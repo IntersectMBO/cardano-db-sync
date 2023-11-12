@@ -239,7 +239,8 @@ extractSyncOptions snp aop =
       | enpTurboMode snp = turboInsertOptions
       | otherwise =
           InsertOptions
-            { ioShelley = enpHasShelley snp
+            { ioInOut = enpHasInOut snp
+            , ioShelley = enpHasShelley snp
             , ioMultiAssets = enpHasMultiAssets snp
             , ioMetadata = enpHasMetadata snp
             , ioPlutusExtra = enpHasPlutusExtra snp

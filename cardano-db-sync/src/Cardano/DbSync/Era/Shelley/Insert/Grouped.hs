@@ -88,8 +88,8 @@ insertBlockGroupedData ::
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
 insertBlockGroupedData syncEnv grouped = do
-  bts <- liftIO $ getBootstrapState syncEnv
-  txOutIds <- lift . DB.insertManyTxOutPlex (getHasConsumedOrPruneTxOut syncEnv) bts $ etoTxOut . fst <$> groupedTxOut grouped
+  disInOut <- liftIO $ getDisableInOutState syncEnv
+  txOutIds <- lift . DB.insertManyTxOutPlex (getHasConsumedOrPruneTxOut syncEnv) disInOut $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
   txInIds <-

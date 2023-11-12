@@ -67,6 +67,7 @@ data SyncNodeParams = SyncNodeParams
   , enpSkipFix :: !Bool
   , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool
+  , enpHasInOut :: !Bool
   , enpHasShelley :: !Bool
   , enpHasMultiAssets :: !Bool
   , enpHasMetadata :: !Bool

@@ -82,6 +82,7 @@ pRunDbSyncNode =
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
+    <*> pHasInOut
     <*> pHasShelley
     <*> pHasMultiAssets
     <*> pHasMetadata
@@ -214,6 +215,15 @@ pSlotNo =
           <> Opt.help "Force a rollback to the specified slot (mainly for testing and debugging)."
           <> Opt.metavar "WORD"
       )
+
+pHasInOut :: Parser Bool
+pHasInOut =
+  Opt.flag
+    True
+    False
+    ( Opt.long "disable-in-out"
+        <> Opt.help "Disables the tx_in and tx_out table"
+    )
 
 pHasShelley :: Parser Bool
 pHasShelley =
