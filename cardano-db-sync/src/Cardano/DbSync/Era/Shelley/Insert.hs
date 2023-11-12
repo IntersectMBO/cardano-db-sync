@@ -284,7 +284,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
   -- In these cases we can avoid expensive queries.
   (resolvedInputs, fees', deposits) <- case (disInOut, mdeposits, unCoin <$> Generic.txFees tx) of
-    (True, _, _) -> pure ([], 0, Nothing)
+    (True, _, _) -> pure ([], 0, unCoin <$> mdeposits)
     (_, Just deposits, Just fees) -> do
       (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
       pure (resolvedInputs, fees, Just (unCoin deposits))
