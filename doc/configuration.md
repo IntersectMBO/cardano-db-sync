@@ -66,6 +66,11 @@ issues.
 With this option the epoch table is left empty. Mostly left for historical reasons, since it
 provides a negligible improvement in sync time.
 
+### --disable-shelley : Experimental
+
+Disables the data related to shelley, all certificates, withdrawalsand  param proposals.
+Doesn't disable `epoch_stake` and `rewards`, For this check `--disable-ledger`.
+
 ### --disable-multiassets : Experimental
 
 Disables the multi assets tables and entries.
