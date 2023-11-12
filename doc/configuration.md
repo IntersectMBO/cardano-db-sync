@@ -116,7 +116,6 @@ inserted in bulk from the ledger state.
 The initial implementation of the feautures assumes using `--prune-tx-out` and not using `--disable-ledger`, since the ledger state is used. The networks needs to be in Babbage or Conway era for this to work.
 Some field are left empty when using this flag, like
 - `tx.fee` has a wrong value 0
-- `tx.deoposit` is left Null
 - `redeemer.script_hash` is left Null
 
 Until the ledger state migration happens any restart requires reusing the `--bootstrap` flag. After it's completed the flag can be omitted on restarts.
