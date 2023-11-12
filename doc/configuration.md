@@ -66,6 +66,19 @@ issues.
 With this option the epoch table is left empty. Mostly left for historical reasons, since it
 provides a negligible improvement in sync time.
 
+### --disable-in-out
+
+Disables the inputs and outputs. With this flag
+- `tx_in` table is left empty
+- `tx_out` table is left empty
+- `ma_tx_out` table is left empty
+- `tx.fee` has a wrong value 0
+- `redeemer.script_hash` is left Null
+
+It's similar to `--bootstrap-tx-out` except the UTxO is never populated. However after using this
+flag db-sync can be stopped and restarted with `--bootstrap-tx-out` to load the UTxO from the
+ledger.
+
 ### --disable-shelley : Experimental
 
 Disables the data related to shelley, all certificates, withdrawalsand  param proposals.
