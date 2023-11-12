@@ -31,14 +31,14 @@ import Cardano.DbSync.Cache (
   insertBlockAndCache,
   insertDatumAndCache,
   insertPoolKeyWithCache,
+  insertStakeAddress,
   queryDatum,
   queryMAWithCache,
+  queryOrInsertRewardAccount,
+  queryOrInsertStakeAddress,
   queryPoolKeyOrInsert,
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
-  queryRewardAccountWithCache,
-  queryRewardAccountWithCacheRetBs,
-  queryStakeAddrWithCache,
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
@@ -371,7 +371,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (lift . insertGovernanceAction cache network blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (lift . insertGovernanceAction cache blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures tracer cache txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
@@ -380,7 +380,6 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
-    network = getNetwork syncEnv
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -391,7 +390,7 @@ prepareTxOut ::
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
-  mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
+  mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
@@ -430,7 +429,7 @@ insertCollateralTxOut ::
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
-  mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache txId addr
+  mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
@@ -710,7 +709,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
 
   epochActivationDelay <- mkEpochActivationDelay poolHashId
 
-  saId <- lift $ insertStakeAddressWithCache cache CacheNew txId (adjustNetworkTag $ Shelley.ppRewardAcnt params)
+  saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ Shelley.ppRewardAcnt params)
   poolUpdateId <-
     lift . DB.insertPoolUpdate $
       DB.PoolUpdate
@@ -726,7 +725,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
         , DB.poolUpdateRegisteredTxId = txId
         }
 
-  mapM_ (insertPoolOwner cache network poolUpdateId txId) $ toList (Shelley.ppOwners params)
+  mapM_ (insertPoolOwner cache network poolUpdateId) $ toList (Shelley.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley.ppRelays params)
   where
     mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
@@ -755,7 +754,7 @@ insertPoolRetire ::
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire trce txId cache epochNum idx keyHash = do
-  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache CacheNew keyHash
+  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache CacheNew True keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -779,53 +778,21 @@ insertMetaDataRef poolId txId md =
       , DB.poolMetadataRefRegisteredTxId = txId
       }
 
-insertStakeAddressWithCache ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Cache ->
-  CacheNew ->
-  DB.TxId ->
-  Shelley.RewardAcnt StandardCrypto ->
-  ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddressWithCache cache cacheNew txId rewardAddr = do
-  eiAddrId <- queryRewardAccountWithCacheRetBs cache cacheNew rewardAddr
-  case eiAddrId of
-    Left (_err, bs) -> insertStakeAddress txId rewardAddr (Just bs)
-    Right addrId -> pure addrId
-
--- If the address already esists in the table, it will not be inserted again (due to
--- the uniqueness constraint) but the function will return the 'StakeAddressId'.
-insertStakeAddress ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  DB.TxId ->
-  Shelley.RewardAcnt StandardCrypto ->
-  Maybe ByteString ->
-  ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddress _txId rewardAddr stakeCredBs =
-  DB.insertStakeAddress $
-    DB.StakeAddress
-      { DB.stakeAddressHashRaw = addrBs
-      , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
-      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
-      }
-  where
-    addrBs = fromMaybe (Ledger.serialiseRewardAcnt rewardAddr) stakeCredBs
-
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
 -- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
 insertStakeAddressRefIfMissing ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Cache ->
-  DB.TxId ->
   Ledger.Addr StandardCrypto ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing _trce cache txId addr =
+insertStakeAddressRefIfMissing _trce cache addr =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> insertStakeAddressWithCache cache DontCacheNew txId (Shelley.RewardAcnt nw cred)
+          Just <$> queryOrInsertStakeAddress cache DontCacheNew nw cred
         Ledger.StakeRefPtr ptr -> do
           queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing
@@ -835,11 +802,10 @@ insertPoolOwner ::
   Cache ->
   Ledger.Network ->
   DB.PoolUpdateId ->
-  DB.TxId ->
   Ledger.KeyHash 'Ledger.Staking StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner cache network poolUpdateId txId skh = do
-  saId <- lift $ insertStakeAddressWithCache cache CacheNew txId (Shelley.RewardAcnt network (Ledger.KeyHashObj skh))
+insertPoolOwner cache network poolUpdateId skh = do
+  saId <- lift $ queryOrInsertStakeAddress cache CacheNew network (Ledger.KeyHashObj skh)
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId
@@ -857,7 +823,7 @@ insertStakeRegistration epochNo txId idx rewardAccount = do
   -- We by-pass the cache here It's likely it won't hit.
   -- We don't store to the cache yet, since there are many addrresses
   -- which are registered and never used.
-  saId <- lift $ insertStakeAddress txId rewardAccount Nothing
+  saId <- lift $ insertStakeAddress rewardAccount Nothing
   void . lift . DB.insertStakeRegistration $
     DB.StakeRegistration
       { DB.stakeRegistrationAddrId = saId
@@ -877,7 +843,7 @@ insertStakeDeregistration ::
   StakeCred ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred = do
-  scId <- liftLookupFail "insertStakeDeregistration" $ queryStakeAddrWithCache cache EvictAndReturn network cred
+  scId <- lift $ queryOrInsertStakeAddress cache EvictAndReturn network cred
   void . lift . DB.insertStakeDeregistration $
     DB.StakeDeregistration
       { DB.stakeDeregistrationAddrId = scId
@@ -901,8 +867,8 @@ insertDelegation ::
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation trce cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
-  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew network cred
-  poolHashId <- lift $ queryPoolKeyOrInsert "insertDelegation" trce cache CacheNew poolkh
+  addrId <- lift $ queryOrInsertStakeAddress cache CacheNew network cred
+  poolHashId <- lift $ queryPoolKeyOrInsert "insertDelegation" trce cache CacheNew True poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
       { DB.delegationAddrId = addrId
@@ -924,7 +890,7 @@ insertDelegationVote ::
   DRep StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegationVote cache network txId idx cred drep = do
-  addrId <- liftLookupFail "insertDelegation" $ queryStakeAddrWithCache cache CacheNew network cred
+  addrId <- lift $ queryOrInsertStakeAddress cache CacheNew network cred
   drepId <- lift $ insertDrep drep
   void . lift . DB.insertDelegationVote $
     DB.DelegationVote
@@ -960,7 +926,7 @@ insertMirCert _tracer cache network txId idx mcert = do
       (StakeCred, Ledger.DeltaCoin) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, dcoin) = do
-      addrId <- lift . insertStakeAddressWithCache cache CacheNew txId $ Generic.annotateStakingCred network cred
+      addrId <- lift $ queryOrInsertStakeAddress cache CacheNew network cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
@@ -974,7 +940,7 @@ insertMirCert _tracer cache network txId idx mcert = do
       (StakeCred, Ledger.DeltaCoin) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, dcoin) = do
-      addrId <- lift . insertStakeAddressWithCache cache CacheNew txId $ Generic.annotateStakingCred network cred
+      addrId <- lift $ queryOrInsertStakeAddress cache CacheNew network cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId
@@ -1006,9 +972,7 @@ insertWithdrawals ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertWithdrawals _tracer cache txId redeemers txWdrl = do
   addrId <-
-    liftLookupFail "insertWithdrawals" $
-      queryRewardAccountWithCache cache CacheNew $
-        Generic.txwRewardAccount txWdrl
+    lift $ queryOrInsertRewardAccount cache CacheNew $ Generic.txwRewardAccount txWdrl
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -1463,15 +1427,14 @@ mkAdaPots blockId slotNo epochNo pots =
 insertGovernanceAction ::
   (MonadIO m, MonadBaseControl IO m) =>
   Cache ->
-  Ledger.Network ->
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
   (Word64, ProposalProcedure StandardConway) ->
   ReaderT SqlBackend m ()
-insertGovernanceAction cache _network blkId txId govExpiresAt (index, pp) = do
+insertGovernanceAction cache blkId txId govExpiresAt (index, pp) = do
   addrId <-
-    insertStakeAddressWithCache cache CacheNew txId $ pProcReturnAddr pp
+    queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
   votingAnchorId <- insertAnchor txId $ pProcAnchor pp
   mParamProposalId <-
     case pProcGovAction pp of
@@ -1500,9 +1463,9 @@ insertGovernanceAction cache _network blkId txId govExpiresAt (index, pp) = do
     UpdateCommittee _ removed added q -> insertNewCommittee governanceAction removed added q
     _ -> pure ()
   where
-    insertTreasuryWithdrawal gaId (cred, coin) = do
+    insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
       addrId <-
-        insertStakeAddressWithCache cache CacheNew txId cred
+        queryOrInsertRewardAccount cache CacheNew rwdAcc
       DB.insertTreasuryWithdrawal $
         DB.TreasuryWithdrawal
           { DB.treasuryWithdrawalGovernanceActionId = gaId
@@ -1556,7 +1519,7 @@ insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
       drep <- lift $ insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
     StakePoolVoter poolkh -> do
-      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cache CacheNew poolkh
+      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cache CacheNew False poolkh
       pure (Nothing, Nothing, Just poolHashId)
   void . lift . DB.insertVotingProcedure $
     DB.VotingProcedure

@@ -241,7 +241,7 @@ insertTxOuts trce hasConsumed bts blkId (ShelleyTx.TxIn txInId _, txOut) = do
         , DB.txValidContract = True
         , DB.txScriptSize = 0
         }
-  _ <- insertStakeAddressRefIfMissing trce uninitiatedCache txId (txOut ^. Core.addrTxOutL)
+  _ <- insertStakeAddressRefIfMissing trce uninitiatedCache (txOut ^. Core.addrTxOutL)
   DB.insertTxOutPlex hasConsumed bts $
     DB.TxOut
       { DB.txOutTxId = txId

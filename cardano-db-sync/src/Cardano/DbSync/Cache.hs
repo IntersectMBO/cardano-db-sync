@@ -16,16 +16,17 @@ module Cardano.DbSync.Cache (
   queryPoolKeyOrInsert,
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
-  queryRewardAccountWithCache,
-  queryRewardAccountWithCacheRetBs,
+  queryOrInsertStakeAddress,
+  queryOrInsertRewardAccount,
+  insertStakeAddress,
   queryStakeAddrWithCache,
-  queryStakeAddrWithCacheRetBs,
   rollbackCache,
 
   -- * CacheStatistics
   getCacheStatistics,
 ) where
 
+import Cardano.BM.Trace
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
@@ -50,7 +51,6 @@ import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
 import Database.Persist.Postgresql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-import Cardano.BM.Trace
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -81,15 +81,44 @@ getCacheStatistics cs =
     UninitiatedCache -> pure initCacheStatistics
     Cache ci -> readTVarIO (cStats ci)
 
-queryRewardAccountWithCache ::
-  forall m.
-  MonadIO m =>
+queryOrInsertRewardAccount ::
+  (MonadBaseControl IO m, MonadIO m) =>
   Cache ->
   CacheNew ->
   Ledger.RewardAcnt StandardCrypto ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.StakeAddressId)
-queryRewardAccountWithCache cache cacheNew rwdAcc =
-  mapLeft fst <$> queryRewardAccountWithCacheRetBs cache cacheNew rwdAcc
+  ReaderT SqlBackend m DB.StakeAddressId
+queryOrInsertRewardAccount cache cacheNew rewardAddr = do
+  eiAddrId <- queryRewardAccountWithCacheRetBs cache cacheNew rewardAddr
+  case eiAddrId of
+    Left (_err, bs) -> insertStakeAddress rewardAddr (Just bs)
+    Right addrId -> pure addrId
+
+queryOrInsertStakeAddress ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Cache ->
+  CacheNew ->
+  Network ->
+  StakeCred ->
+  ReaderT SqlBackend m DB.StakeAddressId
+queryOrInsertStakeAddress cache cacheNew nw cred =
+  queryOrInsertRewardAccount cache cacheNew $ Ledger.RewardAcnt nw cred
+
+-- If the address already exists in the table, it will not be inserted again (due to
+-- the uniqueness constraint) but the function will return the 'StakeAddressId'.
+insertStakeAddress ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Ledger.RewardAcnt StandardCrypto ->
+  Maybe ByteString ->
+  ReaderT SqlBackend m DB.StakeAddressId
+insertStakeAddress rewardAddr stakeCredBs =
+  DB.insertStakeAddress $
+    DB.StakeAddress
+      { DB.stakeAddressHashRaw = addrBs
+      , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
+      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
+      }
+  where
+    addrBs = fromMaybe (Ledger.serialiseRewardAcnt rewardAddr) stakeCredBs
 
 queryRewardAccountWithCacheRetBs ::
   forall m.
@@ -240,24 +269,26 @@ queryPoolKeyOrInsert ::
   Trace IO Text ->
   Cache ->
   CacheNew ->
+  Bool ->
   PoolKeyHash ->
   ReaderT SqlBackend m DB.PoolHashId
-queryPoolKeyOrInsert txt trce cache cacheNew hsh = do
+queryPoolKeyOrInsert txt trce cache cacheNew logsWarning hsh = do
   pk <- queryPoolKeyWithCache cache cacheNew hsh
   case pk of
     Right poolHashId -> pure poolHashId
     Left err -> do
-      liftIO $
-        logWarning trce $
-          mconcat
-            [ "Failed with"
-            , DB.textShow err
-            , " while trying to find pool "
-            , DB.textShow hsh
-            , " for "
-            , txt
-            , ". We will assume that the pool exists and move on."
-            ]
+      when logsWarning $
+        liftIO $
+          logWarning trce $
+            mconcat
+              [ "Failed with "
+              , DB.textShow err
+              , " while trying to find pool "
+              , DB.textShow hsh
+              , " for "
+              , txt
+              , ". We will assume that the pool exists and move on."
+              ]
       insertPoolKeyWithCache cache cacheNew hsh
 
 queryMAWithCache ::
