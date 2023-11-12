@@ -65,6 +65,7 @@ It's very early stage and is missing all Conway specific feautures and some Shel
 * References to `offline` for pool metadata are replaced by `offchain`
 * Added a new table `extra_migrations`
 * DBSync no longer does any query to the `tx_out` table during syncing
+* Added flags `--disable-in-out`, `--disable-shelley`, `--disable-gov`, `--only-gov`
 
 ## 13.1.1.3
 * Adds compatibility with node-8.0.0 [#1403] and node-8.1.1 [#1455]

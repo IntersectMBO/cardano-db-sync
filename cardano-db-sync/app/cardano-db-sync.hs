@@ -90,8 +90,9 @@ pRunDbSyncNode =
     <*> pHasGov
     <*> pHasOffChainPoolData
     <*> pForceTxIn
-    <*> pTurboMode
+    <*> pDisableAllMode
     <*> pFullMode
+    <*> pOnlyGov
     <*> pMigrateConsumed
     <*> pPruneTxOut
     <*> bootstrap
@@ -288,13 +289,13 @@ pForceTxIn =
         <> Opt.help "Force populating the tx_in table even if --consumed-tx-out is enabled"
     )
 
-pTurboMode :: Parser Bool
-pTurboMode =
+pDisableAllMode :: Parser Bool
+pDisableAllMode =
   Opt.flag
     False
     True
-    ( Opt.long "turbo"
-        <> Opt.help "Enables turbo mode, which make db-sync running much faster with limited functionality."
+    ( Opt.long "disable-all"
+        <> Opt.help "Disables everything except the ledger."
     )
 
 pFullMode :: Parser Bool
@@ -304,6 +305,15 @@ pFullMode =
     True
     ( Opt.long "full"
         <> Opt.help "Makes db-sync run with all possible functionalities."
+    )
+
+pOnlyGov :: Parser Bool
+pOnlyGov =
+  Opt.flag
+    False
+    True
+    ( Opt.long "only-gov"
+        <> Opt.help "Runs db-sync with only governance functionality"
     )
 
 pMigrateConsumed :: Parser Bool

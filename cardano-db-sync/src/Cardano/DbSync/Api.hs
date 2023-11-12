@@ -10,7 +10,8 @@
 module Cardano.DbSync.Api (
   fullInsertOptions,
   defaultInsertOptions,
-  turboInsertOptions,
+  onlyGovInsertOptions,
+  disableAllInsertOptions,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
@@ -203,8 +204,11 @@ fullInsertOptions = InsertOptions True True True True True True True
 defaultInsertOptions :: InsertOptions
 defaultInsertOptions = fullInsertOptions
 
-turboInsertOptions :: InsertOptions
-turboInsertOptions = InsertOptions False False False False False False False
+onlyGovInsertOptions :: InsertOptions
+onlyGovInsertOptions = disableAllInsertOptions {ioGov = True}
+
+disableAllInsertOptions :: InsertOptions
+disableAllInsertOptions = InsertOptions False False False False False False False
 
 initEpochState :: EpochState
 initEpochState =

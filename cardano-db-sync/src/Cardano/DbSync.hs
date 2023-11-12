@@ -235,8 +235,9 @@ extractSyncOptions snp aop =
     }
   where
     iopts
+      | enpOnlyGov snp = onlyGovInsertOptions
       | enpFullMode snp = fullInsertOptions
-      | enpTurboMode snp = turboInsertOptions
+      | enpDisableAllMode snp = disableAllInsertOptions
       | otherwise =
           InsertOptions
             { ioInOut = enpHasInOut snp
