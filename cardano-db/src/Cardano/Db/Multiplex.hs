@@ -37,20 +37,20 @@ insertTxOutPlex ::
   ReaderT SqlBackend m ()
 insertTxOutPlex hasConsMigration disInOut txOut = do
   case (hasConsMigration, disInOut) of
+    (_, True) -> pure ()
     (False, _) ->
       void $ insertTxOut txOut
-    (True, False) ->
+    (True, _) ->
       void $ ExtraCons.insertTxOutExtra (toExtraTxOut txOut)
-    (True, True) -> pure ()
 
 insertManyTxOutPlex :: (MonadBaseControl IO m, MonadIO m) => Bool -> Bool -> [TxOut] -> ReaderT SqlBackend m [TxOutId]
 insertManyTxOutPlex hasConsMigration disInOut txOuts =
   case (hasConsMigration, disInOut) of
+    (_, True) -> pure []
     (False, _) ->
       insertManyTxOut txOuts
-    (True, False) ->
+    (True, _) ->
       fmap changeKey <$> ExtraCons.insertManyTxOutExtra (toExtraTxOut <$> txOuts)
-    (True, True) -> pure []
 
 changeKey ::
   ( ToBackendKey SqlBackend record1
