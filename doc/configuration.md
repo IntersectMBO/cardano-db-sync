@@ -34,7 +34,7 @@ When this flag is enabled, some features are missing and some DB tables are left
 
 Warning: Running db-sync with this flag and then restarting it without the flag will cause crashes and should be avoided.
 
-Warning: It was previously required to still have a `--state-dir` option provided when in conjunction with `--disable-ledger`. This is no longer the case and now an error will occure if they are both present at the same time. 
+Warning: It was previously required to still have a `--state-dir` option provided when in conjunction with `--disable-ledger`. This is no longer the case and now an error will occure if they are both present at the same time.
 
 If used with docker, this flag can be provided as an extra flag to docker image.
 
@@ -66,7 +66,7 @@ issues.
 With this option the epoch table is left empty. Mostly left for historical reasons, since it
 provides a negligible improvement in sync time.
 
-### --disable-in-out
+### --disable-in-out : Experimental
 
 Disables the inputs and outputs. With this flag
 - `tx_in` table is left empty
@@ -101,9 +101,18 @@ _(previousle called --disable-offline-data)__
 
 Disables fetching pool offchain metadata.
 
-### --disable-gov
+### --disable-gov : Experimental
 
 Disables all data related to governance
+
+### --disable-all
+
+Disables almost all data except `block`, `tx` and data related to the ledger state
+
+### --only-gov : Experimental
+
+Disables most data except governance data. This is the equivalent of using `--disable-in-out`,
+`--disable-shelley`, `--disable-multiassets`, `--disable-plutus-extra`, `--disable-offchain-pool-data`.
 
 ### --consumed-tx-out
 

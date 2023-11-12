@@ -75,8 +75,9 @@ data SyncNodeParams = SyncNodeParams
   , enpHasGov :: !Bool
   , enpHasOffChainPoolData :: !Bool
   , enpForceTxIn :: !Bool
-  , enpTurboMode :: !Bool
+  , enpDisableAllMode :: !Bool
   , enpFullMode :: !Bool
+  , enpOnlyGov :: !Bool
   , enpMigrateConsumed :: !Bool
   , enpPruneTxOut :: !Bool
   , enpBootstrap :: !Bool
