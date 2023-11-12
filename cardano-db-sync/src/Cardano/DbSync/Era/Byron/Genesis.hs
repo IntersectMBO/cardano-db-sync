@@ -44,25 +44,25 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  bts <- liftIO $ getBootstrapState syncEnv
+  disInOut <- liftIO $ getDisableInOutState syncEnv
   let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
       prunes = getPrunes syncEnv
   if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes bts)
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes bts)
+    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes disInOut)
+    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes disInOut)
   where
     tracer = getTrace syncEnv
 
     insertAction :: Bool -> Bool -> Bool -> (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
-    insertAction hasConsumed prunes bootstrap = do
+    insertAction hasConsumed prunes disInOut = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right bid -> validateGenesisDistribution prunes bootstrap tracer networkName cfg bid
+        Right bid -> validateGenesisDistribution prunes disInOut tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Byron Genesis distribution"
             count <- lift DB.queryBlockCount
-            when (not bootstrap && count > 0) $
+            when (not disInOut && count > 0) $
               dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
             void . lift $
               DB.insertMeta $
@@ -105,8 +105,7 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
                   , DB.blockOpCert = Nothing
                   , DB.blockOpCertCounter = Nothing
                   }
-            bts <- liftIO $ getBootstrapState syncEnv
-            mapM_ (insertTxOuts hasConsumed bts bid) $ genesisTxos cfg
+            mapM_ (insertTxOuts hasConsumed disInOut bid) $ genesisTxos cfg
             liftIO . logInfo tracer $
               "Initial genesis distribution populated. Hash "
                 <> renderByteArray (configGenesisHash cfg)
@@ -124,7 +123,7 @@ validateGenesisDistribution ::
   Byron.Config ->
   DB.BlockId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution prunes bts tracer networkName cfg bid =
+validateGenesisDistribution prunes disInOut tracer networkName cfg bid =
   runExceptT $ do
     meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta
 
@@ -156,7 +155,7 @@ validateGenesisDistribution prunes bts tracer networkName cfg bid =
           , " but got "
           , textShow txCount
           ]
-    unless bts $ do
+    unless disInOut $ do
       totalSupply <- lift DB.queryGenesisSupply
       case DB.word64ToAda <$> configGenesisSupply cfg of
         Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
@@ -182,7 +181,7 @@ insertTxOuts ::
   DB.BlockId ->
   (Byron.Address, Byron.Lovelace) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxOuts hasConsumed bts blkId (address, value) = do
+insertTxOuts hasConsumed disInOut blkId (address, value) = do
   case txHashOfAddress address of
     Left err -> throwError err
     Right val -> do
@@ -205,7 +204,7 @@ insertTxOuts hasConsumed bts blkId (address, value) = do
               , DB.txScriptSize = 0
               }
       lift $
-        DB.insertTxOutPlex hasConsumed bts $
+        DB.insertTxOutPlex hasConsumed disInOut $
           DB.TxOut
             { DB.txOutTxId = txId
             , DB.txOutIndex = 0

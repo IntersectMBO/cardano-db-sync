@@ -63,7 +63,8 @@ data SyncOptions = SyncOptions
   deriving (Show)
 
 data InsertOptions = InsertOptions
-  { ioShelley :: !Bool
+  { ioInOut :: !Bool
+  , ioShelley :: !Bool
   , ioMultiAssets :: !Bool
   , ioMetadata :: !Bool
   , ioPlutusExtra :: !Bool
