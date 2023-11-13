@@ -223,7 +223,7 @@ logProtocolMagicId tracer pm =
 extractSyncOptions :: SyncNodeParams -> Bool -> SyncOptions
 extractSyncOptions snp aop =
   SyncOptions
-    { soptEpochAndCacheEnabled = not $ enpEpochDisabled snp && enpHasCache snp
+    { soptEpochAndCacheEnabled = not (enpBootstrap snp) && ioInOut iopts && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
