@@ -346,10 +346,14 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
+<<<<<<< HEAD
   bts <- getBootstrapInProgress trce (enpBootstrap syncNP) backend
   bootstrapVar <- newTVarIO bts
-  owq <- newTBQueueIO 100
-  orq <- newTBQueueIO 100
+  -- Offline Pool + Anchor queues
+  opwq <- newTBQueueIO 100
+  oprq <- newTBQueueIO 100
+  oawq <- newTBQueueIO 100
+  oarq <- newTBQueueIO 100
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
@@ -385,8 +389,10 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
       , envBootstrap = bootstrapVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
-      , envOffChainPoolResultQueue = orq
-      , envOffChainPoolWorkQueue = owq
+      , envOffChainPoolResultQueue = oprq
+      , envOffChainPoolWorkQueue = opwq
+      , envOffChainAnchorResultQueue = oarq
+      , envOffChainAnchorWorkQueue = oawq
       , envOptions = syncOptions
       , envRunDelayedMigration = runMigrationFnc
       , envSystemStart = systemStart

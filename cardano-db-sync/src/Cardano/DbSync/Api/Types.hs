@@ -17,7 +17,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (Cache)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
-import Cardano.DbSync.Types (OffChainPoolFetchRetry, OffChainPoolResult)
+import Cardano.DbSync.Types (OffChainPoolFetchRetry)
 import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -42,8 +42,10 @@ data SyncEnv = SyncEnv
   , envBootstrap :: !(StrictTVar IO Bool)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
-  , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
-  , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainPoolFetchRetry)
+  , envOffChainPoolResultQueue :: !(StrictTBQueue IO OfflineFetchResult)
+  , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OfflinePoolFetchRetry)
+  , envOffChainAnchorResultQueue :: !(StrictTBQueue IO OfflineFetchResult)
+  , envOffChainAnchorWorkQueue :: !(StrictTBQueue IO OfflineAnchorFetchRetry)
   , envOptions :: !SyncOptions
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart

@@ -618,6 +618,19 @@ share
     vote                 Vote                 sqltype=vote
     votingAnchorId       VotingAnchorId Maybe noreference
 
+  AnchorOfflineData
+    votingAnchorId          VotingAnchorId      noreference
+    hash                    ByteString
+    json                    Text                sqltype=jsonb
+    bytes                   ByteString          sqltype=bytea
+    deriving Show
+
+  AnchorOfflineFetchError
+    votingAnchorId          VotingAnchorId      noreference
+    fetchError              Text
+    retryCount              Word                sqltype=word31type
+    deriving Show
+
   DrepDistr
     hashId                  DrepHashId          noreference
     amount                  Word64

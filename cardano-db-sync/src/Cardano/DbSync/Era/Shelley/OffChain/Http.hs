@@ -99,9 +99,9 @@ httpGetOffChainPoolData ::
   Http.Manager ->
   Http.Request ->
   PoolUrl ->
-  Maybe PoolMetaHash ->
+  PoolMetaHash ->
   ExceptT FetchError IO SimplifiedOffChainPoolData
-httpGetOffChainPoolData manager request poolUrl mHash = do
+httpGetOffChainPoolData manager request poolUrl (PoolMetaHash expectedHash) = do
   res <- handleExceptT (convertHttpException poolUrl) httpGet
   hoistEither res
   where
@@ -152,10 +152,9 @@ httpGetOffChainPoolData manager request poolUrl mHash = do
 
           let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
 
-          whenJust mHash $ \(PoolMetaHash expectedHash) ->
-            when (metadataHash /= expectedHash)
-              . left
-              $ FEHashMismatch poolUrl (renderByteArray expectedHash) (renderByteArray metadataHash)
+          when (metadataHash /= expectedHash)
+            . left
+            $ FEHashMismatch poolUrl (renderByteArray expectedHash) (renderByteArray metadataHash)
 
           decodedMetadata <-
             case Aeson.eitherDecode' respLBS of
