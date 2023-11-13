@@ -11,24 +11,32 @@ module Cardano.DbSync.Types (
   DataHash,
   CardanoInterpreter,
   EpochSlot (..),
-  OffChainPoolResult (..),
+  OffChainDataVariant (..),
+  OffChainFetchResult (..),
+  OffChainMetadata (..),
+  OffChainError (..),
   SlotDetails (..),
   TipInfo (..),
   SyncState (..),
   TPraosStandard,
   MetricSetters (..),
   OffChainPoolFetchRetry (..),
+  OffChainAnchorFetchRetry (..),
   PraosStandard,
   Retry (..),
 ) where
 
 import Cardano.Db (
+  OffChainAnchorData,
+  OffChainAnchorFetchError,
   OffChainPoolData,
   OffChainPoolFetchError,
   PoolHashId,
   PoolMetaHash,
   PoolMetadataRefId,
   PoolUrl,
+  VoteUrl,
+  VotingAnchorId,
  )
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
@@ -84,10 +92,24 @@ newtype EpochSlot = EpochSlot
   }
   deriving (Eq, Ord, Show)
 
-data OffChainPoolResult
-  = OffChainPoolResultMetadata !OffChainPoolData
-  | OffChainPoolResultError !OffChainPoolFetchError
-  deriving (Show)
+-- offChain
+data OffChainDataVariant
+  = OffChainPoolDataVariant
+  | OffChainAnchorDataVariant
+
+data OffChainFetchResult
+  = OffChainPoolFetchResult
+  | OffChainAnchorFetchResult
+  -- = OffChainFetchMetadata !OffChainMetadata
+  -- | OffChainFetchResultError !OffChainError
+
+data OffChainMetadata
+  = OffChainPoolMetadata OffChainPoolData
+  | OffChainAnchorMetadata OffChainAnchorData
+
+data OffChainError
+  = OffChainPoolError OffChainPoolFetchError
+  | OffChainAnchorError OffChainAnchorFetchError
 
 data SlotDetails = SlotDetails
   { sdSlotTime :: !UTCTime
@@ -129,6 +151,14 @@ data OffChainPoolFetchRetry = OffChainPoolFetchRetry
   , opfrPoolUrl :: !PoolUrl
   , opfrPoolMDHash :: !(Maybe PoolMetaHash)
   , opfrRetry :: !Retry
+  }
+  deriving (Show)
+
+data OffChainAnchorFetchRetry = OffChainAnchorFetchRetry
+  { oprfUrl :: VoteUrl
+  , oprfHash :: ByteString
+  , oprfReferenceId :: VotingAnchorId
+  , oprfRetry :: !Retry
   }
   deriving (Show)
 

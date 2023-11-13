@@ -95,6 +95,7 @@ library
                         Cardano.DbSync.Era.Shelley.OffChain.Types
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Validate
+                        Cardano.DbSync.Era.Conway.OffChain
 
                         -- Temporary debugging validation
                         Cardano.DbSync.Era.Shelley.ValidateWithdrawal
