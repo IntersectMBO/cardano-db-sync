@@ -105,9 +105,13 @@ Disables fetching pool offchain metadata.
 
 Disables all data related to governance
 
-### --disable-all
+### --disable-all : Experimental
 
 Disables almost all data except `block`, `tx` and data related to the ledger state
+
+### --dont-use-ledger : Experimental
+
+Maintains the ledger state, but doesn't use any of its data, except to load UTxO. To be used with `--bootstrap-tx-out`
 
 ### --only-gov : Experimental
 

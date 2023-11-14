@@ -68,7 +68,7 @@ import qualified Control.Exception as Exception
 
 import qualified Data.ByteString.Base16 as Base16
 
-import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncOptions (..))
+import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
 import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
@@ -172,6 +172,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
   pure
     HasLedgerEnv
       { leTrace = trce
+      , leUseLedger = ioUseLedger $ soptInsertOptions syncOptions
       , leProtocolInfo = protoInfo
       , leDir = dir
       , leNetwork = nw
@@ -222,8 +223,8 @@ applyBlock env blk = do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
     !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
-    let !ledgerEventsFull = mapMaybe convertAuxLedgerEvent (lrEvents result)
-    let !(ledgerEvents, deposits) = splitDeposits ledgerEventsFull
+    let ledgerEventsFull = mapMaybe convertAuxLedgerEvent (lrEvents result)
+    let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
     let !newLedgerState = lrResult result
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
     !newEpoch <- fromEitherSTM $ mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
@@ -232,17 +233,20 @@ applyBlock env blk = do
     let !ledgerDB' = pushLedgerDB ledgerDB newState
     writeTVar (leStateVar env) (Strict.Just ledgerDB')
     let !appResult =
-          ApplyResult
-            { apPrices = getPrices newState
-            , apGovExpiresAfter = getGovExpiration newState
-            , apPoolsRegistered = getRegisteredPools oldState
-            , apNewEpoch = maybeToStrict newEpoch
-            , apOldLedger = Strict.Just oldState
-            , apSlotDetails = details
-            , apStakeSlice = getStakeSlice env newState False
-            , apEvents = ledgerEvents
-            , apDepositsMap = DepositsMap deposits
-            }
+          if leUseLedger env
+            then
+              ApplyResult
+                { apPrices = getPrices newState
+                , apGovExpiresAfter = getGovExpiration newState
+                , apPoolsRegistered = getRegisteredPools oldState
+                , apNewEpoch = maybeToStrict newEpoch
+                , apOldLedger = Strict.Just oldState
+                , apSlotDetails = details
+                , apStakeSlice = getStakeSlice env newState False
+                , apEvents = ledgerEvents
+                , apDepositsMap = DepositsMap deposits
+                }
+            else defaultApplyResult details
     pure (oldState, appResult)
   where
     mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Either SyncNodeError (Maybe Generic.NewEpoch)
