@@ -24,7 +24,7 @@ main = do
     CmdVersion -> runVersionCommand
     CmdRun params -> do
       let maybeLedgerStateDir = enpMaybeLedgerStateDir params
-      case (maybeLedgerStateDir, enpShouldUseLedger params) of
+      case (maybeLedgerStateDir, enpHasLedger params) of
         (Just _, True) -> run params
         (Nothing, False) -> run params
         (Just _, False) -> run params
@@ -78,7 +78,8 @@ pRunDbSyncNode =
     <*> pPGPassSource
     <*> pEpochDisabled
     <*> pHasCache
-    <*> pUseLedger
+    <*> pHasLedger
+    <*> pShouldUseLedger
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
@@ -188,13 +189,22 @@ pHasCache =
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
     )
 
-pUseLedger :: Parser Bool
-pUseLedger =
+pHasLedger :: Parser Bool
+pHasLedger =
   Opt.flag
     True
     False
     ( Opt.long "disable-ledger"
         <> Opt.help "Disables the leger state. Drastically reduces memory usage and it syncs faster, but some data are missing."
+    )
+
+pShouldUseLedger :: Parser Bool
+pShouldUseLedger =
+  Opt.flag
+    True
+    False
+    ( Opt.long "dont-use-ledger"
+        <> Opt.help "Maintains the ledger state but doesn't use it, except to load UTxO. To be used with --bootstrap-tx-out"
     )
 
 pSocketPath :: Parser SocketPath
