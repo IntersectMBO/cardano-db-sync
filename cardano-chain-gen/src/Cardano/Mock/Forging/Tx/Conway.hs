@@ -239,25 +239,25 @@ mkRegTxCert ::
   StrictMaybe Coin ->
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
-mkRegTxCert coin' = mkTxDelegCert (`ConwayRegCert` coin')
+mkRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayRegCert cred coin'
 
 mkUnRegTxCert ::
   StrictMaybe Coin ->
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
-mkUnRegTxCert coin' = mkTxDelegCert (`ConwayUnRegCert` coin')
+mkUnRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayUnRegCert cred coin'
 
 mkDelegTxCert ::
   Delegatee StandardCrypto ->
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
-mkDelegTxCert delegatee = mkTxDelegCert (`ConwayDelegCert` delegatee)
+mkDelegTxCert delegatee = mkTxDelegCert $ \cred -> ConwayDelegCert cred delegatee
 
 mkTxDelegCert ::
   (StakeCredential StandardCrypto -> ConwayDelegCert StandardCrypto) ->
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
-mkTxDelegCert = (ConwayTxCertDeleg .)
+mkTxDelegCert f = ConwayTxCertDeleg . f
 
 mkFullTx ::
   Int ->
