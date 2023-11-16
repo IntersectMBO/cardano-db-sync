@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Cardano.DbSync.Types (
   BlockDetails (..),
@@ -11,30 +12,37 @@ module Cardano.DbSync.Types (
   DataHash,
   CardanoInterpreter,
   EpochSlot (..),
-  OffChainDataVariant (..),
-  OffChainFetchResult (..),
-  OffChainMetadata (..),
-  OffChainError (..),
+  OffChainResultType (..),
+  OffChainPoolResult (..),
+  OffChainVoteResult (..),
+  OffChainFetchError (..),
+  FetchUrlType(..),
+  FetchError(..),
   SlotDetails (..),
   TipInfo (..),
   SyncState (..),
   TPraosStandard,
   MetricSetters (..),
-  OffChainPoolFetchRetry (..),
-  OffChainAnchorFetchRetry (..),
+  OffChainWorkQueueType (..),
+  OffChainPoolWorkQueue (..),
+  OffChainVoteWorkQueue (..),
+  SimplifiedOffChainDataType(..),
+  SimplifiedOffChainPoolData(..),
+  SimplifiedOffChainVoteData(..),
   PraosStandard,
   Retry (..),
 ) where
 
 import Cardano.Db (
-  OffChainAnchorData,
-  OffChainAnchorFetchError,
   OffChainPoolData,
   OffChainPoolFetchError,
+  OffChainVoteData,
+  OffChainVoteFetchError,
   PoolHashId,
   PoolMetaHash,
   PoolMetadataRefId,
   PoolUrl,
+  VoteMetaHash,
   VoteUrl,
   VotingAnchorId,
  )
@@ -42,7 +50,7 @@ import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
-import Cardano.Prelude hiding (Meta)
+import Cardano.Prelude hiding (Meta, show)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -92,25 +100,6 @@ newtype EpochSlot = EpochSlot
   }
   deriving (Eq, Ord, Show)
 
--- offChain
-data OffChainDataVariant
-  = OffChainPoolDataVariant
-  | OffChainAnchorDataVariant
-
-data OffChainFetchResult
-  = OffChainPoolFetchResult
-  | OffChainAnchorFetchResult
-  -- = OffChainFetchMetadata !OffChainMetadata
-  -- | OffChainFetchResultError !OffChainError
-
-data OffChainMetadata
-  = OffChainPoolMetadata OffChainPoolData
-  | OffChainAnchorMetadata OffChainAnchorData
-
-data OffChainError
-  = OffChainPoolError OffChainPoolFetchError
-  | OffChainAnchorError OffChainAnchorFetchError
-
 data SlotDetails = SlotDetails
   { sdSlotTime :: !UTCTime
   , sdCurrentTime :: !UTCTime
@@ -145,22 +134,62 @@ data MetricSetters = MetricSetters
 data SyncState = SyncLagging | SyncFollowing
   deriving (Eq, Show)
 
-data OffChainPoolFetchRetry = OffChainPoolFetchRetry
-  { opfrPoolHashId :: !PoolHashId
-  , opfrReferenceId :: !PoolMetadataRefId
-  , opfrPoolUrl :: !PoolUrl
-  , opfrPoolMDHash :: !(Maybe PoolMetaHash)
-  , opfrRetry :: !Retry
+-------------------------------------------------------------------------------------
+-- OFFCHAIN
+-------------------------------------------------------------------------------------
+
+data OffChainResultType
+  = OffChainPoolResultType OffChainPoolResult
+  | OffChainVoteResultType OffChainVoteResult
+
+data OffChainPoolResult
+  = OffChainPoolResultMetadata !OffChainPoolData
+  | OffChainPoolResultError !OffChainPoolFetchError
+
+data OffChainVoteResult
+  = OffChainVoteResultMetadata !OffChainVoteData
+  | OffChainVoteResultError !OffChainVoteFetchError
+
+data OffChainWorkQueueType
+  = OffChainPoolWorkQueueType OffChainPoolWorkQueue
+  | OffChainVoteWorkQueueType OffChainVoteWorkQueue
+  deriving (Show)
+
+data OffChainPoolWorkQueue = OffChainPoolWorkQueue
+  { oPoolWqHashId :: !PoolHashId
+  , oPoolWqReferenceId :: !PoolMetadataRefId
+  , oPoolWqUrl :: !PoolUrl
+  , oPoolWqMetaHash :: !PoolMetaHash
+  , oPoolWqRetry :: !Retry
   }
   deriving (Show)
 
-data OffChainAnchorFetchRetry = OffChainAnchorFetchRetry
-  { oprfUrl :: VoteUrl
-  , oprfHash :: ByteString
-  , oprfReferenceId :: VotingAnchorId
-  , oprfRetry :: !Retry
+data OffChainVoteWorkQueue = OffChainVoteWorkQueue
+  { oVoteWqMetaHash :: !VoteMetaHash
+  , oVoteWqReferenceId :: !VotingAnchorId
+  , oVoteWqRetry :: !Retry
+  , oVoteWqUrl :: !VoteUrl
   }
   deriving (Show)
+
+data SimplifiedOffChainDataType
+  = SimplifiedOffChainPoolDataType !OffChainPoolWorkQueue !SimplifiedOffChainPoolData
+  | SimplifiedOffChainVoteDataType !OffChainVoteWorkQueue !SimplifiedOffChainVoteData
+
+data SimplifiedOffChainPoolData = SimplifiedOffChainPoolData
+  { spodTickerName :: !Text
+  , spodHash :: !ByteString
+  , spodBytes :: !ByteString
+  , spodJson :: !Text
+  , spodContentType :: !(Maybe ByteString)
+  }
+
+data SimplifiedOffChainVoteData = SimplifiedOffChainVoteData
+  { sovaHash :: !ByteString
+  , sovaBytes :: !ByteString
+  , sovaJson :: !Text
+  , sovaContentType :: !(Maybe ByteString)
+  }
 
 data Retry = Retry
   { retryFetchTime :: !POSIXTime -- Time last time time
@@ -168,3 +197,83 @@ data Retry = Retry
   , retryCount :: !Word
   }
   deriving (Eq, Show, Generic)
+
+data FetchUrlType
+  = FetchPoolUrl !PoolUrl
+  | FetchVoteUrl !VoteUrl
+  deriving (Eq, Generic)
+
+instance Show FetchUrlType where
+  show =
+    \case
+      FetchPoolUrl url -> show url
+      FetchVoteUrl url -> show url
+
+-------------------------------------------------------------------------------------
+-- OFFCHAIN FETCH ERRORS
+-------------------------------------------------------------------------------------
+
+-- | we want to return the fetch error along with the workqueue it came from
+data OffChainFetchError
+  = OffChainPoolFetchError !FetchError !OffChainPoolWorkQueue
+  | OffChainVoteFetchError !FetchError !OffChainVoteWorkQueue
+
+-- | Fetch error for the HTTP client fetching the pool offchain metadata.
+data FetchError
+  = FEHashMismatch !FetchUrlType !Text !Text
+  | FEDataTooLong !FetchUrlType
+  | FEUrlParseFail !FetchUrlType !Text
+  | FEJsonDecodeFail !FetchUrlType !Text
+  | FEHttpException !FetchUrlType !Text
+  | FEHttpResponse !FetchUrlType !Int !Text
+  | FEBadContentType !FetchUrlType !Text
+  | FEBadContentTypeHtml !FetchUrlType !Text
+  | FEIOException !Text
+  | FETimeout !FetchUrlType !Text
+  | FEConnectionFailure !FetchUrlType
+  deriving (Eq, Generic)
+
+instance Exception FetchError
+
+instance Show FetchError where
+  show =
+    \case
+      FEHashMismatch url xpt act ->
+        mconcat
+          [ "Hash mismatch when fetching metadata from "
+          , show url
+          , ". Expected "
+          , show xpt
+          , " but got "
+          , show act
+          , "."
+          ]
+      FEDataTooLong url ->
+        mconcat
+          [fetchUrlToString url, "Size error, fetching metadata from ", show url, " exceeded 512 bytes."]
+      FEUrlParseFail url err ->
+        mconcat
+          [fetchUrlToString url, "URL parse error for ", show url, " resulted in : ", show err]
+      FEJsonDecodeFail url err ->
+        mconcat
+          [fetchUrlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
+      FEHttpException url err ->
+        mconcat [fetchUrlToString url, "HTTP Exception error for ", show url, " resulted in : ", show err]
+      FEHttpResponse url sc msg ->
+        mconcat [fetchUrlToString url, "HTTP Response error from ", show url, " resulted in HTTP status code : ", show sc, " ", show msg]
+      FEBadContentType url ct ->
+        mconcat [fetchUrlToString url, "HTTP Response error from ", show url, ": expected JSON, but got : ", show ct]
+      FEBadContentTypeHtml url ct ->
+        mconcat [fetchUrlToString url, "HTTP Response error from ", show url, ": expected JSON, but got : ", show ct]
+      FETimeout url ctx ->
+        mconcat [fetchUrlToString url, "Timeout error when fetching metadata from ", show url, ": ", show ctx]
+      FEConnectionFailure url ->
+        mconcat
+          [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "'."]
+      FEIOException err -> "IO Exception: " <> show err
+
+fetchUrlToString :: FetchUrlType -> String
+fetchUrlToString url =
+  case url of
+    FetchPoolUrl _ -> "Error Offchain Pool: "
+    FetchVoteUrl _ -> "Error Offchain Voting Anchor: "

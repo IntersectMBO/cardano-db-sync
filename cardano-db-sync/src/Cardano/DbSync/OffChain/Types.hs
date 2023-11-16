@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.OffChain.Types (
+module Cardano.DbSync.OffChain.Types (
   PoolDescription (..),
   PoolHomepage (..),
   PoolOffChainMetadata (..),

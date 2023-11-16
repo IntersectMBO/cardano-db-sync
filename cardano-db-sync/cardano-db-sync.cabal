@@ -88,14 +88,8 @@ library
                         Cardano.DbSync.Era.Shelley.Insert
                         Cardano.DbSync.Era.Shelley.Insert.Epoch
                         Cardano.DbSync.Era.Shelley.Insert.Grouped
-                        Cardano.DbSync.Era.Shelley.OffChain
-                        Cardano.DbSync.Era.Shelley.OffChain.FetchQueue
-                        Cardano.DbSync.Era.Shelley.OffChain.Http
-                        Cardano.DbSync.Era.Shelley.OffChain.Query
-                        Cardano.DbSync.Era.Shelley.OffChain.Types
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Shelley.Validate
-                        Cardano.DbSync.Era.Conway.OffChain
 
                         -- Temporary debugging validation
                         Cardano.DbSync.Era.Shelley.ValidateWithdrawal
@@ -120,6 +114,14 @@ library
                         Cardano.DbSync.Fix.EpochStake
                         Cardano.DbSync.Fix.PlutusDataBytes
                         Cardano.DbSync.Fix.PlutusScripts
+
+                        -- OffChain
+                        Cardano.DbSync.OffChain
+                        Cardano.DbSync.OffChain.FetchQueue
+                        Cardano.DbSync.OffChain.Http
+                        Cardano.DbSync.OffChain.Query
+                        Cardano.DbSync.OffChain.Types
+
                         Cardano.DbSync.LocalStateQuery
                         Cardano.DbSync.StateQuery
                         Cardano.DbSync.Sync

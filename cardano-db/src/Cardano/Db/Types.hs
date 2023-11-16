@@ -23,6 +23,7 @@ module Cardano.Db.Types (
   PoolCert (..),
   ExtraMigration (..),
   VoteUrl (..),
+  VoteMetaHash(..),
   Vote (..),
   VoterRole (..),
   GovActionType (..),
@@ -236,6 +237,11 @@ instance Ord PoolCert where
 newtype VoteUrl = VoteUrl {unVoteUrl :: Text}
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet VoteUrl)
+
+-- | The raw binary hash of a stake vote metadata.
+newtype VoteMetaHash = VoteMetaHash {unVoteMetaHash :: ByteString}
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet VoteMetaHash)
 
 data Vote = VoteYes | VoteNo | VoteAbstain
   deriving (Eq, Ord, Generic)

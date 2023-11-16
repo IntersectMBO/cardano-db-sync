@@ -13,9 +13,9 @@ import Cardano.Db (
   runDbNoLoggingEnv,
   unValue4,
  )
-import Cardano.DbSync.Era.Shelley.OffChain.Http (
+import Cardano.DbSync.OffChain.Http (
   FetchError (..),
-  httpGetOffChainPoolData,
+  httpGetOffChainData,
   parsePoolUrl,
  )
 import Control.Monad (foldM)
@@ -60,7 +60,7 @@ main = do
           mHash = Just $ toHash testPoolOffChain
       eres <- runExceptT $ do
         request <- parsePoolUrl poolUrl
-        httpGetOffChainPoolData manager request poolUrl mHash
+        httpGetOffChainData manager request poolUrl mHash
       case eres of
         Left err -> do
           print err

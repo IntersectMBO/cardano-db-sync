@@ -23,7 +23,7 @@ The basic operation is a follows:
 
 This is an testing/debugging program. It uses *the same code* to fetch the offchain metadata as
 `cardano-db-sync`. It is not code copy, this application calls the function in `db-sync` that does
-the actual fetch (the function is named `httpGetOffChainPoolData`).
+the actual fetch (the function is named `httpGetOffChainData`).
 
 On success, this program will print "Success" and then print the retrieved JSON.
 

@@ -4,7 +4,7 @@ import Cardano.Db (PoolMetaHash (..), PoolUrl (..))
 import Cardano.DbSync (
   FetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainPoolData,
+  httpGetOffChainData,
   parsePoolUrl,
  )
 import Cardano.DbSync.Error (runOrThrowIO)
@@ -65,7 +65,7 @@ runHttpGet poolUrl mHash =
     httpGet = do
       request <- parsePoolUrl poolUrl
       manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetOffChainPoolData manager request poolUrl mHash
+      httpGetOffChainData manager request poolUrl mHash
 
     reportSuccess :: SimplifiedOffChainPoolData -> IO ()
     reportSuccess spod = do
