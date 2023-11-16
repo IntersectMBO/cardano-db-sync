@@ -11,6 +11,7 @@ module Test.Cardano.Db.Mock.UnifiedApi (
   withConwayFindLeaderAndSubmitTx,
   withShelleyFindLeaderAndSubmit,
   withShelleyFindLeaderAndSubmitTx,
+  getShelleyLedgerState,
   getAlonzoLedgerState,
   getBabbageLedgerState,
   getConwayLedgerState,
@@ -37,6 +38,7 @@ import Ouroboros.Consensus.Cardano.Block (
   StandardBabbage,
   StandardConway,
   StandardCrypto,
+  StandardShelley,
  )
 import Ouroboros.Consensus.Ledger.Basics (LedgerState)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
@@ -146,6 +148,9 @@ withShelleyFindLeaderAndSubmitTx interpreter mockServer mkTxs =
   withShelleyFindLeaderAndSubmit interpreter mockServer $ \st -> do
     tx <- mkTxs st
     pure [tx]
+
+getShelleyLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard StandardShelley))
+getShelleyLedgerState interpreter = withShelleyLedgerState interpreter Right
 
 getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard StandardAlonzo))
 getAlonzoLedgerState interpreter = withAlonzoLedgerState interpreter Right

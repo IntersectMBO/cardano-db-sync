@@ -41,6 +41,7 @@ import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Mock.ChainDB
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
+import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude (bimap, throwIO)
@@ -296,6 +297,7 @@ forgeWithStakeCreds inter = do
     LedgerStateShelley sts -> either throwIO (pure . TxShelley) $ Shelley.mkDCertTxPools sts
     LedgerStateAlonzo sta -> either throwIO (pure . TxAlonzo) $ Alonzo.mkDCertTxPools sta
     LedgerStateBabbage stb -> either throwIO (pure . TxBabbage) $ Babbage.mkDCertTxPools stb
+    LedgerStateConway stc -> either throwIO (pure . TxConway) $ Conway.mkDCertTxPools stc
     _ -> throwIO UnexpectedEra
   forgeNextFindLeader inter [tx]
 

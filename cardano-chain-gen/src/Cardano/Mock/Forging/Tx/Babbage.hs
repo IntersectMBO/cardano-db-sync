@@ -73,7 +73,7 @@ import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Ledger.Val
-import Cardano.Mock.Forging.Tx.Alonzo (mkUTxOAlonzo, mkWitnesses)
+import Cardano.Mock.Forging.Tx.Alonzo (addValidityInterval, mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
@@ -136,16 +136,6 @@ consTxBody ins cols ref outs collOut fees minted certs wdrl =
     Strict.SNothing
     Strict.SNothing
     (Strict.SJust Testnet)
-
-addValidityInterval ::
-  SlotNo ->
-  AlonzoTx StandardBabbage ->
-  AlonzoTx StandardBabbage
-addValidityInterval slotNo tx =
-  tx {body = txBody'}
-  where
-    interval = ValidityInterval SNothing (SJust slotNo)
-    txBody' = set vldtTxBodyL interval $ body tx
 
 consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->

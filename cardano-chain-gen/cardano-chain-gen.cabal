@@ -52,6 +52,7 @@ library
                         Cardano.Mock.Forging.Tx.Babbage
                         Cardano.Mock.Forging.Tx.Babbage.Scenarios
                         Cardano.Mock.Forging.Tx.Conway
+                        Cardano.Mock.Forging.Tx.Conway.Scenarios
                         Cardano.Mock.Forging.Tx.Generic
                         Cardano.Mock.Forging.Tx.Shelley
                         Cardano.Mock.Forging.Types
@@ -151,7 +152,12 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
                         Test.Cardano.Db.Mock.Unit.Conway.Config
+                        Test.Cardano.Db.Mock.Unit.Conway.Other
+                        Test.Cardano.Db.Mock.Unit.Conway.Reward
+                        Test.Cardano.Db.Mock.Unit.Conway.Rollback
                         Test.Cardano.Db.Mock.Unit.Conway.Simple
+                        Test.Cardano.Db.Mock.Unit.Conway.Stake
+                        Test.Cardano.Db.Mock.Unit.Conway.Tx
                         Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
@@ -165,6 +171,7 @@ test-suite cardano-chain-gen
                       , cardano-db-sync
                       , cardano-chain-gen
                       , cardano-ledger-alonzo
+                      , cardano-ledger-conway
                       , cardano-ledger-core
                       , cardano-ledger-mary
                       , cardano-ledger-shelley
@@ -172,6 +179,7 @@ test-suite cardano-chain-gen
                       , cardano-prelude
                       , cardano-slotting
                       , cardano-smash-server
+                      , cardano-strict-containers
                       , containers
                       , contra-tracer
                       , directory

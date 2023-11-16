@@ -23,6 +23,7 @@ module Cardano.Mock.Forging.Tx.Generic (
   unregisteredStakeCredentials,
   unregisteredPools,
   consPoolParams,
+  getPoolStakeCreds,
 ) where
 
 import Cardano.Binary (ToCBOR (..))

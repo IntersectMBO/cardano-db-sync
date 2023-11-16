@@ -5,13 +5,25 @@
 
 module Cardano.Mock.Forging.Tx.Conway (
   consTxBody,
-  mkPaymentTx,
-  mkSimpleTx,
-  mkFullTx,
+  consCertTxBody,
   consPoolParams,
+  mkPaymentTx,
+  mkPaymentTx',
+  mkSimpleTx,
+  mkDCertTx,
+  mkDCertTxPools,
+  mkSimpleDCertTx,
+  mkDepositTxPools,
+  mkDummyRegisterTx,
+  mkTxDelegCert,
+  mkRegTxCert,
+  mkUnRegTxCert,
+  mkDelegTxCert,
+  mkFullTx,
   mkScriptInp,
   mkWitnesses,
   mkUTxOConway,
+  addValidityInterval,
 ) where
 
 import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
@@ -25,20 +37,25 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (VotingProcedures (..))
 import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
-import Cardano.Ledger.Conway.TxCert
+import Cardano.Ledger.Conway.TxCert hiding (mkDelegTxCert)
 import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
+import Cardano.Ledger.Crypto (ADDRHASH ())
+import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
+import qualified Cardano.Ledger.Shelley.LedgerState as LedgerState
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Ledger.TxIn (TxIn (..))
-import Cardano.Mock.Forging.Tx.Alonzo (mkUTxOAlonzo, mkWitnesses)
+import Cardano.Ledger.Val (coin)
+import Cardano.Mock.Forging.Tx.Alonzo (addValidityInterval, mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Babbage (mkScriptInp)
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude
+import Data.List (nub)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..), maybeToStrictMaybe)
@@ -48,6 +65,7 @@ import qualified Data.Set as Set
 import Ouroboros.Consensus.Cardano.Block (LedgerState ())
 import Ouroboros.Consensus.Shelley.Eras (StandardConway (), StandardCrypto ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import Prelude ((!!))
 import qualified Prelude
 
@@ -88,6 +106,16 @@ consTxBody ins cols ref outs colOut fees minted certs withdrawals =
     , ctbTreasuryDonation = Coin 0
     }
 
+consCertTxBody ::
+  Maybe (TxIn StandardCrypto) ->
+  [ConwayTxCert StandardConway] ->
+  Withdrawals StandardCrypto ->
+  ConwayTxBody StandardConway
+consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty SNothing (Coin 0) mempty
+  where
+    toSet Nothing = mempty
+    toSet (Just a) = Set.singleton a
+
 mkPaymentTx ::
   ConwayUTxOIndex ->
   ConwayUTxOIndex ->
@@ -95,25 +123,57 @@ mkPaymentTx ::
   Integer ->
   ConwayLedgerState ->
   Either ForgingError (AlonzoTx StandardConway)
-mkPaymentTx inputIndex outputIndex amount fees state' = do
-  (inputPair, _) <- resolveUTxOIndex inputIndex state'
-  addr <- resolveAddress outputIndex state'
+mkPaymentTx inputIndex outputIndex amount = mkPaymentTx' inputIndex outputIndices
+  where
+    outputIndices = [(outputIndex, valueFromList amount [])]
 
-  let input = Set.singleton $ fst inputPair
-      output = BabbageTxOut addr (valueFromList (fromIntegral amount) []) NoDatum SNothing
+mkPaymentTx' ::
+  ConwayUTxOIndex ->
+  [(ConwayUTxOIndex, MaryValue StandardCrypto)] ->
+  Integer ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkPaymentTx' inputIndex outputIndices fees state' = do
+  (inputPair, _) <- resolveUTxOIndex inputIndex state'
+  outputs <- mapM mkOutputs outputIndices
+
+  let inputs = Set.singleton (fst inputPair)
+      outValue = sum $ map (unCoin . coin . snd) outputIndices
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (fromIntegral $ fromInteger inputValue - amount - fees) []) NoDatum SNothing
+      change =
+        BabbageTxOut
+          addr'
+          (valueFromList (fromIntegral $ fromIntegral inputValue - outValue - fees) [])
+          NoDatum
+          SNothing
 
   pure $
     mkSimpleTx True $
       consPaymentTxBody
-        input
+        inputs
         mempty
         mempty
-        (StrictSeq.fromList [output, change])
+        (StrictSeq.fromList $ outputs <> [change])
         SNothing
         (Coin fees)
         mempty
+  where
+    mkOutputs (outIx, val) = do
+      addr <- resolveAddress outIx state'
+      pure (BabbageTxOut addr val NoDatum SNothing)
+
+mkDCertTx ::
+  [ConwayTxCert StandardConway] ->
+  Withdrawals StandardCrypto ->
+  Maybe (TxIn StandardCrypto) ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkDCertTx certs wdrl ref = Right (mkSimpleTx True $ consCertTxBody ref certs wdrl)
+
+mkDCertTxPools :: ConwayLedgerState -> Either ForgingError (AlonzoTx StandardConway)
+mkDCertTxPools state' =
+  Right $
+    mkSimpleTx True $
+      consCertTxBody Nothing (allPoolStakeCert' state') (Withdrawals mempty)
 
 mkSimpleTx :: Bool -> ConwayTxBody StandardConway -> AlonzoTx StandardConway
 mkSimpleTx isValid' txBody =
@@ -123,6 +183,81 @@ mkSimpleTx isValid' txBody =
     , isValid = IsValid isValid'
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
+
+mkSimpleDCertTx ::
+  [(StakeIndex, StakeCredential StandardCrypto -> ConwayTxCert StandardConway)] ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkSimpleDCertTx consDCert st = do
+  dcerts <- forM consDCert $ \(stakeIndex, mkDCert) -> do
+    cred <- resolveStakeCreds stakeIndex st
+    pure (mkDCert cred)
+  mkDCertTx dcerts (Withdrawals mempty) Nothing
+
+mkDepositTxPools ::
+  ConwayUTxOIndex ->
+  Integer ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkDepositTxPools inputIndex deposit state' = do
+  (inputPair, _) <- resolveUTxOIndex inputIndex state'
+
+  let input = Set.singleton (fst inputPair)
+      BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
+      change =
+        BabbageTxOut
+          addr'
+          (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) [])
+          NoDatum
+          SNothing
+
+  pure $
+    mkSimpleTx True $
+      consTxBody
+        input
+        mempty
+        mempty
+        (StrictSeq.fromList [change])
+        SNothing
+        (Coin 0)
+        mempty
+        (allPoolStakeCert' state')
+        (Withdrawals mempty)
+
+mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardConway)
+mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
+  where
+    consDelegCert =
+      mkRegTxCert SNothing
+        . KeyHashObj
+        . KeyHash
+        . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))
+        . fromIntegral
+        <$> [n, m]
+
+mkRegTxCert ::
+  StrictMaybe Coin ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayRegCert cred coin'
+
+mkUnRegTxCert ::
+  StrictMaybe Coin ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkUnRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayUnRegCert cred coin'
+
+mkDelegTxCert ::
+  Delegatee StandardCrypto ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkDelegTxCert delegatee = mkTxDelegCert $ \cred -> ConwayDelegCert cred delegatee
+
+mkTxDelegCert ::
+  (StakeCredential StandardCrypto -> ConwayDelegCert StandardCrypto) ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkTxDelegCert f = ConwayTxCertDeleg . f
 
 mkFullTx ::
   Int ->
@@ -279,3 +414,15 @@ mkUTxOConway ::
   AlonzoTx StandardConway ->
   [(TxIn StandardCrypto, BabbageTxOut StandardConway)]
 mkUTxOConway = mkUTxOAlonzo
+
+allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
+allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)
+  where
+    getCreds = nub . concatMap getPoolStakeCreds . Map.elems . stakePoolParams
+    stakePoolParams =
+      LedgerState.psStakePoolParams
+        . LedgerState.certPState
+        . LedgerState.lsCertState
+        . LedgerState.esLState
+        . LedgerState.nesEs
+        . Consensus.shelleyLedgerState

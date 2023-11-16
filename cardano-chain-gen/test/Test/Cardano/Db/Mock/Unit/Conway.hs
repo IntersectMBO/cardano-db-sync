@@ -7,7 +7,12 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Reward as Reward
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
 import Test.Tasty (TestTree (), testGroup)
 import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion (), testCase)
@@ -77,6 +82,53 @@ unitTests iom knownMigrations =
             [ test "check force-index adds indexes" ForceIndex.checkForceIndexesArg
             , test "check no force-index doesn't add indexes" ForceIndex.checkNoForceIndexesArg
             ]
+        ]
+    , testGroup
+        "rollbacks"
+        [ test "simple rollback" Rollback.simpleRollback
+        , test "sync bigger chain" Rollback.bigChain
+        , test "rollback while db-sync is off" Rollback.restartAndRollback
+        , test "big rollback executed lazily" Rollback.lazyRollback
+        , test "lazy rollback on restart" Rollback.lazyRollbackRestart
+        , test "rollback while rollbacking" Rollback.doubleRollback
+        , test "rollback stake address cache" Rollback.stakeAddressRollback
+        , test "rollback change order of txs" Rollback.rollbackChangeTxOrder
+        , test "rollback full tx" Rollback.rollbackFullTx
+        ]
+    , testGroup
+        "different configs"
+        [ test "genesis config without pool" Other.configNoPools
+        , test "genesis config without stakes" Other.configNoStakes
+        ]
+    , testGroup
+        "blocks with txs"
+        [ test "simple tx" Tx.addSimpleTx
+        , test "simple tx in Shelley era" Tx.addSimpleTxShelley
+        , test "consume utxo same block" Tx.consumeSameBlock
+        ]
+    , testGroup
+        "stake addresses"
+        [ test "(de)registrations" Stake.registrationTx
+        , test "(de)registrations in same block" Stake.registrationsSameBlock
+        , test "(de)registrations in same tx" Stake.registrationsSameTx
+        , test "stake address pointers" Stake.stakeAddressPtr
+        , test "stake address pointers deregistration" Stake.stakeAddressPtrDereg
+        , test "stake address pointers. Use before registering." Stake.stakeAddressPtrUseBefore
+        ]
+    , testGroup
+        "stake distribution"
+        [ test "stake distribution from genesis" Stake.stakeDistGenesis
+        , test "2000 delegations" Stake.delegations2000
+        , test "2001 delegations" Stake.delegations2001
+        , test "8000 delegations" Stake.delegations8000
+        , test "many delegations" Stake.delegationsMany
+        , test "many delegations, sparse chain" Stake.delegationsManyNotDense
+        ]
+    , testGroup
+        "rewards"
+        [ test "rewards simple" Reward.simpleRewards
+        , test "shelley rewards from multiple sources" Reward.rewardsShelley
+        , test "rollback on epoch boundary" Reward.rollbackBoundary
         ]
     ]
   where
