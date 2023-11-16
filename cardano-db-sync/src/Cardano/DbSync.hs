@@ -236,6 +236,7 @@ extractSyncOptions snp aop =
   where
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
+      | enpOnlyUTxO snp = onlyUTxOInsertOptions
       | enpFullMode snp = fullInsertOptions useLedger
       | enpDisableAllMode snp = disableAllInsertOptions useLedger
       | otherwise =
@@ -250,7 +251,7 @@ extractSyncOptions snp aop =
             , ioGov = enpHasGov snp
             }
 
-    useLedger = enpHasLedger snp && enpShouldUseLedger snp
+    useLedger = enpHasLedger snp && enpShouldUseLedger snp && not (enpOnlyUTxO snp)
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do

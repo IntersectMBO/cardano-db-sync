@@ -93,6 +93,7 @@ pRunDbSyncNode =
     <*> pForceTxIn
     <*> pDisableAllMode
     <*> pFullMode
+    <*> pOnlyUTxO
     <*> pOnlyGov
     <*> pMigrateConsumed
     <*> pPruneTxOut
@@ -315,6 +316,15 @@ pFullMode =
     True
     ( Opt.long "full"
         <> Opt.help "Makes db-sync run with all possible functionalities."
+    )
+
+pOnlyUTxO :: Parser Bool
+pOnlyUTxO =
+  Opt.flag
+    False
+    True
+    ( Opt.long "only-utxo"
+        <> Opt.help "A mode which combines --bootstrap-tx-out with some disable flags"
     )
 
 pOnlyGov :: Parser Bool

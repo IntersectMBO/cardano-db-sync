@@ -78,6 +78,7 @@ data SyncNodeParams = SyncNodeParams
   , enpForceTxIn :: !Bool
   , enpDisableAllMode :: !Bool
   , enpFullMode :: !Bool
+  , enpOnlyUTxO :: !Bool
   , enpOnlyGov :: !Bool
   , enpMigrateConsumed :: !Bool
   , enpPruneTxOut :: !Bool

@@ -274,6 +274,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpForceTxIn = claForceTxIn
       , enpDisableAllMode = False
       , enpFullMode = True
+      , enpOnlyUTxO = False
       , enpOnlyGov = False
       , enpMigrateConsumed = claMigrateConsumed
       , enpPruneTxOut = claPruneTxOut
