@@ -618,19 +618,6 @@ share
     vote                 Vote                 sqltype=vote
     votingAnchorId       VotingAnchorId Maybe noreference
 
-  AnchorOfflineData
-    votingAnchorId          VotingAnchorId      noreference
-    hash                    ByteString
-    json                    Text                sqltype=jsonb
-    bytes                   ByteString          sqltype=bytea
-    deriving Show
-
-  AnchorOfflineFetchError
-    votingAnchorId          VotingAnchorId      noreference
-    fetchError              Text
-    retryCount              Word                sqltype=word31type
-    deriving Show
-
   DrepDistr
     hashId                  DrepHashId          noreference
     amount                  Word64
@@ -663,16 +650,16 @@ share
     UniqueOffChainPoolFetchError poolId fetchTime retryCount
     deriving Show
 
-  OffChainAnchorData
-    votingAnchorId          VotingAnchorId      noreference
-    hash                    ByteString
-    json                    Text                sqltype=jsonb
-    bytes                   ByteString          sqltype=bytea
+  OffChainVoteData
+    votingAnchorId      VotingAnchorId      noreference
+    hash                ByteString
+    json                Text                sqltype=jsonb
+    bytes               ByteString          sqltype=bytea
 
-  OffChainAnchorFetchError
-    votingAnchorId          VotingAnchorId      noreference
-    fetchError              Text
-    retryCount              Word                sqltype=word31type
+  OffChainVoteFetchError
+    votingAnchorId      VotingAnchorId      noreference
+    fetchError          Text
+    retryCount          Word                sqltype=word31type
 
   --------------------------------------------------------------------------
   -- A table containing a managed list of reserved ticker names.
@@ -1246,18 +1233,18 @@ schemaDocs =
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 
-    OffChainAnchorData --^ do
+    OffChainVoteData --^ do
       "The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway."
-      OffChainAnchorDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
-      OffChainAnchorDataHash # "The hash of the offchain data."
-      OffChainAnchorDataJson # "The payload as JSON."
-      OffChainAnchorDataBytes # "The raw bytes of the payload."
+      OffChainVoteDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
+      OffChainVoteDataHash # "The hash of the offchain data."
+      OffChainVoteDataJson # "The payload as JSON."
+      OffChainVoteDataBytes # "The raw bytes of the payload."
 
-    OffChainAnchorFetchError --^ do
+    OffChainVoteFetchError --^ do
       "Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway."
-      OffChainAnchorFetchErrorVotingAnchorId # "The VotingAnchor table index this offchain fetch error refers."
-      OffChainAnchorFetchErrorFetchError # "The text of the error."
-      OffChainAnchorFetchErrorRetryCount # "The number of retries."
+      OffChainVoteFetchErrorVotingAnchorId # "The VotingAnchor table index this offchain fetch error refers."
+      OffChainVoteFetchErrorFetchError # "The text of the error."
+      OffChainVoteFetchErrorRetryCount # "The number of retries."
 
     DrepDistr --^ do
       "The table for the distribution of voting power per DRep per. Currently this has a single entry per DRep\

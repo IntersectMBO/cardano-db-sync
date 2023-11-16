@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.OffChain.Query (
+module Cardano.DbSync.OffChain.Query (
   aquireOffChainPoolData,
 ) where
 
@@ -17,8 +17,8 @@ import Cardano.Db (
   PoolMetadataRefId,
   PoolUrl,
  )
-import Cardano.DbSync.Era.Shelley.OffChain.FetchQueue (newRetry, retryAgain)
-import Cardano.DbSync.Types (OffChainPoolFetchRetry (..))
+import Cardano.DbSync.OffChain.FetchQueue (newRetry, retryAgain)
+import Cardano.DbSync.Types (OffChainPoolWorkQueue (..))
 import Cardano.Prelude hiding (from, groupBy, on, retry)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -50,19 +50,19 @@ import System.Random.Shuffle (shuffleM)
 
 {- HLINT ignore "Fuse on/on" -}
 
-aquireOffChainPoolData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainPoolFetchRetry]
+aquireOffChainPoolData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
 aquireOffChainPoolData now maxCount = do
   -- Results from the query are shuffles so we don't continuously get the same entries.
   xs <- queryNewPoolFetch now
   if length xs >= maxCount
     then take maxCount <$> liftIO (shuffleM xs)
     else do
-      ys <- queryOffChainPoolFetchRetry (Time.posixSecondsToUTCTime now)
+      ys <- queryOffChainPoolWorkQueue (Time.posixSecondsToUTCTime now)
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
 -- Get pool fetch data for new pools (ie pools that had OffChainPoolData entry and no
 -- OffChainPoolFetchError).
-queryNewPoolFetch :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainPoolFetchRetry]
+queryNewPoolFetch :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
 queryNewPoolFetch now = do
   res <- select $ do
     (ph :& pmr) <-
@@ -93,19 +93,19 @@ queryNewPoolFetch now = do
 
     convert ::
       (Value PoolHashId, Value PoolMetadataRefId, Value PoolUrl, Value ByteString) ->
-      OffChainPoolFetchRetry
+      OffChainPoolWorkQueue
     convert (Value phId, Value pmrId, Value url, Value pmh) =
-      OffChainPoolFetchRetry
-        { opfrPoolHashId = phId
-        , opfrReferenceId = pmrId
-        , opfrPoolUrl = url
-        , opfrPoolMDHash = Just $ PoolMetaHash pmh
-        , opfrRetry = newRetry now
+      OffChainPoolWorkQueue
+        { oPoolWqHashId = phId
+        , oPoolWqReferenceId = pmrId
+        , oPoolWqUrl = url
+        , oPoolWqMetaHash = PoolMetaHash pmh
+        , oPoolWqRetry = newRetry now
         }
 
 -- Get pool fetch data for pools that have previously errored.
-queryOffChainPoolFetchRetry :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainPoolFetchRetry]
-queryOffChainPoolFetchRetry _now = do
+queryOffChainPoolWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
+queryOffChainPoolWorkQueue _now = do
   res <- select $ do
     (ph :& pmr :& pofe) <-
       from
@@ -139,12 +139,12 @@ queryOffChainPoolFetchRetry _now = do
 
     convert ::
       (Value UTCTime, Value PoolMetadataRefId, Value PoolUrl, Value ByteString, Value PoolHashId, Value Word) ->
-      OffChainPoolFetchRetry
+      OffChainPoolWorkQueue
     convert (Value time, Value pmrId, Value url, Value pmh, Value phId, Value rCount) =
-      OffChainPoolFetchRetry
-        { opfrPoolHashId = phId
-        , opfrReferenceId = pmrId
-        , opfrPoolUrl = url
-        , opfrPoolMDHash = Just $ PoolMetaHash pmh
-        , opfrRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
+      OffChainPoolWorkQueue
+        { oPoolWqHashId = phId
+        , oPoolWqReferenceId = pmrId
+        , oPoolWqUrl = url
+        , oPoolWqMetaHash = PoolMetaHash pmh
+        , oPoolWqRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
         }

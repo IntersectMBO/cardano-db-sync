@@ -21,7 +21,7 @@ module Cardano.DbSync (
   -- For testing and debugging
   FetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainPoolData,
+  httpGetOffChainData,
   parsePoolUrl,
 ) where
 
@@ -46,10 +46,10 @@ import Cardano.DbSync.Config.Types (
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
-import Cardano.DbSync.Era.Shelley.OffChain.Http (
+import Cardano.DbSync.OffChain.Http (
   FetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainPoolData,
+  httpGetOffChainData,
   parsePoolUrl,
   spodJson,
  )
@@ -197,7 +197,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
             id
             [ runDbThread syncEnv metricsSetters threadChannels
             , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-            , runOffChainFetchThread syncEnv
+            , runFetchOffChainThread syncEnv
             , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
             ]
   where
