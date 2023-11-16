@@ -9,6 +9,7 @@
 
 module Cardano.DbSync.Api (
   fullInsertOptions,
+  onlyUTxOInsertOptions,
   onlyGovInsertOptions,
   disableAllInsertOptions,
   setConsistentLevel,
@@ -199,6 +200,19 @@ getPrunes = do
 
 fullInsertOptions :: Bool -> InsertOptions
 fullInsertOptions useLedger = InsertOptions True useLedger True True True True True True
+
+onlyUTxOInsertOptions :: InsertOptions
+onlyUTxOInsertOptions =
+  InsertOptions
+    { ioInOut = True
+    , ioUseLedger = False
+    , ioShelley = False
+    , ioMultiAssets = True
+    , ioMetadata = False
+    , ioPlutusExtra = False
+    , ioOffChainPoolData = False
+    , ioGov = False
+    }
 
 onlyGovInsertOptions :: Bool -> InsertOptions
 onlyGovInsertOptions useLedger = (disableAllInsertOptions useLedger) {ioGov = True}
