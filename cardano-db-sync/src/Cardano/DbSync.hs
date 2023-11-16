@@ -244,6 +244,7 @@ extractSyncOptions snp aop =
             { ioInOut = enpHasInOut snp
             , ioUseLedger = useLedger
             , ioShelley = enpHasShelley snp
+            , ioRewards = True
             , ioMultiAssets = enpHasMultiAssets snp
             , ioMetadata = enpHasMetadata snp
             , ioPlutusExtra = enpHasPlutusExtra snp

@@ -92,8 +92,8 @@ toOrdering ev = case ev of
   LedgerStartAtEpoch {} -> 8
   LedgerNewEpoch {} -> 9
 
-convertAuxLedgerEvent :: OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
-convertAuxLedgerEvent = toLedgerEvent . wrappedAuxLedgerEvent
+convertAuxLedgerEvent :: Bool -> OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
+convertAuxLedgerEvent hasRewards = toLedgerEvent hasRewards . wrappedAuxLedgerEvent
 
 ledgerEventName :: LedgerEvent -> Text
 ledgerEventName le =
@@ -116,46 +116,46 @@ wrappedAuxLedgerEvent =
   WrapLedgerEvent @(HardForkBlock (CardanoEras StandardCrypto))
 
 class ConvertLedgerEvent blk where
-  toLedgerEvent :: WrapLedgerEvent blk -> Maybe LedgerEvent
+  toLedgerEvent :: Bool -> WrapLedgerEvent blk -> Maybe LedgerEvent
 
 instance ConvertLedgerEvent ByronBlock where
-  toLedgerEvent _ = Nothing
+  toLedgerEvent _ _ = Nothing
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ShelleyEra StandardCrypto)) where
-  toLedgerEvent evt =
+  toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositShelley hsh coin -> Just $ LedgerDeposits hsh coin
-      _ -> toLedgerEventShelley evt
+      _ -> toLedgerEventShelley evt hasRewards
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (AllegraEra StandardCrypto)) where
-  toLedgerEvent evt =
+  toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositAllegra hsh coin -> Just $ LedgerDeposits hsh coin
-      _ -> toLedgerEventShelley evt
+      _ -> toLedgerEventShelley evt hasRewards
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (MaryEra StandardCrypto)) where
-  toLedgerEvent evt =
+  toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositAllegra hsh coin -> Just $ LedgerDeposits hsh coin
-      _ -> toLedgerEventShelley evt
+      _ -> toLedgerEventShelley evt hasRewards
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (AlonzoEra StandardCrypto)) where
-  toLedgerEvent evt =
+  toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositsAlonzo hsh coin -> Just $ LedgerDeposits hsh coin
-      _ -> toLedgerEventShelley evt
+      _ -> toLedgerEventShelley evt hasRewards
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (BabbageEra StandardCrypto)) where
-  toLedgerEvent evt =
+  toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositsAlonzo hsh coin -> Just $ LedgerDeposits hsh coin
-      _ -> toLedgerEventShelley evt
+      _ -> toLedgerEventShelley evt hasRewards
 
 instance ConvertLedgerEvent (ShelleyBlock protocol (ConwayEra StandardCrypto)) where
-  toLedgerEvent evt =
+  toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositsConway hsh coin -> Just $ LedgerDeposits hsh coin
-      _ -> toLedgerEventConway evt
+      _ -> toLedgerEventConway evt hasRewards
 
 toLedgerEventShelley ::
   ( EraCrypto ledgerera ~ StandardCrypto
@@ -167,17 +167,18 @@ toLedgerEventShelley ::
   , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
   ) =>
   WrapLedgerEvent (ShelleyBlock protocol ledgerera) ->
+  Bool ->
   Maybe LedgerEvent
-toLedgerEventShelley evt =
+toLedgerEventShelley evt hasRewards =
   case unwrapLedgerEvent evt of
     ShelleyLedgerEventTICK (TickNewEpochEvent (Shelley.TotalRewardEvent e m)) ->
-      Just $ LedgerTotalRewards e m
+      whenHasRew hasRewards $ LedgerTotalRewards e m
     ShelleyLedgerEventTICK (TickNewEpochEvent (Shelley.RestrainedRewards e m creds)) ->
-      Just $ LedgerRestrainedRewards e (convertPoolRewards m) creds
+      whenHasRew hasRewards $ LedgerRestrainedRewards e (convertPoolRewards m) creds
     ShelleyLedgerEventTICK (TickNewEpochEvent (Shelley.DeltaRewardEvent (RupdEvent e m))) ->
-      Just $ LedgerDeltaRewards e (convertPoolRewards m)
+      whenHasRew hasRewards $ LedgerDeltaRewards e (convertPoolRewards m)
     ShelleyLedgerEventTICK (TickRupdEvent (RupdEvent e m)) ->
-      Just $ LedgerIncrementalRewards e (convertPoolRewards m)
+      whenHasRew hasRewards $ LedgerIncrementalRewards e (convertPoolRewards m)
     ShelleyLedgerEventTICK
       ( TickNewEpochEvent
           ( MirEvent
@@ -210,17 +211,18 @@ toLedgerEventConway ::
   , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
   ) =>
   WrapLedgerEvent (ShelleyBlock protocol ledgerera) ->
+  Bool ->
   Maybe LedgerEvent
-toLedgerEventConway evt =
+toLedgerEventConway evt hasRewards =
   case unwrapLedgerEvent evt of
     ShelleyLedgerEventTICK (TickNewEpochEvent (Conway.TotalRewardEvent e m)) ->
-      Just $ LedgerTotalRewards e m
+      whenHasRew hasRewards $ LedgerTotalRewards e m
     ShelleyLedgerEventTICK (TickNewEpochEvent (Conway.RestrainedRewards e m creds)) ->
-      Just $ LedgerRestrainedRewards e (convertPoolRewards m) creds
+      whenHasRew hasRewards $ LedgerRestrainedRewards e (convertPoolRewards m) creds
     ShelleyLedgerEventTICK (TickNewEpochEvent (Conway.DeltaRewardEvent (RupdEvent e m))) ->
-      Just $ LedgerDeltaRewards e (convertPoolRewards m)
+      whenHasRew hasRewards $ LedgerDeltaRewards e (convertPoolRewards m)
     ShelleyLedgerEventTICK (TickRupdEvent (RupdEvent e m)) ->
-      Just $ LedgerIncrementalRewards e (convertPoolRewards m)
+      whenHasRew hasRewards $ LedgerIncrementalRewards e (convertPoolRewards m)
     ShelleyLedgerEventTICK
       ( TickNewEpochEvent
           ( Conway.EpochEvent
@@ -236,11 +238,14 @@ toLedgerEventConway evt =
     _ -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
-  toLedgerEvent =
+  toLedgerEvent hasRewards =
     hcollapse
-      . hcmap (Proxy @ConvertLedgerEvent) (K . toLedgerEvent)
+      . hcmap (Proxy @ConvertLedgerEvent) (K . toLedgerEvent hasRewards)
       . getOneEraLedgerEvent
       . unwrapLedgerEvent
+
+whenHasRew :: Bool -> a -> Maybe a
+whenHasRew has a = if has then Just a else Nothing
 
 --------------------------------------------------------------------------------
 

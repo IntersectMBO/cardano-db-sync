@@ -124,7 +124,8 @@ syncing without maintaining the ledger
 ### --only-gov : Experimental
 
 Disables most data except governance data. This is the equivalent of using `--disable-in-out`,
-`--disable-shelley`, `--disable-multiassets`, `--disable-plutus-extra`, `--disable-offchain-pool-data`.
+`--disable-shelley`, `--disable-multiassets`, `--disable-plutus-extra`, `--disable-offchain-pool-data`,
+with the only difference that it also disables the `reward` table even when the ledger is used.
 
 ### --consumed-tx-out
 
