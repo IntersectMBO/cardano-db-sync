@@ -173,6 +173,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
     HasLedgerEnv
       { leTrace = trce
       , leUseLedger = ioUseLedger $ soptInsertOptions syncOptions
+      , leHasRewards = ioRewards $ soptInsertOptions syncOptions
       , leProtocolInfo = protoInfo
       , leDir = dir
       , leNetwork = nw
@@ -223,7 +224,7 @@ applyBlock env blk = do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
     !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
-    let ledgerEventsFull = mapMaybe convertAuxLedgerEvent (lrEvents result)
+    let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (lrEvents result)
     let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
     let !newLedgerState = lrResult result
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)

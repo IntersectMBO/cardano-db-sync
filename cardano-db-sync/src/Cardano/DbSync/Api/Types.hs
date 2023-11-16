@@ -66,6 +66,7 @@ data InsertOptions = InsertOptions
   { ioInOut :: !Bool
   , ioUseLedger :: !Bool
   , ioShelley :: !Bool
+  , ioRewards :: !Bool
   , ioMultiAssets :: !Bool
   , ioMetadata :: !Bool
   , ioPlutusExtra :: !Bool

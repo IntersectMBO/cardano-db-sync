@@ -199,7 +199,7 @@ getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
 fullInsertOptions :: Bool -> InsertOptions
-fullInsertOptions useLedger = InsertOptions True useLedger True True True True True True
+fullInsertOptions useLedger = InsertOptions True useLedger True True True True True True True
 
 onlyUTxOInsertOptions :: InsertOptions
 onlyUTxOInsertOptions =
@@ -207,6 +207,7 @@ onlyUTxOInsertOptions =
     { ioInOut = True
     , ioUseLedger = False
     , ioShelley = False
+    , ioRewards = False
     , ioMultiAssets = True
     , ioMetadata = False
     , ioPlutusExtra = False
@@ -218,7 +219,7 @@ onlyGovInsertOptions :: Bool -> InsertOptions
 onlyGovInsertOptions useLedger = (disableAllInsertOptions useLedger) {ioGov = True}
 
 disableAllInsertOptions :: Bool -> InsertOptions
-disableAllInsertOptions useLedger = InsertOptions False useLedger False False False False False False
+disableAllInsertOptions useLedger = InsertOptions False useLedger False False False False False False False
 
 initEpochState :: EpochState
 initEpochState =
