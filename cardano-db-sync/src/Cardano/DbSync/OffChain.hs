@@ -14,7 +14,7 @@ module Cardano.DbSync.OffChain (
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv, envOffChainPoolResultQueue, envOffChainPoolWorkQueue)
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
 import Cardano.DbSync.Types
@@ -46,10 +46,10 @@ loadOffChainWorkQueue _trce workQueue =
     runnablePools <- filter (isRunnable now) <$> aquireOffChainPoolData now 100
     liftIO $ mapM_ queueInsert runnablePools
   where
-    isRunnable :: POSIXTime -> OffChainPoolWorkQueue -> Bool
+    isRunnable :: POSIXTime -> OffChainWorkQueueType -> Bool
     isRunnable now pfr = retryRetryTime (opfrRetry pfr) <= now
 
-    queueInsert :: OffChainPoolWorkQueue -> IO ()
+    queueInsert :: OffChainWorkQueueType -> IO ()
     queueInsert = atomically . writeTBQueue workQueue
 
 insertOffChainResults ::
@@ -62,7 +62,7 @@ insertOffChainResults trce resultQueue = do
   let fetchErrorsLength = length $ filter isFetchError res
   unless (null res)
     $ liftIO
-    . logInfo trce
+      . logInfo trce
     $ mconcat
       [ "Offchain pool metadata fetch: "
       , DB.textShow (length res - fetchErrorsLength)
@@ -72,17 +72,29 @@ insertOffChainResults trce resultQueue = do
       ]
   mapM_ insert res
   where
-    insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
-    insert ofr =
-      case ofr of
-        OffChainPoolResultMetadata md -> void $ DB.insertCheckOffChainPoolData md
-        OffChainPoolResultError fe -> void $ DB.insertCheckOffChainPoolFetchError fe
+    insert :: (MonadBaseControl IO m, MonadIO m) => OffChainResultType -> ReaderT SqlBackend m ()
+    insert ocrt =
+      case ocrt of
+        OffChainPoolResultType a ->
+          case a of
+            OffChainPoolResultMetadata md -> void $ DB.insertCheckOffChainPoolData md
+            OffChainPoolResultError fe -> void $ DB.insertCheckOffChainPoolFetchError fe
+        OffChainVoteResultType a ->
+          case a of
+            OffChainVoteResultMetadata md -> void $ DB.insertOffChainVoteData md
+            OffChainVoteResultError fe -> void $ DB.insertOffChainVoteFetchError fe
 
-    isFetchError :: OffChainPoolResult -> Bool
-    isFetchError fe =
-      case fe of
-        OffChainPoolResultMetadata {} -> False
-        OffChainPoolResultError {} -> True
+    isFetchError :: OffChainResultType -> Bool
+    isFetchError ocrt =
+      case ocrt of
+        OffChainPoolResultType a ->
+          case a of
+            OffChainPoolResultMetadata {} -> False
+            OffChainPoolResultError {} -> True
+        OffChainVoteResultType a ->
+          case a of
+            OffChainVoteResultMetadata {} -> False
+            OffChainVoteResultError {} -> True
 
 runFetchOffChainThread :: SyncEnv -> IO ()
 runFetchOffChainThread syncEnv = do
@@ -99,7 +111,10 @@ runFetchOffChainThread syncEnv = do
     iopts = getInsertOptions syncEnv
 
     queueInsert :: OffChainResultType -> IO ()
-    queueInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
+    queueInsert ocResultType =
+      case ocResultType of
+        OffChainPoolResultType res -> atomically $ writeTBQueue (envOffChainPoolResultQueue syncEnv) $ OffChainPoolResultType res
+        OffChainVoteResultType res -> atomically $ writeTBQueue (envOffChainVoteResultQueue syncEnv) $ OffChainVoteResultType res
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -125,43 +140,43 @@ fetchOffChainData _tracer manager time offChainWorkQueue =
         Right sOffChainData ->
           case sOffChainData of
             SimplifiedOffChainPoolDataType oPoolWorkQ sPoolData ->
-              OffChainPoolResultType
-                $ OffChainPoolResultMetadata
-                $ DB.OffChainPoolData
-                  { DB.offChainPoolDataPoolId = oPoolWqHashId oPoolWorkQ
-                  , DB.offChainPoolDataTickerName = spodTickerName sPoolData
-                  , DB.offChainPoolDataHash = spodHash sPoolData
-                  , DB.offChainPoolDataBytes = spodBytes sPoolData
-                  , DB.offChainPoolDataJson = spodJson sPoolData
-                  , DB.offChainPoolDataPmrId = oPoolWqReferenceId oPoolWorkQ
-                  }
+              OffChainPoolResultType $
+                OffChainPoolResultMetadata $
+                  DB.OffChainPoolData
+                    { DB.offChainPoolDataPoolId = oPoolWqHashId oPoolWorkQ
+                    , DB.offChainPoolDataTickerName = spodTickerName sPoolData
+                    , DB.offChainPoolDataHash = spodHash sPoolData
+                    , DB.offChainPoolDataBytes = spodBytes sPoolData
+                    , DB.offChainPoolDataJson = spodJson sPoolData
+                    , DB.offChainPoolDataPmrId = oPoolWqReferenceId oPoolWorkQ
+                    }
             SimplifiedOffChainVoteDataType oVoteWorkQ sVoteData ->
-              OffChainVoteResultType
-                $ OffChainVoteResultMetadata
-                $ DB.OffChainVoteData
-                  { DB.offChainVoteDataBytes = sovaBytes sVoteData
-                  , DB.offChainVoteDataHash = sovaHash sVoteData
-                  , DB.offChainVoteDataJson = sovaJson sVoteData
-                  , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
-                  }
+              OffChainVoteResultType $
+                OffChainVoteResultMetadata $
+                  DB.OffChainVoteData
+                    { DB.offChainVoteDataBytes = sovaBytes sVoteData
+                    , DB.offChainVoteDataHash = sovaHash sVoteData
+                    , DB.offChainVoteDataJson = sovaJson sVoteData
+                    , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
+                    }
         -- there was an error when gettign offchain data
         Left offChainFetchErr ->
           case offChainFetchErr of
             OffChainPoolFetchError err ocPoolWQ ->
-              OffChainPoolResultType
-                $ OffChainPoolResultError
-                $ DB.OffChainPoolFetchError
-                  { DB.offChainPoolFetchErrorPoolId = oPoolWqHashId ocPoolWQ
-                  , DB.offChainPoolFetchErrorFetchTime = Time.posixSecondsToUTCTime time
-                  , DB.offChainPoolFetchErrorPmrId = oPoolWqReferenceId ocPoolWQ
-                  , DB.offChainPoolFetchErrorFetchError = show err
-                  , DB.offChainPoolFetchErrorRetryCount = retryCount (oPoolWqRetry ocPoolWQ)
-                  }
+              OffChainPoolResultType $
+                OffChainPoolResultError $
+                  DB.OffChainPoolFetchError
+                    { DB.offChainPoolFetchErrorPoolId = oPoolWqHashId ocPoolWQ
+                    , DB.offChainPoolFetchErrorFetchTime = Time.posixSecondsToUTCTime time
+                    , DB.offChainPoolFetchErrorPmrId = oPoolWqReferenceId ocPoolWQ
+                    , DB.offChainPoolFetchErrorFetchError = show err
+                    , DB.offChainPoolFetchErrorRetryCount = retryCount (oPoolWqRetry ocPoolWQ)
+                    }
             OffChainVoteFetchError err ocVoteWQ ->
-              OffChainVoteResultType
-                $ OffChainVoteResultError
-                $ DB.OffChainVoteFetchError
-                  { DB.offChainVoteFetchErrorVotingAnchorId = oVoteWqReferenceId ocVoteWQ
-                  , DB.offChainVoteFetchErrorFetchError = show err
-                  , DB.offChainVoteFetchErrorRetryCount = retryCount (oVoteWqRetry ocVoteWQ)
-                  }
+              OffChainVoteResultType $
+                OffChainVoteResultError $
+                  DB.OffChainVoteFetchError
+                    { DB.offChainVoteFetchErrorVotingAnchorId = oVoteWqReferenceId ocVoteWQ
+                    , DB.offChainVoteFetchErrorFetchError = show err
+                    , DB.offChainVoteFetchErrorRetryCount = retryCount (oVoteWqRetry ocVoteWQ)
+                    }

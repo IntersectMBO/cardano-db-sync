@@ -18,8 +18,8 @@ import Cardano.DbSync.Cache.Types (Cache)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
-  OffChainWorkQueueType,
   OffChainResultType,
+  OffChainWorkQueueType,
  )
 import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -47,8 +47,8 @@ data SyncEnv = SyncEnv
   , envNetworkMagic :: !NetworkMagic
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainResultType)
   , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainWorkQueueType)
-  , envOffChainAnchorResultQueue :: !(StrictTBQueue IO OffChainResultType)
-  , envOffChainAnchorWorkQueue :: !(StrictTBQueue IO OffChainWorkQueueType)
+  , envOffChainVoteResultQueue :: !(StrictTBQueue IO OffChainResultType)
+  , envOffChainVoteWorkQueue :: !(StrictTBQueue IO OffChainWorkQueueType)
   , envOptions :: !SyncOptions
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart

@@ -23,7 +23,7 @@ module Cardano.Db.Types (
   PoolCert (..),
   ExtraMigration (..),
   VoteUrl (..),
-  VoteMetaHash(..),
+  VoteMetaHash (..),
   Vote (..),
   VoterRole (..),
   GovActionType (..),
