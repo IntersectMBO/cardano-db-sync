@@ -160,16 +160,16 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
           , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
           }
 
-    when withinHalfHour
-      $ insertReverseIndex blkId minIds
+    when withinHalfHour $
+      insertReverseIndex blkId minIds
 
     liftIO $ do
       let epoch = unEpochNo epochNo
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
 
       when (withinTwoMins && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
-        logInfo tracer
-          $ mconcat
+        logInfo tracer $
+          mconcat
             [ renderInsertName (Generic.blkEra blk)
             , ": continuing epoch "
             , textShow epoch
@@ -179,8 +179,8 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
             , textShow (unEpochSize $ sdEpochSize details)
             , ")"
             ]
-      logger tracer
-        $ mconcat
+      logger tracer $
+        mconcat
           [ renderInsertName (Generic.blkEra blk)
           , ": epoch "
           , textShow (unEpochNo epochNo)
@@ -364,13 +364,13 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txParamProposal tx
 
       maTxMint <-
-        whenFalseMempty (ioMetadata iopts)
-          $ prepareMaTxMint tracer cache txId
-          $ Generic.txMint tx
+        whenFalseMempty (ioMetadata iopts) $
+          prepareMaTxMint tracer cache txId $
+            Generic.txMint tx
 
-      when (ioPlutusExtra iopts)
-        $ mapM_ (insertScript tracer txId)
-        $ Generic.txScripts tx
+      when (ioPlutusExtra iopts) $
+        mapM_ (insertScript tracer txId) $
+          Generic.txScripts tx
 
       when (ioPlutusExtra iopts) $
         mapM_ (insertExtraKeyWitness tracer txId) $
@@ -398,13 +398,13 @@ prepareTxOut ::
 prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
-    whenFalseEmpty (ioPlutusExtra iopts) Nothing
-      $ Generic.whenInlineDatum dt
-      $ insertDatum tracer cache txId
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      Generic.whenInlineDatum dt $
+        insertDatum tracer cache txId
   mScriptId <-
-    whenFalseEmpty (ioPlutusExtra iopts) Nothing
-      $ whenMaybe mScript
-      $ insertScript tracer txId
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      whenMaybe mScript $
+        insertScript tracer txId
   let !txOut =
         DB.TxOut
           { DB.txOutTxId = txId
@@ -437,13 +437,13 @@ insertCollateralTxOut ::
 insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
-    whenFalseEmpty (ioPlutusExtra iopts) Nothing
-      $ Generic.whenInlineDatum dt
-      $ insertDatum tracer cache txId
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      Generic.whenInlineDatum dt $
+        insertDatum tracer cache txId
   mScriptId <-
-    whenFalseEmpty (ioPlutusExtra iopts) Nothing
-      $ whenMaybe mScript
-      $ insertScript tracer txId
+    whenFalseEmpty (ioPlutusExtra iopts) Nothing $
+      whenMaybe mScript $
+        insertScript tracer txId
   _ <-
     lift
       . DB.insertCollateralTxOut
@@ -1055,8 +1055,8 @@ insertParamProposal ::
   ReaderT SqlBackend m DB.ParamProposalId
 insertParamProposal blkId txId pp = do
   cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (pppCostmdls pp)
-  DB.insertParamProposal
-    $ DB.ParamProposal
+  DB.insertParamProposal $
+    DB.ParamProposal
       { DB.paramProposalRegisteredTxId = txId
       , DB.paramProposalEpochNo = unEpochNo <$> pppEpochNo pp
       , DB.paramProposalKey = pppKey pp
@@ -1173,14 +1173,14 @@ insertDatum tracer cache txId txd = do
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertDatum" $ Generic.txDataValue txd
-      lift
-        $ insertDatumAndCache cache (Generic.txDataHash txd)
-        $ DB.Datum
-          { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
-          , DB.datumTxId = txId
-          , DB.datumValue = value
-          , DB.datumBytes = Generic.txDataBytes txd
-          }
+      lift $
+        insertDatumAndCache cache (Generic.txDataHash txd) $
+          DB.Datum
+            { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
+            , DB.datumTxId = txId
+            , DB.datumValue = value
+            , DB.datumBytes = Generic.txDataBytes txd
+            }
 
 insertRedeemerData ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -1236,8 +1236,8 @@ insertCostModel ::
   Map Language Ledger.CostModel ->
   ReaderT SqlBackend m DB.CostModelId
 insertCostModel _blkId cms =
-  DB.insertCostModel
-    $ DB.CostModel
+  DB.insertCostModel $
+    DB.CostModel
       { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.CostModels cms mempty mempty
       , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
       }
@@ -1333,8 +1333,8 @@ prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
       ReaderT SqlBackend m DB.MaTxMint
     prepareInner policy (aname, amount) = do
       maId <- insertMultiAsset cache policy aname
-      pure
-        $ DB.MaTxMint
+      pure $
+        DB.MaTxMint
           { DB.maTxMintIdent = maId
           , DB.maTxMintQuantity = DB.integerToDbInt65 amount
           , DB.maTxMintTxId = txId
@@ -1363,8 +1363,8 @@ prepareMaTxOuts _tracer cache maMap =
       ReaderT SqlBackend m MissingMaTxOut
     prepareInner policy (aname, amount) = do
       maId <- insertMultiAsset cache policy aname
-      pure
-        $ MissingMaTxOut
+      pure $
+        MissingMaTxOut
           { mmtoIdent = maId
           , mmtoQuantity = DbWord64 (fromIntegral amount)
           }
@@ -1380,8 +1380,8 @@ insertMultiAsset cache policy aName = do
   case mId of
     Right maId -> pure maId
     Left (policyBs, assetNameBs) ->
-      DB.insertMultiAssetUnchecked
-        $ DB.MultiAsset
+      DB.insertMultiAssetUnchecked $
+        DB.MultiAsset
           { DB.multiAssetPolicy = policyBs
           , DB.multiAssetName = assetNameBs
           , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs assetNameBs)
@@ -1536,8 +1536,8 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
 
 insertAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
 insertAnchor txId anchor =
-  DB.insertAnchor
-    $ DB.VotingAnchor
+  DB.insertAnchor $
+    DB.VotingAnchor
       { DB.votingAnchorTxId = txId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
@@ -1627,8 +1627,8 @@ insertDrepDistr e pSnapshot = do
     mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
     mkEntry (drep, coin) = do
       drepId <- insertDrep drep
-      pure
-        $ DB.DrepDistr
+      pure $
+        DB.DrepDistr
           { DB.drepDistrHashId = drepId
           , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
           , DB.drepDistrEpochNo = unEpochNo e

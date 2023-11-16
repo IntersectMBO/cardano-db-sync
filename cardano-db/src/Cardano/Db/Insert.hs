@@ -54,6 +54,8 @@ module Cardano.Db.Insert (
   insertReverseIndex,
   insertCheckOffChainPoolData,
   insertCheckOffChainPoolFetchError,
+  insertOffChainVoteData,
+  insertOffChainVoteFetchError,
   insertReservedPoolTicker,
   insertDelistedPool,
   insertExtraMigration,
@@ -312,6 +314,12 @@ insertCheckOffChainPoolFetchError pofe = do
   foundPool <- existsPoolHashId (offChainPoolFetchErrorPoolId pofe)
   foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
   when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
+
+insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m ()
+insertOffChainVoteData pod = void $ insertCheckUnique "OffChainVoteData" pod
+
+insertOffChainVoteFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteFetchError -> ReaderT SqlBackend m ()
+insertOffChainVoteFetchError pofe = void $ insertCheckUnique "OffChainVoteFetchError" pofe
 
 insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m (Maybe ReservedPoolTickerId)
 insertReservedPoolTicker ticker = do

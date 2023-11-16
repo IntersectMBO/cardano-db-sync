@@ -655,11 +655,15 @@ share
     hash                ByteString
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
+    UniqueOffChainVoteData votingAnchorId hash
+    deriving Show
 
   OffChainVoteFetchError
     votingAnchorId      VotingAnchorId      noreference
     fetchError          Text
     retryCount          Word                sqltype=word31type
+    UniqueOffChainVoteFetchError votingAnchorId retryCount
+    deriving Show
 
   --------------------------------------------------------------------------
   -- A table containing a managed list of reserved ticker names.

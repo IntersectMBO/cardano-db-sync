@@ -19,7 +19,7 @@ import Cardano.DbSync.OffChain.Types (
 import Cardano.DbSync.Types (
   FetchError (..),
   FetchUrlType (..),
-  OffChainFetchError(..),
+  OffChainFetchError (..),
   OffChainPoolWorkQueue (..),
   OffChainVoteWorkQueue (..),
   OffChainWorkQueueType (..),
@@ -82,10 +82,10 @@ httpGetOffChainData manager request oWorkQueueType = do
               if "text/html" `BS.isInfixOf` ct && isPossiblyJsonObject respBS
                 then pure ()
                 else do
-                  when ("text/html" `BS.isInfixOf` ct)
-                    $ left
-                    $ makeOffChainFetchError oWorkQueueType
-                    $ FEBadContentTypeHtml url (Text.decodeLatin1 ct)
+                  when ("text/html" `BS.isInfixOf` ct) $
+                    left $
+                      makeOffChainFetchError oWorkQueueType $
+                        FEBadContentTypeHtml url (Text.decodeLatin1 ct)
                   unless
                     ( "application/json"
                         `BS.isInfixOf` ct
@@ -121,8 +121,8 @@ httpGetOffChainData manager request oWorkQueueType = do
 
           case oWorkQueueType of
             OffChainPoolWorkQueueType ocp ->
-              pure
-                $ SimplifiedOffChainPoolDataType
+              pure $
+                SimplifiedOffChainPoolDataType
                   ocp
                   SimplifiedOffChainPoolData
                     { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
@@ -135,8 +135,8 @@ httpGetOffChainData manager request oWorkQueueType = do
                     , spodContentType = mContentType
                     }
             OffChainVoteWorkQueueType ocv ->
-              pure
-                $ SimplifiedOffChainVoteDataType
+              pure $
+                SimplifiedOffChainVoteDataType
                   ocv
                   SimplifiedOffChainVoteData
                     { sovaHash = metadataHash

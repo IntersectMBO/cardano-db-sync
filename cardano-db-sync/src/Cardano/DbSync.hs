@@ -46,6 +46,8 @@ import Cardano.DbSync.Config.Types (
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
+import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
+import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain.Http (
   FetchError (..),
   SimplifiedOffChainPoolData (..),
@@ -53,8 +55,6 @@ import Cardano.DbSync.OffChain.Http (
   parsePoolUrl,
   spodJson,
  )
-import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
-import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()

@@ -390,8 +390,8 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
       , envNetworkMagic = nwMagic
       , envOffChainPoolResultQueue = oprq
       , envOffChainPoolWorkQueue = opwq
-      , envOffChainAnchorResultQueue = oarq
-      , envOffChainAnchorWorkQueue = oawq
+      , envOffChainVoteResultQueue = oarq
+      , envOffChainVoteWorkQueue = oawq
       , envOptions = syncOptions
       , envRunDelayedMigration = runMigrationFnc
       , envSystemStart = systemStart
