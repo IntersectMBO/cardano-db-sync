@@ -8,6 +8,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as F
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Plutus as Plutus
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Reward as Reward
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
@@ -129,6 +130,19 @@ unitTests iom knownMigrations =
         [ test "rewards simple" Reward.simpleRewards
         , test "shelley rewards from multiple sources" Reward.rewardsShelley
         , test "rollback on epoch boundary" Reward.rollbackBoundary
+        ]
+    , testGroup
+        "plutus send scripts"
+        [ test "simple script lock" Plutus.simpleScript
+        , test "unlock script in same block" Plutus.unlockScriptSameBlock
+        , test "failed script" Plutus.failedScript
+        , test "failed script fees" Plutus.failedScriptFees
+        , test "failed script in same block" Plutus.failedScriptSameBlock
+        , test "multiple scripts unlocked" Plutus.multipleScripts
+        , test "multiple scripts unlocked rollback" Plutus.multipleScriptsRollback
+        , test "multiple scripts unlocked same block" Plutus.multipleScriptsSameBlock
+        , test "multiple scripts failed" Plutus.multipleScriptsFailed
+        , test "multiple scripts failed same block" Plutus.multipleScriptsFailedSameBlock
         ]
     ]
   where

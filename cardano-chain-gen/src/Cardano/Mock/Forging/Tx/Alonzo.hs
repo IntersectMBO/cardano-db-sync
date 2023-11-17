@@ -349,10 +349,16 @@ consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
 consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
 mkScriptTx ::
+  forall era.
+  ( Core.Era era
+  , Core.EraCrypto era ~ StandardCrypto
+  , Core.Script era ~ AlonzoScript era
+  , Core.TxWits era ~ AlonzoTxWits era
+  ) =>
   Bool ->
-  [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))] ->
-  AlonzoTxBody StandardAlonzo ->
-  AlonzoTx StandardAlonzo
+  [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script era))] ->
+  Core.TxBody era ->
+  AlonzoTx era
 mkScriptTx valid rdmrs txBody =
   AlonzoTx
     { body = txBody
@@ -364,7 +370,7 @@ mkScriptTx valid rdmrs txBody =
     witnesses =
       mkWitnesses
         (map (second Just) rdmrs)
-        [(hashData @StandardAlonzo plutusDataList, plutusDataList)]
+        [(hashData @era plutusDataList, plutusDataList)]
 
 mkWitnesses ::
   (Core.Era era, Core.EraCrypto era ~ StandardCrypto, Script era ~ AlonzoScript era) =>

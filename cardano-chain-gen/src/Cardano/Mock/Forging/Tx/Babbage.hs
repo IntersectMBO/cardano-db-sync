@@ -21,6 +21,7 @@ module Cardano.Mock.Forging.Tx.Babbage (
   mkPaymentTx,
   mkPaymentTx',
   scriptSucceeds,
+  getDatum,
   getInlineScript,
   mkLockByScriptTx,
   mkOutFromType,

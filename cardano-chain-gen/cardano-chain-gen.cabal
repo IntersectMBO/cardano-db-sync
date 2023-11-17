@@ -153,6 +153,7 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
                         Test.Cardano.Db.Mock.Unit.Conway.Config
                         Test.Cardano.Db.Mock.Unit.Conway.Other
+                        Test.Cardano.Db.Mock.Unit.Conway.Plutus
                         Test.Cardano.Db.Mock.Unit.Conway.Reward
                         Test.Cardano.Db.Mock.Unit.Conway.Rollback
                         Test.Cardano.Db.Mock.Unit.Conway.Simple
