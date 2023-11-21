@@ -68,7 +68,7 @@
                 (final: prev: {
                   # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
                   # expects these to be here
-                  inherit (project.exes) cardano-db-sync;
+                  inherit (project.exes) cardano-db-sync cardano-db-tool;
                   schema = ./schema;
                 })
 
@@ -97,7 +97,10 @@
               inherit (inputs.cardano-parts.cardano-parts.pkgs.special) cardano-node-pkgs;
             in
               # cardano-parts currently only supports x86_64-linux
-              lib.optionalAttrs (system == "x86_64-linux") (cardano-node-pkgs system);
+              lib.optionalAttrs (system == "x86_64-linux") {
+                inherit (cardano-node-pkgs system)
+                  cardano-cli cardano-node cardano-submit-api;
+              };
 
           # Set up and start Postgres before running database tests
           preCheck = ''
@@ -326,6 +329,8 @@
               else [];
 
           in rec {
+            checks = staticChecks;
+
             hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
               ciJobs = flake.hydraJobs;
               nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
@@ -338,17 +343,34 @@
               checks = staticChecks;
             };
 
-            checks = staticChecks;
+            legacyPackages = pkgs;
 
             packages = lib.optionalAttrs (system == "x86_64-linux") {
               inherit cardano-db-sync-linux cardano-db-sync-docker;
+              inherit project;
               default = flake.packages."cardano-db-sync:exe:cardano-db-sync";
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
               inherit cardano-smash-server-no-basic-auth;
             };
-          }));
+          })) // {
+            nixosModules = {
+              cardano-db-sync = { pkgs, lib, ... }: {
+                imports = [ ./nix/nixos/cardano-db-sync-service.nix ];
+                services.cardano-db-sync.dbSyncPkgs =
+                  let
+                    pkgs' = self.legacyPackages.${pkgs.system};
+                  in {
+                    inherit (pkgs') cardanoLib schema cardano-db-sync;
+
+                    # cardano-db-tool
+                    cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes.cardano-db-tool =
+                      pkgs'.cardano-db-tool;
+                };
+              };
+            };
+          };
 
   nixConfig = {
     extra-substituters = [ "https://cache.iog.io" ];
