@@ -144,6 +144,19 @@ unitTests iom knownMigrations =
         , test "multiple scripts failed" Plutus.multipleScriptsFailed
         , test "multiple scripts failed same block" Plutus.multipleScriptsFailedSameBlock
         ]
+    , testGroup
+        "plutus cert scripts"
+        [ test "stake scripts" Plutus.registrationScriptTx
+        , test "stake scripts deregistration" Plutus.deregistrationScriptTx
+        , test "multiple stake scripts deregistration" Plutus.deregistrationsScriptTxs
+        , test "multiple stake scripts in same tx" Plutus.deregistrationScriptTx
+        , test
+            "multiple stake scripts deregistration in same tx missing redeemer 1"
+            Plutus.deregistrationsScriptTx'
+        , test
+            "multiple stake scripts deregistration in same tx missing redeemer 2"
+            Plutus.deregistrationsScriptTx''
+        ]
     ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree

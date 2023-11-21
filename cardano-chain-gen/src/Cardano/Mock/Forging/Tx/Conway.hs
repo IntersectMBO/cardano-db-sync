@@ -19,6 +19,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkDCertTx,
   mkDCertTxPools,
   mkSimpleDCertTx,
+  mkScriptDCertTx,
   mkDepositTxPools,
   mkDummyRegisterTx,
   mkTxDelegCert,
@@ -34,9 +35,11 @@ module Cardano.Mock.Forging.Tx.Conway (
 
 import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts (ValidityInterval (..))
+import Cardano.Ledger.Alonzo.Scripts (Tag (..))
 import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
+import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..))
 import Cardano.Ledger.BaseTypes (EpochNo (..), Network (..))
 import Cardano.Ledger.Binary (Sized (..))
 import Cardano.Ledger.Coin (Coin (..))
@@ -238,11 +241,7 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees state
         (Coin fees)
         mempty
   where
-    mkScriptInps = mapMaybe mapRdmr . map Babbage.mkScriptInp . zip [0 ..]
-
-    mapRdmr :: Maybe (a, Maybe b) -> Maybe (a, b)
-    mapRdmr (Just (a, Just b)) = Just (a, b)
-    mapRdmr _ = Nothing
+    mkScriptInps = mapMaybe joinSnd . map Babbage.mkScriptInp . zip [0 ..]
 
 mkDCertTx ::
   [ConwayTxCert StandardConway] ->
@@ -275,6 +274,30 @@ mkSimpleDCertTx consDCert st = do
     cred <- resolveStakeCreds stakeIndex st
     pure (mkDCert cred)
   mkDCertTx dcerts (Withdrawals mempty) Nothing
+
+mkScriptDCertTx ::
+  [(StakeIndex, Bool, StakeCredential StandardCrypto -> ConwayTxCert StandardConway)] ->
+  Bool ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkScriptDCertTx consCert isValid' state' = do
+  dcerts <- forM consCert $ \(stakeIndex, _, mkDCert) -> do
+    cred <- resolveStakeCreds stakeIndex state'
+    pure $ mkDCert cred
+
+  pure $
+    mkScriptTx isValid' (mapMaybe prepareRedeemer . zip [0 ..] $ consCert) $
+      consCertTxBody Nothing dcerts (Withdrawals mempty)
+  where
+    prepareRedeemer (n, (StakeIndexScript bl, shouldAddRedeemer, _))
+      | not shouldAddRedeemer = Nothing
+      | bl =
+          mkRedeemer n (Examples.alwaysFailsScriptHash, Examples.alwaysFailsScript)
+      | otherwise =
+          mkRedeemer n (Examples.alwaysSucceedsScriptHash, Examples.alwaysSucceedsScript)
+    prepareRedeemer _ = Nothing
+
+    mkRedeemer n (a, b) = Just (RdmrPtr Cert n, (a, b))
 
 mkDepositTxPools ::
   ConwayUTxOIndex ->
@@ -527,6 +550,14 @@ mkOutFromType amount txOutType =
       SNothing -> SNothing
       SJust True -> SJust Examples.alwaysSucceedsScript
       SJust False -> SJust Examples.alwaysFailsScript
+
+-- | Takes a nested Monad of the form Monad (_, Monad), and combines them into one
+-- outer monad
+joinSnd :: Monad m => m (a, m b) -> m (a, b)
+joinSnd m = do
+  (a, m') <- m
+  b <- m'
+  pure (a, b)
 
 allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)

@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
-  -- * Plutus Send Scripts
+  -- * Plutus send scripts
   simpleScript,
   unlockScriptSameBlock,
   failedScript,
@@ -13,6 +13,14 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
   multipleScriptsSameBlock,
   multipleScriptsFailed,
   multipleScriptsFailedSameBlock,
+
+  -- * Plutus cert scripts
+  registrationScriptTx,
+  deregistrationScriptTx,
+  deregistrationsScriptTxs,
+  deregistrationsScriptTx,
+  deregistrationsScriptTx',
+  deregistrationsScriptTx'',
 ) where
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
@@ -24,8 +32,9 @@ import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
-import Cardano.Mock.Forging.Types (MockBlock (..), NodeId (..), TxEra (..), UTxOIndex (..))
+import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (head)
+import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (genesisPoint)
 import Test.Cardano.Db.Mock.Config
@@ -407,3 +416,172 @@ multipleScriptsFailedSameBlock =
     assertAlonzoCounts dbSync (0, 0, 0, 0, 3, 0, 1, 1)
   where
     testLabel = "conwayMultipleScriptsFailedSameBlock"
+
+registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
+registrationScriptTx =
+  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a transaction with a registration cert
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkSimpleDCertTx [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+
+    -- Verify stake address script counts
+    assertBlockNoBackoff dbSync 1
+    assertScriptCert dbSync (0, 0, 0, 1)
+  where
+    testLabel = "conwayRegistrationScriptTx"
+
+deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationScriptTx =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge registration/deregistration cert transaction
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      sequence
+        [ Conway.mkSimpleDCertTx
+            [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+            state'
+        , Conway.mkScriptDCertTx
+            [(StakeIndexScript True, True, Conway.mkUnRegTxCert SNothing)]
+            True
+            state'
+        ]
+
+    -- Verify dereg and stake address script counts
+    assertBlockNoBackoff dbSync 1
+    assertScriptCert dbSync (1, 0, 0, 1)
+  where
+    testLabel = "conwayDeregistrationScriptTx"
+
+deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTxs =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge multiple reg/dereg transactions in a single block
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      reg <-
+        Conway.mkSimpleDCertTx
+          [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+          state'
+      dereg <-
+        Conway.mkScriptDCertTx
+          [(StakeIndexScript True, True, Conway.mkUnRegTxCert SNothing)]
+          True
+          state'
+      pure
+        [ reg
+        , dereg
+        , Conway.addValidityInterval 1000 reg
+        , Conway.addValidityInterval 2000 dereg
+        ]
+
+    assertBlockNoBackoff dbSync 1
+    -- Verify dereg and stake address script counts
+    assertScriptCert dbSync (2, 0, 0, 1)
+    -- Verify script/redeemer/datum counts
+    assertAlonzoCounts dbSync (1, 2, 1, 0, 0, 0, 0, 0)
+  where
+    testLabel = "conwayDeregistrationsScriptTxs"
+
+deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge multiple reg/dereg transactions in a single block
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      sequence
+        [ -- A transaction with one registration
+          Conway.mkSimpleDCertTx
+            [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+            state'
+        , -- A transaction with multiple deregistrations/registrations
+          Conway.mkScriptDCertTx
+            [ (StakeIndexScript True, True, Conway.mkUnRegTxCert SNothing)
+            , -- No redeemer
+              (StakeIndexScript True, False, Conway.mkRegTxCert SNothing)
+            , -- Add redeemer
+              (StakeIndexScript True, True, Conway.mkUnRegTxCert SNothing)
+            ]
+            True
+            state'
+        ]
+
+    assertBlockNoBackoff dbSync 1
+    -- Verify dereg and stake address script counts
+    assertScriptCert dbSync (2, 0, 0, 1)
+    -- Verify script/redeemer/datum counts
+    assertAlonzoCounts dbSync (1, 2, 1, 0, 0, 0, 0, 0)
+  where
+    testLabel = "conwayDeregistrationsScriptTx"
+
+-- Like previous but missing a redeemer. This is a known ledger issue
+deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx' =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge registrations/deregistrations without a redeemer
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
+      sequence
+        [ -- A transaction with one registration
+          Conway.mkSimpleDCertTx
+            [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+            state'
+        , -- Multiple degistrations/registrations, missing redeemer
+          Conway.mkScriptDCertTx
+            [ -- No redeemer
+              (StakeIndexScript True, False, Conway.mkUnRegTxCert SNothing)
+            , (StakeIndexScript True, False, Conway.mkRegTxCert SNothing)
+            , -- Add redeemer
+              (StakeIndexScript True, True, Conway.mkUnRegTxCert SNothing)
+            ]
+            True
+            state'
+        ]
+
+    assertBlockNoBackoff dbSync 1
+    -- TODO: This is a bug! The first field (delegations) should be 2. However the
+    -- deregistrations are missing the redeemers
+    assertScriptCert dbSync (0, 0, 0, 1)
+    -- Redeemer count should now be 1
+    assertAlonzoCounts dbSync (1, 1, 1, 0, 0, 0, 0, 0)
+  where
+    testLabel = "conwayDeregistrationsScriptTx'"
+
+-- Like previous but missing the other redeemer. This is a known ledger issue
+deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx'' =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge registrations/deregistrations without a redeemer
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
+      sequence
+        [ -- A transaction with one registration
+          Conway.mkSimpleDCertTx
+            [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+            state'
+        , -- Multiple deregistrations/registrations, missing redeemer
+          Conway.mkScriptDCertTx
+            [ -- Add redeemer
+              (StakeIndexScript True, True, Conway.mkUnRegTxCert SNothing)
+            , (StakeIndexScript True, False, Conway.mkRegTxCert SNothing)
+            , -- No redeemer
+              (StakeIndexScript True, False, Conway.mkUnRegTxCert SNothing)
+            ]
+            True
+            state'
+        ]
+
+    assertBlockNoBackoff dbSync 1
+    -- TODO: Is this a bug? The first field (delegations) should be 2, but it's only 1
+    assertScriptCert dbSync (1, 0, 0, 1)
+    -- Redeemer count should now be 1
+    assertAlonzoCounts dbSync (1, 1, 1, 0, 0, 0, 0, 0)
+  where
+    testLabel = "conwayDeregistrationsScriptTx''"
