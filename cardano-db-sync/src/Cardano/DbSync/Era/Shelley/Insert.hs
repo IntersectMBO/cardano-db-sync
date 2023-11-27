@@ -61,7 +61,6 @@ import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.BaseTypes (getVersion, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -76,6 +75,7 @@ import Cardano.Ledger.DRep
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
+import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert

@@ -37,8 +37,6 @@ module Cardano.Mock.Forging.Tx.Conway (
 
 import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts (ValidityInterval (..))
-import Cardano.Ledger.Alonzo.Scripts (Tag (..))
-import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..))
@@ -54,8 +52,9 @@ import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
 import Cardano.Ledger.Crypto (ADDRHASH ())
 import Cardano.Ledger.Keys (KeyHash (..))
-import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
+import Cardano.Ledger.Plutus.Data (Datum (..), hashData)
+import Cardano.Ledger.Plutus.Language (Language (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as LedgerState
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Ledger.TxIn (TxIn (..))

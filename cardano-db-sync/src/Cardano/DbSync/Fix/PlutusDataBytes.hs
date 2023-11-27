@@ -20,12 +20,12 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Error (bsBase16Encode)
 import Cardano.DbSync.Types
-import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
+import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import Cardano.Prelude (mapMaybe)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (filterM, when)

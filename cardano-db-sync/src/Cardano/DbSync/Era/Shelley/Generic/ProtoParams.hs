@@ -10,13 +10,13 @@ module Cardano.DbSync.Era.Shelley.Generic.ProtoParams (
 
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Core
-import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import Cardano.Ledger.BaseTypes (UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Core
 import Cardano.Ledger.Conway.PParams hiding (params)
+import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -61,7 +61,7 @@ data ProtoParams = ProtoParams
     ppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
   , ppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
   , ppCommitteeMinSize :: !(Maybe Natural)
-  , ppCommitteeMaxTermLength :: !(Maybe Natural)
+  , ppCommitteeMaxTermLength :: !(Maybe Word64)
   , ppGovActionLifetime :: !(Maybe EpochNo)
   , ppGovActionDeposit :: !(Maybe Natural)
   , ppDRepDeposit :: !(Maybe Natural)
@@ -121,7 +121,7 @@ fromConwayParams params =
     , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
     , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
     , ppCommitteeMinSize = Just $ params ^. ppCommitteeMinSizeL
-    , ppCommitteeMaxTermLength = Just $ params ^. ppCommitteeMaxTermLengthL
+    , ppCommitteeMaxTermLength = Just . unEpochNo $ params ^. ppCommitteeMaxTermLengthL
     , ppGovActionLifetime = Just $ params ^. ppGovActionLifetimeL
     , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL

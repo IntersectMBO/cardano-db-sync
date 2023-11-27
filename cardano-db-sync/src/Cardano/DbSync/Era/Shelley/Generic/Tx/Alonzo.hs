@@ -36,7 +36,6 @@ import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
-import qualified Cardano.Ledger.Alonzo.Language as Alonzo
 import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), txscriptfee, unBinaryPlutus)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
@@ -50,6 +49,7 @@ import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), policyID)
+import qualified Cardano.Ledger.Plutus.Language as Alonzo
 import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
@@ -64,7 +64,7 @@ import qualified Data.Set as Set
 #if __GLASGOW_HASKELL__ >= 906
 import Data.Type.Equality (type (~))
 #endif
-import Cardano.Ledger.Language (Plutus (..))
+import Cardano.Ledger.Plutus.Language (Plutus (..))
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
 
@@ -123,7 +123,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
         { txOutIndex = index
         , txOutAddress = txOut ^. Core.addrTxOutL
         , txOutAddressRaw = SBS.fromShort bs
-        , txOutAdaValue = Coin ada
+        , txOutAdaValue = ada
         , txOutMaValue = maMap
         , txOutScript = Nothing
         , txOutDatum = getMaybeDatumHash $ strictMaybeToMaybe mDataHash
