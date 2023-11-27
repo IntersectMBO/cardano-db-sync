@@ -72,8 +72,6 @@ library
                       , quiet
                       , resource-pool
                       , servant-server
-                      , servant-swagger
-                      , swagger2
                       , text
                       , time
                       , transformers-except

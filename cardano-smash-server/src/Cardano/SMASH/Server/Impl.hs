@@ -15,24 +15,20 @@ import Cardano.SMASH.Server.PoolDataLayer
 import Cardano.SMASH.Server.Types
 import Data.Aeson (encode)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Swagger (Contact (..), Info (..), License (..), Swagger (..), URL (..))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Version (showVersion)
 import Paths_cardano_smash_server (version)
 import Servant (Handler (..), Server, err400, err403, err404, errBody, (:<|>) (..))
-import Servant.Swagger (toSwagger)
 
 data ServerEnv = ServerEnv
   { seTrace :: Trace IO Text
   , seDataLayer :: PoolDataLayer
   }
 
--- | Combined server of a Smash service with Swagger documentation.
 server :: ServerEnv -> Server API
 server serverEnv =
-  pure todoSwagger
-    :<|> getOffChainPoolMetadata serverEnv
+  getOffChainPoolMetadata serverEnv
     :<|> getHealthStatus
     :<|> getReservedTickers serverEnv
     :<|> getDelistedPools serverEnv
@@ -43,37 +39,6 @@ server serverEnv =
     :<|> checkPool serverEnv
     :<|> addTicker serverEnv
     :<|> fetchPolicies serverEnv
-
--- | Swagger spec for Todo API.
-todoSwagger :: Swagger
-todoSwagger =
-  let swaggerDefinition = toSwagger smashApi
-   in swaggerDefinition {_swaggerInfo = swaggerInfo}
-  where
-    smashVersion :: Text
-    smashVersion = toS $ showVersion version
-
-    swaggerInfo :: Info
-    swaggerInfo =
-      Info
-        { _infoTitle = "Smash"
-        , _infoDescription = Just "Stakepool Metadata Aggregation Server"
-        , _infoTermsOfService = Nothing
-        , _infoContact =
-            Just $
-              Contact
-                { _contactName = Just "IOHK"
-                , _contactUrl = Just $ URL "https://iohk.io/"
-                , _contactEmail = Just "operations@iohk.io"
-                }
-        , _infoLicense =
-            Just $
-              License
-                { _licenseName = "APACHE2"
-                , _licenseUrl = Just $ URL "https://github.com/input-output-hk/cardano-db-sync/blob/master/LICENSE"
-                }
-        , _infoVersion = smashVersion
-        }
 
 -- 403 if it is delisted
 -- 404 if it is not available (e.g. it could not be downloaded, or was invalid)

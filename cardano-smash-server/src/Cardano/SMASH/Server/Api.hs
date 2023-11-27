@@ -19,7 +19,6 @@ module Cardano.SMASH.Server.Api (
 import Cardano.Prelude
 import Cardano.SMASH.Server.Types
 import Data.Aeson (FromJSON, ToJSON (..), eitherDecode, encode, object, (.=))
-import Data.Swagger (Swagger (..))
 import Network.Wai (Request, lazyRequestBody)
 import Servant (
   BasicAuth,
@@ -42,7 +41,6 @@ import Servant.Server.Internal (
   errBody,
   withRequest,
  )
-import Servant.Swagger (HasSwagger (..))
 import Prelude (String)
 
 -- Showing errors as JSON. To be reused when we need more general error handling.
@@ -136,11 +134,7 @@ type SmashAPI =
     :<|> AddTickerAPI
     :<|> FetchPoliciesAPI
 
--- | API for serving @swagger.json@.
-type SwaggerAPI = "swagger.json" :> Get '[JSON] Swagger
-
--- | Combined API of a Todo service with Swagger documentation.
-type API = SwaggerAPI :<|> SmashAPI
+type API = SmashAPI
 
 fullAPI :: Proxy API
 fullAPI = Proxy
@@ -148,11 +142,3 @@ fullAPI = Proxy
 -- | Just the @Proxy@ for the API type.
 smashApi :: Proxy SmashAPI
 smashApi = Proxy
-
--- For now, we just ignore the @Body@ definition.
-instance HasSwagger api => HasSwagger (Body name :> api) where
-  toSwagger _ = toSwagger (Proxy :: Proxy api)
-
--- For now, we just ignore the @BasicAuth@ definition.
-instance HasSwagger api => HasSwagger (BasicAuth name typo :> api) where
-  toSwagger _ = toSwagger (Proxy :: Proxy api)

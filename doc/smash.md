@@ -165,6 +165,7 @@ Interacting with a server via a regular HTTP protocol is unsafe since it is usin
 ## How to get the Swagger/OpenAPI info?
 
 First, run the application. Then, go to the localhost and copy the content into an [editor](https://editor.swagger.io/).
+TODO: Swagger has been disabled in recent releases.
 
 ## Delisting feature
 

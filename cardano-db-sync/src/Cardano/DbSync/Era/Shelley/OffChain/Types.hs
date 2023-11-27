@@ -14,21 +14,16 @@ import Cardano.Prelude
 import Control.Monad.Fail (fail)
 import Data.Aeson (FromJSON (..), Object, ToJSON (..), object, withObject, (.:), (.=))
 import Data.Aeson.Types (Parser)
-import Data.Swagger (ToSchema (..))
 
 newtype PoolDescription = PoolDescription
   { unPoolDescription :: Text
   }
   deriving (Eq, Show, Ord, Generic)
 
-instance ToSchema PoolDescription
-
 newtype PoolHomepage = PoolHomepage
   { unPoolHomepage :: Text
   }
   deriving (Eq, Show, Ord, Generic)
-
-instance ToSchema PoolHomepage
 
 -- | The bit of the pool data off the chain.
 data PoolOffChainMetadata = PoolOffChainMetadata
@@ -44,14 +39,10 @@ newtype PoolName = PoolName
   }
   deriving (Eq, Show, Ord, Generic)
 
-instance ToSchema PoolName
-
 newtype PoolTicker = PoolTicker
   { unPoolTicker :: Text
   }
   deriving (Eq, Show, Ord, Generic)
-
-instance ToSchema PoolTicker
 
 instance FromJSON PoolOffChainMetadata where
   parseJSON =
@@ -71,8 +62,6 @@ instance ToJSON PoolOffChainMetadata where
       , "ticker" .= unPoolTicker ticker'
       , "homepage" .= unPoolHomepage homepage'
       ]
-
-instance ToSchema PoolOffChainMetadata
 
 -- -------------------------------------------------------------------------------------------------
 

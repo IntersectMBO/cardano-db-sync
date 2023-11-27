@@ -43,7 +43,6 @@ import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
-import Data.Swagger (NamedSchema (..), ToParamSchema (..), ToSchema (..))
 import Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock.POSIX as Time
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
@@ -72,10 +71,6 @@ instance FromJSON PoolId where
     case parsePoolId poolId of
       Left err -> fail $ toS err
       Right poolId' -> pure poolId'
-
-instance ToParamSchema PoolId
-
-instance ToSchema PoolId
 
 instance FromHttpApiData PoolId where
   parseUrlPiece poolId = parsePoolId poolId
@@ -129,10 +124,6 @@ instance FromJSON PoolMetadataHash where
     poolHash <- o .: "poolHash"
     pure $ PoolMetadataHash poolHash
 
-instance ToSchema PoolMetadataHash
-
-instance ToParamSchema PoolMetadataHash
-
 -- TODO: Add sanity checks
 instance FromHttpApiData PoolMetadataHash where
   parseUrlPiece poolMetadataHash = Right $ PoolMetadataHash poolMetadataHash
@@ -140,8 +131,6 @@ instance FromHttpApiData PoolMetadataHash where
 -- Result wrapper.
 newtype ApiResult err a = ApiResult (Either err a)
   deriving (Generic)
-
-instance (ToSchema a, ToSchema err) => ToSchema (ApiResult err a)
 
 instance (ToJSON err, ToJSON a) => ToJSON (ApiResult err a) where
   toJSON (ApiResult (Left dbFail)) = toJSON dbFail
@@ -175,8 +164,6 @@ instance FromJSON HealthStatus where
         , hsVersion = version
         }
 
-instance ToSchema HealthStatus
-
 data PolicyResult = PolicyResult
   { prSmashURL :: !SmashURL
   , prHealthStatus :: !HealthStatus
@@ -194,8 +181,6 @@ instance ToJSON PolicyResult where
       , "uniqueTickers" .= toJSON uniqueTickers
       ]
 
-instance ToSchema PolicyResult
-
 -- | Fetch error for the specific @PoolId@ and the @PoolMetadataHash@.
 data PoolFetchError = PoolFetchError !Time.POSIXTime !PoolId !PoolMetadataHash !Text !Word
   deriving (Eq, Show, Generic)
@@ -210,8 +195,6 @@ instance ToJSON PoolFetchError where
       , "cause" .= errorCause
       , "retryCount" .= retryCount
       ]
-
-instance ToSchema PoolFetchError
 
 formatTimeToNormal :: Time.POSIXTime -> Text
 formatTimeToNormal = toS . formatTime defaultTimeLocale "%d.%m.%Y. %T" . Time.posixSecondsToUTCTime
@@ -236,10 +219,6 @@ instance FromJSON SmashURL where
       Nothing -> fail "Not a valid URI for SMASH server."
       Just uri' -> pure (SmashURL uri')
 
-instance ToSchema SmashURL where
-  declareNamedSchema _ =
-    pure (NamedSchema (Just "SmashURL") mempty)
-
 newtype UniqueTicker = UniqueTicker {getUniqueTicker :: (TickerName, PoolId)}
   deriving (Eq, Show, Generic)
 
@@ -256,8 +235,6 @@ instance FromJSON UniqueTicker where
     poolMetadataHash <- o .: "poolId"
 
     pure . UniqueTicker $ (tickerName, poolMetadataHash)
-
-instance ToSchema UniqueTicker
 
 -- | The ticker name wrapper so we have some additional safety.
 newtype TickerName = TickerName {getTickerName :: Text}
@@ -296,10 +273,6 @@ validateTickerName name = do
           <> show (length name)
           <> " characters."
 
-instance ToParamSchema TickerName
-
-instance ToSchema TickerName
-
 data PoolIdBlockNumber = PoolIdBlockNumber !PoolId !Word64
   deriving (Eq, Show, Generic)
 
@@ -317,8 +290,6 @@ instance FromJSON PoolIdBlockNumber where
 
     pure (PoolIdBlockNumber poolId blockNumber)
 
-instance ToSchema PoolIdBlockNumber
-
 -- | The stake pool metadata in JSON format. This type represents it in
 -- its raw original form. The hash of this content is the 'PoolMetadataHash'.
 newtype PoolMetadataRaw = PoolMetadataRaw {getPoolMetadata :: ByteString}
@@ -332,9 +303,6 @@ instance MimeUnrender OctetStream PoolMetadataRaw where
 instance ToJSON PoolMetadataRaw where
   toJSON (PoolMetadataRaw metadata) = Aeson.String $ decodeUtf8 metadata
   toEncoding (PoolMetadataRaw metadata) = unsafeToEncoding $ BSB.byteString metadata
-
-instance ToSchema PoolMetadataRaw where
-  declareNamedSchema _ = pure (NamedSchema (Just "RawPoolMetadata") mempty)
 
 -- | Specific time string format.
 newtype TimeStringFormat = TimeStringFormat {unTimeStringFormat :: UTCTime}
@@ -350,8 +318,6 @@ instance FromHttpApiData TimeStringFormat where
 -- Required for the above, error with newer GHC versions
 instance MonadFail (Either Text) where
   fail = Left . toS
-
-instance ToParamSchema TimeStringFormat
 
 -- | A user we'll grab from the database when we authenticate someone
 newtype User = User {userName :: Text}
@@ -373,10 +339,6 @@ data DBFail
   | PoolDataLayerError !Text
   | ConfigError !Text
   deriving (Eq)
-
-instance ToSchema DBFail where
-  declareNamedSchema _ =
-    pure (NamedSchema (Just "DBFail") mempty)
 
 instance Exception DBFail
 
