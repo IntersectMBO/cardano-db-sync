@@ -349,7 +349,7 @@ test-suite test
                       , cardano-ledger-binary
                       , cardano-ledger-core:testlib
                       , cardano-ledger-allegra:{cardano-ledger-allegra,testlib}
-                      , cardano-ledger-alonzo:{cardano-ledger-alonzo,testlib}
+                      , cardano-ledger-alonzo:{testlib}
                       , cardano-ledger-shelley:{cardano-ledger-shelley,testlib}
                       , cardano-db-sync
                       , cardano-ledger-core

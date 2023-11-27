@@ -12,7 +12,6 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.TxBody
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
@@ -65,7 +64,7 @@ fromMaryTx (blkIndex, tx) =
         { txOutIndex = index
         , txOutAddress = txOut ^. Core.addrTxOutL
         , txOutAddressRaw = SBS.fromShort bs
-        , txOutAdaValue = Coin ada
+        , txOutAdaValue = ada
         , txOutMaValue = maMap
         , txOutScript = Nothing
         , txOutDatum = NoDatum -- Mary does not support plutus data

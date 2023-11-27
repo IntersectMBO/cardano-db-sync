@@ -21,16 +21,15 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
+import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import Cardano.Prelude
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
@@ -128,7 +127,7 @@ fromTxOut index txOut =
     { txOutIndex = index
     , txOutAddress = txOut ^. Core.addrTxOutL
     , txOutAddressRaw = SBS.fromShort bs
-    , txOutAdaValue = Coin ada
+    , txOutAdaValue = ada
     , txOutMaValue = maMap
     , txOutScript = fromScript <$> strictMaybeToMaybe mScript
     , txOutDatum = fromDatum datum

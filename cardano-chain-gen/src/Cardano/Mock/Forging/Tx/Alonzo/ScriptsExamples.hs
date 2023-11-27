@@ -29,9 +29,7 @@ module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
 
 import Cardano.Ledger.Address
 import Cardano.Ledger.Alonzo
-import Cardano.Ledger.Alonzo.Language
 import Cardano.Ledger.Alonzo.Scripts
-import Cardano.Ledger.Alonzo.Scripts.Data
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
@@ -39,6 +37,8 @@ import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Era
 import Cardano.Ledger.Hashes
 import Cardano.Ledger.Mary.Value
+import Cardano.Ledger.Plutus.Data
+import Cardano.Ledger.Plutus.Language
 import Cardano.Prelude (panic)
 import Codec.CBOR.Write (toStrictByteString)
 import Codec.Serialise
