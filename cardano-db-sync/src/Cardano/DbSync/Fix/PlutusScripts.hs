@@ -27,7 +27,7 @@ import Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Cardano.Ledger.Core as Ledger
-import qualified Cardano.Ledger.Language as Ledger
+import qualified Cardano.Ledger.Plutus.Language as Ledger
 
 import Cardano.Db (ScriptType (..), maybeToEither)
 import qualified Cardano.Db.Old.V13_0 as DB_V_13_0
@@ -49,7 +49,7 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlon
 import Ouroboros.Consensus.Shelley.Eras
 
 import Cardano.DbSync.Fix.PlutusDataBytes
-import Cardano.Ledger.Language (Plutus (..))
+import Cardano.Ledger.Plutus.Language (Plutus (..))
 
 newtype FixPlutusScripts = FixPlutusScripts {scriptsInfo :: [FixPlutusInfo]}
 

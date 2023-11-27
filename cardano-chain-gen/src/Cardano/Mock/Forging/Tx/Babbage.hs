@@ -51,9 +51,7 @@ module Cardano.Mock.Forging.Tx.Babbage (
 import Cardano.Ledger.Address
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Core
-import Cardano.Ledger.Alonzo.Language
 import Cardano.Ledger.Alonzo.Scripts
-import qualified Cardano.Ledger.Alonzo.Scripts.Data as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxAuxData as Alonzo
 import Cardano.Ledger.Alonzo.TxWits
 import Cardano.Ledger.Babbage.Collateral (collOuts)
@@ -67,6 +65,8 @@ import Cardano.Ledger.Credential
 import Cardano.Ledger.Crypto (ADDRHASH)
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
+import qualified Cardano.Ledger.Plutus.Data as Alonzo
+import Cardano.Ledger.Plutus.Language
 import Cardano.Ledger.Shelley.PParams
 import Cardano.Ledger.Shelley.TxAuxData
 import Cardano.Ledger.Shelley.TxCert

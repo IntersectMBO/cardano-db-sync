@@ -14,13 +14,13 @@ module Cardano.DbSync.Era.Shelley.Generic.ParamProposal (
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
 import Cardano.Ledger.Alonzo.Core
-import Cardano.Ledger.Alonzo.Language (Language)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin, unCoin)
 import Cardano.Ledger.Crypto
 import qualified Cardano.Ledger.Keys as Ledger
+import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -69,7 +69,7 @@ data ParamProposal = ParamProposal
     pppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
   , pppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
   , pppCommitteeMinSize :: !(Maybe Natural)
-  , pppCommitteeMaxTermLength :: !(Maybe Natural)
+  , pppCommitteeMaxTermLength :: !(Maybe Word64)
   , pppGovActionLifetime :: !(Maybe EpochNo)
   , pppGovActionDeposit :: !(Maybe Natural)
   , pppDRepDeposit :: !(Maybe Natural)
@@ -138,7 +138,7 @@ convertConwayParamProposal pmap =
       pppPoolVotingThresholds = strictMaybeToMaybe (pmap ^. ppuPoolVotingThresholdsL)
     , pppDRepVotingThresholds = strictMaybeToMaybe (pmap ^. ppuDRepVotingThresholdsL)
     , pppCommitteeMinSize = strictMaybeToMaybe (pmap ^. ppuCommitteeMinSizeL)
-    , pppCommitteeMaxTermLength = strictMaybeToMaybe (pmap ^. ppuCommitteeMaxTermLengthL)
+    , pppCommitteeMaxTermLength = unEpochNo <$> strictMaybeToMaybe (pmap ^. ppuCommitteeMaxTermLengthL)
     , pppGovActionLifetime = strictMaybeToMaybe (pmap ^. ppuGovActionLifetimeL)
     , pppGovActionDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuGovActionDepositL)
     , pppDRepDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuDRepDepositL)

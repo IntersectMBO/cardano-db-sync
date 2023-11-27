@@ -28,8 +28,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
-import Cardano.Ledger.Alonzo.Scripts.Data (hashData)
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
+import Cardano.Ledger.Plutus.Data (hashData)
 import Cardano.Ledger.SafeHash (extractHash)
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager)

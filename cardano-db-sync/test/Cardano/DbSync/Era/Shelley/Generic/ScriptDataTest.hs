@@ -4,10 +4,10 @@
 module Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest (tests) where
 
 import Cardano.DbSync.Era.Shelley.Generic.ScriptData
-import Cardano.Ledger.Alonzo.Scripts.Data (Data (..))
-import qualified Cardano.Ledger.Alonzo.Scripts.Data as Ledger
 import Cardano.Ledger.Api (Shelley ())
 import Cardano.Ledger.Binary.Decoding
+import Cardano.Ledger.Plutus.Data (Data (..))
+import qualified Cardano.Ledger.Plutus.Data as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16
