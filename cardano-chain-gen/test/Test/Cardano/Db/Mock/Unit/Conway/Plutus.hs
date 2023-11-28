@@ -21,12 +21,18 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
   deregistrationsScriptTx,
   deregistrationsScriptTx',
   deregistrationsScriptTx'',
+
+  -- * Plutus MultiAsset scripts
+  mintMultiAsset,
+  mintMultiAssets,
+  swapMultiAssets,
 ) where
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
-import Cardano.Db as DB
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Alonzo.Scripts.Data (hashData)
+import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.SafeHash (extractHash)
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
@@ -34,6 +40,7 @@ import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (head)
+import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (genesisPoint)
@@ -585,3 +592,130 @@ deregistrationsScriptTx'' =
     assertAlonzoCounts dbSync (1, 1, 1, 0, 0, 0, 0, 0)
   where
     testLabel = "conwayDeregistrationsScriptTx''"
+
+mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
+mintMultiAsset =
+  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with a multi-asset script
+    void $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \state' -> do
+      let val =
+            MultiAsset $
+              Map.singleton
+                (PolicyID Examples.alwaysMintScriptHash)
+                (Map.singleton (head Examples.assetNames) 1)
+      Conway.mkMultiAssetsScriptTx
+        [UTxOIndex 0]
+        (UTxOIndex 1)
+        [(UTxOAddressNew 0, MaryValue 10_000 mempty)]
+        []
+        val
+        True
+        100
+        state'
+
+    -- Verify script counts
+    assertBlockNoBackoff dbSync 1
+    assertAlonzoCounts dbSync (1, 1, 1, 1, 0, 0, 0, 0)
+  where
+    testLabel = "conwayMintMultiAsset"
+
+mintMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
+mintMultiAssets =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with multiple multi-asset scripts
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      let assets = Map.fromList [(head Examples.assetNames, 10), (Examples.assetNames !! 1, 4)]
+          policy0 = PolicyID Examples.alwaysMintScriptHash
+          policy1 = PolicyID Examples.alwaysSucceedsScriptHash
+          val = MultiAsset $ Map.fromList [(policy0, assets), (policy1, assets)]
+
+      sequence
+        [ Conway.mkMultiAssetsScriptTx
+            [UTxOIndex 0]
+            (UTxOIndex 1)
+            [(UTxOAddressNew 0, MaryValue 10_000 mempty)]
+            []
+            val
+            True
+            100
+            state'
+        , Conway.mkMultiAssetsScriptTx
+            [UTxOIndex 2]
+            (UTxOIndex 3)
+            [(UTxOAddressNew 0, MaryValue 10_000 mempty)]
+            []
+            val
+            True
+            200
+            state'
+        ]
+
+    -- Verify script counts
+    assertBlockNoBackoff dbSync 1
+    assertAlonzoCounts dbSync (2, 4, 1, 2, 0, 0, 0, 0)
+  where
+    testLabel = "conwayMintMultiAssets"
+
+swapMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
+swapMultiAssets =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with multiple multi-asset scripts
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      let assetsMinted =
+            Map.fromList [(head Examples.assetNames, 10), (Examples.assetNames !! 1, 4)]
+          policy0 = PolicyID Examples.alwaysMintScriptHash
+          policy1 = PolicyID Examples.alwaysSucceedsScriptHash
+          mintValue =
+            MultiAsset $
+              Map.fromList [(policy0, assetsMinted), (policy1, assetsMinted)]
+          assets =
+            Map.fromList [(head Examples.assetNames, 5), (Examples.assetNames !! 1, 2)]
+          outValue =
+            MaryValue 20 $
+              MultiAsset $
+                Map.fromList [(policy0, assets), (policy1, assets)]
+
+      -- Forge a multi-asset script
+      tx0 <-
+        Conway.mkMultiAssetsScriptTx
+          [UTxOIndex 0]
+          (UTxOIndex 1)
+          [ (UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)
+          , (UTxOAddress Examples.alwaysMintScriptAddr, outValue)
+          ]
+          []
+          mintValue
+          True
+          100
+          state'
+
+      -- Consume the outputs from tx0
+      let utxos = Conway.mkUTxOConway tx0
+      tx1 <-
+        Conway.mkMultiAssetsScriptTx
+          [UTxOPair (head utxos), UTxOPair (utxos !! 1), UTxOIndex 2]
+          (UTxOIndex 3)
+          [ (UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)
+          , (UTxOAddress Examples.alwaysMintScriptAddr, outValue)
+          , (UTxOAddressNew 0, outValue)
+          , (UTxOAddressNew 0, outValue)
+          ]
+          []
+          mintValue
+          True
+          200
+          state'
+
+      pure [tx0, tx1]
+
+    -- Verify script counts
+    assertBlockNoBackoff dbSync 1
+    assertAlonzoCounts dbSync (2, 6, 1, 2, 4, 2, 0, 0)
+  where
+    testLabel = "conwaySwapMultiAssets"

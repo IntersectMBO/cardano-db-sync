@@ -20,6 +20,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkDCertTxPools,
   mkSimpleDCertTx,
   mkScriptDCertTx,
+  mkMultiAssetsScriptTx,
   mkDepositTxPools,
   mkDummyRegisterTx,
   mkTxDelegCert,
@@ -27,6 +28,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkUnRegTxCert,
   mkDelegTxCert,
   mkFullTx,
+  mkScriptMint,
   Babbage.mkScriptInp,
   mkWitnesses,
   mkUTxOConway,
@@ -240,8 +242,6 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees state
         SNothing
         (Coin fees)
         mempty
-  where
-    mkScriptInps = mapMaybe joinSnd . map Babbage.mkScriptInp . zip [0 ..]
 
 mkDCertTx ::
   [ConwayTxCert StandardConway] ->
@@ -298,6 +298,48 @@ mkScriptDCertTx consCert isValid' state' = do
     prepareRedeemer _ = Nothing
 
     mkRedeemer n (a, b) = Just (RdmrPtr Cert n, (a, b))
+
+mkMultiAssetsScriptTx ::
+  [ConwayUTxOIndex] ->
+  ConwayUTxOIndex ->
+  [(ConwayUTxOIndex, MaryValue StandardCrypto)] ->
+  [ConwayUTxOIndex] ->
+  MultiAsset StandardCrypto ->
+  Bool ->
+  Integer ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees state' = do
+  inputs <- mapM (`resolveUTxOIndex` state') inputIx
+  refs <- mapM (`resolveUTxOIndex` state') refInput
+  (colInput, _) <- resolveUTxOIndex colInputIx state'
+  outputs <- mapM mkOuts outputIx
+
+  let inputs' = Set.fromList $ map (fst . fst) inputs
+      refInputs' = Set.fromList $ map (fst . fst) refs
+      colInputs' = Set.singleton $ fst colInput
+
+  pure $
+    mkScriptTx succeeds (mkScriptInps (map fst inputs) ++ mkScriptMint minted) $
+      consTxBody
+        inputs'
+        colInputs'
+        refInputs'
+        (StrictSeq.fromList outputs)
+        SNothing
+        (Coin fees)
+        mempty
+        mempty -- TODO[sgillespie]: minted?
+        (Withdrawals mempty)
+  where
+    mkOuts (outIx, val) = do
+      addr <- resolveAddress outIx state'
+      pure $
+        BabbageTxOut
+          addr
+          val
+          (Alonzo.DatumHash $ Alonzo.hashData @StandardConway Examples.plutusDataList)
+          SNothing
 
 mkDepositTxPools ::
   ConwayUTxOIndex ->
@@ -512,6 +554,25 @@ mkFullTx n m state' = do
     auxiliaryDataScripts =
       NonEmpty.fromList [Examples.toBinaryPlutus Examples.alwaysFailsScript]
 
+mkScriptMint ::
+  MultiAsset StandardCrypto ->
+  [(RdmrPtr, (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+mkScriptMint (MultiAsset m) =
+  mapMaybe mkMint . zip [0 ..] . map policyID $ Map.keys m
+  where
+    mkMint (n, policyId)
+      | policyId == Examples.alwaysFailsScriptHash =
+          Just (RdmrPtr Mint n, alwaysFails)
+      | policyId == Examples.alwaysSucceedsScriptHash =
+          Just (RdmrPtr Mint n, alwaysSucceeds)
+      | policyId == Examples.alwaysMintScriptHash =
+          Just (RdmrPtr Mint n, alwaysMint)
+      | otherwise = Nothing
+
+    alwaysFails = (Examples.alwaysFailsScriptHash, Examples.alwaysFailsScript)
+    alwaysSucceeds = (Examples.alwaysFailsScriptHash, Examples.alwaysSucceedsScript)
+    alwaysMint = (Examples.alwaysMintScriptHash, Examples.alwaysMintScript)
+
 consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->
   Set (TxIn StandardCrypto) ->
@@ -558,6 +619,11 @@ joinSnd m = do
   (a, m') <- m
   b <- m'
   pure (a, b)
+
+mkScriptInps ::
+  [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
+  [(RdmrPtr, (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+mkScriptInps = mapMaybe joinSnd . map Babbage.mkScriptInp . zip [0 ..]
 
 allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)

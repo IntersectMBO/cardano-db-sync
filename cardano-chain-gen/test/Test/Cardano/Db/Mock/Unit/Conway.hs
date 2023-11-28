@@ -157,6 +157,12 @@ unitTests iom knownMigrations =
             "multiple stake scripts deregistration in same tx missing redeemer 2"
             Plutus.deregistrationsScriptTx''
         ]
+    , testGroup
+        "MultiAssets plutus scripts"
+        [ test "mint simple multi asset" Plutus.mintMultiAsset
+        , test "mint many multi assets" Plutus.mintMultiAssets
+        , test "swap many multi assets" Plutus.swapMultiAssets
+        ]
     ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
