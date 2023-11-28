@@ -125,7 +125,7 @@ mkPaymentTx ::
   Either ForgingError (AlonzoTx StandardConway)
 mkPaymentTx inputIndex outputIndex amount = mkPaymentTx' inputIndex outputIndices
   where
-    outputIndices = [(outputIndex, valueFromList amount [])]
+    outputIndices = [(outputIndex, valueFromList (Coin amount) [])]
 
 mkPaymentTx' ::
   ConwayUTxOIndex ->
@@ -143,7 +143,7 @@ mkPaymentTx' inputIndex outputIndices fees state' = do
       change =
         BabbageTxOut
           addr'
-          (valueFromList (fromIntegral $ fromIntegral inputValue - outValue - fees) [])
+          (valueFromList (Coin $ unCoin inputValue - outValue - fees) [])
           NoDatum
           SNothing
 
@@ -207,7 +207,7 @@ mkDepositTxPools inputIndex deposit state' = do
       change =
         BabbageTxOut
           addr'
-          (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) [])
+          (valueFromList (Coin $ unCoin inputValue - deposit) [])
           NoDatum
           SNothing
 
@@ -343,7 +343,7 @@ mkFullTx n m state' = do
         (ScriptHashObj alwaysFailsScriptHash)
         (StakeRefBase $ unregisteredStakeCredentials !! 2)
     outValue0 =
-      MaryValue 20 $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+      MaryValue (Coin 20) $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
     policy0 = PolicyID alwaysMintScriptHash
     policy1 = PolicyID alwaysSucceedsScriptHash
     assets0 = Map.fromList [(Prelude.head assetNames, 5), (assetNames !! 1, 2)]

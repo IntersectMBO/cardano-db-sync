@@ -28,6 +28,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
+import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Plutus.Data (hashData)
 import Cardano.Ledger.SafeHash (extractHash)
@@ -411,7 +412,7 @@ mintMultiAsset =
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
       let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
-      Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] [] val0 True 100 st
+      Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue (Coin 10000) mempty)] [] val0 True 100 st
 
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (1, 1, 1, 1, 0, 0, 0, 0)
@@ -427,8 +428,8 @@ mintMultiAssets =
       let policy0 = PolicyID alwaysMintScriptHash
       let policy1 = PolicyID alwaysSucceedsScriptHash
       let val1 = MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
-      tx0 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue 10000 mempty)] [] val1 True 100 st
-      tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, MaryValue 10000 mempty)] [] val1 True 200 st
+      tx0 <- Babbage.mkMAssetsScriptTx [UTxOIndex 0] (UTxOIndex 1) [(UTxOAddressNew 0, MaryValue (Coin 10000) mempty)] [] val1 True 100 st
+      tx1 <- Babbage.mkMAssetsScriptTx [UTxOIndex 2] (UTxOIndex 3) [(UTxOAddressNew 0, MaryValue (Coin 10000) mempty)] [] val1 True 200 st
       pure [tx0, tx1]
 
     assertBlockNoBackoff dbSync 1
@@ -446,7 +447,7 @@ swapMultiAssets =
       let policy1 = PolicyID alwaysSucceedsScriptHash
       let mintValue0 = MultiAsset $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
       let assets0 = Map.fromList [(head assetNames, 5), (assetNames !! 1, 2)]
-      let outValue0 = MaryValue 20 $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+      let outValue0 = MaryValue (Coin 20) $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
 
       tx0 <-
         Babbage.mkMAssetsScriptTx
