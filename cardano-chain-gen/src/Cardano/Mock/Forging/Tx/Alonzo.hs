@@ -132,9 +132,9 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
   addr <- resolveAddress outputIndex sta
 
   let input = Set.singleton $ fst inputPair
-      output = AlonzoTxOut addr (valueFromList (fromIntegral amount) []) Strict.SNothing
+      output = AlonzoTxOut addr (valueFromList (Coin amount) []) Strict.SNothing
       AlonzoTxOut addr' (MaryValue inputValue _) _ = snd inputPair
-      change = AlonzoTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) Strict.SNothing
+      change = AlonzoTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) Strict.SNothing
   Right $ mkSimpleTx True $ consPaymentTxBody input mempty (StrictSeq.fromList [output, change]) (Coin fees) mempty
 
 mkPaymentTx' ::
@@ -148,8 +148,8 @@ mkPaymentTx' inputIndex outputIndex sta = do
 
   let inps = Set.singleton $ fst inputPair
       AlonzoTxOut addr' (MaryValue inputValue _) _ = snd inputPair
-      outValue = sum ((\(MaryValue vl _) -> vl) . snd <$> outputIndex)
-      change = AlonzoTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - outValue) []) Strict.SNothing
+      outValue = sum ((\(MaryValue vl _) -> unCoin vl) . snd <$> outputIndex)
+      change = AlonzoTxOut addr' (valueFromList (Coin (unCoin inputValue - outValue)) []) Strict.SNothing
   Right $ mkSimpleTx True $ consPaymentTxBody inps mempty (StrictSeq.fromList $ outps ++ [change]) (Coin 0) mempty
   where
     mkOuts (outIx, vl) = do
@@ -169,14 +169,14 @@ mkLockByScriptTx inputIndex spendable amount fees sta = do
   let input = Set.singleton $ fst inputPair
       outs = mkOut <$> spendable
       AlonzoTxOut addr' (MaryValue inputValue _) _ = snd inputPair
-      change = AlonzoTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) Strict.SNothing
+      change = AlonzoTxOut addr' (valueFromList (Coin (unCoin inputValue - amount - fees)) []) Strict.SNothing
   -- No witnesses are necessary when the outputs is a script address. Only when it's consumed.
   Right $ mkSimpleTx True $ consPaymentTxBody input mempty (StrictSeq.fromList $ outs <> [change]) (Coin fees) mempty
   where
     datahash = hashData @StandardAlonzo plutusDataList
     mkOut sp =
       let outAddress = if sp then alwaysSucceedsScriptAddr else alwaysFailsScriptAddr
-       in AlonzoTxOut outAddress (valueFromList (fromIntegral amount) []) (Strict.SJust datahash)
+       in AlonzoTxOut outAddress (valueFromList (Coin amount) []) (Strict.SJust datahash)
 
 mkUnlockScriptTx ::
   [AlonzoUTxOIndex] ->
@@ -194,7 +194,7 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
 
   let inpts = Set.fromList $ fst <$> inputPairs
       colInput = Set.singleton $ fst colInputPair
-      output = AlonzoTxOut addr (valueFromList (fromIntegral amount) []) Strict.SNothing
+      output = AlonzoTxOut addr (valueFromList (Coin amount) []) Strict.SNothing
   Right
     $ mkScriptTx
       succeeds
@@ -323,7 +323,7 @@ mkDepositTxPools inputIndex deposit sta = do
 
   let input = Set.singleton $ fst inputPair
       AlonzoTxOut addr' (MaryValue inputValue _) _ = snd inputPair
-      change = AlonzoTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) []) Strict.SNothing
+      change = AlonzoTxOut addr' (valueFromList (Coin (unCoin inputValue - deposit)) []) Strict.SNothing
   Right $ mkSimpleTx True $ consTxBody input mempty (StrictSeq.fromList [change]) (Coin 0) mempty (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkDCertTxPools ::

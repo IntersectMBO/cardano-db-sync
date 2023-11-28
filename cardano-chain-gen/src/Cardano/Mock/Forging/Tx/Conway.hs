@@ -36,7 +36,8 @@ module Cardano.Mock.Forging.Tx.Conway (
 ) where
 
 import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
-import Cardano.Ledger.Allegra.Scripts (ValidityInterval (..))
+import Cardano.Ledger.Allegra.Scripts
+import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
 import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..))
@@ -53,7 +54,7 @@ import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReferen
 import Cardano.Ledger.Crypto (ADDRHASH ())
 import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
-import Cardano.Ledger.Plutus.Data (Datum (..), hashData)
+import Cardano.Ledger.Plutus.Data
 import Cardano.Ledger.Plutus.Language (Language (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as LedgerState
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
@@ -65,7 +66,7 @@ import Cardano.Mock.Forging.Tx.Alonzo (
   mkUTxOAlonzo,
   mkWitnesses,
  )
-import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
+import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
@@ -140,7 +141,7 @@ mkPaymentTx ::
   Either ForgingError (AlonzoTx StandardConway)
 mkPaymentTx inputIndex outputIndex amount = mkPaymentTx' inputIndex outputIndices
   where
-    outputIndices = [(outputIndex, valueFromList amount [])]
+    outputIndices = [(outputIndex, valueFromList (Coin amount) [])]
 
 mkPaymentTx' ::
   ConwayUTxOIndex ->
@@ -158,8 +159,8 @@ mkPaymentTx' inputIndex outputIndices fees state' = do
       change =
         BabbageTxOut
           addr'
-          (valueFromList (fromIntegral $ fromIntegral inputValue - outValue - fees) [])
-          Alonzo.NoDatum
+          (valueFromList (Coin $ unCoin inputValue - outValue - fees) [])
+          NoDatum
           SNothing
 
   pure $
@@ -175,7 +176,7 @@ mkPaymentTx' inputIndex outputIndices fees state' = do
   where
     mkOutputs (outIx, val) = do
       addr <- resolveAddress outIx state'
-      pure (BabbageTxOut addr val Alonzo.NoDatum SNothing)
+      pure (BabbageTxOut addr val NoDatum SNothing)
 
 mkLockByScriptTx ::
   ConwayUTxOIndex ->
@@ -193,8 +194,8 @@ mkLockByScriptTx inputIndex txOutTypes amount fees state' = do
       change =
         BabbageTxOut
           addr'
-          (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) [])
-          Alonzo.NoDatum
+          (valueFromList (Coin $ unCoin inputValue - amount - fees) [])
+          NoDatum
           SNothing
 
   pure $
@@ -227,8 +228,8 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees state
       output =
         BabbageTxOut
           addr
-          (valueFromList (fromIntegral amount) [])
-          Alonzo.NoDatum
+          (valueFromList (Coin amount) [])
+          NoDatum
           SNothing
 
   pure $
@@ -291,9 +292,9 @@ mkScriptDCertTx consCert isValid' state' = do
     prepareRedeemer (n, (StakeIndexScript bl, shouldAddRedeemer, _))
       | not shouldAddRedeemer = Nothing
       | bl =
-          mkRedeemer n (Examples.alwaysFailsScriptHash, Examples.alwaysFailsScript)
+          mkRedeemer n (alwaysFailsScriptHash, alwaysFailsScript)
       | otherwise =
-          mkRedeemer n (Examples.alwaysSucceedsScriptHash, Examples.alwaysSucceedsScript)
+          mkRedeemer n (alwaysSucceedsScriptHash, alwaysSucceedsScript)
     prepareRedeemer _ = Nothing
 
     mkRedeemer n (a, b) = Just (RdmrPtr Cert n, (a, b))
@@ -337,7 +338,7 @@ mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees 
         BabbageTxOut
           addr
           val
-          (Alonzo.DatumHash $ Alonzo.hashData @StandardConway Examples.plutusDataList)
+          (DatumHash $ hashData @StandardConway plutusDataList)
           SNothing
 
 mkDepositTxPools ::
@@ -353,8 +354,8 @@ mkDepositTxPools inputIndex deposit state' = do
       change =
         BabbageTxOut
           addr'
-          (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) [])
-          Alonzo.NoDatum
+          (valueFromList (Coin $ unCoin inputValue - deposit) [])
+          NoDatum
           SNothing
 
   pure $
@@ -417,8 +418,8 @@ mkFullTx n m state' = do
         mkWitnesses
           redeemers
           [
-            ( Alonzo.hashData @StandardConway Examples.plutusDataList
-            , Examples.plutusDataList @StandardConway
+            ( hashData @StandardConway plutusDataList
+            , plutusDataList @StandardConway
             )
           ]
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') refInputs
@@ -468,20 +469,20 @@ mkFullTx n m state' = do
       BabbageTxOut
         addr0
         outValue0
-        (Alonzo.DatumHash (Alonzo.hashData @StandardConway Examples.plutusDataList))
-        (SJust Examples.alwaysFailsScript)
+        (DatumHash (hashData @StandardConway plutusDataList))
+        (SJust alwaysFailsScript)
     out1 =
       BabbageTxOut
-        Examples.alwaysSucceedsScriptAddr
+        alwaysSucceedsScriptAddr
         outValue0
-        (Alonzo.DatumHash (Alonzo.hashData @StandardConway Examples.plutusDataList))
+        (DatumHash (hashData @StandardConway plutusDataList))
         SNothing
     out2 =
       BabbageTxOut
         addr2
         outValue0
-        (Alonzo.DatumHash (Alonzo.hashData @StandardConway Examples.plutusDataList))
-        (SJust Examples.alwaysFailsScript)
+        (DatumHash (hashData @StandardConway plutusDataList))
+        (SJust alwaysFailsScript)
     addr0 =
       Addr
         Testnet
@@ -490,15 +491,13 @@ mkFullTx n m state' = do
     addr2 =
       Addr
         Testnet
-        (ScriptHashObj Examples.alwaysFailsScriptHash)
+        (ScriptHashObj alwaysFailsScriptHash)
         (StakeRefBase $ unregisteredStakeCredentials !! 2)
     outValue0 =
-      MaryValue 20 $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
-    policy0 = PolicyID Examples.alwaysMintScriptHash
-    policy1 = PolicyID Examples.alwaysSucceedsScriptHash
-    assets0 =
-      Map.fromList
-        [(Prelude.head Examples.assetNames, 5), (Examples.assetNames !! 1, 2)]
+      MaryValue (Coin 20) $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+    policy0 = PolicyID alwaysMintScriptHash
+    policy1 = PolicyID alwaysSucceedsScriptHash
+    assets0 = Map.fromList [(Prelude.head assetNames, 5), (assetNames !! 1, 2)]
 
     -- Inputs
     mkInputs inputs' = Set.fromList $ fst <$> inputs'
@@ -544,14 +543,14 @@ mkFullTx n m state' = do
     -- Minted
     minted = MultiAsset $ Map.fromList [(policy0, assetsMinted0), (policy1, assetsMinted0)]
     assetsMinted0 =
-      Map.fromList [(Prelude.head Examples.assetNames, 10), (Examples.assetNames !! 1, 4)]
+      Map.fromList [(Prelude.head assetNames, 10), (assetNames !! 1, 4)]
 
     -- Auxiliary data
     auxiliaryData' =
       AlonzoTxAuxData auxiliaryDataMap mempty (Map.singleton PlutusV2 auxiliaryDataScripts)
     auxiliaryDataMap = Map.fromList [(1, List []), (2, List [])]
     auxiliaryDataScripts =
-      NonEmpty.fromList [Examples.toBinaryPlutus Examples.alwaysFailsScript]
+      NonEmpty.fromList [toBinaryPlutus alwaysFailsScript]
 
 mkScriptMint ::
   MultiAsset StandardCrypto ->
@@ -560,17 +559,17 @@ mkScriptMint (MultiAsset m) =
   mapMaybe mkMint . zip [0 ..] . map policyID $ Map.keys m
   where
     mkMint (n, policyId)
-      | policyId == Examples.alwaysFailsScriptHash =
+      | policyId == alwaysFailsScriptHash =
           Just (RdmrPtr Mint n, alwaysFails)
-      | policyId == Examples.alwaysSucceedsScriptHash =
+      | policyId == alwaysSucceedsScriptHash =
           Just (RdmrPtr Mint n, alwaysSucceeds)
-      | policyId == Examples.alwaysMintScriptHash =
+      | policyId == alwaysMintScriptHash =
           Just (RdmrPtr Mint n, alwaysMint)
       | otherwise = Nothing
 
-    alwaysFails = (Examples.alwaysFailsScriptHash, Examples.alwaysFailsScript)
-    alwaysSucceeds = (Examples.alwaysFailsScriptHash, Examples.alwaysSucceedsScript)
-    alwaysMint = (Examples.alwaysMintScriptHash, Examples.alwaysMintScript)
+    alwaysFails = (alwaysFailsScriptHash, alwaysFailsScript)
+    alwaysSucceeds = (alwaysFailsScriptHash, alwaysSucceedsScript)
+    alwaysMint = (alwaysMintScriptHash, alwaysMintScript)
 
 consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->
@@ -594,22 +593,22 @@ mkOutFromType ::
   Babbage.TxOutScriptType ->
   BabbageTxOut StandardConway
 mkOutFromType amount txOutType =
-  BabbageTxOut outAddress (valueFromList (fromIntegral amount) []) datum script
+  BabbageTxOut outAddress (valueFromList (Coin amount) []) datum script
   where
     outAddress
-      | Babbage.scriptSucceeds txOutType = Examples.alwaysSucceedsScriptAddr
-      | otherwise = Examples.alwaysFailsScriptAddr
+      | Babbage.scriptSucceeds txOutType = alwaysSucceedsScriptAddr
+      | otherwise = alwaysFailsScriptAddr
     datum = case Babbage.getDatum txOutType of
-      Babbage.NotInlineDatum -> Alonzo.DatumHash dataHash
+      Babbage.NotInlineDatum -> DatumHash dataHash
       Babbage.InlineDatum ->
-        Alonzo.Datum (Alonzo.dataToBinaryData Examples.plutusDataList)
+        Datum (dataToBinaryData plutusDataList)
       Babbage.InlineDatumCBOR sbs ->
-        Alonzo.Datum $ either error identity (Alonzo.makeBinaryData sbs)
-    dataHash = Alonzo.hashData @StandardConway Examples.plutusDataList
+        Datum $ either error identity (makeBinaryData sbs)
+    dataHash = hashData @StandardConway plutusDataList
     script = case Babbage.getInlineScript txOutType of
       SNothing -> SNothing
-      SJust True -> SJust Examples.alwaysSucceedsScript
-      SJust False -> SJust Examples.alwaysFailsScript
+      SJust True -> SJust alwaysSucceedsScript
+      SJust False -> SJust alwaysFailsScript
 
 -- | Takes a nested Monad of the form Monad (_, Monad), and combines them into one
 -- outer monad
