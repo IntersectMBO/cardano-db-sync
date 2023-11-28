@@ -1,5 +1,8 @@
 # Schema Documentation for cardano-db-sync
 
+Schema version: 13.2.0.0 (from branch **kderme/update-node-8-7** which may not accurately reflect the version number)
+**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
+
 ### `schema_version`
 
 The version of the database schema. Schema versioning is split into three stages as detailed below. This table should only ever have a single row.
@@ -801,7 +804,7 @@ A table for every committee key de-registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
-| `hot_key` | bytea | The deregistered hot key hash |
+| `cold_key` | bytea | The deregistered cold key hash |
 | `voting_anchor_id` | integer (64) | The Voting anchor reference id |
 
 ### `drep_registration`
