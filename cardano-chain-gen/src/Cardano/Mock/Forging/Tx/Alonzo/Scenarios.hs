@@ -38,7 +38,7 @@ delegateAndSendBlocks n interpreter = do
   sendBlocks <- forM (chunksOf 500 addresses) $ \blockAddresses -> do
     blockTxs <- withAlonzoLedgerState interpreter $ \st ->
       forM (chunksOf 10 blockAddresses) $ \txAddresses ->
-        Alonzo.mkPaymentTx' utxoIndex (fmap (\addr -> (UTxOAddress addr, MaryValue 1 mempty)) txAddresses) st
+        Alonzo.mkPaymentTx' utxoIndex (fmap (\addr -> (UTxOAddress addr, MaryValue (Coin 1) mempty)) txAddresses) st
     forgeNextFindLeader interpreter (TxAlonzo <$> blockTxs)
   pure $ registerBlocks <> delegateBlocks <> sendBlocks
   where

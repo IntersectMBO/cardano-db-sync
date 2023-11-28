@@ -167,9 +167,9 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
   addr <- resolveAddress outputIndex sta
 
   let input = Set.singleton $ fst inputPair
-      output = BabbageTxOut addr (valueFromList (fromIntegral amount) []) NoDatum SNothing
+      output = BabbageTxOut addr (valueFromList (Coin amount) []) NoDatum SNothing
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) NoDatum SNothing
   Right $ mkSimpleTx True $ consPaymentTxBody input mempty mempty (StrictSeq.fromList [output, change]) SNothing (Coin fees) mempty
 
 mkPaymentTx' ::
@@ -184,7 +184,7 @@ mkPaymentTx' inputIndex outputIndex sta = do
   let inps = Set.singleton $ fst inputPair
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
       outValue = sum (unCoin . coin . snd <$> outputIndex)
-      change = BabbageTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - outValue) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - outValue) []) NoDatum SNothing
   Right $ mkSimpleTx True $ consPaymentTxBody inps mempty mempty (StrictSeq.fromList $ outps ++ [change]) SNothing (Coin 0) mempty
   where
     mkOuts (outIx, vl) = do
@@ -225,7 +225,7 @@ mkLockByScriptTx inputIndex txOutTypes amount fees sta = do
   let input = Set.singleton $ fst inputPair
       outs = mkOutFromType amount <$> txOutTypes
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - amount - fees) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) NoDatum SNothing
   -- No witnesses are necessary when the outputs is a script address. Only when it's consumed.
   Right $ mkSimpleTx True $ consPaymentTxBody input mempty mempty (StrictSeq.fromList $ outs <> [change]) SNothing (Coin fees) mempty
 
@@ -241,7 +241,7 @@ mkOutFromType amount txOutType =
         SNothing -> SNothing
         SJust True -> SJust alwaysSucceedsScript
         SJust False -> SJust alwaysFailsScript
-   in BabbageTxOut outAddress (valueFromList (fromIntegral amount) []) dt scpt
+   in BabbageTxOut outAddress (valueFromList (Coin amount) []) dt scpt
 
 mkUnlockScriptTx ::
   [BabbageUTxOIndex] ->
@@ -259,7 +259,7 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
 
   let inpts = Set.fromList $ fst <$> inputPairs
       colInput = Set.singleton $ fst colInputPair
-      output = BabbageTxOut addr (valueFromList (fromIntegral amount) []) NoDatum SNothing
+      output = BabbageTxOut addr (valueFromList (Coin amount) []) NoDatum SNothing
   Right
     $ mkScriptTx
       succeeds
@@ -287,7 +287,7 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
       colOut = maybeToStrictMaybe $ mkOutFromType amount <$> collTxOutType
       refInpts = Set.fromList $ fst <$> refInputPairs
       colInput = Set.singleton $ fst colInputPair
-      output = BabbageTxOut addr (valueFromList (fromIntegral amount) []) NoDatum SNothing
+      output = BabbageTxOut addr (valueFromList (Coin amount) []) NoDatum SNothing
   Right
     $ mkScriptTx
       succeeds
@@ -437,7 +437,7 @@ mkDepositTxPools inputIndex deposit sta = do
 
   let input = Set.singleton $ fst inputPair
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (fromIntegral $ fromIntegral inputValue - deposit) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - deposit) []) NoDatum SNothing
   Right $ mkSimpleTx True $ consTxBody input mempty mempty (StrictSeq.fromList [change]) SNothing (Coin 0) mempty (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkDCertTxPools ::
@@ -556,7 +556,7 @@ mkFullTx n m sta = do
     policy0 = PolicyID alwaysMintScriptHash
     policy1 = PolicyID alwaysSucceedsScriptHash
     assets0 = Map.fromList [(Prelude.head assetNames, 5), (assetNames !! 1, 2)]
-    outValue0 = MaryValue 20 $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
+    outValue0 = MaryValue (Coin 20) $ MultiAsset $ Map.fromList [(policy0, assets0), (policy1, assets0)]
     addr0 = Addr Testnet (Prelude.head unregisteredAddresses) (StakeRefBase $ Prelude.head unregisteredStakeCredentials)
     addr2 = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) (StakeRefBase $ unregisteredStakeCredentials !! 2)
     out0, out1, out2 :: BabbageTxOut StandardBabbage

@@ -6,6 +6,7 @@ module Cardano.Mock.Forging.Tx.Conway.Scenarios (
 
 import Cardano.Ledger.Address (Addr (..), Withdrawals (..))
 import Cardano.Ledger.BaseTypes (Network (..))
+import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.TxCert (Delegatee (..))
 import Cardano.Ledger.Core (Tx ())
 import Cardano.Ledger.Credential (StakeCredential (), StakeReference (..))
@@ -67,7 +68,7 @@ mkPaymentBlocks utxoIx addresses interpreter =
   forgeBlocksChunked interpreter addresses $ \txAddrs ->
     Conway.mkPaymentTx' utxoIx (map mkUTxOAddress txAddrs) 0 . unState
   where
-    mkUTxOAddress addr = (UTxOAddress addr, MaryValue 1 mempty)
+    mkUTxOAddress addr = (UTxOAddress addr, MaryValue (Coin 1) mempty)
 
 -- | Forge blocks in chunks of 500 txs
 forgeBlocksChunked ::

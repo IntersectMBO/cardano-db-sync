@@ -16,6 +16,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference (
   referenceDelegation,
 ) where
 
+import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Cardano.Mock.Forging.Interpreter (withBabbageLedgerState)
@@ -376,7 +377,7 @@ referenceMintingScript =
         Babbage.mkMAssetsScriptTx
           [UTxOIndex 0]
           (UTxOIndex 1)
-          [(UTxOAddressNew 0, MaryValue 10000 mempty)]
+          [(UTxOAddressNew 0, MaryValue (Coin 10000) mempty)]
           [UTxOPair utxo0]
           val0
           True
@@ -413,7 +414,7 @@ referenceDelegation =
         Babbage.mkMAssetsScriptTx
           [UTxOIndex 0]
           (UTxOIndex 1)
-          [(UTxOAddressNew 0, MaryValue 10000 mempty)]
+          [(UTxOAddressNew 0, MaryValue (Coin 10000) mempty)]
           [UTxOPair utxo0]
           val0
           True

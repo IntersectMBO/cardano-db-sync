@@ -31,8 +31,9 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
-import Cardano.Ledger.Alonzo.Scripts.Data (hashData)
+import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
+import Cardano.Ledger.Plutus.Data
 import Cardano.Ledger.SafeHash (extractHash)
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
@@ -608,7 +609,7 @@ mintMultiAsset =
       Conway.mkMultiAssetsScriptTx
         [UTxOIndex 0]
         (UTxOIndex 1)
-        [(UTxOAddressNew 0, MaryValue 10_000 mempty)]
+        [(UTxOAddressNew 0, MaryValue (Coin 10_000) mempty)]
         []
         val
         True
@@ -637,7 +638,7 @@ mintMultiAssets =
         [ Conway.mkMultiAssetsScriptTx
             [UTxOIndex 0]
             (UTxOIndex 1)
-            [(UTxOAddressNew 0, MaryValue 10_000 mempty)]
+            [(UTxOAddressNew 0, MaryValue (Coin 10_000) mempty)]
             []
             val
             True
@@ -646,7 +647,7 @@ mintMultiAssets =
         , Conway.mkMultiAssetsScriptTx
             [UTxOIndex 2]
             (UTxOIndex 3)
-            [(UTxOAddressNew 0, MaryValue 10_000 mempty)]
+            [(UTxOAddressNew 0, MaryValue (Coin 10_000) mempty)]
             []
             val
             True
@@ -677,7 +678,7 @@ swapMultiAssets =
           assets =
             Map.fromList [(head Examples.assetNames, 5), (Examples.assetNames !! 1, 2)]
           outValue =
-            MaryValue 20 $
+            MaryValue (Coin 20) $
               MultiAsset $
                 Map.fromList [(policy0, assets), (policy1, assets)]
 
