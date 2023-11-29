@@ -83,7 +83,7 @@ insertForeignKeyMissing = do
     count0 <- offChainPoolFetchErrorCount
     assertBool (show count0 ++ "/= 1") (count0 == 1)
 
-    -- Delete all OffChainFetchErrorCount after pmrid
+    -- Delete all OffChainFetchErrorTypeCount after pmrid
     queryFirstAndDeleteAfter OffChainPoolFetchErrorPmrId pmrid
     deleteWhere [PoolMetadataRefId >=. pmrid]
     count1 <- offChainPoolFetchErrorCount

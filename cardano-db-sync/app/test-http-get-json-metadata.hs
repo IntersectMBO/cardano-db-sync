@@ -14,9 +14,13 @@ import Cardano.Db (
   unValue4,
  )
 import Cardano.DbSync.OffChain.Http (
-  FetchError (..),
-  httpGetOffChainData,
-  parsePoolUrl,
+  httpGetOffChainPoolData,
+  parseOffChainPoolUrl,
+ )
+import Cardano.DbSync.Types (
+  OffChainFetchError (..),
+  OffChainHashType (..),
+  OffChainUrlType (..),
  )
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
@@ -57,10 +61,10 @@ main = do
     testOne :: Http.Manager -> TestFailure -> TestOffChain -> IO TestFailure
     testOne manager !accum testPoolOffChain = do
       let poolUrl = toUrl testPoolOffChain
-          mHash = Just $ toHash testPoolOffChain
+          mHash = Just $ OffChainPoolHash $ toHash testPoolOffChain
       eres <- runExceptT $ do
-        request <- parsePoolUrl poolUrl
-        httpGetOffChainData manager request poolUrl mHash
+        request <- parseOffChainPoolUrl poolUrl
+        httpGetOffChainPoolData manager request (OffChainPoolUrl poolUrl) mHash
       case eres of
         Left err -> do
           print err
@@ -90,20 +94,20 @@ data TestFailure = TestFailure
   , tfConnectionFailure :: !Word
   }
 
-classifyFetchError :: TestFailure -> FetchError -> TestFailure
+classifyFetchError :: TestFailure -> OffChainFetchError -> TestFailure
 classifyFetchError tf fe =
   case fe of
-    FEHashMismatch {} -> tf {tfHashMismatch = tfHashMismatch tf + 1}
-    FEDataTooLong {} -> tf {tfDataTooLong = tfDataTooLong tf + 1}
-    FEUrlParseFail {} -> tf {tfUrlParseFail = tfUrlParseFail tf + 1}
-    FEJsonDecodeFail {} -> tf {tfJsonDecodeFail = tfJsonDecodeFail tf + 1}
-    FEHttpException {} -> tf {tfHttpException = tfHttpException tf + 1}
-    FEHttpResponse {} -> tf {tfHttpResponse = tfHttpResponse tf + 1}
-    FEBadContentType {} -> tf {tfBadContentType = tfBadContentType tf + 1}
-    FEBadContentTypeHtml {} -> tf {tfBadContentTypeHtml = tfBadContentTypeHtml tf + 1}
-    FEIOException {} -> tf {tfIOException = tfIOException tf + 1}
-    FETimeout {} -> tf {tfTimeout = tfTimeout tf + 1}
-    FEConnectionFailure {} -> tf {tfConnectionFailure = tfConnectionFailure tf + 1}
+    OCFErrHashMismatch {} -> tf {tfHashMismatch = tfHashMismatch tf + 1}
+    OCFErrDataTooLong {} -> tf {tfDataTooLong = tfDataTooLong tf + 1}
+    OCFErrUrlParseFail {} -> tf {tfUrlParseFail = tfUrlParseFail tf + 1}
+    OCFErrJsonDecodeFail {} -> tf {tfJsonDecodeFail = tfJsonDecodeFail tf + 1}
+    OCFErrHttpException {} -> tf {tfHttpException = tfHttpException tf + 1}
+    OCFErrHttpResponse {} -> tf {tfHttpResponse = tfHttpResponse tf + 1}
+    OCFErrBadContentType {} -> tf {tfBadContentType = tfBadContentType tf + 1}
+    OCFErrBadContentTypeHtml {} -> tf {tfBadContentTypeHtml = tfBadContentTypeHtml tf + 1}
+    OCFErrIOException {} -> tf {tfIOException = tfIOException tf + 1}
+    OCFErrTimeout {} -> tf {tfTimeout = tfTimeout tf + 1}
+    OCFErrConnectionFailure {} -> tf {tfConnectionFailure = tfConnectionFailure tf + 1}
 
 emptyTestFailure :: TestFailure
 emptyTestFailure = TestFailure 0 0 0 0 0 0 0 0 0 0 0

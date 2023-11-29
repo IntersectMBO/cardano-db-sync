@@ -661,6 +661,7 @@ share
   OffChainVoteFetchError
     votingAnchorId      VotingAnchorId      noreference
     fetchError          Text
+    fetchTime           UTCTime             sqltype=timestamp
     retryCount          Word                sqltype=word31type
     UniqueOffChainVoteFetchError votingAnchorId retryCount
     deriving Show
