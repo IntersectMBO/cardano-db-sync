@@ -3,7 +3,6 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Era (
-  module X,
   insertValidateGenesisDist,
 ) where
 

@@ -2,12 +2,13 @@
 
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..))
 import Cardano.DbSync (
-  FetchError (..),
+  OffChainFetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainData,
-  parsePoolUrl,
+  httpGetOffChainPoolData,
+  parseOffChainPoolUrl,
  )
 import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.Types (OffChainHashType (..), OffChainUrlType (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 import qualified Data.ByteString.Base16 as Base16
@@ -31,7 +32,7 @@ main = do
   xs <- getArgs
   case xs of
     [url] -> runHttpGet (PoolUrl $ Text.pack url) Nothing
-    [url, hash] -> runHttpGet (PoolUrl $ Text.pack url) (Just $ parseHash hash)
+    [url, hash] -> runHttpGet (PoolUrl $ Text.pack url) (Just $ OffChainPoolHash $ parseHash hash)
     _otherwise -> usageExit
   where
     parseHash :: String -> PoolMetaHash
@@ -57,15 +58,15 @@ usageExit = do
 
 -- -------------------------------------------------------------------------------------------------
 
-runHttpGet :: PoolUrl -> Maybe PoolMetaHash -> IO ()
+runHttpGet :: PoolUrl -> Maybe OffChainHashType -> IO ()
 runHttpGet poolUrl mHash =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
-    httpGet :: ExceptT FetchError IO SimplifiedOffChainPoolData
+    httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainPoolData
     httpGet = do
-      request <- parsePoolUrl poolUrl
+      request <- parseOffChainPoolUrl poolUrl
       manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetOffChainData manager request poolUrl mHash
+      httpGetOffChainPoolData manager request (OffChainPoolUrl poolUrl) mHash
 
     reportSuccess :: SimplifiedOffChainPoolData -> IO ()
     reportSuccess spod = do

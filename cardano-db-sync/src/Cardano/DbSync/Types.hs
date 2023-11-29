@@ -12,12 +12,11 @@ module Cardano.DbSync.Types (
   DataHash,
   CardanoInterpreter,
   EpochSlot (..),
-  OffChainResultType (..),
   OffChainPoolResult (..),
   OffChainVoteResult (..),
+  OffChainHashType (..),
+  OffChainUrlType (..),
   OffChainFetchError (..),
-  FetchUrlType (..),
-  FetchError (..),
   SlotDetails (..),
   TipInfo (..),
   SyncState (..),
@@ -135,13 +134,8 @@ data SyncState = SyncLagging | SyncFollowing
   deriving (Eq, Show)
 
 -------------------------------------------------------------------------------------
--- OFFCHAIN
+-- OffChain
 -------------------------------------------------------------------------------------
-
-data OffChainResultType
-  = OffChainPoolResultType OffChainPoolResult
-  | OffChainVoteResultType OffChainVoteResult
-
 data OffChainPoolResult
   = OffChainPoolResultMetadata !OffChainPoolData
   | OffChainPoolResultError !OffChainPoolFetchError
@@ -151,8 +145,8 @@ data OffChainVoteResult
   | OffChainVoteResultError !OffChainVoteFetchError
 
 data OffChainWorkQueueType
-  = OffChainPoolWorkQueueType OffChainPoolWorkQueue
-  | OffChainVoteWorkQueueType OffChainVoteWorkQueue
+  = OffChainPoolWorkQueueType !OffChainPoolWorkQueue
+  | OffChainVoteWorkQueueType !OffChainVoteWorkQueue
   deriving (Show)
 
 data OffChainPoolWorkQueue = OffChainPoolWorkQueue
@@ -173,8 +167,8 @@ data OffChainVoteWorkQueue = OffChainVoteWorkQueue
   deriving (Show)
 
 data SimplifiedOffChainDataType
-  = SimplifiedOffChainPoolDataType !OffChainPoolWorkQueue !SimplifiedOffChainPoolData
-  | SimplifiedOffChainVoteDataType !OffChainVoteWorkQueue !SimplifiedOffChainVoteData
+  = SimplifiedOffChainPoolDataType !SimplifiedOffChainPoolData
+  | SimplifiedOffChainVoteDataType !SimplifiedOffChainVoteData
 
 data SimplifiedOffChainPoolData = SimplifiedOffChainPoolData
   { spodTickerName :: !Text
@@ -198,47 +192,45 @@ data Retry = Retry
   }
   deriving (Eq, Show, Generic)
 
-data FetchUrlType
-  = FetchPoolUrl !PoolUrl
-  | FetchVoteUrl !VoteUrl
+data OffChainUrlType
+  = OffChainPoolUrl !PoolUrl
+  | OffChainVoteUrl !VoteUrl
   deriving (Eq, Generic)
 
-instance Show FetchUrlType where
+data OffChainHashType
+  = OffChainPoolHash PoolMetaHash
+  | OffChainVoteHash VoteMetaHash
+  deriving (Eq, Generic)
+
+instance Show OffChainUrlType where
   show =
     \case
-      FetchPoolUrl url -> show url
-      FetchVoteUrl url -> show url
+      OffChainPoolUrl url -> show url
+      OffChainVoteUrl url -> show url
 
 -------------------------------------------------------------------------------------
--- OFFCHAIN FETCH ERRORS
+-- OffChain Fetch error for the HTTP client fetching the pool offchain metadata.
 -------------------------------------------------------------------------------------
-
--- | we want to return the fetch error along with the workqueue it came from
 data OffChainFetchError
-  = OffChainPoolFetchError !FetchError !OffChainPoolWorkQueue
-  | OffChainVoteFetchError !FetchError !OffChainVoteWorkQueue
-
--- | Fetch error for the HTTP client fetching the pool offchain metadata.
-data FetchError
-  = FEHashMismatch !FetchUrlType !Text !Text
-  | FEDataTooLong !FetchUrlType
-  | FEUrlParseFail !FetchUrlType !Text
-  | FEJsonDecodeFail !FetchUrlType !Text
-  | FEHttpException !FetchUrlType !Text
-  | FEHttpResponse !FetchUrlType !Int !Text
-  | FEBadContentType !FetchUrlType !Text
-  | FEBadContentTypeHtml !FetchUrlType !Text
-  | FEIOException !Text
-  | FETimeout !FetchUrlType !Text
-  | FEConnectionFailure !FetchUrlType
+  = OCFErrHashMismatch !OffChainUrlType !Text !Text
+  | OCFErrDataTooLong !OffChainUrlType
+  | OCFErrUrlParseFail !OffChainUrlType !Text
+  | OCFErrJsonDecodeFail !OffChainUrlType !Text
+  | OCFErrHttpException !OffChainUrlType !Text
+  | OCFErrHttpResponse !OffChainUrlType !Int !Text
+  | OCFErrBadContentType !OffChainUrlType !Text
+  | OCFErrBadContentTypeHtml !OffChainUrlType !Text
+  | OCFErrIOException !Text
+  | OCFErrTimeout !OffChainUrlType !Text
+  | OCFErrConnectionFailure !OffChainUrlType
   deriving (Eq, Generic)
 
-instance Exception FetchError
+instance Exception OffChainFetchError
 
-instance Show FetchError where
+instance Show OffChainFetchError where
   show =
     \case
-      FEHashMismatch url xpt act ->
+      OCFErrHashMismatch url xpt act ->
         mconcat
           [ "Hash mismatch when fetching metadata from "
           , show url
@@ -248,32 +240,32 @@ instance Show FetchError where
           , show act
           , "."
           ]
-      FEDataTooLong url ->
+      OCFErrDataTooLong url ->
         mconcat
           [fetchUrlToString url, "Size error, fetching metadata from ", show url, " exceeded 512 bytes."]
-      FEUrlParseFail url err ->
+      OCFErrUrlParseFail url err ->
         mconcat
           [fetchUrlToString url, "URL parse error for ", show url, " resulted in : ", show err]
-      FEJsonDecodeFail url err ->
+      OCFErrJsonDecodeFail url err ->
         mconcat
           [fetchUrlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
-      FEHttpException url err ->
+      OCFErrHttpException url err ->
         mconcat [fetchUrlToString url, "HTTP Exception error for ", show url, " resulted in : ", show err]
-      FEHttpResponse url sc msg ->
+      OCFErrHttpResponse url sc msg ->
         mconcat [fetchUrlToString url, "HTTP Response error from ", show url, " resulted in HTTP status code : ", show sc, " ", show msg]
-      FEBadContentType url ct ->
+      OCFErrBadContentType url ct ->
         mconcat [fetchUrlToString url, "HTTP Response error from ", show url, ": expected JSON, but got : ", show ct]
-      FEBadContentTypeHtml url ct ->
+      OCFErrBadContentTypeHtml url ct ->
         mconcat [fetchUrlToString url, "HTTP Response error from ", show url, ": expected JSON, but got : ", show ct]
-      FETimeout url ctx ->
+      OCFErrTimeout url ctx ->
         mconcat [fetchUrlToString url, "Timeout error when fetching metadata from ", show url, ": ", show ctx]
-      FEConnectionFailure url ->
+      OCFErrConnectionFailure url ->
         mconcat
           [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "'."]
-      FEIOException err -> "IO Exception: " <> show err
+      OCFErrIOException err -> "IO Exception: " <> show err
 
-fetchUrlToString :: FetchUrlType -> String
+fetchUrlToString :: OffChainUrlType -> String
 fetchUrlToString url =
   case url of
-    FetchPoolUrl _ -> "Error Offchain Pool: "
-    FetchVoteUrl _ -> "Error Offchain Voting Anchor: "
+    OffChainPoolUrl _ -> "Error Offchain Pool: "
+    OffChainVoteUrl _ -> "Error Offchain Voting Anchor: "

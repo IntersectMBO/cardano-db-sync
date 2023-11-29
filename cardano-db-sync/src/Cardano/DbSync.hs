@@ -19,10 +19,12 @@ module Cardano.DbSync (
   runDbSyncNode,
   runDbSync,
   -- For testing and debugging
-  FetchError (..),
+  OffChainFetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainData,
-  parsePoolUrl,
+  httpGetOffChainPoolData,
+  parseOffChainPoolUrl,
+  httpGetOffChainVoteData,
+  parseOffChainVoteUrl,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
@@ -48,12 +50,12 @@ import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
 import Cardano.DbSync.Ledger.State
+import Cardano.DbSync.OffChain (runFetchOffChainThreads)
 import Cardano.DbSync.OffChain.Http (
-  FetchError (..),
-  SimplifiedOffChainPoolData (..),
-  httpGetOffChainData,
-  parsePoolUrl,
-  spodJson,
+  httpGetOffChainPoolData,
+  httpGetOffChainVoteData,
+  parseOffChainPoolUrl,
+  parseOffChainVoteUrl,
  )
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
@@ -115,7 +117,8 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
   (ranMigrations, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
   unless (null unofficial) $
     logWarning trce $
-      "Unofficial migration scripts found: " <> textShow unofficial
+      "Unofficial migration scripts found: "
+        <> textShow unofficial
 
   if ranMigrations
     then logInfo trce "All migrations were executed"
@@ -169,37 +172,38 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfig)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfig)
   Db.runIohkLogging trce $
-    withPostgresqlConn dbConnString $ \backend -> liftIO $ do
-      runOrThrowIO $ runExceptT $ do
-        genCfg <- readCardanoGenesisConfig syncNodeConfig
-        logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+    withPostgresqlConn dbConnString $
+      \backend -> liftIO $ do
+        runOrThrowIO $ runExceptT $ do
+          genCfg <- readCardanoGenesisConfig syncNodeConfig
+          logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
-        syncEnv <-
-          ExceptT $
-            mkSyncEnvFromConfig
-              trce
-              backend
-              syncOptions
-              genCfg
-              syncNodeParams
-              ranMigrations
-              runMigrationFnc
-        liftIO $ runExtraMigrationsMaybe syncEnv
-        unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
-          logInfo trce "Migrating to a no ledger schema"
-          Db.noLedgerMigrations backend trce
-        insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
+          syncEnv <-
+            ExceptT $
+              mkSyncEnvFromConfig
+                trce
+                backend
+                syncOptions
+                genCfg
+                syncNodeParams
+                ranMigrations
+                runMigrationFnc
+          liftIO $ runExtraMigrationsMaybe syncEnv
+          unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
+            logInfo trce "Migrating to a no ledger schema"
+            Db.noLedgerMigrations backend trce
+          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
 
-        -- communication channel between datalayer thread and chainsync-client thread
-        threadChannels <- liftIO newThreadChannels
-        liftIO $
-          mapConcurrently_
-            id
-            [ runDbThread syncEnv metricsSetters threadChannels
-            , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-            , runFetchOffChainThread syncEnv
-            , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-            ]
+          -- communication channel between datalayer thread and chainsync-client thread
+          threadChannels <- liftIO newThreadChannels
+          liftIO $
+            mapConcurrently_
+              id
+              [ runDbThread syncEnv metricsSetters threadChannels
+              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runFetchOffChainThreads syncEnv
+              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+              ]
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -212,8 +216,9 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
 
 logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
 logProtocolMagicId tracer pm =
-  liftIO . logInfo tracer $
-    mconcat
+  liftIO
+    . logInfo tracer
+    $ mconcat
       [ "NetworkMagic: "
       , textShow (Crypto.unProtocolMagicId pm)
       ]
