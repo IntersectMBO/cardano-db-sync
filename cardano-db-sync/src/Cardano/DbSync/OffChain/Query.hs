@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 
 module Cardano.DbSync.OffChain.Query (
   getOffChainVoteData,
@@ -19,7 +20,7 @@ import Cardano.Db (
   PoolUrl,
  )
 import Cardano.DbSync.OffChain.FetchQueue (newRetry, retryAgain)
-import Cardano.DbSync.Types (OffChainPoolWorkQueue (..), OffChainVoteWorkQueue(..))
+import Cardano.DbSync.Types (OffChainPoolWorkQueue (..), OffChainVoteWorkQueue (..))
 import Cardano.Prelude hiding (from, groupBy, on, retry)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -65,7 +66,7 @@ getOffChainVoteData now maxCount = do
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
 queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
-queryNewVoteWorkQueue now = do
+queryNewVoteWorkQueue _now = do
   pure undefined
 
 queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
