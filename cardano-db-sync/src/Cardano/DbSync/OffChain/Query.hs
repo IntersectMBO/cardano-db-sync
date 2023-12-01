@@ -2,7 +2,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.OffChain.Query (
-  aquireOffChainPoolData,
+  getOffChainVoteData,
+  getOffChainPoolData,
 ) where
 
 import Cardano.Db (
@@ -18,7 +19,7 @@ import Cardano.Db (
   PoolUrl,
  )
 import Cardano.DbSync.OffChain.FetchQueue (newRetry, retryAgain)
-import Cardano.DbSync.Types (OffChainPoolWorkQueue (..))
+import Cardano.DbSync.Types (OffChainPoolWorkQueue (..), OffChainVoteWorkQueue(..))
 import Cardano.Prelude hiding (from, groupBy, on, retry)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
@@ -50,20 +51,43 @@ import System.Random.Shuffle (shuffleM)
 
 {- HLINT ignore "Fuse on/on" -}
 
-aquireOffChainPoolData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
-aquireOffChainPoolData now maxCount = do
+---------------------------------------------------------------------------------------------------------------------------------
+-- Query OffChain VoteData
+---------------------------------------------------------------------------------------------------------------------------------
+
+getOffChainVoteData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
+getOffChainVoteData now maxCount = do
+  xs <- queryNewVoteWorkQueue now
+  if length xs >= maxCount
+    then take maxCount <$> liftIO (shuffleM xs)
+    else do
+      ys <- queryOffChainVoteWorkQueue (Time.posixSecondsToUTCTime now)
+      take maxCount . (xs ++) <$> liftIO (shuffleM ys)
+
+queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
+queryNewVoteWorkQueue now = do
+  pure undefined
+
+queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
+queryOffChainVoteWorkQueue _now = pure undefined
+
+---------------------------------------------------------------------------------------------------------------------------------
+-- Query OffChain PoolData
+---------------------------------------------------------------------------------------------------------------------------------
+getOffChainPoolData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
+getOffChainPoolData now maxCount = do
   -- Results from the query are shuffles so we don't continuously get the same entries.
-  xs <- queryNewPoolFetch now
+  xs <- queryNewPoolWorkQueue now
   if length xs >= maxCount
     then take maxCount <$> liftIO (shuffleM xs)
     else do
       ys <- queryOffChainPoolWorkQueue (Time.posixSecondsToUTCTime now)
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
--- Get pool fetch data for new pools (ie pools that had OffChainPoolData entry and no
+-- Get pool work queue data for new pools (ie pools that had OffChainPoolData entry and no
 -- OffChainPoolFetchError).
-queryNewPoolFetch :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
-queryNewPoolFetch now = do
+queryNewPoolWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
+queryNewPoolWorkQueue now = do
   res <- select $ do
     (ph :& pmr) <-
       from
