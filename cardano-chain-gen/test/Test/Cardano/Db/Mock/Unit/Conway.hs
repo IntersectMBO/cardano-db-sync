@@ -163,6 +163,14 @@ unitTests iom knownMigrations =
         , test "mint many multi assets" Plutus.mintMultiAssets
         , test "swap many multi assets" Plutus.swapMultiAssets
         ]
+    , testGroup
+        "Pools and smash"
+        [ test "pool registration" Other.poolReg
+        , test "query pool that's not registered" Other.nonexistentPoolQuery
+        , test "pool deregistration" Other.poolDeReg
+        , test "multiple deregistration" Other.poolDeRegMany
+        , test "delist pool" Other.poolDelist
+        ]
     ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
