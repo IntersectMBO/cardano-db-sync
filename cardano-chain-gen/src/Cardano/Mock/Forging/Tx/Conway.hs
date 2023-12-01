@@ -10,6 +10,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   consTxBody,
   consCertTxBody,
   consPoolParams,
+  consTxCertPool,
   mkPaymentTx,
   mkPaymentTx',
   mkLockByScriptTx,
@@ -17,6 +18,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkScriptTx,
   mkSimpleTx,
   mkDCertTx,
+  mkDCertPoolTx,
   mkDCertTxPools,
   mkSimpleDCertTx,
   mkScriptDCertTx,
@@ -53,7 +55,7 @@ import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
 import Cardano.Ledger.Crypto (ADDRHASH ())
-import Cardano.Ledger.Keys (KeyHash (..))
+import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Ledger.Language (Language (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import qualified Cardano.Ledger.Shelley.LedgerState as LedgerState
@@ -131,6 +133,21 @@ consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty SNothing (Coin 
   where
     toSet Nothing = mempty
     toSet (Just a) = Set.singleton a
+
+consTxCertPool ::
+  [StakeCredential StandardCrypto] ->
+  KeyHash 'StakePool StandardCrypto ->
+  ConwayTxCert StandardConway
+consTxCertPool [] _ = panic "Expected at least 1 pool owner"
+consTxCertPool (rwCred : poolOwners) poolId =
+  ConwayTxCertPool
+    . Core.RegPool
+    . consPoolParams poolId rwCred
+    . map unKeyHashObj
+    $ poolOwners
+  where
+    unKeyHashObj (KeyHashObj owner) = owner
+    unKeyHashObj _ = panic "Expected a KeyHashObj"
 
 mkPaymentTx ::
   ConwayUTxOIndex ->
@@ -249,6 +266,24 @@ mkDCertTx ::
   Maybe (TxIn StandardCrypto) ->
   Either ForgingError (AlonzoTx StandardConway)
 mkDCertTx certs wdrl ref = Right (mkSimpleTx True $ consCertTxBody ref certs wdrl)
+
+mkDCertPoolTx ::
+  [ ( [StakeIndex]
+    , PoolIndex
+    , [StakeCredential StandardCrypto] ->
+      KeyHash 'StakePool StandardCrypto ->
+      ConwayTxCert StandardConway
+    )
+  ] ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkDCertPoolTx consDCert state' = do
+  dcerts <- forM consDCert $ \(stakeIxs, poolIx, mkDCert) -> do
+    stakeCreds <- forM stakeIxs $ \stakeIx -> resolveStakeCreds stakeIx state'
+    let poolId = resolvePool poolIx state'
+    pure $ mkDCert stakeCreds poolId
+
+  mkDCertTx dcerts (Withdrawals mempty) Nothing
 
 mkDCertTxPools :: ConwayLedgerState -> Either ForgingError (AlonzoTx StandardConway)
 mkDCertTxPools state' =
