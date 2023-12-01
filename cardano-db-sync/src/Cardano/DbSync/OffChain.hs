@@ -38,35 +38,59 @@ import Database.Persist.Sql (SqlBackend)
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 
+---------------------------------------------------------------------------------------------------------------------------------
+-- Load OffChain Work Queue
+---------------------------------------------------------------------------------------------------------------------------------
+data LoadOffChainWorkQueue a m = LoadOffChainWorkQueue
+  { lQueue :: StrictTBQueue IO a
+  , lRetryTime :: a -> Retry
+  , lGetData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [a]
+  }
+
 loadOffChainPoolWorkQueue ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   StrictTBQueue IO OffChainPoolWorkQueue ->
   ReaderT SqlBackend m ()
-loadOffChainPoolWorkQueue _trce workQueue = do
-  -- If we try to write the to queue when it is full it will block. Therefore only add more to
-  -- the queue if it is empty.
-  whenM (liftIO $ atomically (isEmptyTBQueue workQueue)) $ do
-    now <- liftIO Time.getPOSIXTime
-    runnablePools <- filter (isRunnable now) <$> aquireOffChainPoolData now 100
-    liftIO $ mapM_ queueInsert runnablePools
-  where
-    isRunnable :: POSIXTime -> OffChainPoolWorkQueue -> Bool
-    isRunnable now pfr = retryRetryTime (oPoolWqRetry pfr) <= now
-
-    queueInsert :: OffChainPoolWorkQueue -> IO ()
-    queueInsert = atomically . writeTBQueue workQueue
+loadOffChainPoolWorkQueue trce workQueue =
+  loadOffChainWorkQueue
+    trce
+    LoadOffChainWorkQueue
+      { lQueue = workQueue
+      , lRetryTime = oPoolWqRetry
+      , lGetData = getOffChainPoolData
+      }
 
 loadOffChainVoteWorkQueue ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   StrictTBQueue IO OffChainVoteWorkQueue ->
   ReaderT SqlBackend m ()
-loadOffChainVoteWorkQueue _trce workQueue = do
-  -- TODO: Vince - do we just get the data from database here? which seems to be what aquireOffChainPoolData
-  --       is doing for Pool data in function above
-  whenM (liftIO $ atomically (isEmptyTBQueue workQueue)) $ do
-    pure ()
+loadOffChainVoteWorkQueue trce workQueue =
+  loadOffChainWorkQueue
+    trce
+    LoadOffChainWorkQueue
+      { lQueue = workQueue
+      , lRetryTime = oVoteWqRetry
+      , lGetData = getOffChainVoteData
+      }
+
+loadOffChainWorkQueue ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  LoadOffChainWorkQueue a m ->
+  ReaderT SqlBackend m ()
+loadOffChainWorkQueue _trce offChainWorkQueue = do
+  whenM (liftIO $ atomically (isEmptyTBQueue (lQueue offChainWorkQueue))) $ do
+    now <- liftIO Time.getPOSIXTime
+    runnablePools <- filter (isRunnable now offChainWorkQueue) <$> lGetData offChainWorkQueue now 100
+    liftIO $ mapM_ (queueInsert offChainWorkQueue) runnablePools
+  where
+    isRunnable :: POSIXTime -> LoadOffChainWorkQueue a m -> a -> Bool
+    isRunnable now oCWorkQueue locWq = retryRetryTime (lRetryTime oCWorkQueue locWq) <= now
+
+    queueInsert :: LoadOffChainWorkQueue a m -> a -> IO ()
+    queueInsert oCWorkQueue locWq = atomically $ writeTBQueue (lQueue oCWorkQueue) locWq
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Insert OffChain
@@ -171,8 +195,6 @@ runFetchOffChainThreads syncEnv = do
 
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
-
--- OffChainVoteResultType res -> atomically $ writeTBQueue (envOffChainVoteResultQueue syncEnv) $ OffChainVoteResultType res
 
 -- -------------------------------------------------------------------------------------------------
 
