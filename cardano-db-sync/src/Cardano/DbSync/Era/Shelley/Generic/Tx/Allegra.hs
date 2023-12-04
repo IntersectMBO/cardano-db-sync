@@ -42,9 +42,6 @@ import Cardano.Slotting.Slot (SlotNo (..))
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto)
 

@@ -21,13 +21,16 @@ module Cardano.DbSync.Ledger.Event (
 
 import Cardano.Db hiding (AdaPots, EpochNo, SyncState, epochNo)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
+import Cardano.Ledger.SafeHash (SafeHash)
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),
@@ -45,17 +48,11 @@ import Cardano.Prelude hiding (All)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.State.Transition (Event)
 import qualified Data.Map.Strict as Map
+import Data.SOP.BasicFunctors
+import Data.SOP.Constraint
 import Data.SOP.Strict (hcmap, hcollapse)
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
-import qualified Cardano.Ledger.Allegra.Rules as Allegra
-import Cardano.Ledger.SafeHash (SafeHash)
-import Data.SOP.BasicFunctors
-import Data.SOP.Constraint
 import Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import Ouroboros.Consensus.Cardano.Block
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (

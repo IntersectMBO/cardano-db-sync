@@ -36,9 +36,6 @@ import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 import Cardano.Ledger.Val
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
 import Data.String (String)
 import qualified GHC.Show as S
 import Ouroboros.Consensus.Byron.Ledger

@@ -26,9 +26,6 @@ import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
 import Data.VMap (VB, VMap (..), VP)
 import qualified Data.VMap as VMap
 import qualified Data.Vector.Generic as VG
