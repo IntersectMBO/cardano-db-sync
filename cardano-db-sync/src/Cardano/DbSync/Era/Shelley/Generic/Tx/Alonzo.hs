@@ -49,6 +49,7 @@ import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), policyID)
+import Cardano.Ledger.Plutus.Language (Plutus (..))
 import qualified Cardano.Ledger.Plutus.Language as Alonzo
 import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (ScriptHash)
@@ -61,10 +62,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
-import Cardano.Ledger.Plutus.Language (Plutus (..))
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
 

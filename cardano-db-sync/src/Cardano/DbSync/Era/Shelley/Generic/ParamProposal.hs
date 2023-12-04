@@ -18,6 +18,8 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin, unCoin)
+import Cardano.Ledger.Conway.Core
+import Cardano.Ledger.Conway.PParams
 import Cardano.Ledger.Crypto
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
@@ -25,11 +27,6 @@ import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map.Strict as Map
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
-import Cardano.Ledger.Conway.Core
-import Cardano.Ledger.Conway.PParams
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway)
 

@@ -29,9 +29,6 @@ import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser ())
 import Data.Sequence.Strict (fromList)
-#if __GLASGOW_HASKELL__ >= 906
-import Data.Type.Equality (type (~))
-#endif
 import Text.Show (Show (..))
 import Prelude ()
 
