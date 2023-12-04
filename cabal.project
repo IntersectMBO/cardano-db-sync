@@ -61,6 +61,9 @@ write-ghc-environment-files: always
 package snap-server
   flags: +openssl
 
+allow-newer:
+  swagger2:aeson
+
 -- ---------------------------------------------------------
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
