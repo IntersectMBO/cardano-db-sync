@@ -7,6 +7,8 @@
 
 module Cardano.Mock.Forging.Tx.Conway (
   Babbage.TxOutScriptType (..),
+  Babbage.DatumType (..),
+  Babbage.ReferenceScript (..),
   consTxBody,
   consCertTxBody,
   consPoolParams,
@@ -15,6 +17,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkPaymentTx',
   mkLockByScriptTx,
   mkUnlockScriptTx,
+  mkUnlockScriptTxBabbage,
   mkScriptTx,
   mkSimpleTx,
   mkDCertTx,
@@ -34,6 +37,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   Babbage.mkScriptInp,
   mkWitnesses,
   mkUTxOConway,
+  mkUTxOCollConway,
   addValidityInterval,
 ) where
 
@@ -235,30 +239,37 @@ mkUnlockScriptTx ::
   Integer ->
   ConwayLedgerState ->
   Either ForgingError (AlonzoTx StandardConway)
-mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees state' = do
-  inputPairs <- map fst <$> mapM (`resolveUTxOIndex` state') inputIndex
-  (colInputPair, _) <- resolveUTxOIndex colInputIndex state'
-  addr <- resolveAddress outputIndex state'
+mkUnlockScriptTx inputIndex colInputIndex outputIndex =
+  mkUnlockScriptTx' inputIndex colInputIndex outputIndex mempty Nothing
 
-  let inputs = Set.fromList $ map fst inputPairs
-      colInputs = Set.singleton $ fst colInputPair
-      output =
-        BabbageTxOut
-          addr
-          (valueFromList (Coin amount) [])
-          NoDatum
-          SNothing
+mkUnlockScriptTxBabbage ::
+  [ConwayUTxOIndex] ->
+  ConwayUTxOIndex ->
+  ConwayUTxOIndex ->
+  [ConwayUTxOIndex] ->
+  Bool ->
+  Bool ->
+  Integer ->
+  Integer ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succeeds amount fees state' = do
+  let colTxOutType =
+        if compl
+          then Just $ Babbage.TxOutInline True Babbage.InlineDatum (Babbage.ReferenceScript True)
+          else Just $ Babbage.TxOutNoInline True
+      colOutput = mkOutFromType amount <$> colTxOutType
 
-  pure $
-    mkScriptTx succeeds (mkScriptInps inputPairs) $
-      consPaymentTxBody
-        inputs
-        colInputs
-        mempty
-        (StrictSeq.singleton output)
-        SNothing
-        (Coin fees)
-        mempty
+  mkUnlockScriptTx'
+    inputIndex
+    colInputIndex
+    outputIndex
+    refInput
+    colOutput
+    succeeds
+    amount
+    fees
+    state'
 
 mkDCertTx ::
   [ConwayTxCert StandardConway] ->
@@ -623,6 +634,11 @@ mkUTxOConway ::
   [(TxIn StandardCrypto, BabbageTxOut StandardConway)]
 mkUTxOConway = mkUTxOAlonzo
 
+mkUTxOCollConway ::
+  AlonzoTx StandardConway ->
+  [(TxIn StandardCrypto, BabbageTxOut StandardConway)]
+mkUTxOCollConway = Babbage.mkUTxOCollBabbage
+
 mkOutFromType ::
   Integer ->
   Babbage.TxOutScriptType ->
@@ -645,6 +661,11 @@ mkOutFromType amount txOutType =
       SJust True -> SJust alwaysSucceedsScript
       SJust False -> SJust alwaysFailsScript
 
+mkScriptInps ::
+  [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
+  [(RdmrPtr, (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+mkScriptInps = mapMaybe joinSnd . map Babbage.mkScriptInp . zip [0 ..]
+
 -- | Takes a nested Monad of the form Monad (_, Monad), and combines them into one
 -- outer monad
 joinSnd :: Monad m => m (a, m b) -> m (a, b)
@@ -653,10 +674,43 @@ joinSnd m = do
   b <- m'
   pure (a, b)
 
-mkScriptInps ::
-  [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
-  [(RdmrPtr, (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
-mkScriptInps = mapMaybe joinSnd . map Babbage.mkScriptInp . zip [0 ..]
+mkUnlockScriptTx' ::
+  [ConwayUTxOIndex] ->
+  ConwayUTxOIndex ->
+  ConwayUTxOIndex ->
+  [ConwayUTxOIndex] ->
+  Maybe (BabbageTxOut StandardConway) ->
+  Bool ->
+  Integer ->
+  Integer ->
+  ConwayLedgerState ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds amount fees state' = do
+  inputPairs <- map fst <$> mapM (`resolveUTxOIndex` state') inputIndex
+  refInputPairs <- map fst <$> mapM (`resolveUTxOIndex` state') refInput
+  (colInputPair, _) <- resolveUTxOIndex colInputIndex state'
+  addr <- resolveAddress outputIndex state'
+
+  let inputs = Set.fromList $ map fst inputPairs
+      colInputs = Set.singleton $ fst colInputPair
+      refInputs = Set.fromList $ map fst refInputPairs
+      output =
+        BabbageTxOut
+          addr
+          (valueFromList (Coin amount) [])
+          NoDatum
+          SNothing
+
+  pure $
+    mkScriptTx succeeds (mkScriptInps inputPairs) $
+      consPaymentTxBody
+        inputs
+        colInputs
+        refInputs
+        (StrictSeq.singleton output)
+        (maybeToStrictMaybe colOut)
+        (Coin fees)
+        mempty
 
 allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)
