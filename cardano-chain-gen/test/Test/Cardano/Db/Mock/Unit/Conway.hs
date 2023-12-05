@@ -7,6 +7,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
+import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Plutus as Plutus
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Reward as Reward
@@ -15,7 +16,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
 import Test.Tasty (TestTree (), testGroup)
-import Test.Tasty.ExpectedFailure (expectFail)
+import Test.Tasty.ExpectedFailure (expectFail, ignoreTest)
 import Test.Tasty.HUnit (Assertion (), testCase)
 import Prelude (String ())
 
@@ -170,6 +171,37 @@ unitTests iom knownMigrations =
         , test "pool deregistration" Other.poolDeReg
         , test "multiple deregistration" Other.poolDeRegMany
         , test "delist pool" Other.poolDelist
+        ]
+    , testGroup
+        "Inline and reference"
+        [ test "spend inline datum" InlineRef.unlockDatumOutput
+        , test "spend inline datum same block" InlineRef.unlockDatumOutputSameBlock
+        , test "inline datum with noncanonical CBOR" InlineRef.inlineDatumCBOR
+        , test "spend reference script" InlineRef.spendRefScript
+        , test "spend reference script same block" InlineRef.spendRefScriptSameBlock
+        , test "spend collateral output of invalid tx" InlineRef.spendCollateralOutput
+        , ignoreTest $
+            test
+              "spend collateral output of invalid tx rollback"
+              InlineRef.spendCollateralOutputRollback
+        , ignoreTest $
+            test
+              "spend collateral output of invalid tx same block"
+              InlineRef.spendCollateralOutputSameBlock
+        , ignoreTest $
+            test
+              "reference input to output which is not spent"
+              InlineRef.referenceInputUnspend
+        , ignoreTest $
+            test
+              "supply and run script which is both reference and in witnesses"
+              InlineRef.supplyScriptsTwoWays
+        , ignoreTest $
+            test
+              "supply and run script which is both reference and in witnesses same block"
+              InlineRef.supplyScriptsTwoWaysSameBlock
+        , ignoreTest $ test "reference script as minting" InlineRef.referenceMintingScript
+        , ignoreTest $ test "reference script as delegation" InlineRef.referenceDelegation
         ]
     ]
   where

@@ -480,7 +480,10 @@ mkScriptTx valid rdmrs txBody =
 mkUTxOBabbage :: AlonzoTx StandardBabbage -> [(TxIn StandardCrypto, BabbageTxOut StandardBabbage)]
 mkUTxOBabbage = mkUTxOAlonzo
 
-mkUTxOCollBabbage :: AlonzoTx StandardBabbage -> [(TxIn StandardCrypto, BabbageTxOut StandardBabbage)]
+mkUTxOCollBabbage ::
+  (BabbageEraTxBody era) =>
+  AlonzoTx era ->
+  [(TxIn (EraCrypto era), TxOut era)]
 mkUTxOCollBabbage tx = Map.toList $ unUTxO $ collOuts $ getField @"body" tx
 
 emptyTxBody :: BabbageTxBody StandardBabbage
