@@ -8,16 +8,22 @@ module Cardano.DbSync.OffChain.Query (
 ) where
 
 import Cardano.Db (
-  EntityField (OffChainPoolDataPmrId, OffChainPoolFetchErrorFetchTime, OffChainPoolFetchErrorId, OffChainPoolFetchErrorPmrId, OffChainPoolFetchErrorPoolId, OffChainPoolFetchErrorRetryCount, PoolHashId, PoolMetadataRefHash, PoolMetadataRefId, PoolMetadataRefPoolId, PoolMetadataRefUrl),
+  EntityField (..),
   OffChainPoolData,
   OffChainPoolFetchError,
   OffChainPoolFetchErrorId,
+  OffChainVoteData,
+  OffChainVoteFetchError,
   PoolHash,
   PoolHashId,
   PoolMetaHash (PoolMetaHash),
   PoolMetadataRef,
   PoolMetadataRefId,
   PoolUrl,
+  VoteMetaHash (..),
+  VoteUrl,
+  VotingAnchor,
+  VotingAnchorId,
  )
 import Cardano.DbSync.OffChain.FetchQueue (newRetry, retryAgain)
 import Cardano.DbSync.Types (OffChainPoolWorkQueue (..), OffChainVoteWorkQueue (..))
@@ -55,7 +61,6 @@ import System.Random.Shuffle (shuffleM)
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Query OffChain VoteData
 ---------------------------------------------------------------------------------------------------------------------------------
-
 getOffChainVoteData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
 getOffChainVoteData now maxCount = do
   xs <- queryNewVoteWorkQueue now
@@ -65,9 +70,28 @@ getOffChainVoteData now maxCount = do
       ys <- queryOffChainVoteWorkQueue (Time.posixSecondsToUTCTime now)
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
+-- get all the voting anchors that don't already exist in OffChainVoteData or OffChainVoteFetchError
 queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
-queryNewVoteWorkQueue _now = do
-  pure undefined
+queryNewVoteWorkQueue now = do
+  res <- select $ do
+    va <- from $ table @VotingAnchor
+    where_ (notExists $ from (table @OffChainVoteData) >>= \ocvd -> where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. va ^. VotingAnchorId))
+    where_ (notExists $ from (table @OffChainVoteFetchError) >>= \ocvfe -> where_ (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId))
+    pure
+      ( va ^. VotingAnchorId
+      , va ^. VotingAnchorDataHash
+      , va ^. VotingAnchorUrl
+      )
+  pure $ map convert res
+  where
+    convert :: (Value VotingAnchorId, Value ByteString, Value VoteUrl) -> OffChainVoteWorkQueue
+    convert (Value vaId, Value vaHash, Value url) =
+      OffChainVoteWorkQueue
+        { oVoteWqMetaHash = VoteMetaHash vaHash
+        , oVoteWqReferenceId = vaId
+        , oVoteWqRetry = newRetry now
+        , oVoteWqUrl = url
+        }
 
 queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
 queryOffChainVoteWorkQueue _now = pure undefined
