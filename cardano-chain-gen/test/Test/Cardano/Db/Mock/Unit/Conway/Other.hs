@@ -12,6 +12,10 @@ module Test.Cardano.Db.Mock.Unit.Conway.Other (
   poolDeReg,
   poolDeRegMany,
   poolDelist,
+
+  -- * Hard fork
+  forkFixedEpoch,
+  rollbackFork,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
@@ -21,15 +25,18 @@ import Cardano.Ledger.Core (PoolCert (..))
 import Cardano.Ledger.Credential (StakeCredential ())
 import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Ledger.Keys (KeyHash (), KeyRole (..))
-import Cardano.Mock.ChainSync.Server (IOManager ())
+import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
+import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
-import Cardano.Mock.Forging.Types (ForgingError (..), PoolIndex (..), StakeIndex (..))
+import Cardano.Mock.Forging.Types
 import Cardano.Prelude
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
+import Data.List (last)
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
+import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
@@ -371,3 +378,61 @@ mkPoolDereg ::
   KeyHash 'StakePool StandardCrypto ->
   ConwayTxCert StandardConway
 mkPoolDereg epochNo _ keyHash = ConwayTxCertPool (RetirePool keyHash epochNo)
+
+forkFixedEpoch :: IOManager -> [(Text, Text)] -> Assertion
+forkFixedEpoch =
+  withFullConfigAndDropDB configDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Add a Babbage tx
+    void $
+      Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+
+    -- Initiate a hard fork
+    epochs0 <- Api.fillEpochs interpreter mockServer 2
+    -- Add a simple Conway tx
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+    -- Fill the rest of the epoch
+    epochs1 <- Api.fillUntilNextEpoch interpreter mockServer
+
+    -- Verify block count
+    assertBlockNoBackoff dbSync $ 2 + length (epochs0 <> epochs1)
+  where
+    configDir = "config-conway-hf-epoch1"
+    testLabel = "conwayForkFixedEpoch"
+
+rollbackFork :: IOManager -> [(Text, Text)] -> Assertion
+rollbackFork =
+  withFullConfig configDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a Babbage tx
+    void $
+      Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+    -- Fill the rest of the epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter mockServer
+    -- Create a point to rollback to
+    epoch1 <- Api.fillEpochPercentage interpreter mockServer 85
+    -- Fill the rest of the epoch
+    epoch1' <- Api.fillUntilNextEpoch interpreter mockServer
+    -- Forge a Conway tx
+    blk <-
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1 <> epoch1')
+    -- Rollback
+    atomically $ rollback mockServer (blockPoint $ last epoch1)
+    -- Replay remaining blocks
+    forM_ (epoch1' <> [blk]) (atomically . addBlock mockServer)
+
+    -- Verify block count
+    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1 <> epoch1')
+  where
+    configDir = "config-conway-hf-epoch1"
+    testLabel = "conwayRollbackFork"
