@@ -198,6 +198,11 @@ unitTests iom knownMigrations =
         , test "reference script as minting" InlineRef.referenceMintingScript
         , test "reference script as delegation" InlineRef.referenceDelegation
         ]
+    , testGroup
+        "Hard Fork"
+        [ test "fork from Babbage to Conway fixed epoch" Other.forkFixedEpoch
+        , test "fork from Babbage to Conway and rollback" Other.rollbackFork
+        ]
     ]
   where
     test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
