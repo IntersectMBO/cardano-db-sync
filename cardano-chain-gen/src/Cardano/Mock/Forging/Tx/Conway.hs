@@ -343,7 +343,7 @@ mkScriptDCertTx consCert isValid' state' = do
           mkRedeemer n (alwaysSucceedsScriptHash, alwaysSucceedsScript)
     prepareRedeemer _ = Nothing
 
-    mkRedeemer n (a, b) = Just (RdmrPtr Cert n, (a, b))
+    mkRedeemer n (a, b) = Just (RdmrPtr Cert n, Just (a, b))
 
 mkMultiAssetsScriptTx ::
   [ConwayUTxOIndex] ->
@@ -600,17 +600,17 @@ mkFullTx n m state' = do
 
 mkScriptMint ::
   MultiAsset StandardCrypto ->
-  [(RdmrPtr, (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+  [(RdmrPtr, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
 mkScriptMint (MultiAsset m) =
   mapMaybe mkMint . zip [0 ..] . map policyID $ Map.keys m
   where
     mkMint (n, policyId)
       | policyId == alwaysFailsScriptHash =
-          Just (RdmrPtr Mint n, alwaysFails)
+          Just (RdmrPtr Mint n, Just alwaysFails)
       | policyId == alwaysSucceedsScriptHash =
-          Just (RdmrPtr Mint n, alwaysSucceeds)
+          Just (RdmrPtr Mint n, Just alwaysSucceeds)
       | policyId == alwaysMintScriptHash =
-          Just (RdmrPtr Mint n, alwaysMint)
+          Just (RdmrPtr Mint n, Just alwaysMint)
       | otherwise = Nothing
 
     alwaysFails = (alwaysFailsScriptHash, alwaysFailsScript)
@@ -663,16 +663,8 @@ mkOutFromType amount txOutType =
 
 mkScriptInps ::
   [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
-  [(RdmrPtr, (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
-mkScriptInps = mapMaybe joinSnd . map Babbage.mkScriptInp . zip [0 ..]
-
--- | Takes a nested Monad of the form Monad (_, Monad), and combines them into one
--- outer monad
-joinSnd :: Monad m => m (a, m b) -> m (a, b)
-joinSnd m = do
-  (a, m') <- m
-  b <- m'
-  pure (a, b)
+  [(RdmrPtr, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+mkScriptInps = mapMaybe Babbage.mkScriptInp . zip [0 ..]
 
 mkUnlockScriptTx' ::
   [ConwayUTxOIndex] ->

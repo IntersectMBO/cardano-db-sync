@@ -198,8 +198,13 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
   Right
     $ mkScriptTx
       succeeds
-      (mapMaybe mkScriptInp $ zip [0 ..] inputPairs)
+      (mapMaybe mkScriptInp' $ zip [0 ..] inputPairs)
     $ consPaymentTxBody inpts colInput (StrictSeq.fromList [output]) (Coin fees) mempty
+
+mkScriptInp' ::
+  (Word64, (TxIn StandardCrypto, Core.TxOut StandardAlonzo)) ->
+  Maybe (RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
+mkScriptInp' = map (second Just) . mkScriptInp
 
 mkScriptInp ::
   (Word64, (TxIn StandardCrypto, Core.TxOut StandardAlonzo)) ->
@@ -219,17 +224,17 @@ mkScriptInp (n, (_txIn, txOut))
 
 mkScriptMint ::
   MultiAsset StandardCrypto ->
-  [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))]
+  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))]
 mkScriptMint (MultiAsset mp) = mapMaybe f $ zip [0 ..] (Map.keys mp)
   where
     f (n, policyId)
       | policyID policyId == alwaysFailsScriptHash =
-          Just (RdmrPtr Mint n, (alwaysFailsScriptHash, alwaysFailsScript))
+          Just (RdmrPtr Mint n, Just (alwaysFailsScriptHash, alwaysFailsScript))
       | policyID policyId == alwaysSucceedsScriptHash =
           Just
-            (RdmrPtr Mint n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+            (RdmrPtr Mint n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
       | policyID policyId == alwaysMintScriptHash =
-          Just (RdmrPtr Mint n, (alwaysMintScriptHash, alwaysMintScript))
+          Just (RdmrPtr Mint n, Just (alwaysMintScriptHash, alwaysMintScript))
       | otherwise = Nothing
 
 mkMAssetsScriptTx ::
@@ -250,7 +255,7 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta 
   Right
     $ mkScriptTx
       succeeds
-      ( mapMaybe mkScriptInp (zip [0 ..] inputPairs)
+      ( mapMaybe mkScriptInp' (zip [0 ..] inputPairs)
           ++ mkScriptMint minted
       )
     $ consPaymentTxBody inpts colInput (StrictSeq.fromList outps) (Coin fees) minted
@@ -300,7 +305,7 @@ mkScriptDCertTx consDert valid st = do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
   Right $
-    mkScriptTx valid (mapMaybe prepareRedeemer $ zip [0 ..] consDert) $
+    mkScriptTx valid (mapMaybe (map (second Just) . prepareRedeemer) $ zip [0 ..] consDert) $
       consCertTxBody dcerts (Withdrawals mempty)
   where
     prepareRedeemer (n, (StakeIndexScript bl, addRedeemer, _)) =
@@ -356,7 +361,7 @@ mkScriptTx ::
   , Core.TxWits era ~ AlonzoTxWits era
   ) =>
   Bool ->
-  [(RdmrPtr, (ScriptHash StandardCrypto, Core.Script era))] ->
+  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
   Core.TxBody era ->
   AlonzoTx era
 mkScriptTx valid rdmrs txBody =
@@ -369,7 +374,7 @@ mkScriptTx valid rdmrs txBody =
   where
     witnesses =
       mkWitnesses
-        (map (second Just) rdmrs)
+        rdmrs
         [(hashData @era plutusDataList, plutusDataList)]
 
 mkWitnesses ::
