@@ -350,12 +350,19 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       txMetadata <-
         whenFalseMempty (ioMetadata iopts) $
-          prepareTxMetadata tracer txId (Generic.txMetadata tx)
-
-      when (ioShelley iopts) $ do
-        mapM_ (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers) $ Generic.txCertificates tx
-        mapM_ (insertWithdrawals tracer cache txId redeemers) $ Generic.txWithdrawals tx
-        mapM_ (lift . insertParamProposal blkId txId) $ Generic.txParamProposal tx
+          prepareTxMetadata
+            tracer
+            txId
+            (Generic.txMetadata tx)
+      mapM_
+        (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers)
+        $ Generic.txCertificates tx
+      when (ioShelley iopts) $
+        mapM_ (insertWithdrawals tracer cache txId redeemers) $
+          Generic.txWithdrawals tx
+      when (ioShelley iopts) $
+        mapM_ (lift . insertParamProposal blkId txId) $
+          Generic.txParamProposal tx
 
       maTxMint <-
         whenFalseMempty (ioMetadata iopts) $
@@ -523,13 +530,20 @@ insertCertificate ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
   case cert of
-    Left (ShelleyTxCertDelegCert deleg) -> insertDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
-    Left (ShelleyTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
-    Left (ShelleyTxCertMir mir) -> insertMirCert tracer cache network txId idx mir
+    Left (ShelleyTxCertDelegCert deleg) ->
+      when (ioShelley iopts) $ insertDelegCert tracer cache network txId idx mRedeemerId epochNo slotNo deleg
+    Left (ShelleyTxCertPool pool) ->
+      when (ioShelley iopts) $ insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
+    Left (ShelleyTxCertMir mir) ->
+      when (ioShelley iopts) $ insertMirCert tracer cache network txId idx mir
     Left (ShelleyTxCertGenesisDeleg _gen) ->
-      liftIO $ logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
-    Right (ConwayTxCertDeleg deleg) -> insertConwayDelegCert syncEnv txId idx mRedeemerId epochNo slotNo deleg
-    Right (ConwayTxCertPool pool) -> insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
+      when (ioShelley iopts) $
+        liftIO $
+          logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
+    Right (ConwayTxCertDeleg deleg) ->
+      when (ioShelley iopts) $ insertConwayDelegCert syncEnv txId idx mRedeemerId epochNo slotNo deleg
+    Right (ConwayTxCertPool pool) ->
+      when (ioShelley iopts) $ insertPoolCert tracer cache isMember network epochNo blkId txId idx pool
     Right (ConwayTxCertGov c) ->
       when (ioGov iopts) $ case c of
         ConwayRegDRep cred coin anchor ->
