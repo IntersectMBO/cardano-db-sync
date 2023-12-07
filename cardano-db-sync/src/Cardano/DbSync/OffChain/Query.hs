@@ -94,7 +94,30 @@ queryNewVoteWorkQueue now = do
         }
 
 queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
-queryOffChainVoteWorkQueue _now = pure undefined
+queryOffChainVoteWorkQueue _now = do
+  res <- select $ do
+    (va :& ocpfe) <-
+      from $ table @VotingAnchor
+        `innerJoin` table @OffChainVoteFetchError
+          `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
+    orderBy [desc (ocpfe ^. OffChainVoteFetchErrorFetchTime)]
+    pure
+      ( ocpfe ^. OffChainVoteFetchErrorFetchTime
+      , va ^. VotingAnchorId
+      , va ^. VotingAnchorDataHash
+      , va ^. VotingAnchorUrl
+      , ocpfe ^. OffChainVoteFetchErrorRetryCount
+      )
+  pure $ map convert res
+  where
+    convert :: (Value UTCTime, Value VotingAnchorId, Value ByteString, Value VoteUrl, Value Word) -> OffChainVoteWorkQueue
+    convert (Value time, Value vaId, Value vaHash, Value url, Value rCount) =
+      OffChainVoteWorkQueue
+        { oVoteWqMetaHash = VoteMetaHash vaHash
+        , oVoteWqReferenceId = vaId
+        , oVoteWqRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
+        , oVoteWqUrl = url
+        }
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Query OffChain PoolData
@@ -117,8 +140,8 @@ queryNewPoolWorkQueue now = do
     (ph :& pmr) <-
       from
         $ table @PoolHash
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
+        `innerJoin` table @PoolMetadataRef
+          `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
     where_ (just (pmr ^. PoolMetadataRefId) `in_` latestRefs)
     where_ (notExists $ from (table @OffChainPoolData) >>= \pod -> where_ (pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId))
     where_ (notExists $ from (table @OffChainPoolFetchError) >>= \pofe -> where_ (pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId))
@@ -159,10 +182,10 @@ queryOffChainPoolWorkQueue _now = do
     (ph :& pmr :& pofe) <-
       from
         $ table @PoolHash
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
-          `innerJoin` table @OffChainPoolFetchError
-        `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
+        `innerJoin` table @PoolMetadataRef
+          `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
+        `innerJoin` table @OffChainPoolFetchError
+          `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
     where_ (just (pofe ^. OffChainPoolFetchErrorId) `in_` latestRefs)
     where_ (notExists $ from (table @OffChainPoolData) >>= \pod -> where_ (pod ^. OffChainPoolDataPmrId ==. pofe ^. OffChainPoolFetchErrorPmrId))
     orderBy [desc (pofe ^. OffChainPoolFetchErrorFetchTime)]
