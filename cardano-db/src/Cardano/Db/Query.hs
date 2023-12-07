@@ -58,6 +58,8 @@ module Cardano.Db.Query (
   queryAllExtraMigrations,
   queryMinMaxEpochStake,
   queryGovActionProposalId,
+  queryDrepHashAlwaysAbstain,
+  queryDrepHashAlwaysNoConfidence,
   -- queries used in smash
   queryOffChainPoolData,
   queryPoolRegister,
@@ -787,6 +789,24 @@ queryGovActionProposalId txId index = do
     where_ (ga ^. GovActionProposalIndex ==. val index)
     pure ga
   pure $ maybeToEither (DbLookupGovActionPair txId index) entityKey (listToMaybe res)
+
+queryDrepHashAlwaysAbstain :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
+queryDrepHashAlwaysAbstain = do
+  res <- select $ do
+    dh <- from $ table @DrepHash
+    where_ (isNothing (dh ^. DrepHashRaw))
+    where_ (dh ^. DrepHashView ==. val hardcodedAlwaysAbstain)
+    pure $ dh ^. DrepHashId
+  pure $ unValue <$> listToMaybe res
+
+queryDrepHashAlwaysNoConfidence :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
+queryDrepHashAlwaysNoConfidence = do
+  res <- select $ do
+    dh <- from $ table @DrepHash
+    where_ (isNothing (dh ^. DrepHashRaw))
+    where_ (dh ^. DrepHashView ==. val hardcodedAlwaysNoConfidence)
+    pure $ dh ^. DrepHashId
+  pure $ unValue <$> listToMaybe res
 
 {--------------------------------------------
   Queries use in SMASH

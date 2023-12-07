@@ -54,6 +54,8 @@ module Cardano.Db.Types (
   renderGovActionType,
   readGovActionType,
   word64ToAda,
+  hardcodedAlwaysAbstain,
+  hardcodedAlwaysNoConfidence,
 ) where
 
 import Cardano.Ledger.Coin (DeltaCoin (..))
@@ -417,3 +419,9 @@ readGovActionType str =
 word64ToAda :: Word64 -> Ada
 word64ToAda w =
   Ada (fromIntegral w / 1000000)
+
+hardcodedAlwaysAbstain :: Text
+hardcodedAlwaysAbstain = "drep_always_abstain"
+
+hardcodedAlwaysNoConfidence :: Text
+hardcodedAlwaysNoConfidence = "drep_always_no_confidence"

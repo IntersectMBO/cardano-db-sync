@@ -84,7 +84,6 @@ import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Either.Extra (eitherToMaybe)
 import Data.Group (invert)
@@ -1578,26 +1577,14 @@ resolveGovActionProposal gaId = do
 insertDrep :: (MonadBaseControl IO m, MonadIO m) => DRep StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
 insertDrep = \case
   DRepCredential cred -> insertCredDrepHash cred
-  DRepAlwaysAbstain ->
-    DB.insertDrepHash
-      DB.DrepHash
-        { DB.drepHashRaw = BS.replicate 28 '\0'
-        , DB.drepHashView = "drep_always_abstain"
-        , DB.drepHashHasScript = False
-        }
-  DRepAlwaysNoConfidence ->
-    DB.insertDrepHash
-      DB.DrepHash
-        { DB.drepHashRaw = BS.replicate 28 '\0'
-        , DB.drepHashView = "drep_always_no_confidence"
-        , DB.drepHashHasScript = False
-        }
+  DRepAlwaysAbstain -> DB.insertAlwaysAbstainDrep
+  DRepAlwaysNoConfidence -> DB.insertAlwaysNoConfidence
 
 insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'DRepRole StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
 insertCredDrepHash cred = do
   DB.insertDrepHash
     DB.DrepHash
-      { DB.drepHashRaw = bs
+      { DB.drepHashRaw = Just bs
       , DB.drepHashView = serialiseDrepToBech32 bs
       , DB.drepHashHasScript = Generic.hasCredScript cred
       }
