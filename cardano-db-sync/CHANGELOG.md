@@ -18,6 +18,9 @@ Some useful links (adjust the numbers to the correct tag):
 
 In the schema docs, you can search for `13.2` or `Conway` for schema changes from the previous official release.
 
+### sancho-next
+- Renamed table governance_action to gov_action_proposal
+
 ### sancho-2.3.0
 - is compatible with node 8.7-pre
 - introduces flag `--only-gov` which allows db-sync to sync only the governance related data.

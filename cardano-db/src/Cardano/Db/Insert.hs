@@ -65,7 +65,7 @@ module Cardano.Db.Insert (
   setNullRatified,
   replaceAdaPots,
   insertAnchor,
-  insertGovernanceAction,
+  insertGovActionProposal,
   insertTreasuryWithdrawal,
   insertNewCommittee,
   insertVotingProcedure,
@@ -332,21 +332,21 @@ updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
   updateWhere [EpochStakeProgressEpochNo Database.Persist.==. epoch] [EpochStakeProgressCompleted Database.Persist.=. True]
 
-updateGovActionEnacted :: MonadIO m => GovernanceActionId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionEnacted :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
 updateGovActionEnacted gaid eNo =
-  updateWhere [GovernanceActionId ==. gaid, GovernanceActionEnactedEpoch ==. Nothing] [GovernanceActionEnactedEpoch =. Just eNo]
+  updateWhere [GovActionProposalId ==. gaid, GovActionProposalEnactedEpoch ==. Nothing] [GovActionProposalEnactedEpoch =. Just eNo]
 
-updateGovActionRatified :: MonadIO m => GovernanceActionId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionRatified :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
 updateGovActionRatified gaid eNo =
-  updateWhere [GovernanceActionId ==. gaid, GovernanceActionRatifiedEpoch ==. Nothing] [GovernanceActionRatifiedEpoch =. Just eNo]
+  updateWhere [GovActionProposalId ==. gaid, GovActionProposalRatifiedEpoch ==. Nothing] [GovActionProposalRatifiedEpoch =. Just eNo]
 
 setNullEnacted :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 setNullEnacted eNo =
-  updateWhere [GovernanceActionEnactedEpoch !=. Nothing, GovernanceActionEnactedEpoch >. Just eNo] [GovernanceActionEnactedEpoch =. Nothing]
+  updateWhere [GovActionProposalEnactedEpoch !=. Nothing, GovActionProposalEnactedEpoch >. Just eNo] [GovActionProposalEnactedEpoch =. Nothing]
 
 setNullRatified :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 setNullRatified eNo =
-  updateWhere [GovernanceActionRatifiedEpoch !=. Nothing, GovernanceActionRatifiedEpoch >. Just eNo] [GovernanceActionRatifiedEpoch =. Nothing]
+  updateWhere [GovActionProposalRatifiedEpoch !=. Nothing, GovActionProposalRatifiedEpoch >. Just eNo] [GovActionProposalRatifiedEpoch =. Nothing]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do
@@ -363,8 +363,8 @@ replaceAdaPots blockId adapots = do
 insertAnchor :: (MonadBaseControl IO m, MonadIO m) => VotingAnchor -> ReaderT SqlBackend m VotingAnchorId
 insertAnchor = insertCheckUnique "VotingAnchor"
 
-insertGovernanceAction :: (MonadBaseControl IO m, MonadIO m) => GovernanceAction -> ReaderT SqlBackend m GovernanceActionId
-insertGovernanceAction = insertUnchecked "GovernanceAction"
+insertGovActionProposal :: (MonadBaseControl IO m, MonadIO m) => GovActionProposal -> ReaderT SqlBackend m GovActionProposalId
+insertGovActionProposal = insertUnchecked "GovActionProposal"
 
 insertTreasuryWithdrawal :: (MonadBaseControl IO m, MonadIO m) => TreasuryWithdrawal -> ReaderT SqlBackend m TreasuryWithdrawalId
 insertTreasuryWithdrawal = insertUnchecked "TreasuryWithdrawal"

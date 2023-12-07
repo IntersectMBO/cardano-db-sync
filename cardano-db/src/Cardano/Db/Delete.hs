@@ -144,11 +144,11 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     queryFirstAndDeleteAfter CommitteeDeRegistrationTxId txId
     queryFirstAndDeleteAfter DrepRegistrationTxId txId
     queryFirstAndDeleteAfter VotingProcedureTxId txId
-    mgaId <- queryMinRefId GovernanceActionTxId txId
+    mgaId <- queryMinRefId GovActionProposalTxId txId
     whenJust mgaId $ \gaId -> do
-      queryFirstAndDeleteAfter TreasuryWithdrawalGovernanceActionId gaId
-      queryFirstAndDeleteAfter NewCommitteeGovernanceActionId gaId
-      deleteWhere [GovernanceActionId >=. gaId]
+      queryFirstAndDeleteAfter TreasuryWithdrawalGovActionProposalId gaId
+      queryFirstAndDeleteAfter NewCommitteeGovActionProposalId gaId
+      deleteWhere [GovActionProposalId >=. gaId]
     mvaId <- queryMinRefId VotingAnchorTxId txId
     whenJust mvaId $ \vaId -> do
       queryFirstAndDeleteAfter OffChainAnchorDataVotingAnchorId vaId
