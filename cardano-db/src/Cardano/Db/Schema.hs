@@ -579,7 +579,7 @@ share
     url                 VoteUrl             sqltype=varchar
     UniqueVotingAnchor  dataHash url
 
-  GovernanceAction
+  GovActionProposal
     txId               TxId                  noreference
     index              Word64
     deposit            DbLovelace            sqltype=lovelace
@@ -595,12 +595,12 @@ share
     expiredEpoch       Word64 Maybe          sqltype=word31type
 
   TreasuryWithdrawal
-    governanceActionId  GovernanceActionId  noreference
+    govActionProposalId  GovActionProposalId  noreference
     stakeAddressId      StakeAddressId      noreference
     amount              DbLovelace          sqltype=lovelace
 
   NewCommittee
-    governanceActionId  GovernanceActionId  noreference
+    govActionProposalId  GovActionProposalId  noreference
     quorum              Double
     deletedMembers      Text
     addedMembers        Text
@@ -608,7 +608,7 @@ share
   VotingProcedure -- GovVote
     txId                 TxId                 noreference
     index                Word16
-    governanceActionId   GovernanceActionId   noreference
+    govActionProposalId   GovActionProposalId   noreference
     voterRole            VoterRole            sqltype=voterrole
     committeeVoter       ByteString Maybe
     drepVoter            DrepHashId Maybe     noreference
@@ -1185,36 +1185,36 @@ schemaDocs =
       VotingAnchorDataHash # "A hash of the contents of the metadata URL"
       VotingAnchorUrl # "A URL to a JSON payload of metadata"
 
-    GovernanceAction --^ do
-      "A table for proposed GovernanceAction, aka ProposalProcedure, GovAction or GovProposal.\
+    GovActionProposal --^ do
+      "A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal.\
       \ At most one of the ratified/enacted/dropped/expired\
       \ epoch field can be non-null, indicating the current state of the proposal. This table may be referenced\
       \ by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway."
-      GovernanceActionTxId # "The Tx table index of the tx that includes this certificate."
-      GovernanceActionIndex # "The index of this proposal procedure within its transaction."
-      GovernanceActionDeposit # "The deposit amount payed for this proposal."
-      GovernanceActionReturnAddress # "The StakeAddress index of the reward address to receive the deposit when it is repaid."
-      GovernanceActionVotingAnchorId # "The Anchor table index related to this proposal."
-      GovernanceActionType # "Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction"
-      GovernanceActionDescription # "A Text describing the content of this GovernanceAction in a readable way."
-      GovernanceActionParamProposal # "If this is a param proposal action, this has the index of the param_proposal table."
-      GovernanceActionRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null."
-      GovernanceActionEnactedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
-      GovernanceActionDroppedEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
-      GovernanceActionExpiredEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
-      GovernanceActionExpiration # "Shows the epoch at which this governance action will expire."
+      GovActionProposalTxId # "The Tx table index of the tx that includes this certificate."
+      GovActionProposalIndex # "The index of this proposal procedure within its transaction."
+      GovActionProposalDeposit # "The deposit amount payed for this proposal."
+      GovActionProposalReturnAddress # "The StakeAddress index of the reward address to receive the deposit when it is repaid."
+      GovActionProposalVotingAnchorId # "The Anchor table index related to this proposal."
+      GovActionProposalType # "Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction"
+      GovActionProposalDescription # "A Text describing the content of this GovActionProposal in a readable way."
+      GovActionProposalParamProposal # "If this is a param proposal action, this has the index of the param_proposal table."
+      GovActionProposalRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null."
+      GovActionProposalEnactedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
+      GovActionProposalDroppedEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
+      GovActionProposalExpiredEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
+      GovActionProposalExpiration # "Shows the epoch at which this governance action will expire."
 
     TreasuryWithdrawal --^ do
-      "A table for all treasury withdrawals proposed on a GovernanceAction. New in 13.2-Conway."
-      TreasuryWithdrawalGovernanceActionId
-        # "The GovernanceAction table index for this withdrawal.\
-          \Multiple TreasuryWithdrawal may reference the same GovernanceAction."
+      "A table for all treasury withdrawals proposed on a GovActionProposal. New in 13.2-Conway."
+      TreasuryWithdrawalGovActionProposalId
+        # "The GovActionProposal table index for this withdrawal.\
+          \Multiple TreasuryWithdrawal may reference the same GovActionProposal."
       TreasuryWithdrawalStakeAddressId # "The address that benefits from this withdrawal."
       TreasuryWithdrawalAmount # "The amount for this withdrawl."
 
     NewCommittee --^ do
-      "A table for new committee proposed on a GovernanceAction. New in 13.2-Conway."
-      NewCommitteeGovernanceActionId # "The GovernanceAction table index for this new committee."
+      "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
+      NewCommitteeGovActionProposalId # "The GovActionProposal table index for this new committee."
       NewCommitteeQuorum # "The proposed quorum."
       NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
       NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
@@ -1223,7 +1223,7 @@ schemaDocs =
       "A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New in 13.2-Conway."
       VotingProcedureTxId # "The Tx table index of the tx that includes this VotingProcedure."
       VotingProcedureIndex # "The index of this VotingProcedure within this transaction."
-      VotingProcedureGovernanceActionId # "The index of the GovernanceAction that this vote targets."
+      VotingProcedureGovActionProposalId # "The index of the GovActionProposal that this vote targets."
       VotingProcedureVoterRole # "The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO."
       VotingProcedureCommitteeVoter # ""
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
