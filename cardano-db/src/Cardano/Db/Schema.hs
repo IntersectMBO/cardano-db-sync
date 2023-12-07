@@ -582,6 +582,7 @@ share
   GovActionProposal
     txId               TxId                  noreference
     index              Word64
+    prevGovActionProposal GovActionProposalId Maybe noreference
     deposit            DbLovelace            sqltype=lovelace
     returnAddress      StakeAddressId        noreference
     expiration         Word64 Maybe          sqltype=word31type
@@ -601,7 +602,8 @@ share
 
   NewCommittee
     govActionProposalId  GovActionProposalId  noreference
-    quorum              Double
+    quorumNominator     Word64
+    quorumDenominator   Word64
     deletedMembers      Text
     addedMembers        Text
 
@@ -1192,6 +1194,7 @@ schemaDocs =
       \ by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway."
       GovActionProposalTxId # "The Tx table index of the tx that includes this certificate."
       GovActionProposalIndex # "The index of this proposal procedure within its transaction."
+      GovActionProposalPrevGovActionProposal # "The previous related GovActionProposal. This is null for "
       GovActionProposalDeposit # "The deposit amount payed for this proposal."
       GovActionProposalReturnAddress # "The StakeAddress index of the reward address to receive the deposit when it is repaid."
       GovActionProposalVotingAnchorId # "The Anchor table index related to this proposal."
@@ -1215,7 +1218,8 @@ schemaDocs =
     NewCommittee --^ do
       "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
       NewCommitteeGovActionProposalId # "The GovActionProposal table index for this new committee."
-      NewCommitteeQuorum # "The proposed quorum."
+      NewCommitteeQuorumNominator # "The proposed quorum nominator."
+      NewCommitteeQuorumDenominator # "The proposed quorum denominator."
       NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
       NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
 
