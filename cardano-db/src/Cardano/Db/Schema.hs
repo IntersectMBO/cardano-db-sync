@@ -542,10 +542,10 @@ share
     description         Text Maybe
 
   DrepHash
-    raw                 ByteString         sqltype=hash28type
+    raw                 ByteString Maybe   sqltype=hash28type
     view                Text
     hasScript           Bool
-    UniqueDrepHash      raw view
+    UniqueDrepHash      raw !force
 
   DelegationVote
     addrId              StakeAddressId      noreference

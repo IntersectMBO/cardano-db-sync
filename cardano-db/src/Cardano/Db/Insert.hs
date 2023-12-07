@@ -74,6 +74,8 @@ module Cardano.Db.Insert (
   insertCommitteeRegistration,
   insertCommitteeDeRegistration,
   insertDrepRegistration,
+  insertAlwaysAbstainDrep,
+  insertAlwaysNoConfidence,
   insertUnchecked,
   insertMany',
   -- Export mainly for testing.
@@ -389,6 +391,32 @@ insertCommitteeDeRegistration = insertUnchecked "CommitteeDeRegistration"
 
 insertDrepRegistration :: (MonadBaseControl IO m, MonadIO m) => DrepRegistration -> ReaderT SqlBackend m DrepRegistrationId
 insertDrepRegistration = insertUnchecked "DrepRegistration"
+
+insertAlwaysAbstainDrep :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m DrepHashId
+insertAlwaysAbstainDrep = do
+  qr <- queryDrepHashAlwaysAbstain
+  maybe ins pure qr
+  where
+    ins =
+      insertUnchecked "DrepHashAlwaysAbstain" $
+        DrepHash
+          { drepHashRaw = Nothing
+          , drepHashView = hardcodedAlwaysAbstain
+          , drepHashHasScript = False
+          }
+
+insertAlwaysNoConfidence :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m DrepHashId
+insertAlwaysNoConfidence = do
+  qr <- queryDrepHashAlwaysNoConfidence
+  maybe ins pure qr
+  where
+    ins =
+      insertUnchecked "DrepHashAlwaysNoConfidence" $
+        DrepHash
+          { drepHashRaw = Nothing
+          , drepHashView = hardcodedAlwaysNoConfidence
+          , drepHashHasScript = False
+          }
 
 -- -----------------------------------------------------------------------------
 
