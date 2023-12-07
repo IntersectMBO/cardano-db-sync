@@ -62,7 +62,7 @@ import Cardano.DbSync.Util.Bech32
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-import Cardano.Ledger.BaseTypes (getVersion, strictMaybeToMaybe)
+import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
@@ -80,8 +80,6 @@ import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
-import Cardano.Slotting.Block (BlockNo (..))
-import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
@@ -378,7 +376,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (lift . insertGovActionProposal cache blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (insertGovActionProposal cache blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures tracer cache txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
@@ -1445,38 +1443,50 @@ insertGovActionProposal ::
   DB.TxId ->
   Maybe EpochNo ->
   (Word64, ProposalProcedure StandardConway) ->
-  ReaderT SqlBackend m ()
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
   addrId <-
-    queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
-  votingAnchorId <- insertAnchor txId $ pProcAnchor pp
-  mParamProposalId <-
+    lift $ queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
+  votingAnchorId <- lift $ insertAnchor txId $ pProcAnchor pp
+  mParamProposalId <- lift $
     case pProcGovAction pp of
       ParameterChange _ pparams ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
       _ -> pure Nothing
+  prevGovActionDBId <- case mprevGovAction of
+    Nothing -> pure Nothing
+    Just prevGovActionId -> Just <$> resolveGovActionProposal prevGovActionId
   govActionProposal <-
-    DB.insertGovActionProposal $
-      DB.GovActionProposal
-        { DB.govActionProposalTxId = txId
-        , DB.govActionProposalIndex = index
-        , DB.govActionProposalDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
-        , DB.govActionProposalReturnAddress = addrId
-        , DB.govActionProposalExpiration = unEpochNo <$> govExpiresAt
-        , DB.govActionProposalVotingAnchorId = Just votingAnchorId
-        , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
-        , DB.govActionProposalDescription = textShow $ pProcGovAction pp
-        , DB.govActionProposalParamProposal = mParamProposalId
-        , DB.govActionProposalRatifiedEpoch = Nothing
-        , DB.govActionProposalEnactedEpoch = Nothing
-        , DB.govActionProposalDroppedEpoch = Nothing
-        , DB.govActionProposalExpiredEpoch = Nothing
-        }
+    lift $
+      DB.insertGovActionProposal $
+        DB.GovActionProposal
+          { DB.govActionProposalTxId = txId
+          , DB.govActionProposalIndex = index
+          , DB.govActionProposalPrevGovActionProposal = prevGovActionDBId
+          , DB.govActionProposalDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
+          , DB.govActionProposalReturnAddress = addrId
+          , DB.govActionProposalExpiration = unEpochNo <$> govExpiresAt
+          , DB.govActionProposalVotingAnchorId = Just votingAnchorId
+          , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
+          , DB.govActionProposalDescription = textShow $ pProcGovAction pp
+          , DB.govActionProposalParamProposal = mParamProposalId
+          , DB.govActionProposalRatifiedEpoch = Nothing
+          , DB.govActionProposalEnactedEpoch = Nothing
+          , DB.govActionProposalDroppedEpoch = Nothing
+          , DB.govActionProposalExpiredEpoch = Nothing
+          }
   case pProcGovAction pp of
-    TreasuryWithdrawals mp -> mapM_ (insertTreasuryWithdrawal govActionProposal) (Map.toList mp)
-    UpdateCommittee _ removed added q -> insertNewCommittee govActionProposal removed added q
+    TreasuryWithdrawals mp -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposal) (Map.toList mp)
+    UpdateCommittee _ removed added q -> lift $ insertNewCommittee govActionProposal removed added q
     _ -> pure ()
   where
+    mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
+      ParameterChange prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
+      HardForkInitiation prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
+      NoConfidence prv -> unPrevGovActionId <$> strictMaybeToMaybe prv
+      UpdateCommittee prv _ _ _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
+      _ -> Nothing
+
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
       addrId <-
         queryOrInsertRewardAccount cache CacheNew rwdAcc
@@ -1491,10 +1501,13 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
       void . DB.insertNewCommittee $
         DB.NewCommittee
           { DB.newCommitteeGovActionProposalId = gaId
-          , DB.newCommitteeQuorum = toDouble q
+          , DB.newCommitteeQuorumNominator = fromIntegral $ numerator r
+          , DB.newCommitteeQuorumDenominator = fromIntegral $ denominator r
           , DB.newCommitteeDeletedMembers = textShow removed
           , DB.newCommitteeAddedMembers = textShow added
           }
+      where
+        r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
 
 insertAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
 insertAnchor txId anchor =
