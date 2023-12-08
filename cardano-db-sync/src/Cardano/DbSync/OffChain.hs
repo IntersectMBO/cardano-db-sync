@@ -11,7 +11,8 @@ module Cardano.DbSync.OffChain (
   insertOffChainVoteResults,
   loadOffChainPoolWorkQueue,
   loadOffChainVoteWorkQueue,
-  runFetchOffChainThreads,
+  runFetchOffChainPoolThread,
+  runFetchOffChainVoteThread,
   fetchOffChainPoolData,
   fetchOffChainVoteData,
 ) where
@@ -165,22 +166,15 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Run OffChain threads
 ---------------------------------------------------------------------------------------------------------------------------------
-runFetchOffChainThreads :: SyncEnv -> IO ()
-runFetchOffChainThreads syncEnv = do
+runFetchOffChainPoolThread :: SyncEnv -> IO ()
+runFetchOffChainPoolThread syncEnv = do
   -- if dissable gov is active then don't run voting anchor thread
-  unless (ioGov iopts) $ do
-    logInfo trce "Running Offchain Vote Anchor fetch thread"
-    forever $ do
-      tDelay
-      voteq <- blockingFlushTBQueue (envOffChainVoteWorkQueue syncEnv)
-      manager <- Http.newManager tlsManagerSettings
-      now <- liftIO Time.getPOSIXTime
-      mapM_ (queueVoteInsert <=< fetchOffChainVoteData trce manager now) voteq
-
   when (ioOffChainPoolData iopts) $ do
     logInfo trce "Running Offchain Pool fetch thread"
     forever $ do
       tDelay
+      -- load the offChain vote work queue using the db
+      _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) (envBackend syncEnv)
       poolq <- blockingFlushTBQueue (envOffChainPoolWorkQueue syncEnv)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime
@@ -189,12 +183,32 @@ runFetchOffChainThreads syncEnv = do
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-    tDelay = threadDelay 60_000_000 -- 60 second sleep
     queuePoolInsert :: OffChainPoolResult -> IO ()
     queuePoolInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
 
+runFetchOffChainVoteThread :: SyncEnv -> IO ()
+runFetchOffChainVoteThread syncEnv = do
+  -- if dissable gov is active then don't run voting anchor thread
+  unless (ioGov iopts) $ do
+    logInfo trce "Running Offchain Vote Anchor fetch thread"
+    forever $ do
+      tDelay
+      -- load the offChain pool work queue using the db
+      _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) (envBackend syncEnv)
+      voteq <- blockingFlushTBQueue (envOffChainVoteWorkQueue syncEnv)
+      manager <- Http.newManager tlsManagerSettings
+      now <- liftIO Time.getPOSIXTime
+      mapM_ (queueVoteInsert <=< fetchOffChainVoteData trce manager now) voteq
+  where
+    trce = getTrace syncEnv
+    iopts = getInsertOptions syncEnv
+
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
+
+-- 60 second sleep
+tDelay :: IO ()
+tDelay = threadDelay 60_000_000
 
 -- -------------------------------------------------------------------------------------------------
 

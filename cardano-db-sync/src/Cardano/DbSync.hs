@@ -50,7 +50,7 @@ import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
 import Cardano.DbSync.Ledger.State
-import Cardano.DbSync.OffChain (runFetchOffChainThreads)
+import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
   httpGetOffChainVoteData,
@@ -201,7 +201,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
               id
               [ runDbThread syncEnv metricsSetters threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainThreads syncEnv
+              , runFetchOffChainPoolThread syncEnv
+              , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
               ]
   where
