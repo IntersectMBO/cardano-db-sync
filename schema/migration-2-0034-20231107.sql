@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 32 THEN
+  IF next_version = 34 THEN
     EXECUTE 'ALTER TABLE "committee_de_registration" ADD COLUMN "cold_key" bytea NOT NULL' ;
     EXECUTE 'ALTER TABLE "committee_de_registration" DROP COLUMN "hot_key"' ;
     EXECUTE 'CREATe TABLE "off_chain_vote_data"("id" SERIAL8  PRIMARY KEY UNIQUE,"voting_anchor_id" INT8 NOT NULL,"hash" BYTEA NOT NULL,"json" jsonb NOT NULL,"bytes" bytea NOT NULL)' ;
