@@ -147,13 +147,12 @@ httpGetOffChain manager request mHash url =
           . left
           $ OCFErrHashMismatch url (renderByteArray eMetaHash) (renderByteArray metadataHash)
 
-      decodedMetadata <-
-        case Aeson.eitherDecode' respLBS of
-          Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
-          Right res -> pure res
-
       case url of
-        OffChainPoolUrl _ ->
+        OffChainPoolUrl _ -> do
+          decodedMetadata <-
+            case Aeson.eitherDecode' respLBS of
+              Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
+              Right res -> pure res
           pure $
             SimplifiedOffChainPoolDataType
               SimplifiedOffChainPoolData
@@ -172,10 +171,8 @@ httpGetOffChain manager request mHash url =
               SimplifiedOffChainVoteData
                 { sovaHash = metadataHash
                 , sovaBytes = respBS
-                , -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
-                  -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
-                  -- that the Aeson parser accepts.
-                  sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
+                , -- TODO: no json format decided for vote metadata yet so we are leaving it blank for now
+                  sovaJson = ""
                 , sovaContentType = mContentType
                 }
 

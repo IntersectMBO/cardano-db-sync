@@ -4,10 +4,9 @@ import Cardano.Db (PoolMetaHash (..), PoolUrl (..))
 import Cardano.DbSync (
   OffChainFetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainPoolData,
-  parseOffChainPoolUrl,
  )
 import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.OffChain.Http (httpGetOffChainPoolData, parseOffChainPoolUrl)
 import Cardano.DbSync.Types (OffChainHashType (..), OffChainUrlType (..))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)

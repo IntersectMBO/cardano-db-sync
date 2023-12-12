@@ -238,7 +238,7 @@ newtype VoteUrl = VoteUrl {unVoteUrl :: Text}
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet VoteUrl)
 
--- | The raw binary hash of a stake vote metadata.
+-- | The raw binary hash of a vote metadata.
 newtype VoteMetaHash = VoteMetaHash {unVoteMetaHash :: ByteString}
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet VoteMetaHash)
