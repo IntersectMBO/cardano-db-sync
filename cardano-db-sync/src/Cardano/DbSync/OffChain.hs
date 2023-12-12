@@ -84,8 +84,8 @@ loadOffChainWorkQueue ::
 loadOffChainWorkQueue _trce offChainWorkQueue = do
   whenM (liftIO $ atomically (isEmptyTBQueue (lQueue offChainWorkQueue))) $ do
     now <- liftIO Time.getPOSIXTime
-    runnablePools <- filter (isRunnable now offChainWorkQueue) <$> lGetData offChainWorkQueue now 100
-    liftIO $ mapM_ (queueInsert offChainWorkQueue) runnablePools
+    runnableOffChainPools <- filter (isRunnable now offChainWorkQueue) <$> lGetData offChainWorkQueue now 100
+    liftIO $ mapM_ (queueInsert offChainWorkQueue) runnableOffChainPools
   where
     isRunnable :: POSIXTime -> LoadOffChainWorkQueue a m -> a -> Bool
     isRunnable now oCWorkQueue locWq = retryRetryTime (lRetryTime oCWorkQueue locWq) <= now
@@ -103,13 +103,11 @@ insertOffChainPoolResults ::
   ReaderT SqlBackend m ()
 insertOffChainPoolResults trce resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
-  let resLength = length res
-      resErrorsLength = length $ filter isFetchError res
-  unless (null res)
-    $ liftIO
-      . logInfo trce
-    $ logInsertOffChainResults "Pool" resLength resErrorsLength
-
+  unless (null res) $ do
+    let resLength = length res
+        resErrorsLength = length $ filter isFetchError res
+    liftIO . logInfo trce $
+      logInsertOffChainResults "Pool" resLength resErrorsLength
   mapM_ insert res
   where
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
@@ -129,12 +127,11 @@ insertOffChainVoteResults ::
   ReaderT SqlBackend m ()
 insertOffChainVoteResults trce resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
-  let resLength = length res
-      resErrorsLength = length $ filter isFetchError res
-  unless (null res)
-    $ liftIO
-      . logInfo trce
-    $ logInsertOffChainResults "Voting Anchor" resLength resErrorsLength
+  unless (null res) $ do
+    let resLength = length res
+        resErrorsLength = length $ filter isFetchError res
+    liftIO . logInfo trce $
+      logInsertOffChainResults "Voting Anchor" resLength resErrorsLength
   mapM_ insert res
   where
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
@@ -174,7 +171,7 @@ runFetchOffChainPoolThread syncEnv = do
     forever $ do
       tDelay
       -- load the offChain vote work queue using the db
-      _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) (envBackend syncEnv)
+      _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) (envBackend syncEnv)
       poolq <- blockingFlushTBQueue (envOffChainPoolWorkQueue syncEnv)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime
@@ -189,12 +186,12 @@ runFetchOffChainPoolThread syncEnv = do
 runFetchOffChainVoteThread :: SyncEnv -> IO ()
 runFetchOffChainVoteThread syncEnv = do
   -- if dissable gov is active then don't run voting anchor thread
-  unless (ioGov iopts) $ do
+  when (ioGov iopts) $ do
     logInfo trce "Running Offchain Vote Anchor fetch thread"
     forever $ do
       tDelay
       -- load the offChain pool work queue using the db
-      _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) (envBackend syncEnv)
+      _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) (envBackend syncEnv)
       voteq <- blockingFlushTBQueue (envOffChainVoteWorkQueue syncEnv)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime

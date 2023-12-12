@@ -118,9 +118,8 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
-      lift
-        . insertBlockAndCache cache
-        $ DB.Block
+      lift . insertBlockAndCache cache $
+        DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo
           , DB.blockSlotNo = Just $ unSlotNo (Generic.blkSlotNo blk)
@@ -197,7 +196,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     insertStakeSlice syncEnv $ apStakeSlice applyResult
 
-    unless (ioGov iopts)
+    when (ioGov iopts)
       . lift
       $ insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
 

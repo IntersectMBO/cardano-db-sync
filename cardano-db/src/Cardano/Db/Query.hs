@@ -53,6 +53,7 @@ module Cardano.Db.Query (
   queryMaxRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
+  existsVotingAnchorId,
   queryAdaPotsId,
   queryBlockHeight,
   queryAllExtraMigrations,
@@ -739,6 +740,15 @@ existsPoolMetadataRefId pmrid = do
     where_ (pmr ^. PoolMetadataRefId ==. val pmrid)
     limit 1
     pure (pmr ^. PoolMetadataRefId)
+  pure $ not (null res)
+
+existsVotingAnchorId :: MonadIO m => VotingAnchorId -> ReaderT SqlBackend m Bool
+existsVotingAnchorId vaId = do
+  res <- select $ do
+    votingAnchor <- from $ table @VotingAnchor
+    where_ (votingAnchor ^. VotingAnchorId ==. val vaId)
+    limit 1
+    pure (votingAnchor ^. VotingAnchorId)
   pure $ not (null res)
 
 queryAdaPotsId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe (Entity AdaPots))

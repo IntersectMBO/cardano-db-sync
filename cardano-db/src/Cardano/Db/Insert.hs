@@ -316,10 +316,14 @@ insertCheckOffChainPoolFetchError pofe = do
   when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
 
 insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m ()
-insertOffChainVoteData pod = void $ insertCheckUnique "OffChainVoteData" pod
+insertOffChainVoteData ocvd = do
+  foundVotingAnchor <- existsVotingAnchorId (offChainVoteDataVotingAnchorId ocvd)
+  when foundVotingAnchor . void $ insertCheckUnique "OffChainVoteData" ocvd
 
 insertOffChainVoteFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteFetchError -> ReaderT SqlBackend m ()
-insertOffChainVoteFetchError pofe = void $ insertCheckUnique "OffChainVoteFetchError" pofe
+insertOffChainVoteFetchError ocvfe = do
+  foundVotingAnchor <- existsVotingAnchorId (offChainVoteFetchErrorVotingAnchorId ocvfe)
+  when foundVotingAnchor . void $ insertCheckUnique "OffChainVoteFetchError" ocvfe
 
 insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m (Maybe ReservedPoolTickerId)
 insertReservedPoolTicker ticker = do

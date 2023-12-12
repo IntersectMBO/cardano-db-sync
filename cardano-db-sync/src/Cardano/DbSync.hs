@@ -21,10 +21,6 @@ module Cardano.DbSync (
   -- For testing and debugging
   OffChainFetchError (..),
   SimplifiedOffChainPoolData (..),
-  httpGetOffChainPoolData,
-  parseOffChainPoolUrl,
-  httpGetOffChainVoteData,
-  parseOffChainVoteUrl,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
@@ -51,12 +47,6 @@ import Cardano.DbSync.Era
 import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
-import Cardano.DbSync.OffChain.Http (
-  httpGetOffChainPoolData,
-  httpGetOffChainVoteData,
-  parseOffChainPoolUrl,
-  parseOffChainVoteUrl,
- )
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
