@@ -75,8 +75,16 @@ queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChai
 queryNewVoteWorkQueue now = do
   res <- select $ do
     va <- from $ table @VotingAnchor
-    where_ (notExists $ from (table @OffChainVoteData) >>= \ocvd -> where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. va ^. VotingAnchorId))
-    where_ (notExists $ from (table @OffChainVoteFetchError) >>= \ocvfe -> where_ (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId))
+    where_
+      ( notExists $
+          from (table @OffChainVoteData) >>= \ocvd ->
+            where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. va ^. VotingAnchorId)
+      )
+    where_
+      ( notExists $
+          from (table @OffChainVoteFetchError) >>= \ocvfe ->
+            where_ (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
+      )
     pure
       ( va ^. VotingAnchorId
       , va ^. VotingAnchorDataHash
@@ -101,6 +109,11 @@ queryOffChainVoteWorkQueue _now = do
         $ table @VotingAnchor
           `innerJoin` table @OffChainVoteFetchError
         `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
+    where_
+      ( notExists $
+          from (table @OffChainVoteData) >>= \ocvd ->
+            where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. ocpfe ^. OffChainVoteFetchErrorVotingAnchorId)
+      )
     orderBy [desc (ocpfe ^. OffChainVoteFetchErrorFetchTime)]
     pure
       ( ocpfe ^. OffChainVoteFetchErrorFetchTime
@@ -144,8 +157,16 @@ queryNewPoolWorkQueue now = do
           `innerJoin` table @PoolMetadataRef
         `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
     where_ (just (pmr ^. PoolMetadataRefId) `in_` latestRefs)
-    where_ (notExists $ from (table @OffChainPoolData) >>= \pod -> where_ (pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId))
-    where_ (notExists $ from (table @OffChainPoolFetchError) >>= \pofe -> where_ (pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId))
+    where_
+      ( notExists $
+          from (table @OffChainPoolData) >>= \pod ->
+            where_ (pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId)
+      )
+    where_
+      ( notExists $
+          from (table @OffChainPoolFetchError) >>= \pofe ->
+            where_ (pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
+      )
     pure
       ( ph ^. PoolHashId
       , pmr ^. PoolMetadataRefId

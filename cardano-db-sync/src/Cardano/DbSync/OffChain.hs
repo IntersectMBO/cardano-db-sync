@@ -29,7 +29,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTBQueue (..),
   flushTBQueue,
   isEmptyTBQueue,
-  readTBQueue,
   writeTBQueue,
  )
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -84,8 +83,8 @@ loadOffChainWorkQueue ::
 loadOffChainWorkQueue _trce offChainWorkQueue = do
   whenM (liftIO $ atomically (isEmptyTBQueue (lQueue offChainWorkQueue))) $ do
     now <- liftIO Time.getPOSIXTime
-    runnableOffChainPools <- filter (isRunnable now offChainWorkQueue) <$> lGetData offChainWorkQueue now 100
-    liftIO $ mapM_ (queueInsert offChainWorkQueue) runnableOffChainPools
+    runnableOffChainData <- filter (isRunnable now offChainWorkQueue) <$> lGetData offChainWorkQueue now 100
+    liftIO $ mapM_ (queueInsert offChainWorkQueue) runnableOffChainData
   where
     isRunnable :: POSIXTime -> LoadOffChainWorkQueue a m -> a -> Bool
     isRunnable now oCWorkQueue locWq = retryRetryTime (lRetryTime oCWorkQueue locWq) <= now
@@ -172,7 +171,7 @@ runFetchOffChainPoolThread syncEnv = do
       tDelay
       -- load the offChain vote work queue using the db
       _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) (envBackend syncEnv)
-      poolq <- blockingFlushTBQueue (envOffChainPoolWorkQueue syncEnv)
+      poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue syncEnv)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime
       mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
@@ -192,7 +191,7 @@ runFetchOffChainVoteThread syncEnv = do
       tDelay
       -- load the offChain pool work queue using the db
       _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) (envBackend syncEnv)
-      voteq <- blockingFlushTBQueue (envOffChainVoteWorkQueue syncEnv)
+      voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
       manager <- Http.newManager tlsManagerSettings
       now <- liftIO Time.getPOSIXTime
       mapM_ (queueVoteInsert <=< fetchOffChainVoteData trce manager now) voteq
@@ -206,16 +205,6 @@ runFetchOffChainVoteThread syncEnv = do
 -- 60 second sleep
 tDelay :: IO ()
 tDelay = threadDelay 60_000_000
-
--- -------------------------------------------------------------------------------------------------
-
--- Blocks on an empty queue, but gets all elements in the queue if there is more than one.
-blockingFlushTBQueue :: StrictTBQueue IO a -> IO [a]
-blockingFlushTBQueue queue = do
-  atomically $ do
-    x <- readTBQueue queue
-    xs <- flushTBQueue queue
-    pure $ x : xs
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Fetch OffChain data
