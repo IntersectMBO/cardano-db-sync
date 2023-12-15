@@ -172,7 +172,7 @@ httpGetOffChain manager request mHash url =
                 { sovaHash = metadataHash
                 , sovaBytes = respBS
                 , -- TODO: no json format decided for vote metadata yet so we are leaving it blank for now
-                  sovaJson = ""
+                  sovaJson = "{}"
                 , sovaContentType = mContentType
                 }
 
