@@ -2,7 +2,7 @@
 
 **Note:** Anyone wishing to build and run anything in this repository should avoid the `master` branch and build/run from the latest release tag.
 
-## Purpose
+## Purpose 
 
 The purpose of Cardano DB Sync is to follow the Cardano chain and take information from the chain
 and an internally maintained copy of ledger state. Data is then extracted from the chain and
