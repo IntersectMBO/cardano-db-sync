@@ -14,6 +14,7 @@ import Cardano.Db (
   OffChainPoolFetchErrorId,
   OffChainVoteData,
   OffChainVoteFetchError,
+  OffChainVoteFetchErrorId,
   PoolHash,
   PoolHashId,
   PoolMetaHash (PoolMetaHash),
@@ -36,12 +37,13 @@ import Database.Esqueleto.Experimental (
   SqlExpr,
   Value (..),
   ValueList,
-  desc,
+  asc,
   from,
   groupBy,
   in_,
   innerJoin,
   just,
+  limit,
   max_,
   notExists,
   on,
@@ -63,16 +65,16 @@ import System.Random.Shuffle (shuffleM)
 ---------------------------------------------------------------------------------------------------------------------------------
 getOffChainVoteData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
 getOffChainVoteData now maxCount = do
-  xs <- queryNewVoteWorkQueue now
+  xs <- queryNewVoteWorkQueue now maxCount
   if length xs >= maxCount
     then take maxCount <$> liftIO (shuffleM xs)
     else do
-      ys <- queryOffChainVoteWorkQueue (Time.posixSecondsToUTCTime now)
+      ys <- queryOffChainVoteWorkQueue (Time.posixSecondsToUTCTime now) maxCount
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
 -- get all the voting anchors that don't already exist in OffChainVoteData or OffChainVoteFetchError
-queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
-queryNewVoteWorkQueue now = do
+queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
+queryNewVoteWorkQueue now maxCount = do
   res <- select $ do
     va <- from $ table @VotingAnchor
     where_
@@ -85,6 +87,7 @@ queryNewVoteWorkQueue now = do
           from (table @OffChainVoteFetchError) >>= \ocvfe ->
             where_ (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
       )
+    limit $ fromIntegral maxCount
     pure
       ( va ^. VotingAnchorId
       , va ^. VotingAnchorDataHash
@@ -101,20 +104,17 @@ queryNewVoteWorkQueue now = do
         , oVoteWqUrl = url
         }
 
-queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
-queryOffChainVoteWorkQueue _now = do
+queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> Int -> ReaderT SqlBackend m [OffChainVoteWorkQueue]
+queryOffChainVoteWorkQueue _now maxCount = do
   res <- select $ do
     (va :& ocpfe) <-
       from
         $ table @VotingAnchor
           `innerJoin` table @OffChainVoteFetchError
         `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
-    where_
-      ( notExists $
-          from (table @OffChainVoteData) >>= \ocvd ->
-            where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. ocpfe ^. OffChainVoteFetchErrorVotingAnchorId)
-      )
-    orderBy [desc (ocpfe ^. OffChainVoteFetchErrorFetchTime)]
+    orderBy [asc (ocpfe ^. OffChainVoteFetchErrorId)]
+    where_ (just (ocpfe ^. OffChainVoteFetchErrorId) `in_` latestRefs)
+    limit $ fromIntegral maxCount
     pure
       ( ocpfe ^. OffChainVoteFetchErrorFetchTime
       , va ^. VotingAnchorId
@@ -133,23 +133,35 @@ queryOffChainVoteWorkQueue _now = do
         , oVoteWqUrl = url
         }
 
+    latestRefs :: SqlExpr (ValueList (Maybe OffChainVoteFetchErrorId))
+    latestRefs =
+      subList_select $ do
+        ocvfe <- from (table @OffChainVoteFetchError)
+        groupBy (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId)
+        where_
+          ( notExists $
+              from (table @OffChainVoteData) >>= \ocvd ->
+                where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. ocvfe ^. OffChainVoteFetchErrorVotingAnchorId)
+          )
+        pure $ max_ (ocvfe ^. OffChainVoteFetchErrorId)
+
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Query OffChain PoolData
 ---------------------------------------------------------------------------------------------------------------------------------
 getOffChainPoolData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
 getOffChainPoolData now maxCount = do
   -- Results from the query are shuffles so we don't continuously get the same entries.
-  xs <- queryNewPoolWorkQueue now
+  xs <- queryNewPoolWorkQueue now maxCount
   if length xs >= maxCount
     then take maxCount <$> liftIO (shuffleM xs)
     else do
-      ys <- queryOffChainPoolWorkQueue (Time.posixSecondsToUTCTime now)
+      ys <- queryOffChainPoolWorkQueue (Time.posixSecondsToUTCTime now) maxCount
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
 -- Get pool work queue data for new pools (ie pools that had OffChainPoolData entry and no
 -- OffChainPoolFetchError).
-queryNewPoolWorkQueue :: MonadIO m => POSIXTime -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
-queryNewPoolWorkQueue now = do
+queryNewPoolWorkQueue :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
+queryNewPoolWorkQueue now maxCount = do
   res <- select $ do
     (ph :& pmr) <-
       from
@@ -167,6 +179,7 @@ queryNewPoolWorkQueue now = do
           from (table @OffChainPoolFetchError) >>= \pofe ->
             where_ (pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
       )
+    limit $ fromIntegral maxCount
     pure
       ( ph ^. PoolHashId
       , pmr ^. PoolMetadataRefId
@@ -198,8 +211,8 @@ queryNewPoolWorkQueue now = do
         }
 
 -- Get pool fetch data for pools that have previously errored.
-queryOffChainPoolWorkQueue :: MonadIO m => UTCTime -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
-queryOffChainPoolWorkQueue _now = do
+queryOffChainPoolWorkQueue :: MonadIO m => UTCTime -> Int -> ReaderT SqlBackend m [OffChainPoolWorkQueue]
+queryOffChainPoolWorkQueue _now maxCount = do
   res <- select $ do
     (ph :& pmr :& pofe) <-
       from
@@ -209,8 +222,8 @@ queryOffChainPoolWorkQueue _now = do
           `innerJoin` table @OffChainPoolFetchError
         `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
     where_ (just (pofe ^. OffChainPoolFetchErrorId) `in_` latestRefs)
-    where_ (notExists $ from (table @OffChainPoolData) >>= \pod -> where_ (pod ^. OffChainPoolDataPmrId ==. pofe ^. OffChainPoolFetchErrorPmrId))
-    orderBy [desc (pofe ^. OffChainPoolFetchErrorFetchTime)]
+    orderBy [asc (pofe ^. OffChainPoolFetchErrorId)]
+    limit $ fromIntegral maxCount
     pure
       ( pofe ^. OffChainPoolFetchErrorFetchTime
       , pofe ^. OffChainPoolFetchErrorPmrId
@@ -228,6 +241,7 @@ queryOffChainPoolWorkQueue _now = do
     latestRefs =
       subList_select $ do
         pofe <- from (table @OffChainPoolFetchError)
+        where_ (notExists $ from (table @OffChainPoolData) >>= \pod -> where_ (pod ^. OffChainPoolDataPmrId ==. pofe ^. OffChainPoolFetchErrorPmrId))
         groupBy (pofe ^. OffChainPoolFetchErrorPoolId)
         pure $ max_ (pofe ^. OffChainPoolFetchErrorId)
 
