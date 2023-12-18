@@ -367,7 +367,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
             Generic.txMint tx
 
       when (ioPlutusExtra iopts) $
-        mapM_ (insertScript tracer txId) $
+        mapM_ (lift . insertScript tracer txId) $
           Generic.txScripts tx
 
       when (ioPlutusExtra iopts) $
@@ -402,7 +402,7 @@ prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw
   mScriptId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       whenMaybe mScript $
-        insertScript tracer txId
+        lift . insertScript tracer txId
   let !txOut =
         DB.TxOut
           { DB.txOutTxId = txId
@@ -441,7 +441,7 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
   mScriptId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       whenMaybe mScript $
-        insertScript tracer txId
+        lift . insertScript tracer txId
   _ <-
     lift
       . DB.insertCollateralTxOut
@@ -1390,16 +1390,15 @@ insertScript ::
   Trace IO Text ->
   DB.TxId ->
   Generic.TxScript ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.ScriptId
+  ReaderT SqlBackend m DB.ScriptId
 insertScript tracer txId script = do
-  mScriptId <- lift $ DB.queryScript $ Generic.txScriptHash script
+  mScriptId <- DB.queryScript $ Generic.txScriptHash script
   case mScriptId of
     Just scriptId -> pure scriptId
     Nothing -> do
       json <- scriptConvert script
-      lift
-        . DB.insertScript
-        $ DB.Script
+      DB.insertScript $
+        DB.Script
           { DB.scriptTxId = txId
           , DB.scriptHash = Generic.txScriptHash script
           , DB.scriptType = Generic.txScriptType script
@@ -1479,7 +1478,7 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
   prevGovActionDBId <- case mprevGovAction of
     Nothing -> pure Nothing
     Just prevGovActionId -> Just <$> resolveGovActionProposal prevGovActionId
-  govActionProposal <-
+  govActionProposalId <-
     lift $
       DB.insertGovActionProposal $
         DB.GovActionProposal
@@ -1499,8 +1498,9 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
           , DB.govActionProposalExpiredEpoch = Nothing
           }
   case pProcGovAction pp of
-    TreasuryWithdrawals mp -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposal) (Map.toList mp)
-    UpdateCommittee _ removed added q -> lift $ insertNewCommittee govActionProposal removed added q
+    TreasuryWithdrawals mp -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
+    UpdateCommittee _ removed added q -> lift $ insertNewCommittee govActionProposalId removed added q
+    NewConstitution _ constitution -> lift $ insertConstitution txId govActionProposalId constitution
     _ -> pure ()
   where
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
@@ -1508,6 +1508,7 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
       HardForkInitiation prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
       NoConfidence prv -> unPrevGovActionId <$> strictMaybeToMaybe prv
       UpdateCommittee prv _ _ _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
+      NewConstitution prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
       _ -> Nothing
 
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
@@ -1539,6 +1540,16 @@ insertAnchor txId anchor =
       { DB.votingAnchorTxId = txId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
+      }
+
+insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m ()
+insertConstitution txId gapId constitution = do
+  votingAnchorId <- insertAnchor txId $ constitutionAnchor constitution
+  void . DB.insertConstitution $
+    DB.Constitution
+      { DB.constitutionGovActionProposalId = gapId
+      , DB.constitutionVotingAnchorId = votingAnchorId
+      , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
       }
 
 insertVotingProcedures ::

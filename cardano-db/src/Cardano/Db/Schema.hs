@@ -607,6 +607,11 @@ share
     deletedMembers      Text
     addedMembers        Text
 
+  Constitution
+    govActionProposalId  GovActionProposalId  noreference
+    votingAnchorId       VotingAnchorId       noreference
+    scriptHash           ByteString Maybe     sqltype=hash28type
+
   VotingProcedure -- GovVote
     txId                 TxId                 noreference
     index                Word16
@@ -1227,6 +1232,12 @@ schemaDocs =
       NewCommitteeQuorumDenominator # "The proposed quorum denominator."
       NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
       NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
+
+    Constitution --^ do
+      "A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway."
+      ConstitutionGovActionProposalId # "The GovActionProposal table index for this constitution."
+      ConstitutionVotingAnchorId # "The ConstitutionVotingAnchor table index for this constitution."
+      ConstitutionScriptHash # "The Script Hash. It's associated script may not be already inserted in the script table."
 
     VotingProcedure --^ do
       "A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New in 13.2-Conway."

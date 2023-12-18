@@ -67,6 +67,7 @@ module Cardano.Db.Insert (
   setNullRatified,
   replaceAdaPots,
   insertAnchor,
+  insertConstitution,
   insertGovActionProposal,
   insertTreasuryWithdrawal,
   insertNewCommittee,
@@ -376,6 +377,9 @@ replaceAdaPots blockId adapots = do
 
 insertAnchor :: (MonadBaseControl IO m, MonadIO m) => VotingAnchor -> ReaderT SqlBackend m VotingAnchorId
 insertAnchor = insertCheckUnique "VotingAnchor"
+
+insertConstitution :: (MonadBaseControl IO m, MonadIO m) => Constitution -> ReaderT SqlBackend m ConstitutionId
+insertConstitution = insertUnchecked "Constitution"
 
 insertGovActionProposal :: (MonadBaseControl IO m, MonadIO m) => GovActionProposal -> ReaderT SqlBackend m GovActionProposalId
 insertGovActionProposal = insertUnchecked "GovActionProposal"
