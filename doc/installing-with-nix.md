@@ -9,8 +9,8 @@ build Cardano DB Sync.
 This guide assumes you have the following tools:
 
  * [Nix](https://nixos.org/download.html)
- * [Cardano Node](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
- 
+ * [Cardano Node](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
+
 Nix will handle all other dependencies.
 
 Create a working directory for your builds:
@@ -52,12 +52,12 @@ Enter the working directory for your builds:
 cd ~/src
 ```
 
-Find the latest release here: https://github.com/input-output-hk/cardano-db-sync/releases
+Find the latest release here: https://github.com/IntersectMBO/cardano-db-sync/releases
 
 Check out the latest release version:
 
 ```bash
-git clone https://github.com/input-output-hk/cardano-db-sync.git
+git clone https://github.com/IntersectMBO/cardano-db-sync.git
 cd cardano-db-sync
 git fetch --all --tags
 git checkout tags/<VERSION>

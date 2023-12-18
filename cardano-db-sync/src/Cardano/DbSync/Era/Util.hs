@@ -44,7 +44,7 @@ safeDecodeToJson tracer tracePrefix x = do
       -- We have to insert
       pure Nothing
     Right json ->
-      -- See https://github.com/input-output-hk/cardano-db-sync/issues/297
+      -- See https://github.com/IntersectMBO/cardano-db-sync/issues/297
       if containsUnicodeNul json
         then do
           liftIO $ logWarning tracer $ tracePrefix <> ": dropped due to a Unicode NUL character."

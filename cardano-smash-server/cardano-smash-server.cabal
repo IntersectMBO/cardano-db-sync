@@ -4,9 +4,9 @@ name:                   cardano-smash-server
 version:                13.2.0.0
 synopsis:               The Cardano smash server
 description:            Please see the README on GitHub at
-                        <https://github.com/input-output-hk/cardano-db-sync/cardano-smash-server/#readme>
-homepage:               https://github.com/input-output-hk/cardano-db-sync
-bug-reports:            https://github.com/input-output-hk/cardano-db-sync/issues
+                        <https://github.com/IntersectMBO/cardano-db-sync/cardano-smash-server/#readme>
+homepage:               https://github.com/IntersectMBO/cardano-db-sync
+bug-reports:            https://github.com/IntersectMBO/cardano-db-sync/issues
 license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
@@ -113,6 +113,3 @@ executable cardano-smash-server
                       , cardano-prelude
                       , optparse-applicative
                       , text
-
-
-

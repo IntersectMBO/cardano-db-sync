@@ -30,7 +30,7 @@ import Ouroboros.Consensus.HardFork.History.Qry (
 -- -------------------------------------------------------------------------------------------------
 
 -- TODO: Switch back to the old version of this when this is fixed:
--- https://github.com/input-output-hk/cardano-db-sync/issues/276
+-- https://github.com/IntersectMBO/cardano-db-sync/issues/276
 querySlotDetails :: SystemStart -> SlotNo -> Qry SlotDetails
 querySlotDetails start absSlot = do
   absTime <- qryFromExpr $

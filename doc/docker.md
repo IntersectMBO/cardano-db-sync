@@ -8,7 +8,7 @@ Regular users should almost never attempt building and running from the `master`
 they should build and run the latest release tag. The tags can be listed using the `git tag`
 command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided in most cases.
 ```
-git clone git@github.com:input-output-hk/cardano-db-sync.git
+git clone git@github.com:IntersectMBO/cardano-db-sync.git
 cd cardano-db-sync
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
 ```
@@ -27,8 +27,8 @@ The PostgreSQL database is exposed on localhost port `5432`
 
 ### To change PostgreSQL settings:
 
-Release `13.1.0.0` introduced new flag `POSTGRES_ARGS` inside 
-[docker-compose.yml](https://github.com/input-output-hk/cardano-db-sync/blob/master/docker-compose.yml) file wih
+Release `13.1.0.0` introduced new flag `POSTGRES_ARGS` inside
+[docker-compose.yml](https://github.com/IntersectMBO/cardano-db-sync/blob/master/docker-compose.yml) file wih
 reccomended default values for `maintenance_work_mem` and `max_parallel_maintenance_workers` parameters.
 
 - default start
@@ -80,7 +80,7 @@ docker run \
   -v $PWD/config/network/mainnet/cardano-db-sync:/config \
   -v $PWD/config/network/mainnet/genesis:/genesis \
   -v $PWD/node-ipc:/node-ipc \
-  ghcr.io/input-output-hk/cardano-db-sync:13.1.1.2-docker \
+  ghcr.io/IntersectMBO/cardano-db-sync:13.1.1.2-docker \
     run --config /config/config.yaml --socket-path /node-ipc/node.socket # command
 ```
 
@@ -95,7 +95,7 @@ docker load -i ./result
 
 Restoring a database by running from gensis can take a number of hours, snapshots are provided for
 Mainnet to restore the postgres database. See the
-[latest releases](https://github.com/input-output-hk/cardano-db-sync/releases) for a recent snapshot
+[latest releases](https://github.com/IntersectMBO/cardano-db-sync/releases) for a recent snapshot
 matched with the `cardano-db-sync` version.
 
 To download and restore a snapshot include `RESTORE_SNAPSHOT`:

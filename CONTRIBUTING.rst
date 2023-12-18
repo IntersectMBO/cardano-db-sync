@@ -8,7 +8,7 @@ deployments.
 
 On how to set up Nix for ``cardano-db-sync`` development, please see `Building Cardano
 Node with nix
-<https://github.com/input-output-hk/cardano-node/tree/master/doc/getting-started/building-the-node-using-nix.md>`_.
+<https://github.com/IntersectMBO/cardano-node/tree/master/doc/getting-started/building-the-node-using-nix.md>`_.
 
 Roles and Responsibilities
 ==========================
@@ -77,6 +77,6 @@ Releasing a New Version
 
 See `<doc/release-process.md>`__
 
-.. _CODEOWNERS: https://github.com/input-output-hk/cardano-db-sync/blob/master/CODEOWNERS
-.. _cardano-haskell-packages: https://github.com/input-output-hk/cardano-haskell-packages
+.. _CODEOWNERS: https://github.com/IntersectMBO/cardano-db-sync/blob/master/CODEOWNERS
+.. _cardano-haskell-packages: https://github.com/IntersectMBO/cardano-haskell-packages
 .. _fourmolu: https://github.com/fourmolu/fourmolu

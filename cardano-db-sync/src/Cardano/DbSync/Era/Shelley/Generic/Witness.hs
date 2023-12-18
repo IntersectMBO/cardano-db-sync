@@ -14,10 +14,9 @@ import Cardano.Ledger.Mary (MaryEra)
 import Cardano.Ledger.Shelley (ShelleyEra)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
--- Cargo culted from ledger-specs. Written by Tim Sheard and PRed in
--- https://github.com/input-output-hk/cardano-ledger-specs/pull/2173
--- Even once it is merged, will need to wait until the node moves to a
--- version that this feature.
+-- Cargo culted from ledger. Written by Tim Sheard and PRed in
+-- https://github.com/IntersectMBO/cardano-ledger/pull/2173 Even once it is merged, will
+-- need to wait until the node moves to a version that this feature.
 
 -- | Evidence that a valid (predefined) crypto exists
 data Evidence c where

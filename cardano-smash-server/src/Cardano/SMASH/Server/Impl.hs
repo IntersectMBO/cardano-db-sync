@@ -70,7 +70,7 @@ todoSwagger =
             Just $
               License
                 { _licenseName = "APACHE2"
-                , _licenseUrl = Just $ URL "https://github.com/input-output-hk/cardano-db-sync/blob/master/LICENSE"
+                , _licenseUrl = Just $ URL "https://github.com/IntersectMBO/cardano-db-sync/blob/master/LICENSE"
                 }
         , _infoVersion = smashVersion
         }

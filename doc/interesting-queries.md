@@ -611,7 +611,7 @@ select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, po
 
 ### Find all incorrect entries in `epoch` table
 
-In [issue #1457](https://github.com/input-output-hk/cardano-db-sync/issues/1457) it was pointed out
+In [issue #1457](https://github.com/IntersectMBO/cardano-db-sync/issues/1457) it was pointed out
 that some entries in the epoch table were incorrect. These incorrect entries can be found using:
 ```
 select b.epoch_no, e.epoch_blk_count, e.epoch_tx_count, b.block_block_count, b.block_tx_count
@@ -629,4 +629,4 @@ them.
 ---
 
 
-[Query.hs]: https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
+[Query.hs]: https://github.com/IntersectMBO/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs

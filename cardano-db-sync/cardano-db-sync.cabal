@@ -5,8 +5,8 @@ version:                13.2.0.0
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
-homepage:               https://github.com/input-output-hk/cardano-db-sync
-bug-reports:            https://github.com/input-output-hk/cardano-db-sync/issues
+homepage:               https://github.com/IntersectMBO/cardano-db-sync
+bug-reports:            https://github.com/IntersectMBO/cardano-db-sync/issues
 license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team
