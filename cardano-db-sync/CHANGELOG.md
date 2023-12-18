@@ -12,9 +12,9 @@ It is advised to resync from genesis when using a new version a or b.
 
 Some useful links (adjust the numbers to the correct tag):
 
-- Changelog: https://github.com/input-output-hk/cardano-db-sync/blob/sancho-2-0-0/cardano-db-sync/CHANGELOG.md#13200
-- Schema docs https://github.com/input-output-hk/cardano-db-sync/blob/sancho-2-0-0/doc/schema.md
-- Postgres migrations https://github.com/input-output-hk/cardano-db-sync/tree/sancho-2-0-0/schema
+- Changelog: https://github.com/IntersectMBO/cardano-db-sync/blob/sancho-2-0-0/cardano-db-sync/CHANGELOG.md#13200
+- Schema docs https://github.com/IntersectMBO/cardano-db-sync/blob/sancho-2-0-0/doc/schema.md
+- Postgres migrations https://github.com/IntersectMBO/cardano-db-sync/tree/sancho-2-0-0/schema
 
 In the schema docs, you can search for `13.2` or `Conway` for schema changes from the previous official release.
 
@@ -59,7 +59,7 @@ In the schema docs, you can search for `13.2` or `Conway` for schema changes fro
 - is compatible with node-8.3-pre. There are no schema changes over sancho-1-0-0.
 
 ### sancho-1.0.0
-The schema is quite close to the [initial design](https://github.com/input-output-hk/cardano-db-sync/blob/conway-schema-design-13.2/doc/schema.md). You may find some differences: ie the `param_proposals` and `epoch_param` are not extended yet,
+The schema is quite close to the [initial design](https://github.com/IntersectMBO/cardano-db-sync/blob/conway-schema-design-13.2/doc/schema.md). You may find some differences: ie the `param_proposals` and `epoch_param` are not extended yet,
 Some tables/fields are created but are not populated yet: `anchor_offline_data`, `anchor_offline_fetch_error` , `drep_distr` , `governance_action.x_epoch` , `delegation_vote.redeemer_id`
 
 ### sancho-0.0.0
@@ -127,10 +127,10 @@ It's very early stage and is missing all Conway specific feautures and some Shel
 * Bump to the latest node release.
 
 ## 13.0.3
-* Integrated the fix for the missused minfee function in ledger (https://github.com/input-output-hk/cardano-ledger/pull/2938)
+* Integrated the fix for the missused minfee function in ledger (https://github.com/IntersectMBO/cardano-ledger/pull/2938)
 
 ## 13.0.2
-* Integrated the fix of the obsolete check in the new 'Praos' protocol (https://github.com/input-output-hk/ouroboros-network/pull/3891)
+* Integrated the fix of the obsolete check in the new 'Praos' protocol (https://github.com/IntersectMBO/ouroboros-network/pull/3891)
 
 ## 13.0.1
 * Ensure Babbage TxOut decoder can't fail due to malformed Ptr. This bug manifests itself if db-sync is running in the Babbage era and shuts down, it has to re-sync from an Alonzo snapshot, or from Genesis if it doesn't exist. (#1181)

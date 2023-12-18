@@ -7,13 +7,13 @@ Add your description here, if it fixes a particular issue please provide a [link
 - [ ] Commit sequence broadly makes sense
 - [ ] Commits have useful messages
 - [ ] New tests are added if needed and existing tests are updated
-- [ ] Any changes are noted in the [changelog](https://github.com/input-output-hk/cardano-db-sync/blob/master/cardano-db-sync/CHANGELOG.md)
+- [ ] Any changes are noted in the [changelog](https://github.com/IntersectMBO/cardano-db-sync/blob/master/cardano-db-sync/CHANGELOG.md)
 - [ ] Code is formatted with [`fourmolu`](https://github.com/fourmolu/fourmolu) on version 0.10.1.0 (which can be run with `scripts/fourmolize.sh`)
 - [ ] Self-reviewed the diff
 
 # Migrations
 
-- [ ] The pr causes a [breaking change](https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/migrations.md) of type a,b or c
+- [ ] The pr causes a [breaking change](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/migrations.md) of type a,b or c
 - [ ] If there is a breaking change, the pr includes a database migration and/or a fix process for old values, so that upgrade is possible
 - [ ] Resyncing and running the migrations provided will result in the same database semantically
 

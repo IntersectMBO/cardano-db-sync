@@ -5,20 +5,20 @@
 This guide assumes you have the following tools:
 
  * [Git](https://git-scm.com/download)
- * [Cardano Node](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/install.md)
+ * [Cardano Node](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/install.md)
  * [Postgres Development Libraries (libpq)](https://www.postgresql.org/download/)
  * [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)
- 
+
 In addition, Cardano DB Sync requires the following software (instructions below):
 
  * [GHC](https://www.haskell.org/ghcup/install/) >= 8.10.7
  * [Cabal](https://www.haskell.org/ghcup/install/) >= 3.10.1.0
- * [libsodium-vrf](https://github.com/input-output-hk/libsodium)
+ * [libsodium-vrf](https://github.com/IntersectMBO/libsodium)
  * [secp256k1](https://github.com/bitcoin-core/secp256k1)
  * [blst](https://github.com/supranational/blst)
- 
+
  macOS:
- 
+
 * [x-code](https://developer.apple.com/xcode/resources/)
 
 Create a working directory for your builds:
@@ -57,7 +57,7 @@ It should print a path of this shape: `/home/<user>/.ghcup/bin/cabal`.
 
 ### Install Sodium
 
-Cardano uses a [fork](https://github.com/input-output-hk/libsodium) of `libsodium` which
+Cardano uses a [fork](https://github.com/IntersectMBO/libsodium) of `libsodium` which
 exposes some internal functions and adds some other new functions.
 
 Enter a working directory for your builds:
@@ -76,7 +76,7 @@ REV=$(curl -L https://github.com/input-output-hk/iohk-nix/releases/latest/downlo
 Checkout libsodium:
 
 ```bash
-git clone https://github.com/input-output-hk/libsodium
+git clone https://github.com/IntersectMBO/libsodium
 cd libsodium
 git checkout $REV
 ```
@@ -218,12 +218,12 @@ Enter the working directory for your builds:
 cd ~/src
 ```
 
-Find the latest release here: https://github.com/input-output-hk/cardano-db-sync/releases
+Find the latest release here: https://github.com/IntersectMBO/cardano-db-sync/releases
 
 Check out the latest release version:
 
 ```bash
-git clone https://github.com/input-output-hk/cardano-db-sync.git
+git clone https://github.com/IntersectMBO/cardano-db-sync.git
 cd cardano-db-sync
 git fetch --all --tags
 git checkout tags/<VERSION>

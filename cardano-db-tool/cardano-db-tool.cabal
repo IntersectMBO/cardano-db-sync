@@ -5,8 +5,8 @@ version:                13.2.0.0
 synopsis:               Utilities to manage the cardano-db-sync databases.
 description:            Utilities and executable, used to manage and validate the
                         PostgreSQL db and the ledger database of the cardano-db-sync node
-homepage:               https://github.com/input-output-hk/cardano-db-sync
-bug-reports:		        https://github.com/input-output-hk/cardano-db-sync/issues
+homepage:               https://github.com/IntersectMBO/cardano-db-sync
+bug-reports:            https://github.com/IntersectMBO/cardano-db-sync/issues
 license:                Apache-2.0
 license-file:           LICENSE
 author:                 IOHK Engineering Team

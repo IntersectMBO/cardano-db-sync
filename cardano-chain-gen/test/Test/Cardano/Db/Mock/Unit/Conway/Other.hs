@@ -137,7 +137,7 @@ poolReg =
   where
     testLabel = "conwayPoolReg"
 
--- Issue https://github.com/input-output-hk/cardano-db-sync/issues/997
+-- Issue https://github.com/IntersectMBO/cardano-db-sync/issues/997
 nonexistentPoolQuery :: IOManager -> [(Text, Text)] -> Assertion
 nonexistentPoolQuery =
   withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do

@@ -7,7 +7,7 @@ that is unsupported.
 
 Running the db sync node will require Nix and either multiple terminals or a multi terminal
 emulator like GNU Screen or TMux.
-Setup [IOHK binary cache](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md#iohk-binary-cache)
+Setup [IOHK binary cache](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md#iohk-binary-cache)
 to avoid several hours of build time.
 
 The db sync node is designed to work with a locally running Cardano Node. The two git repositories need to be checked out so that
@@ -29,15 +29,15 @@ Regular users should almost never attempt building and running from the `master`
 they should build and run the latest release tag. The tags can be listed using the `git tag`
 command. Pre-release tags (eg things like `12.0.0-preX`) should also be avoided in most cases.
 ```
-git clone https://github.com/input-output-hk/cardano-node
+git clone https://github.com/IntersectMBO/cardano-node
 cd cardano-node
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
 nix run .#mainnet/node
 ```
 
 More detailed instructions on GHC, Cabal, libraries and `cardano-node` setup can be found here:
-- [Installing Cardano Node from source](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/install.md)
-- [Building Cardano Node with nix](https://github.com/input-output-hk/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
+- [Installing Cardano Node from source](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/install.md)
+- [Building Cardano Node with nix](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
 
 ### Set up and run the db-sync node
 
@@ -58,7 +58,7 @@ make install
 - with cabal:
 
 ```
-git clone https://github.com/input-output-hk/cardano-db-sync
+git clone https://github.com/IntersectMBO/cardano-db-sync
 cd cardano-db-sync
 PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
@@ -85,7 +85,7 @@ when running cabal build
 - with nix:
 
 ```
-git clone https://github.com/input-output-hk/cardano-db-sync
+git clone https://github.com/IntersectMBO/cardano-db-sync
 cd cardano-db-sync
 git checkout <latest-official-tag> -b tag-<latest-official-tag>
 nix build -v .#cardano-db-sync -o db-sync-node

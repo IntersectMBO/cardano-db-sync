@@ -5,13 +5,13 @@
       "locked": {
         "lastModified": 1702906471,
         "narHash": "sha256-br+hVo3R6nfmiSEPXcLKhIX4Kg5gcK2PjzjmvQsuUp8=",
-        "owner": "input-output-hk",
+        "owner": "IntersectMBO",
         "repo": "cardano-haskell-packages",
         "rev": "48a359ac3f1d437ebaa91126b20e15a65201f004",
         "type": "github"
       },
       "original": {
-        "owner": "input-output-hk",
+        "owner": "IntersectMBO",
         "ref": "repo",
         "repo": "cardano-haskell-packages",
         "type": "github"

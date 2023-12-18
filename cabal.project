@@ -1,5 +1,5 @@
 repository cardano-haskell-packages
-  url: https://input-output-hk.github.io/cardano-haskell-packages
+  url: https://chap.intersectmbo.org/
   secure: True
   root-keys:
     3e0cce471cf09815f930210f7827266fd09045445d65923e6d0238a6cd15126f
@@ -73,7 +73,7 @@ allow-newer:
 
 source-repository-package
   type: git
-  location: https://github.com/input-output-hk/cardano-node
+  location: https://github.com/IntersectMBO/cardano-node
   tag: 34d89af65439db92293b88967c299c20692abc1c
   --sha256: sha256-pVUWfzVnM4RvpFlJNH2ZmWPZzmkGT1Ty8B1p7NFh69M=
   subdir:
