@@ -36,7 +36,7 @@ main = do
     stateDirErrorMsg :: [Char]
     stateDirErrorMsg =
       "Error: If not using --state-dir then make sure to have --disable-ledger. "
-        <> "For more details view https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
+        <> "For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
 
     run :: SyncNodeParams -> IO ()
     run prms = do

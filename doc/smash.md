@@ -68,7 +68,7 @@ SMASH records and serves the following subset of information:
 * homepage
 * short description
 
-More information about the pool metadata (the `PoolMetaData` record) can be found [here](https://github.com/input-output-hk/cardano-ledger-specs/blob/4458fdba7e2211f63e7f28ecd3f9b55b02eee071/shelley/chain-and-ledger/executable-spec/src/Shelley/Spec/Ledger/TxData.hs#L62)
+More information about the pool metadata (the `PoolMetaData` record) can be found [here](https://github.com/IntersectMBO/cardano-ledger/blob/4458fdba7e2211f63e7f28ecd3f9b55b02eee071/shelley/chain-and-ledger/executable-spec/src/Shelley/Spec/Ledger/TxData.hs#L62)
 
 Stake pool metadata information can be also found in [The mainnet metadata Design Specification for Delegation and Incentives in Cardano](https://hydra.iohk.io/build/790053/download/1/delegation_design_spec.pdf) section 4.2 Stake Pool Metadata, p.30.
 
@@ -107,7 +107,7 @@ PGPASSFILE=config/pgpass-mainnet db-sync-node/bin/cardano-db-sync \
     --schema-dir schema/
 ```
 
-see https://github.com/input-output-hk/cardano-db-sync/blob/master/doc/building-running.md for more info on how
+see https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/building-running.md for more info on how
 to run cardano-db-sync.
 
 Finally you can then run ``smash-server`` using e.g:

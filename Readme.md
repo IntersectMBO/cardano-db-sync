@@ -71,7 +71,7 @@ above is met).
 
 Install db-sync with one of the following methods:
 
- * [Static Binaries](https://github.com/input-output-hk/cardano-db-sync/releases/latest)
+ * [Static Binaries](https://github.com/IntersectMBO/cardano-db-sync/releases/latest)
  * [Installing with Nix][InstallingNix]
  * [Installing from Source][Installing]
  * [Docker][Docker]

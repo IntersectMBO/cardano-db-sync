@@ -761,7 +761,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
           pure $ if otherUpdates then 3 else 2
 
     -- Ignore the network in the `RewardAcnt` and use the provided one instead.
-    -- This is a workaround for https://github.com/input-output-hk/cardano-db-sync/issues/546
+    -- This is a workaround for https://github.com/IntersectMBO/cardano-db-sync/issues/546
     adjustNetworkTag :: Ledger.RewardAcnt StandardCrypto -> Ledger.RewardAcnt StandardCrypto
     adjustNetworkTag (Shelley.RewardAcnt _ cred) = Shelley.RewardAcnt network cred
 

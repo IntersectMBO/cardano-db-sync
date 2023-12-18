@@ -109,7 +109,7 @@ simpleRewards =
 
 -- This test is the same as the previous, but in Shelley era. Rewards result
 -- should be different because of the old Shelley bug.
--- https://github.com/input-output-hk/cardano-db-sync/issues/959
+-- https://github.com/IntersectMBO/cardano-db-sync/issues/959
 --
 -- The differenece in rewards is triggered when a reward address of a pool A
 -- delegates to a pool B and is not an owner of pool B. In this case it receives

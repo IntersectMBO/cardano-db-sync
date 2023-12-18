@@ -1,21 +1,20 @@
 # General reviewers per PR
-* @input-output-hk/core-tech-dbsync
+* @IntersectMBO/core-tech-dbsync
 
 # Specific reviewers for code pieces
 # NB - The last matching pattern takes precedence
 
 # /doc folder and README.* needs to be owned by @docs-access
-doc                          @input-output-hk/docs-access @input-output-hk/core-tech-dbsync
-Readme.*                     @input-output-hk/docs-access @input-output-hk/core-tech-dbsync
-CONTRIBUTING.rst             @input-output-hk/docs-access @input-output-hk/core-tech-dbsync
+doc                          @input-output-hk/docs-access @IntersectMBO/core-tech-dbsync
+Readme.*                     @input-output-hk/docs-access @IntersectMBO/core-tech-dbsync
+CONTRIBUTING.rst             @input-output-hk/docs-access @IntersectMBO/core-tech-dbsync
 
 # DevOps
-.buildkite                   @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-.github                      @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-/config                      @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-nix                          @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-*.nix                        @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-flake.lock                   @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-bors.toml                    @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-docker-compose.yml           @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
-scripts/postgresql-setup.sh  @input-output-hk/core-tech-devx @input-output-hk/core-tech-release
+.github                      @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+/config                      @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+nix                          @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+*.nix                        @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+flake.lock                   @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+bors.toml                    @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+docker-compose.yml           @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+scripts/postgresql-setup.sh  @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release

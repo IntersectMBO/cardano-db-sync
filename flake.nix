@@ -21,7 +21,7 @@
       flake = false;
     };
     CHaP = {
-      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
+      url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
       flake = false;
     };
     cardano-parts = {
@@ -155,7 +155,7 @@
                 (compiler-nix-name: { inherit compiler-nix-name; });
 
             inputMap = {
-              "https://input-output-hk.github.io/cardano-haskell-packages" = inputs.CHaP;
+              "https://chap.intersectmbo.org/" = inputs.CHaP;
             };
 
             shell.tools = {
