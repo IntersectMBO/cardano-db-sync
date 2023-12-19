@@ -23,6 +23,7 @@ In the schema docs, you can search for `13.2` or `Conway` for schema changes fro
 - Replaced new_committee.quorum to new_committee.quorum_nominator and new_committee.quorum_denominator
 - always_abstain and always_no_confidence drep_hash entries now have a null `raw` value and the unique key changed
 - governance_action.description now uses the json format
+- new offchain capabilites for voting anchor
 
 ### sancho-2.3.0
 - is compatible with node 8.7-pre
