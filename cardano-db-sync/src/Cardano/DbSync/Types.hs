@@ -183,6 +183,7 @@ data SimplifiedOffChainVoteData = SimplifiedOffChainVoteData
   , sovaBytes :: !ByteString
   , sovaJson :: !Text
   , sovaContentType :: !(Maybe ByteString)
+  , sovaWarning :: !(Maybe Text)
   }
 
 data Retry = Retry

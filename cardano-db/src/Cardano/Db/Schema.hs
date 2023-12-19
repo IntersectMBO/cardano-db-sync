@@ -660,6 +660,7 @@ share
     hash                ByteString
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
+    warning             Text Maybe
     UniqueOffChainVoteData votingAnchorId hash
     deriving Show
 
@@ -1250,11 +1251,13 @@ schemaDocs =
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 
     OffChainVoteData --^ do
-      "The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway."
+      "The table with the offchain metadata related to Vote Anchors. It accepts metadata in a more lenient way than what's\
+        \ decribed in CIP-100. New in 13.2-Conway."
       OffChainVoteDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
       OffChainVoteDataHash # "The hash of the offchain data."
       OffChainVoteDataJson # "The payload as JSON."
       OffChainVoteDataBytes # "The raw bytes of the payload."
+      OffChainVoteDataWarning # "A warning that occured while validating the metadata."
 
     OffChainVoteFetchError --^ do
       "Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway."

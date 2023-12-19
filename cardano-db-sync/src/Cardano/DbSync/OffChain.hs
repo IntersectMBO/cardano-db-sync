@@ -78,6 +78,7 @@ loadOffChainVoteWorkQueue trce workQueue =
       }
 
 loadOffChainWorkQueue ::
+  forall a m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   LoadOffChainWorkQueue a m ->
@@ -85,14 +86,14 @@ loadOffChainWorkQueue ::
 loadOffChainWorkQueue _trce offChainWorkQueue = do
   whenM (liftIO $ atomically (isEmptyTBQueue (lQueue offChainWorkQueue))) $ do
     now <- liftIO Time.getPOSIXTime
-    runnableOffChainData <- filter (isRunnable now offChainWorkQueue) <$> lGetData offChainWorkQueue now 100
-    liftIO $ mapM_ (queueInsert offChainWorkQueue) runnableOffChainData
+    runnableOffChainData <- filter (isRunnable now) <$> lGetData offChainWorkQueue now 100
+    liftIO $ mapM_ queueInsert runnableOffChainData
   where
-    isRunnable :: POSIXTime -> LoadOffChainWorkQueue a m -> a -> Bool
-    isRunnable now oCWorkQueue locWq = retryRetryTime (lRetryTime oCWorkQueue locWq) <= now
+    isRunnable :: POSIXTime -> a -> Bool
+    isRunnable now locWq = retryRetryTime (lRetryTime offChainWorkQueue locWq) <= now
 
-    queueInsert :: LoadOffChainWorkQueue a m -> a -> IO ()
-    queueInsert oCWorkQueue locWq = atomically $ writeTBQueue (lQueue oCWorkQueue) locWq
+    queueInsert :: a -> IO ()
+    queueInsert locWq = atomically $ writeTBQueue (lQueue offChainWorkQueue) locWq
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Insert OffChain
@@ -266,6 +267,7 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
               , DB.offChainVoteDataHash = sovaHash sVoteData
               , DB.offChainVoteDataJson = sovaJson sVoteData
               , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
+              , DB.offChainVoteDataWarning = sovaWarning sVoteData
               }
         Left err ->
           OffChainVoteResultError $
