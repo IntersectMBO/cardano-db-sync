@@ -167,12 +167,12 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfig
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
-
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
                 trce
                 backend
+                dbConnString
                 syncOptions
                 genCfg
                 syncNodeParams

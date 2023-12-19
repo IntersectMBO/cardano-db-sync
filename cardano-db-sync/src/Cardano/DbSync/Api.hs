@@ -85,6 +85,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
+import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -331,6 +332,7 @@ getCurrentTipBlockNo env = do
 mkSyncEnv ::
   Trace IO Text ->
   SqlBackend ->
+  ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
   Ledger.Network ->
@@ -340,7 +342,7 @@ mkSyncEnv ::
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMigrations runMigrationFnc = do
+mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   consistentLevelVar <- newTVarIO Unchecked
@@ -379,6 +381,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
     SyncEnv
       { envBackend = backend
       , envCache = cache
+      , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
       , envDbConstraints = dbCNamesVar
       , envEpochState = epochVar
@@ -400,6 +403,7 @@ mkSyncEnv trce backend syncOptions protoInfo nw nwMagic systemStart syncNP ranMi
 mkSyncEnvFromConfig ::
   Trace IO Text ->
   SqlBackend ->
+  ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
   SyncNodeParams ->
@@ -408,7 +412,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
+mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -436,6 +440,7 @@ mkSyncEnvFromConfig trce backend syncOptions genCfg syncNodeParams ranMigration 
             <$> mkSyncEnv
               trce
               backend
+              connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
