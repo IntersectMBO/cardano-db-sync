@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
@@ -26,7 +27,6 @@ import Cardano.DbSync.Types (
  )
 import Cardano.DbSync.Util (renderByteArray)
 import Cardano.Prelude hiding (show)
-import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
@@ -100,8 +100,11 @@ httpGetOffChain manager request mHash url =
         . left
         $ OCFErrHttpResponse url (Http.statusCode status) (Text.decodeLatin1 $ Http.statusMessage status)
 
-      -- Read a maxiumm of 600 bytes and then later check if the length exceeds 512 bytes.
-      respLBS <- liftIO $ Http.brReadSome (Http.responseBody responseBR) 600
+      let (bytesToRead, maxBytes) =
+            case url of
+              OffChainPoolUrl _ -> (600, 512)
+              OffChainVoteUrl _ -> (3000, 3000)
+      respLBS <- liftIO $ Http.brReadSome (Http.responseBody responseBR) bytesToRead
       let respBS = LBS.toStrict respLBS
 
       let mContentType = List.lookup Http.hContentType (Http.responseHeaders responseBR)
@@ -132,20 +135,24 @@ httpGetOffChain manager request mHash url =
                 . left
                 $ OCFErrBadContentType url (Text.decodeLatin1 ct)
 
-      unless (BS.length respBS <= 512)
+      unless (BS.length respBS <= maxBytes)
         . left
         $ OCFErrDataTooLong url
 
       let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
 
-      whenJust mHash $ \expectedMetaHash -> do
-        let eMetaHash =
-              case expectedMetaHash of
-                OffChainPoolHash (PoolMetaHash m) -> m
-                OffChainVoteHash (VoteMetaHash m) -> m
-        when (metadataHash /= eMetaHash)
-          . left
-          $ OCFErrHashMismatch url (renderByteArray eMetaHash) (renderByteArray metadataHash)
+      mWarning <- case mHash of
+        Nothing -> pure Nothing
+        Just expectedMetaHash -> do
+          case expectedMetaHash of
+            OffChainPoolHash (PoolMetaHash m) ->
+              if metadataHash /= m
+                then left $ OCFErrHashMismatch url (renderByteArray m) (renderByteArray metadataHash)
+                else pure Nothing
+            OffChainVoteHash (VoteMetaHash m) ->
+              if metadataHash /= m
+                then pure $ Just $ textShow $ OCFErrHashMismatch url (renderByteArray m) (renderByteArray metadataHash)
+                else pure Nothing
 
       case url of
         OffChainPoolUrl _ -> do
@@ -165,15 +172,19 @@ httpGetOffChain manager request mHash url =
                   spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
                 , spodContentType = mContentType
                 }
-        OffChainVoteUrl _ ->
+        OffChainVoteUrl _ -> do
+          decodedMetadata <-
+            case Aeson.eitherDecode' @Aeson.Value respLBS of
+              Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
+              Right res -> pure res
           pure $
             SimplifiedOffChainVoteDataType
               SimplifiedOffChainVoteData
                 { sovaHash = metadataHash
                 , sovaBytes = respBS
-                , -- TODO: no json format decided for vote metadata yet so we are leaving it blank for now
-                  sovaJson = "{}"
+                , sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
                 , sovaContentType = mContentType
+                , sovaWarning = mWarning
                 }
 
 -- | Is the provided ByteSring possibly JSON object?
