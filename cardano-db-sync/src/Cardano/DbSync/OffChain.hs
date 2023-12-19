@@ -202,9 +202,9 @@ runFetchOffChainVoteThread syncEnv = do
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
 
--- 60 second sleep
+-- 5 minute sleep in milliseconds
 tDelay :: IO ()
-tDelay = threadDelay 60_000_000
+tDelay = threadDelay 300_000_000
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Fetch OffChain data

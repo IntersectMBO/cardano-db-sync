@@ -200,7 +200,7 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
       . lift
       $ insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
 
-    when (ioOffChainPoolData iopts && unBlockNo (Generic.blkBlockNo blk) `mod` offChainModBase == 0)
+    when (ioOffChainPoolData iopts)
       . lift
       $ insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
   where
@@ -222,9 +222,6 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
       case eraText of
         Generic.Shelley -> "insertShelleyBlock"
         other -> mconcat ["insertShelleyBlock(", textShow other, ")"]
-
-    offChainModBase :: Word64
-    offChainModBase = if withinTwoMins then 10 else 2000
 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
