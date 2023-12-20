@@ -28,7 +28,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncOptions (..), SyncEnv (..), envLedgerEnv)
+import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
 import Cardano.DbSync.Config (configureLogging, readSyncNodeConfig)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types (
