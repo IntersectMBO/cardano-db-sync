@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.0 (from branch **kderme/update-node-8-7** which may not accurately reflect the version number)
+Schema version: 13.2.0.0 (from branch **kderme/sancho-3-0-0** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -835,9 +835,9 @@ A table for every Anchor that appears on Governance Actions. These are pointers 
 | `data_hash` | blob | A hash of the contents of the metadata URL |
 | `url` | varchar | A URL to a JSON payload of metadata |
 
-### `governance_action`
+### `gov_action_proposal`
 
-A table for proposed GovernanceAction, aka ProposalProcedure, GovAction or GovProposal. At most one of the ratified/enacted/dropped/expired epoch field can be non-null, indicating the current state of the proposal. This table may be referenced by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway.
+A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal. At most one of the ratified/enacted/dropped/expired epoch field can be non-null, indicating the current state of the proposal. This table may be referenced by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -846,12 +846,13 @@ A table for proposed GovernanceAction, aka ProposalProcedure, GovAction or GovPr
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `index` | integer (64) | The index of this proposal procedure within its transaction. |
+| `prev_gov_action_proposal` | integer (64) | The previous related GovActionProposal. This is null for |
 | `deposit` | lovelace | The deposit amount payed for this proposal. |
 | `return_address` | integer (64) | The StakeAddress index of the reward address to receive the deposit when it is repaid. |
 | `expiration` | word31type | Shows the epoch at which this governance action will expire. |
 | `voting_anchor_id` | integer (64) | The Anchor table index related to this proposal. |
 | `type` | govactiontype | Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction |
-| `description` | string | A Text describing the content of this GovernanceAction in a readable way. |
+| `description` | string | A Text describing the content of this GovActionProposal in a readable way. |
 | `param_proposal` | integer (64) | If this is a param proposal action, this has the index of the param_proposal table. |
 | `ratified_epoch` | word31type | If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null. |
 | `enacted_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. |
@@ -860,30 +861,44 @@ A table for proposed GovernanceAction, aka ProposalProcedure, GovAction or GovPr
 
 ### `treasury_withdrawal`
 
-A table for all treasury withdrawals proposed on a GovernanceAction. New in 13.2-Conway.
+A table for all treasury withdrawals proposed on a GovActionProposal. New in 13.2-Conway.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `governance_action_id` | integer (64) | The GovernanceAction table index for this withdrawal.Multiple TreasuryWithdrawal may reference the same GovernanceAction. |
+| `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this withdrawal.Multiple TreasuryWithdrawal may reference the same GovActionProposal. |
 | `stake_address_id` | integer (64) | The address that benefits from this withdrawal. |
 | `amount` | lovelace | The amount for this withdrawl. |
 
 ### `new_committee`
 
-A table for new committee proposed on a GovernanceAction. New in 13.2-Conway.
+A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `governance_action_id` | integer (64) | The GovernanceAction table index for this new committee. |
-| `quorum` | double | The proposed quorum. |
+| `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. |
+| `quorum_nominator` | integer (64) | The proposed quorum nominator. |
+| `quorum_denominator` | integer (64) | The proposed quorum denominator. |
 | `deleted_members` | string | The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway. |
 | `added_members` | string | The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway. |
+
+### `constitution`
+
+A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this constitution. |
+| `voting_anchor_id` | integer (64) | The ConstitutionVotingAnchor table index for this constitution. |
+| `script_hash` | hash28type | The Script Hash. It's associated script may not be already inserted in the script table. |
 
 ### `voting_procedure`
 
@@ -896,7 +911,7 @@ A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this VotingProcedure. |
 | `index` | integer (32) | The index of this VotingProcedure within this transaction. |
-| `governance_action_id` | integer (64) | The index of the GovernanceAction that this vote targets. |
+| `gov_action_proposal_id` | integer (64) | The index of the GovActionProposal that this vote targets. |
 | `voter_role` | voterrole | The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO. |
 | `committee_voter` | blob |  |
 | `drep_voter` | integer (64) |  |
@@ -949,9 +964,9 @@ A table containing pool offchain data fetch errors.
 | `fetch_error` | string | The text of the error. |
 | `retry_count` | word31type | The number of retries. |
 
-### `off_chain_voting_data`
+### `off_chain_vote_data`
 
-The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway.
+The table with the offchain metadata related to Vote Anchors. It accepts metadata in a more lenient way than what's decribed in CIP-100. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -962,8 +977,9 @@ The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway
 | `hash` | blob | The hash of the offchain data. |
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
+| `warning` | string | A warning that occured while validating the metadata. |
 
-### `off_chain_voting_fetch_error`
+### `off_chain_vote_fetch_error`
 
 Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway.
 
@@ -974,6 +990,7 @@ Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2
 | `id` | integer (64) |  |
 | `voting_anchor_id` | integer (64) | The VotingAnchor table index this offchain fetch error refers. |
 | `fetch_error` | string | The text of the error. |
+| `fetch_time` | timestamp |  |
 | `retry_count` | word31type | The number of retries. |
 
 ### `reserved_pool_ticker`
