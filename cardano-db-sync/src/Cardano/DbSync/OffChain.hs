@@ -198,7 +198,7 @@ runFetchOffChainVoteThread syncEnv = do
         \backendVote -> liftIO $
           forever $ do
             tDelay
-            -- load the offChain pool work queue using the db
+            -- load the offChain vote work queue using the db
             _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
             manager <- Http.newManager tlsManagerSettings
