@@ -28,7 +28,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncOptions (..), envLedgerEnv)
+import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncOptions (..), SyncEnv (..), envLedgerEnv)
 import Cardano.DbSync.Config (configureLogging, readSyncNodeConfig)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types (
@@ -51,6 +51,7 @@ import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Constraint (addRewardConstraintsIfNotExist)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
@@ -178,6 +179,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 syncNodeParams
                 ranMigrations
                 runMigrationFnc
+          liftIO $ runReaderT (addRewardConstraintsIfNotExist syncEnv trce) (envBackend syncEnv)
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"

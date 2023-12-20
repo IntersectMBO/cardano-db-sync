@@ -203,7 +203,7 @@ insertManyDrepDistr ::
   (MonadBaseControl IO m, MonadIO m) =>
   [DrepDistr] ->
   ReaderT SqlBackend m ()
-insertManyDrepDistr = insertManyUncheckedUnique "Many DrepDistr"
+insertManyDrepDistr = insertManyCheckUnique "Many DrepDistr"
 
 insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
 insertManyTxIn = insertMany' "Many TxIn"
@@ -341,7 +341,7 @@ insertExtraMigration token = void . insert $ ExtraMigrations (textShow token) (J
 
 insertEpochStakeProgress :: (MonadBaseControl IO m, MonadIO m) => [EpochStakeProgress] -> ReaderT SqlBackend m ()
 insertEpochStakeProgress =
-  insertManyUncheckedUnique "Many EpochStakeProgress"
+  insertManyCheckUnique "Many EpochStakeProgress"
 
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
@@ -527,7 +527,7 @@ insertManyWithManualUnique ::
   ReaderT SqlBackend m ()
 insertManyWithManualUnique = insertManyUnique
 
-insertManyUncheckedUnique ::
+insertManyCheckUnique ::
   forall m record.
   ( MonadBaseControl IO m
   , MonadIO m
@@ -536,7 +536,7 @@ insertManyUncheckedUnique ::
   String ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyUncheckedUnique vtype records = do
+insertManyCheckUnique vtype records = do
   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
   insertManyUnique vtype True constraintName records
 
