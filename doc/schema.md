@@ -949,7 +949,7 @@ A table containing pool offchain data fetch errors.
 | `fetch_error` | string | The text of the error. |
 | `retry_count` | word31type | The number of retries. |
 
-### `off_chain_anchor_data`
+### `off_chain_voting_data`
 
 The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway.
 
@@ -963,7 +963,7 @@ The table with the offchain metadata related to Vote Anchors. New in 13.2-Conway
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 
-### `off_chain_anchor_fetch_error`
+### `off_chain_voting_fetch_error`
 
 Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway.
 
