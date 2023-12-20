@@ -9,6 +9,8 @@ module Cardano.DbSync.Util.Constraint (
   constraintNameReward,
   dbConstraintNamesExists,
   addConstraintsIfNotExist,
+  addStakeConstraintsIfNotExist,
+  addRewardConstraintsIfNotExist,
   addRewardTableConstraint,
   addEpochStakeTableConstraint,
 ) where
@@ -58,12 +60,34 @@ addConstraintsIfNotExist ::
   Trace IO Text ->
   ReaderT SqlBackend m ()
 addConstraintsIfNotExist syncEnv trce = do
-  ManualDbConstraints {..} <- liftIO . readTVarIO $ envDbConstraints syncEnv
-  unless dbConstraintRewards (addRewardTableConstraint trce)
-  unless dbConstraintEpochStake (addEpochStakeTableConstraint trce)
+  addStakeConstraintsIfNotExist syncEnv trce
+  addRewardConstraintsIfNotExist syncEnv trce
+
+addStakeConstraintsIfNotExist ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  Trace IO Text ->
+  ReaderT SqlBackend m ()
+addStakeConstraintsIfNotExist syncEnv trce = do
+  mdbc <- liftIO . readTVarIO $ envDbConstraints syncEnv
+  unless (dbConstraintEpochStake mdbc) (addEpochStakeTableConstraint trce)
   liftIO
     . atomically
-    $ writeTVar (envDbConstraints syncEnv) (DB.ManualDbConstraints True True)
+    $ writeTVar (envDbConstraints syncEnv) (mdbc { dbConstraintEpochStake = True})
+
+addRewardConstraintsIfNotExist ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  Trace IO Text ->
+  ReaderT SqlBackend m ()
+addRewardConstraintsIfNotExist syncEnv trce = do
+  mdbc <- liftIO . readTVarIO $ envDbConstraints syncEnv
+  unless (dbConstraintRewards mdbc) (addRewardTableConstraint trce)
+  liftIO
+    . atomically
+    $ writeTVar (envDbConstraints syncEnv) (mdbc {dbConstraintRewards = True})
 
 addRewardTableConstraint ::
   forall m.
