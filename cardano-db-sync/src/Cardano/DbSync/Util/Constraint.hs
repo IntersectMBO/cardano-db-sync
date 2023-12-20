@@ -74,7 +74,7 @@ addStakeConstraintsIfNotExist syncEnv trce = do
   unless (dbConstraintEpochStake mdbc) (addEpochStakeTableConstraint trce)
   liftIO
     . atomically
-    $ writeTVar (envDbConstraints syncEnv) (mdbc { dbConstraintEpochStake = True})
+    $ writeTVar (envDbConstraints syncEnv) (mdbc {dbConstraintEpochStake = True})
 
 addRewardConstraintsIfNotExist ::
   forall m.

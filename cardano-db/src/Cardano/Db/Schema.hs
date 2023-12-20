@@ -1252,7 +1252,7 @@ schemaDocs =
 
     OffChainVoteData --^ do
       "The table with the offchain metadata related to Vote Anchors. It accepts metadata in a more lenient way than what's\
-        \ decribed in CIP-100. New in 13.2-Conway."
+      \ decribed in CIP-100. New in 13.2-Conway."
       OffChainVoteDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
       OffChainVoteDataHash # "The hash of the offchain data."
       OffChainVoteDataJson # "The payload as JSON."
