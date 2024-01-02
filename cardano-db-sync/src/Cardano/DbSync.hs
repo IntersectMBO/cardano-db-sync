@@ -235,7 +235,7 @@ extractSyncOptions snp aop =
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
       | enpOnlyUTxO snp = onlyUTxOInsertOptions
-      | enpFullMode snp = fullInsertOptions useLedger
+      | enpFullMode snp = fullInsertOptions useLedger (enpKeepMetadataNames snp)
       | enpDisableAllMode snp = disableAllInsertOptions useLedger
       | otherwise =
           InsertOptions
@@ -245,6 +245,7 @@ extractSyncOptions snp aop =
             , ioRewards = True
             , ioMultiAssets = enpHasMultiAssets snp
             , ioMetadata = enpHasMetadata snp
+            , ioKeepMetadataNames = enpKeepMetadataNames snp
             , ioPlutusExtra = enpHasPlutusExtra snp
             , ioOffChainPoolData = enpHasOffChainPoolData snp
             , ioGov = enpHasGov snp

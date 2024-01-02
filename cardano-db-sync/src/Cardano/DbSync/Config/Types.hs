@@ -72,6 +72,7 @@ data SyncNodeParams = SyncNodeParams
   , enpHasShelley :: !Bool
   , enpHasMultiAssets :: !Bool
   , enpHasMetadata :: !Bool
+  , enpKeepMetadataNames :: ![Text]
   , enpHasPlutusExtra :: !Bool
   , enpHasGov :: !Bool
   , enpHasOffChainPoolData :: !Bool

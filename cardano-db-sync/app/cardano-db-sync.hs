@@ -87,6 +87,7 @@ pRunDbSyncNode =
     <*> pHasShelley
     <*> pHasMultiAssets
     <*> pHasMetadata
+    <*> pKeepTxMetadata
     <*> pHasPlutusExtra
     <*> pHasGov
     <*> pHasOffChainPoolData
@@ -227,6 +228,15 @@ pSlotNo =
           <> Opt.help "Force a rollback to the specified slot (mainly for testing and debugging)."
           <> Opt.metavar "WORD"
       )
+
+pKeepTxMetadata :: Parser [Text]
+pKeepTxMetadata =
+  Opt.many
+    ( Opt.strOption
+        ( Opt.long "keep-tx-metadata"
+            <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
+        )
+    )
 
 pHasInOut :: Parser Bool
 pHasInOut =
