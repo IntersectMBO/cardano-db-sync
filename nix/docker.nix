@@ -6,9 +6,9 @@
 , evalService, cardanoLib
 
 # Image dependencies
-, bashInteractive, cacert, cardano-cli, cardano-db-sync, coreutils, curl, findutils
-, getconf, glibcLocales, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn
-, libpqxx, postgresql, socat, utillinux
+, bashInteractive, cacert, cardano-cli, cardano-db-sync, cardano-db-tool
+, coreutils, curl, findutils, getconf, glibcLocales, gnutar, gzip, jq, iana-etc
+, iproute, iputils, lib, libidn, libpqxx, postgresql, socat, utillinux
 }:
 
 let
@@ -44,6 +44,7 @@ let
         socat # Utility for bidirectional data transfer
         utillinux # System utilities for Linux
         cardano-cli # tool for interacting with cardano-node
+        cardano-db-tool # utilities for creating database snapshots
       ];
     };
 
