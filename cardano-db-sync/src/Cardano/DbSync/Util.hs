@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -23,12 +25,14 @@ module Cardano.DbSync.Util (
   textPrettyShow,
   textShow,
   third,
-  thrd3,
+  first3,
   forth4,
+  zipWith3,
   splitLast,
   traverseMEither,
   whenStrictJust,
   whenMaybe,
+  foldAndAccM,
   mlookup,
   whenRight,
   whenFalseEmpty,
@@ -185,14 +189,29 @@ whenMaybe :: Monad m => Maybe a -> (a -> m b) -> m (Maybe b)
 whenMaybe (Just a) f = Just <$> f a
 whenMaybe Nothing _f = pure Nothing
 
+foldAndAccM :: forall a b c t m. (Foldable t, Monad m) => ([c] -> a -> m (b, [c])) -> t a -> m [b]
+foldAndAccM f as = reverse . snd <$> foldM g ([], []) as
+  where
+    g :: ([c], [b]) -> a -> m ([c], [b])
+    g (cs, bs) a = do
+      (b, cs') <- f cs a
+      pure (cs <> cs', b : bs)
+
 third :: (a, b, c) -> c
 third (_, _, c) = c
 
-thrd3 :: (a, b, c, d) -> c
-thrd3 (_, _, c, _) = c
+first3 :: (a, b, c) -> a
+first3 (a, _, _) = a
 
 forth4 :: (a, b, c, d) -> d
 forth4 (_, _, _, d) = d
+
+{-# NOINLINE [1] zipWith3 #-}
+zipWith3 :: (a -> b -> c -> d) -> [a]-> [b] -> [c] -> [d]
+zipWith3 z = go
+  where
+    go (a:as) (b:bs) (c:cs) = z a b c : go as bs cs
+    go _ _ _                = []
 
 splitLast :: [(a, b, c, d)] -> ([(a, b, c)], [d])
 splitLast = unzip . fmap (\(a, b, c, d) -> ((a, b, c), d))
