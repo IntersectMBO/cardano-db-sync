@@ -23,7 +23,7 @@ import Cardano.DbSync.Types (
   OffChainVoteResult,
   OffChainVoteWorkQueue,
  )
-import Cardano.Prelude (Bool, Eq, IO, Show, Text, Word64)
+import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -78,7 +78,7 @@ data InsertOptions = InsertOptions
   , ioRewards :: !Bool
   , ioMultiAssets :: !Bool
   , ioMetadata :: !Bool
-  , ioKeepMetadataNames :: ![Text]
+  , ioKeepMetadataNames :: Strict.Maybe [Word64]
   , ioPlutusExtra :: !Bool
   , ioOffChainPoolData :: !Bool
   , ioGov :: !Bool

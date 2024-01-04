@@ -229,10 +229,11 @@ pSlotNo =
           <> Opt.metavar "WORD"
       )
 
-pKeepTxMetadata :: Parser [Text]
+pKeepTxMetadata :: Parser [Word64]
 pKeepTxMetadata =
   Opt.many
-    ( Opt.strOption
+    ( Opt.option
+        Opt.auto
         ( Opt.long "keep-tx-metadata"
             <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
         )

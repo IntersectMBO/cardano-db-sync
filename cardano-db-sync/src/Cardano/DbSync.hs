@@ -56,6 +56,7 @@ import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
+import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -232,10 +233,15 @@ extractSyncOptions snp aop =
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
+    maybeKeepMNames =
+      if null (enpKeepMetadataNames snp)
+        then Strict.Just (enpKeepMetadataNames snp)
+        else Strict.Nothing
+
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
       | enpOnlyUTxO snp = onlyUTxOInsertOptions
-      | enpFullMode snp = fullInsertOptions useLedger (enpKeepMetadataNames snp)
+      | enpFullMode snp = fullInsertOptions useLedger maybeKeepMNames
       | enpDisableAllMode snp = disableAllInsertOptions useLedger
       | otherwise =
           InsertOptions
@@ -245,7 +251,7 @@ extractSyncOptions snp aop =
             , ioRewards = True
             , ioMultiAssets = enpHasMultiAssets snp
             , ioMetadata = enpHasMetadata snp
-            , ioKeepMetadataNames = enpKeepMetadataNames snp
+            , ioKeepMetadataNames = maybeKeepMNames
             , ioPlutusExtra = enpHasPlutusExtra snp
             , ioOffChainPoolData = enpHasOffChainPoolData snp
             , ioGov = enpHasGov snp
