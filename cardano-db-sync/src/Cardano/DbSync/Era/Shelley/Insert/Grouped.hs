@@ -102,7 +102,7 @@ insertBlockGroupedData syncEnv grouped = do
     lift $ DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
   void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
   void . lift . DB.insertManyTxMint $ groupedTxMint grouped
-  pure $ DB.MinIds (minimumMaybe txInIds) (minimumMaybe txOutIds) (minimumMaybe maTxOutIds)
+  pure $ DB.MinIds (listToMaybe txInIds) (listToMaybe txOutIds) (listToMaybe maTxOutIds)
   where
     tracer = getTrace syncEnv
 
@@ -214,8 +214,3 @@ matches :: Generic.TxIn -> ExtendedTxOut -> Bool
 matches txIn eutxo =
   Generic.txInHash txIn == etoTxHash eutxo
     && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
-
-minimumMaybe :: (Ord a, Foldable f) => f a -> Maybe a
-minimumMaybe xs
-  | null xs = Nothing
-  | otherwise = Just $ minimum xs
