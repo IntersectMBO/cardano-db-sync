@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Insert.Grouped (
   resolveTxInputsValue,
   resolveScriptHash,
   resolveInMemory,
+  resolveInMemoryMany,
   mkmaTxOuts,
 ) where
 
@@ -48,8 +49,6 @@ data BlockGroupedData = BlockGroupedData
   , groupedTxOut :: ![(ExtendedTxOut, [MissingMaTxOut])]
   , groupedTxMetadata :: ![DB.TxMetadata]
   , groupedTxMint :: ![DB.MaTxMint]
-  , groupedTxFees :: !Word64
-  , groupedTxOutSum :: !Word64
   }
 
 -- | While we collect data, we don't have access yet to the 'TxOutId', since
@@ -73,7 +72,7 @@ data ExtendedTxIn = ExtendedTxIn
   deriving (Show)
 
 instance Monoid BlockGroupedData where
-  mempty = BlockGroupedData [] [] [] [] 0 0
+  mempty = BlockGroupedData [] [] [] []
 
 instance Semigroup BlockGroupedData where
   tgd1 <> tgd2 =
@@ -82,8 +81,6 @@ instance Semigroup BlockGroupedData where
       (groupedTxOut tgd1 <> groupedTxOut tgd2)
       (groupedTxMetadata tgd1 <> groupedTxMetadata tgd2)
       (groupedTxMint tgd1 <> groupedTxMint tgd2)
-      (groupedTxFees tgd1 + groupedTxFees tgd2)
-      (groupedTxOutSum tgd1 + groupedTxOutSum tgd2)
 
 insertBlockGroupedData ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -172,18 +169,21 @@ resolveTxInputs hasConsumed txIn = do
 -- This happens the input consumes an output introduced in the same block.
 resolveTxInputsValue ::
   MonadIO m =>
+  [[ExtendedTxOut]] ->
   [(ByteString, Generic.TxOut)] ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, Maybe DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
-resolveTxInputsValue blockTxOuts txIn =
+resolveTxInputsValue txOutPrev blockTxOuts txIn =
   liftLookupFail ("resolveTxInputsValue " <> textShow txIn <> " ") $ do
     qres <- fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
         case resolveInMemory' txIn blockTxOuts of
-          Nothing -> pure $ Left err
           Just txOut -> pure $ Right $ convertFoundValue $ DB.DbLovelace $ fromIntegral $ unCoin $ Generic.txOutAdaValue txOut
+          Nothing -> case resolveInMemoryMany txIn txOutPrev of
+            Nothing -> pure $ Left err
+            Just txOut -> pure $ Right $ convertFoundValue $ DB.txOutValue $ etoTxOut txOut
   where
     convertFoundAll :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Generic.TxIn, Maybe DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
     convertFoundAll (txId, txOutId, lovelace) = (txIn, Just txId, Right txOutId, Just lovelace)
@@ -208,7 +208,7 @@ resolveRemainingInputs etis mp =
 
 resolveScriptHash ::
   (MonadBaseControl IO m, MonadIO m) =>
-  [ExtendedTxOut] ->
+  [[ExtendedTxOut]] ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
 resolveScriptHash groupedOutputs txIn =
@@ -217,7 +217,7 @@ resolveScriptHash groupedOutputs txIn =
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
-        case resolveInMemory txIn groupedOutputs of
+        case resolveInMemoryMany txIn groupedOutputs of
           Nothing -> pure $ Left err
           Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
 
@@ -238,6 +238,18 @@ matches' :: Generic.TxIn -> (ByteString, Generic.TxOut) -> Bool
 matches' txIn (txHash, txOut) =
   Generic.txInHash txIn == txHash
     && Generic.txInIndex txIn == Generic.txOutIndex txOut
+
+resolveInMemoryMany :: Generic.TxIn -> [[ExtendedTxOut]] -> Maybe ExtendedTxOut
+resolveInMemoryMany txIn =
+  findMapMaybe (resolveInMemory txIn)
+  where
+    findMapMaybe :: (a -> Maybe b) -> [a] -> Maybe b
+    findMapMaybe f = go
+      where
+        go [] = Nothing
+        go (a : as) = case f a of
+          Nothing -> go as
+          Just b -> Just b
 
 minimumMaybe :: (Ord a, Foldable f) => f a -> Maybe a
 minimumMaybe xs

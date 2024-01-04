@@ -101,6 +101,7 @@ type IsPoolMember = PoolKeyHash -> Bool
 insertShelleyBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  [BlockGroupedData] ->
   Bool ->
   Bool ->
   Bool ->
@@ -108,8 +109,8 @@ insertShelleyBlock ::
   SlotDetails ->
   IsPoolMember ->
   ApplyResult ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
-insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
+  ReaderT SqlBackend m (Either SyncNodeError [BlockGroupedData])
+insertShelleyBlock syncEnv groupsPrev shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -141,12 +142,11 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
 
-    txsPrepared <- foldAndAccM (prepareTx syncEnv blkId applyResult) zippedTx
+    txsPrepared <- foldAndAccM (prepareTx syncEnv txOutPrev blkId applyResult) zippedTx
     txIds <- lift $ DB.insertManyTx (ptrTxDb <$> txsPrepared)
-    let txInserter = insertTx syncEnv blkId isMember (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
+    let txInserter = insertTx syncEnv txOutPrev blkId isMember (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
     let newZip = zipWith3 (\tx txId ptr -> (txId, tx, ptr)) (Generic.blkTxs blk) txIds txsPrepared
     blockGroupedData <- foldM txInserter mempty newZip
-    minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- when we later update the epoch values.
@@ -158,14 +158,11 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
         EpochBlockDiff
           { ebdBlockId = blkId
           , ebdTime = sdSlotTime details
-          , ebdFees = groupedTxFees blockGroupedData
+          , ebdFees = sum (ptrFees <$> txsPrepared)
           , ebdEpochNo = unEpochNo (sdEpochNo details)
-          , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
+          , ebdOutSum = sum (fromIntegral . ptrOutSum <$> txsPrepared)
           , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
           }
-
-    when withinHalfHour $
-      insertReverseIndex blkId minIds
 
     liftIO $ do
       let epoch = unEpochNo epochNo
@@ -208,8 +205,19 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
     when (ioOffChainPoolData iopts)
       . lift
       $ insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
+
+    if withinHalfHour then do
+      unless (null groupsPrev) $
+        void $ insertBlockGroupedData syncEnv $ mconcat $ reverse groupsPrev
+      minIds <- insertBlockGroupedData syncEnv blockGroupedData
+      insertReverseIndex blkId minIds
+      pure []
+    else do
+      pure $ blockGroupedData : groupsPrev
   where
     iopts = getInsertOptions syncEnv
+
+    txOutPrev = fmap fst . groupedTxOut <$> groupsPrev
 
     logger :: Trace IO a -> a -> IO ()
     logger
@@ -273,12 +281,13 @@ data PrepareTxRes = PrepareTxRes
 prepareTx ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  [[ExtendedTxOut]] ->
   DB.BlockId ->
   ApplyResult ->
   [(ByteString, Generic.TxOut)] ->
   (Word64, Generic.Tx) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (PrepareTxRes, [(ByteString, Generic.TxOut)])
-prepareTx syncEnv blkId applyResult blockTxOuts (blockIndex, tx) = do
+prepareTx syncEnv txOutPrev blkId applyResult blockTxOuts (blockIndex, tx) = do
   let !txHash = Generic.txHash tx
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
@@ -293,7 +302,7 @@ prepareTx syncEnv blkId applyResult blockTxOuts (blockIndex, tx) = do
       pure (resolvedInputsDB, fees, unCoin <$> mdeposits)
     (_, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
-      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputsValue blockTxOuts) (Generic.txInputs tx)
+      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputsValue txOutPrev blockTxOuts) (Generic.txInputs tx)
       let !inSum = sum $ map unDbLovelace $ catMaybes amounts
           !diffSum = if inSum >= outSum then inSum - outSum else 0
           !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -318,6 +327,7 @@ prepareTx syncEnv blkId applyResult blockTxOuts (blockIndex, tx) = do
 insertTx ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  [[ExtendedTxOut]] ->
   DB.BlockId ->
   IsPoolMember ->
   EpochNo ->
@@ -326,17 +336,17 @@ insertTx ::
   BlockGroupedData ->
   (DB.TxId, Generic.Tx, PrepareTxRes) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx syncEnv blkId isMember epochNo slotNo applyResult grouped (txId, tx, ptr) = do
+insertTx syncEnv txOutPrev blkId isMember epochNo slotNo applyResult grouped (txId, tx, ptr) = do
   let !txHash = Generic.txHash tx
   disInOut <- liftIO $ getDisableInOutState syncEnv
   if not (Generic.txValidContract tx)
     then do
       !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      !txIns <- mapM (prepareTxIn txId (fst <$> groupedTxOut grouped) Map.empty) (ptrResolvedTxIn ptr)
+      !txIns <- mapM (prepareTxIn txId groups Map.empty) (ptrResolvedTxIn ptr)
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
       -- Same happens bellow on last line of this function.
-      pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [] (ptrFees ptr) (ptrOutSum ptr))
+      pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [])
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
@@ -346,7 +356,7 @@ insertTx syncEnv blkId isMember epochNo slotNo applyResult grouped (txId, tx, pt
         Map.fromList
           <$> whenFalseMempty
             (ioPlutusExtra iopts)
-            (mapM (insertRedeemer tracer disInOut (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
+            (mapM (insertRedeemer tracer disInOut groups txId) (Generic.txRedeemer tx))
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
@@ -390,12 +400,14 @@ insertTx syncEnv blkId isMember epochNo slotNo applyResult grouped (txId, tx, pt
         mapM_ (insertGovActionProposal cache blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures tracer cache txId) (Generic.txVotingProcedure tx)
 
-      !txIns <- mapM (prepareTxIn txId (fst <$> groupedTxOut grouped) redeemers) (ptrResolvedTxIn ptr)
-      pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint (ptrFees ptr) (ptrOutSum ptr))
+      !txIns <- mapM (prepareTxIn txId groups redeemers) (ptrResolvedTxIn ptr)
+      pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
+
+    groups = (fst <$> groupedTxOut grouped) : txOutPrev
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -481,7 +493,7 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
 prepareTxIn ::
   Monad m =>
   DB.TxId ->
-  [ExtendedTxOut] ->
+  [[ExtendedTxOut]] ->
   Map Word64 DB.RedeemerId ->
   (Generic.TxIn, Maybe DB.TxId, Either Generic.TxIn DB.TxOutId) ->
   ExceptT SyncNodeError m ExtendedTxIn
@@ -489,7 +501,7 @@ prepareTxIn txInId groupedOutputs redeemers (txIn, mtxOutId, mTxOutId) = do
   txOutId <- liftLookupFail "resolveScriptHash" $
     case mtxOutId of
       Just txOutId -> pure $ Right txOutId
-      Nothing -> case resolveInMemory txIn groupedOutputs of
+      Nothing -> case resolveInMemoryMany txIn groupedOutputs of
         Nothing -> pure $ Left $ DB.DbLookupTxHash (Generic.txInHash txIn)
         Just txOut -> pure $ Right $ DB.txOutTxId $ etoTxOut txOut
   let txInDB =
@@ -1138,7 +1150,7 @@ insertRedeemer ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Bool ->
-  [ExtendedTxOut] ->
+  [[ExtendedTxOut]] ->
   DB.TxId ->
   (Word64, Generic.TxRedeemer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Word64, DB.RedeemerId)
