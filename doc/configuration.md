@@ -154,3 +154,9 @@ Some field are left empty when using this flag, like
 - `redeemer.script_hash` is left Null
 
 Until the ledger state migration happens any restart requires reusing the `--bootstrap-tx-out` flag. After it's completed the flag can be omitted on restarts.
+
+### --keep-tx-metadata
+
+This flag was introduced in v.13.2.0.0 as all postgres field with the type jsonb were removed to improve insertion performance.
+If they are required and you have database queries against jsonb then activate this flag to re-introduce the type jsonb.
+You can pass multiple values to the flag eg: `--keep-tx-metadata 1,2,3` make sure you are using commas between each key.

@@ -235,13 +235,13 @@ extractSyncOptions snp aop =
   where
     maybeKeepMNames =
       if null (enpKeepMetadataNames snp)
-        then Strict.Just (enpKeepMetadataNames snp)
-        else Strict.Nothing
+        then Strict.Nothing
+        else Strict.Just (enpKeepMetadataNames snp)
 
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
       | enpOnlyUTxO snp = onlyUTxOInsertOptions
-      | enpFullMode snp = fullInsertOptions useLedger maybeKeepMNames
+      | enpFullMode snp = fullInsertOptions useLedger
       | enpDisableAllMode snp = disableAllInsertOptions useLedger
       | otherwise =
           InsertOptions

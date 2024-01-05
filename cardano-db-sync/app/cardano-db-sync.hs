@@ -7,6 +7,7 @@ import Cardano.DbSync.Config
 import Cardano.DbSync.Metrics (withMetricSetters)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
+import Data.List.Split (splitOn)
 import Data.String (String)
 import qualified Data.Text as Text
 import Data.Version (showVersion)
@@ -231,13 +232,17 @@ pSlotNo =
 
 pKeepTxMetadata :: Parser [Word64]
 pKeepTxMetadata =
-  Opt.many
-    ( Opt.option
-        Opt.auto
-        ( Opt.long "keep-tx-metadata"
-            <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
-        )
+  Opt.option
+    (parseCommaSeparated <$> Opt.str)
+    ( Opt.long "keep-tx-metadata"
+        <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
     )
+  where
+    parseCommaSeparated :: String -> [Word64]
+    parseCommaSeparated str =
+      case traverse readMaybe (splitOn "," str) of
+        Just values -> values
+        Nothing -> error "Failed to parse comma-separated values"
 
 pHasInOut :: Parser Bool
 pHasInOut =

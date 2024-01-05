@@ -199,8 +199,20 @@ getPrunes :: SyncEnv -> Bool
 getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
-fullInsertOptions :: Bool -> Strict.Maybe [Word64] -> InsertOptions
-fullInsertOptions useLedger maybeKeepMNames = InsertOptions True useLedger True True True True maybeKeepMNames True True True
+fullInsertOptions :: Bool -> InsertOptions
+fullInsertOptions useLedger =
+  InsertOptions
+    { ioInOut = True
+    , ioUseLedger = useLedger
+    , ioShelley = True
+    , ioRewards = True
+    , ioMultiAssets = True
+    , ioMetadata = True
+    , ioKeepMetadataNames = Strict.Nothing
+    , ioPlutusExtra = True
+    , ioOffChainPoolData = True
+    , ioGov = True
+    }
 
 onlyUTxOInsertOptions :: InsertOptions
 onlyUTxOInsertOptions =
@@ -221,7 +233,19 @@ onlyGovInsertOptions :: Bool -> InsertOptions
 onlyGovInsertOptions useLedger = (disableAllInsertOptions useLedger) {ioGov = True}
 
 disableAllInsertOptions :: Bool -> InsertOptions
-disableAllInsertOptions useLedger = InsertOptions False useLedger False False False False Strict.Nothing False False False
+disableAllInsertOptions useLedger =
+  InsertOptions
+    { ioInOut = False
+    , ioUseLedger = useLedger
+    , ioShelley = False
+    , ioRewards = False
+    , ioMultiAssets = False
+    , ioMetadata = False
+    , ioKeepMetadataNames = Strict.Nothing
+    , ioPlutusExtra = False
+    , ioOffChainPoolData = False
+    , ioGov = False
+    }
 
 initEpochState :: EpochState
 initEpochState =
