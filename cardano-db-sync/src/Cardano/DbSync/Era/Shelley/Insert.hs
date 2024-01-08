@@ -197,11 +197,11 @@ insertShelleyBlock syncEnv shouldLog withinTwoMins withinHalfHour blk details is
 
     insertStakeSlice syncEnv $ apStakeSlice applyResult
 
-    when (ioGov iopts)
+    when (ioGov iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
       . lift
       $ insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
 
-    when (ioOffChainPoolData iopts)
+    when (ioOffChainPoolData iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
       . lift
       $ insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
   where

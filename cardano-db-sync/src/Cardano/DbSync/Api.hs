@@ -376,10 +376,10 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   bts <- getBootstrapInProgress trce (enpBootstrap syncNP) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
-  opwq <- newTBQueueIO 100
-  oprq <- newTBQueueIO 100
-  oawq <- newTBQueueIO 100
-  oarq <- newTBQueueIO 100
+  opwq <- newTBQueueIO 1000
+  oprq <- newTBQueueIO 1000
+  oawq <- newTBQueueIO 1000
+  oarq <- newTBQueueIO 1000
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
