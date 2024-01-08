@@ -46,6 +46,7 @@ unitTests iom knownMigrations =
         [ testGroup
             "consumed-tx-out and prune-tx-out"
             [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
+            , test "flag check reset-jsonb" MigrateConsumedPruneTxOut.commandLineArgResetJsonb
             , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback

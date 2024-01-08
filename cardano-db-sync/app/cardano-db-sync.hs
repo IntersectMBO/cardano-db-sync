@@ -105,7 +105,7 @@ pRunDbSyncNode = do
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
-    <*> pSetJsonB
+    <*> pResetJsonb
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -380,16 +380,16 @@ pPruneTxOut =
           \ then it must be always set on following executions of db-sync."
     )
 
-pSetJsonB :: Parser Bool
-pSetJsonB =
+pResetJsonb :: Parser Bool
+pResetJsonb =
   Opt.flag
     False
     True
-    ( Opt.long "set-jsonb"
+    ( Opt.long "reset-jsonb"
         <> Opt.help
           "The database used to have fields that were of the type jsonb \
           \ which slowed performance when inserting. \
-          \ But if you would like them back then this flags needs to be active."
+          \ But if you would like to reset them, then this flags needs to be active."
     )
 
 bootstrap :: Parser Bool

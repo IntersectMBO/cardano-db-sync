@@ -48,7 +48,7 @@ queryUpdateListTxOutConsumedByTxId ls = do
 
 queryTxConsumedColumnExists :: MonadIO m => ReaderT SqlBackend m Bool
 queryTxConsumedColumnExists = do
-  columntExists :: [Text] <-
+  columnExists :: [Text] <-
     fmap unSingle
       <$> rawSql
         ( mconcat
@@ -57,7 +57,23 @@ queryTxConsumedColumnExists = do
             ]
         )
         []
-  pure (not $ null columntExists)
+  pure (not $ null columnExists)
+
+queryJsonbColumnTypeExists :: MonadIO m => ReaderT SqlBackend m Bool
+queryJsonbColumnTypeExists = do
+  columnTypeExists :: [Bool] <-
+    fmap unSingle
+      <$> rawSql
+        ( mconcat
+            [ "SELECT column_name, data_type = 'jsonb' AS is_jsonb_type, my_column IS NOT NULL AS has_jsonb_value "
+            , "FROM information_schema.columns "
+            , "WHERE table_name='tx_metadata' and column_name='json'"
+            ]
+        )
+        []
+  case columnTypeExists of
+    [isJsonbTypeExists] -> if isJsonbTypeExists then pure True else pure False
+    _ -> pure False
 
 -- | This is a count of the null consumed_by_tx_id
 queryTxOutConsumedNullCount :: MonadIO m => ReaderT SqlBackend m Word64

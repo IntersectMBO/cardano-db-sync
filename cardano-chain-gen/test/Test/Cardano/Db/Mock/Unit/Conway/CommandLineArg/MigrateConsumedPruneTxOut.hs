@@ -3,6 +3,7 @@
 
 module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut (
   commandLineArgCheck,
+  commandLineArgResetJsonb,
   basicPrune,
   pruneWithSimpleRollback,
   pruneWithFullTxRollback,
@@ -69,6 +70,24 @@ commandLineArgCheck ioManager names = do
         , claPruneTxOut = False
         }
     testLabel = "conwayCLASimple"
+
+commandLineArgResetJsonb :: IOManager -> [(Text, Text)] -> Assertion
+commandLineArgResetJsonb =
+  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    void $
+      withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+
+    startDBSync dbSync
+    assertBlockNoBackoff dbSync 1
+    assertEqQuery
+      dbSync
+      DB.queryJsonbColumnTypeExists
+      True
+      "missing consumed_by_tx_id column when flag --consumed-tx-out active"
+  where
+    cmdLineArgs = initCommandLineArgs {claResetJsonb = True}
+    testLabel = "conwayCLAResetJsonb"
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune =

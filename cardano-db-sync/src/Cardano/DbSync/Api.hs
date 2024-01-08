@@ -25,7 +25,7 @@ module Cardano.DbSync.Api (
   runIndexMigrations,
   initPruneConsumeMigration,
   runExtraMigrationsMaybe,
-  runResetJsonB,
+  runResetJsonb,
   getSafeBlockNoDiff,
   getPruneInterval,
   whenConsumeOrPruneTxOut,
@@ -174,8 +174,8 @@ runExtraMigrationsMaybe syncEnv = do
       (getSafeBlockNoDiff syncEnv)
       pcm
 
-runResetJsonB :: SyncEnv -> IO ()
-runResetJsonB syncEnv =
+runResetJsonb :: SyncEnv -> IO ()
+runResetJsonb syncEnv =
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.resetJsonbMigration
 

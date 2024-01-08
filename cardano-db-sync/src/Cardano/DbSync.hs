@@ -182,8 +182,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 ranMigrations
                 runMigrationFnc
 
-          -- if user wants to reset fiels in db that have the type jsonb
-          when (enpSetJsonB syncNodeParams) $ liftIO $ runResetJsonB syncEnv
+          -- if user wants to reset columns in db that used to have the type jsonb
+          when (enpResetJsonb syncNodeParams) $ liftIO $ runResetJsonb syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
