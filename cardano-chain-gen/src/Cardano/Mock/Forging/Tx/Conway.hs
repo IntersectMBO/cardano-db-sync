@@ -32,6 +32,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkRegTxCert,
   mkUnRegTxCert,
   mkDelegTxCert,
+  Babbage.mkParamUpdateTx,
   mkFullTx,
   mkScriptMint,
   Babbage.mkScriptInp,

@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -44,6 +45,7 @@ module Cardano.Mock.Forging.Tx.Babbage (
   mkWitnesses,
   mkUTxOBabbage,
   mkUTxOCollBabbage,
+  mkParamUpdateTx,
   mkFullTx,
   emptyTxBody,
   emptyTx,
@@ -90,6 +92,7 @@ import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
+import Prelude hiding (map)
 
 type BabbageUTxOIndex = UTxOIndex StandardBabbage
 
@@ -514,6 +517,37 @@ emptyTx =
     , isValid = IsValid True
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
+
+mkParamUpdateTx :: Either ForgingError (AlonzoTx StandardBabbage)
+mkParamUpdateTx = Right (mkSimpleTx True txBody)
+  where
+    txBody =
+      BabbageTxBody
+        { btbInputs = mempty
+        , btbCollateral = mempty
+        , btbReferenceInputs = mempty
+        , btbOutputs = mempty
+        , btbCollateralReturn = SNothing
+        , btbTotalCollateral = SNothing
+        , btbCerts = mempty
+        , btbWithdrawals = Withdrawals mempty
+        , btbTxFee = Coin 0
+        , btbValidityInterval = ValidityInterval SNothing SNothing
+        , btbUpdate = SJust $ Update update (EpochNo 1)
+        , btbReqSignerHashes = mempty
+        , btbMint = mempty
+        , btbScriptIntegrityHash = SNothing
+        , btbAuxDataHash = SNothing
+        , btbTxNetworkId = SJust Testnet
+        }
+    update =
+      ProposedPPUpdates $
+        Map.fromList $
+          map (,paramsUpdate) registeredShelleyGenesisKeys
+    paramsUpdate =
+      Core.emptyPParamsUpdate
+        & ppuProtocolVersionL
+          .~ SJust (ProtVer (natVersion @9) 0)
 
 mkFullTx ::
   Int ->

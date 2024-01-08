@@ -2,7 +2,7 @@
     "maxLovelaceSupply": 60000000,
     "securityParam": 10,
     "slotsPerKESPeriod": 129600,
-    "updateQuorum": 5,
+    "updateQuorum": 2,
     "activeSlotsCoeff": 0.2,
     "protocolParams": {
         "minUTxOValue": 0,
@@ -43,7 +43,16 @@
     },
     "networkId": "Testnet",
     "maxKESEvolutions": 60,
-    "genDelegs": { },
+    "genDelegs": {
+        "30c3083efd794227fde2351a04500349d1b467556c30e35d6794a501": {
+            "delegate": "3af50e522694318e8856d34021140817aa21d47ff62a4d0ddcba1924",
+            "vrf": "2846ed605f6629976ec92e9e65140c1cb3a95c563c996592c926a2ae7e5a461f"
+        },
+        "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6": {
+            "delegate": "1683652d05e83e25eb648a9543db33cf8ff1f7a2af9129d3a901dd4a",
+            "vrf": "4df7c5a5b30469756bd09db60cbe9b0cf1b2447e0c41122d130768c179b7d166"
+        }
+    },
     "slotLength": 1,
     "systemStart": "2021-11-18T20:22:02Z",
     "epochLength": 500,

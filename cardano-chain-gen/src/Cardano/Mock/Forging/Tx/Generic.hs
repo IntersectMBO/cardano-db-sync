@@ -22,6 +22,8 @@ module Cardano.Mock.Forging.Tx.Generic (
   unregisteredAddresses,
   unregisteredStakeCredentials,
   unregisteredPools,
+  registeredByronGenesisKeys,
+  registeredShelleyGenesisKeys,
   consPoolParams,
   getPoolStakeCreds,
 ) where
@@ -247,6 +249,17 @@ unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
+  ]
+
+registeredByronGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+registeredByronGenesisKeys =
+  [ KeyHash "1a3e49767796fd99b057ad54db3310fd640806fcb0927399bbca7b43"
+  ]
+
+registeredShelleyGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+registeredShelleyGenesisKeys =
+  [ KeyHash "30c3083efd794227fde2351a04500349d1b467556c30e35d6794a501"
+  , KeyHash "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6"
   ]
 
 createStakeCredentials :: Int -> [StakeCredential StandardCrypto]

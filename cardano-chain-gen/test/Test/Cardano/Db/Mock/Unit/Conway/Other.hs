@@ -1,5 +1,10 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Other (
   -- * Different configs
@@ -16,25 +21,47 @@ module Test.Cardano.Db.Mock.Unit.Conway.Other (
   -- * Hard fork
   forkFixedEpoch,
   rollbackFork,
+  forkParam,
 ) where
 
+import Cardano.Db (
+  EntityField (
+    EpochParamEpochNo,
+    EpochParamProtocolMajor,
+    ParamProposalEpochNo,
+    ParamProposalProtocolMajor
+  ),
+  EpochParam (),
+  ParamProposal (),
+ )
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
-import Cardano.Ledger.BaseTypes (EpochNo ())
+import Cardano.Ledger.BaseTypes (EpochNo (..))
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
 import Cardano.Ledger.Core (PoolCert (..))
 import Cardano.Ledger.Credential (StakeCredential ())
 import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Ledger.Keys (KeyHash (), KeyRole (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
-import Cardano.Mock.Forging.Interpreter (forgeNext)
+import Cardano.Mock.Forging.Interpreter (Interpreter (), forgeNext, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude
+import Cardano.Prelude hiding (from)
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.List (last)
+import Database.Esqueleto.Experimental (
+  from,
+  selectOne,
+  table,
+  unValue,
+  val,
+  where_,
+  (==.),
+  (^.),
+ )
+import Database.Persist.Sql (SqlBackend ())
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
@@ -436,3 +463,90 @@ rollbackFork =
   where
     configDir = "config-conway-hf-epoch1"
     testLabel = "conwayRollbackFork"
+
+forkParam :: IOManager -> [(Text, Text)] -> Assertion
+forkParam =
+  withFullConfig configDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with stake credentials
+    void $ Api.registerAllStakeCreds interpreter mockServer
+    -- Protocol params aren't added to the DB until the following epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter mockServer
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (1 + length epoch0)
+    -- Protocol major version should still match config
+    assertEqBackoff
+      dbSync
+      (queryCurrentMajVer interpreter)
+      (Just 7)
+      []
+      "Unexpected protocol major version"
+
+    -- Propose a parameter update
+    void $
+      Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
+        const Babbage.mkParamUpdateTx
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (2 + length epoch0)
+    -- Query protocol param proposals
+    assertEqBackoff
+      dbSync
+      (queryMajVerProposal interpreter)
+      (Just 9)
+      []
+      "Unexpected protocol major version proposal"
+
+    -- The fork will be applied on the first block of the next epoch
+    epoch1 <- Api.fillUntilNextEpoch interpreter mockServer
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1)
+    -- Protocol major version should now be updated
+    assertEqBackoff
+      dbSync
+      (queryCurrentMajVer interpreter)
+      (Just 9)
+      []
+      "Unexpected protocol major version"
+
+    -- Add a simple Conway tx
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync $ 3 + length (epoch0 <> epoch1)
+  where
+    testLabel = "conwayForkParam"
+    configDir = babbageConfigDir
+
+    queryCurrentMajVer ::
+      MonadIO m =>
+      Interpreter ->
+      ReaderT SqlBackend m (Maybe Word16)
+    queryCurrentMajVer interpreter = do
+      -- Look up current epoch from ledger
+      EpochNo currentEpoch <- liftIO $ getCurrentEpoch interpreter
+
+      -- Query epoch params from database
+      res <- selectOne $ do
+        param <- from $ table @EpochParam
+        where_ (param ^. EpochParamEpochNo ==. val currentEpoch)
+        pure (param ^. EpochParamProtocolMajor)
+
+      pure $ unValue <$> res
+
+    queryMajVerProposal ::
+      MonadIO m =>
+      Interpreter ->
+      ReaderT SqlBackend m (Maybe Word16)
+    queryMajVerProposal interpreter = do
+      -- Look up current epoch from ledger
+      EpochNo currentEpoch <- liftIO $ getCurrentEpoch interpreter
+
+      -- Query proposals from database
+      res <- selectOne $ do
+        prop <- from $ table @ParamProposal
+        where_ $ prop ^. ParamProposalEpochNo ==. val (Just currentEpoch)
+        pure (prop ^. ParamProposalProtocolMajor)
+
+      pure $ join (unValue <$> res)
