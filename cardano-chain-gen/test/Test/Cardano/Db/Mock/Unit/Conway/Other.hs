@@ -24,16 +24,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Other (
   forkParam,
 ) where
 
-import Cardano.Db (
-  EntityField (
-    EpochParamEpochNo,
-    EpochParamProtocolMajor,
-    ParamProposalEpochNo,
-    ParamProposalProtocolMajor
-  ),
-  EpochParam (),
-  ParamProposal (),
- )
+import qualified Cardano.Db as Db
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.Ledger.BaseTypes (EpochNo (..))
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
@@ -51,17 +42,7 @@ import Cardano.Prelude hiding (from)
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.List (last)
-import Database.Esqueleto.Experimental (
-  from,
-  selectOne,
-  table,
-  unValue,
-  val,
-  where_,
-  (==.),
-  (^.),
- )
-import Database.Persist.Sql (SqlBackend ())
+import Database.Esqueleto.Experimental
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
@@ -469,12 +450,10 @@ forkParam =
   withFullConfig configDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
-    -- Forge a block with stake credentials
-    void $ Api.registerAllStakeCreds interpreter mockServer
     -- Protocol params aren't added to the DB until the following epoch
     epoch0 <- Api.fillUntilNextEpoch interpreter mockServer
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (1 + length epoch0)
+    assertBlockNoBackoff dbSync (length epoch0)
     -- Protocol major version should still match config
     assertEqBackoff
       dbSync
@@ -488,7 +467,7 @@ forkParam =
       Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         const Babbage.mkParamUpdateTx
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (2 + length epoch0)
+    assertBlockNoBackoff dbSync (1 + length epoch0)
     -- Query protocol param proposals
     assertEqBackoff
       dbSync
@@ -500,7 +479,7 @@ forkParam =
     -- The fork will be applied on the first block of the next epoch
     epoch1 <- Api.fillUntilNextEpoch interpreter mockServer
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1)
+    assertBlockNoBackoff dbSync $ 1 + length (epoch0 <> epoch1)
     -- Protocol major version should now be updated
     assertEqBackoff
       dbSync
@@ -514,7 +493,7 @@ forkParam =
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync $ 3 + length (epoch0 <> epoch1)
+    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1)
   where
     testLabel = "conwayForkParam"
     configDir = babbageConfigDir
@@ -529,9 +508,9 @@ forkParam =
 
       -- Query epoch params from database
       res <- selectOne $ do
-        param <- from $ table @EpochParam
-        where_ (param ^. EpochParamEpochNo ==. val currentEpoch)
-        pure (param ^. EpochParamProtocolMajor)
+        param <- from $ table @Db.EpochParam
+        where_ (param ^. Db.EpochParamEpochNo ==. val currentEpoch)
+        pure (param ^. Db.EpochParamProtocolMajor)
 
       pure $ unValue <$> res
 
@@ -545,8 +524,8 @@ forkParam =
 
       -- Query proposals from database
       res <- selectOne $ do
-        prop <- from $ table @ParamProposal
-        where_ $ prop ^. ParamProposalEpochNo ==. val (Just currentEpoch)
-        pure (prop ^. ParamProposalProtocolMajor)
+        prop <- from $ table @Db.ParamProposal
+        where_ $ prop ^. Db.ParamProposalEpochNo ==. val (Just currentEpoch)
+        pure (prop ^. Db.ParamProposalProtocolMajor)
 
       pure $ join (unValue <$> res)
