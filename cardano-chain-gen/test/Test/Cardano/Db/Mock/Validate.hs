@@ -42,6 +42,7 @@ module Test.Cardano.Db.Mock.Validate (
 
 import Cardano.Db
 import qualified Cardano.Db as DB
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
@@ -197,8 +198,8 @@ assertAddrValues ::
   IO ()
 assertAddrValues env ix expected sta = do
   addr <- assertRight $ resolveAddress ix sta
-  let addrBs = Ledger.serialiseAddr addr
-      q = queryAddressOutputs addrBs
+  let address = Generic.renderAddress addr
+      q = queryAddressOutputs address
   assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a

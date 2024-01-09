@@ -11,7 +11,6 @@ module Cardano.DbSync.Era.Byron.Genesis (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Binary as Binary
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
@@ -209,7 +208,6 @@ insertTxOuts hasConsumed disInOut blkId (address, value) = do
             { DB.txOutTxId = txId
             , DB.txOutIndex = 0
             , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-            , DB.txOutAddressRaw = Binary.serialize' address
             , DB.txOutAddressHasScript = False
             , DB.txOutPaymentCred = Nothing
             , DB.txOutStakeAddressId = Nothing

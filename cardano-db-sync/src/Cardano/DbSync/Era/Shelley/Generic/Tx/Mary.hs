@@ -11,13 +11,11 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval, getScripts)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.TxBody
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import Cardano.Prelude
-import qualified Data.ByteString.Short as SBS
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardMary)
 
@@ -63,14 +61,12 @@ fromMaryTx (blkIndex, tx) =
       TxOut
         { txOutIndex = index
         , txOutAddress = txOut ^. Core.addrTxOutL
-        , txOutAddressRaw = SBS.fromShort bs
         , txOutAdaValue = ada
         , txOutMaValue = maMap
         , txOutScript = Nothing
         , txOutDatum = NoDatum -- Mary does not support plutus data
         }
       where
-        bs = Ledger.unCompactAddr $ txOut ^. Core.compactAddrTxOutL
         MaryValue ada (MultiAsset maMap) = txOut ^. Core.valueTxOutL
 
     (invBefore, invAfter) = getInterval txBody

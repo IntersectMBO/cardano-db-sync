@@ -12,11 +12,6 @@ module Cardano.DbSync.Era.Byron.Insert (
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
 import Cardano.Binary (serialize')
-import qualified Cardano.Binary as Binary
-
--- Import all 'cardano-ledger' functions and data types qualified so they do not
--- clash with the Cardano.Db functions and data types which are also imported
--- qualified.
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.UTxO as Byron
@@ -327,7 +322,6 @@ insertTxOut _tracer hasConsumed bootStrap txId index txout =
       { DB.txOutTxId = txId
       , DB.txOutIndex = fromIntegral index
       , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-      , DB.txOutAddressRaw = Binary.serialize' (Byron.txOutAddress txout)
       , DB.txOutAddressHasScript = False
       , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
       , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.

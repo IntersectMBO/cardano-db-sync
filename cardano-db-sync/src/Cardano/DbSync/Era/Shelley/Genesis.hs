@@ -21,7 +21,6 @@ import Cardano.DbSync.Era.Shelley.Insert
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
-import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (KeyHashObj))
@@ -247,7 +246,6 @@ insertTxOuts trce hasConsumed disInOut blkId (ShelleyTx.TxIn txInId _, txOut) = 
       { DB.txOutTxId = txId
       , DB.txOutIndex = 0
       , DB.txOutAddress = Generic.renderAddress addr
-      , DB.txOutAddressRaw = Ledger.serialiseAddr addr
       , DB.txOutAddressHasScript = hasScript
       , DB.txOutPaymentCred = Generic.maybePaymentCred addr
       , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
@@ -258,7 +256,6 @@ insertTxOuts trce hasConsumed disInOut blkId (ShelleyTx.TxIn txInId _, txOut) = 
       }
   where
     addr = txOut ^. Core.addrTxOutL
-
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
 -- Insert pools and delegations coming from Genesis.

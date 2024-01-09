@@ -32,7 +32,6 @@ import Cardano.DbSync.Era.Shelley.Generic.Script (fromMultiSig)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (TxIx (..), strictMaybeToMaybe)
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
@@ -45,7 +44,6 @@ import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
@@ -112,14 +110,11 @@ mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBody
       TxOut
         { txOutIndex = index
         , txOutAddress = txOut ^. Core.addrTxOutL
-        , txOutAddressRaw = SBS.fromShort bs
         , txOutAdaValue = txOut ^. Core.valueTxOutL
         , txOutMaValue = mempty -- Shelley does not support multi-assets
         , txOutScript = Nothing
         , txOutDatum = NoDatum -- Shelley does not support plutus data
         }
-      where
-        bs = Ledger.unCompactAddr $ txOut ^. Core.compactAddrTxOutL
 
 fromTxIn :: ShelleyTx.TxIn StandardCrypto -> TxIn
 fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =

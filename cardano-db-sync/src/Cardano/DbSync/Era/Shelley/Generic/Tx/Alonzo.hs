@@ -119,14 +119,12 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
       TxOut
         { txOutIndex = index
         , txOutAddress = txOut ^. Core.addrTxOutL
-        , txOutAddressRaw = SBS.fromShort bs
         , txOutAdaValue = ada
         , txOutMaValue = maMap
         , txOutScript = Nothing
         , txOutDatum = getMaybeDatumHash $ strictMaybeToMaybe mDataHash
         }
       where
-        bs = Ledger.unCompactAddr $ txOut ^. Core.compactAddrTxOutL
         MaryValue ada (MultiAsset maMap) = txOut ^. Core.valueTxOutL
         mDataHash = txOut ^. Alonzo.dataHashTxOutL
 
