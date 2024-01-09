@@ -19,7 +19,6 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
@@ -31,7 +30,6 @@ import qualified Cardano.Ledger.Era as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import Cardano.Prelude
-import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
@@ -123,14 +121,12 @@ fromTxOut index txOut =
   TxOut
     { txOutIndex = index
     , txOutAddress = txOut ^. Core.addrTxOutL
-    , txOutAddressRaw = SBS.fromShort bs
     , txOutAdaValue = ada
     , txOutMaValue = maMap
     , txOutScript = fromScript <$> strictMaybeToMaybe mScript
     , txOutDatum = fromDatum datum
     }
   where
-    bs = Ledger.unCompactAddr $ txOut ^. Core.compactAddrTxOutL
     MaryValue ada (MultiAsset maMap) = txOut ^. Core.valueTxOutL
     datum = txOut ^. Core.datumTxOutL
     mScript = txOut ^. Core.referenceScriptTxOutL

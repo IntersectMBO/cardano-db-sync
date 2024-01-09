@@ -140,7 +140,6 @@ share
     txId                TxId                noreference
     index               Word64              sqltype=txindex
     address             Text
-    addressRaw          ByteString
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
     stakeAddressId      StakeAddressId Maybe noreference
@@ -155,7 +154,6 @@ share
     txId                TxId                noreference     -- This type is the primary key for the 'tx' table.
     index               Word64              sqltype=txindex
     address             Text
-    addressRaw          ByteString
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
     stakeAddressId      StakeAddressId Maybe noreference
@@ -600,7 +598,6 @@ schemaDocs =
       TxOutTxId # "The Tx table index of the transaction that contains this transaction output."
       TxOutIndex # "The index of this transaction output with the transaction."
       TxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
-      TxOutAddressRaw # "The raw binary address."
       TxOutAddressHasScript # "Flag which shows if this address is locked by a script."
       TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
       TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
@@ -614,7 +611,6 @@ schemaDocs =
       CollateralTxOutTxId # "The Tx table index of the transaction that contains this transaction output."
       CollateralTxOutIndex # "The index of this transaction output with the transaction."
       CollateralTxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
-      CollateralTxOutAddressRaw # "The raw binary address."
       CollateralTxOutAddressHasScript # "Flag which shows if this address is locked by a script."
       CollateralTxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
       CollateralTxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."

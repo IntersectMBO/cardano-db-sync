@@ -66,7 +66,6 @@ toExtraTxOut txOut =
     { ExtraCons.txOutTxId = changeKey $ txOutTxId txOut
     , ExtraCons.txOutIndex = txOutIndex txOut
     , ExtraCons.txOutAddress = txOutAddress txOut
-    , ExtraCons.txOutAddressRaw = txOutAddressRaw txOut
     , ExtraCons.txOutAddressHasScript = txOutAddressHasScript txOut
     , ExtraCons.txOutPaymentCred = txOutPaymentCred txOut
     , ExtraCons.txOutStakeAddressId = changeKey <$> txOutStakeAddressId txOut

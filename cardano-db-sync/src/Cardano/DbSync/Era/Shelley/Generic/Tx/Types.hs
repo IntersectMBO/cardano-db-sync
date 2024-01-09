@@ -91,7 +91,6 @@ data TxIn = TxIn
 data TxOut = TxOut
   { txOutIndex :: !Word64
   , txOutAddress :: !(Ledger.Addr StandardCrypto)
-  , txOutAddressRaw :: !ByteString
   , txOutAdaValue :: !Coin
   , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
   , txOutScript :: Maybe TxScript

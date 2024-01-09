@@ -395,7 +395,7 @@ prepareTxOut ::
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
@@ -410,7 +410,6 @@ prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw
           { DB.txOutTxId = txId
           , DB.txOutIndex = index
           , DB.txOutAddress = Generic.renderAddress addr
-          , DB.txOutAddressRaw = addrRaw
           , DB.txOutAddressHasScript = hasScript
           , DB.txOutPaymentCred = Generic.maybePaymentCred addr
           , DB.txOutStakeAddressId = mSaId
@@ -434,7 +433,7 @@ insertCollateralTxOut ::
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
@@ -451,7 +450,6 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
         { DB.collateralTxOutTxId = txId
         , DB.collateralTxOutIndex = index
         , DB.collateralTxOutAddress = Generic.renderAddress addr
-        , DB.collateralTxOutAddressRaw = addrRaw
         , DB.collateralTxOutAddressHasScript = hasScript
         , DB.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
         , DB.collateralTxOutStakeAddressId = mSaId

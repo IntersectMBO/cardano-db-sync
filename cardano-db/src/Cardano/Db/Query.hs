@@ -1192,11 +1192,11 @@ queryAddressBalanceAtSlot addr slotNo = do
   Queries use in tests
 ------------------------}
 
-queryAddressOutputs :: MonadIO m => ByteString -> ReaderT SqlBackend m DbLovelace
+queryAddressOutputs :: MonadIO m => Text -> ReaderT SqlBackend m DbLovelace
 queryAddressOutputs addr = do
   res <- select $ do
     txout <- from $ table @TxOut
-    where_ (txout ^. TxOutAddressRaw ==. val addr)
+    where_ (txout ^. TxOutAddress ==. val addr)
     pure $ sum_ (txout ^. TxOutValue)
   pure $ convert (listToMaybe res)
   where

@@ -100,4 +100,4 @@ testSlotLeader =
 mkTxOut :: BlockId -> TxId -> TxOut
 mkTxOut blkId txId =
   let addr = mkAddressHash blkId txId
-   in TxOut txId 0 (Text.pack addr) (BS.pack addr) False Nothing Nothing (DbLovelace 1000000000) Nothing Nothing Nothing
+   in TxOut txId 0 (Text.pack addr) False Nothing Nothing (DbLovelace 1000000000) Nothing Nothing Nothing
