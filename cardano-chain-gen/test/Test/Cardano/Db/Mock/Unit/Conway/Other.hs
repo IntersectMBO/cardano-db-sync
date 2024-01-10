@@ -4,7 +4,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Other (
   -- * Different configs
@@ -33,16 +32,16 @@ import Cardano.Ledger.Credential (StakeCredential ())
 import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Ledger.Keys (KeyHash (), KeyRole (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
-import Cardano.Mock.Forging.Interpreter (Interpreter (), forgeNext, getCurrentEpoch)
+import Cardano.Mock.Forging.Interpreter (forgeNext, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
 import Cardano.Mock.Forging.Types
+import Cardano.Mock.Query (queryParamProposalFromEpoch, queryVersionMajorFromEpoch)
 import Cardano.Prelude hiding (from)
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.List (last)
-import Database.Esqueleto.Experimental
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
@@ -497,35 +496,9 @@ forkParam =
   where
     testLabel = "conwayForkParam"
     configDir = babbageConfigDir
-
-    queryCurrentMajVer ::
-      MonadIO m =>
-      Interpreter ->
-      ReaderT SqlBackend m (Maybe Word16)
-    queryCurrentMajVer interpreter = do
-      -- Look up current epoch from ledger
-      EpochNo currentEpoch <- liftIO $ getCurrentEpoch interpreter
-
-      -- Query epoch params from database
-      res <- selectOne $ do
-        param <- from $ table @Db.EpochParam
-        where_ (param ^. Db.EpochParamEpochNo ==. val currentEpoch)
-        pure (param ^. Db.EpochParamProtocolMajor)
-
-      pure $ unValue <$> res
-
-    queryMajVerProposal ::
-      MonadIO m =>
-      Interpreter ->
-      ReaderT SqlBackend m (Maybe Word16)
+    queryCurrentMajVer interpreter = queryVersionMajorFromEpoch =<< getEpochNo interpreter
     queryMajVerProposal interpreter = do
-      -- Look up current epoch from ledger
-      EpochNo currentEpoch <- liftIO $ getCurrentEpoch interpreter
-
-      -- Query proposals from database
-      res <- selectOne $ do
-        prop <- from $ table @Db.ParamProposal
-        where_ $ prop ^. Db.ParamProposalEpochNo ==. val (Just currentEpoch)
-        pure (prop ^. Db.ParamProposalProtocolMajor)
-
-      pure $ join (unValue <$> res)
+      epochNo <- getEpochNo interpreter
+      prop <- queryParamProposalFromEpoch epochNo
+      pure (Db.paramProposalProtocolMajor =<< prop)
+    getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
