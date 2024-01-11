@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        compiler-nix-name: [ghc8107, ghc928, ghc962]
+        compiler-nix-name: [ghc810, ghc92, ghc96]
 
     steps:
       - name: Checkout code
@@ -48,7 +48,7 @@ jobs:
       - name: cabal build
         run: cabal build all -j --enable-tests
       - name: postgres init
-        working-directory: 
+        working-directory:
         run: |
           # Set up environment
           PG_DIR="$(mktemp -d)"
