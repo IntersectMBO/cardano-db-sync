@@ -202,6 +202,7 @@ unitTests iom knownMigrations =
         "Hard Fork"
         [ test "fork from Babbage to Conway fixed epoch" Other.forkFixedEpoch
         , test "fork from Babbage to Conway and rollback" Other.rollbackFork
+        , test "fork with protocol change proposal" Other.forkParam
         ]
     ]
   where
