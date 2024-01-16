@@ -200,7 +200,19 @@ getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
 fullInsertOptions :: Bool -> InsertOptions
-fullInsertOptions useLedger = InsertOptions True useLedger True True True True True True True
+fullInsertOptions useLedger =
+  InsertOptions
+    { ioInOut = True
+    , ioUseLedger = useLedger
+    , ioShelley = True
+    , ioRewards = True
+    , ioMultiAssets = True
+    , ioMetadata = True
+    , ioKeepMetadataNames = Strict.Nothing
+    , ioPlutusExtra = True
+    , ioOffChainPoolData = True
+    , ioGov = True
+    }
 
 onlyUTxOInsertOptions :: InsertOptions
 onlyUTxOInsertOptions =
@@ -211,6 +223,7 @@ onlyUTxOInsertOptions =
     , ioRewards = False
     , ioMultiAssets = True
     , ioMetadata = False
+    , ioKeepMetadataNames = Strict.Nothing
     , ioPlutusExtra = False
     , ioOffChainPoolData = False
     , ioGov = False
@@ -220,7 +233,19 @@ onlyGovInsertOptions :: Bool -> InsertOptions
 onlyGovInsertOptions useLedger = (disableAllInsertOptions useLedger) {ioGov = True}
 
 disableAllInsertOptions :: Bool -> InsertOptions
-disableAllInsertOptions useLedger = InsertOptions False useLedger False False False False False False False
+disableAllInsertOptions useLedger =
+  InsertOptions
+    { ioInOut = False
+    , ioUseLedger = useLedger
+    , ioShelley = False
+    , ioRewards = False
+    , ioMultiAssets = False
+    , ioMetadata = False
+    , ioKeepMetadataNames = Strict.Nothing
+    , ioPlutusExtra = False
+    , ioOffChainPoolData = False
+    , ioGov = False
+    }
 
 initEpochState :: EpochState
 initEpochState =

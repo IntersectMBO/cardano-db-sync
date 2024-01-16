@@ -80,7 +80,7 @@ import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
-import Control.Monad.Extra (whenJust)
+import Control.Monad.Extra (mapMaybeM, whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.Aeson as Aeson
@@ -88,6 +88,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Either.Extra (eitherToMaybe)
 import Data.Group (invert)
 import qualified Data.Map.Strict as Map
+import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
@@ -350,6 +351,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           prepareTxMetadata
             tracer
             txId
+            iopts
             (Generic.txMetadata tx)
       mapM_
         (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers)
@@ -1205,28 +1207,44 @@ prepareTxMetadata ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.TxId ->
+  InsertOptions ->
   Maybe (Map Word64 TxMetadataValue) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.TxMetadata]
-prepareTxMetadata tracer txId mmetadata =
+prepareTxMetadata tracer txId inOpts mmetadata = do
   case mmetadata of
     Nothing -> pure []
-    Just metadata -> mapM prepare $ Map.toList metadata
+    Just metadata -> mapMaybeM prepare $ Map.toList metadata
   where
     prepare ::
       (MonadBaseControl IO m, MonadIO m) =>
       (Word64, TxMetadataValue) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxMetadata
+      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
     prepare (key, md) = do
+      case ioKeepMetadataNames inOpts of
+        Strict.Just metadataNames -> do
+          let isMatchingKey = key `elem` metadataNames
+          if isMatchingKey
+            then mkDbTxMetadata (key, md)
+            else pure Nothing
+        -- if we have TxMetadata and keepMetadataNames is Nothing then we want to keep all metadata
+        Strict.Nothing -> mkDbTxMetadata (key, md)
+
+    mkDbTxMetadata ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      (Word64, TxMetadataValue) ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
+    mkDbTxMetadata (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
       mjson <- safeDecodeToJson tracer "prepareTxMetadata" jsonbs
-      pure
-        DB.TxMetadata
-          { DB.txMetadataKey = DbWord64 key
-          , DB.txMetadataJson = mjson
-          , DB.txMetadataBytes = singleKeyCBORMetadata
-          , DB.txMetadataTxId = txId
-          }
+      pure $
+        Just $
+          DB.TxMetadata
+            { DB.txMetadataKey = DbWord64 key
+            , DB.txMetadataJson = mjson
+            , DB.txMetadataBytes = singleKeyCBORMetadata
+            , DB.txMetadataTxId = txId
+            }
 
 insertCostModel ::
   (MonadBaseControl IO m, MonadIO m) =>

@@ -268,6 +268,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpHasShelley = True
       , enpHasMultiAssets = claHasMultiAssets
       , enpHasMetadata = claHasMetadata
+      , enpKeepMetadataNames = []
       , enpHasPlutusExtra = True
       , enpHasGov = True
       , enpHasOffChainPoolData = True

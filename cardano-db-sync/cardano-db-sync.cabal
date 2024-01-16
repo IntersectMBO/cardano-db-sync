@@ -254,6 +254,7 @@ executable cardano-db-sync
                       , cardano-prelude
                       , cardano-slotting
                       , optparse-applicative
+                      , split
                       , text
 
 executable http-get-json-metadata

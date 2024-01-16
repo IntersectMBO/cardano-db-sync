@@ -78,6 +78,7 @@ data InsertOptions = InsertOptions
   , ioRewards :: !Bool
   , ioMultiAssets :: !Bool
   , ioMetadata :: !Bool
+  , ioKeepMetadataNames :: Strict.Maybe [Word64]
   , ioPlutusExtra :: !Bool
   , ioOffChainPoolData :: !Bool
   , ioGov :: !Bool
