@@ -82,7 +82,7 @@ commandLineArgResetJsonb =
     assertBlockNoBackoff dbSync 1
     assertEqQuery
       dbSync
-      DB.queryJsonbColumnTypeExists
+      DB.queryJsonbTypeExists
       True
       "missing consumed_by_tx_id column when flag --consumed-tx-out active"
   where

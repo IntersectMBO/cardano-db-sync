@@ -45,6 +45,7 @@ data SyncEnv = SyncEnv
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envEpochState :: !(StrictTVar IO EpochState)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
+  , envJsonbExists :: !Bool
   , envIndexes :: !(StrictTVar IO Bool)
   , envIsFixed :: !(StrictTVar IO FixesRan)
   , envBootstrap :: !(StrictTVar IO Bool)

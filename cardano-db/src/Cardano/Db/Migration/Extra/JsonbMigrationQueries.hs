@@ -11,7 +11,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 
-import Database.Esqueleto.Experimental (SqlBackend, rawExecute)
+import Database.Esqueleto.Experimental
 import Database.PostgreSQL.Simple (SqlError)
 
 resetJsonbMigration ::
@@ -53,3 +53,26 @@ resetJsonbMigration = do
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DBResetJsonb $ show e)
+
+queryJsonbTypeExists ::
+  MonadIO m =>
+  ReaderT SqlBackend m Bool
+queryJsonbTypeExists = do
+  let tableName = " 'tx_metadata' "
+      columnName = "'json'"
+  isJsonbColumn :: [Bool] <-
+    fmap unSingle
+      <$> rawSql
+        ( mconcat
+            [ "SELECT column_name, data_type::text = 'jsonb' AS is_jsonb_type, my_column IS NOT NULL AS has_jsonb_value "
+            , "FROM information_schema.columns "
+            , "WHERE table_name ="
+            , tableName
+            , "AND column_name ="
+            , columnName
+            ]
+        )
+        []
+  pure $ case isJsonbColumn of
+    [b] -> b
+    _ -> False
