@@ -130,6 +130,7 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Property.Property
                         Test.Cardano.Db.Mock.Unit.Alonzo
+                        Test.Cardano.Db.Mock.Unit.Alonzo.Config
                         Test.Cardano.Db.Mock.Unit.Alonzo.Plutus
                         Test.Cardano.Db.Mock.Unit.Alonzo.PoolAndSmash
                         Test.Cardano.Db.Mock.Unit.Alonzo.Reward
@@ -141,6 +142,7 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled
                         Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex
                         Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut
+                        Test.Cardano.Db.Mock.Unit.Babbage.Config
                         Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference
                         Test.Cardano.Db.Mock.Unit.Babbage.Other
                         Test.Cardano.Db.Mock.Unit.Babbage.Plutus
@@ -187,6 +189,7 @@ test-suite cardano-chain-gen
                       , cardano-strict-containers
                       , containers
                       , contra-tracer
+                      , data-default-class
                       , directory
                       , esqueleto
                       , extra

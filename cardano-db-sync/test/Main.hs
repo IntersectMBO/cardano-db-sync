@@ -1,5 +1,6 @@
 module Main where
 
+import qualified Cardano.DbSync.Config.TypesTest as Types
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest as ScriptData
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptTest as Script
 import qualified Cardano.DbSync.Util.AddressTest as Address
@@ -17,4 +18,5 @@ main =
     , Cbor.tests
     , Script.tests
     , ScriptData.tests
+    , Types.tests
     ]
