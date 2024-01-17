@@ -16,6 +16,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as 
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config as BabConfig
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Other as BabOther
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Plutus as BabPlutus
@@ -30,6 +31,11 @@ unitTests iom knownMigrations =
   testGroup
     "Babbage unit tests"
     [ testGroup
+        "config"
+        [ testCase "default insert config" BabConfig.defaultInsertConfig
+        , testCase "insert config" BabConfig.insertConfig
+        ]
+    , testGroup
         "simple"
         [ test "simple forge blocks" BabSimple.forgeBlocks
         , test "sync one block" BabSimple.addSimple
