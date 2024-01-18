@@ -23,7 +23,7 @@ import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, mkAdaPots)
-import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertPoolDepositRefunds, insertRewards)
+import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertInstantRewards, insertPoolDepositRefunds, insertRewards)
 import Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.EpochStake
@@ -293,7 +293,7 @@ insertLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
-            insertRewards syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
+            insertInstantRewards ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs ->
           unless (Map.null $ Generic.unRewards drs) $ do

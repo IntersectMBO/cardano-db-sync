@@ -21,7 +21,6 @@ module Cardano.Db.Query (
   queryCalcEpochEntry,
   queryCurrentEpochNo,
   queryNormalEpochRewardCount,
-  queryNullPoolRewardExists,
   queryGenesis,
   queryGenesisSupply,
   queryShelleyGenesisSupply,
@@ -428,17 +427,6 @@ queryNormalEpochRewardCount epochNum = do
     where_ (rwd ^. RewardType `in_` valList [RwdMember, RwdLeader])
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
-
-queryNullPoolRewardExists :: MonadIO m => Reward -> ReaderT SqlBackend m Bool
-queryNullPoolRewardExists newRwd = do
-  res <- select $ do
-    rwd <- from $ table @Reward
-    where_ (rwd ^. RewardAddrId ==. val (rewardAddrId newRwd))
-    where_ (rwd ^. RewardType ==. val (rewardType newRwd))
-    where_ (rwd ^. RewardEarnedEpoch ==. val (rewardEarnedEpoch newRwd))
-    limit 1
-    pure (rwd ^. RewardId)
-  pure $ not (null res)
 
 queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
 queryGenesis = do

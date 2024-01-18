@@ -22,7 +22,6 @@ import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import qualified Data.Strict.Maybe as Strict
 import Database.Esqueleto.Experimental (
   SqlBackend,
   delete,
@@ -80,9 +79,7 @@ deleteReward ::
   ReaderT SqlBackend m ()
 deleteReward nw cache epochNo (cred, rwd) = do
   mAddrId <- queryStakeAddrWithCache cache DontCacheNew nw cred
-  eiPoolId <- case Generic.rewardPool rwd of
-    Strict.Nothing -> pure $ Left $ Db.DbLookupMessage "deleteReward.queryPoolKeyWithCache"
-    Strict.Just poolHash -> queryPoolKeyWithCache cache DontCacheNew poolHash
+  eiPoolId <- queryPoolKeyWithCache cache DontCacheNew (Generic.rewardPool rwd)
   case (mAddrId, eiPoolId) of
     (Right addrId, Right poolId) -> do
       delete $ do
@@ -90,7 +87,7 @@ deleteReward nw cache epochNo (cred, rwd) = do
         where_ (rwdDb ^. Db.RewardAddrId ==. val addrId)
         where_ (rwdDb ^. Db.RewardType ==. val (Generic.rewardSource rwd))
         where_ (rwdDb ^. Db.RewardSpendableEpoch ==. val (unEpochNo epochNo))
-        where_ (rwdDb ^. Db.RewardPoolId ==. val (Just poolId))
+        where_ (rwdDb ^. Db.RewardPoolId ==. val poolId)
     _ -> pure ()
 
 deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
