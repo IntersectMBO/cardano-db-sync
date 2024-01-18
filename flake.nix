@@ -146,14 +146,18 @@
             echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
           '';
 
-          project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, ... }: rec {
+          project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
-            compiler-nix-name = lib.mkDefault "ghc8107";
+            compiler-nix-name =
+              if system == "x86_64-linux"
+                then lib.mkDefault "ghc810"
+                else lib.mkDefault "ghc963";
             flake.variants =
-              lib.genAttrs
-                ["ghc963"]
-                (compiler-nix-name: { inherit compiler-nix-name; });
+              let
+                compilers = lib.optionals (system == "x86_64-linux") ["ghc963"];
+              in
+                lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
