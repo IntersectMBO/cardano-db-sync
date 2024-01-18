@@ -11,6 +11,7 @@
 
 module Cardano.DbSync.Era.Shelley.Insert.Epoch (
   insertRewards,
+  insertInstantRewards,
   insertPoolDepositRefunds,
   insertStakeSlice,
   sumRewardTotal,
@@ -31,11 +32,9 @@ import qualified Cardano.Ledger.Coin as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
-import Control.Monad.Extra (mapMaybeM)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import qualified Data.Strict.Maybe as Strict
 import Database.Persist.Sql (SqlBackend)
 
 {- HLINT ignore "Use readTVarIO" -}
@@ -117,43 +116,69 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
       ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
       saId <- lift $ queryOrInsertStakeAddress cache CacheNew nw saddr
-      mapMaybeM (prepareReward saId) (Set.toList rset)
+      mapM (prepareReward saId) (Set.toList rset)
 
-    -- For rewards with a null pool, the reward unique key doesn't work.
-    -- So we need to manually check that it's not already in the db.
-    -- This can happen on rollbacks.
     prepareReward ::
       (MonadBaseControl IO m, MonadIO m) =>
       DB.StakeAddressId ->
       Generic.Reward ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.Reward)
+      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.Reward
     prepareReward saId rwd = do
-      mPool <- queryPool (Generic.rewardPool rwd)
-      let rwdDb =
-            DB.Reward
-              { DB.rewardAddrId = saId
-              , DB.rewardType = Generic.rewardSource rwd
-              , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-              , DB.rewardEarnedEpoch = unEpochNo earnedEpoch
-              , DB.rewardSpendableEpoch = unEpochNo spendableEpoch
-              , DB.rewardPoolId = mPool
-              }
-      case DB.rewardPoolId rwdDb of
-        Just _ -> pure $ Just rwdDb
-        Nothing -> do
-          exists <- lift $ DB.queryNullPoolRewardExists rwdDb
-          if exists then pure Nothing else pure (Just rwdDb)
+      poolId <- queryPool (Generic.rewardPool rwd)
+      pure $
+        DB.Reward
+          { DB.rewardAddrId = saId
+          , DB.rewardType = Generic.rewardSource rwd
+          , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
+          , DB.rewardEarnedEpoch = unEpochNo earnedEpoch
+          , DB.rewardSpendableEpoch = unEpochNo spendableEpoch
+          , DB.rewardPoolId = poolId
+          }
 
     queryPool ::
       (MonadBaseControl IO m, MonadIO m) =>
-      Strict.Maybe PoolKeyHash ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.PoolHashId)
-    queryPool Strict.Nothing = pure Nothing
-    queryPool (Strict.Just poolHash) =
-      Just <$> lift (queryPoolKeyOrInsert "insertRewards" trce cache CacheNew (ioShelley iopts) poolHash)
+      PoolKeyHash ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolHashId
+    queryPool poolHash =
+      lift (queryPoolKeyOrInsert "insertRewards" trce cache CacheNew (ioShelley iopts) poolHash)
 
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
+
+insertInstantRewards ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Network ->
+  EpochNo ->
+  EpochNo ->
+  Cache ->
+  [(StakeCred, Set Generic.InstantReward)] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertInstantRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
+  dbRewards <- concatMapM mkRewards rewardsChunk
+  let chunckDbRewards = splittRecordsEvery 100000 dbRewards
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance
+  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyInstantRewards rws
+  where
+    mkRewards ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      (StakeCred, Set Generic.InstantReward) ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.InstantReward]
+    mkRewards (saddr, rset) = do
+      saId <- lift $ queryOrInsertStakeAddress cache CacheNew nw saddr
+      pure $ map (prepareReward saId) (Set.toList rset)
+
+    prepareReward ::
+      DB.StakeAddressId ->
+      Generic.InstantReward ->
+      DB.InstantReward
+    prepareReward saId rwd =
+      DB.InstantReward
+        { DB.instantRewardAddrId = saId
+        , DB.instantRewardType = Generic.irSource rwd
+        , DB.instantRewardAmount = Generic.coinToDbLovelace (Generic.irAmount rwd)
+        , DB.instantRewardEarnedEpoch = unEpochNo earnedEpoch
+        , DB.instantRewardSpendableEpoch = unEpochNo spendableEpoch
+        }
 
 splittRecordsEvery :: Int -> [a] -> [[a]]
 splittRecordsEvery val = go

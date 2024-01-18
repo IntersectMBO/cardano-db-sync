@@ -82,7 +82,7 @@ deleteBlocksBlockId trce blockId = do
           liftIO $
             logWarning
               trce
-              "Failed to find ReverseInex. Deletion may take longer."
+              "Failed to find ReverseIndex. Deletion may take longer."
           pure (minIds, False)
         Just minIdDB -> do
           let minIds' = minIds <> minIdDB

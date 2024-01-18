@@ -18,6 +18,7 @@ module Cardano.Db.Insert (
   insertExtraKeyWitness,
   insertManyEpochStakes,
   insertManyRewards,
+  insertManyInstantRewards,
   insertManyDrepDistr,
   insertManyTxIn,
   insertMaTxMint,
@@ -198,6 +199,12 @@ insertManyRewards ::
   [Reward] ->
   ReaderT SqlBackend m ()
 insertManyRewards = insertManyWithManualUnique "Many Rewards"
+
+insertManyInstantRewards ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  [InstantReward] ->
+  ReaderT SqlBackend m ()
+insertManyInstantRewards = insertManyCheckUnique "Many Instant Rewards"
 
 insertManyDrepDistr ::
   (MonadBaseControl IO m, MonadIO m) =>

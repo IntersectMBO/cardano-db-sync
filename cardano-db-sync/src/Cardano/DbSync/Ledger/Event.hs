@@ -52,7 +52,6 @@ import Data.SOP.BasicFunctors
 import Data.SOP.Constraint
 import Data.SOP.Strict (hcmap, hcollapse)
 import qualified Data.Set as Set
-import qualified Data.Strict.Maybe as Strict
 import Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import Ouroboros.Consensus.Cardano.Block
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (
@@ -64,7 +63,7 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedgerEvent (..)
 import Ouroboros.Consensus.TypeFamilyWrappers
 
 data LedgerEvent
-  = LedgerMirDist !(Map StakeCred (Set Generic.Reward))
+  = LedgerMirDist !(Map StakeCred (Set Generic.InstantReward))
   | LedgerPoolReap !EpochNo !Generic.Rewards
   | LedgerIncrementalRewards !EpochNo !Generic.Rewards
   | LedgerDeltaRewards !EpochNo !Generic.Rewards
@@ -260,30 +259,29 @@ convertPoolDepositRefunds rwds =
     convert (kh, coin) =
       Generic.Reward
         { Generic.rewardSource = RwdDepositRefund
-        , Generic.rewardPool = Strict.Just kh
+        , Generic.rewardPool = kh
         , Generic.rewardAmount = coin
         }
 
 convertMirRewards ::
   Map StakeCred Coin ->
   Map StakeCred Coin ->
-  Map StakeCred (Set Generic.Reward)
+  Map StakeCred (Set Generic.InstantReward)
 convertMirRewards resPay trePay =
   Map.unionWith Set.union (convertResPay resPay) (convertTrePay trePay)
   where
-    convertResPay :: Map StakeCred Coin -> Map StakeCred (Set Generic.Reward)
+    convertResPay :: Map StakeCred Coin -> Map StakeCred (Set Generic.InstantReward)
     convertResPay = Map.map (mkPayment RwdReserves)
 
-    convertTrePay :: Map StakeCred Coin -> Map StakeCred (Set Generic.Reward)
+    convertTrePay :: Map StakeCred Coin -> Map StakeCred (Set Generic.InstantReward)
     convertTrePay = Map.map (mkPayment RwdTreasury)
 
-    mkPayment :: RewardSource -> Coin -> Set Generic.Reward
+    mkPayment :: RewardSource -> Coin -> Set Generic.InstantReward
     mkPayment src coin =
       Set.singleton $
-        Generic.Reward
-          { Generic.rewardSource = src
-          , Generic.rewardPool = Strict.Nothing
-          , Generic.rewardAmount = coin
+        Generic.InstantReward
+          { Generic.irSource = src
+          , Generic.irAmount = coin
           }
 
 convertPoolRewards ::
@@ -298,7 +296,7 @@ convertPoolRewards rmap =
       Generic.Reward
         { Generic.rewardSource = rewardTypeToSource $ Ledger.rewardType sr
         , Generic.rewardAmount = Ledger.rewardAmount sr
-        , Generic.rewardPool = Strict.Just $ Ledger.rewardPool sr
+        , Generic.rewardPool = Ledger.rewardPool sr
         }
 
 --------------------------------------------------------------------------------

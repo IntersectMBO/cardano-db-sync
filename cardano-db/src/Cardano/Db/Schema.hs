@@ -302,12 +302,24 @@ share
     addrId              StakeAddressId      noreference
     type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
-    earnedEpoch         Word64
+    earnedEpoch         Word64 generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
     spendableEpoch      Word64
-    poolId              PoolHashId Maybe    noreference
-    -- Here used to lie a uniqye constraint which would slow down inserts when in syncing mode
+    poolId              PoolHashId          noreference
+    -- Here used to lie a unique constraint which would slow down inserts when in syncing mode
     -- Now the constraint is set manually inside of `applyAndInsertBlockMaybe` once the tip of
     -- the chain has been reached.
+    deriving Show
+
+  InstantReward
+    addrId              StakeAddressId      noreference
+    type                RewardSource        sqltype=rewardtype
+    amount              DbLovelace          sqltype=lovelace
+    earnedEpoch         Word64 generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
+    spendableEpoch      Word64
+    -- Here used to lie a unique constraint which would slow down inserts when in syncing mode
+    -- Now the constraint is set manually inside of `applyAndInsertBlockMaybe` once the tip of
+    -- the chain has been reached.
+    UniqueInstantReward addrId earnedEpoch type
     deriving Show
 
   Withdrawal
@@ -903,19 +915,33 @@ schemaDocs =
       TxMetadataTxId # "The Tx table index of the transaction where this metadata was included."
 
     Reward --^ do
-      "A table for earned rewards. It includes 5 types of rewards. The rewards are inserted incrementally and\
+      "A table for earned staking rewards. After 13.2 release it includes only 3 types of rewards: member, leader and refund, \
+      \ since the other 2 types have moved to a separate table instant_reward.\
+      \ The rewards are inserted incrementally and\
       \ this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries\
       \ may be missing."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
-      RewardType # "The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refunds`"
+      RewardType # "The type of the rewards"
       RewardAmount # "The reward amount (in Lovelace)."
       RewardEarnedEpoch
         # "The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be\
-          \ `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N."
+          \ `N - 2`, `refund` N."
       RewardSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
       RewardPoolId
         # "The PoolHash table index for the pool the stake address was delegated to when\
-          \ the reward is earned or for the pool that there is a deposit refund. Will be NULL for payments from the treasury or the reserves."
+          \ the reward is earned or for the pool that there is a deposit refund."
+
+    InstantReward --^ do
+      "A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury.\
+      \ This table only exists for historic reasons, since instant rewards are depredated after Conway.\
+      \ New in 13.2"
+      InstantRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
+      InstantRewardType # "The type of the rewards."
+      InstantRewardAmount # "The reward amount (in Lovelace)."
+      InstantRewardEarnedEpoch
+        # "The epoch in which the reward was earned. For rewards spendable in epoch `N`, this will be\
+          \ `N - 1`."
+      InstantRewardSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."
