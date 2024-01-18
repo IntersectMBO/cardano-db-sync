@@ -44,10 +44,15 @@ package cryptonite
   -- generation is dubious. Set the flag so we use /dev/urandom by default.
   flags: -support_rdrand
 
+-- Do not depend on C++ for slightly faster utf8 parsing.
+package text
+  flags: -simdutf
+
 -- concurrent-output is incompatible with our haskell.nix version due to
 -- arch(wasm32).
 -- TODO[sgillespie]: Upgrade haskell.nix
-constraints: concurrent-output < 1.10.19
+constraints:
+  , concurrent-output < 1.10.19
 
 -- ---------------------------------------------------------
 -- Enable tests
