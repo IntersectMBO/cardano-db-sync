@@ -1,71 +1,6 @@
 # Revision history for cardano-db-sync
 
-## Sancho changelog
-`sancho-a-b-c` tags in db-sync are a series of incremental integration of conway feautures. These tags can follow the
-sanchonet https://book.world.dev.cardano.org/environments.html#sanchonet-testnet.
-Their enumeration has the following meaning:<br>
-a: schema changes<br>
-b: compatible with a respinned sanchonet or node<br>
-c: minor changes or fixes<br>
-
-It is advised to resync from genesis when using a new version a or b.
-
-Some useful links (adjust the numbers to the correct tag):
-
-- Changelog: https://github.com/IntersectMBO/cardano-db-sync/blob/sancho-2-0-0/cardano-db-sync/CHANGELOG.md#13200
-- Schema docs https://github.com/IntersectMBO/cardano-db-sync/blob/sancho-2-0-0/doc/schema.md
-- Postgres migrations https://github.com/IntersectMBO/cardano-db-sync/tree/sancho-2-0-0/schema
-
-In the schema docs, you can search for `13.2` or `Conway` for schema changes from the previous official release.
-
-### sancho-3.0.0
-- Renamed table `governance_action` to `gov_action_proposal`
-- Replaced `new_committee.quorum` to `new_committee.quorum_nominator` and `new_committee.quorum_denominator`
-- `always_abstain` and `always_no_confidence` `drep_hash` entries now have a null `raw` value and the unique key changed
-- `governance_action.description` now uses the json format
-- Added new offchain capabilites for voting anchor: the `off_chain_vote_data` and `off_chain_vote_fetch_error` are now populated
-- Added a constitution table
-
-### sancho-2.3.0
-- is compatible with node 8.7-pre
-- introduces flag `--only-gov` which allows db-sync to sync only the governance related data.
-- disable swagger in smash server temporarily
-
-### sancho-2.2.0
-- is compatible with node 8.6-pre
-- `governance_action.ratified_epoch` is now populated
-- `drep_distr.active_until` is now populated
-- Fixed typo `voting_procedure.comittee_voter` to `voting_procedure.committee_voter`
-- Added `committee_de_registration.voting_anchor_id` field
-
-### sancho-2.1.0
-- Fixed an issue with the size of Committee hash
-
-### sancho-2.0.1
-- Workaround an issue where delegation could target unregistered pools
-
-### sancho-2.0.0
-- is compatible with node 8.5-pre
-- adds the governance epoch param group in table `epoch_param` and their updates through governance proposal in
-`param_proposal`
-- adds a new field `governance_action.expiration` for the expected expiration of an action.
-- populates the `drep_distr` table and `governance.enacted_epoch` that used to remain empty.
-- fixes an issue with duplicated entries in `drep_hash` and `voting_anchor`.
-- merges drep registration, re-registration and de-registration on the same table `drep_registration` for easy use
-- the new field `drep_distr.active_until` is not populated yet.
-- change `new_committee` gov actions represantation.
-
-### sancho-1.1.0
-- is compatible with node-8.3-pre. There are no schema changes over sancho-1-0-0.
-
-### sancho-1.0.0
-The schema is quite close to the [initial design](https://github.com/IntersectMBO/cardano-db-sync/blob/conway-schema-design-13.2/doc/schema.md). You may find some differences: ie the `param_proposals` and `epoch_param` are not extended yet,
-Some tables/fields are created but are not populated yet: `anchor_offline_data`, `anchor_offline_fetch_error` , `drep_distr` , `governance_action.x_epoch` , `delegation_vote.redeemer_id`
-
-### sancho-0.0.0
-It's very early stage and is missing all Conway specific feautures and some Shelley features related to Rewards. Incremental tags will follow.
-
-## 13.2.0.0 - Unreleased
+## 13.2.0.0
 * Uses the cache for the computation of `epoch` table when following
 * `epoch_stake` is now computed earlier, before the epoch is reached
 * Exception handling and concurrency improved.
@@ -78,7 +13,12 @@ It's very early stage and is missing all Conway specific feautures and some Shel
 * References to `offline` for pool metadata are replaced by `offchain`
 * Added a new table `extra_migrations`
 * DBSync no longer does any query to the `tx_out` table during syncing
-* Added flags `--disable-in-out`, `--disable-shelley`, `--disable-gov`, `--only-gov`
+* Added flags `--disable-in-out`, `--disable-shelley`, `--disable-gov`, `--only-gov`, `--keep-tx-metadata`
+* Move MIR from reward to instant_reward. Done with a migration.
+* Remove redundant field `address_raw` of `tx_out` and `collateral_tx_out`
+* Partial Conway integration. You can read more in `doc/schema.md` (tagged as Conway). Also in files
+`schema/cardano-chain-gen/schema/migration-2-0032-20230815.sql` and `schema/cardano-chain-gen/schema/migration-2-0032-20230815.sql`
+for the raw sql migrations.
 
 ## 13.1.1.3
 * Adds compatibility with node-8.0.0 [#1403] and node-8.1.1 [#1455]
