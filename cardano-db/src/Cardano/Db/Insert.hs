@@ -499,7 +499,7 @@ insertManyUnique vtype constraintExists constraintName records = do
         ]
 
     values :: [PersistValue]
-    values = concatMap (map toPersistValue . toPersistFields) records
+    values = concatMap Util.mkInsertValues records
 
     conflictQuery :: Text
     conflictQuery =
