@@ -89,6 +89,7 @@ module Cardano.Db.Query (
   -- queries used only in tests
   queryAddressOutputs,
   queryRewardCount,
+  queryInstantRewardCount,
   queryTxInCount,
   queryEpochCount,
   queryCostModel,
@@ -1196,6 +1197,13 @@ queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
 queryRewardCount = do
   res <- select $ do
     _ <- from $ table @Reward
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+queryInstantRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryInstantRewardCount = do
+  res <- select $ do
+    _ <- from $ table @InstantReward
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
