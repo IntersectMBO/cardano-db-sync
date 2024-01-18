@@ -52,7 +52,7 @@ import Test.Cardano.Db.Mock.UnifiedApi (
   withAlonzoFindLeaderAndSubmit,
   withAlonzoFindLeaderAndSubmitTx,
  )
-import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertRewardCount, assertRewardCounts)
+import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertInstantRewardCount, assertRewardCount, assertRewardCounts)
 import Test.Tasty.HUnit (Assertion)
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
@@ -481,6 +481,6 @@ singleMIRCertMultiOut =
     b <- fillUntilNextEpoch interpreter mockServer
 
     assertBlockNoBackoff dbSync (2 + length a + length b)
-    assertRewardCount dbSync 4
+    assertInstantRewardCount dbSync 4
   where
     testLabel = "singleMIRCertMultiOut-alonzo"

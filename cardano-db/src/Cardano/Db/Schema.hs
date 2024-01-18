@@ -316,9 +316,6 @@ share
     amount              DbLovelace          sqltype=lovelace
     earnedEpoch         Word64 generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
     spendableEpoch      Word64
-    -- Here used to lie a unique constraint which would slow down inserts when in syncing mode
-    -- Now the constraint is set manually inside of `applyAndInsertBlockMaybe` once the tip of
-    -- the chain has been reached.
     UniqueInstantReward addrId earnedEpoch type
     deriving Show
 
