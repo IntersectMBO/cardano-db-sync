@@ -235,6 +235,7 @@ pKeepTxMetadata =
   Opt.option
     (parseCommaSeparated <$> Opt.str)
     ( Opt.long "keep-tx-metadata"
+        <> Opt.value []
         <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
     )
   where
