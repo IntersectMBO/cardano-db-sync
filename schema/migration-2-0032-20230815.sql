@@ -25,7 +25,7 @@ BEGIN
     EXECUTE 'ALTER TABLE "new_committee" ADD COLUMN "deleted_members" VARCHAR NOT NULL' ;
     EXECUTE 'ALTER TABLE "new_committee" ADD COLUMN "added_members" VARCHAR NOT NULL' ;
     EXECUTE 'ALTER TABLE "new_committee" DROP COLUMN "members"' ;
-    EXECUTE 'ALTER TABLE "new_committee" ADD COLUMN "quorum_nominator" INT8 NOT NULL' ;
+    EXECUTE 'ALTER TABLE "new_committee" ADD COLUMN "quorum_numerator" INT8 NOT NULL' ;
     EXECUTE 'ALTER TABLE "new_committee" ADD COLUMN "quorum_denominator" INT8 NOT NULL' ;
     EXECUTE 'ALTER TABLE "new_committee" DROP COLUMN "quorum"' ;
     EXECUTE 'CREATe TABLE "voting_procedure"("id" SERIAL8 PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" INT4 NOT NULL,"gov_action_proposal_id" INT8 NOT NULL,"voter_role" voterrole NOT NULL,"committee_voter" BYTEA NULL,"drep_voter" INT8 NULL,"pool_voter" INT8 NULL,"vote" vote NOT NULL,"voting_anchor_id" INT8 NULL)' ;

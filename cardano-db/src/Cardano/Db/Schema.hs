@@ -609,7 +609,7 @@ share
 
   NewCommittee
     govActionProposalId  GovActionProposalId  noreference
-    quorumNominator     Word64
+    quorumNumerator     Word64
     quorumDenominator   Word64
     deletedMembers      Text
     addedMembers        Text
@@ -1248,7 +1248,7 @@ schemaDocs =
     NewCommittee --^ do
       "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
       NewCommitteeGovActionProposalId # "The GovActionProposal table index for this new committee."
-      NewCommitteeQuorumNominator # "The proposed quorum nominator."
+      NewCommitteeQuorumNumerator # "The proposed quorum nominator."
       NewCommitteeQuorumDenominator # "The proposed quorum denominator."
       NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
       NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
