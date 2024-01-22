@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 26 THEN
+  IF next_version = 27 THEN
     EXECUTE 'CREATe TABLE "epoch_stake_progress"("id" SERIAL8  PRIMARY KEY UNIQUE,"epoch_no" word31type NOT NULL,"completed" BOOLEAN NOT NULL)' ;
     EXECUTE 'ALTER TABLE "epoch_stake_progress" ADD CONSTRAINT "unique_epoch_stake_progress" UNIQUE("epoch_no")' ;
     EXECUTE 'CREATe TABLE "extra_migrations"("id" SERIAL8  PRIMARY KEY UNIQUE,"token" VARCHAR NOT NULL,"description" VARCHAR NULL)' ;

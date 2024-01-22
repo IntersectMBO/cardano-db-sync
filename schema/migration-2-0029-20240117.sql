@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 38 THEN
+  IF next_version = 29 THEN
     EXECUTE 'ALTER TABLE "instant_reward" ALTER COLUMN "id" SET NOT NULL' ;
     EXECUTE 'ALTER TABLE "instant_reward" DROP COLUMN id';
     EXECUTE 'ALTER TABLE "instant_reward" ALTER COLUMN "addr_id" SET NOT NULL' ;

@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 36 THEN
+  IF next_version = 31 THEN
     EXECUTE 'ALTER TABLE "tx_out" DROP COLUMN "address_raw"' ;
 
     EXECUTE 'ALTER TABLE "collateral_tx_out" DROP COLUMN "address_raw"' ;
