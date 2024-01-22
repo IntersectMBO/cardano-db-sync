@@ -18,8 +18,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        compiler-nix-name: [ghc810, ghc92, ghc96]
+        os: [ubuntu-latest]
+        compiler-nix-name: [ghc810, ghc96]
+        include:
+          # We want a single job, because macOS runners are scarce.
+          - os: macos-latest
+            compiler-nix-name: ghc96
 
     steps:
       - name: Checkout code
