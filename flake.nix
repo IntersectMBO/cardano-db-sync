@@ -36,6 +36,7 @@
         "x86_64-linux"
         "x86_64-darwin"
         "aarch64-darwin"
+        "aarch64-linux"
       ];
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
