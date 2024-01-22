@@ -1541,7 +1541,7 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
       void . DB.insertNewCommittee $
         DB.NewCommittee
           { DB.newCommitteeGovActionProposalId = gaId
-          , DB.newCommitteeQuorumNominator = fromIntegral $ numerator r
+          , DB.newCommitteeQuorumNumerator = fromIntegral $ numerator r
           , DB.newCommitteeQuorumDenominator = fromIntegral $ denominator r
           , DB.newCommitteeDeletedMembers = textShow removed
           , DB.newCommitteeAddedMembers = textShow added
