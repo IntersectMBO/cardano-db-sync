@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 35 THEN
+  IF next_version = 30 THEN
     EXECUTE 'alter domain addr29type drop constraint addr29type_check' ;
     EXECUTE 'alter domain asset32type drop constraint asset32type_check' ;
     EXECUTE 'alter domain hash28type drop constraint hash28type_check' ;

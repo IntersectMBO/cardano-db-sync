@@ -564,13 +564,13 @@ share
   CommitteeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    coldKey             ByteString          sqltype=bytea
-    hotKey              ByteString          sqltype=bytea
+    coldKey             ByteString          sqltype=hash28type
+    hotKey              ByteString          sqltype=hash28type
 
   CommitteeDeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    coldKey             ByteString          sqltype=bytea
+    coldKey             ByteString          sqltype=hash28type
     votingAnchorId      VotingAnchorId Maybe  noreference
 
   DrepRegistration
