@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (
   fromTxOut,
 ) where
 
+import Cardano.DbSync.Config.Types (PlutusConfig)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
@@ -34,7 +35,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 
-fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
+fromBabbageTx :: PlutusConfig -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
 fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx

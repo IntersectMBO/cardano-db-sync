@@ -35,7 +35,10 @@ import Cardano.DbSync.Config.Types (
   ConfigFile (..),
   GenesisFile (..),
   LedgerStateDir (..),
+  MetadataConfig (..),
+  MultiAssetConfig (..),
   NetworkName (..),
+  PlutusConfig (..),
   SocketPath (..),
   SyncCommand (..),
   SyncNodeConfig (..),
@@ -55,7 +58,6 @@ import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
-import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -232,14 +234,6 @@ extractSyncOptions snp aop =
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
-    maybeWhitelistMDNames = whitelistToMaybe (enpWhitelistMetadataNames snp)
-    maybeWhitelistMAPolicies = whitelistToMaybe (enpWhitelistMAPolicies snp)
-
-    whitelistToMaybe wList =
-      if null wList
-        then Strict.Nothing
-        else Strict.Just wList
-
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
       | enpOnlyUTxO snp = onlyUTxOInsertOptions
@@ -251,11 +245,10 @@ extractSyncOptions snp aop =
             , ioUseLedger = useLedger
             , ioShelley = enpHasShelley snp
             , ioRewards = True
-            , ioMultiAssets = enpHasMultiAssets snp
-            , ioMetadata = enpHasMetadata snp
-            , ioWhitelistMetadataNames = maybeWhitelistMDNames
-            , ioWhitelistMAPolicies = maybeWhitelistMAPolicies
-            , ioPlutusExtra = enpHasPlutusExtra snp
+            , -- TODO: cmdv: this is where we plug configs
+              ioMultiAssets = MultiAssetDisable
+            , ioMetadata = MetadataDisable
+            , ioPlutusExtra = PlutusDisable
             , ioOffChainPoolData = enpHasOffChainPoolData snp
             , ioGov = enpHasGov snp
             }

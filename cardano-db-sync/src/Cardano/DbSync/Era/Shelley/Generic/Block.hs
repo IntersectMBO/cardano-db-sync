@@ -25,6 +25,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
+import Cardano.DbSync.Config.Types (PlutusConfig)
 import Cardano.DbSync.Era.Shelley.Generic.Tx
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Bech32 (serialiseVerKeyVrfToBech32)
@@ -120,7 +121,7 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (getTxs blk)
     }
 
-fromAlonzoBlock :: Bool -> Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
+fromAlonzoBlock :: PlutusConfig -> Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
 fromAlonzoBlock iope mprices blk =
   Block
     { blkEra = Alonzo
@@ -137,7 +138,7 @@ fromAlonzoBlock iope mprices blk =
     , blkTxs = map (fromAlonzoTx iope mprices) (getTxs blk)
     }
 
-fromBabbageBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
+fromBabbageBlock :: PlutusConfig -> Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
 fromBabbageBlock iope mprices blk =
   Block
     { blkEra = Babbage
@@ -154,7 +155,7 @@ fromBabbageBlock iope mprices blk =
     , blkTxs = map (fromBabbageTx iope mprices) (getTxs blk)
     }
 
-fromConwayBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardConway -> Block
+fromConwayBlock :: PlutusConfig -> Maybe Prices -> ShelleyBlock PraosStandard StandardConway -> Block
 fromConwayBlock iope mprices blk =
   Block
     { blkEra = Conway

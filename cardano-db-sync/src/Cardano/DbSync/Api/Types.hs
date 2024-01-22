@@ -15,7 +15,7 @@ module Cardano.DbSync.Api.Types (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (Cache)
-import Cardano.DbSync.Config.Types (SyncNodeConfig)
+import Cardano.DbSync.Config.Types (SyncNodeConfig, MetadataConfig, MultiAssetConfig, PlutusConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
@@ -24,7 +24,7 @@ import Cardano.DbSync.Types (
   OffChainVoteResult,
   OffChainVoteWorkQueue,
  )
-import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
+import Cardano.Prelude (Bool (..), Eq, IO, Show, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -78,11 +78,9 @@ data InsertOptions = InsertOptions
   , ioUseLedger :: !Bool
   , ioShelley :: !Bool
   , ioRewards :: !Bool
-  , ioMultiAssets :: !Bool
-  , ioMetadata :: !Bool
-  , ioWhitelistMetadataNames :: Strict.Maybe [Word64]
-  , ioWhitelistMAPolicies :: Strict.Maybe [Word64]
-  , ioPlutusExtra :: !Bool
+  , ioMultiAssets :: !MultiAssetConfig
+  , ioMetadata :: !MetadataConfig
+  , ioPlutusExtra :: !PlutusConfig
   , ioOffChainPoolData :: !Bool
   , ioGov :: !Bool
   }

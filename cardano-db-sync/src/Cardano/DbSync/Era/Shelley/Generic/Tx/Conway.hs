@@ -8,6 +8,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Conway (
   fromConwayTx,
 ) where
 
+import Cardano.DbSync.Config.Types (PlutusConfig)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
@@ -26,7 +27,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardConway)
 
-fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
+fromConwayTx :: PlutusConfig -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx

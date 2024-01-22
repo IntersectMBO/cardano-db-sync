@@ -20,16 +20,19 @@ module Cardano.DbSync.Config (
   readCardanoGenesisConfig,
   readSyncNodeConfig,
   configureLogging,
+  plutusWhitelistCheckTxOut,
 ) where
 
 import qualified Cardano.BM.Configuration.Model as Logging
 import qualified Cardano.BM.Setup as Logging
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.BM.Trace as Logging
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv, SyncOptions (..), envOptions)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPreConfig, readByteStringFromFile)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.Prelude
 import System.FilePath (takeDirectory, (</>))
 
@@ -88,3 +91,28 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
 
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
+
+-- do a whitelist check against a list of TxOut and if one matches we keep them all
+plutusWhitelistCheckTxOut :: SyncEnv -> [Generic.TxOut] -> Bool
+plutusWhitelistCheckTxOut syncEnv txOuts = do
+  let iopts = soptInsertOptions $ envOptions syncEnv
+  case ioPlutusExtra iopts of
+    PlutusEnable -> True
+    PlutusDisable -> False
+    PlutusWhitelistScripts whitelist -> do
+      -- we map over our txOuts and check if txOutAddress OR txOutScript are in the whitelist
+      let whitelistCheck =
+            ( \txOut ->
+                case (Generic.txOutScript txOut, Generic.maybePaymentCred $ Generic.txOutAddress txOut) of
+                  (Just script, _) ->
+                    if Generic.txScriptHash script `elem` whitelist
+                      then Just txOut
+                      else Nothing
+                  (_, Just address) ->
+                    if address `elem` whitelist
+                      then Just txOut
+                      else Nothing
+                  (Nothing, Nothing) -> Nothing
+            )
+              <$> txOuts
+      any isJust whitelistCheck

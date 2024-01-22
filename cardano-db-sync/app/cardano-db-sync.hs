@@ -91,7 +91,6 @@ pRunDbSyncNode = do
     <*> pHasMultiAssets
     <*> pHasMetadata
     <*> pWhiteListTxMetadata
-    <*> pWhiteListMAPolicies
     <*> pHasPlutusExtra
     <*> pHasGov
     <*> pHasOffChainPoolData
@@ -240,14 +239,6 @@ pWhiteListTxMetadata =
     ( Opt.long "whitelist-tx-metadata"
         <> Opt.value []
         <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
-    )
-
-pWhiteListMAPolicies :: Parser [Word64]
-pWhiteListMAPolicies =
-  Opt.option
-    (parseCommaSeparated <$> Opt.str)
-    ( Opt.long "whitelist-multi-asset-policy"
-        <> Opt.help "Only insert a specific sellected list of multi-assets, based on the multi-asset's policy name"
     )
 
 parseCommaSeparated :: String -> [Word64]

@@ -142,7 +142,8 @@ storePage ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv cache percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
-  txOuts <- mapM (prepareTxOut syncEnv cache) ls
+  txOuts <- do
+    mapM (prepareTxOut syncEnv cache) ls
   txOutIds <- lift . DB.insertManyTxOutPlex True False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
@@ -167,7 +168,7 @@ prepareTxOut syncEnv txCache (TxIn txHash (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txHash
   let genTxOut = fromTxOut index txOut
   txId <- queryTxIdWithCache txCache txHashByteString
-  Insert.prepareTxOut syncEnv trce cache iopts (txId, txHashByteString) genTxOut
+  Insert.prepareTxOut trce iopts cache (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv

@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -18,11 +19,17 @@ module Cardano.DbSync.Config.Types (
   GenesisHashConway (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
+  MetadataConfig (..),
+  MultiAssetConfig (..),
+  PlutusConfig (..),
   LedgerStateDir (..),
   LogFileDir (..),
   NetworkName (..),
   NodeConfigFile (..),
   SocketPath (..),
+  isMetadataEnableOrWhiteList,
+  isMultiAssetEnableOrWhitelist,
+  isPlutusEnableOrWhitelist,
   adjustGenesisFilePath,
   adjustNodeConfigFilePath,
   pcNodeConfigFilePath,
@@ -73,7 +80,6 @@ data SyncNodeParams = SyncNodeParams
   , enpHasMultiAssets :: !Bool
   , enpHasMetadata :: !Bool
   , enpWhitelistMetadataNames :: ![Word64]
-  , enpWhitelistMAPolicies :: ![Word64]
   , enpHasPlutusExtra :: !Bool
   , enpHasGov :: !Bool
   , enpHasOffChainPoolData :: !Bool
@@ -131,6 +137,42 @@ data SyncPreConfig = SyncPreConfig
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
   }
+
+data MetadataConfig
+  = MetadataEnable
+  | MetadataDisable
+  | MetadataWhitelistKeys (NonEmpty ByteString)
+  deriving (Eq, Show)
+
+isMetadataEnableOrWhiteList :: MetadataConfig -> Bool
+isMetadataEnableOrWhiteList = \case
+  MetadataEnable -> True
+  MetadataDisable -> False
+  MetadataWhitelistKeys _ -> True
+
+data MultiAssetConfig
+  = MultiAssetEnable
+  | MultiAssetDisable
+  | MultiAssetWhitelistPolicies (NonEmpty ByteString)
+  deriving (Eq, Show)
+
+isMultiAssetEnableOrWhitelist :: MultiAssetConfig -> Bool
+isMultiAssetEnableOrWhitelist = \case
+  MultiAssetEnable -> True
+  MultiAssetDisable -> False
+  MultiAssetWhitelistPolicies _ -> True
+
+data PlutusConfig
+  = PlutusEnable
+  | PlutusDisable
+  | PlutusWhitelistScripts (NonEmpty ByteString)
+  deriving (Eq, Show)
+
+isPlutusEnableOrWhitelist :: PlutusConfig -> Bool
+isPlutusEnableOrWhitelist = \case
+  PlutusEnable -> True
+  PlutusDisable -> False
+  PlutusWhitelistScripts _ -> True
 
 newtype GenesisFile = GenesisFile
   { unGenesisFile :: FilePath
