@@ -41,6 +41,7 @@ module Test.Cardano.Db.Mock.Config (
   withCustomConfigAndDropDB,
   withCustomConfigAndLogs,
   withFullConfig',
+  replaceConfigFile,
 ) where
 
 import Cardano.Api (NetworkMagic (..))
@@ -81,7 +82,7 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
-import System.FilePath.Posix ((</>))
+import System.FilePath.Posix (takeDirectory, (</>))
 import System.IO.Silently (hSilence)
 
 data Config = Config
@@ -94,12 +95,13 @@ data Config = Config
 
 data DBSyncEnv = DBSyncEnv
   { dbSyncParams :: SyncNodeParams
-  , partialRunDbSync :: SyncNodeParams -> IO ()
+  , dbSyncConfig :: SyncNodeConfig
+  , partialRunDbSync :: SyncNodeParams -> SyncNodeConfig -> IO ()
   , dbSyncThreadVar :: TMVar (Async ())
   }
 
 data CommandLineArgs = CommandLineArgs
-  { claHasConfigFile :: Bool
+  { claConfigFilename :: FilePath
   , claEpochDisabled :: Bool
   , claHasCache :: Bool
   , claHasLedger :: Bool
@@ -151,12 +153,17 @@ fingerprintRoot = rootTestDir </> "fingerprint"
 mkFingerPrint :: FilePath -> FilePath
 mkFingerPrint testLabel = fingerprintRoot </> testLabel
 
-mkDBSyncEnv :: SyncNodeParams -> (SyncNodeParams -> IO ()) -> IO DBSyncEnv
-mkDBSyncEnv params pRunDbSync = do
+mkDBSyncEnv ::
+  SyncNodeParams ->
+  SyncNodeConfig ->
+  (SyncNodeParams -> SyncNodeConfig -> IO ()) ->
+  IO DBSyncEnv
+mkDBSyncEnv params cfg pRunDbSync = do
   runningVar <- newEmptyTMVarIO
   pure $
     DBSyncEnv
       { dbSyncParams = params
+      , dbSyncConfig = cfg
       , partialRunDbSync = pRunDbSync
       , dbSyncThreadVar = runningVar
       }
@@ -188,7 +195,7 @@ startDBSync env = do
   case thr of
     Just _a -> error "db-sync already running"
     Nothing -> do
-      let appliedRunDbSync = partialRunDbSync env $ dbSyncParams env
+      let appliedRunDbSync = partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
       -- we async the fully applied runDbSync here ad put it into the thread
       asyncApplied <- async appliedRunDbSync
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
@@ -220,17 +227,21 @@ getPoolLayer env = do
 
 mkConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> IO Config
 mkConfig staticDir mutableDir cmdLineArgs config = do
+  let cfgDir = mkConfigDir staticDir
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
-  creds <- mkShelleyCredentials $ staticDir </> "pools" </> "bulk1.creds"
+  creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
   let (pInfoForger, forging) = mkProtocolInfoCardano genCfg creds
   forging' <- forging
   syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
 
-mkSyncNodeConfig :: FilePath -> IO SyncNodeConfig
-mkSyncNodeConfig configFilePath =
-  readSyncNodeConfig $ ConfigFile (mkConfigDir configFilePath </> "test-db-sync-config.json")
+mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig
+mkSyncNodeConfig configFilePath cmdLineArgs =
+  readSyncNodeConfig $ mkConfigFile configDir configFilename
+  where
+    configFilename = claConfigFilename cmdLineArgs
+    configDir = mkConfigDir configFilePath
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
@@ -250,9 +261,10 @@ mkShelleyCredentials bulkFile = do
 mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
 mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
   pgconfig <- runOrThrowIO Db.readPGPassDefault
+
   pure $
     SyncNodeParams
-      { enpConfigFile = ConfigFile $ staticDir </> (if claHasConfigFile then "test-db-sync-config.json" else "")
+      { enpConfigFile = mkConfigFile staticDir claConfigFilename
       , enpSocketPath = SocketPath $ mutableDir </> ".socket"
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
@@ -285,10 +297,14 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpMaybeRollback = Nothing
       }
 
+mkConfigFile :: FilePath -> FilePath -> ConfigFile
+mkConfigFile staticDir cliConfigFilename =
+  ConfigFile $ staticDir </> cliConfigFilename
+
 initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =
   CommandLineArgs
-    { claHasConfigFile = True
+    { claConfigFilename = "test-db-sync-config.json"
     , claEpochDisabled = True
     , claHasCache = True
     , claHasLedger = True
@@ -460,9 +476,9 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
   syncNodeConfig <-
     case mSyncNodeConfig of
       Just snc -> pure snc
-      Nothing -> mkSyncNodeConfig configFilePath
+      Nothing -> mkSyncNodeConfig configFilePath cmdLineArgs
 
-  cfg <- mkConfig (mkConfigDir configFilePath) mutableDir cmdLineArgs syncNodeConfig
+  cfg <- mkConfig configFilePath mutableDir cmdLineArgs syncNodeConfig
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
   let dbsyncParams = syncNodeParams cfg
   trce <-
@@ -470,7 +486,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
       then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params syncNodeConfig True
+  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce params cfg' True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
@@ -483,7 +499,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
       (unSocketPath (enpSocketPath $ syncNodeParams cfg))
       $ \mockServer ->
         -- we dont fork dbsync here. Just prepare it as an action
-        withDBSyncEnv (mkDBSyncEnv dbsyncParams partialDbSyncRun) $ \dbSyncEnv -> do
+        withDBSyncEnv (mkDBSyncEnv dbsyncParams syncNodeConfig partialDbSyncRun) $ \dbSyncEnv -> do
           let pgPass = getDBSyncPGPass dbSyncEnv
           tableNames <- Db.getAllTablleNames pgPass
           -- We only want to create the table schema once for the tests so here we check
@@ -509,3 +525,13 @@ recreateDir path = do
 
 textShow :: (Show a) => a -> Text
 textShow = Text.pack . show
+
+replaceConfigFile :: FilePath -> DBSyncEnv -> IO DBSyncEnv
+replaceConfigFile newFilename dbSync@DBSyncEnv {..} = do
+  cfg <- readSyncNodeConfig $ mkConfigFile configDir newFilename
+
+  pure $ dbSync {dbSyncParams = newParams, dbSyncConfig = cfg}
+  where
+    configDir = mkConfigDir . takeDirectory . unConfigFile . enpConfigFile $ dbSyncParams
+    newParams =
+      dbSyncParams {enpConfigFile = ConfigFile $ configDir </> newFilename}

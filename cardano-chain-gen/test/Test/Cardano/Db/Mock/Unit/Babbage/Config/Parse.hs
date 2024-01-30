@@ -1,4 +1,4 @@
-module Test.Cardano.Db.Mock.Unit.Babbage.Config (
+module Test.Cardano.Db.Mock.Unit.Babbage.Config.Parse (
   defaultInsertConfig,
   insertConfig,
 ) where
@@ -13,12 +13,12 @@ import Prelude ()
 
 defaultInsertConfig :: Assertion
 defaultInsertConfig = do
-  cfg <- mkSyncNodeConfig babbageConfigDir
+  cfg <- mkSyncNodeConfig babbageConfigDir initCommandLineArgs
   dncInsertConfig cfg @?= def
 
 insertConfig :: Assertion
 insertConfig = do
-  cfg <- mkSyncNodeConfig configDir
+  cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
         SyncInsertConfig
           { spcTxOut = TxOutDisable

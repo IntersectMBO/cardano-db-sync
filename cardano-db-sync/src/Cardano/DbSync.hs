@@ -31,16 +31,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Types (
-  ConfigFile (..),
-  GenesisFile (..),
-  LedgerStateDir (..),
-  NetworkName (..),
-  SocketPath (..),
-  SyncCommand (..),
-  SyncNodeConfig (..),
-  SyncNodeParams (..),
- )
+import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
@@ -87,6 +78,7 @@ runDbSync ::
   IO ()
 runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic = do
   logInfo trce $ textShow syncOpts
+
   -- Read the PG connection info
   pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
 
@@ -126,7 +118,16 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce pgConfig slotNo
-  runSyncNode metricsSetters trce iomgr connectionString ranMigrations (void . runMigration) syncNodeConfigFromFile params syncOpts
+  runSyncNode
+    metricsSetters
+    trce
+    iomgr
+    connectionString
+    ranMigrations
+    (void . runMigration)
+    syncNodeConfigFromFile
+    params
+    syncOpts
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
@@ -141,7 +142,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         , " in the schema directory and restart it."
         ]
 
-    syncOpts = extractSyncOptions params abortOnPanic
+    syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
 
 runSyncNode ::
   MetricSetters ->
@@ -163,6 +164,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
+
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
       \backend -> liftIO $ do
@@ -218,15 +220,23 @@ logProtocolMagicId tracer pm =
 
 -- -------------------------------------------------------------------------------------------------
 
-extractSyncOptions :: SyncNodeParams -> Bool -> SyncOptions
-extractSyncOptions snp aop =
+extractSyncOptions :: SyncNodeParams -> Bool -> SyncNodeConfig -> SyncOptions
+extractSyncOptions snp aop snc =
   SyncOptions
-    { soptEpochAndCacheEnabled = not (enpBootstrap snp) && ioInOut iopts && not (enpEpochDisabled snp && enpHasCache snp)
+    { soptEpochAndCacheEnabled =
+        not (spcTxOut (dncInsertConfig snc) == TxOutBootstrap)
+          && ioInOut iopts
+          && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
     , soptOnlyFix = enpOnlyFix snp
-    , soptPruneConsumeMigration = initPruneConsumeMigration (enpMigrateConsumed snp) (enpPruneTxOut snp) (enpBootstrap snp) (enpForceTxIn snp)
+    , soptPruneConsumeMigration =
+        initPruneConsumeMigration
+          (spcTxOut (dncInsertConfig snc) == TxOutConsumed)
+          (spcTxOut (dncInsertConfig snc) == TxOutPrune)
+          (spcTxOut (dncInsertConfig snc) == TxOutBootstrap)
+          (enpForceTxIn snp) -- TODO[sgillespie]
     , soptInsertOptions = iopts
     , snapshotEveryFollowing = enpSnEveryFollowing snp
     , snapshotEveryLagging = enpSnEveryLagging snp

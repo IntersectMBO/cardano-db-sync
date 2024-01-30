@@ -1,8 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards #-}
 
-module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut (
-  commandLineArgCheck,
+module Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut (
+  txConsumedColumnCheck,
   basicPrune,
   pruneWithSimpleRollback,
   pruneWithFullTxRollback,
@@ -17,7 +16,6 @@ module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync (SyncNodeParams (..))
 import Cardano.DbSync.Config (SyncNodeConfig (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
@@ -33,27 +31,28 @@ import Test.Tasty.HUnit (Assertion ())
 import Prelude ()
 import qualified Prelude
 
-commandLineArgCheck :: IOManager -> [(Text, Text)] -> Assertion
-commandLineArgCheck ioManager names = do
-  -- be midefull that you have to manually pass the ioManager + names
+txConsumedColumnCheck :: IOManager -> [(Text, Text)] -> Assertion
+txConsumedColumnCheck ioManager names = do
+  -- be mindful that you have to manually pass the ioManager + names
   syncNodeConfig <- mkSynNodeConfig
-  withCustomConfig
+  withCustomConfigAndDropDB
     cmdLineArgs
     (Just syncNodeConfig)
     conwayConfigDir
     testLabel
     ( \interpreter mockServer dbSync -> do
+        startDBSync dbSync
+
         void $
           withConwayFindLeaderAndSubmitTx interpreter mockServer $
             Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
 
-        startDBSync dbSync
         assertBlockNoBackoff dbSync 1
         assertEqQuery
           dbSync
           DB.queryTxConsumedColumnExists
           True
-          "missing consumed_by_tx_id column when flag --consumed-tx-out active"
+          "missing consumed_by_tx_id column when tx-out = consumed"
     )
     ioManager
     names
@@ -61,18 +60,17 @@ commandLineArgCheck ioManager names = do
     -- an example of how we will pass our custom configs overwriting the init file
     mkSynNodeConfig :: IO SyncNodeConfig
     mkSynNodeConfig = do
-      initConfigFile <- mkSyncNodeConfig conwayConfigDir
+      initConfigFile <- mkSyncNodeConfig conwayConfigDir cmdLineArgs
       pure $ initConfigFile {dncEnableLogging = True}
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "conwayCLASimple"
+    testLabel = "conwayTxConsumedColumnCheck"
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
-basicPrune =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+basicPrune = do
+  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add some blocks
@@ -97,17 +95,15 @@ basicPrune =
     assertEqQuery dbSync DB.queryTxOutCount 12 "the pruning didn't work correctly as the tx-out count is incorrect"
     -- Check unspent tx
     assertUnspentTx dbSync
-
-    pure ()
   where
-    cmdLineArgs =
+    args =
       initCommandLineArgs
-        { claForceTxIn = True
-        , claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
+        , claForceTxIn = True
         }
-    testLabel = "conwayCLAPrune"
+    testLabel = "conwayConfigPrune"
     fullBlockSize b = fromIntegral $ length b + 2
+    cfgDir = conwayConfigDir
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback =
@@ -143,11 +139,10 @@ pruneWithSimpleRollback =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claForceTxIn = True
-        , claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
+        , claForceTxIn = True
         }
-    testLabel = "conwayCLAPruneSimpleRollback"
+    testLabel = "conwayConfigPruneSimpleRollback"
     fullBlockSize b = fromIntegral $ length b + 4
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
@@ -185,11 +180,10 @@ pruneWithFullTxRollback =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claForceTxIn = True
-        , claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-prune.json"
+        , claForceTxIn = True
         }
-    testLabel = "conwayPruneOnFullRollback"
+    testLabel = "conwayConfigPruneOnFullRollback"
 
 -- The transactions in the last `2 * securityParam` blocks should not be pruned
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
@@ -221,10 +215,9 @@ pruningShouldKeepSomeTx =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "conwayCLAPruneCorrectAmount"
+    testLabel = "conwayConfigPruneCorrectAmount"
 
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneAndRollBackOneBlock =
@@ -264,10 +257,9 @@ pruneAndRollBackOneBlock =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "conwayCLAPruneAndRollBack"
+    testLabel = "conwayConfigPruneAndRollBack"
 
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
 noPruneAndRollBack =
@@ -307,10 +299,9 @@ noPruneAndRollBack =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "conwayCLAPruneAndRollBack"
+    testLabel = "conwayConfigNoPruneAndRollBack"
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneSameBlock =
@@ -347,10 +338,9 @@ pruneSameBlock =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "conwayCLAPruneSameBlock"
+    testLabel = "conwayConfigPruneSameBlock"
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 noPruneSameBlock =
@@ -383,10 +373,9 @@ noPruneSameBlock =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "conwayCLANoPruneSameBlock"
+    testLabel = "conwayConfigNoPruneSameBlock"
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart =
@@ -400,10 +389,8 @@ migrateAndPruneRestart =
 
     stopDBSync dbSync
 
-    -- Start without migrate consumed flag
-    let DBSyncEnv {..} = dbSync
-        newParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
-        newEnv = dbSync {dbSyncParams = newParams}
+    -- Start without tx-out=consumed
+    newEnv <- replaceConfigFile "test-db-sync-config.json" dbSync
     startDBSync newEnv
     -- There is a slight delay before the flag is checked
     threadDelay 3_000_000
@@ -412,10 +399,9 @@ migrateAndPruneRestart =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "conwayCLAMigrateAndPruneRestart"
+    testLabel = "conwayConfigMigrateAndPruneRestart"
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 pruneRestartMissingFlag =
@@ -429,10 +415,8 @@ pruneRestartMissingFlag =
 
     stopDBSync dbSync
 
-    -- Start without prune tx out flag
-    let DBSyncEnv {..} = dbSync
-        newParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
-        newEnv = dbSync {dbSyncParams = newParams}
+    -- Start without tx-out=prune
+    newEnv <- replaceConfigFile "test-db-sync-config.json" dbSync
     startDBSync newEnv
     -- There is a slight delay before the flag is checked
     threadDelay 3_000_000
@@ -441,10 +425,9 @@ pruneRestartMissingFlag =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = False
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "conwayCLAPruneRestartMissingFlag"
+    testLabel = "conwayConfigPruneRestartMissingFlag"
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 bootstrapRestartMissingFlag =
@@ -458,10 +441,8 @@ bootstrapRestartMissingFlag =
     assertTxOutCount dbSync 0
 
     stopDBSync dbSync
-    -- Start without bootstrap flag
-    let DBSyncEnv {..} = dbSync
-        newParams = dbSyncParams {enpBootstrap = False}
-        newEnv = dbSync {dbSyncParams = newParams}
+    -- Start without tx-out=bootstrap
+    newEnv <- replaceConfigFile "test-db-sync-config.json" dbSync
     startDBSync newEnv
     -- There is a slight delay befor the flag is checked
     threadDelay 3_000_000
@@ -470,8 +451,7 @@ bootstrapRestartMissingFlag =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = False
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-bootstrap.json"
         , claBootstrap = True
         }
-    testLabel = "conwayBootstrapRestartMissingFlag"
+    testLabel = "conwayConfigBootstrapRestartMissingFlag"

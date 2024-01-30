@@ -13,12 +13,12 @@ import Prelude ()
 
 defaultInsertConfig :: Assertion
 defaultInsertConfig = do
-  cfg <- mkSyncNodeConfig alonzoConfigDir
+  cfg <- mkSyncNodeConfig alonzoConfigDir initCommandLineArgs
   dncInsertConfig cfg @?= def
 
 insertConfig :: Assertion
 insertConfig = do
-  cfg <- mkSyncNodeConfig configDir
+  cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
         SyncInsertConfig
           { spcTxOut = TxOutDisable

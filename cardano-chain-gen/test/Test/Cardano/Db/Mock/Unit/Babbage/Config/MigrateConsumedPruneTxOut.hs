@@ -1,8 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut (
-  commandLineArgCheck,
+module Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut (
+  txConsumedColumnCheck,
   basicPrune,
   pruneWithSimpleRollback,
   pruneWithFullTxRollback,
@@ -17,7 +16,6 @@ module Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOu
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync (SyncNodeParams (..))
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
@@ -29,9 +27,9 @@ import Data.Text (Text)
 import Ouroboros.Consensus.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config (
   CommandLineArgs (..),
-  DBSyncEnv (..),
   babbageConfigDir,
   initCommandLineArgs,
+  replaceConfigFile,
   startDBSync,
   stopDBSync,
   withCustomConfig,
@@ -49,8 +47,8 @@ import Test.Cardano.Db.Mock.UnifiedApi (
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount, assertTxInCount, assertTxOutCount, assertUnspentTx, checkStillRuns)
 import Test.Tasty.HUnit (Assertion)
 
-commandLineArgCheck :: IOManager -> [(Text, Text)] -> Assertion
-commandLineArgCheck = do
+txConsumedColumnCheck :: IOManager -> [(Text, Text)] -> Assertion
+txConsumedColumnCheck = do
   withCustomConfigAndDropDB cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -62,10 +60,9 @@ commandLineArgCheck = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "CLASimple"
+    testLabel = "configTxConsumedColumnCheck"
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune = do
@@ -90,11 +87,10 @@ basicPrune = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         , claForceTxIn = True
         }
-    testLabel = "CLAPrune"
+    testLabel = "configPrune"
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback = do
@@ -120,11 +116,10 @@ pruneWithSimpleRollback = do
     fullBlockSize b = fromIntegral $ length b + 4
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         , claForceTxIn = True
         }
-    testLabel = "CLAPruneSimpleRollback"
+    testLabel = "configPruneSimpleRollback"
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithFullTxRollback = do
@@ -152,11 +147,10 @@ pruneWithFullTxRollback = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         , claForceTxIn = True
         }
-    testLabel = "CLAPruneOnFullRollback"
+    testLabel = "configPruneOnFullRollback"
 
 -- The tx in the last, 2 x securityParam worth of blocks should not be pruned.
 -- In these tests, 2 x securityParam = 20 blocks.
@@ -181,10 +175,9 @@ pruningShouldKeepSomeTx = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "CLAPruneCorrectAmount"
+    testLabel = "configPruneCorrectAmount"
 
 -- prune with rollback
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
@@ -217,10 +210,9 @@ pruneAndRollBackOneBlock = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "CLAPruneAndRollBack"
+    testLabel = "configPruneAndRollBack"
 
 -- consume with rollback
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
@@ -253,10 +245,9 @@ noPruneAndRollBack = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "CLAPruneAndRollBack"
+    testLabel = "configPruneAndRollBack"
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneSameBlock =
@@ -282,10 +273,9 @@ pruneSameBlock =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "CLAPruneSameBlock"
+    testLabel = "configPruneSameBlock"
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 noPruneSameBlock =
@@ -308,24 +298,21 @@ noPruneSameBlock =
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "CLANoPruneSameBlock"
+    testLabel = "configNoPruneSameBlock"
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart = do
   withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
-    let DBSyncEnv {..} = dbSyncEnv
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
     -- stop
     stopDBSync dbSyncEnv
     -- update the syncParams to include new params
-    let newDbSyncParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
-        newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
-    startDBSync newDbSyncEnv
+    newEnv <- replaceConfigFile "test-db-sync-config.json" dbSyncEnv
+    startDBSync newEnv
     -- there is a slight delay before flag is checked
     threadDelay 6000000
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
@@ -333,25 +320,21 @@ migrateAndPruneRestart = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = True
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-consumed.json"
         }
-    testLabel = "CLAMigrateAndPruneRestart"
+    testLabel = "configMigrateAndPruneRestart"
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 pruneRestartMissingFlag = do
   withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
-    let DBSyncEnv {..} = dbSyncEnv
-
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
     -- stop
     stopDBSync dbSyncEnv
     -- update the syncParams to include new params
-    let newDbSyncParams = dbSyncParams {enpMigrateConsumed = False, enpPruneTxOut = False}
-        newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
-    startDBSync newDbSyncEnv
+    newEnv <- replaceConfigFile "test-db-sync-config.json" dbSyncEnv
+    startDBSync newEnv
     -- there is a slight delay before flag is checked
     threadDelay 6000000
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
@@ -359,15 +342,13 @@ pruneRestartMissingFlag = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = False
-        , claPruneTxOut = True
+        { claConfigFilename = "test-db-sync-config-prune.json"
         }
-    testLabel = "CLApruneRestartMissingFlag"
+    testLabel = "configPruneRestartMissingFlag"
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 bootstrapRestartMissingFlag = do
   withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
-    let DBSyncEnv {..} = dbSyncEnv
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
@@ -375,9 +356,8 @@ bootstrapRestartMissingFlag = do
     -- stop
     stopDBSync dbSyncEnv
     -- update the syncParams to include new params
-    let newDbSyncParams = dbSyncParams {enpBootstrap = False}
-        newDbSyncEnv = dbSyncEnv {dbSyncParams = newDbSyncParams}
-    startDBSync newDbSyncEnv
+    newEnv <- replaceConfigFile "test-db-sync-config.json" dbSyncEnv
+    startDBSync newEnv
     -- there is a slight delay before flag is checked
     threadDelay 6000000
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
@@ -385,8 +365,7 @@ bootstrapRestartMissingFlag = do
   where
     cmdLineArgs =
       initCommandLineArgs
-        { claMigrateConsumed = False
-        , claPruneTxOut = False
+        { claConfigFilename = "test-db-sync-config-bootstrap.json"
         , claBootstrap = True
         }
-    testLabel = "CLABootstrapRestartMissingFlag"
+    testLabel = "configBootstrapRestartMissingFlag"

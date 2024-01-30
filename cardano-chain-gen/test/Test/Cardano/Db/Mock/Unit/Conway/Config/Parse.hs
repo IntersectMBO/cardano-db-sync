@@ -1,8 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
-module Test.Cardano.Db.Mock.Unit.Conway.Config (
+module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
   conwayGenesis,
   missingConwayGenesis,
   noConwayGenesis,
@@ -32,7 +31,7 @@ import Prelude ()
 conwayGenesis :: Assertion
 conwayGenesis =
   mkSyncNodeConfig configDir initCommandLineArgs
-    >>= void . mkConfig (mkConfigDir configDir) mutableDir cmdLineArgs
+    >>= void . mkConfig configDir mutableDir cmdLineArgs
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigSimple"
@@ -42,7 +41,7 @@ missingConwayGenesis :: Assertion
 missingConwayGenesis = do
   res <- try $ do
     cfg <- mkSyncNodeConfig configDir initCommandLineArgs
-    mkConfig (mkConfigDir configDir) mutableDir cmdLineArgs cfg
+    mkConfig configDir mutableDir cmdLineArgs cfg
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
     configDir = "config-conway-missing-genesis"
@@ -54,7 +53,7 @@ noConwayGenesis = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisFile = Nothing}
   void $
-    mkConfig (mkConfigDir configDir) mutableDir cmdLineArgs cfg'
+    mkConfig configDir mutableDir cmdLineArgs cfg'
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
@@ -65,7 +64,7 @@ noConwayGenesisHash = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisHash = Nothing}
   void $
-    mkConfig (mkConfigDir configDir) mutableDir initCommandLineArgs cfg'
+    mkConfig configDir mutableDir initCommandLineArgs cfg'
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
@@ -76,7 +75,7 @@ wrongConwayGenesisHash = do
   hash <- Aeson.throwDecode "\"0000000000000000000000000000000000000000000000000000000000000000\""
   let cfg' = cfg {dncConwayGenesisHash = Just hash}
 
-  res <- try (mkConfig (mkConfigDir configDir) mutableDir initCommandLineArgs cfg')
+  res <- try (mkConfig configDir mutableDir initCommandLineArgs cfg')
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
     configDir = "config-conway"
@@ -90,8 +89,10 @@ isConwayConfigError = either isConwayConfigError' (const False)
 
 defaultInsertConfig :: Assertion
 defaultInsertConfig = do
-  cfg <- mkSyncNodeConfig conwayConfigDir initCommandLineArgs
+  cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   dncInsertConfig cfg @?= def
+  where
+    configDir = "config-conway"
 
 insertConfig :: Assertion
 insertConfig = do
@@ -143,7 +144,7 @@ basicPrune = do
   where
     args =
       initCommandLineArgs
-        { claConfigFilename = Just "test-db-sync-config-prune.json"
+        { claConfigFilename = "test-db-sync-config-prune.json"
         , claMigrateConsumed = True
         , claPruneTxOut = True
         }
