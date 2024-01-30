@@ -78,7 +78,7 @@ newThreadChannels =
   -- The pipeline queue in the LocalChainSync machinery is 50 elements long
   -- so we should not exceed that.
   ThreadChannels
-    <$> TBQ.newTBQueueIO 47
+    <$> TBQ.newTBQueueIO 300
     <*> newTVarIO False
 
 writeDbActionQueue :: ThreadChannels -> DbAction -> STM ()

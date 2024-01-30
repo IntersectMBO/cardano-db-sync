@@ -40,6 +40,7 @@ module Cardano.Db.Insert (
   insertStakeRegistration,
   insertTreasury,
   insertTx,
+  insertManyTx,
   insertTxIn,
   insertManyTxMint,
   insertManyTxMetadata,
@@ -267,6 +268,9 @@ insertTreasury = insertUnchecked "Treasury"
 
 insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
 insertTx tx = insertUnchecked ("Tx: " ++ show (BS.length (txHash tx))) tx
+
+insertManyTx :: (MonadBaseControl IO m, MonadIO m) => [Tx] -> ReaderT SqlBackend m [TxId]
+insertManyTx = insertMany' "Txs"
 
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
 insertTxIn = insertUnchecked "TxIn"
