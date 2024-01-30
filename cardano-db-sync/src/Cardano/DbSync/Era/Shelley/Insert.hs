@@ -689,14 +689,16 @@ insertConwayDelegCert syncEnv txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
     ConwayRegCert cred _dep ->
       when (ioShelley iopts) $
-        insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
+        insertStakeRegistration epochNo txId idx $
+          Generic.annotateStakingCred network cred
     ConwayUnRegCert cred _dep ->
       when (ioShelley iopts) $
         insertStakeDeregistration cache network epochNo txId idx mRedeemerId cred
     ConwayDelegCert cred delegatee -> insertDeleg cred delegatee
     ConwayRegDelegCert cred delegatee _dep -> do
       when (ioShelley iopts) $
-        insertStakeRegistration epochNo txId idx $ Generic.annotateStakingCred network cred
+        insertStakeRegistration epochNo txId idx $
+          Generic.annotateStakingCred network cred
       insertDeleg cred delegatee
   where
     insertDeleg cred = \case
