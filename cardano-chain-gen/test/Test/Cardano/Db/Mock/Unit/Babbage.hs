@@ -15,8 +15,8 @@ import Test.Tasty.HUnit (Assertion, testCase)
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex as ForceIndex
-import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
-import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config as BabConfig
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config.Parse as Config
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Other as BabOther
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Plutus as BabPlutus
@@ -32,8 +32,23 @@ unitTests iom knownMigrations =
     "Babbage unit tests"
     [ testGroup
         "config"
-        [ testCase "default insert config" BabConfig.defaultInsertConfig
-        , testCase "insert config" BabConfig.insertConfig
+        [ testCase "default insert config" Config.defaultInsertConfig
+        , testCase "insert config" Config.insertConfig
+        , testGroup
+            "consumed-tx-out and prune-tx-out"
+            [ test "flag check" MigrateConsumedPruneTxOut.txConsumedColumnCheck
+            , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
+            , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
+            , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
+            , test "pruning should keep some tx" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTx
+            , test "prune and rollback one block" MigrateConsumedPruneTxOut.pruneAndRollBackOneBlock
+            , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
+            , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
+            , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
+            , expectFail $ test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
+            , expectFail $ test "set prune flag, restart missing prune flag" MigrateConsumedPruneTxOut.pruneRestartMissingFlag
+            , expectFail $ test "set bootstrap flag, restart missing bootstrap flag" MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
+            ]
         ]
     , testGroup
         "simple"
@@ -47,23 +62,8 @@ unitTests iom knownMigrations =
     , testGroup
         "Command Line Arguments"
         [ testGroup
-            "consumed-tx-out and prune-tx-out"
-            [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
-            , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
-            , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
-            , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
-            , test "pruning should keep some tx" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTx
-            , test "prune and rollback one block" MigrateConsumedPruneTxOut.pruneAndRollBackOneBlock
-            , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
-            , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
-            , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
-            , expectFail $ test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
-            , expectFail $ test "set prune flag, restart missing prune flag" MigrateConsumedPruneTxOut.pruneRestartMissingFlag
-            , expectFail $ test "set bootstrap flag, restart missing bootstrap flag" MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
-            ]
-        , testGroup
             "config"
-            [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg
+            [ expectFail $ test "fails if incorrect config file given" ConfigFile.checkConfigFileArg
             ]
         , testGroup
             "disable-epoch"

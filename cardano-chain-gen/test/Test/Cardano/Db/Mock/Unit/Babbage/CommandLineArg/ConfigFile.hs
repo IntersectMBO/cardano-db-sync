@@ -17,4 +17,4 @@ checkConfigFileArg =
     checkStillRuns dbSyncEnv
   where
     testLabel = "CLAcheckConfigFileArg"
-    commandLineConfigArgs = initCommandLineArgs {claHasConfigFile = False}
+    commandLineConfigArgs = initCommandLineArgs {claConfigFilename = "does-not-exist"}

@@ -141,8 +141,8 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile
                         Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled
                         Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex
-                        Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut
-                        Test.Cardano.Db.Mock.Unit.Babbage.Config
+                        Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut
+                        Test.Cardano.Db.Mock.Unit.Babbage.Config.Parse
                         Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference
                         Test.Cardano.Db.Mock.Unit.Babbage.Other
                         Test.Cardano.Db.Mock.Unit.Babbage.Plutus
@@ -155,8 +155,8 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex
-                        Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
-                        Test.Cardano.Db.Mock.Unit.Conway.Config
+                        Test.Cardano.Db.Mock.Unit.Conway.Config.Parse
+                        Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut
                         Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference
                         Test.Cardano.Db.Mock.Unit.Conway.Other
                         Test.Cardano.Db.Mock.Unit.Conway.Plutus
