@@ -108,7 +108,11 @@ unitTests iom knownMigrations =
         "blocks with txs"
         [ test "simple tx" Tx.addSimpleTx
         , test "simple tx in Shelley era" Tx.addSimpleTxShelley
+        , test "simple tx with ledger disabled" Tx.addSimpleTxNoLedger
         , test "consume utxo same block" Tx.consumeSameBlock
+        , test "tx with metadata" Tx.addTxMetadata
+        , test "tx with metadata disabled" Tx.addTxMetadataDisabled
+        , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
         ]
     , testGroup
         "stake addresses"
@@ -118,6 +122,8 @@ unitTests iom knownMigrations =
         , test "stake address pointers" Stake.stakeAddressPtr
         , test "stake address pointers deregistration" Stake.stakeAddressPtrDereg
         , test "stake address pointers. Use before registering." Stake.stakeAddressPtrUseBefore
+        , test "register stake creds" Stake.registerStakeCreds
+        , test "register stake creds with shelley disabled" Stake.registerStakeCredsNoShelley
         ]
     , testGroup
         "stake distribution"
@@ -138,6 +144,7 @@ unitTests iom knownMigrations =
         "plutus send scripts"
         [ test "simple script lock" Plutus.simpleScript
         , test "unlock script in same block" Plutus.unlockScriptSameBlock
+        , test "unlock script with plutus disabled" Plutus.unlockScriptNoPlutus
         , test "failed script" Plutus.failedScript
         , test "failed script fees" Plutus.failedScriptFees
         , test "failed script in same block" Plutus.failedScriptSameBlock
@@ -165,6 +172,7 @@ unitTests iom knownMigrations =
         [ test "mint simple multi asset" Plutus.mintMultiAsset
         , test "mint many multi assets" Plutus.mintMultiAssets
         , test "swap many multi assets" Plutus.swapMultiAssets
+        , test "swap with multi assets disabled" Plutus.swapMultiAssetsDisabled
         ]
     , testGroup
         "Pools and smash"

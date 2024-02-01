@@ -6,6 +6,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptTest as Script
 import qualified Cardano.DbSync.Util.AddressTest as Address
 import qualified Cardano.DbSync.Util.Bech32Test as Bech32
 import qualified Cardano.DbSync.Util.CborTest as Cbor
+import qualified Cardano.DbSyncTest as DbSync
 import Cardano.Prelude
 import Hedgehog.Main
 import Prelude ()
@@ -18,5 +19,6 @@ main =
     , Cbor.tests
     , Script.tests
     , ScriptData.tests
+    , DbSync.tests
     , Types.tests
     ]

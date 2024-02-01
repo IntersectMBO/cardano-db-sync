@@ -3,6 +3,9 @@
 module Cardano.Mock.Query (
   queryVersionMajorFromEpoch,
   queryParamProposalFromEpoch,
+  queryNullTxDepositExists,
+  queryMultiAssetCount,
+  queryTxMetadataCount,
 ) where
 
 import qualified Cardano.Db as Db
@@ -41,3 +44,27 @@ queryParamProposalFromEpoch epochNo = do
     where_ $ prop ^. Db.ParamProposalEpochNo ==. val (Just epochNo)
     pure prop
   pure $ entityVal <$> res
+
+-- | Query whether there any null tx deposits?
+queryNullTxDepositExists :: MonadIO io => ReaderT SqlBackend io Bool
+queryNullTxDepositExists = do
+  res <- select $ do
+    tx <- from $ table @Db.Tx
+    where_ $ isNothing_ (tx ^. Db.TxDeposit)
+  pure $ not (null res)
+
+queryMultiAssetCount :: MonadIO io => ReaderT SqlBackend io Word
+queryMultiAssetCount = do
+  res <- select $ do
+    _ <- from (table @Db.MultiAsset)
+    pure countRows
+
+  pure $ maybe 0 unValue (listToMaybe res)
+
+queryTxMetadataCount :: MonadIO io => ReaderT SqlBackend io Word
+queryTxMetadataCount = do
+  res <- selectOne $ do
+    _ <- from (table @Db.TxMetadata)
+    pure countRows
+
+  pure $ maybe 0 unValue res

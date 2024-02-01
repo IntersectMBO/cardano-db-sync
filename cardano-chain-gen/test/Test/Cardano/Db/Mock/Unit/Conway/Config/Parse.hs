@@ -19,7 +19,7 @@ import Cardano.DbSync.Error
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
-import Cardano.Prelude
+import Cardano.Prelude hiding (from, isNothing)
 import qualified Data.Aeson as Aeson
 import Data.Default.Class (Default (..))
 import Test.Cardano.Db.Mock.Config

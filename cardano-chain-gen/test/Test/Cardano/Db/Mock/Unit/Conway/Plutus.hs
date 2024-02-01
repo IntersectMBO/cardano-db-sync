@@ -5,6 +5,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
   -- * Plutus send scripts
   simpleScript,
   unlockScriptSameBlock,
+  unlockScriptNoPlutus,
   failedScript,
   failedScriptFees,
   failedScriptSameBlock,
@@ -26,6 +27,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
   mintMultiAsset,
   mintMultiAssets,
   swapMultiAssets,
+  swapMultiAssetsDisabled,
 ) where
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
@@ -40,6 +42,7 @@ import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
+import Cardano.Mock.Query (queryMultiAssetCount)
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
@@ -122,6 +125,43 @@ unlockScriptSameBlock =
     assertAlonzoCounts dbSync (1, 1, 1, 1, 1, 1, 0, 0)
   where
     testLabel = "conwayUnlockScriptSameBlock"
+
+unlockScriptNoPlutus :: IOManager -> [(Text, Text)] -> Assertion
+unlockScriptNoPlutus =
+  withCustomConfig args Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with stake credentials
+    void $ Api.registerAllStakeCreds interpreter mockServer
+
+    -- Lock some funds
+    lockTx <-
+      withConwayLedgerState interpreter $
+        Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline True] 20_000 20_000
+    -- Unlock the funds above with a script
+    let utxos = map UTxOPair (Conway.mkUTxOConway lockTx)
+    unlockTx <-
+      withConwayLedgerState interpreter $
+        Conway.mkUnlockScriptTx utxos (UTxOIndex 1) (UTxOIndex 2) True 10_000 500
+
+    -- Submit them
+    void $
+      Api.forgeNextFindLeaderAndSubmit
+        interpreter
+        mockServer
+        (map TxConway [lockTx, unlockTx])
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 2
+    -- Should not have any scripts
+    assertAlonzoCounts dbSync (0, 0, 0, 0, 1, 0, 0, 0)
+  where
+    args =
+      initCommandLineArgs
+        { claConfigFilename = "test-db-sync-config-no-plutus.json"
+        , claFullMode = False
+        }
+    testLabel = "conwayConfigPlutusDisbaled"
 
 failedScript :: IOManager -> [(Text, Text)] -> Assertion
 failedScript =
@@ -718,5 +758,46 @@ swapMultiAssets =
     -- Verify script counts
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (2, 6, 1, 2, 4, 2, 0, 0)
+    assertEqBackoff dbSync queryMultiAssetCount 4 [] "Expected multi-assets"
   where
     testLabel = "conwaySwapMultiAssets"
+
+swapMultiAssetsDisabled :: IOManager -> [(Text, Text)] -> Assertion
+swapMultiAssetsDisabled =
+  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with multiple multi-asset scripts
+    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      let policy = PolicyID Examples.alwaysMintScriptHash
+          assets = Map.singleton (Prelude.head Examples.assetNames) 1
+          mintedValue = MultiAsset $ Map.singleton policy assets
+          outValue = MaryValue (Coin 20) (MultiAsset $ Map.singleton policy assets)
+
+      -- Forge a multi-asset script
+      tx0 <-
+        Conway.mkMultiAssetsScriptTx
+          [UTxOIndex 0]
+          (UTxOIndex 1)
+          [(UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)]
+          []
+          mintedValue
+          True
+          100
+          state'
+
+      pure [tx0]
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 1
+    -- Verify multi-assets
+    assertEqBackoff dbSync queryMultiAssetCount 0 [] "Unexpected multi-assets"
+  where
+    args =
+      initCommandLineArgs
+        { claConfigFilename = "test-db-sync-config-no-multi-assets.json"
+        , claFullMode = False
+        }
+
+    testLabel = "conwayConfigMultiAssetsDisabled"
+    cfgDir = conwayConfigDir
