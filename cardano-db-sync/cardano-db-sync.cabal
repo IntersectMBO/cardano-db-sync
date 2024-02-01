@@ -343,6 +343,7 @@ test-suite test
                         Cardano.DbSync.Util.AddressTest
                         Cardano.DbSync.Util.Bech32Test
                         Cardano.DbSync.Util.CborTest
+                        Cardano.DbSyncTest
 
   build-depends:        base
                       , aeson
@@ -356,17 +357,20 @@ test-suite test
                       , iohk-monitoring
                       , cardano-ledger-api
                       , cardano-ledger-binary
+                      , cardano-ledger-byron
                       , cardano-ledger-core:testlib
                       , cardano-ledger-allegra:{cardano-ledger-allegra,testlib}
                       , cardano-ledger-alonzo:{testlib}
                       , cardano-ledger-byron
                       , cardano-ledger-shelley:{cardano-ledger-shelley,testlib}
+                      , cardano-db
                       , cardano-db-sync
                       , cardano-ledger-core
                       , cardano-prelude
                       , cardano-strict-containers
                       , containers
                       , data-default-class
+                      , iohk-monitoring
                       , hedgehog
                       , hedgehog-quickcheck
                       , ouroboros-consensus-cardano

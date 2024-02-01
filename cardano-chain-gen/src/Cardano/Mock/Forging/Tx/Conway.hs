@@ -20,6 +20,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkUnlockScriptTxBabbage,
   mkScriptTx,
   mkSimpleTx,
+  mkAuxDataTx,
   mkDCertTx,
   mkDCertPoolTx,
   mkDCertTxPools,
@@ -28,6 +29,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkMultiAssetsScriptTx,
   mkDepositTxPools,
   mkDummyRegisterTx,
+  mkDummyTxBody,
   mkTxDelegCert,
   mkRegTxCert,
   mkUnRegTxCert,
@@ -46,7 +48,7 @@ import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
-import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..))
+import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), mkAlonzoTxAuxData)
 import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..))
 import Cardano.Ledger.BaseTypes (EpochNo (..), Network (..))
 import Cardano.Ledger.Binary (Sized (..))
@@ -312,6 +314,19 @@ mkSimpleTx isValid' txBody =
     , auxiliaryData = maybeToStrictMaybe Nothing
     }
 
+mkAuxDataTx ::
+  Bool ->
+  ConwayTxBody StandardConway ->
+  Map Word64 Metadatum ->
+  AlonzoTx StandardConway
+mkAuxDataTx isValid' txBody auxData =
+  AlonzoTx
+    { body = txBody
+    , wits = mempty
+    , isValid = IsValid isValid'
+    , auxiliaryData = SJust (mkAlonzoTxAuxData auxData [])
+    }
+
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential StandardCrypto -> ConwayTxCert StandardConway)] ->
   ConwayLedgerState ->
@@ -452,6 +467,19 @@ mkTxDelegCert ::
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
 mkTxDelegCert f = ConwayTxCertDeleg . f
+
+mkDummyTxBody :: ConwayTxBody StandardConway
+mkDummyTxBody =
+  consTxBody
+    mempty
+    mempty
+    mempty
+    mempty
+    SNothing
+    mempty
+    mempty
+    mempty
+    (Withdrawals mempty)
 
 mkFullTx ::
   Int ->

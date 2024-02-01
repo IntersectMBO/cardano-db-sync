@@ -8,6 +8,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Stake (
   stakeAddressPtr,
   stakeAddressPtrDereg,
   stakeAddressPtrUseBefore,
+  registerStakeCreds,
+  registerStakeCredsNoShelley,
 
   -- * Stake Distribution
   stakeDistGenesis,
@@ -385,3 +387,48 @@ delegationsManyNotDense =
     assertEpochStakeEpoch dbSync 7 40_005
   where
     testLabel = "conwayDelegationsManyNotDense"
+
+registerStakeCreds :: IOManager -> [(Text, Text)] -> Assertion
+registerStakeCreds = do
+  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- These will be saved
+    void $ Api.registerAllStakeCreds interpreter mockServer
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 1
+
+    -- Verify stake registrations
+    let expectedRegCount = 4
+    assertCertCounts dbSync (expectedRegCount, 0, 0, 0)
+  where
+    args =
+      initCommandLineArgs
+        { claFullMode = False
+        }
+    testLabel = "conwayConfigShelleyEnabled"
+    cfgDir = conwayConfigDir
+
+registerStakeCredsNoShelley :: IOManager -> [(Text, Text)] -> Assertion
+registerStakeCredsNoShelley = do
+  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- These should not be saved when shelley is disabled
+    void $ Api.registerAllStakeCreds interpreter mockServer
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 1
+
+    -- Verify stake registrations
+    let expectedRegCount = 0
+    assertCertCounts dbSync (expectedRegCount, 0, 0, 0)
+  where
+    args =
+      initCommandLineArgs
+        { claConfigFilename = "test-db-sync-config-no-shelley.json"
+        , claFullMode = False
+        }
+    testLabel = "conwayConfigShelleyDisabled"
+    cfgDir = conwayConfigDir

@@ -21,6 +21,7 @@ module Cardano.DbSync (
   -- For testing and debugging
   OffChainFetchError (..),
   SimplifiedOffChainPoolData (..),
+  extractSyncOptions,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
@@ -224,7 +225,7 @@ extractSyncOptions :: SyncNodeParams -> Bool -> SyncNodeConfig -> SyncOptions
 extractSyncOptions snp aop snc =
   SyncOptions
     { soptEpochAndCacheEnabled =
-        not (spcTxOut (dncInsertConfig snc) == TxOutBootstrap)
+        not isTxOutBootstrap
           && ioInOut iopts
           && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
@@ -233,9 +234,9 @@ extractSyncOptions snp aop snc =
     , soptOnlyFix = enpOnlyFix snp
     , soptPruneConsumeMigration =
         initPruneConsumeMigration
-          (spcTxOut (dncInsertConfig snc) == TxOutConsumed)
-          (spcTxOut (dncInsertConfig snc) == TxOutPrune)
-          (spcTxOut (dncInsertConfig snc) == TxOutBootstrap)
+          isTxOutConsumed
+          isTxOutPrune
+          isTxOutBootstrap
           (enpForceTxIn snp) -- TODO[sgillespie]
     , soptInsertOptions = iopts
     , snapshotEveryFollowing = enpSnEveryFollowing snp
@@ -243,9 +244,10 @@ extractSyncOptions snp aop snc =
     }
   where
     maybeKeepMNames =
-      if null (enpKeepMetadataNames snp)
-        then Strict.Nothing
-        else Strict.Just (enpKeepMetadataNames snp)
+      case spcMetadata (dncInsertConfig snc) of
+        MetadataKeys ks -> Strict.Just (map fromIntegral $ toList ks)
+        MetadataEnable -> Strict.Nothing
+        MetadataDisable -> Strict.Nothing
 
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
@@ -256,17 +258,25 @@ extractSyncOptions snp aop snc =
           InsertOptions
             { ioInOut = enpHasInOut snp
             , ioUseLedger = useLedger
-            , ioShelley = enpHasShelley snp
+            , ioShelley = isShelleyEnabled (spcShelley (dncInsertConfig snc))
             , ioRewards = True
-            , ioMultiAssets = enpHasMultiAssets snp
-            , ioMetadata = enpHasMetadata snp
+            , ioMultiAssets = isMultiAssetEnabled (spcMultiAsset (dncInsertConfig snc))
+            , ioMetadata = isMetadataEnabled (spcMetadata (dncInsertConfig snc))
             , ioKeepMetadataNames = maybeKeepMNames
-            , ioPlutusExtra = enpHasPlutusExtra snp
-            , ioOffChainPoolData = enpHasOffChainPoolData snp
-            , ioGov = enpHasGov snp
+            , ioPlutusExtra = isPlutusEnabled (spcPlutus (dncInsertConfig snc))
+            , ioOffChainPoolData = useOffchainPoolData
+            , ioGov = useGovernance
             }
 
-    useLedger = enpHasLedger snp && enpShouldUseLedger snp && not (enpOnlyUTxO snp)
+    useLedger = (spcLedger (dncInsertConfig snc) == LedgerEnable) && not (enpOnlyUTxO snp)
+    useOffchainPoolData =
+      isOffchainPoolDataEnabled (spcOffchainPoolData (dncInsertConfig snc))
+    useGovernance =
+      isGovernanceEnabled (spcGovernance (dncInsertConfig snc))
+
+    isTxOutConsumed = spcTxOut (dncInsertConfig snc) == TxOutConsumed
+    isTxOutPrune = spcTxOut (dncInsertConfig snc) == TxOutPrune
+    isTxOutBootstrap = spcTxOut (dncInsertConfig snc) == TxOutBootstrap
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do

@@ -1,7 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Cardano.DbSync.Config.TypesTest (tests) where
+module Cardano.DbSync.Config.TypesTest (
+  tests,
+  genSyncInsertConfig,
+) where
 
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Gen as Gen
