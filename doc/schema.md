@@ -1,6 +1,8 @@
+Resolving dependencies...
+Up to date
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.0 (from branch **kderme/sancho-3-0-0** which may not accurately reflect the version number)
+Schema version: 13.2.0.0 (from branch **kderme/optimizations** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -124,7 +126,6 @@ A table for transaction outputs.
 | `tx_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
 | `index` | txindex | The index of this transaction output with the transaction. |
 | `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
-| `address_raw` | blob | The raw binary address. |
 | `address_has_script` | boolean | Flag which shows if this address is locked by a script. |
 | `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
 | `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
@@ -145,7 +146,6 @@ A table for transaction collateral outputs. New in v13.
 | `tx_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
 | `index` | txindex | The index of this transaction output with the transaction. |
 | `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
-| `address_raw` | blob | The raw binary address. |
 | `address_has_script` | boolean | Flag which shows if this address is locked by a script. |
 | `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
 | `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
@@ -383,7 +383,7 @@ A table for metadata attached to a transaction.
 
 ### `reward`
 
-A table for earned rewards. It includes 5 types of rewards. The rewards are inserted incrementally and this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries may be missing.
+A table for earned staking rewards. After 13.2 release it includes only 3 types of rewards: member, leader and refund,  since the other 2 types have moved to a separate table instant_reward. The rewards are inserted incrementally and this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries may be missing.
 
 * Primary Id: `id`
 
@@ -391,11 +391,26 @@ A table for earned rewards. It includes 5 types of rewards. The rewards are inse
 |-|-|-|
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
-| `type` | rewardtype | The source of the rewards; pool `member`, pool `leader`, `treasury` or `reserves` payment and pool deposits `refunds` |
+| `type` | rewardtype | The type of the rewards |
 | `amount` | lovelace | The reward amount (in Lovelace). |
-| `earned_epoch` | integer (64) | The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be `N - 2`, for `treasury` and `reserves` `N - 1` and for `refund` N. |
+| `earned_epoch` | integer (64) | The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be `N - 2`, `refund` N. |
 | `spendable_epoch` | integer (64) | The epoch in which the reward is actually distributed and can be spent. |
-| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned or for the pool that there is a deposit refund. Will be NULL for payments from the treasury or the reserves. |
+| `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned or for the pool that there is a deposit refund. |
+
+### `instant_reward`
+
+A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury. This table only exists for historic reasons, since instant rewards are depredated after Conway. New in 13.2
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `addr_id` | integer (64) | The StakeAddress table index for the stake address that earned the reward. |
+| `type` | rewardtype | The type of the rewards. |
+| `amount` | lovelace | The reward amount (in Lovelace). |
+| `earned_epoch` | integer (64) | The epoch in which the reward was earned. For rewards spendable in epoch `N`, this will be `N - 1`. |
+| `spendable_epoch` | integer (64) | The epoch in which the reward is actually distributed and can be spent. |
 
 ### `withdrawal`
 
@@ -790,8 +805,8 @@ A table for every committee hot key registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this registration within the certificates of this transaction. |
-| `cold_key` | bytea | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
-| `hot_key` | bytea | The registered hot hey hash |
+| `cold_key` | hash28type | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
+| `hot_key` | hash28type | The registered hot hey hash |
 
 ### `committee_de_registration`
 
@@ -804,7 +819,7 @@ A table for every committee key de-registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
-| `cold_key` | bytea | The deregistered cold key hash |
+| `cold_key` | hash28type | The deregistered cold key hash |
 | `voting_anchor_id` | integer (64) | The Voting anchor reference id |
 
 ### `drep_registration`
@@ -882,7 +897,7 @@ A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 |-|-|-|
 | `id` | integer (64) |  |
 | `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. |
-| `quorum_nominator` | integer (64) | The proposed quorum nominator. |
+| `quorum_numerator` | integer (64) | The proposed quorum nominator. |
 | `quorum_denominator` | integer (64) | The proposed quorum denominator. |
 | `deleted_members` | string | The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway. |
 | `added_members` | string | The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway. |

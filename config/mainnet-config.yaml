@@ -12,7 +12,7 @@ EnableLogging: True
 # config, it will likely lead to db-sync throwing up weird error messages from
 # the consensus layer.
 # The path to the node config file is relative to this config file.
-NodeConfigFile: /nix/store/33r8vqnrlhbpk6vifd1hphphg8v6fc89-config-0-0.json
+NodeConfigFile: /nix/store/8lnh50vcc13zq5av67sakyj23ybgssnh-config-0-0.json
 
 # ------------------------------------------------------------------------------
 # Logging configuration follows.
