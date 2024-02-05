@@ -20,18 +20,18 @@ import Prelude ()
 conwayGenesis :: Assertion
 conwayGenesis =
   mkSyncNodeConfig configDir
-    >>= void . mkConfig configDir mutableDir cmdLineArgs
+    >>= void . mkConfig (mkConfigDir configDir) mutableDir cmdLineArgs
   where
-    configDir = mkConfigDir "config-conway"
+    configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigSimple"
     cmdLineArgs = initCommandLineArgs
 
 missingConwayGenesis :: Assertion
 missingConwayGenesis = do
-  res <- try $ mkConfig configDir mutableDir cmdLineArgs =<< mkSyncNodeConfig configDir
+  res <- try $ mkConfig (mkConfigDir configDir) mutableDir cmdLineArgs =<< mkSyncNodeConfig configDir
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
-    configDir = mkConfigDir "config-conway-missing-genesis"
+    configDir = "config-conway-missing-genesis"
     mutableDir = mkMutableDir "conwayConfigMissingGenesis"
     cmdLineArgs = initCommandLineArgs
 
@@ -40,9 +40,9 @@ noConwayGenesis = do
   cfg <- mkSyncNodeConfig configDir
   let cfg' = cfg {dncConwayGenesisFile = Nothing}
   void $
-    mkConfig configDir mutableDir cmdLineArgs cfg'
+    mkConfig (mkConfigDir configDir) mutableDir cmdLineArgs cfg'
   where
-    configDir = mkConfigDir "config-conway"
+    configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
     cmdLineArgs = initCommandLineArgs
 
@@ -51,9 +51,9 @@ noConwayGenesisHash = do
   cfg <- mkSyncNodeConfig configDir
   let cfg' = cfg {dncConwayGenesisHash = Nothing}
   void $
-    mkConfig configDir mutableDir initCommandLineArgs cfg'
+    mkConfig (mkConfigDir configDir) mutableDir initCommandLineArgs cfg'
   where
-    configDir = mkConfigDir "config-conway"
+    configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
 
 wrongConwayGenesisHash :: Assertion
@@ -62,10 +62,10 @@ wrongConwayGenesisHash = do
   hash <- Aeson.throwDecode "\"0000000000000000000000000000000000000000000000000000000000000000\""
   let cfg' = cfg {dncConwayGenesisHash = Just hash}
 
-  res <- try (mkConfig configDir mutableDir initCommandLineArgs cfg')
+  res <- try (mkConfig (mkConfigDir configDir) mutableDir initCommandLineArgs cfg')
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
-    configDir = mkConfigDir "config-conway"
+    configDir = "config-conway"
     mutableDir = mkMutableDir "configConwayWrongGenesis"
 
 isConwayConfigError :: Either SyncNodeError a -> Bool

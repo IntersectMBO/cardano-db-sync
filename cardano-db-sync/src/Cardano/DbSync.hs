@@ -68,7 +68,7 @@ import Prelude (id)
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
   withIOManager $ \iomgr -> do
-    trce <- configureLogging params "db-sync-node"
+    trce <- configureLogging syncNodeConfigFromFile "db-sync-node"
 
     abortOnPanic <- hasAbortOnPanicEnv
     startupReport trce abortOnPanic params

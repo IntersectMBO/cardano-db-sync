@@ -33,14 +33,11 @@ import Cardano.DbSync.Config.Types
 import Cardano.Prelude
 import System.FilePath (takeDirectory, (</>))
 
-configureLogging :: SyncNodeParams -> Text -> IO (Trace IO Text)
-configureLogging params loggingName = do
-  let configFile = enpConfigFile params
-  enc <- readSyncNodeConfig configFile
-
-  if not (dncEnableLogging enc)
+configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO Text)
+configureLogging syncNodeConfig loggingName = do
+  if not (dncEnableLogging syncNodeConfig)
     then pure Logging.nullTracer
-    else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig enc) loggingName
+    else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig syncNodeConfig) loggingName
 
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do

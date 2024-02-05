@@ -467,7 +467,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
   let dbsyncParams = syncNodeParams cfg
   trce <-
     if shouldLog
-      then configureLogging dbsyncParams "db-sync-node"
+      then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
   let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params syncNodeConfig True
