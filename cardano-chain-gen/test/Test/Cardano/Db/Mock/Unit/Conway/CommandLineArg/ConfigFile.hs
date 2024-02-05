@@ -13,7 +13,7 @@ import Prelude ()
 
 checkConfigFileArg :: IOManager -> [(Text, Text)] -> Assertion
 checkConfigFileArg =
-  withCustomConfig cliArgs conwayConfigDir testLabel $ \_ _ dbSync -> do
+  withCustomConfig cliArgs Nothing conwayConfigDir testLabel $ \_ _ dbSync -> do
     startDBSync dbSync
     -- There is a slight delay before the flag is checked
     threadDelay 2_000_000

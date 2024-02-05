@@ -13,7 +13,7 @@ import Prelude ()
 
 checkForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkForceIndexesArg =
-  withCustomConfig cliArgs conwayConfigDir testLabel $ \_ _ dbSync -> do
+  withCustomConfig cliArgs Nothing conwayConfigDir testLabel $ \_ _ dbSync -> do
     startDBSync dbSync
 
     -- Verify number of DB indexes
@@ -24,7 +24,7 @@ checkForceIndexesArg =
 
 checkNoForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkNoForceIndexesArg =
-  withCustomConfigAndDropDB cliArgs conwayConfigDir testLabel $ \_ _ dbSync -> do
+  withCustomConfigAndDropDB cliArgs Nothing conwayConfigDir testLabel $ \_ _ dbSync -> do
     startDBSync dbSync
 
     -- Verify number of DB indexes

@@ -41,9 +41,11 @@ main = do
 
     run :: SyncNodeParams -> IO ()
     run prms = do
-      prometheusPort <- dncPrometheusPort <$> readSyncNodeConfig (enpConfigFile prms)
+      -- read the config file as early as possible
+      syncNodeConfigFromFile <- readSyncNodeConfig (enpConfigFile prms)
+      let prometheusPort = dncPrometheusPort syncNodeConfigFromFile
       withMetricSetters prometheusPort $ \metricsSetters ->
-        runDbSyncNode metricsSetters knownMigrationsPlain prms
+        runDbSyncNode metricsSetters knownMigrationsPlain prms syncNodeConfigFromFile
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -70,7 +72,7 @@ depricated =
       <> Opt.hidden
 
 pRunDbSyncNode :: Parser SyncNodeParams
-pRunDbSyncNode =
+pRunDbSyncNode = do
   SyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
