@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:11.18-alpine
+    image: postgres:14.10-alpine
     environment:
       - POSTGRES_LOGGING=true
       - POSTGRES_DB_FILE=/run/secrets/postgres_db
@@ -32,7 +32,7 @@ services:
         max-file: "10"
 
   cardano-node:
-    image: inputoutput/cardano-node:8.0.0
+    image: ghcr.io/intersectmbo/cardano-node:8.7.3
     environment:
       - NETWORK=${NETWORK:-mainnet}
     volumes:
@@ -53,7 +53,7 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: inputoutput/cardano-db-sync:13.2.0.0
+    image: ghcr.io/intersectmbo/cardano-db-sync:13.2.0.0
     environment:
       - DISABLE_LEDGER=${DISABLE_LEDGER}
       - NETWORK=${NETWORK:-mainnet}
