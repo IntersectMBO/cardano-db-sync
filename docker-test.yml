@@ -2,7 +2,7 @@ version: "3.5"
 
 services:
   postgres:
-    image: postgres:11.5-alpine
+    image: postgres:14.10-alpine
     environment:
       - POSTGRES_LOGGING=true
       - POSTGRES_DB_FILE=/run/secrets/postgres_db
@@ -33,4 +33,3 @@ secrets:
 
 volumes:
   postgres:
-
