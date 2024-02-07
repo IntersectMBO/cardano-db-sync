@@ -29,7 +29,7 @@ import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
-import Cardano.DbSync.Config (configureLogging, readSyncNodeConfig)
+import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types (
   ConfigFile (..),
@@ -65,15 +65,15 @@ import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
 
-runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> IO ()
-runDbSyncNode metricsSetters knownMigrations params =
+runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
+runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
   withIOManager $ \iomgr -> do
-    trce <- configureLogging params "db-sync-node"
+    trce <- configureLogging syncNodeConfigFromFile "db-sync-node"
 
-    aop <- hasAbortOnPanicEnv
-    startupReport trce aop params
+    abortOnPanic <- hasAbortOnPanicEnv
+    startupReport trce abortOnPanic params
 
-    runDbSync metricsSetters knownMigrations iomgr trce params aop
+    runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic
 
 runDbSync ::
   MetricSetters ->
@@ -81,9 +81,11 @@ runDbSync ::
   IOManager ->
   Trace IO Text ->
   SyncNodeParams ->
+  SyncNodeConfig ->
+  -- Should abort on panic
   Bool ->
   IO ()
-runDbSync metricsSetters knownMigrations iomgr trce params aop = do
+runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic = do
   logInfo trce $ textShow syncOpts
   -- Read the PG connection info
   pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
@@ -124,7 +126,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce pgConfig slotNo
-  runSyncNode metricsSetters trce iomgr connectionString ranMigrations (void . runMigration) params syncOpts
+  runSyncNode metricsSetters trce iomgr connectionString ranMigrations (void . runMigration) syncNodeConfigFromFile params syncOpts
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
@@ -139,7 +141,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params aop = do
         , " in the schema directory and restart it."
         ]
 
-    syncOpts = extractSyncOptions params aop
+    syncOpts = extractSyncOptions params abortOnPanic
 
 runSyncNode ::
   MetricSetters ->
@@ -150,23 +152,22 @@ runSyncNode ::
   Bool ->
   -- | run migration function
   RunMigration ->
+  SyncNodeConfig ->
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeParams syncOptions = do
-  syncNodeConfig <- readSyncNodeConfig configFile
+runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
-
-  logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfig)
-  logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfig)
-  logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfig)
+  logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfigFromFile)
+  logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
+  logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
       \backend -> liftIO $ do
         runOrThrowIO $ runExceptT $ do
-          genCfg <- readCardanoGenesisConfig syncNodeConfig
+          genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
@@ -176,6 +177,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 dbConnString
                 syncOptions
                 genCfg
+                syncNodeConfigFromFile
                 syncNodeParams
                 ranMigrations
                 runMigrationFnc
@@ -183,7 +185,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
           unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             Db.noLedgerMigrations backend trce
-          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfig) genCfg (useShelleyInit syncNodeConfig)
+          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
@@ -203,7 +205,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
         _ -> False
 
-    configFile = enpConfigFile syncNodeParams
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 
 logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()

@@ -229,8 +229,8 @@ mkConfig staticDir mutableDir cmdLineArgs config = do
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
 
 mkSyncNodeConfig :: FilePath -> IO SyncNodeConfig
-mkSyncNodeConfig staticDir =
-  readSyncNodeConfig $ ConfigFile (staticDir </> "test-db-sync-config.json")
+mkSyncNodeConfig configFilePath =
+  readSyncNodeConfig $ ConfigFile (mkConfigDir configFilePath </> "test-db-sync-config.json")
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
@@ -325,7 +325,16 @@ withFullConfig ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig = withFullConfig' (WithConfigArgs True False False) initCommandLineArgs
+withFullConfig =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = False
+        , shouldDropDB = False
+        }
+    )
+    initCommandLineArgs
+    Nothing
 
 -- this function needs to be used where the schema needs to be rebuilt
 withFullConfigAndDropDB ::
@@ -337,19 +346,41 @@ withFullConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndDropDB = withFullConfig' (WithConfigArgs True False True) initCommandLineArgs
+withFullConfigAndDropDB =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = False
+        , shouldDropDB = True
+        }
+    )
+    initCommandLineArgs
+    Nothing
 
 withFullConfigAndLogs ::
+  -- | config filepath
   FilePath ->
+  -- | test label
   FilePath ->
   (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndLogs = withFullConfig' (WithConfigArgs True True False) initCommandLineArgs
+withFullConfigAndLogs =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = True
+        , shouldDropDB = False
+        }
+    )
+    initCommandLineArgs
+    Nothing
 
 withCustomConfig ::
   CommandLineArgs ->
+  -- | custom SyncNodeConfig
+  Maybe SyncNodeConfig ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -358,10 +389,19 @@ withCustomConfig ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfig = withFullConfig' (WithConfigArgs True False False)
+withCustomConfig =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = False
+        , shouldDropDB = False
+        }
+    )
 
 withCustomConfigAndDropDB ::
   CommandLineArgs ->
+  -- | custom SyncNodeConfig
+  Maybe SyncNodeConfig ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -370,11 +410,20 @@ withCustomConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndDropDB = withFullConfig' (WithConfigArgs True False True)
+withCustomConfigAndDropDB =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = False
+        , shouldDropDB = True
+        }
+    )
 
 -- This is a usefull function to be able to see logs from DBSync when writing/debuging tests
 withCustomConfigAndLogs ::
   CommandLineArgs ->
+  -- | custom SyncNodeConfig
+  Maybe SyncNodeConfig ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -383,11 +432,20 @@ withCustomConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogs = withFullConfig' (WithConfigArgs True True False)
+withCustomConfigAndLogs =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = True
+        , shouldDropDB = False
+        }
+    )
 
 withFullConfig' ::
   WithConfigArgs ->
   CommandLineArgs ->
+  -- | custom SyncNodeConfig
+  Maybe SyncNodeConfig ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -396,17 +454,23 @@ withFullConfig' ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig' WithConfigArgs {..} cmdLineArgs configFilePath testLabelFilePath action iom migr = do
+withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath testLabelFilePath action iom migr = do
   recreateDir mutableDir
-  cfg <- mkConfig configDir mutableDir cmdLineArgs =<< mkSyncNodeConfig configDir
+  -- check if custom syncNodeConfigs have been passed or not
+  syncNodeConfig <-
+    case mSyncNodeConfig of
+      Just snc -> pure snc
+      Nothing -> mkSyncNodeConfig configFilePath
+
+  cfg <- mkConfig (mkConfigDir configFilePath) mutableDir cmdLineArgs syncNodeConfig
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
   let dbsyncParams = syncNodeParams cfg
   trce <-
     if shouldLog
-      then configureLogging dbsyncParams "db-sync-node"
+      then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params True
+  let partialDbSyncRun params = runDbSync emptyMetricsSetters migr iom trce params syncNodeConfig True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
@@ -429,7 +493,6 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs configFilePath testLabelFilePath
             else void . hSilence [stderr] $ Db.truncateTables pgPass tableNames
           action interpreter mockServer dbSyncEnv
   where
-    configDir = mkConfigDir configFilePath
     mutableDir = mkMutableDir testLabelFilePath
 
 prepareFingerprintFile :: FilePath -> IO FilePath

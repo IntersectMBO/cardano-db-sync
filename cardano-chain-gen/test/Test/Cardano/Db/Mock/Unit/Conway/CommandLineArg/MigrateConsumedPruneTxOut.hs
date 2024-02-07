@@ -18,6 +18,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync (SyncNodeParams (..))
+import Cardano.DbSync.Config (SyncNodeConfig (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -33,20 +34,35 @@ import Prelude ()
 import qualified Prelude
 
 commandLineArgCheck :: IOManager -> [(Text, Text)] -> Assertion
-commandLineArgCheck =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+commandLineArgCheck ioManager names = do
+  -- be midefull that you have to manually pass the ioManager + names
+  syncNodeConfig <- mkSynNodeConfig
+  withCustomConfig
+    cmdLineArgs
+    (Just syncNodeConfig)
+    conwayConfigDir
+    testLabel
+    ( \interpreter mockServer dbSync -> do
+        void $
+          withConwayFindLeaderAndSubmitTx interpreter mockServer $
+            Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
 
-    startDBSync dbSync
-    assertBlockNoBackoff dbSync 1
-    assertEqQuery
-      dbSync
-      DB.queryTxConsumedColumnExists
-      True
-      "missing consumed_by_tx_id column when flag --consumed-tx-out active"
+        startDBSync dbSync
+        assertBlockNoBackoff dbSync 1
+        assertEqQuery
+          dbSync
+          DB.queryTxConsumedColumnExists
+          True
+          "missing consumed_by_tx_id column when flag --consumed-tx-out active"
+    )
+    ioManager
+    names
   where
+    -- an example of how we will pass our custom configs overwriting the init file
+    mkSynNodeConfig :: IO SyncNodeConfig
+    mkSynNodeConfig = do
+      initConfigFile <- mkSyncNodeConfig conwayConfigDir
+      pure $ initConfigFile {dncEnableLogging = True}
     cmdLineArgs =
       initCommandLineArgs
         { claMigrateConsumed = True
@@ -56,7 +72,7 @@ commandLineArgCheck =
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add some blocks
@@ -95,7 +111,7 @@ basicPrune =
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -136,7 +152,7 @@ pruneWithSimpleRollback =
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithFullTxRollback =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     -- Forge a block
     blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -178,7 +194,7 @@ pruneWithFullTxRollback =
 -- The transactions in the last `2 * securityParam` blocks should not be pruned
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
 pruningShouldKeepSomeTx =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -212,7 +228,7 @@ pruningShouldKeepSomeTx =
 
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneAndRollBackOneBlock =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -255,7 +271,7 @@ pruneAndRollBackOneBlock =
 
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
 noPruneAndRollBack =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -298,7 +314,7 @@ noPruneAndRollBack =
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneSameBlock =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -338,7 +354,7 @@ pruneSameBlock =
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 noPruneSameBlock =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -374,7 +390,7 @@ noPruneSameBlock =
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -403,7 +419,7 @@ migrateAndPruneRestart =
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 pruneRestartMissingFlag =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -432,7 +448,7 @@ pruneRestartMissingFlag =
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 bootstrapRestartMissingFlag =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks

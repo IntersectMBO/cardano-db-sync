@@ -15,6 +15,7 @@ module Cardano.DbSync.Api.Types (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (Cache)
+import Cardano.DbSync.Config.Types (SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
@@ -54,6 +55,7 @@ data SyncEnv = SyncEnv
   , envOffChainVoteResultQueue :: !(StrictTBQueue IO OffChainVoteResult)
   , envOffChainVoteWorkQueue :: !(StrictTBQueue IO OffChainVoteWorkQueue)
   , envOptions :: !SyncOptions
+  , envSyncNodeConfig :: !SyncNodeConfig
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }

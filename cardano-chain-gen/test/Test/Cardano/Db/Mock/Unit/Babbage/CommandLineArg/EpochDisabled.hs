@@ -21,7 +21,7 @@ mkCommandLineArgs epochDisabled = initCommandLineArgs {claEpochDisabled = epochD
 -- this test fails as incorrect configuration file given
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochDisabledArg =
-  withCustomConfigAndDropDB (mkCommandLineArgs True) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfigAndDropDB (mkCommandLineArgs True) Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 50
     -- add 2 blocks with tx
@@ -36,7 +36,7 @@ checkEpochDisabledArg =
 
 checkEpochEnabled :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochEnabled =
-  withCustomConfig (mkCommandLineArgs False) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig (mkCommandLineArgs False) Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 50
     -- add 2 blocks with tx

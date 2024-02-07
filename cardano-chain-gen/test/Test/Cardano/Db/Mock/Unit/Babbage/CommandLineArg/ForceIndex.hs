@@ -16,7 +16,7 @@ import Test.Tasty.HUnit (Assertion)
 
 checkForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkForceIndexesArg =
-  withCustomConfig commandLineForceIndexArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
+  withCustomConfig commandLineForceIndexArgs Nothing babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
     threadDelay 3_000_000
     assertEqQuery dbSyncEnv DB.queryPgIndexesCount 162 "there wasn't the correct number of indexes"
@@ -29,7 +29,7 @@ checkForceIndexesArg =
 
 checkNoForceIndexesArg :: IOManager -> [(Text, Text)] -> Assertion
 checkNoForceIndexesArg =
-  withCustomConfigAndDropDB commandLineNoForceIndexArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
+  withCustomConfigAndDropDB commandLineNoForceIndexArgs Nothing babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
     threadDelay 3_000_000
     assertEqQuery dbSyncEnv DB.queryPgIndexesCount 97 "there wasn't the correct number of indexes"

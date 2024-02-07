@@ -51,7 +51,7 @@ import Test.Tasty.HUnit (Assertion)
 
 commandLineArgCheck :: IOManager -> [(Text, Text)] -> Assertion
 commandLineArgCheck = do
-  withCustomConfigAndDropDB cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfigAndDropDB cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
@@ -69,7 +69,7 @@ commandLineArgCheck = do
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     -- add 50 block
     b1 <- forgeAndSubmitBlocks interpreter mockServer 50
@@ -98,7 +98,7 @@ basicPrune = do
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
     atomically $ addBlock mockServer blk0
@@ -128,7 +128,7 @@ pruneWithSimpleRollback = do
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithFullTxRollback = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -162,7 +162,7 @@ pruneWithFullTxRollback = do
 -- In these tests, 2 x securityParam = 20 blocks.
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
 pruningShouldKeepSomeTx = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 80
     -- these two blocs + tx will fall withing the last 20 blocks so should not be pruned
@@ -189,7 +189,7 @@ pruningShouldKeepSomeTx = do
 -- prune with rollback
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneAndRollBackOneBlock = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 98
     -- add 2 blocks with tx
@@ -225,7 +225,7 @@ pruneAndRollBackOneBlock = do
 -- consume with rollback
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
 noPruneAndRollBack = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 98
     -- add 2 blocks with tx
@@ -260,7 +260,7 @@ noPruneAndRollBack = do
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneSameBlock =
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 76
     blk77 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -289,7 +289,7 @@ pruneSameBlock =
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 noPruneSameBlock =
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 96
     blk97 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -315,7 +315,7 @@ noPruneSameBlock =
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let DBSyncEnv {..} = dbSyncEnv
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
@@ -340,7 +340,7 @@ migrateAndPruneRestart = do
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 pruneRestartMissingFlag = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let DBSyncEnv {..} = dbSyncEnv
 
     startDBSync dbSyncEnv
@@ -366,7 +366,7 @@ pruneRestartMissingFlag = do
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 bootstrapRestartMissingFlag = do
-  withCustomConfig cmdLineArgs babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let DBSyncEnv {..} = dbSyncEnv
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50

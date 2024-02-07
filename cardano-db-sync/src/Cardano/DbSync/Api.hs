@@ -363,11 +363,12 @@ mkSyncEnv ::
   Ledger.Network ->
   NetworkMagic ->
   SystemStart ->
+  SyncNodeConfig ->
   SyncNodeParams ->
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNP ranMigrations runMigrationFnc = do
+mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
   consistentLevelVar <- newTVarIO Unchecked
@@ -405,6 +406,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   pure $
     SyncEnv
       { envBackend = backend
+      , envBootstrap = bootstrapVar
       , envCache = cache
       , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
@@ -413,7 +415,6 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar
       , envIsFixed = fixDataVar
-      , envBootstrap = bootstrapVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
       , envOffChainPoolResultQueue = oprq
@@ -422,6 +423,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envOffChainVoteWorkQueue = oawq
       , envOptions = syncOptions
       , envRunDelayedMigration = runMigrationFnc
+      , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }
 
@@ -431,13 +433,14 @@ mkSyncEnvFromConfig ::
   ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
+  SyncNodeConfig ->
   SyncNodeParams ->
   -- | migrations were ran on startup
   Bool ->
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeParams ranMigration runMigrationFnc =
+mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -471,6 +474,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodePar
               (Shelley.sgNetworkId $ scConfig sCfg)
               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              syncNodeConfigFromFile
               syncNodeParams
               ranMigration
               runMigrationFnc

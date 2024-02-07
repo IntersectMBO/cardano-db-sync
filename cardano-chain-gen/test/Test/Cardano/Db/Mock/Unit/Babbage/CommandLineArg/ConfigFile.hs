@@ -12,7 +12,7 @@ import Test.Tasty.HUnit (Assertion)
 -- this test fails as incorrect configuration file given
 checkConfigFileArg :: IOManager -> [(Text, Text)] -> Assertion
 checkConfigFileArg =
-  withCustomConfig commandLineConfigArgs babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
+  withCustomConfig commandLineConfigArgs Nothing babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     -- poll dbSync to see if it's running, which it shouldn't
     checkStillRuns dbSyncEnv
   where
