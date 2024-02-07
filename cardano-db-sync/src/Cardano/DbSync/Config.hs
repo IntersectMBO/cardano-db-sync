@@ -20,7 +20,7 @@ module Cardano.DbSync.Config (
   readCardanoGenesisConfig,
   readSyncNodeConfig,
   configureLogging,
-  plutusWhitelistCheckTxOut,
+  plutusMultiAssetWhitelistCheck,
 ) where
 
 import qualified Cardano.BM.Configuration.Model as Logging
@@ -33,7 +33,10 @@ import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPr
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Mary.Value (PolicyID (..))
 import Cardano.Prelude
+import Data.Map (keys)
 import System.FilePath (takeDirectory, (</>))
 
 configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO Text)
@@ -92,27 +95,60 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
 
--- do a whitelist check against a list of TxOut and if one matches we keep them all
-plutusWhitelistCheckTxOut :: SyncEnv -> [Generic.TxOut] -> Bool
-plutusWhitelistCheckTxOut syncEnv txOuts = do
-  let iopts = soptInsertOptions $ envOptions syncEnv
+-- check both whitelist but also checking plutus Maybes first
+-- TODO: cmdv: unsure if this is correct because if plutusMaybeCheck fails then no multiasset whitelist is not checked
+plutusMultiAssetWhitelistCheck :: SyncEnv -> [Generic.TxOut] -> Bool
+plutusMultiAssetWhitelistCheck syncEnv txOuts =
+  plutusMaybeCheck txOuts && (plutusWhitelistCheck syncEnv txOuts || multiAssetWhitelistCheck syncEnv txOuts)
+
+plutusMaybeCheck :: [Generic.TxOut] -> Bool
+plutusMaybeCheck =
+  any (\txOut -> isJust (Generic.txOutScript txOut) || isJust (Generic.maybePaymentCred $ Generic.txOutAddress txOut))
+
+plutusWhitelistCheck :: SyncEnv -> [Generic.TxOut] -> Bool
+plutusWhitelistCheck syncEnv txOuts = do
+  -- first check the config option
   case ioPlutusExtra iopts of
     PlutusEnable -> True
     PlutusDisable -> False
-    PlutusWhitelistScripts whitelist -> do
-      -- we map over our txOuts and check if txOutAddress OR txOutScript are in the whitelist
-      let whitelistCheck =
-            ( \txOut ->
-                case (Generic.txOutScript txOut, Generic.maybePaymentCred $ Generic.txOutAddress txOut) of
-                  (Just script, _) ->
-                    if Generic.txScriptHash script `elem` whitelist
-                      then Just txOut
-                      else Nothing
-                  (_, Just address) ->
-                    if address `elem` whitelist
-                      then Just txOut
-                      else Nothing
-                  (Nothing, Nothing) -> Nothing
-            )
-              <$> txOuts
-      any isJust whitelistCheck
+    PlutusWhitelistScripts plutusWhitelist -> plutuswhitelistCheck plutusWhitelist
+  where
+    iopts = soptInsertOptions $ envOptions syncEnv
+    plutuswhitelistCheck whitelist = do
+      any
+        ( isJust
+            . ( \txOut -> do
+                  case (Generic.txOutScript txOut, Generic.maybePaymentCred $ Generic.txOutAddress txOut) of
+                    (Just script, _) ->
+                      if Generic.txScriptHash script `elem` whitelist
+                        then Just txOut
+                        else Nothing
+                    (_, Just address) ->
+                      if address `elem` whitelist
+                        then Just txOut
+                        else Nothing
+                    (Nothing, Nothing) -> Nothing
+              )
+        )
+        txOuts
+
+multiAssetWhitelistCheck :: SyncEnv -> [Generic.TxOut] -> Bool
+multiAssetWhitelistCheck syncEnv txOuts = do
+  let iopts = soptInsertOptions $ envOptions syncEnv
+  case ioMultiAssets iopts of
+    MultiAssetEnable -> True
+    MultiAssetDisable -> False
+    MultiAssetWhitelistPolicies multiAssetWhitelist ->
+      or multiAssetwhitelistCheck
+      where
+        -- txOutMaValue is a Map and we want to check if any of the keys match our whitelist
+        multiAssetwhitelistCheck :: [Bool]
+        multiAssetwhitelistCheck =
+          ( \txout ->
+              any (checkMAValueMap multiAssetWhitelist) (keys $ Generic.txOutMaValue txout)
+          )
+            <$> txOuts
+
+        checkMAValueMap :: NonEmpty ByteString -> PolicyID StandardCrypto -> Bool
+        checkMAValueMap maWhitelist policyId =
+          Generic.unScriptHash (policyID policyId) `elem` maWhitelist

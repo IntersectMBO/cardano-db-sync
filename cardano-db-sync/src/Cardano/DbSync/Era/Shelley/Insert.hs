@@ -43,7 +43,7 @@ import Cardano.DbSync.Cache (
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
 
-import Cardano.DbSync.Config (plutusWhitelistCheckTxOut)
+import Cardano.DbSync.Config (plutusMultiAssetWhitelistCheck)
 import Cardano.DbSync.Config.Types (MetadataConfig (..), MultiAssetConfig (..), PlutusConfig (..), isMetadataEnableOrWhiteList, isPlutusEnableOrWhitelist)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (
@@ -324,8 +324,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     then do
       !txOutsGrouped <- do
         let txOuts = Generic.txOutputs tx
-        -- we do a plutus whitelist check
-        if plutusWhitelistCheckTxOut syncEnv txOuts
+        if plutusMultiAssetWhitelistCheck syncEnv txOuts
           then mapM (prepareTxOut tracer iopts cache (txId, txHash)) txOuts
           else pure mempty
 
@@ -339,7 +338,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       !txOutsGrouped <- do
         let txOuts = Generic.txOutputs tx
         -- we do a plutus whitelist check
-        if plutusWhitelistCheckTxOut syncEnv txOuts
+        if plutusMultiAssetWhitelistCheck syncEnv txOuts
           then mapM (prepareTxOut tracer iopts cache (txId, txHash)) txOuts
           else pure mempty
 
@@ -380,7 +379,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           MetadataDisable -> pure mempty
           MetadataEnable -> prepareMaTxMint tracer cache Nothing txId $ Generic.txMint tx
           MetadataWhitelistKeys whitelist -> prepareMaTxMint tracer cache (Just whitelist) txId $ Generic.txMint tx
-      -- TODO: cmdv do whitelist check here maybe?
+
       when (isPlutusEnableOrWhitelist $ ioPlutusExtra iopts) $
         mapM_ (lift . insertScript tracer txId) $
           Generic.txScripts tx
@@ -408,7 +407,7 @@ prepareTxOut ::
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut tracer iopts cache (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+prepareTxOut tracer iopts cache (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
   case ioPlutusExtra iopts of
     -- can skip to part2 as mDatumId & mScriptId aren't needed
     PlutusDisable -> buildExtendedTxOutPart2 Nothing Nothing
@@ -419,8 +418,8 @@ prepareTxOut tracer iopts cache (txId, txHash) (Generic.TxOut index addr addrRaw
       (MonadBaseControl IO m, MonadIO m) =>
       ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
     buildExtendedTxOutPart1 = do
-      mDatumId <- whenFalseEmpty (ioPlutusExtra iopts) Nothing $ Generic.whenInlineDatum dt $ insertDatum tracer cache txId
-      mScriptId <-  whenFalseEmpty (ioPlutusExtra iopts) Nothing $ whenMaybe mScript $ lift . insertScript tracer txId
+      mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer cache txId
+      mScriptId <- whenMaybe mScript $ lift . insertScript tracer txId
       buildExtendedTxOutPart2 mDatumId mScriptId
 
     buildExtendedTxOutPart2 ::
@@ -435,7 +434,6 @@ prepareTxOut tracer iopts cache (txId, txHash) (Generic.TxOut index addr addrRaw
               { DB.txOutTxId = txId
               , DB.txOutIndex = index
               , DB.txOutAddress = Generic.renderAddress addr
-              , DB.txOutAddressRaw = addrRaw
               , DB.txOutAddressHasScript = hasScript
               , DB.txOutPaymentCred = Generic.maybePaymentCred addr
               , DB.txOutStakeAddressId = mSaId
@@ -447,13 +445,8 @@ prepareTxOut tracer iopts cache (txId, txHash) (Generic.TxOut index addr addrRaw
       let !eutxo = ExtendedTxOut txHash txOut
       case ioMultiAssets iopts of
         MultiAssetDisable -> pure (eutxo, mempty)
-        -- prepareMaTxOuts with NO multi asset whitelist check
-        MultiAssetEnable -> do
+        _ -> do
           !maTxOuts <- prepareMaTxOuts tracer cache Nothing maMap
-          pure (eutxo, maTxOuts)
-        -- prepareMaTxOuts with a multiasset whitelist check
-        MultiAssetWhitelistPolicies whitelist -> do
-          !maTxOuts <- prepareMaTxOuts tracer cache (Just whitelist) maMap
           pure (eutxo, maTxOuts)
 
     hasScript :: Bool
@@ -467,7 +460,7 @@ insertCollateralTxOut ::
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxOut tracer cache inOpts (txId, _txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
+insertCollateralTxOut tracer cache inOpts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
   case ioPlutusExtra inOpts of
     PlutusDisable -> do
       _ <- insertColTxOutPart2 Nothing Nothing
@@ -487,8 +480,8 @@ insertCollateralTxOut tracer cache inOpts (txId, _txHash) (Generic.TxOut index a
         (Nothing, Nothing) -> void $ insertColTxOutPart2 Nothing Nothing
   where
     insertColTxOutPart1 = do
-      mDatumId <- whenFalseEmpty (isPlutusEnableOrWhitelist iopts) Nothing $ Generic.whenInlineDatum dt $ insertDatum tracer cache txId
-      mScriptId <- whenFalseEmpty (isPlutusEnableOrWhitelist iopts) Nothing $ whenMaybe mScript $ lift . insertScript tracer txId
+      mDatumId <- Generic.whenInlineDatum dt $ insertDatum tracer cache txId
+      mScriptId <- whenMaybe mScript $ lift . insertScript tracer txId
       insertColTxOutPart2 mDatumId mScriptId
       pure ()
 
@@ -501,7 +494,6 @@ insertCollateralTxOut tracer cache inOpts (txId, _txHash) (Generic.TxOut index a
             { DB.collateralTxOutTxId = txId
             , DB.collateralTxOutIndex = index
             , DB.collateralTxOutAddress = Generic.renderAddress addr
-            , DB.collateralTxOutAddressRaw = addrRaw
             , DB.collateralTxOutAddressHasScript = hasScript
             , DB.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
             , DB.collateralTxOutStakeAddressId = mSaId
@@ -1465,8 +1457,8 @@ insertMultiAsset cache mWhitelist policy aName = do
     Right maId -> pure $ Just maId
     Left (policyBs, assetNameBs) ->
       case mWhitelist of
+        -- we want to check the whitelist at the begining
         Just whitelist ->
-          --
           if policyBs `elem` whitelist
             then Just <$> insertAssettIntoDB policyBs assetNameBs
             else pure Nothing
