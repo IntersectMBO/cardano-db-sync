@@ -113,6 +113,7 @@ import Database.Persist.Class (
   replaceUnique,
  )
 import Database.Persist.EntityDef.Internal (entityDB, entityUniques)
+import Database.Persist.Postgresql (upsertWhere)
 import Database.Persist.Sql (
   OnlyOneUniqueKey,
   PersistRecordBackend,
@@ -352,7 +353,7 @@ insertEpochStakeProgress =
 
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
-  updateWhere [EpochStakeProgressEpochNo Database.Persist.==. epoch] [EpochStakeProgressCompleted Database.Persist.=. True]
+  upsertWhere (EpochStakeProgress epoch True) [EpochStakeProgressCompleted Database.Persist.=. True] [EpochStakeProgressEpochNo Database.Persist.==. epoch]
 
 updateGovActionEnacted :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
 updateGovActionEnacted gaid eNo =

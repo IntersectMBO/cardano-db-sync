@@ -955,6 +955,11 @@ schemaDocs =
       EpochStakeAmount # "The amount (in Lovelace) being staked."
       EpochStakeEpochNo # "The epoch number."
 
+    EpochStakeProgress --^ do
+      "A table which shows when the epoch_stake for an epoch is complete"
+      EpochStakeProgressEpochNo # "The related epoch"
+      EpochStakeProgressCompleted # "True if completed. If not completed the entry won't exist or more rarely be False."
+
     Treasury --^ do
       "A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0\
       \ (Alonzo) if more than one payment was made to a stake address in a single epoch, only the\
