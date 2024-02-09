@@ -1,6 +1,7 @@
 # Revision history for cardano-db-sync
 
 ## 13.2.0.0
+* Added a new table `epoch_stake_progress` which indicates when `epoch_stake` is completed
 * Uses the cache for the computation of `epoch` table when following
 * `epoch_stake` is now computed earlier, before the epoch is reached
 * Exception handling and concurrency improved.
