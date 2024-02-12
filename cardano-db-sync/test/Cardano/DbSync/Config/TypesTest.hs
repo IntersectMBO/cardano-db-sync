@@ -4,14 +4,13 @@
 module Cardano.DbSync.Config.TypesTest (tests) where
 
 import Cardano.DbSync.Config.Types
+import qualified Cardano.DbSync.Gen as Gen
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import Data.Aeson.QQ.Simple (aesonQQ)
-import Data.ByteString.Short (ShortByteString (), toShort)
 import Data.Default.Class (Default (..))
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
 import Prelude ()
 
 tests :: IO Bool
@@ -37,13 +36,13 @@ prop_syncInsertConfigFromJSON = property $ do
 
 prop_syncInsertConfigRoundtrip :: Property
 prop_syncInsertConfigRoundtrip = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
 
   tripping cfg Aeson.encode Aeson.decode
 
 prop_isTxEnabled :: Property
 prop_isTxEnabled = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
   let txOutCfg = spcTxOut cfg
 
   -- TxOut is enabled if it is not TxOutDisable
@@ -51,7 +50,7 @@ prop_isTxEnabled = property $ do
 
 prop_isLedgerEnabled :: Property
 prop_isLedgerEnabled = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
   let ledgerCfg = spcLedger cfg
 
   -- Ledger is enabled if it is not LedgerDisable
@@ -59,7 +58,7 @@ prop_isLedgerEnabled = property $ do
 
 prop_isShelleyEnabled :: Property
 prop_isShelleyEnabled = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
   let shelleyCfg = spcShelley cfg
 
   -- Shelley is enabled if it is not ShelleyDisable
@@ -67,7 +66,7 @@ prop_isShelleyEnabled = property $ do
 
 prop_isMultiAssetEnabled :: Property
 prop_isMultiAssetEnabled = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
   let multiAssetCfg = spcMultiAsset cfg
 
   -- MultiAsset is enabled if it is not MultiAssetDisable
@@ -75,7 +74,7 @@ prop_isMultiAssetEnabled = property $ do
 
 prop_isMetadataEnabled :: Property
 prop_isMetadataEnabled = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
   let metadataCfg = spcMetadata cfg
 
   -- Metadata is enabled if it is not MetadataDisable
@@ -83,68 +82,11 @@ prop_isMetadataEnabled = property $ do
 
 prop_isPlutusEnabled :: Property
 prop_isPlutusEnabled = property $ do
-  cfg <- forAll genSyncInsertConfig
+  cfg <- forAll Gen.syncInsertConfig
   let plutusCfg = spcPlutus cfg
 
   -- Plutus is enabled if it is not PlutusDisable
   isPlutusEnabled plutusCfg === (plutusCfg /= PlutusDisable)
-
-genSyncInsertConfig :: Gen SyncInsertConfig
-genSyncInsertConfig =
-  SyncInsertConfig
-    <$> Gen.element [TxOutEnable, TxOutDisable, TxOutConsumed, TxOutPrune, TxOutBootstrap]
-    <*> Gen.element [LedgerEnable, LedgerDisable, LedgerIgnore]
-    <*> genShelleyConfig
-    <*> genMultiAssetConfig
-    <*> genMetadataConfig
-    <*> genPlutusConfig
-    <*> (GovernanceConfig <$> Gen.bool)
-    <*> (OffchainPoolDataConfig <$> Gen.bool)
-    <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
-
-genShelleyConfig :: Gen ShelleyInsertConfig
-genShelleyConfig = do
-  Gen.choice
-    [ pure ShelleyEnable
-    , pure ShelleyDisable
-    , ShelleyStakeAddrs <$> Gen.nonEmpty (Range.linear 1 5) genAddr
-    ]
-
-genMultiAssetConfig :: Gen MultiAssetConfig
-genMultiAssetConfig =
-  Gen.choice
-    [ pure MultiAssetEnable
-    , pure MultiAssetDisable
-    , MultiAssetPolicies <$> Gen.nonEmpty (Range.linear 1 5) genPolicy
-    ]
-
-genMetadataConfig :: Gen MetadataConfig
-genMetadataConfig =
-  Gen.choice
-    [ pure MetadataEnable
-    , pure MetadataDisable
-    , MetadataKeys <$> Gen.nonEmpty (Range.linear 1 5) genKey
-    ]
-
-genPlutusConfig :: Gen PlutusConfig
-genPlutusConfig =
-  Gen.choice
-    [ pure PlutusEnable
-    , pure PlutusDisable
-    , PlutusScripts <$> Gen.nonEmpty (Range.linear 1 5) genScriptHash
-    ]
-
-genAddr :: Gen ShortByteString
-genAddr = toShort <$> Gen.utf8 (Range.linear 1 5) Gen.unicode
-
-genPolicy :: Gen ShortByteString
-genPolicy = toShort <$> Gen.utf8 (Range.linear 1 5) Gen.unicode
-
-genKey :: Gen Word
-genKey = Gen.word (Range.linear minBound maxBound)
-
-genScriptHash :: Gen ShortByteString
-genScriptHash = toShort <$> Gen.utf8 (Range.linear 1 5) Gen.unicode
 
 -- | Various JSON values that should generate the default config
 genDefaultJson :: Gen Aeson.Value
