@@ -112,6 +112,6 @@
     }
   ],
   "insert_options": {
-    "ledger": "disable"
+    "ledger": "ignore"
   }
 }

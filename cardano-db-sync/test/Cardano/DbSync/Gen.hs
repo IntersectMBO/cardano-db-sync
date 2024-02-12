@@ -53,26 +53,10 @@ syncNodeParams =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.list (Range.linear 0 10) (Gen.word64 (Range.linear minBound maxBound))
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
     <*> Gen.word64 (Range.linear 0 1000)
     <*> Gen.word64 (Range.linear 0 1000)
     <*> pure Nothing
+    <*> Gen.bool
 
 syncNodeConfig :: Logging.Configuration -> Gen SyncNodeConfig
 syncNodeConfig loggingCfg =
