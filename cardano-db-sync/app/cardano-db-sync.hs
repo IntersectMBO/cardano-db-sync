@@ -7,11 +7,9 @@ import Cardano.DbSync.Config
 import Cardano.DbSync.Metrics (withMetricSetters)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
-import Data.List.Split (splitOn)
 import Data.String (String)
 import qualified Data.Text as Text
 import Data.Version (showVersion)
-import GHC.Base (error)
 import MigrationValidations (KnownMigration (..), knownMigrations)
 import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
@@ -23,21 +21,19 @@ main = do
   cmd <- Opt.execParser opts
   case cmd of
     CmdVersion -> runVersionCommand
-    CmdRun params -> do
-      let maybeLedgerStateDir = enpMaybeLedgerStateDir params
-      case (maybeLedgerStateDir, enpHasLedger params) of
-        (Just _, True) -> run params
-        (Nothing, False) -> run params
-        (Just _, False) -> run params
-        (Nothing, True) -> error stateDirErrorMsg
+    CmdRun params -> run params
   where
+    -- TODO[sgillespie]: This check needs to come after we parse the config file
+    --
+    -- (Nothing, True) -> error stateDirErrorMsg
+    --
+    -- stateDirErrorMsg :: [Char]
+    -- stateDirErrorMsg =
+    --   "Error: If not using --state-dir then make sure to have --disable-ledger. "
+    --     <> "For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
+
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
-
-    stateDirErrorMsg :: [Char]
-    stateDirErrorMsg =
-      "Error: If not using --state-dir then make sure to have --disable-ledger. "
-        <> "For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
 
     run :: SyncNodeParams -> IO ()
     run prms = do
@@ -52,11 +48,12 @@ main = do
 opts :: ParserInfo SyncCommand
 opts =
   Opt.info
-    (depricated <*> pCommandLine <**> Opt.helper)
+    (pDeprecated <*> pCommandLine <**> Opt.helper)
     ( Opt.fullDesc
         <> Opt.progDesc "Cardano PostgreSQL sync node."
     )
 
+-- * Flags
 pCommandLine :: Parser SyncCommand
 pCommandLine =
   asum
@@ -64,12 +61,26 @@ pCommandLine =
     , CmdRun <$> pRunDbSyncNode
     ]
 
-depricated :: Parser (a -> a)
-depricated =
-  Opt.abortOption (Opt.InfoMsg "Error: disable-offline-data has been depricated, please use disable-offchain-pool-data instead") $
-    Opt.long "disable-offline-data"
-      <> Opt.help "disable-offline-data is depricated"
-      <> Opt.hidden
+pDeprecated :: Parser (a -> a)
+pDeprecated =
+  pDisableOfflineData
+    <*> pHasLedger
+    <*> pShouldUseLedger
+    <*> pKeepTxMetadata
+    <*> pHasShelley
+    <*> pHasMultiAssets
+    <*> pHasMetadata
+    <*> pHasPlutusExtra
+    <*> pHasGov
+    <*> pHasOffChainPoolData
+    <*> pForceTxIn
+    <*> pDisableAllMode
+    <*> pFullMode
+    <*> pOnlyUTxO
+    <*> pOnlyGov
+    <*> pMigrateConsumed
+    <*> pPruneTxOut
+    <*> pBootstrap
 
 pRunDbSyncNode :: Parser SyncNodeParams
 pRunDbSyncNode = do
@@ -81,30 +92,14 @@ pRunDbSyncNode = do
     <*> pPGPassSource
     <*> pEpochDisabled
     <*> pHasCache
-    <*> pHasLedger
-    <*> pShouldUseLedger
     <*> pSkipFix
     <*> pOnlyFix
     <*> pForceIndexes
     <*> pHasInOut
-    <*> pHasShelley
-    <*> pHasMultiAssets
-    <*> pHasMetadata
-    <*> pKeepTxMetadata
-    <*> pHasPlutusExtra
-    <*> pHasGov
-    <*> pHasOffChainPoolData
-    <*> pForceTxIn
-    <*> pDisableAllMode
-    <*> pFullMode
-    <*> pOnlyUTxO
-    <*> pOnlyGov
-    <*> pMigrateConsumed
-    <*> pPruneTxOut
-    <*> bootstrap
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
+    <*> pure False
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -194,24 +189,6 @@ pHasCache =
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
     )
 
-pHasLedger :: Parser Bool
-pHasLedger =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-ledger"
-        <> Opt.help "Disables the leger state. Drastically reduces memory usage and it syncs faster, but some data are missing."
-    )
-
-pShouldUseLedger :: Parser Bool
-pShouldUseLedger =
-  Opt.flag
-    True
-    False
-    ( Opt.long "dont-use-ledger"
-        <> Opt.help "Maintains the ledger state but doesn't use it, except to load UTxO. To be used with --bootstrap-tx-out"
-    )
-
 pSocketPath :: Parser SocketPath
 pSocketPath =
   SocketPath
@@ -232,21 +209,6 @@ pSlotNo =
           <> Opt.metavar "WORD"
       )
 
-pKeepTxMetadata :: Parser [Word64]
-pKeepTxMetadata =
-  Opt.option
-    (parseCommaSeparated <$> Opt.str)
-    ( Opt.long "keep-tx-metadata"
-        <> Opt.value []
-        <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
-    )
-  where
-    parseCommaSeparated :: String -> [Word64]
-    parseCommaSeparated str =
-      case traverse readMaybe (splitOn "," str) of
-        Just values -> values
-        Nothing -> error "Failed to parse comma-separated values"
-
 pHasInOut :: Parser Bool
 pHasInOut =
   Opt.flag
@@ -254,141 +216,6 @@ pHasInOut =
     False
     ( Opt.long "disable-in-out"
         <> Opt.help "Disables the tx_in and tx_out table"
-    )
-
-pHasShelley :: Parser Bool
-pHasShelley =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-shelley"
-        <> Opt.help "Disables the certs and Shelley related data"
-    )
-
-pHasMultiAssets :: Parser Bool
-pHasMultiAssets =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-multiassets"
-        <> Opt.help "Disables the multi assets tables and entries."
-    )
-
-pHasMetadata :: Parser Bool
-pHasMetadata =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-metadata"
-        <> Opt.help "Disables the tx_metadata table."
-    )
-
-pHasPlutusExtra :: Parser Bool
-pHasPlutusExtra =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-plutus-extra"
-        <> Opt.help "Disables most tables and entries related to plutus and scripts."
-    )
-
-pHasGov :: Parser Bool
-pHasGov =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-gov"
-        <> Opt.help "Disables the governance related data"
-    )
-
-pHasOffChainPoolData :: Parser Bool
-pHasOffChainPoolData =
-  Opt.flag
-    True
-    False
-    ( Opt.long "disable-offchain-pool-data"
-        <> Opt.help "Disables fetching pool offchain metadata."
-    )
-
-pForceTxIn :: Parser Bool
-pForceTxIn =
-  Opt.flag
-    False
-    True
-    ( Opt.long "force-tx-in"
-        <> Opt.help "Force populating the tx_in table even if --consumed-tx-out is enabled"
-    )
-
-pDisableAllMode :: Parser Bool
-pDisableAllMode =
-  Opt.flag
-    False
-    True
-    ( Opt.long "disable-all"
-        <> Opt.help "Disables everything except the ledger."
-    )
-
-pFullMode :: Parser Bool
-pFullMode =
-  Opt.flag
-    False
-    True
-    ( Opt.long "full"
-        <> Opt.help "Makes db-sync run with all possible functionalities."
-    )
-
-pOnlyUTxO :: Parser Bool
-pOnlyUTxO =
-  Opt.flag
-    False
-    True
-    ( Opt.long "only-utxo"
-        <> Opt.help "A mode which combines --bootstrap-tx-out with some disable flags"
-    )
-
-pOnlyGov :: Parser Bool
-pOnlyGov =
-  Opt.flag
-    False
-    True
-    ( Opt.long "only-gov"
-        <> Opt.help "Runs db-sync with only governance functionality"
-    )
-
-pMigrateConsumed :: Parser Bool
-pMigrateConsumed =
-  Opt.flag
-    False
-    True
-    ( Opt.long "consumed-tx-out"
-        <> Opt.help
-          "Runs the tx_out migration, which adds a new field.If this is set once,\
-          \ then it must be always be set on following executions of db-sync, unless prune-tx-out\
-          \ is used instead."
-    )
-
-pPruneTxOut :: Parser Bool
-pPruneTxOut =
-  Opt.flag
-    False
-    True
-    ( Opt.long "prune-tx-out"
-        <> Opt.help
-          "Prunes the consumed tx_out periodically. This assumes \
-          \ consumed-tx-out is also set, even if it's not. If this is set once,\
-          \ then it must be always set on following executions of db-sync."
-    )
-
-bootstrap :: Parser Bool
-bootstrap =
-  Opt.flag
-    False
-    True
-    ( Opt.long "bootstrap-tx-out"
-        <> Opt.help
-          "This syncs without populating the tx_out table. It eventually gets populated\
-          \ by migrating the ledger state. It assumes the --consumed-tx-out and\
-          \ not having the --disable-ledger-state"
     )
 
 pVersionCommand :: Parser SyncCommand
@@ -405,6 +232,169 @@ pVersionCommand =
             <> Opt.hidden
         )
     ]
+
+-- * Deprecated flags
+pDisableOfflineData :: Parser (a -> a)
+pDisableOfflineData =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-offline-data has been deprecated, please use disable-offchain-pool-data instead")
+    ( Opt.long "disable-offline-data"
+        <> Opt.help "disable-offline-data is deprecated"
+        <> Opt.hidden
+    )
+
+pHasLedger :: Parser (a -> a)
+pHasLedger =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-ledger has been deprecated, please configure ledger in db-sync-config.json instead")
+    ( Opt.long "disable-ledger"
+        <> Opt.help "disable-ledger is deprecated"
+        <> Opt.hidden
+    )
+
+pShouldUseLedger :: Parser (a -> a)
+pShouldUseLedger =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: dont-use-ledger has been deprecated, please configure ledger in db-sync-config.json instead")
+    ( Opt.long "dont-use-ledger"
+        <> Opt.help "dont-use-ledger is deprecated"
+        <> Opt.hidden
+    )
+
+pKeepTxMetadata :: Parser (a -> a)
+pKeepTxMetadata =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: keep-tx-metadata has been deprecated, please configure ledger in db-sync-config.json instead")
+    ( Opt.long "keep-tx-metadata"
+        <> Opt.help "keep-tx-metadata is deprecated"
+        <> Opt.hidden
+    )
+
+pHasShelley :: Parser (a -> a)
+pHasShelley =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-shelley has been deprecated, please configure shelley in db-sync-config.json instead")
+    ( Opt.long "disable-shelley"
+        <> Opt.help "disable-shelley is deprecated"
+        <> Opt.hidden
+    )
+
+pHasMultiAssets :: Parser (a -> a)
+pHasMultiAssets =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-multiassets has been deprecated, please configure multi-assets in db-sync-config.json instead")
+    ( Opt.long "disable-multiassets"
+        <> Opt.help "disable-multiassets is deprecated"
+        <> Opt.hidden
+    )
+
+pHasMetadata :: Parser (a -> a)
+pHasMetadata =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-metadata has been deprecated, please configure metadata in db-sync-config.json instead")
+    ( Opt.long "disable-metadata"
+        <> Opt.help "disable-metadata is deprecated"
+        <> Opt.hidden
+    )
+
+pHasPlutusExtra :: Parser (a -> a)
+pHasPlutusExtra =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-plutus-extra has been deprecated, please configure plutus in db-sync-config.json instead")
+    ( Opt.long "disable-metadata"
+        <> Opt.help "disable-metadata is deprecated"
+        <> Opt.hidden
+    )
+
+pHasGov :: Parser (a -> a)
+pHasGov =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-gov has been deprecated, please configure governance in db-sync-config.json instead")
+    ( Opt.long "disable-gov"
+        <> Opt.help "disable-gov is deprecated"
+        <> Opt.hidden
+    )
+
+pHasOffChainPoolData :: Parser (a -> a)
+pHasOffChainPoolData =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-offchain-pool-data has been deprecated, please configure offchain pool data in db-sync-config.json instead")
+    ( Opt.long "disable-offchain-pool-data"
+        <> Opt.help "disable-gov is deprecated"
+        <> Opt.hidden
+    )
+
+pForceTxIn :: Parser (a -> a)
+pForceTxIn =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: force-tx-in has been deprecated, please configure tx-out in db-sync-config.json instead")
+    ( Opt.long "force-tx-in"
+        <> Opt.help "force-tx-in is deprecated"
+        <> Opt.hidden
+    )
+
+pDisableAllMode :: Parser (a -> a)
+pDisableAllMode =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: disable-all has been deprecated, please configure db-sync-config.json instead")
+    ( Opt.long "disable-all"
+        <> Opt.help "disable-all is deprecated"
+        <> Opt.hidden
+    )
+
+pFullMode :: Parser (a -> a)
+pFullMode =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: full has been deprecated, please configure db-sync-config.json instead")
+    ( Opt.long "full"
+        <> Opt.help "full is deprecated"
+        <> Opt.hidden
+    )
+
+pOnlyUTxO :: Parser (a -> a)
+pOnlyUTxO =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: only-utxo has been deprecated, please configure db-sync-config.json instead")
+    ( Opt.long "only-utxo"
+        <> Opt.help "only-utxo is deprecated"
+        <> Opt.hidden
+    )
+
+pOnlyGov :: Parser (a -> a)
+pOnlyGov =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: only-gov has been deprecated, please configure db-sync-config.json instead")
+    ( Opt.long "only-gov"
+        <> Opt.help "only-gov is deprecated"
+        <> Opt.hidden
+    )
+
+pMigrateConsumed :: Parser (a -> a)
+pMigrateConsumed =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: consumed-tx-out has been deprecated, please configure tx-out in db-sync-config.json instead")
+    ( Opt.long "consumed-tx-out"
+        <> Opt.help "consumed-tx-out is deprecated"
+        <> Opt.hidden
+    )
+
+pPruneTxOut :: Parser (a -> a)
+pPruneTxOut =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: prune-tx-out has been deprecated, please configure tx-out in db-sync-config.json instead")
+    ( Opt.long "prune-tx-out"
+        <> Opt.help "prune-tx-out is deprecated"
+        <> Opt.hidden
+    )
+
+pBootstrap :: Parser (a -> a)
+pBootstrap =
+  Opt.abortOption
+    (Opt.InfoMsg "Error: bootstrap-tx-out has been deprecated, please configure tx-out in db-sync-config.json instead")
+    ( Opt.long "bootstrap-tx-out"
+        <> Opt.help "bootstrap-tx-out is deprecated"
+        <> Opt.hidden
+    )
 
 command' :: String -> String -> Parser a -> Opt.Mod Opt.CommandFields a
 command' c descr p =

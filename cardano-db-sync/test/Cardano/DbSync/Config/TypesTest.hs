@@ -1,10 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module Cardano.DbSync.Config.TypesTest (
-  tests,
-  genSyncInsertConfig,
-) where
+module Cardano.DbSync.Config.TypesTest (tests) where
 
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Gen as Gen
@@ -24,7 +21,8 @@ tests =
       [ ("SyncInsertConfig FromJSON", prop_syncInsertConfigFromJSON)
       , ("SyncInsertConfig roundtrip", prop_syncInsertConfigRoundtrip)
       , ("isTxEnabled", prop_isTxEnabled)
-      , ("isLedgerEnabled", prop_isLedgerEnabled)
+      , ("ishasLedger", prop_hasLedger)
+      , ("shouldUseLedger", prop_shouldUseLedger)
       , ("isShelleyEnabled", prop_isShelleyEnabled)
       , ("isMultiAssetEnabled", prop_isMultiAssetEnabled)
       , ("isMetadataEnabled", prop_isMetadataEnabled)
@@ -51,13 +49,21 @@ prop_isTxEnabled = property $ do
   -- TxOut is enabled if it is not TxOutDisable
   isTxOutEnabled txOutCfg === (txOutCfg /= TxOutDisable)
 
-prop_isLedgerEnabled :: Property
-prop_isLedgerEnabled = property $ do
+prop_hasLedger :: Property
+prop_hasLedger = property $ do
   cfg <- forAll Gen.syncInsertConfig
   let ledgerCfg = spcLedger cfg
 
   -- Ledger is enabled if it is not LedgerDisable
-  isLedgerEnabled ledgerCfg === (ledgerCfg /= LedgerDisable)
+  hasLedger ledgerCfg === (ledgerCfg /= LedgerDisable)
+
+prop_shouldUseLedger :: Property
+prop_shouldUseLedger = property $ do
+  cfg <- forAll Gen.syncInsertConfig
+  let ledgerCfg = spcLedger cfg
+
+  -- Ledger is enabled if it is not LedgerDisable
+  shouldUseLedger ledgerCfg === (ledgerCfg == LedgerEnable)
 
 prop_isShelleyEnabled :: Property
 prop_isShelleyEnabled = property $ do

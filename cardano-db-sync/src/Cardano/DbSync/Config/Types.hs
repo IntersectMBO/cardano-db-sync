@@ -39,7 +39,8 @@ module Cardano.DbSync.Config.Types (
   adjustNodeConfigFilePath,
   pcNodeConfigFilePath,
   isTxOutEnabled,
-  isLedgerEnabled,
+  hasLedger,
+  shouldUseLedger,
   isShelleyEnabled,
   isMultiAssetEnabled,
   isMetadataEnabled,
@@ -84,30 +85,14 @@ data SyncNodeParams = SyncNodeParams
   , enpPGPassSource :: !PGPassSource
   , enpEpochDisabled :: !Bool
   , enpHasCache :: !Bool
-  , enpHasLedger :: !Bool
-  , enpShouldUseLedger :: !Bool
   , enpSkipFix :: !Bool
   , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool
   , enpHasInOut :: !Bool
-  , enpHasShelley :: !Bool
-  , enpHasMultiAssets :: !Bool
-  , enpHasMetadata :: !Bool
-  , enpKeepMetadataNames :: ![Word64]
-  , enpHasPlutusExtra :: !Bool
-  , enpHasGov :: !Bool
-  , enpHasOffChainPoolData :: !Bool
-  , enpForceTxIn :: !Bool
-  , enpDisableAllMode :: !Bool
-  , enpFullMode :: !Bool
-  , enpOnlyUTxO :: !Bool
-  , enpOnlyGov :: !Bool
-  , enpMigrateConsumed :: !Bool
-  , enpPruneTxOut :: !Bool
-  , enpBootstrap :: !Bool
   , enpSnEveryFollowing :: !Word64
   , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
+  , enpForceTxIn :: !Bool -- TODO[sgillespie]
   }
   deriving (Show)
 
@@ -282,10 +267,15 @@ isTxOutEnabled TxOutConsumed = True
 isTxOutEnabled TxOutPrune = True
 isTxOutEnabled TxOutBootstrap = True
 
-isLedgerEnabled :: LedgerInsertConfig -> Bool
-isLedgerEnabled LedgerDisable = False
-isLedgerEnabled LedgerEnable = True
-isLedgerEnabled LedgerIgnore = True
+hasLedger :: LedgerInsertConfig -> Bool
+hasLedger LedgerDisable = False
+hasLedger LedgerEnable = True
+hasLedger LedgerIgnore = True
+
+shouldUseLedger :: LedgerInsertConfig -> Bool
+shouldUseLedger LedgerDisable = False
+shouldUseLedger LedgerEnable = True
+shouldUseLedger LedgerIgnore = False
 
 isShelleyEnabled :: ShelleyInsertConfig -> Bool
 isShelleyEnabled ShelleyDisable = False

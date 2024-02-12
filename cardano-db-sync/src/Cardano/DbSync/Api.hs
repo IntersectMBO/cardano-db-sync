@@ -374,7 +374,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (enpBootstrap syncNP) backend
+  bts <- getBootstrapInProgress trce (isTxOutBootstrap syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -384,7 +384,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
-    case (enpMaybeLedgerStateDir syncNP, enpHasLedger syncNP) of
+    case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
       (Just dir, True) ->
         HasLedger
           <$> mkHasLedgerEnv
@@ -426,6 +426,9 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }
+  where
+    hasLedger' = hasLedger . spcLedger . dncInsertConfig
+    isTxOutBootstrap = (== TxOutBootstrap) . spcTxOut . dncInsertConfig
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->

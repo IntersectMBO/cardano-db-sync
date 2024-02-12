@@ -166,6 +166,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
+  let useLedger = shouldUseLedger (spcLedger $ dncInsertConfig syncNodeConfigFromFile)
+
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
       \backend -> liftIO $ do
@@ -185,7 +187,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 ranMigrations
                 runMigrationFnc
           liftIO $ runExtraMigrationsMaybe syncEnv
-          unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
+          unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             Db.noLedgerMigrations backend trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
@@ -249,26 +251,21 @@ extractSyncOptions snp aop snc =
         MetadataEnable -> Strict.Nothing
         MetadataDisable -> Strict.Nothing
 
-    iopts
-      | enpOnlyGov snp = onlyGovInsertOptions useLedger
-      | enpOnlyUTxO snp = onlyUTxOInsertOptions
-      | enpFullMode snp = fullInsertOptions useLedger
-      | enpDisableAllMode snp = disableAllInsertOptions useLedger
-      | otherwise =
-          InsertOptions
-            { ioInOut = enpHasInOut snp
-            , ioUseLedger = useLedger
-            , ioShelley = isShelleyEnabled (spcShelley (dncInsertConfig snc))
-            , ioRewards = True
-            , ioMultiAssets = isMultiAssetEnabled (spcMultiAsset (dncInsertConfig snc))
-            , ioMetadata = isMetadataEnabled (spcMetadata (dncInsertConfig snc))
-            , ioKeepMetadataNames = maybeKeepMNames
-            , ioPlutusExtra = isPlutusEnabled (spcPlutus (dncInsertConfig snc))
-            , ioOffChainPoolData = useOffchainPoolData
-            , ioGov = useGovernance
-            }
+    iopts =
+      InsertOptions
+        { ioInOut = enpHasInOut snp
+        , ioUseLedger = useLedger
+        , ioShelley = isShelleyEnabled (spcShelley (dncInsertConfig snc))
+        , ioRewards = True
+        , ioMultiAssets = isMultiAssetEnabled (spcMultiAsset (dncInsertConfig snc))
+        , ioMetadata = isMetadataEnabled (spcMetadata (dncInsertConfig snc))
+        , ioKeepMetadataNames = maybeKeepMNames
+        , ioPlutusExtra = isPlutusEnabled (spcPlutus (dncInsertConfig snc))
+        , ioOffChainPoolData = useOffchainPoolData
+        , ioGov = useGovernance
+        }
 
-    useLedger = (spcLedger (dncInsertConfig snc) == LedgerEnable) && not (enpOnlyUTxO snp)
+    useLedger = spcLedger (dncInsertConfig snc) == LedgerEnable
     useOffchainPoolData =
       isOffchainPoolDataEnabled (spcOffchainPoolData (dncInsertConfig snc))
     useGovernance =
