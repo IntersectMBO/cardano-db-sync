@@ -11,6 +11,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import qualified Cardano.DbSync.Era.Shelley.Insert as Insert
 import Cardano.DbSync.Era.Shelley.Insert.Grouped
@@ -105,6 +106,7 @@ storeUTxO ::
   , BabbageEraTxOut era
   , MonadIO m
   , MonadBaseControl IO m
+  , DBPlutusScript era
   ) =>
   SyncEnv ->
   TxCache ->
@@ -131,6 +133,7 @@ storePage ::
   , Cardano.Ledger.Core.Value era ~ MaryValue StandardCrypto
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
+  , DBPlutusScript era
   , BabbageEraTxOut era
   , MonadIO m
   , MonadBaseControl IO m
@@ -158,6 +161,7 @@ prepareTxOut ::
   , BabbageEraTxOut era
   , MonadIO m
   , MonadBaseControl IO m
+  , DBPlutusScript era
   ) =>
   SyncEnv ->
   TxCache ->

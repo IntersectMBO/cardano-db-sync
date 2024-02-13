@@ -58,7 +58,7 @@ library
                       , base16-bytestring
                       , bytestring
                       , ansi-terminal
-                      , cardano-api ^>=8.33
+                      , cardano-api >= 8.38
                       , cardano-db
                       , cardano-db-sync
                       , cardano-ledger-alonzo

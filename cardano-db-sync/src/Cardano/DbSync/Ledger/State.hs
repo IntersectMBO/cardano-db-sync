@@ -73,7 +73,6 @@ import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
 import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Conway.Governance as Shelley
-import qualified Cardano.Ledger.Conway.PParams as Shelley
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
@@ -829,7 +828,7 @@ getPrices st = case ledgerState $ clsState st of
       )
   _ -> Strict.Nothing
 
-getGovExpiration :: CardanoLedgerState -> Strict.Maybe EpochNo
+getGovExpiration :: CardanoLedgerState -> Strict.Maybe Ledger.EpochInterval
 getGovExpiration st = case ledgerState $ clsState st of
   LedgerStateConway bls ->
     Strict.Just $

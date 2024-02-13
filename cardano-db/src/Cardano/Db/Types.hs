@@ -154,6 +154,8 @@ data ScriptPurpose
   | Mint
   | Cert
   | Rewrd
+  | Vote
+  | Propose
   deriving (Eq, Generic, Show)
 
 data ScriptType
@@ -332,6 +334,8 @@ renderScriptPurpose ss =
     Mint -> "mint"
     Cert -> "cert"
     Rewrd -> "reward"
+    Vote -> "vote"
+    Propose -> "propose"
 
 readScriptPurpose :: String -> ScriptPurpose
 readScriptPurpose str =
@@ -340,6 +344,8 @@ readScriptPurpose str =
     "mint" -> Mint
     "cert" -> Cert
     "reward" -> Rewrd
+    "vote" -> Vote
+    "propose" -> Propose
     _other -> error $ "readScriptPurpose: Unknown ScriptPurpose " ++ str
 
 showRewardSource :: RewardSource -> Text

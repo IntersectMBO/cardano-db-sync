@@ -53,7 +53,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
         if not isValid2
           then sumTxOutCoin collOutputs
           else sumTxOutCoin outputs
-    , txInvalidBefore = invalidBefore
+    , txInvalidBefore = invalidBef
     , txInvalidHereafter = invalidAfter
     , txWithdrawalSum = calcWithdrawalSum txBody
     , txMetadata = fromAlonzoMetadata <$> getTxMetadata tx
@@ -94,6 +94,6 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
         Alonzo.IsValid x -> x
 
     (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx Right
-    (invalidBefore, invalidAfter) = getInterval txBody
+    (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody
