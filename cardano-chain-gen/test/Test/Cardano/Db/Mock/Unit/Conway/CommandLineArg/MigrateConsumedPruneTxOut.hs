@@ -73,7 +73,7 @@ commandLineArgCheck ioManager names = do
 
 commandLineArgResetJsonb :: IOManager -> [(Text, Text)] -> Assertion
 commandLineArgResetJsonb =
-  withCustomConfig cmdLineArgs conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500

@@ -351,6 +351,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         whenFalseMempty (ioMetadata iopts) $
           prepareTxMetadata
             tracer
+            syncEnv
             txId
             iopts
             (Generic.txMetadata tx)
@@ -1220,7 +1221,7 @@ prepareTxMetadata ::
   InsertOptions ->
   Maybe (Map Word64 TxMetadataValue) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.TxMetadata]
-prepareTxMetadata tracer txId inOpts mmetadata = do
+prepareTxMetadata tracer syncEnv txId inOpts mmetadata = do
   case mmetadata of
     Nothing -> pure []
     Just metadata -> mapMaybeM prepare $ Map.toList metadata
@@ -1245,20 +1246,21 @@ prepareTxMetadata tracer txId inOpts mmetadata = do
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
     mkDbTxMetadata (key, md) = do
       let singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
-          -- if user still has jsonb types in the db, they are still converted
-          mjson =
-            if envJsonbExists syncEnv
-              then do
-                let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
-                join $ safeDecodeToJson tracer "prepareTxMetadata" jsonbs
-              else Just $ txMetadataValueToText md
-      pure
-        DB.TxMetadata
-          { DB.txMetadataKey = DbWord64 key
-          , DB.txMetadataJson = mjson
-          , DB.txMetadataBytes = singleKeyCBORMetadata
-          , DB.txMetadataTxId = txId
-          }
+      -- if user still has jsonb types in the db, they are still converted
+      mjson <-
+        if envJsonbExists syncEnv
+          then do
+            let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
+            safeDecodeToJson tracer "prepareTxMetadata" jsonbs
+          else pure $ Just $ txMetadataValueToText md
+      pure $
+        Just $
+          DB.TxMetadata
+            { DB.txMetadataKey = DbWord64 key
+            , DB.txMetadataJson = mjson
+            , DB.txMetadataBytes = singleKeyCBORMetadata
+            , DB.txMetadataTxId = txId
+            }
 
 insertCostModel ::
   (MonadBaseControl IO m, MonadIO m) =>

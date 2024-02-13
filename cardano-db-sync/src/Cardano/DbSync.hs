@@ -51,7 +51,7 @@ import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util.Constraint (addRewardConstraintsIfNotExist, dbJsonbTypeExists)
+import Cardano.DbSync.Util.Constraint (dbJsonbTypeExists)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async

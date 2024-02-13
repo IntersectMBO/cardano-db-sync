@@ -360,59 +360,6 @@ getCurrentTipBlockNo env = do
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
-mkSyncEnvFromConfig ::
-  Trace IO Text ->
-  SqlBackend ->
-  ConnectionString ->
-  SyncOptions ->
-  GenesisConfig ->
-  SyncNodeParams ->
-  -- | migrations were ran on startup
-  Bool ->
-  -- | run migration function
-  RunMigration ->
-  -- | jsonb is currently being used as db type
-  Bool ->
-  IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeParams ranMigration runMigrationFnc jsonbExists =
-  case genCfg of
-    GenesisCardano _ bCfg sCfg _ _
-      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure
-            . Left
-            . SNErrCardanoConfig
-            $ mconcat
-              [ "ProtocolMagicId "
-              , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              , " /= "
-              , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-              ]
-      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure
-            . Left
-            . SNErrCardanoConfig
-            $ mconcat
-              [ "SystemStart "
-              , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              , " /= "
-              , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
-              ]
-      | otherwise ->
-          Right
-            <$> mkSyncEnv
-              trce
-              backend
-              connectionString
-              syncOptions
-              (fst $ mkProtocolInfoCardano genCfg [])
-              (Shelley.sgNetworkId $ scConfig sCfg)
-              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              syncNodeParams
-              ranMigration
-              runMigrationFnc
-              jsonbExists
-
 mkSyncEnv ::
   Trace IO Text ->
   SqlBackend ->
@@ -489,6 +436,58 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envSystemStart = systemStart
       }
 
+-- mkSyncEnvFromConfig ::
+--   Trace IO Text ->
+--   SqlBackend ->
+--   ConnectionString ->
+--   SyncOptions ->
+--   GenesisConfig ->
+--   SyncNodeConfig ->
+--   SyncNodeParams ->
+--   -- | migrations were ran on startup
+--   Bool ->
+--   -- | run migration function
+--   RunMigration ->
+--   IO (Either SyncNodeError SyncEnv)
+-- mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+--   case genCfg of
+--     GenesisCardano _ bCfg sCfg _ _
+--       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
+--           pure
+--             . Left
+--             . SNErrCardanoConfig
+--             $ mconcat
+--               [ "ProtocolMagicId "
+--               , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+--               , " /= "
+--               , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+--               ]
+--       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
+--           pure
+--             . Left
+--             . SNErrCardanoConfig
+--             $ mconcat
+--               [ "SystemStart "
+--               , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+--               , " /= "
+--               , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
+--               ]
+--       | otherwise ->
+--           Right
+--             <$> mkSyncEnv
+--               trce
+--               backend
+--               connectionString
+--               syncOptions
+--               (fst $ mkProtocolInfoCardano genCfg [])
+--               (Shelley.sgNetworkId $ scConfig sCfg)
+--               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+--               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+--               syncNodeConfigFromFile
+--               syncNodeParams
+--               ranMigration
+--               runMigrationFnc
+
 mkSyncEnvFromConfig ::
   Trace IO Text ->
   SqlBackend ->
@@ -501,8 +500,10 @@ mkSyncEnvFromConfig ::
   Bool ->
   -- | run migration function
   RunMigration ->
+  -- | jsonb is currently being used as db type
+  Bool ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc jsonbExists =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -540,6 +541,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
               syncNodeParams
               ranMigration
               runMigrationFnc
+              jsonbExists
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
