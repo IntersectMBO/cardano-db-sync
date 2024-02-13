@@ -1022,7 +1022,7 @@ schemaDocs =
       RedeemerFee
         # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices.\
           \ Is null when --disable-ledger is enabled. New in v13: became nullable."
-      RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'."
+      RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward', `voting`, `proposing`"
       RedeemerIndex # "The index of the redeemer pointer in the transaction."
       RedeemerScriptHash # "The script hash this redeemer is used for."
       RedeemerRedeemerDataId # "The data related to this redeemer. New in v13: renamed from datum_id."

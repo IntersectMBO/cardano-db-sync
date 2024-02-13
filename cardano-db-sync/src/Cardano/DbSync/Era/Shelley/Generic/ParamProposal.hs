@@ -15,11 +15,10 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
 import Cardano.Ledger.Alonzo.Core
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import Cardano.Ledger.BaseTypes (UnitInterval, strictMaybeToMaybe)
+import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin, unCoin)
 import Cardano.Ledger.Conway.Core
-import Cardano.Ledger.Conway.PParams
 import Cardano.Ledger.Crypto
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
@@ -35,12 +34,12 @@ data ParamProposal = ParamProposal
   , pppKey :: !(Maybe ByteString)
   , pppMinFeeA :: !(Maybe Natural)
   , pppMinFeeB :: !(Maybe Natural)
-  , pppMaxBlockSize :: !(Maybe Natural)
-  , pppMaxTxSize :: !(Maybe Natural)
-  , pppMaxBhSize :: !(Maybe Natural)
+  , pppMaxBlockSize :: !(Maybe Word32)
+  , pppMaxTxSize :: !(Maybe Word32)
+  , pppMaxBhSize :: !(Maybe Word16)
   , pppKeyDeposit :: !(Maybe Coin)
   , pppPoolDeposit :: !(Maybe Coin)
-  , pppMaxEpoch :: !(Maybe EpochNo)
+  , pppMaxEpoch :: !(Maybe EpochInterval)
   , pppOptimalPoolCount :: !(Maybe Natural)
   , pppInfluence :: !(Maybe Rational)
   , pppMonetaryExpandRate :: !(Maybe UnitInterval)
@@ -66,11 +65,11 @@ data ParamProposal = ParamProposal
     pppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
   , pppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
   , pppCommitteeMinSize :: !(Maybe Natural)
-  , pppCommitteeMaxTermLength :: !(Maybe Word64)
-  , pppGovActionLifetime :: !(Maybe EpochNo)
+  , pppCommitteeMaxTermLength :: !(Maybe EpochInterval)
+  , pppGovActionLifetime :: !(Maybe EpochInterval)
   , pppGovActionDeposit :: !(Maybe Natural)
   , pppDRepDeposit :: !(Maybe Natural)
-  , pppDRepActivity :: !(Maybe EpochNo)
+  , pppDRepActivity :: !(Maybe EpochInterval)
   }
 
 convertParamProposal :: EraCrypto era ~ StandardCrypto => Witness era -> Shelley.Update era -> [ParamProposal]
@@ -135,7 +134,7 @@ convertConwayParamProposal pmap =
       pppPoolVotingThresholds = strictMaybeToMaybe (pmap ^. ppuPoolVotingThresholdsL)
     , pppDRepVotingThresholds = strictMaybeToMaybe (pmap ^. ppuDRepVotingThresholdsL)
     , pppCommitteeMinSize = strictMaybeToMaybe (pmap ^. ppuCommitteeMinSizeL)
-    , pppCommitteeMaxTermLength = unEpochNo <$> strictMaybeToMaybe (pmap ^. ppuCommitteeMaxTermLengthL)
+    , pppCommitteeMaxTermLength = strictMaybeToMaybe (pmap ^. ppuCommitteeMaxTermLengthL)
     , pppGovActionLifetime = strictMaybeToMaybe (pmap ^. ppuGovActionLifetimeL)
     , pppGovActionDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuGovActionDepositL)
     , pppDRepDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuDRepDepositL)

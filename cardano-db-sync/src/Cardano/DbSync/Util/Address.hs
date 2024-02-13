@@ -10,6 +10,7 @@ module Cardano.DbSync.Util.Address (
 
 import Cardano.DbSync.Util.Bech32 (deserialiseFromBech32, serialiseToBech32)
 import qualified Cardano.Ledger.Address as Address
+import Cardano.Ledger.Api.Tx.Address (decodeAddrLenient)
 import Cardano.Ledger.BaseTypes (Network (..))
 import Cardano.Ledger.Credential (PaymentCredential (), StakeReference (..))
 import Cardano.Ledger.Crypto (Crypto ())
@@ -27,13 +28,13 @@ serialiseAddress (Address.Addr net payCred stakeRef) =
 
 -- | Deserialise a UTxO Byron era address from base58
 deserialiseByronAddress :: Crypto c => Text -> Maybe (Address.Addr c)
-deserialiseByronAddress base58 = Address.deserialiseAddr =<< rawBytes
+deserialiseByronAddress base58 = decodeAddrLenient =<< rawBytes
   where
     rawBytes = decodeBase58 bitcoinAlphabet $ encodeUtf8 base58
 
 -- | Deserialise a UTxO Shelley era address from bech32
 deserialiseShelleyAddress :: Crypto c => Text -> Maybe (Address.Addr c)
-deserialiseShelleyAddress bech32 = Address.deserialiseAddr =<< rawBytes
+deserialiseShelleyAddress bech32 = decodeAddrLenient =<< rawBytes
   where
     rawBytes = rightToMaybe $ deserialiseFromBech32 bech32
 
