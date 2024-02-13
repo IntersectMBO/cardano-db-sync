@@ -213,8 +213,11 @@
                 # Disable haddock on 8.x
                 lib.mkIf (lib.versionOlder config.compiler.version "9") {
                   packages.cardano-ledger-alonzo.doHaddock = false;
+                  packages.cardano-ledger-allegra.doHaddock = false;
+                  packages.cardano-ledger-api.doHaddock = false;
                   packages.cardano-ledger-babbage.doHaddock = false;
                   packages.cardano-ledger-conway.doHaddock = false;
+                  packages.cardano-ledger-shelley.doHaddock = false;
                   packages.cardano-protocol-tpraos.doHaddock = false;
                   packages.ouroboros-network-framework.doHaddock = false;
                 })
