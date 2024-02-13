@@ -124,7 +124,7 @@ emptyDepositsMap = DepositsMap Map.empty
 -- The result of applying a new block. This includes all the data that insertions require.
 data ApplyResult = ApplyResult
   { apPrices :: !(Strict.Maybe Prices) -- prices after the block application
-  , apGovExpiresAfter :: !(Strict.Maybe EpochNo)
+  , apGovExpiresAfter :: !(Strict.Maybe Ledger.EpochInterval)
   , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
   , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , apOldLedger :: !(Strict.Maybe CardanoLedgerState)
@@ -150,7 +150,7 @@ defaultApplyResult slotDetails =
 
 getGovExpiresAt :: ApplyResult -> EpochNo -> Maybe EpochNo
 getGovExpiresAt applyResult e = case apGovExpiresAfter applyResult of
-  Strict.Just pr -> Just $ e + pr
+  Strict.Just ei -> Just $ Ledger.addEpochInterval e ei
   Strict.Nothing -> Nothing
 
 newtype LedgerDB = LedgerDB

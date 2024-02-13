@@ -76,6 +76,7 @@ import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Plutus.Language (Language)
+import Cardano.Ledger.PoolParams
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
@@ -650,12 +651,12 @@ insertPoolCert ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  Shelley.PoolCert StandardCrypto ->
+  PoolCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer cache isMember network epoch blkId txId idx pCert =
   case pCert of
-    Shelley.RegPool pParams -> insertPoolRegister tracer cache isMember network epoch blkId txId idx pParams
-    Shelley.RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash
+    RegPool pParams -> insertPoolRegister tracer cache isMember network epoch blkId txId idx pParams
+    RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash
 
 insertDelegCert ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -729,39 +730,39 @@ insertPoolRegister ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  Shelley.PoolParams StandardCrypto ->
+  PoolParams StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx params = do
-  poolHashId <- lift $ insertPoolKeyWithCache cache CacheNew (Shelley.ppId params)
-  mdId <- case strictMaybeToMaybe $ Shelley.ppMetadata params of
+  poolHashId <- lift $ insertPoolKeyWithCache cache CacheNew (ppId params)
+  mdId <- case strictMaybeToMaybe $ ppMetadata params of
     Just md -> Just <$> insertMetaDataRef poolHashId txId md
     Nothing -> pure Nothing
 
   epochActivationDelay <- mkEpochActivationDelay poolHashId
 
-  saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ Shelley.ppRewardAcnt params)
+  saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ ppRewardAcnt params)
   poolUpdateId <-
     lift
       . DB.insertPoolUpdate
       $ DB.PoolUpdate
         { DB.poolUpdateHashId = poolHashId
         , DB.poolUpdateCertIndex = idx
-        , DB.poolUpdateVrfKeyHash = hashToBytes (Shelley.ppVrf params)
-        , DB.poolUpdatePledge = Generic.coinToDbLovelace (Shelley.ppPledge params)
+        , DB.poolUpdateVrfKeyHash = hashToBytes (ppVrf params)
+        , DB.poolUpdatePledge = Generic.coinToDbLovelace (ppPledge params)
         , DB.poolUpdateRewardAddrId = saId
         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
         , DB.poolUpdateMetaId = mdId
-        , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (Shelley.ppMargin params)
-        , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (Shelley.ppCost params)
+        , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (ppMargin params)
+        , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (ppCost params)
         , DB.poolUpdateRegisteredTxId = txId
         }
 
-  mapM_ (insertPoolOwner cache network poolUpdateId) $ toList (Shelley.ppOwners params)
-  mapM_ (insertPoolRelay poolUpdateId) $ toList (Shelley.ppRelays params)
+  mapM_ (insertPoolOwner cache network poolUpdateId) $ toList (ppOwners params)
+  mapM_ (insertPoolRelay poolUpdateId) $ toList (ppRelays params)
   where
     mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
     mkEpochActivationDelay poolHashId =
-      if isMember (Shelley.ppId params)
+      if isMember (ppId params)
         then pure 3
         else do
           -- if the pool is not registered at the end of the previous block, check for
@@ -798,15 +799,15 @@ insertMetaDataRef ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.PoolHashId ->
   DB.TxId ->
-  Shelley.PoolMetadata ->
+  PoolMetadata ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.PoolMetadataRefId
 insertMetaDataRef poolId txId md =
   lift
     . DB.insertPoolMetadataRef
     $ DB.PoolMetadataRef
       { DB.poolMetadataRefPoolId = poolId
-      , DB.poolMetadataRefUrl = PoolUrl $ Ledger.urlToText (Shelley.pmUrl md)
-      , DB.poolMetadataRefHash = Shelley.pmHash md
+      , DB.poolMetadataRefUrl = PoolUrl $ urlToText (pmUrl md)
+      , DB.poolMetadataRefHash = pmHash md
       , DB.poolMetadataRefRegisteredTxId = txId
       }
 
@@ -942,18 +943,18 @@ insertMirCert ::
   Ledger.Network ->
   DB.TxId ->
   Word16 ->
-  Shelley.MIRCert StandardCrypto ->
+  MIRCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMirCert _tracer cache network txId idx mcert = do
-  case Shelley.mirPot mcert of
-    Shelley.ReservesMIR ->
-      case Shelley.mirRewards mcert of
-        Shelley.StakeAddressesMIR rwds -> mapM_ insertMirReserves $ Map.toList rwds
-        Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (Ledger.toDeltaCoin xfrs)
-    Shelley.TreasuryMIR -> do
-      case Shelley.mirRewards mcert of
-        Shelley.StakeAddressesMIR rwds -> mapM_ insertMirTreasury $ Map.toList rwds
-        Shelley.SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Ledger.toDeltaCoin xfrs)
+  case mirPot mcert of
+    ReservesMIR ->
+      case mirRewards mcert of
+        StakeAddressesMIR rwds -> mapM_ insertMirReserves $ Map.toList rwds
+        SendToOppositePotMIR xfrs -> insertPotTransfer (Ledger.toDeltaCoin xfrs)
+    TreasuryMIR -> do
+      case mirRewards mcert of
+        StakeAddressesMIR rwds -> mapM_ insertMirTreasury $ Map.toList rwds
+        SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Ledger.toDeltaCoin xfrs)
   where
     insertMirReserves ::
       (MonadBaseControl IO m, MonadIO m) =>
@@ -1020,14 +1021,14 @@ insertWithdrawals _tracer cache txId redeemers txWdrl = do
 insertPoolRelay ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.PoolUpdateId ->
-  Shelley.StakePoolRelay ->
+  StakePoolRelay ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRelay updateId relay =
   void
     . lift
     . DB.insertPoolRelay
     $ case relay of
-      Shelley.SingleHostAddr mPort mIpv4 mIpv6 ->
+      SingleHostAddr mPort mIpv4 mIpv6 ->
         DB.PoolRelay -- An IPv4 and/or IPv6 address
           { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = textShow <$> strictMaybeToMaybe mIpv4
@@ -1036,7 +1037,7 @@ insertPoolRelay updateId relay =
           , DB.poolRelayDnsSrvName = Nothing
           , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
           }
-      Shelley.SingleHostName mPort name ->
+      SingleHostName mPort name ->
         DB.PoolRelay -- An A or AAAA DNS record
           { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = Nothing
@@ -1045,7 +1046,7 @@ insertPoolRelay updateId relay =
           , DB.poolRelayDnsSrvName = Nothing
           , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
           }
-      Shelley.MultiHostName name ->
+      MultiHostName name ->
         DB.PoolRelay -- An SRV DNS record
           { DB.poolRelayUpdateId = updateId
           , DB.poolRelayIpv4 = Nothing
@@ -1075,7 +1076,7 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalMaxBhSize = fromIntegral <$> pppMaxBhSize pp
       , DB.paramProposalKeyDeposit = Generic.coinToDbLovelace <$> pppKeyDeposit pp
       , DB.paramProposalPoolDeposit = Generic.coinToDbLovelace <$> pppPoolDeposit pp
-      , DB.paramProposalMaxEpoch = unEpochNo <$> pppMaxEpoch pp
+      , DB.paramProposalMaxEpoch = fromIntegral . unEpochInterval <$> pppMaxEpoch pp
       , DB.paramProposalOptimalPoolCount = fromIntegral <$> pppOptimalPoolCount pp
       , DB.paramProposalInfluence = fromRational <$> pppInfluence pp
       , DB.paramProposalMonetaryExpandRate = toDouble <$> pppMonetaryExpandRate pp
@@ -1114,11 +1115,11 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalDvtPPGovGroup = toDouble . dvtPPGovGroup <$> pppDRepVotingThresholds pp
       , DB.paramProposalDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> pppDRepVotingThresholds pp
       , DB.paramProposalCommitteeMinSize = DbWord64 . fromIntegral <$> pppCommitteeMinSize pp
-      , DB.paramProposalCommitteeMaxTermLength = DbWord64 . fromIntegral <$> pppCommitteeMaxTermLength pp
-      , DB.paramProposalGovActionLifetime = unEpochNo <$> pppGovActionLifetime pp
+      , DB.paramProposalCommitteeMaxTermLength = DbWord64 . fromIntegral . unEpochInterval <$> pppCommitteeMaxTermLength pp
+      , DB.paramProposalGovActionLifetime = fromIntegral . unEpochInterval <$> pppGovActionLifetime pp
       , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
       , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
-      , DB.paramProposalDrepActivity = unEpochNo <$> pppDRepActivity pp
+      , DB.paramProposalDrepActivity = fromIntegral . unEpochInterval <$> pppDRepActivity pp
       }
 
 toDouble :: Ledger.UnitInterval -> Double
@@ -1143,21 +1144,13 @@ insertRedeemer tracer disInOut groupedOutputs txId (rix, redeemer) = do
         , DB.redeemerUnitMem = Generic.txRedeemerMem redeemer
         , DB.redeemerUnitSteps = Generic.txRedeemerSteps redeemer
         , DB.redeemerFee = DB.DbLovelace . fromIntegral . unCoin <$> Generic.txRedeemerFee redeemer
-        , DB.redeemerPurpose = mkPurpose $ Generic.txRedeemerPurpose redeemer
+        , DB.redeemerPurpose = Generic.txRedeemerPurpose redeemer
         , DB.redeemerIndex = Generic.txRedeemerIndex redeemer
         , DB.redeemerScriptHash = scriptHash
         , DB.redeemerRedeemerDataId = tdId
         }
   pure (rix, rid)
   where
-    mkPurpose :: Ledger.Tag -> DB.ScriptPurpose
-    mkPurpose tag =
-      case tag of
-        Ledger.Spend -> DB.Spend
-        Ledger.Mint -> DB.Mint
-        Ledger.Cert -> DB.Cert
-        Ledger.Rewrd -> DB.Rewrd
-
     findScriptHash ::
       (MonadBaseControl IO m, MonadIO m) =>
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
@@ -1262,7 +1255,7 @@ insertCostModel ::
 insertCostModel _blkId cms =
   DB.insertCostModel $
     DB.CostModel
-      { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.CostModels cms mempty mempty
+      { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.mkCostModels cms
       , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
       }
 
@@ -1287,7 +1280,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamMaxBhSize = fromIntegral (Generic.ppMaxBHSize params)
       , DB.epochParamKeyDeposit = Generic.coinToDbLovelace (Generic.ppKeyDeposit params)
       , DB.epochParamPoolDeposit = Generic.coinToDbLovelace (Generic.ppPoolDeposit params)
-      , DB.epochParamMaxEpoch = unEpochNo (Generic.ppMaxEpoch params)
+      , DB.epochParamMaxEpoch = fromIntegral $ unEpochInterval (Generic.ppMaxEpoch params)
       , DB.epochParamOptimalPoolCount = fromIntegral (Generic.ppOptialPoolCount params)
       , DB.epochParamInfluence = fromRational (Generic.ppInfluence params)
       , DB.epochParamMonetaryExpandRate = toDouble (Generic.ppMonetaryExpandRate params)
@@ -1325,11 +1318,11 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamDvtPPGovGroup = toDouble . dvtPPGovGroup <$> Generic.ppDRepVotingThresholds params
       , DB.epochParamDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> Generic.ppDRepVotingThresholds params
       , DB.epochParamCommitteeMinSize = DbWord64 . fromIntegral <$> Generic.ppCommitteeMinSize params
-      , DB.epochParamCommitteeMaxTermLength = DbWord64 . fromIntegral <$> Generic.ppCommitteeMaxTermLength params
-      , DB.epochParamGovActionLifetime = unEpochNo <$> Generic.ppGovActionLifetime params
+      , DB.epochParamCommitteeMaxTermLength = DbWord64 . fromIntegral . unEpochInterval <$> Generic.ppCommitteeMaxTermLength params
+      , DB.epochParamGovActionLifetime = fromIntegral . unEpochInterval <$> Generic.ppGovActionLifetime params
       , DB.epochParamGovActionDeposit = DbWord64 . fromIntegral <$> Generic.ppGovActionDeposit params
       , DB.epochParamDrepDeposit = DbWord64 . fromIntegral <$> Generic.ppDRepDeposit params
-      , DB.epochParamDrepActivity = unEpochNo <$> Generic.ppDRepActivity params
+      , DB.epochParamDrepActivity = fromIntegral . unEpochInterval <$> Generic.ppDRepActivity params
       , DB.epochParamBlockId = blkId
       }
 
@@ -1498,7 +1491,7 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
   votingAnchorId <- lift $ insertAnchor txId $ pProcAnchor pp
   mParamProposalId <- lift $
     case pProcGovAction pp of
-      ParameterChange _ pparams ->
+      ParameterChange _ pparams _ ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
       _ -> pure Nothing
   prevGovActionDBId <- case mprevGovAction of
@@ -1524,17 +1517,17 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
           , DB.govActionProposalExpiredEpoch = Nothing
           }
   case pProcGovAction pp of
-    TreasuryWithdrawals mp -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
+    TreasuryWithdrawals mp _ -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
     UpdateCommittee _ removed added q -> lift $ insertNewCommittee govActionProposalId removed added q
     NewConstitution _ constitution -> lift $ insertConstitution txId govActionProposalId constitution
     _ -> pure ()
   where
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
-      ParameterChange prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
-      HardForkInitiation prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
-      NoConfidence prv -> unPrevGovActionId <$> strictMaybeToMaybe prv
-      UpdateCommittee prv _ _ _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
-      NewConstitution prv _ -> unPrevGovActionId <$> strictMaybeToMaybe prv
+      ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
+      HardForkInitiation prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
+      NoConfidence prv -> unGovPurposeId <$> strictMaybeToMaybe prv
+      UpdateCommittee prv _ _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
+      NewConstitution prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       _ -> Nothing
 
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
@@ -1684,4 +1677,4 @@ updateEnacted isEnacted epochNo enactedState = do
       then lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
       else lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
   where
-    getPrevId (PrevGovActionId gai) = gai
+    getPrevId = unGovPurposeId

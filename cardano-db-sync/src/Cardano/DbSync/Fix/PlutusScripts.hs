@@ -27,7 +27,8 @@ import Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes (strictMaybeToMaybe)
 import qualified Cardano.Ledger.Core as Ledger
-import qualified Cardano.Ledger.Plutus.Language as Ledger
+
+-- import Cardano.Ledger.Plutus.Language
 
 import Cardano.Db (ScriptType (..), maybeToEither)
 import qualified Cardano.Db.Old.V13_0 as DB_V_13_0
@@ -49,6 +50,7 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlon
 import Ouroboros.Consensus.Shelley.Eras
 
 import Cardano.DbSync.Fix.PlutusDataBytes
+import Cardano.Ledger.Babbage.TxOut
 import Cardano.Ledger.Plutus.Language (Plutus (..))
 
 newtype FixPlutusScripts = FixPlutusScripts {scriptsInfo :: [FixPlutusInfo]}
@@ -108,16 +110,17 @@ findWrongPlutusScripts tracer =
       Just prevPoint
 
     hashPlutusScript dbScript = do
-      lang <- getLang
+      --      lang <- getLang -- TODO: Conway
       bytes <- maybeToEither "No bytes found for plutus script" id $ DB_V_13_0.scriptBytes dbScript
-      let script :: AlonzoScript StandardAlonzo = PlutusScript (Plutus lang (BinaryPlutus $ SBS.toShort bytes))
+      let script :: AlonzoScript StandardAlonzo = PlutusScript (AlonzoPlutusV1 (Plutus $ PlutusBinary $ SBS.toShort bytes))
       let hsh :: Ledger.ScriptHash StandardCrypto = Ledger.hashScript @StandardAlonzo script
       Right $ Generic.unScriptHash hsh
-      where
-        getLang = case DB_V_13_0.scriptType dbScript of
-          PlutusV1 -> Right Ledger.PlutusV1
-          PlutusV2 -> Right Ledger.PlutusV2
-          _ -> Left "Non plutus script found where it shouldn't."
+
+--      where
+--        getLang = case DB_V_13_0.scriptType dbScript of
+--          PlutusV1 -> Right Ledger.PlutusV1
+--          PlutusV2 -> Right Ledger.PlutusV2
+--          _ -> Left "Non plutus script found where it shouldn't."
 
 fixPlutusScripts :: MonadIO m => Trace IO Text -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
 fixPlutusScripts tracer cblk fpss = do
@@ -163,7 +166,7 @@ scrapScriptTxBabbage tx = Map.union txMap txOutMap
 
     getOutputScript :: Ledger.TxOut StandardBabbage -> Maybe (ByteString, ByteString)
     getOutputScript txOut = do
-      script :: AlonzoScript StandardBabbage <- strictMaybeToMaybe $ txOut ^. Babbage.referenceScriptTxOutL
+      script :: AlonzoScript StandardBabbage <- strictMaybeToMaybe $ txOut ^. referenceScriptTxOutL
       getTxScript $ Babbage.fromScript script
 
 scrapScriptTxAlonzo :: Ledger.Tx StandardAlonzo -> Map ByteString ByteString

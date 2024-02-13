@@ -209,4 +209,4 @@ test-suite cardano-chain-gen
                       , persistent-postgresql
                       , postgresql-simple
                       , QuickCheck
-                      , quickcheck-state-machine
+                      , quickcheck-state-machine:no-vendored-treediff

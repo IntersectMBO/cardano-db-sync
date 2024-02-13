@@ -38,9 +38,9 @@ import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Era (EraCrypto)
 import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (MultiSig, ScriptHash)
-import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -87,7 +87,7 @@ fromShelleyTx (blkIndex, tx) =
 
     scripts :: [TxScript]
     scripts =
-      mkTxScript <$> Map.toList (ShelleyTx.txwitsScript tx)
+      mkTxScript <$> Map.toList (tx ^. Core.witsTxL . Core.scriptTxWitsL)
 
     mkTxScript :: (ScriptHash (EraCrypto StandardShelley), MultiSig StandardShelley) -> TxScript
     mkTxScript (hsh, script) =
@@ -116,8 +116,8 @@ mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBody
         , txOutDatum = NoDatum -- Shelley does not support plutus data
         }
 
-fromTxIn :: ShelleyTx.TxIn StandardCrypto -> TxIn
-fromTxIn (ShelleyTx.TxIn (ShelleyTx.TxId txid) (TxIx w64)) =
+fromTxIn :: Ledger.TxIn StandardCrypto -> TxIn
+fromTxIn (Ledger.TxIn (Ledger.TxId txid) (TxIx w64)) =
   TxIn
     { txInHash = safeHashToByteString txid
     , txInIndex = w64
@@ -140,7 +140,7 @@ mkTxIn ::
 mkTxIn txBody = map fromTxIn $ toList $ txBody ^. Core.inputsTxBodyL
 
 calcWithdrawalSum ::
-  (Shelley.ShelleyEraTxBody era, EraCrypto era ~ StandardCrypto) =>
+  (Core.EraTxBody era, EraCrypto era ~ StandardCrypto) =>
   Core.TxBody era ->
   Coin
 calcWithdrawalSum bd =
@@ -165,7 +165,7 @@ mkTxWithdrawal (ra, c) =
     }
 
 mkTxParamProposal ::
-  (Shelley.ShelleyEraTxBody era, EraCrypto era ~ StandardCrypto, Core.ProtVerAtMost era 8) =>
+  (Shelley.ShelleyEraTxBody era, EraCrypto era ~ StandardCrypto) =>
   Witness era ->
   Core.TxBody era ->
   [ParamProposal]

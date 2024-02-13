@@ -20,8 +20,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Metadata (
 ) where
 
 import qualified Cardano.Ledger.Allegra.TxAuxData as Allegra
+import Cardano.Ledger.Alonzo.Scripts (AlonzoEraScript)
 import qualified Cardano.Ledger.Alonzo.TxAuxData as Alonzo
-import Cardano.Ledger.Era (Era)
 import qualified Cardano.Ledger.Shelley.TxAuxData as Shelley
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
@@ -48,7 +48,7 @@ fromAllegraMetadata :: Allegra.AllegraTxAuxData StandardAllegra -> Map Word64 Tx
 fromAllegraMetadata (Allegra.AllegraTxAuxData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
-fromAlonzoMetadata :: Era era => Alonzo.AlonzoTxAuxData era -> Map Word64 TxMetadataValue
+fromAlonzoMetadata :: AlonzoEraScript era => Alonzo.AlonzoTxAuxData era -> Map Word64 TxMetadataValue
 fromAlonzoMetadata aux =
   Map.map fromMetadatum $ Alonzo.atadMetadata aux
 

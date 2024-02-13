@@ -14,7 +14,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Witness
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.TxBody
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
-import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
+import Cardano.Ledger.Shelley.TxOut
 import Cardano.Prelude
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardMary)
@@ -56,7 +56,7 @@ fromMaryTx (blkIndex, tx) =
     outputs :: [TxOut]
     outputs = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
 
-    fromTxOut :: Word64 -> ShelleyTx.ShelleyTxOut StandardMary -> TxOut
+    fromTxOut :: Word64 -> ShelleyTxOut StandardMary -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
