@@ -5,7 +5,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 35 THEN
+  IF next_version = 34 THEN
     EXECUTE 'ALTER TABLE "tx_metadata" ALTER COLUMN "json" TYPE VARCHAR' ;
     EXECUTE 'ALTER TABLE "script" ALTER COLUMN "json" TYPE VARCHAR' ;
     EXECUTE 'ALTER TABLE "datum" ALTER COLUMN "value" TYPE VARCHAR' ;
