@@ -8,7 +8,7 @@ This is `a.b.c.d`. where
 different values.
 - `d`: no semantic change to the db.
 
-## Upgrading to 13.2.0.0
+## Upgrading to 13.2.0.x
 
 In order to upgrade from 13.1.x.x to 13.2.0.x resyncing is not necessary and no special
 flags are required from the user. DBSync will automatically perform the new migrations under `schema`
@@ -21,7 +21,7 @@ Upgrading from 13.0.x to 13.2.0.x should be possible but hasn't been tested.
 
 ### Ledger replay
 
-Release 13.2.0.0 drops the ledger snaphot serialisation compatibility. This means it's not able to
+Release 13.2.0.1 drops the ledger snaphot serialisation compatibility. This means it's not able to
 parse older ledger snapshots. DBSync will delete any existing snapshot and will replay the ledger
 rules from genesis. This doesn't mean a rollback to genesis. No db data are deleted.
 

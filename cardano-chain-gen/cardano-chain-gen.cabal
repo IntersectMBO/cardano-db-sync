@@ -1,7 +1,7 @@
 cabal-version:          3.0
 
 name:                   cardano-chain-gen
-version:                13.2.0.0
+version:                13.2.0.1
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/IntersectMBO/cardano-db-sync
