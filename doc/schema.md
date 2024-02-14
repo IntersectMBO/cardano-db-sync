@@ -1,8 +1,6 @@
-Resolving dependencies...
-Up to date
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.0 (from branch **kderme/optimizations** which may not accurately reflect the version number)
+Schema version: 13.2.0.1
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -383,7 +381,7 @@ A table for metadata attached to a transaction.
 
 ### `reward`
 
-A table for earned staking rewards. After 13.2 release it includes only 3 types of rewards: member, leader and refund,  since the other 2 types have moved to a separate table instant_reward. The rewards are inserted incrementally and this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries may be missing.
+A table for earned staking rewards. After 13.2 release it includes only 3 types of rewards: member, leader and refund,  since the other 2 types have moved to a separate table instant_reward. The rewards are inserted incrementally and this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries may be missing. The `reward.id` field has been removed and it only appears on docs due to a bug.
 
 * Primary Id: `id`
 
@@ -399,7 +397,7 @@ A table for earned staking rewards. After 13.2 release it includes only 3 types 
 
 ### `instant_reward`
 
-A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury. This table only exists for historic reasons, since instant rewards are depredated after Conway. New in 13.2
+A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury. This table only exists for historic reasons, since instant rewards are depredated after Conway. The `reward.id` field has been removed and it only appears on docs due to a bug. New in 13.2
 
 * Primary Id: `id`
 
@@ -442,13 +440,15 @@ A table containing the epoch stake distribution for each epoch. This is inserted
 
 ### `epoch_stake_progress`
 
+A table which shows when the epoch_stake for an epoch is complete
+
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `epoch_no` | word31type |  |
-| `completed` | boolean |  |
+| `epoch_no` | word31type | The related epoch |
+| `completed` | boolean | True if completed. If not completed the entry won't exist or more rarely be False. |
 
 ### `treasury`
 

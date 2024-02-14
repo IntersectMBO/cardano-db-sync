@@ -916,7 +916,7 @@ schemaDocs =
       \ since the other 2 types have moved to a separate table instant_reward.\
       \ The rewards are inserted incrementally and\
       \ this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries\
-      \ may be missing."
+      \ may be missing. The `reward.id` field has been removed and it only appears on docs due to a bug."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The type of the rewards"
       RewardAmount # "The reward amount (in Lovelace)."
@@ -931,6 +931,7 @@ schemaDocs =
     InstantReward --^ do
       "A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury.\
       \ This table only exists for historic reasons, since instant rewards are depredated after Conway.\
+      \ The `reward.id` field has been removed and it only appears on docs due to a bug.\
       \ New in 13.2"
       InstantRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       InstantRewardType # "The type of the rewards."

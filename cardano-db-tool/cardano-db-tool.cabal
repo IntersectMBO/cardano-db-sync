@@ -1,7 +1,7 @@
 cabal-version:          3.0
 
 name:                   cardano-db-tool
-version:                13.2.0.0
+version:                13.2.0.1
 synopsis:               Utilities to manage the cardano-db-sync databases.
 description:            Utilities and executable, used to manage and validate the
                         PostgreSQL db and the ledger database of the cardano-db-sync node

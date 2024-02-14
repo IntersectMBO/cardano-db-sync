@@ -1,7 +1,7 @@
 cabal-version:          3.0
 
 name:                   cardano-smash-server
-version:                13.2.0.0
+version:                13.2.0.1
 synopsis:               The Cardano smash server
 description:            Please see the README on GitHub at
                         <https://github.com/IntersectMBO/cardano-db-sync/cardano-smash-server/#readme>
