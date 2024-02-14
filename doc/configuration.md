@@ -157,6 +157,5 @@ Until the ledger state migration happens any restart requires reusing the `--boo
 
 ### --keep-tx-metadata
 
-This flag was introduced in v.13.2.0.0 as all postgres field with the type jsonb were removed to improve insertion performance.
-If they are required and you have database queries against jsonb then activate this flag to re-introduce the type jsonb.
+It keeps only metadata with the specified keys.
 You can pass multiple values to the flag eg: `--keep-tx-metadata 1,2,3` make sure you are using commas between each key.
