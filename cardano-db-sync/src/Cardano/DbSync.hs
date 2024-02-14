@@ -245,8 +245,7 @@ extractSyncOptions snp aop =
             , ioUseLedger = useLedger
             , ioShelley = enpHasShelley snp
             , ioRewards = True
-            , -- TODO: cmdv: this is where we plug configs
-              ioMultiAssets = MultiAssetDisable
+            , ioMultiAssets = MultiAssetDisable
             , ioMetadata = MetadataDisable
             , ioPlutusExtra = PlutusDisable
             , ioOffChainPoolData = enpHasOffChainPoolData snp

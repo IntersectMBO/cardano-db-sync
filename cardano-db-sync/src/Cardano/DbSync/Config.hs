@@ -96,48 +96,37 @@ mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
 
 -- check both whitelist but also checking plutus Maybes first
--- TODO: cmdv: unsure if this is correct because if plutusMaybeCheck fails then no multiasset whitelist is not checked
 plutusMultiAssetWhitelistCheck :: SyncEnv -> [Generic.TxOut] -> Bool
 plutusMultiAssetWhitelistCheck syncEnv txOuts =
-  plutusMaybeCheck txOuts && (plutusWhitelistCheck syncEnv txOuts || multiAssetWhitelistCheck syncEnv txOuts)
-
-plutusMaybeCheck :: [Generic.TxOut] -> Bool
-plutusMaybeCheck =
-  any (\txOut -> isJust (Generic.txOutScript txOut) || isJust (Generic.maybePaymentCred $ Generic.txOutAddress txOut))
+  plutusWhitelistCheck syncEnv txOuts || multiAssetWhitelistCheck syncEnv txOuts
 
 plutusWhitelistCheck :: SyncEnv -> [Generic.TxOut] -> Bool
 plutusWhitelistCheck syncEnv txOuts = do
   -- first check the config option
   case ioPlutusExtra iopts of
     PlutusEnable -> True
-    PlutusDisable -> False
+    PlutusDisable -> True
     PlutusWhitelistScripts plutusWhitelist -> plutuswhitelistCheck plutusWhitelist
   where
     iopts = soptInsertOptions $ envOptions syncEnv
-    plutuswhitelistCheck whitelist = do
-      any
-        ( isJust
-            . ( \txOut -> do
-                  case (Generic.txOutScript txOut, Generic.maybePaymentCred $ Generic.txOutAddress txOut) of
-                    (Just script, _) ->
-                      if Generic.txScriptHash script `elem` whitelist
-                        then Just txOut
-                        else Nothing
-                    (_, Just address) ->
-                      if address `elem` whitelist
-                        then Just txOut
-                        else Nothing
-                    (Nothing, Nothing) -> Nothing
-              )
-        )
-        txOuts
+    plutuswhitelistCheck :: NonEmpty ByteString -> Bool
+    plutuswhitelistCheck whitelist =
+      any (\txOut -> isScriptHashWhitelisted whitelist txOut || isAddressWhitelisted whitelist txOut) txOuts
+    -- check if the script hash is in the whitelist
+    isScriptHashWhitelisted :: NonEmpty ByteString -> Generic.TxOut -> Bool
+    isScriptHashWhitelisted whitelist txOut =
+      maybe False ((`elem` whitelist) . Generic.txScriptHash) (Generic.txOutScript txOut)
+    -- check if the address is in the whitelist
+    isAddressWhitelisted :: NonEmpty ByteString -> Generic.TxOut -> Bool
+    isAddressWhitelisted whitelist txOut =
+      maybe False (`elem` whitelist) (Generic.maybePaymentCred $ Generic.txOutAddress txOut)
 
 multiAssetWhitelistCheck :: SyncEnv -> [Generic.TxOut] -> Bool
 multiAssetWhitelistCheck syncEnv txOuts = do
   let iopts = soptInsertOptions $ envOptions syncEnv
   case ioMultiAssets iopts of
     MultiAssetEnable -> True
-    MultiAssetDisable -> False
+    MultiAssetDisable -> True
     MultiAssetWhitelistPolicies multiAssetWhitelist ->
       or multiAssetwhitelistCheck
       where
