@@ -166,7 +166,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
-  let useLedger = shouldUseLedger (spcLedger $ dncInsertConfig syncNodeConfigFromFile)
+  let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
 
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
@@ -227,7 +227,7 @@ extractSyncOptions :: SyncNodeParams -> Bool -> SyncNodeConfig -> SyncOptions
 extractSyncOptions snp aop snc =
   SyncOptions
     { soptEpochAndCacheEnabled =
-        not isTxOutBootstrap
+        not isTxOutBootstrap'
           && ioInOut iopts
           && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
@@ -236,17 +236,17 @@ extractSyncOptions snp aop snc =
     , soptOnlyFix = enpOnlyFix snp
     , soptPruneConsumeMigration =
         initPruneConsumeMigration
-          isTxOutConsumed
-          isTxOutPrune
-          isTxOutBootstrap
-          (enpForceTxIn snp) -- TODO[sgillespie]
+          isTxOutConsumed'
+          isTxOutPrune'
+          isTxOutBootstrap'
+          forceTxIn'
     , soptInsertOptions = iopts
     , snapshotEveryFollowing = enpSnEveryFollowing snp
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
     maybeKeepMNames =
-      case spcMetadata (dncInsertConfig snc) of
+      case sioMetadata (dncInsertOptions snc) of
         MetadataKeys ks -> Strict.Just (map fromIntegral $ toList ks)
         MetadataEnable -> Strict.Nothing
         MetadataDisable -> Strict.Nothing
@@ -255,25 +255,26 @@ extractSyncOptions snp aop snc =
       InsertOptions
         { ioInOut = enpHasInOut snp
         , ioUseLedger = useLedger
-        , ioShelley = isShelleyEnabled (spcShelley (dncInsertConfig snc))
+        , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
         , ioRewards = True
-        , ioMultiAssets = isMultiAssetEnabled (spcMultiAsset (dncInsertConfig snc))
-        , ioMetadata = isMetadataEnabled (spcMetadata (dncInsertConfig snc))
+        , ioMultiAssets = isMultiAssetEnabled (sioMultiAsset (dncInsertOptions snc))
+        , ioMetadata = isMetadataEnabled (sioMetadata (dncInsertOptions snc))
         , ioKeepMetadataNames = maybeKeepMNames
-        , ioPlutusExtra = isPlutusEnabled (spcPlutus (dncInsertConfig snc))
+        , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
         , ioOffChainPoolData = useOffchainPoolData
         , ioGov = useGovernance
         }
 
-    useLedger = spcLedger (dncInsertConfig snc) == LedgerEnable
+    useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable
     useOffchainPoolData =
-      isOffchainPoolDataEnabled (spcOffchainPoolData (dncInsertConfig snc))
+      isOffchainPoolDataEnabled (sioOffchainPoolData (dncInsertOptions snc))
     useGovernance =
-      isGovernanceEnabled (spcGovernance (dncInsertConfig snc))
+      isGovernanceEnabled (sioGovernance (dncInsertOptions snc))
 
-    isTxOutConsumed = spcTxOut (dncInsertConfig snc) == TxOutConsumed
-    isTxOutPrune = spcTxOut (dncInsertConfig snc) == TxOutPrune
-    isTxOutBootstrap = spcTxOut (dncInsertConfig snc) == TxOutBootstrap
+    isTxOutConsumed' = isTxOutConsumed . sioTxOut . dncInsertOptions $ snc
+    isTxOutPrune' = isTxOutPrune . sioTxOut . dncInsertOptions $ snc
+    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions $ snc
+    forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do

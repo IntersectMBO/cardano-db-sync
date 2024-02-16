@@ -21,7 +21,7 @@ tests =
       [ ("SyncInsertConfig FromJSON", prop_syncInsertConfigFromJSON)
       , ("SyncInsertConfig roundtrip", prop_syncInsertConfigRoundtrip)
       , ("isTxEnabled", prop_isTxEnabled)
-      , ("ishasLedger", prop_hasLedger)
+      , ("hasLedger", prop_hasLedger)
       , ("shouldUseLedger", prop_shouldUseLedger)
       , ("isShelleyEnabled", prop_isShelleyEnabled)
       , ("isMultiAssetEnabled", prop_isMultiAssetEnabled)
@@ -39,60 +39,71 @@ prop_syncInsertConfigRoundtrip :: Property
 prop_syncInsertConfigRoundtrip = property $ do
   cfg <- forAll Gen.syncInsertConfig
 
+  let isSyncInsertConfig =
+        case cfg of
+          SyncInsertConfig _ -> True
+          _ -> False
+
+  cover 5 "full" (cfg == FullInsertOptions)
+  cover 5 "only utxo" (cfg == OnlyUTxOInsertOptions)
+  cover 5 "only gov" (cfg == OnlyGovInsertOptions)
+  cover 5 "disable all" (cfg == DisableAllInsertOptions)
+  cover 5 "config" isSyncInsertConfig
+
   tripping cfg Aeson.encode Aeson.decode
 
 prop_isTxEnabled :: Property
 prop_isTxEnabled = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let txOutCfg = spcTxOut cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let txOutCfg = sioTxOut cfg
 
   -- TxOut is enabled if it is not TxOutDisable
   isTxOutEnabled txOutCfg === (txOutCfg /= TxOutDisable)
 
 prop_hasLedger :: Property
 prop_hasLedger = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let ledgerCfg = spcLedger cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let ledgerCfg = sioLedger cfg
 
   -- Ledger is enabled if it is not LedgerDisable
   hasLedger ledgerCfg === (ledgerCfg /= LedgerDisable)
 
 prop_shouldUseLedger :: Property
 prop_shouldUseLedger = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let ledgerCfg = spcLedger cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let ledgerCfg = sioLedger cfg
 
   -- Ledger is enabled if it is not LedgerDisable
   shouldUseLedger ledgerCfg === (ledgerCfg == LedgerEnable)
 
 prop_isShelleyEnabled :: Property
 prop_isShelleyEnabled = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let shelleyCfg = spcShelley cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let shelleyCfg = sioShelley cfg
 
   -- Shelley is enabled if it is not ShelleyDisable
   isShelleyEnabled shelleyCfg === (shelleyCfg /= ShelleyDisable)
 
 prop_isMultiAssetEnabled :: Property
 prop_isMultiAssetEnabled = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let multiAssetCfg = spcMultiAsset cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let multiAssetCfg = sioMultiAsset cfg
 
   -- MultiAsset is enabled if it is not MultiAssetDisable
   isMultiAssetEnabled multiAssetCfg === (multiAssetCfg /= MultiAssetDisable)
 
 prop_isMetadataEnabled :: Property
 prop_isMetadataEnabled = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let metadataCfg = spcMetadata cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let metadataCfg = sioMetadata cfg
 
   -- Metadata is enabled if it is not MetadataDisable
   isMetadataEnabled metadataCfg === (metadataCfg /= MetadataDisable)
 
 prop_isPlutusEnabled :: Property
 prop_isPlutusEnabled = property $ do
-  cfg <- forAll Gen.syncInsertConfig
-  let plutusCfg = spcPlutus cfg
+  cfg <- forAll Gen.syncInsertOptions
+  let plutusCfg = sioPlutus cfg
 
   -- Plutus is enabled if it is not PlutusDisable
   isPlutusEnabled plutusCfg === (plutusCfg /= PlutusDisable)
@@ -103,7 +114,9 @@ genDefaultJson =
   Gen.element
     [ [aesonQQ|
         {
-          "tx_out": "enable",
+          "tx_out": {
+            "value": "enable"
+          },
           "ledger": "enable",
           "shelley": {
             "enable": true,
@@ -131,7 +144,9 @@ genDefaultJson =
       |]
     , [aesonQQ|
         {
-          "tx_out": "enable",
+          "tx_out": {
+            "value": "enable"
+          },
           "ledger": "enable",
           "shelley": {
             "enable": true

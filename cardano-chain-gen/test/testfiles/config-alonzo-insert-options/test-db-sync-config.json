@@ -112,7 +112,9 @@
     }
   ],
   "insert_options": {
-    "tx_out": "disable",
+    "tx_out": {
+      "value": "disable"
+    },
     "ledger": "disable",
     "shelley": {
       "enable": false,

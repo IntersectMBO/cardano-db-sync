@@ -112,6 +112,9 @@
     }
   ],
   "insert_options": {
-    "tx_out": "prune"
+    "tx_out": {
+      "value": "prune",
+      "force_tx_in": true
+    }
   }
 }
