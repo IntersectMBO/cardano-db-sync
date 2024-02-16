@@ -14,24 +14,24 @@ import Prelude ()
 defaultInsertConfig :: Assertion
 defaultInsertConfig = do
   cfg <- mkSyncNodeConfig babbageConfigDir initCommandLineArgs
-  dncInsertConfig cfg @?= def
+  dncInsertOptions cfg @?= def
 
 insertConfig :: Assertion
 insertConfig = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
-        SyncInsertConfig
-          { spcTxOut = TxOutDisable
-          , spcLedger = LedgerDisable
-          , spcShelley = ShelleyDisable
-          , spcMultiAsset = MultiAssetDisable
-          , spcMetadata = MetadataDisable
-          , spcPlutus = PlutusDisable
-          , spcGovernance = GovernanceConfig False
-          , spcOffchainPoolData = OffchainPoolDataConfig False
-          , spcJsonType = JsonTypeDisable
+        SyncInsertOptions
+          { sioTxOut = TxOutDisable
+          , sioLedger = LedgerDisable
+          , sioShelley = ShelleyDisable
+          , sioMultiAsset = MultiAssetDisable
+          , sioMetadata = MetadataDisable
+          , sioPlutus = PlutusDisable
+          , sioGovernance = GovernanceConfig False
+          , sioOffchainPoolData = OffchainPoolDataConfig False
+          , sioJsonType = JsonTypeDisable
           }
 
-  dncInsertConfig cfg @?= expected
+  dncInsertOptions cfg @?= expected
   where
     configDir = "config-babbage-insert-options"

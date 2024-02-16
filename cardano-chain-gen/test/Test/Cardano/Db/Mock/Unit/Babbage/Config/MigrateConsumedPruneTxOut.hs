@@ -16,6 +16,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut (
 ) where
 
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Config.Types
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
@@ -29,6 +30,7 @@ import Test.Cardano.Db.Mock.Config (
   CommandLineArgs (..),
   babbageConfigDir,
   initCommandLineArgs,
+  mkSyncNodeConfig,
   replaceConfigFile,
   startDBSync,
   stopDBSync,
@@ -88,7 +90,6 @@ basicPrune = do
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"
-        , claForceTxIn = True
         }
     testLabel = "configPrune"
 
@@ -117,7 +118,6 @@ pruneWithSimpleRollback = do
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"
-        , claForceTxIn = True
         }
     testLabel = "configPruneSimpleRollback"
 
@@ -148,15 +148,16 @@ pruneWithFullTxRollback = do
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"
-        , claForceTxIn = True
         }
     testLabel = "configPruneOnFullRollback"
 
 -- The tx in the last, 2 x securityParam worth of blocks should not be pruned.
 -- In these tests, 2 x securityParam = 20 blocks.
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
-pruningShouldKeepSomeTx = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruningShouldKeepSomeTx ioManager names = do
+  syncNodeConfig <- mkSyncNodeConfig'
+
+  withConfig' syncNodeConfig $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 80
     -- these two blocs + tx will fall withing the last 20 blocks so should not be pruned
@@ -173,6 +174,20 @@ pruningShouldKeepSomeTx = do
     assertTxInCount dbSyncEnv 0
     assertEqQuery dbSyncEnv DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
+    withConfig' cfg f =
+      withCustomConfig cmdLineArgs (Just cfg) babbageConfigDir testLabel f ioManager names
+
+    mkSyncNodeConfig' :: IO SyncNodeConfig
+    mkSyncNodeConfig' = do
+      initCfg <- mkSyncNodeConfig babbageConfigDir cmdLineArgs
+      pure $
+        initCfg
+          { dncInsertOptions =
+              (dncInsertOptions initCfg)
+                { sioTxOut = TxOutPrune (ForceTxIn False)
+                }
+          }
+
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"

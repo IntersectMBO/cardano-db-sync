@@ -21,7 +21,9 @@ module Cardano.DbSync.Config.Types (
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
+  SyncInsertOptions (..),
   TxOutConfig (..),
+  ForceTxIn (..),
   LedgerInsertConfig (..),
   ShelleyInsertConfig (..),
   MultiAssetConfig (..),
@@ -45,6 +47,10 @@ module Cardano.DbSync.Config.Types (
   isMultiAssetEnabled,
   isMetadataEnabled,
   isPlutusEnabled,
+  isTxOutBootstrap,
+  isTxOutConsumed,
+  isTxOutPrune,
+  forceTxIn,
 ) where
 
 import qualified Cardano.BM.Configuration as Logging
@@ -92,7 +98,6 @@ data SyncNodeParams = SyncNodeParams
   , enpSnEveryFollowing :: !Word64
   , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
-  , enpForceTxIn :: !Bool -- TODO[sgillespie]
   }
   deriving (Show)
 
@@ -126,7 +131,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncAlonzoHardFork :: !TriggerHardFork
   , dncBabbageHardFork :: !TriggerHardFork
   , dncConwayHardFork :: !TriggerHardFork
-  , dncInsertConfig :: !SyncInsertConfig
+  , dncInsertOptions :: !SyncInsertOptions
   }
 
 data SyncPreConfig = SyncPreConfig
@@ -138,27 +143,40 @@ data SyncPreConfig = SyncPreConfig
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
   }
+  deriving (Show)
 
-data SyncInsertConfig = SyncInsertConfig
-  { spcTxOut :: TxOutConfig
-  , spcLedger :: LedgerInsertConfig
-  , spcShelley :: ShelleyInsertConfig
-  , spcMultiAsset :: MultiAssetConfig
-  , spcMetadata :: MetadataConfig
-  , spcPlutus :: PlutusConfig
-  , spcGovernance :: GovernanceConfig
-  , spcOffchainPoolData :: OffchainPoolDataConfig
-  , spcJsonType :: JsonTypeConfig
+data SyncInsertConfig
+  = FullInsertOptions
+  | OnlyUTxOInsertOptions
+  | OnlyGovInsertOptions
+  | DisableAllInsertOptions
+  | SyncInsertConfig SyncInsertOptions
+  deriving (Eq, Show)
+
+data SyncInsertOptions = SyncInsertOptions
+  { sioTxOut :: TxOutConfig
+  , sioLedger :: LedgerInsertConfig
+  , sioShelley :: ShelleyInsertConfig
+  , sioMultiAsset :: MultiAssetConfig
+  , sioMetadata :: MetadataConfig
+  , sioPlutus :: PlutusConfig
+  , sioGovernance :: GovernanceConfig
+  , sioOffchainPoolData :: OffchainPoolDataConfig
+  , sioJsonType :: JsonTypeConfig
   }
   deriving (Eq, Show)
 
 data TxOutConfig
   = TxOutEnable
   | TxOutDisable
-  | TxOutConsumed
-  | TxOutPrune
-  | TxOutBootstrap
+  | TxOutConsumed ForceTxIn
+  | TxOutPrune ForceTxIn
+  | TxOutBootstrap ForceTxIn
   deriving (Eq, Show)
+
+newtype ForceTxIn = ForceTxIn {unForceTxIn :: Bool}
+  deriving (Eq, Show)
+  deriving newtype (ToJSON, FromJSON)
 
 data LedgerInsertConfig
   = LedgerEnable
@@ -263,9 +281,28 @@ pcNodeConfigFilePath = unNodeConfigFile . pcNodeConfigFile
 isTxOutEnabled :: TxOutConfig -> Bool
 isTxOutEnabled TxOutDisable = False
 isTxOutEnabled TxOutEnable = True
-isTxOutEnabled TxOutConsumed = True
-isTxOutEnabled TxOutPrune = True
-isTxOutEnabled TxOutBootstrap = True
+isTxOutEnabled (TxOutConsumed _) = True
+isTxOutEnabled (TxOutPrune _) = True
+isTxOutEnabled (TxOutBootstrap _) = True
+
+isTxOutBootstrap :: TxOutConfig -> Bool
+isTxOutBootstrap (TxOutBootstrap _) = True
+isTxOutBootstrap _ = False
+
+isTxOutConsumed :: TxOutConfig -> Bool
+isTxOutConsumed (TxOutConsumed _) = True
+isTxOutConsumed _ = False
+
+isTxOutPrune :: TxOutConfig -> Bool
+isTxOutPrune (TxOutPrune _) = True
+isTxOutPrune _ = False
+
+forceTxIn :: TxOutConfig -> Bool
+forceTxIn (TxOutConsumed f) = unForceTxIn f
+forceTxIn (TxOutPrune f) = unForceTxIn f
+forceTxIn (TxOutBootstrap f) = unForceTxIn f
+forceTxIn TxOutEnable = False
+forceTxIn TxOutDisable = False
 
 hasLedger :: LedgerInsertConfig -> Bool
 hasLedger LedgerDisable = False
@@ -321,47 +358,83 @@ instance FromJSON SyncProtocol where
       x -> typeMismatch "Protocol" x
 
 instance FromJSON SyncInsertConfig where
-  parseJSON = Aeson.withObject "SyncInsertConfig" $ \obj ->
-    SyncInsertConfig
-      <$> obj .:? "tx_out" .!= spcTxOut def
-      <*> obj .:? "ledger" .!= spcLedger def
-      <*> obj .:? "shelley" .!= spcShelley def
-      <*> obj .:? "multi_asset" .!= spcMultiAsset def
-      <*> obj .:? "metadata" .!= spcMetadata def
-      <*> obj .:? "plutus" .!= spcPlutus def
-      <*> obj .:? "governance" .!= spcGovernance def
-      <*> obj .:? "offchain_pool_data" .!= spcOffchainPoolData def
-      <*> obj .:? "json_type" .!= spcJsonType def
+  parseJSON = Aeson.withObject "SyncInsertConfig" $ \obj -> do
+    preset <- obj .:? "preset"
+    case preset :: Maybe Text of
+      Nothing -> SyncInsertConfig <$> parseJSON (Aeson.Object obj)
+      Just "full" -> pure FullInsertOptions
+      Just "only_utxo" -> pure OnlyUTxOInsertOptions
+      Just "only_gov" -> pure OnlyGovInsertOptions
+      Just "disable_all" -> pure DisableAllInsertOptions
+      Just other -> fail $ "unexpected preset: " <> show other
 
 instance ToJSON SyncInsertConfig where
-  toJSON SyncInsertConfig {..} =
+  toJSON (SyncInsertConfig opts) = toJSON opts
+  toJSON FullInsertOptions = Aeson.object ["preset" .= ("full" :: Text)]
+  toJSON OnlyUTxOInsertOptions = Aeson.object ["preset" .= ("only_utxo" :: Text)]
+  toJSON OnlyGovInsertOptions = Aeson.object ["preset" .= ("only_gov" :: Text)]
+  toJSON DisableAllInsertOptions = Aeson.object ["preset" .= ("disable_all" :: Text)]
+
+instance FromJSON SyncInsertOptions where
+  parseJSON = Aeson.withObject "SyncInsertOptions" $ \obj ->
+    SyncInsertOptions
+      <$> obj .:? "tx_out" .!= sioTxOut def
+      <*> obj .:? "ledger" .!= sioLedger def
+      <*> obj .:? "shelley" .!= sioShelley def
+      <*> obj .:? "multi_asset" .!= sioMultiAsset def
+      <*> obj .:? "metadata" .!= sioMetadata def
+      <*> obj .:? "plutus" .!= sioPlutus def
+      <*> obj .:? "governance" .!= sioGovernance def
+      <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
+      <*> obj .:? "json_type" .!= sioJsonType def
+
+instance ToJSON SyncInsertOptions where
+  toJSON SyncInsertOptions {..} =
     Aeson.object
-      [ "tx_out" .= spcTxOut
-      , "ledger" .= spcLedger
-      , "shelley" .= spcShelley
-      , "multi_asset" .= spcMultiAsset
-      , "metadata" .= spcMetadata
-      , "plutus" .= spcPlutus
-      , "governance" .= spcGovernance
-      , "offchain_pool_data" .= spcOffchainPoolData
-      , "json_type" .= spcJsonType
+      [ "tx_out" .= sioTxOut
+      , "ledger" .= sioLedger
+      , "shelley" .= sioShelley
+      , "multi_asset" .= sioMultiAsset
+      , "metadata" .= sioMetadata
+      , "plutus" .= sioPlutus
+      , "governance" .= sioGovernance
+      , "offchain_pool_data" .= sioOffchainPoolData
+      , "json_type" .= sioJsonType
       ]
 
 instance ToJSON TxOutConfig where
-  toJSON TxOutEnable = "enable"
-  toJSON TxOutDisable = "disable"
-  toJSON TxOutConsumed = "consumed"
-  toJSON TxOutPrune = "prune"
-  toJSON TxOutBootstrap = "bootstrap"
+  toJSON cfg =
+    Aeson.object
+      [ "value" .= value cfg
+      , "force_tx_in" .= forceTxIn' cfg
+      ]
+    where
+      value :: TxOutConfig -> Text
+      value TxOutEnable = "enable"
+      value TxOutDisable = "disable"
+      value (TxOutConsumed _) = "consumed"
+      value (TxOutPrune _) = "prune"
+      value (TxOutBootstrap _) = "bootstrap"
+
+      forceTxIn' :: TxOutConfig -> Maybe Bool
+      forceTxIn' TxOutEnable = Nothing
+      forceTxIn' TxOutDisable = Nothing
+      forceTxIn' (TxOutConsumed f) = Just (unForceTxIn f)
+      forceTxIn' (TxOutPrune f) = Just (unForceTxIn f)
+      forceTxIn' (TxOutBootstrap f) = Just (unForceTxIn f)
 
 instance FromJSON TxOutConfig where
-  parseJSON = Aeson.withText "tx_out" $ \case
-    "enable" -> pure TxOutEnable
-    "disable" -> pure TxOutDisable
-    "consumed" -> pure TxOutConsumed
-    "prune" -> pure TxOutPrune
-    "bootstrap" -> pure TxOutBootstrap
-    other -> fail $ "unexpected tx_out: " <> show other
+  parseJSON = Aeson.withObject "tx_out" $ \obj -> do
+    val <- obj .: "value"
+    forceTxIn' <- obj .:? "force_tx_in" .!= ForceTxIn False
+
+    case val :: Text of
+      "enable" -> pure TxOutEnable
+      "disable" -> pure TxOutDisable
+      "consumed" -> pure (TxOutConsumed forceTxIn')
+      "prune" -> pure (TxOutPrune forceTxIn')
+      "bootstrap" -> pure (TxOutBootstrap forceTxIn')
+      other -> fail $ "unexpected tx_out: " <> show other
 
 instance ToJSON LedgerInsertConfig where
   toJSON LedgerEnable = "enable"
@@ -490,17 +563,20 @@ instance FromJSON JsonTypeConfig where
     other -> fail $ "unexpected json_type: " <> show other
 
 instance Default SyncInsertConfig where
+  def = SyncInsertConfig def
+
+instance Default SyncInsertOptions where
   def =
-    SyncInsertConfig
-      { spcTxOut = TxOutEnable
-      , spcLedger = LedgerEnable
-      , spcShelley = ShelleyEnable
-      , spcMultiAsset = MultiAssetEnable
-      , spcMetadata = MetadataEnable
-      , spcPlutus = PlutusEnable
-      , spcGovernance = GovernanceConfig True
-      , spcOffchainPoolData = OffchainPoolDataConfig True
-      , spcJsonType = JsonTypeText
+    SyncInsertOptions
+      { sioTxOut = TxOutEnable
+      , sioLedger = LedgerEnable
+      , sioShelley = ShelleyEnable
+      , sioMultiAsset = MultiAssetEnable
+      , sioMetadata = MetadataEnable
+      , sioPlutus = PlutusEnable
+      , sioGovernance = GovernanceConfig True
+      , sioOffchainPoolData = OffchainPoolDataConfig True
+      , sioJsonType = JsonTypeText
       }
 
 boolToEnableDisable :: IsString s => Bool -> s

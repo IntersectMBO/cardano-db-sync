@@ -4,8 +4,10 @@
 module Cardano.DbSync.Gen (
   -- * Config/Api Type generators
   syncNodeParams,
+  syncPreConfig,
   syncNodeConfig,
   syncInsertConfig,
+  syncInsertOptions,
   shelleyConfig,
   multiAssetConfig,
   metadataConfig,
@@ -14,6 +16,7 @@ module Cardano.DbSync.Gen (
   metadataKey,
   scriptHash,
   addr,
+  networkName,
 
   -- * Utility generators
   hashBlake2b_256,
@@ -22,7 +25,9 @@ module Cardano.DbSync.Gen (
   triggerHardFork,
 ) where
 
-import qualified Cardano.BM.Configuration.Model as Logging
+import qualified Cardano.BM.Configuration.Model as Logging (Configuration ())
+import qualified Cardano.BM.Data.Configuration as Logging
+import qualified Cardano.BM.Data.Severity as Logging
 import Cardano.Chain.Update (ProtocolVersion (..))
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import Cardano.Crypto.Hash (Blake2b_256 (), Hash ())
@@ -38,6 +43,17 @@ import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
+
+syncPreConfig :: Gen SyncPreConfig
+syncPreConfig =
+  SyncPreConfig
+    <$> networkName
+    <*> pure loggingRepresentation
+    <*> (NodeConfigFile <$> filePath)
+    <*> Gen.bool
+    <*> Gen.bool
+    <*> Gen.int (Range.linear 0 10000)
+    <*> syncInsertConfig
 
 syncNodeParams :: MonadGen m => m SyncNodeParams
 syncNodeParams =
@@ -56,12 +72,11 @@ syncNodeParams =
     <*> Gen.word64 (Range.linear 0 1000)
     <*> Gen.word64 (Range.linear 0 1000)
     <*> pure Nothing
-    <*> Gen.bool
 
 syncNodeConfig :: Logging.Configuration -> Gen SyncNodeConfig
 syncNodeConfig loggingCfg =
   SyncNodeConfig
-    <$> (NetworkName <$> Gen.text (Range.linear 0 100) Gen.alpha)
+    <$> networkName
     <*> pure loggingCfg
     <*> (NodeConfigFile <$> filePath)
     <*> Gen.constant SyncProtocolCardano
@@ -85,12 +100,22 @@ syncNodeConfig loggingCfg =
     <*> triggerHardFork
     <*> triggerHardFork
     <*> triggerHardFork
-    <*> syncInsertConfig
+    <*> syncInsertOptions
 
 syncInsertConfig :: Gen SyncInsertConfig
 syncInsertConfig =
-  SyncInsertConfig
-    <$> Gen.element [TxOutEnable, TxOutDisable, TxOutConsumed, TxOutPrune, TxOutBootstrap]
+  Gen.choice
+    [ pure FullInsertOptions
+    , pure OnlyUTxOInsertOptions
+    , pure OnlyGovInsertOptions
+    , pure DisableAllInsertOptions
+    , SyncInsertConfig <$> syncInsertOptions
+    ]
+
+syncInsertOptions :: Gen SyncInsertOptions
+syncInsertOptions =
+  SyncInsertOptions
+    <$> txOutConfig
     <*> Gen.element [LedgerEnable, LedgerDisable, LedgerIgnore]
     <*> shelleyConfig
     <*> multiAssetConfig
@@ -99,6 +124,16 @@ syncInsertConfig =
     <*> (GovernanceConfig <$> Gen.bool)
     <*> (OffchainPoolDataConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
+
+txOutConfig :: Gen TxOutConfig
+txOutConfig =
+  Gen.choice
+    [ pure TxOutEnable
+    , pure TxOutDisable
+    , TxOutConsumed <$> (ForceTxIn <$> Gen.bool)
+    , TxOutPrune <$> (ForceTxIn <$> Gen.bool)
+    , TxOutBootstrap <$> (ForceTxIn <$> Gen.bool)
+    ]
 
 shelleyConfig :: Gen ShelleyInsertConfig
 shelleyConfig = do
@@ -144,6 +179,9 @@ metadataKey = Gen.word (Range.linear minBound maxBound)
 scriptHash :: Gen ShortByteString
 scriptHash = toShort <$> Gen.utf8 (Range.linear 1 5) Gen.unicode
 
+networkName :: Gen NetworkName
+networkName = NetworkName <$> Gen.text (Range.linear 0 100) Gen.alpha
+
 hashBlake2b_256 :: MonadGen m => m (Maybe (Hash Blake2b_256 ByteString))
 hashBlake2b_256 = serialiseHash <$> Gen.bytes (Range.linear 0 100)
   where
@@ -166,3 +204,23 @@ triggerHardFork =
     , TriggerHardForkAtEpoch . EpochNo <$> Gen.word64 (Range.linear minBound maxBound)
     , TriggerHardForkAtVersion <$> Gen.word16 (Range.linear minBound maxBound)
     ]
+
+-- | @Logging.Representation@ is not useful for our testing, so we just generate a minimal example
+loggingRepresentation :: Logging.Representation
+loggingRepresentation =
+  Logging.Representation
+    { Logging.minSeverity = Logging.Info
+    , Logging.rotation = Nothing
+    , Logging.setupScribes = []
+    , Logging.defaultScribes = []
+    , Logging.setupBackends = []
+    , Logging.defaultBackends = []
+    , Logging.hasEKG = Nothing
+    , Logging.hasGraylog = Nothing
+    , Logging.hasPrometheus = Nothing
+    , Logging.hasGUI = Nothing
+    , Logging.traceForwardTo = Nothing
+    , Logging.forwardDelay = Nothing
+    , Logging.traceAcceptAt = Nothing
+    , Logging.options = mempty
+    }

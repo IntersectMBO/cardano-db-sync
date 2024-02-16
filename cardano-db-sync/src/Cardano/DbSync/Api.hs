@@ -8,6 +8,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Api (
+  extractInsertOptions,
   fullInsertOptions,
   onlyUTxOInsertOptions,
   onlyGovInsertOptions,
@@ -153,11 +154,11 @@ runIndexMigrations env = do
     atomically $ writeTVar (envIndexes env) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
-initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn =
+initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
   DB.PruneConsumeMigration
     { DB.pcmPruneTxOut = pruneTxOut || bootstrap
     , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut || bootstrap
-    , DB.pcmSkipTxIn = not forceTxIn && (consumed || pruneTxOut || bootstrap)
+    , DB.pcmSkipTxIn = not forceTxIn' && (consumed || pruneTxOut || bootstrap)
     }
 
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
@@ -199,52 +200,62 @@ getPrunes :: SyncEnv -> Bool
 getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
-fullInsertOptions :: Bool -> InsertOptions
-fullInsertOptions useLedger =
-  InsertOptions
-    { ioInOut = True
-    , ioUseLedger = useLedger
-    , ioShelley = True
-    , ioRewards = True
-    , ioMultiAssets = True
-    , ioMetadata = True
-    , ioKeepMetadataNames = Strict.Nothing
-    , ioPlutusExtra = True
-    , ioOffChainPoolData = True
-    , ioGov = True
+extractInsertOptions :: SyncPreConfig -> SyncInsertOptions
+extractInsertOptions cfg =
+  case pcInsertConfig cfg of
+    FullInsertOptions -> fullInsertOptions
+    OnlyUTxOInsertOptions -> onlyUTxOInsertOptions
+    OnlyGovInsertOptions -> onlyGovInsertOptions
+    DisableAllInsertOptions -> disableAllInsertOptions
+    SyncInsertConfig opts -> opts
+
+fullInsertOptions :: SyncInsertOptions
+fullInsertOptions =
+  SyncInsertOptions
+    { sioTxOut = TxOutEnable
+    , sioLedger = LedgerEnable
+    , sioShelley = ShelleyEnable
+    , sioMultiAsset = MultiAssetEnable
+    , sioMetadata = MetadataEnable
+    , sioPlutus = PlutusEnable
+    , sioGovernance = GovernanceConfig True
+    , sioOffchainPoolData = OffchainPoolDataConfig True
+    , sioJsonType = JsonTypeText
     }
 
-onlyUTxOInsertOptions :: InsertOptions
+onlyUTxOInsertOptions :: SyncInsertOptions
 onlyUTxOInsertOptions =
-  InsertOptions
-    { ioInOut = True
-    , ioUseLedger = False
-    , ioShelley = False
-    , ioRewards = False
-    , ioMultiAssets = True
-    , ioMetadata = False
-    , ioKeepMetadataNames = Strict.Nothing
-    , ioPlutusExtra = False
-    , ioOffChainPoolData = False
-    , ioGov = False
+  SyncInsertOptions
+    { sioTxOut = TxOutEnable
+    , sioLedger = LedgerIgnore
+    , sioShelley = ShelleyDisable
+    , sioMultiAsset = MultiAssetDisable
+    , sioMetadata = MetadataDisable
+    , sioPlutus = PlutusDisable
+    , sioGovernance = GovernanceConfig False
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioJsonType = JsonTypeText
     }
 
-onlyGovInsertOptions :: Bool -> InsertOptions
-onlyGovInsertOptions useLedger = (disableAllInsertOptions useLedger) {ioGov = True}
+onlyGovInsertOptions :: SyncInsertOptions
+onlyGovInsertOptions =
+  disableAllInsertOptions
+    { sioLedger = LedgerEnable
+    , sioGovernance = GovernanceConfig True
+    }
 
-disableAllInsertOptions :: Bool -> InsertOptions
-disableAllInsertOptions useLedger =
-  InsertOptions
-    { ioInOut = False
-    , ioUseLedger = useLedger
-    , ioShelley = False
-    , ioRewards = False
-    , ioMultiAssets = False
-    , ioMetadata = False
-    , ioKeepMetadataNames = Strict.Nothing
-    , ioPlutusExtra = False
-    , ioOffChainPoolData = False
-    , ioGov = False
+disableAllInsertOptions :: SyncInsertOptions
+disableAllInsertOptions =
+  SyncInsertOptions
+    { sioTxOut = TxOutDisable
+    , sioLedger = LedgerIgnore
+    , sioShelley = ShelleyDisable
+    , sioMultiAsset = MultiAssetDisable
+    , sioMetadata = MetadataDisable
+    , sioPlutus = PlutusDisable
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioGovernance = GovernanceConfig False
+    , sioJsonType = JsonTypeText
     }
 
 initEpochState :: EpochState
@@ -374,7 +385,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutBootstrap syncNodeConfigFromFile) backend
+  bts <- getBootstrapInProgress trce (isTxOutBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -427,8 +438,8 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envSystemStart = systemStart
       }
   where
-    hasLedger' = hasLedger . spcLedger . dncInsertConfig
-    isTxOutBootstrap = (== TxOutBootstrap) . spcTxOut . dncInsertConfig
+    hasLedger' = hasLedger . sioLedger . dncInsertOptions
+    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->

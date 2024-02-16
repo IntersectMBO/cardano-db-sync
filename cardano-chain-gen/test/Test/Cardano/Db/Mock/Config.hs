@@ -117,7 +117,6 @@ data CommandLineArgs = CommandLineArgs
   , claMigrateConsumed :: Bool
   , claPruneTxOut :: Bool
   , claBootstrap :: Bool
-  , claForceTxIn :: Bool
   }
 
 data WithConfigArgs = WithConfigArgs
@@ -275,7 +274,6 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpOnlyFix = claOnlyFix
       , enpForceIndexes = claForceIndexes
       , enpHasInOut = True
-      , enpForceTxIn = claForceTxIn
       , enpSnEveryFollowing = 35
       , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing
@@ -304,7 +302,6 @@ initCommandLineArgs =
     , claMigrateConsumed = False
     , claPruneTxOut = False
     , claBootstrap = False
-    , claForceTxIn = False
     }
 
 emptyMetricsSetters :: MetricSetters

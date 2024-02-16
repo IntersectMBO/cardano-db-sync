@@ -217,7 +217,7 @@ data PruneConsumeMigration = PruneConsumeMigration
     pcmConsumeOrPruneTxOut :: Bool
   , pcmSkipTxIn :: Bool
   }
-  deriving (Show)
+  deriving (Eq, Show)
 
 extraDescription :: ExtraMigration -> Text
 extraDescription = \case

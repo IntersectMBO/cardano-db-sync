@@ -16,7 +16,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Config (SyncNodeConfig (..))
+import Cardano.DbSync.Config.Types
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -99,7 +99,6 @@ basicPrune = do
     args =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"
-        , claForceTxIn = True
         }
     testLabel = "conwayConfigPrune"
     fullBlockSize b = fromIntegral $ length b + 2
@@ -140,7 +139,6 @@ pruneWithSimpleRollback =
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"
-        , claForceTxIn = True
         }
     testLabel = "conwayConfigPruneSimpleRollback"
     fullBlockSize b = fromIntegral $ length b + 4
@@ -181,14 +179,15 @@ pruneWithFullTxRollback =
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"
-        , claForceTxIn = True
         }
     testLabel = "conwayConfigPruneOnFullRollback"
 
 -- The transactions in the last `2 * securityParam` blocks should not be pruned
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
-pruningShouldKeepSomeTx =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+pruningShouldKeepSomeTx ioManager names = do
+  syncNodeConfig <- mkSyncNodeConfig'
+
+  withConfig' syncNodeConfig $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -213,6 +212,20 @@ pruningShouldKeepSomeTx =
     assertTxInCount dbSync 0
     assertEqQuery dbSync DB.queryTxOutConsumedCount 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
+    withConfig' cfg f =
+      withCustomConfig cmdLineArgs (Just cfg) conwayConfigDir testLabel f ioManager names
+
+    mkSyncNodeConfig' :: IO SyncNodeConfig
+    mkSyncNodeConfig' = do
+      initCfg <- mkSyncNodeConfig conwayConfigDir cmdLineArgs
+      pure $
+        initCfg
+          { dncInsertOptions =
+              (dncInsertOptions initCfg)
+                { sioTxOut = TxOutPrune (ForceTxIn False)
+                }
+          }
+
     cmdLineArgs =
       initCommandLineArgs
         { claConfigFilename = "test-db-sync-config-prune.json"

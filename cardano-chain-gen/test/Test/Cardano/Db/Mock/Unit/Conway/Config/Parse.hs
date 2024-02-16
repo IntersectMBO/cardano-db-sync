@@ -1,4 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
@@ -9,22 +8,15 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
   wrongConwayGenesisHash,
   insertConfig,
   defaultInsertConfig,
-  basicPrune,
 ) where
 
-import qualified Cardano.Db as DB
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
-import Cardano.Mock.ChainSync.Server (IOManager ())
-import qualified Cardano.Mock.Forging.Tx.Conway as Conway
-import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Cardano.Prelude hiding (from, isNothing)
 import qualified Data.Aeson as Aeson
 import Data.Default.Class (Default (..))
 import Test.Cardano.Db.Mock.Config
-import Test.Cardano.Db.Mock.UnifiedApi
-import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion (), assertBool, (@?=))
 import Prelude ()
 
@@ -90,7 +82,7 @@ isConwayConfigError = either isConwayConfigError' (const False)
 defaultInsertConfig :: Assertion
 defaultInsertConfig = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
-  dncInsertConfig cfg @?= def
+  dncInsertOptions cfg @?= def
   where
     configDir = "config-conway"
 
@@ -98,56 +90,18 @@ insertConfig :: Assertion
 insertConfig = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
-        SyncInsertConfig
-          { spcTxOut = TxOutDisable
-          , spcLedger = LedgerDisable
-          , spcShelley = ShelleyDisable
-          , spcMultiAsset = MultiAssetDisable
-          , spcMetadata = MetadataDisable
-          , spcPlutus = PlutusDisable
-          , spcGovernance = GovernanceConfig False
-          , spcOffchainPoolData = OffchainPoolDataConfig False
-          , spcJsonType = JsonTypeDisable
+        SyncInsertOptions
+          { sioTxOut = TxOutDisable
+          , sioLedger = LedgerDisable
+          , sioShelley = ShelleyDisable
+          , sioMultiAsset = MultiAssetDisable
+          , sioMetadata = MetadataDisable
+          , sioPlutus = PlutusDisable
+          , sioGovernance = GovernanceConfig False
+          , sioOffchainPoolData = OffchainPoolDataConfig False
+          , sioJsonType = JsonTypeDisable
           }
 
-  dncInsertConfig cfg @?= expected
+  dncInsertOptions cfg @?= expected
   where
     configDir = "config-conway-insert-options"
-
-basicPrune :: IOManager -> [(Text, Text)] -> Assertion
-basicPrune = do
-  withCustomConfigAndDropDB args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
-
-    -- Add some blocks
-    blks <- forgeAndSubmitBlocks interpreter mockServer 50
-
-    -- Add blocks with transactions
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000
-
-    -- Check tx-out count before pruning
-    assertBlockNoBackoff dbSync (fullBlockSize blks)
-    assertEqQuery dbSync DB.queryTxOutCount 14 "new epoch didn't prune tx_out column that are null"
-
-    blks' <- forgeAndSubmitBlocks interpreter mockServer 48
-    assertBlockNoBackoff dbSync (fullBlockSize $ blks <> blks')
-
-    -- Check that tx_out was pruned
-    assertEqQuery dbSync DB.queryTxOutCount 12 "the pruning didn't work correctly as the tx-out count is incorrect"
-    -- Check unspent tx
-    assertUnspentTx dbSync
-  where
-    args =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        , claMigrateConsumed = True
-        , claPruneTxOut = True
-        }
-    testLabel = "conwayConfigPrune"
-    fullBlockSize b = fromIntegral $ length b + 2
-    cfgDir = conwayConfigDir

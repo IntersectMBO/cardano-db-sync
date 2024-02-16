@@ -335,7 +335,8 @@ test-suite test
                         -Wunused-imports
                         -Wunused-packages
 
-  other-modules:        Cardano.DbSync.Config.TypesTest
+  other-modules:        Cardano.DbSync.ApiTest
+                        Cardano.DbSync.Config.TypesTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptTest
                         Cardano.DbSync.Gen

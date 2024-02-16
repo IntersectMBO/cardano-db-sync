@@ -99,7 +99,6 @@ pRunDbSyncNode = do
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
-    <*> pure False
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
