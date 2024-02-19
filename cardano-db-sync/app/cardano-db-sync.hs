@@ -105,6 +105,7 @@ pRunDbSyncNode = do
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
+    <*> pResetJsonb
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -377,6 +378,18 @@ pPruneTxOut =
           "Prunes the consumed tx_out periodically. This assumes \
           \ consumed-tx-out is also set, even if it's not. If this is set once,\
           \ then it must be always set on following executions of db-sync."
+    )
+
+pResetJsonb :: Parser Bool
+pResetJsonb =
+  Opt.flag
+    False
+    True
+    ( Opt.long "reset-jsonb"
+        <> Opt.help
+          "The database used to have fields that were of the type jsonb \
+          \ which slowed performance when inserting. \
+          \ But if you would like to reset them, then this flags needs to be active."
     )
 
 bootstrap :: Parser Bool

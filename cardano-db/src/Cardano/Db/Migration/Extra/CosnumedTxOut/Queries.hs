@@ -48,7 +48,7 @@ queryUpdateListTxOutConsumedByTxId ls = do
 
 queryTxConsumedColumnExists :: MonadIO m => ReaderT SqlBackend m Bool
 queryTxConsumedColumnExists = do
-  columntExists :: [Text] <-
+  columnExists :: [Text] <-
     fmap unSingle
       <$> rawSql
         ( mconcat
@@ -57,7 +57,7 @@ queryTxConsumedColumnExists = do
             ]
         )
         []
-  pure (not $ null columntExists)
+  pure (not $ null columnExists)
 
 -- | This is a count of the null consumed_by_tx_id
 queryTxOutConsumedNullCount :: MonadIO m => ReaderT SqlBackend m Word64

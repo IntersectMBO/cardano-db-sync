@@ -47,6 +47,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (
   TxMetadataValue (..),
   metadataValueToJsonNoSchema,
+  txMetadataValueToText,
  )
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Shelley.Insert.Epoch
@@ -350,6 +351,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         whenFalseMempty (ioMetadata iopts) $
           prepareTxMetadata
             tracer
+            syncEnv
             txId
             iopts
             (Generic.txMetadata tx)
@@ -1214,11 +1216,12 @@ insertRedeemerData tracer txId txd = do
 prepareTxMetadata ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
   InsertOptions ->
   Maybe (Map Word64 TxMetadataValue) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.TxMetadata]
-prepareTxMetadata tracer txId inOpts mmetadata = do
+prepareTxMetadata tracer syncEnv txId inOpts mmetadata = do
   case mmetadata of
     Nothing -> pure []
     Just metadata -> mapMaybeM prepare $ Map.toList metadata
@@ -1242,9 +1245,14 @@ prepareTxMetadata tracer txId inOpts mmetadata = do
       (Word64, TxMetadataValue) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
     mkDbTxMetadata (key, md) = do
-      let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
-          singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
-      mjson <- safeDecodeToJson tracer "prepareTxMetadata" jsonbs
+      let singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
+      -- if user still has jsonb types in the db, they are still converted
+      mjson <-
+        if envJsonbExists syncEnv
+          then do
+            let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
+            safeDecodeToJson tracer "prepareTxMetadata" jsonbs
+          else pure $ Just $ txMetadataValueToText md
       pure $
         Just $
           DB.TxMetadata

@@ -69,10 +69,9 @@ unitTests iom knownMigrations =
             ]
         , testGroup
             "config"
-            [ expectFail $
-                test
-                  "fails if incorrect or no config file given"
-                  ConfigFile.checkConfigFileArg
+            [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg
+            , test "not using the reset-jsonb config should have no jsonb types in db" ConfigFile.configNoResetJsonb
+            , test "reset-jsonb config should reset jsonb types in db" ConfigFile.configResetJsonb
             ]
         , testGroup
             "disable-epoch"

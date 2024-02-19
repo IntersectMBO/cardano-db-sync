@@ -87,6 +87,7 @@ data SyncNodeParams = SyncNodeParams
   , enpSnEveryFollowing :: !Word64
   , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
+  , enpResetJsonb :: !Bool
   }
   deriving (Show)
 

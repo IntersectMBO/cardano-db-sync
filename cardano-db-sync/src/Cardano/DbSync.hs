@@ -44,13 +44,14 @@ import Cardano.DbSync.Config.Types (
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
-import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
+import Cardano.DbSync.Error (SyncNodeError (..), hasAbortOnPanicEnv, logAndThrowIO, runOrThrowIO)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Constraint (dbJsonbTypeExists)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
@@ -168,6 +169,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
       \backend -> liftIO $ do
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
+          jsonbExists <- dbJsonbTypeExists backend
+          when (jsonbExists && not (enpResetJsonb syncNodeParams)) $ liftIO $ logAndThrowIO trce $ SNErrMissingJsonb "jsonb type in database was previously put back using the config reset-json, once things have been reset the config needs to always be present in the configuration file. "
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
@@ -181,6 +184,10 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 syncNodeParams
                 ranMigrations
                 runMigrationFnc
+                jsonbExists
+
+          -- if user wants to reset columns in db that used to have the type jsonb
+          when (enpResetJsonb syncNodeParams) $ liftIO $ runResetJsonb syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"

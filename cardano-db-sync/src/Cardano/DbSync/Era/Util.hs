@@ -34,8 +34,8 @@ containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
 
 safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
-safeDecodeToJson tracer tracePrefix x = do
-  ejson <- liftIO $ safeDecodeUtf8 x
+safeDecodeToJson tracer tracePrefix jsonBS = do
+  ejson <- liftIO $ safeDecodeUtf8 jsonBS
   case ejson of
     Left err -> do
       liftIO . logWarning tracer $
