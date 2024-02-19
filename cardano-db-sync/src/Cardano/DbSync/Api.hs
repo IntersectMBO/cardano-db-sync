@@ -176,8 +176,7 @@ runExtraMigrationsMaybe syncEnv = do
 
 runResetJsonb :: SyncEnv -> IO ()
 runResetJsonb syncEnv =
-  DB.runDbIohkNoLogging (envBackend syncEnv) $
-    DB.resetJsonbMigration
+  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.resetJsonbMigration
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv

@@ -46,7 +46,6 @@ unitTests iom knownMigrations =
         [ testGroup
             "consumed-tx-out and prune-tx-out"
             [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
-            , test "flag check reset-jsonb" MigrateConsumedPruneTxOut.commandLineArgResetJsonb
             , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
@@ -70,10 +69,9 @@ unitTests iom knownMigrations =
             ]
         , testGroup
             "config"
-            [ expectFail $
-                test
-                  "fails if incorrect or no config file given"
-                  ConfigFile.checkConfigFileArg
+            [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg
+            , test "not using the reset-jsonb config should have no jsonb types in db" ConfigFile.configNoResetJsonb
+            , test "reset-jsonb config should reset jsonb types in db" ConfigFile.configResetJsonb
             ]
         , testGroup
             "disable-epoch"

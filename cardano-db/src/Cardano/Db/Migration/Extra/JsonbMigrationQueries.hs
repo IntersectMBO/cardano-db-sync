@@ -39,40 +39,39 @@ resetJsonbMigration = do
       []
   handle exceptHandler $
     rawExecute
-      "ALTER TABLE cost_model ALTER COLUMN cost TYPE jsonb USING cost::jsonb"
+      "ALTER TABLE cost_model ALTER COLUMN cost TYPE jsonb USING value::jsonb"
       []
   handle exceptHandler $
     rawExecute
-      "ALTER TABLE off_chain_pool_data ALTER COLUMN json TYPE jsonb USING json::jsonb"
+      "ALTER TABLE off_chain_vote_data ALTER COLUMN json TYPE jsonb USING value::jsonb"
       []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE off_chain_vote_data ALTER COLUMN json TYPE jsonb USING json::jsonb"
-      []
-  where
-    exceptHandler :: SqlError -> ReaderT SqlBackend m a
-    exceptHandler e =
-      liftIO $ throwIO (DBResetJsonb $ show e)
 
 queryJsonbTypeExists ::
-  MonadIO m =>
+  (MonadIO m) =>
   ReaderT SqlBackend m Bool
 queryJsonbTypeExists = do
-  let tableName = " 'tx_metadata' "
-      columnName = "'json'"
-  isJsonbColumn :: [Bool] <-
-    fmap unSingle
-      <$> rawSql
-        ( mconcat
-            [ "SELECT column_name, data_type::text = 'jsonb' AS is_jsonb_type, my_column IS NOT NULL AS has_jsonb_value "
-            , "FROM information_schema.columns "
-            , "WHERE table_name ="
-            , tableName
-            , "AND column_name ="
-            , columnName
-            ]
-        )
-        []
-  pure $ case isJsonbColumn of
-    [b] -> b
+  isjsonb <- rawSql query []
+  pure $ case isjsonb of
+    [Single (1 :: Int)] -> True
     _ -> False
+  where
+    tableName = "'tx_metadata'"
+    columnName = "'json'"
+    -- check if the column is of type jsonb
+    query =
+      mconcat
+        [ "SELECT COUNT(*) FROM information_schema.columns "
+        , "WHERE table_name ="
+        , tableName
+        , "AND column_name ="
+        , columnName
+        , "AND data_type = 'jsonb';"
+        ]
+
+exceptHandler ::
+  forall m a.
+  MonadIO m =>
+  SqlError ->
+  ReaderT SqlBackend m a
+exceptHandler e =
+  liftIO $ throwIO (DBPruneConsumed $ show e)
