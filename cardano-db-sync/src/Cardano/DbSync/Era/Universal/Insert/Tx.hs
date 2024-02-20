@@ -260,7 +260,7 @@ insertTxMetadata tracer txId inOpts mmetadata = do
     mkDbTxMetadata (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
-      mjson <- safeDecodeToJson tracer "insertTxMetadata" jsonbs
+      mjson <- safeDecodeToJson tracer "prepareTxMetadata: Column 'json' in table 'metadata' " jsonbs
       pure $
         Just $
           DB.TxMetadata
