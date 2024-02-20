@@ -155,7 +155,7 @@ Some field are left empty when using this flag, like
 
 Until the ledger state migration happens any restart requires reusing the `--bootstrap-tx-out` flag. After it's completed the flag can be omitted on restarts.
 
-### --keep-tx-metadata
+### --whitelist-tx-metadata
 
-It keeps only metadata with the specified keys.
-You can pass multiple values to the flag eg: `--keep-tx-metadata 1,2,3` make sure you are using commas between each key.
+To help improved database insert thoughput, user can chose to filter specific tx metadata they would like to keep and insert, ignore everything else.
+You can pass multiple values to the flag eg: `--whitelist-tx-metadata 1,2,3` make sure you are using commas between each key.

@@ -320,7 +320,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
   if not (Generic.txValidContract tx)
     then do
-      !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (prepareTxOut syncEnv tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
@@ -329,7 +329,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
-      !txOutsGrouped <- mapM (prepareTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (prepareTxOut syncEnv tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       !redeemers <-
         Map.fromList
@@ -365,7 +365,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       maTxMint <-
         whenFalseMempty (ioMetadata iopts) $
-          prepareMaTxMint tracer cache txId $
+          prepareMaTxMint syncEnv tracer cache txId $
             Generic.txMint tx
 
       when (ioPlutusExtra iopts) $
@@ -389,13 +389,14 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
 prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   Cache ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
+prepareTxOut syncEnv tracer cache iopts (txId, txHash) (Generic.TxOut index addr addrRaw value maMap mScript dt) = do
   mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
@@ -419,7 +420,7 @@ prepareTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value m
           , DB.txOutReferenceScriptId = mScriptId
           }
   let !eutxo = ExtendedTxOut txHash txOut
-  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ prepareMaTxOuts tracer cache maMap
+  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ prepareMaTxOuts syncEnv tracer cache maMap
   pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
@@ -1228,7 +1229,7 @@ prepareTxMetadata tracer txId inOpts mmetadata = do
       (Word64, TxMetadataValue) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
     prepare (key, md) = do
-      case ioKeepMetadataNames inOpts of
+      case ioWhitelistMetadataNames inOpts of
         Strict.Just metadataNames -> do
           let isMatchingKey = key `elem` metadataNames
           if isMatchingKey
@@ -1335,12 +1336,14 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
 
 prepareMaTxMint ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   Cache ->
   DB.TxId ->
   MultiAsset StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
-prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
+prepareMaTxMint syncEnv _tracer cache txId (MultiAsset mintMap) =
+  -- TODO: VINCE HERE
   concatMapM (lift . prepareOuter) $ Map.toList mintMap
   where
     prepareOuter ::
@@ -1356,7 +1359,7 @@ prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
       (AssetName, Integer) ->
       ReaderT SqlBackend m DB.MaTxMint
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- insertMultiAsset syncEnv cache policy aname
       pure $
         DB.MaTxMint
           { DB.maTxMintIdent = maId
@@ -1366,11 +1369,12 @@ prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
 
 prepareMaTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   Cache ->
   Map (PolicyID StandardCrypto) (Map AssetName Integer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [MissingMaTxOut]
-prepareMaTxOuts _tracer cache maMap =
+prepareMaTxOuts syncEnv _tracer cache maMap =
   concatMapM (lift . prepareOuter) $ Map.toList maMap
   where
     prepareOuter ::
@@ -1386,7 +1390,7 @@ prepareMaTxOuts _tracer cache maMap =
       (AssetName, Integer) ->
       ReaderT SqlBackend m MissingMaTxOut
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- insertMultiAsset syncEnv cache policy aname
       pure $
         MissingMaTxOut
           { mmtoIdent = maId
@@ -1395,11 +1399,12 @@ prepareMaTxOuts _tracer cache maMap =
 
 insertMultiAsset ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Cache ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cache policy aName = do
+insertMultiAsset _syncEnv cache policy aName = do
   mId <- queryMAWithCache cache policy aName
   case mId of
     Right maId -> pure maId

@@ -167,7 +167,7 @@ prepareTxOut syncEnv txCache (TxIn txHash (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txHash
   let genTxOut = fromTxOut index txOut
   txId <- queryTxIdWithCache txCache txHashByteString
-  Insert.prepareTxOut trce cache iopts (txId, txHashByteString) genTxOut
+  Insert.prepareTxOut syncEnv trce cache iopts (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv

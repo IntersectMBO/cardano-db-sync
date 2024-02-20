@@ -90,7 +90,8 @@ pRunDbSyncNode = do
     <*> pHasShelley
     <*> pHasMultiAssets
     <*> pHasMetadata
-    <*> pKeepTxMetadata
+    <*> pWhiteListTxMetadata
+    <*> pWhiteListMAPolicies
     <*> pHasPlutusExtra
     <*> pHasGov
     <*> pHasOffChainPoolData
@@ -232,20 +233,28 @@ pSlotNo =
           <> Opt.metavar "WORD"
       )
 
-pKeepTxMetadata :: Parser [Word64]
-pKeepTxMetadata =
+pWhiteListTxMetadata :: Parser [Word64]
+pWhiteListTxMetadata =
   Opt.option
     (parseCommaSeparated <$> Opt.str)
-    ( Opt.long "keep-tx-metadata"
+    ( Opt.long "whitelist-tx-metadata"
         <> Opt.value []
         <> Opt.help "Insert a specific set of tx metadata, based on the tx metadata key names"
     )
-  where
-    parseCommaSeparated :: String -> [Word64]
-    parseCommaSeparated str =
-      case traverse readMaybe (splitOn "," str) of
-        Just values -> values
-        Nothing -> error "Failed to parse comma-separated values"
+
+pWhiteListMAPolicies :: Parser [Word64]
+pWhiteListMAPolicies =
+  Opt.option
+    (parseCommaSeparated <$> Opt.str)
+    ( Opt.long "whitelist-multi-asset-policy"
+        <> Opt.help "Only insert a specific sellected list of multi-assets, based on the multi-asset's policy name"
+    )
+
+parseCommaSeparated :: String -> [Word64]
+parseCommaSeparated str =
+  case traverse readMaybe (splitOn "," str) of
+    Just values -> values
+    Nothing -> error "Failed to parse comma-separated values"
 
 pHasInOut :: Parser Bool
 pHasInOut =

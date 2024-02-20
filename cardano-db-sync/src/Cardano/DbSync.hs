@@ -232,10 +232,13 @@ extractSyncOptions snp aop =
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
-    maybeKeepMNames =
-      if null (enpKeepMetadataNames snp)
+    maybeWhitelistMDNames = whitelistToMaybe (enpWhitelistMetadataNames snp)
+    maybeWhitelistMAPolicies = whitelistToMaybe (enpWhitelistMAPolicies snp)
+
+    whitelistToMaybe wList =
+      if null wList
         then Strict.Nothing
-        else Strict.Just (enpKeepMetadataNames snp)
+        else Strict.Just wList
 
     iopts
       | enpOnlyGov snp = onlyGovInsertOptions useLedger
@@ -250,7 +253,8 @@ extractSyncOptions snp aop =
             , ioRewards = True
             , ioMultiAssets = enpHasMultiAssets snp
             , ioMetadata = enpHasMetadata snp
-            , ioKeepMetadataNames = maybeKeepMNames
+            , ioWhitelistMetadataNames = maybeWhitelistMDNames
+            , ioWhitelistMAPolicies = maybeWhitelistMAPolicies
             , ioPlutusExtra = enpHasPlutusExtra snp
             , ioOffChainPoolData = enpHasOffChainPoolData snp
             , ioGov = enpHasGov snp
