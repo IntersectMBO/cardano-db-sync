@@ -6,42 +6,291 @@ features have been added, including historic rewards with Shelley, scripts with 
 with Mary, Plutus scripts and redeemers with Alonzo, stake pool metadata with the integration of
 SMASH, etc.
 
-While db-sync needs to use the resources that all these features require, many applications use only
-a small fraction of these features. Therefore, it is reasonable to introduce flags and options that
-turn off some of these features, especially the most expensive ones in terms of performance. These
-configuration options require proper documentation, which is presented below.
+Most application use only a small fraction of these features. Therefore, db-sync offers options that
+turn off some of these features, especially the most expensive ones in terms of performance.
 
-### --disable-ledger
+## Configuration File
+
+Starting with db-sync 13.3.0.0, customizing features is done in the standard db-sync configuration
+file (`db-sync-config.json` or `db-sync-config.yaml`).
+
+## Simple Example
+
+Below is a sample `insert_options` section that shows all the defaults:
+
+```
+{
+  // <-- Rest of configuration -->
+  // ...
+
+  "insert_options": {
+    "tx_out": {
+      "value": "enable"
+    },
+    "ledger": "enable",
+    "shelley": {
+      "enable": true
+    },
+    "multi_asset": {
+      "enable": true
+    },
+    "metadata": {
+      "enable": true
+    },
+    "plutus": {
+      "enable": true
+    },
+    "governance": "enable",
+    "offchain_pool_data": "enable",
+    "json_type": "text"
+  }
+}
+```
+
+## Properties
+
+`insert_options` may contain the following elements:
+
+| Property                                    | Type       | Required |
+| :------------------------------------------ | :--------- | :------  |
+| [preset](#preset)                           | `enum`     | Optional |
+| [tx\_out](#tx-out)                          | `object`   | Optional |
+| [ledger](#ledger)                           | `enum`     | Optional |
+| [shelley](#shelley)                         | `object`   | Optional |
+| [multi\_asset](#multi-asset)                | `object`   | Optional |
+| [metadata](#metadata)                       | `object`   | Optional |
+| [plutus](#plutus)                           | `object`   | Optional |
+| [governance](#governance)                   | `enum`     | Optional |
+| [offchain\_pool\_data](#offchain-pool-data) | `enum`     | Optional |
+
+### Preset
+
+Preset is an aggregate setting that overrides all other properties. For example, setting
+preset to `"full"` will enable all insert options.
+
+`preset`
+
+ * Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value           | Explanation                                                  |
+| :-----------    | :----------------------------------------------------------- |
+| `"full"`        | Enable all options                                           |
+| `"only_utxo"`   | Only load `block`, `tx`, `tx_out` and `ma_tx_out`            |
+| `"only_gov"`    | Disable most data except governance data.                    |
+| `"disable_all"` | Only load `block`, `tx` and data related to the ledger state |
+
+**Full**
+
+This is equivalent to enabling all other settings.
+
+**Only UTxO**
+
+This is equivalent to setting:
+
+```
+"tx_out": {
+  "value": "bootstrap"
+},
+"ledger": "ignore",
+"shelley": {
+  "enable": false
+},
+"plutus": {
+  "enable": false
+},
+"governance": "disable",
+"offchain_pool_data": "disable"
+```
+
+Initially populates only a few tables, like `block` and `tx`. It maintains a ledger state but
+doesn't use any of its data. When syncing is completed, it loads the whole UTxO set from the ledger
+to the `tx_out` and `ma_tx_out` tables.  After that db-sync can be restarted with `ledger` set to
+`"disable"` to continue syncing without maintaining the ledger
+
+**Only Gov**
+
+This is equivalent to setting:
+
+```
+"tx_out": {
+  "value": "disable"
+},
+"ledger": "disable",
+"shelley": {
+  "enable": false
+},
+"multi_asset": {
+  "enable": false
+},
+"plutus": {
+  "enable": false
+},
+"governance": "enable",
+"offchain_pool_data": "disable"
+
+```
+
+Disables most data except governance data. It also disables the `reward` table even when the ledger
+is used.
+
+**Disable All**
+
+This is equivalent to setting:
+
+```
+"tx_out": {
+  "value": "disable"
+},
+"ledger": "enable",
+"shelley": {
+  "enable": false
+},
+"multi_asset": {
+  "enable": false
+},
+"plutus": {
+  "enable": false
+},
+"governance": "disable",
+"offchain_pool_data": "disable"
+```
+
+Disables almost all data except `block`, `tx` and data related to the ledger state.
+
+### Tx Out
+
+`tx_out`
+
+ * Type: `object`
+
+Tx Out Properties:
+
+| Property                      | Type      | Required |
+| :---------------------------- | :-------- | :------- |
+| [value](#value)               | `string`  | Optional |
+| [force\_tx\_in](#force-tx-in) | `boolean` | Optional |
+
+#### Value
+
+`tx_out.value`
+
+ * Type: `string`
+
+**enum**: the value of this property must be equal to one of the following values:
+
+| Value         | Explanation                                                             |
+| :------------ | :---------------------------------------------------------------------- |
+| `"enable"`    | Enable all tx inputs and outputs                                        |
+| `"disable"`   | Disable tx inputs and outputs                                           |
+| `"consumed"`  | Adds a new field `tx_out (consumed_by_tx_id)`                           |
+| `"prune"`     | Periodically prune the consumed tx_out table                            |
+| `"bootstrap"` | Prune consumed `tx_out` table, delays writing UTxOs until fully synched |
+
+**Enable**
+
+Enable all inputs and outputs.
+
+**Disable**
+
+Disable inputs and outputs. With this flag:
+
+ * `tx_in` table is left empty
+ * `tx_out` table is left empty
+ * `ma_tx_out` table is left empty
+ * `tx.fee` has a wrong value 0
+ * `redeemer.script_hash` is left Null
+
+It's similar to `"bootstrap"` except the UTxO is never populated. However, after using this flag
+db-sync can be stopped and restarted with `"bootstrap"` to load the UTxO from the ledger.
+
+**Consumed**
+
+Adds a new field `tx_out (consumed_by_tx_id)` and populates it accordingly. This allows users to
+query the tx_out table for unspent outputs directly, without the need to join with the `tx_in`
+table.  If this is set once, then it must be always be set on following executions of db-sync,
+unless `prune-tx-out` is used instead.
+
+**Prune**
+
+Periodically prunes the consumed `tx_out` table. This allows users to query for utxo without having
+to maintain the whole `tx_out` table. Deletes to `tx_out` are propagated to `ma_tx_out` through
+foreign keys. If this is set once, then it must be always set on subsequent executions of
+db-sync. Failure to do this can result in crashes and db-sync currently has no way to detect it.
+
+**Bootstrap**
+
+Results in a similar db schema as using `"prune"`, except it syncs faster. The difference is that
+instead of inserting/updating/deleting outputs, it delays the insertion of UTxO until the tip of the
+chain. By doing so, it avoid costly db operations for the majority of outputs, that are eventually
+consumed and as a result deleted. UTxO are eventually inserted in bulk from the ledger state.  The
+initial implementation of the feautures assumes `ledger` is set to `"enable"` , since the ledger
+state is used. The networks needs to be in Babbage or Conway era for this to work. The following
+fields are left empty:
+
+ * `tx.fee` has a wrong value 0
+ * `redeemer.script_hash` is left Null
+
+Until the ledger state migration happens, any restart requires this setting. After completion, this
+can be changed.
+
+#### Force Tx In
+
+`tx_out.force_tx_in`
+
+ * Type: `boolean`
+
+### Ledger
 
 One of the db-sync features that uses the most resources is that it maintains a ledger state and
 replays all the ledger rules. This is the only way to get historic reward details and other data
 that is not included in the blocks (ie. historic stake distribution, ada pots, epoch parameters,
-etc). The flag --disable-ledger provides the option to turn off these features and significantly
-reduce memory usage (by up to 10GB on mainnet) and sync time. Another benefit of this option is
-that there are no rollbacks on startup, which tend to take quite some time, since there are no
-ledger snapshots maintained on disk.
+etc).
 
-When this flag is enabled, some features are missing and some DB tables are left empty:
-- `redeemer.fee` is left null
-- `reward` table is left empty
-- `epoch_stake` table is left empty
-- `ada_pots` table is left empty
-- `epoch_param` table is left empty
-- `tx.deposit` is left null (too expensive to calculate without the ledger)
-- `drep_distr` is left empty
-- `governance_action.x_epoch` is left null
-- `governance_action.expiration` is left null
+`ledger`
 
-Warning: Running db-sync with this flag and then restarting it without the flag will cause crashes and should be avoided.
+ * Type: `string`
 
-Warning: It was previously required to still have a `--state-dir` option provided when in conjunction with `--disable-ledger`. This is no longer the case and now an error will occure if they are both present at the same time.
+**enum**: The value of this property must be equal to one of the following values:
 
-If used with docker, this flag can be provided as an extra flag to docker image.
+| Value      | Explanation |
+| :----      | :---------- |
+| `"enable"` | Maintain ledger state and replay all ledger rules    |
+| `"disable"`| Do not maintain a ledger state                       |
+| `"ignore"` | Maintain ledger state, but don't use any of its data |
 
-Released snapshots are compatible with these options. Since the snapshots are created without the
-option, there still can be some minor inconsistencies. The above data may exist up to the slot/epoch
-of the snapshot creation and can be missing afterward. To fix this, when db-sync is initiated with
-this flag, it will automatically remove all these data.
+**Enable**
+
+Maintain ledger state and replay all ledger rules.
+
+**Disable**
+
+Turn off ledger state and significantly reduce memory usage (by up to 10GB on mainnet) and sync
+time. Another benefit of this option is that there are no rollbacks on startup, which tend to take
+quite some time, since there are no ledger snapshots maintained on disk.
+
+When this flag is enabled:
+
+ * `redeemer.fee` is left null
+ * `reward` table is left empty
+ * `epoch_stake` table is left empty
+ * `ada_pots` table is left empty
+ * `epoch_param` table is left empty
+ * `tx.deposit` is left null (too expensive to calculate without the ledger)
+ * `drep_distr` is left empty
+ * `governance_action.x_epoch` is left null
+ * `governance_action.expiration` is left null
+
+Warning: Running db-sync with this setting and restarting it with a different one will cause crashes
+and should be avoided.
+
+Warning: If this setting is used with the `--state-dir` command line option, an error will occur.
+
+Released snapshots are compatible with this option. Since the snapshots are created with `ledger`
+enabled, there still can be some minor inconsistencies. The above data may exist up to the
+slot/epoch of the snapshot creation and can be missing afterward. To fix this, when db-sync is
+initiated with `ledger` disabled, it will automatically remove this data.
 
 Warning: This will irreversibly delete data from existing snapshots.
 
@@ -55,107 +304,123 @@ delete from ada_pots;
 delete from epoch_param;
 ```
 
-### --disable-cache : Experimental
+**Ignore**
 
-This flag disables the application level caches of db-sync. It slightly reduces memory usage but
-increases the syncing time. This flag is worth using only when experiencing significant memory
-issues.
+Maintains the ledger state, but doesn't use any of its data, except to load UTxO. To be used with
+`tx_out` set to `"bootstrap"`
 
-### --disable-epoch : Experimental
+### Shelley
 
-With this option the epoch table is left empty. Mostly left for historical reasons, since it
-provides a negligible improvement in sync time.
+`shelley`
 
-### --disable-in-out : Experimental
+ * Type: `object`
 
-Disables the inputs and outputs. With this flag
-- `tx_in` table is left empty
-- `tx_out` table is left empty
-- `ma_tx_out` table is left empty
-- `tx.fee` has a wrong value 0
-- `redeemer.script_hash` is left Null
+Shelley Properties:
 
-It's similar to `--bootstrap-tx-out` except the UTxO is never populated. However after using this
-flag db-sync can be stopped and restarted with `--bootstrap-tx-out` to load the UTxO from the
-ledger.
+| Property          | Type      | Required |
+| :---------------- | :-------- | :------- |
+| [enable](#enable) | `boolean` | Optional |
 
-### --disable-shelley : Experimental
+#### Enable
 
-Disables the data related to shelley, all certificates, withdrawalsand  param proposals.
-Doesn't disable `epoch_stake` and `rewards`, For this check `--disable-ledger`.
+Enables or disables data related to shelley: all certificates, withdrawals, and param
+proposals. Does not control `epoch_stake` and `rewards`, For this check `ledger`.
 
-### --disable-multiassets : Experimental
+`shelley.enable`
 
-Disables the multi assets tables and entries.
+ * Type: `boolean`
 
-### --disable-metadata : Experimental
+### Multi Asset
 
-Disables the tx_metadata table.
+`multi_asset`
 
-### --disable-plutus-extra : Experimental
+ * Type: `object`
 
-Disables most tables and entries related to plutus and scripts.
+Multi Asset Properties:
 
-### --disable-offchain-pool-data : Experimental
-_(previousle called --disable-offline-data)__
+| Property            | Type      | Required |
+| :------------------ | :-------- | :------- |
+| [enable](#enable-1) | `boolean` | Optional |
 
-Disables fetching pool offchain metadata.
+#### Enable
 
-### --disable-gov : Experimental
+Enables or disables multi assets tables and entries.
 
-Disables all data related to governance
+`multi_asset.enable`
 
-### --disable-all : Experimental
+ * Type: `boolean`
 
-Disables almost all data except `block`, `tx` and data related to the ledger state
+### Metadata
 
-### --dont-use-ledger : Experimental
+`metadata`
 
-Maintains the ledger state, but doesn't use any of its data, except to load UTxO. To be used with `--bootstrap-tx-out`
+ * Type: `object`
 
-### --only-utxo : Experimental
+Metadata Properties:
 
-This is the equivalent of using `--dont-use-ledger`
-`--disable-shelley`, `--disable-plutus-extra`, `--disable-offchain-pool-data`, `--disable-gov`, `--bootstrap-tx-out`.
-This mode initially populates only a few tables, like `block` and `tx`. It maintains a ledger state but doesn't use any of its data. When syncing is completed, it loads the whole UTxO set from the ledger to the `tx_out` and `ma_tx_out` tables.
-After that db-sync can be restarted with `--disable-ledger-state` to continue
-syncing without maintaining the ledger
+| Property            | Type      | Required |
+| :------------------ | :-------- | :------- |
+| [enable](#enable-2) | `boolean` | Optional |
+| [keys](#keys)       | `array`   | Optional |
 
-### --only-gov : Experimental
+#### Enable
 
-Disables most data except governance data. This is the equivalent of using `--disable-in-out`,
-`--disable-shelley`, `--disable-multiassets`, `--disable-plutus-extra`, `--disable-offchain-pool-data`,
-with the only difference that it also disables the `reward` table even when the ledger is used.
+Enables or disables the `tx_metadata` table.
 
-### --consumed-tx-out
+`metadata.enable`
 
-Adds a new field `tx_out (consumed_by_tx_id)` and populated it accordingly. This allows users to
-query the tx_out table for unspent outputs directly, without the need to join with the tx_in table.
-If this is set once, then it must be always be set on following executions of db-sync, unless
-`prune-tx-out` is used instead.
+ * Type: `boolean`
 
-### --prune-tx-out
+#### Keys
 
-If `prune-tx-out` is set it's assumed that --consumed-tx-out is also set, even if it's not.
-This flag periodically prunes the consumed tx_out table. So it allows to query for utxo
-without having to maintain the whole tx_out table. Deletes to `tx_out` are propagated to `ma_tx_out`
-through foreign keys. If this is set once, then it must be always set on following executions of
-db-sync. Failure to do this can result in crashed and db-sync currently has no way to detect it.
+If set, only keep metadata with the specified keys.
 
-### --bootstrap-tx-out
+`metadata.keys`
 
-This flag results in a similar db schema as using `--prune-tx-out`, except it syncs faster. The difference is that instead of inserting/updating/deleting outputs, it delays the insertion of
-UTxO until the tip of the chain. By doing so, it avoid costly db operations for the majority of
-outputs, that are eventually consumed and as a result deleted. UTxO are eventually
-inserted in bulk from the ledger state.
-The initial implementation of the feautures assumes using `--prune-tx-out` and not using `--disable-ledger`, since the ledger state is used. The networks needs to be in Babbage or Conway era for this to work.
-Some field are left empty when using this flag, like
-- `tx.fee` has a wrong value 0
-- `redeemer.script_hash` is left Null
+ * Type: `integer[]`
 
-Until the ledger state migration happens any restart requires reusing the `--bootstrap-tx-out` flag. After it's completed the flag can be omitted on restarts.
+### Plutus
 
-### --keep-tx-metadata
+`plutus`
 
-It keeps only metadata with the specified keys.
-You can pass multiple values to the flag eg: `--keep-tx-metadata 1,2,3` make sure you are using commas between each key.
+ * Type: `object`
+
+Plutus Properties:
+
+| Property            | Type      | Required |
+| :------------------ | :-------- | :------- |
+| [enable](#enable-3) | `boolean` | Optional |
+
+#### Enable
+
+Enables or disables most tables and entries related to plutus and scripts.
+
+`plutus.enable`
+
+ * Type: `boolean`
+
+### Governance
+
+`governance`
+
+ * Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value      | Explanation                            |
+| :--------- | :------------------------------------- |
+| `"enable"` | Enable all data related to governance  |
+| `"disable"`| Disable all data related to governance |
+
+### Offchain Pool Data
+
+`offchain_pool_data`
+
+ * Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value      | Explanation                               |
+| :--------- | :---------------------------------------- |
+| `"enable"` | Enables fetching offchain metadata.       |
+| `"disable"`| Disables fetching pool offchain metadata. |
