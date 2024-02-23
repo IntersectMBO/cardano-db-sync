@@ -24,6 +24,7 @@ insertConfig = do
           { sioTxOut = TxOutDisable
           , sioLedger = LedgerDisable
           , sioShelley = ShelleyDisable
+          , sioRewards = RewardsConfig True
           , sioMultiAsset = MultiAssetDisable
           , sioMetadata = MetadataDisable
           , sioPlutus = PlutusDisable

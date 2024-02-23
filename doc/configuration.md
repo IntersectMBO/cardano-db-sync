@@ -132,8 +132,7 @@ This is equivalent to setting:
 
 ```
 
-Disables most data except governance data. It also disables the `reward` table even when the ledger
-is used.
+Disables most data except `block`, `tx`, and governance data.
 
 **Disable All**
 
@@ -143,7 +142,7 @@ This is equivalent to setting:
 "tx_out": {
   "value": "disable"
 },
-"ledger": "enable",
+"ledger": "disable",
 "shelley": {
   "enable": false
 },
@@ -157,7 +156,7 @@ This is equivalent to setting:
 "offchain_pool_data": "disable"
 ```
 
-Disables almost all data except `block`, `tx` and data related to the ledger state.
+Disables almost all data except `block` and `tx` tables.
 
 ### Tx Out
 

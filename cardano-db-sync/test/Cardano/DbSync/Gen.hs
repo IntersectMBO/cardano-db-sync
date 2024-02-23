@@ -118,6 +118,7 @@ syncInsertOptions =
     <$> txOutConfig
     <*> Gen.element [LedgerEnable, LedgerDisable, LedgerIgnore]
     <*> shelleyConfig
+    <*> pure (RewardsConfig True)
     <*> multiAssetConfig
     <*> metadataConfig
     <*> plutusConfig
