@@ -4,6 +4,7 @@
 import Cardano.Db (MigrationDir (..), PGPassSource (PGPassDefaultEnv, PGPassEnv), gitRev)
 import Cardano.DbSync (runDbSyncNode)
 import Cardano.DbSync.Config
+import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Metrics (withMetricSetters)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
@@ -15,6 +16,7 @@ import Options.Applicative (Parser, ParserInfo)
 import qualified Options.Applicative as Opt
 import Paths_cardano_db_sync (version)
 import System.Info (arch, compilerName, compilerVersion, os)
+import Prelude (error)
 
 main :: IO ()
 main = do
@@ -23,15 +25,6 @@ main = do
     CmdVersion -> runVersionCommand
     CmdRun params -> run params
   where
-    -- TODO[sgillespie]: This check needs to come after we parse the config file
-    --
-    -- (Nothing, True) -> error stateDirErrorMsg
-    --
-    -- stateDirErrorMsg :: [Char]
-    -- stateDirErrorMsg =
-    --   "Error: If not using --state-dir then make sure to have --disable-ledger. "
-    --     <> "For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md#ledger-state"
-
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations
 
@@ -39,9 +32,28 @@ main = do
     run prms = do
       -- read the config file as early as possible
       syncNodeConfigFromFile <- readSyncNodeConfig (enpConfigFile prms)
+
+      -- Validate state-dir/ledger
+      let maybeLedgerStateDir = enpMaybeLedgerStateDir prms
+          ledgerCfg = sioLedger (dncInsertOptions syncNodeConfigFromFile)
+
+      void $ case (maybeLedgerStateDir, ledgerCfg) of
+        -- It is an error to enable ledger and not specify the state
+        (Nothing, LedgerEnable) -> error stateDirErrorMsg
+        -- Or to ignore ledger and not specify the state
+        (Nothing, LedgerIgnore) -> error stateDirErrorMsg
+        -- Otherwise, it's OK
+        _ -> pure ()
+
       let prometheusPort = dncPrometheusPort syncNodeConfigFromFile
       withMetricSetters prometheusPort $ \metricsSetters ->
         runDbSyncNode metricsSetters knownMigrationsPlain prms syncNodeConfigFromFile
+
+    stateDirErrorMsg :: [Char]
+    stateDirErrorMsg =
+      "Error: If not using --state-dir then make sure to have ledger disabled. "
+        <> "For more details view https://github.com/IntersectMBO/cardano-db-sync/blob"
+        <> "/master/doc/syncing-and-rollbacks.md#ledger-state"
 
 -- -------------------------------------------------------------------------------------------------
 

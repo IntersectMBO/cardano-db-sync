@@ -253,10 +253,11 @@ extractSyncOptions snp aop snc =
 
     iopts =
       InsertOptions
-        { ioInOut = enpHasInOut snp
+        { ioInOut = isTxOutEnabled'
         , ioUseLedger = useLedger
         , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
-        , ioRewards = True
+        , -- Rewards are only disabled on "disable_all" and "only_gov" presets
+          ioRewards = True
         , ioMultiAssets = isMultiAssetEnabled (sioMultiAsset (dncInsertOptions snc))
         , ioMetadata = isMetadataEnabled (sioMetadata (dncInsertOptions snc))
         , ioKeepMetadataNames = maybeKeepMNames
@@ -274,6 +275,7 @@ extractSyncOptions snp aop snc =
     isTxOutConsumed' = isTxOutConsumed . sioTxOut . dncInsertOptions $ snc
     isTxOutPrune' = isTxOutPrune . sioTxOut . dncInsertOptions $ snc
     isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions $ snc
+    isTxOutEnabled' = isTxOutEnabled . sioTxOut . dncInsertOptions $ snc
     forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
