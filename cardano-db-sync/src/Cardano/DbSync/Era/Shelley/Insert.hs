@@ -364,7 +364,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txParamProposal tx
 
       maTxMint <-
-        whenFalseMempty (ioMetadata iopts) $
+        whenFalseMempty (ioMultiAssets iopts) $
           prepareMaTxMint tracer cache txId $
             Generic.txMint tx
 
