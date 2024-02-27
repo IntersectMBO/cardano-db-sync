@@ -35,6 +35,12 @@ module Test.Cardano.Db.Mock.Config (
   configMetadataEnable,
   configMetadataDisable,
   configMetadataKeys,
+  configMultipleMetadataKeys,
+  configMulitiAssetPoliciesKeys,
+  configShelleyStakeAddrKeys,
+  configMultipleShelleyStakeAddrKeys,
+
+  -- * Make Functions
   mkFingerPrint,
   mkMutableDir,
   mkDBSyncEnv,
@@ -90,6 +96,7 @@ import Control.Monad.Extra (eitherM)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
+import Data.ByteString.Short (ShortByteString)
 import Data.Text (Text)
 import Database.Persist.Postgresql (createPostgresqlPool)
 import Database.Persist.Sql (SqlBackend)
@@ -353,6 +360,22 @@ configMetadataDisable cfg = do
 configMetadataKeys :: SyncNodeConfig -> SyncNodeConfig
 configMetadataKeys cfg = do
   cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMetadata = MetadataKeys $ 1 :| []}}
+
+configMultipleMetadataKeys :: SyncNodeConfig -> SyncNodeConfig
+configMultipleMetadataKeys cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMetadata = MetadataKeys $ 1 :| [6]}}
+
+configMulitiAssetPoliciesKeys :: ShortByteString -> SyncNodeConfig -> SyncNodeConfig
+configMulitiAssetPoliciesKeys maPolicyShortBs cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMultiAsset = MultiAssetPolicies $ maPolicyShortBs :| []}}
+
+configShelleyStakeAddrKeys :: ShortByteString -> SyncNodeConfig -> SyncNodeConfig
+configShelleyStakeAddrKeys shelleyStakeAddrShortBs cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioShelley = ShelleyStakeAddrs $ shelleyStakeAddrShortBs :| []}}
+
+configMultipleShelleyStakeAddrKeys :: NonEmpty ShortByteString -> SyncNodeConfig -> SyncNodeConfig
+configMultipleShelleyStakeAddrKeys shelleyStakeAddrShortBs cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioShelley = ShelleyStakeAddrs shelleyStakeAddrShortBs}}
 
 initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =

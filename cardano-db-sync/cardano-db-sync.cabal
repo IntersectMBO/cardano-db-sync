@@ -83,12 +83,11 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Types
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Generic.Witness
-                        Cardano.DbSync.Era.Shelley.Genesis
                         Cardano.DbSync.Era.Shelley.Query
                         Cardano.DbSync.Era.Universal.Adjust
                         Cardano.DbSync.Era.Universal.Block
                         Cardano.DbSync.Era.Universal.Epoch
-                        Cardano.DbSync.Era.Universal.Validate
+                        Cardano.DbSync.Era.Universal.Genesis
                         Cardano.DbSync.Era.Universal.Insert.Certificate
                         Cardano.DbSync.Era.Universal.Insert.GovAction
                         Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -96,6 +95,7 @@ library
                         Cardano.DbSync.Era.Universal.Insert.Other
                         Cardano.DbSync.Era.Universal.Insert.Pool
                         Cardano.DbSync.Era.Universal.Insert.Tx
+                        Cardano.DbSync.Era.Universal.Validate
 
 
                         -- Temporary debugging validation
@@ -143,6 +143,7 @@ library
                         Cardano.DbSync.Util.Bech32
                         Cardano.DbSync.Util.Cbor
                         Cardano.DbSync.Util.Constraint
+                        Cardano.DbSync.Util.Whitelist
 
                         Paths_cardano_db_sync
 

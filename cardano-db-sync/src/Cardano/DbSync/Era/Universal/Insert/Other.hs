@@ -14,21 +14,23 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
   insertRedeemerData,
   insertStakeAddressRefIfMissing,
   insertMultiAsset,
+  insertScriptWithWhitelist,
   insertScript,
   insertExtraKeyWitness,
-) where
+)
+where
 
-import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Api (getTrace)
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
+import Cardano.DbSync.Config.Types (isShelleyWhitelistModeActive)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Whitelist (isSimplePlutusScriptHashInWhitelist, shelleyStakeAddrWhitelistCheck)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
@@ -36,6 +38,7 @@ import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.ByteString.Short (ShortByteString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
@@ -51,7 +54,7 @@ insertRedeemer ::
   (Word64, Generic.TxRedeemer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Word64, DB.RedeemerId)
 insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
-  tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
+  tdId <- insertRedeemerData syncEnv txId $ Generic.txRedeemerData redeemer
   scriptHash <- findScriptHash
   rid <-
     lift
@@ -68,29 +71,31 @@ insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
         }
   pure (rix, rid)
   where
-    tracer = getTrace syncEnv
     findScriptHash ::
       (MonadBaseControl IO m, MonadIO m) =>
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
     findScriptHash =
-      case (disInOut, Generic.txRedeemerScriptHash redeemer) of
-        (True, _) -> pure Nothing
-        (_, Nothing) -> pure Nothing
-        (_, Just (Right bs)) -> pure $ Just bs
-        (_, Just (Left txIn)) -> resolveScriptHash syncEnv groupedOutputs txIn
+      -- If we are in shelley whitelist mode, we don't need to resolve the script hash
+      if isShelleyWhitelistModeActive $ ioShelley $ soptInsertOptions $ envOptions syncEnv
+        then pure Nothing
+        else case (disInOut, Generic.txRedeemerScriptHash redeemer) of
+          (True, _) -> pure Nothing
+          (_, Nothing) -> pure Nothing
+          (_, Just (Right bs)) -> pure $ Just bs
+          (_, Just (Left txIn)) -> resolveScriptHash syncEnv groupedOutputs txIn
 
 insertRedeemerData ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RedeemerDataId
-insertRedeemerData tracer txId txd = do
+insertRedeemerData syncEnv txId txd = do
   mRedeemerDataId <- lift $ DB.queryRedeemerData $ Generic.dataHashToBytes $ Generic.txDataHash txd
   case mRedeemerDataId of
     Just redeemerDataId -> pure redeemerDataId
     Nothing -> do
-      value <- safeDecodeToJson tracer "insertDatum: Column 'value' in table 'datum' " $ Generic.txDataValue txd
+      value <- safeDecodeToJson syncEnv "insertRedeemerData: Column 'value' in table 'datum' " $ Generic.txDataValue txd
       lift
         . DB.insertRedeemerData
         $ DB.RedeemerData
@@ -105,17 +110,17 @@ insertRedeemerData tracer txId txd = do
 --------------------------------------------------------------------------------------------
 insertDatum ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   CacheStatus ->
   DB.TxId ->
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
-insertDatum tracer cache txId txd = do
+insertDatum syncEnv cache txId txd = do
   mDatumId <- lift $ queryDatum cache $ Generic.txDataHash txd
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
-      value <- safeDecodeToJson tracer "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
+      value <- safeDecodeToJson syncEnv "insertDatum: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
       lift $
         insertDatumAndCache cache (Generic.txDataHash txd) $
           DB.Datum
@@ -127,38 +132,46 @@ insertDatum tracer cache txId txd = do
 
 insertWithdrawals ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   CacheStatus ->
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals tracer cache txId redeemers txWdrl = do
-  addrId <-
-    lift $ queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
-  void . lift . DB.insertWithdrawal $
-    DB.Withdrawal
-      { DB.withdrawalAddrId = addrId
-      , DB.withdrawalTxId = txId
-      , DB.withdrawalAmount = Generic.coinToDbLovelace $ Generic.txwAmount txWdrl
-      , DB.withdrawalRedeemerId = mlookup (Generic.txwRedeemerIndex txWdrl) redeemers
-      }
+insertWithdrawals syncEnv cache txId redeemers txWdrl = do
+  -- check if shelley stake address is in the whitelist
+  when (shelleyStakeAddrWhitelistCheck syncEnv $ Generic.txwRewardAccount txWdrl) $ do
+    addrId <-
+      lift $ queryOrInsertRewardAccount syncEnv cache UpdateCache $ Generic.txwRewardAccount txWdrl
+    void
+      . lift
+      . DB.insertWithdrawal
+      $ DB.Withdrawal
+        { DB.withdrawalAddrId = addrId
+        , DB.withdrawalTxId = txId
+        , DB.withdrawalAmount = Generic.coinToDbLovelace $ Generic.txwAmount txWdrl
+        , DB.withdrawalRedeemerId = mlookup (Generic.txwRedeemerIndex txWdrl) redeemers
+        }
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
 -- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
 insertStakeAddressRefIfMissing ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   CacheStatus ->
   Ledger.Addr StandardCrypto ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing trce cache addr =
+insertStakeAddressRefIfMissing syncEnv cache addr =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress trce cache UpdateCache nw cred
+          -- Check if the stake address is in the shelley whitelist
+          whenFalseEmpty
+            (shelleyStakeAddrWhitelistCheck syncEnv $ Ledger.RewardAccount nw cred)
+            Nothing
+            (Just <$> queryOrInsertStakeAddress syncEnv cache UpdateCache nw cred)
         Ledger.StakeRefPtr ptr -> do
           DB.queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing
@@ -166,14 +179,24 @@ insertStakeAddressRefIfMissing trce cache addr =
 insertMultiAsset ::
   (MonadBaseControl IO m, MonadIO m) =>
   CacheStatus ->
+  Maybe (NonEmpty ShortByteString) ->
   PolicyID StandardCrypto ->
   AssetName ->
-  ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cache policy aName = do
+  ReaderT SqlBackend m (Maybe DB.MultiAssetId)
+insertMultiAsset cache mWhitelist policy aName = do
   mId <- queryMAWithCache cache policy aName
   case mId of
-    Right maId -> pure maId
+    Right maId -> pure $ Just maId
     Left (policyBs, assetNameBs) ->
+      case mWhitelist of
+        -- we want to check the whitelist at the begining
+        Just whitelist ->
+          if shortBsBase16Encode policyBs `elem` whitelist
+            then Just <$> insertAssettIntoDB policyBs assetNameBs
+            else pure Nothing
+        Nothing -> Just <$> insertAssettIntoDB policyBs assetNameBs
+  where
+    insertAssettIntoDB policyBs assetNameBs =
       DB.insertMultiAssetUnchecked $
         DB.MultiAsset
           { DB.multiAssetPolicy = policyBs
@@ -181,13 +204,24 @@ insertMultiAsset cache policy aName = do
           , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs assetNameBs)
           }
 
+insertScriptWithWhitelist ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  DB.TxId ->
+  Generic.TxScript ->
+  ReaderT SqlBackend m (Maybe DB.ScriptId)
+insertScriptWithWhitelist syncEnv txId script = do
+  if isSimplePlutusScriptHashInWhitelist syncEnv $ Generic.txScriptHash script
+    then insertScript syncEnv txId script <&> Just
+    else pure Nothing
+
 insertScript ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
   Generic.TxScript ->
   ReaderT SqlBackend m DB.ScriptId
-insertScript tracer txId script = do
+insertScript syncEnv txId script = do
   mScriptId <- DB.queryScript $ Generic.txScriptHash script
   case mScriptId of
     Just scriptId -> pure scriptId
@@ -203,17 +237,16 @@ insertScript tracer txId script = do
           , DB.scriptBytes = Generic.txScriptCBOR script
           }
   where
-    scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
+    scriptConvert :: (MonadIO m) => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
-      maybe (pure Nothing) (safeDecodeToJson tracer "insertScript: Column 'json' in table 'script' ") (Generic.txScriptJson s)
+      maybe (pure Nothing) (safeDecodeToJson syncEnv "insertScript: Column 'json' in table 'script' ") (Generic.txScriptJson s)
 
 insertExtraKeyWitness ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
   DB.TxId ->
   ByteString ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertExtraKeyWitness _tracer txId keyHash = do
+insertExtraKeyWitness txId keyHash = do
   void
     . lift
     . DB.insertExtraKeyWitness
