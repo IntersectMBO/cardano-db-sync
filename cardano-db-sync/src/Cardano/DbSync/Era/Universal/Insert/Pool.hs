@@ -64,9 +64,7 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
   mdId <- case strictMaybeToMaybe $ PoolP.ppMetadata params of
     Just md -> Just <$> insertPoolMetaDataRef poolHashId txId md
     Nothing -> pure Nothing
-
   epochActivationDelay <- mkEpochActivationDelay poolHashId
-
   saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ PoolP.ppRewardAcnt params)
   poolUpdateId <-
     lift

@@ -189,7 +189,8 @@ data LedgerInsertConfig
 data ShelleyInsertConfig
   = ShelleyEnable
   | ShelleyDisable
-  | ShelleyStakeAddrs (NonEmpty ShortByteString)
+  | -- Whitelist of Shelley stake addresses
+    ShelleyStakeAddrs (NonEmpty ShortByteString)
   deriving (Eq, Show)
 
 newtype RewardsConfig = RewardsConfig
@@ -199,19 +200,22 @@ newtype RewardsConfig = RewardsConfig
 data MultiAssetConfig
   = MultiAssetEnable
   | MultiAssetDisable
-  | MultiAssetPolicies (NonEmpty ShortByteString)
+  | -- | Whitelist of multiAsset policy IDs
+    MultiAssetPolicies (NonEmpty ShortByteString)
   deriving (Eq, Show)
 
 data MetadataConfig
   = MetadataEnable
   | MetadataDisable
-  | MetadataKeys (NonEmpty Word)
+  | -- | Whitelist of metadata keys
+    MetadataKeys (NonEmpty Word)
   deriving (Eq, Show)
 
 data PlutusConfig
   = PlutusEnable
   | PlutusDisable
-  | PlutusScripts (NonEmpty ShortByteString)
+  | -- | Whitelist of plutus script hashes
+    PlutusScripts (NonEmpty ShortByteString)
   deriving (Eq, Show)
 
 newtype GovernanceConfig = GovernanceConfig

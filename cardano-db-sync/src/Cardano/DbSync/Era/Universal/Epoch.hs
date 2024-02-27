@@ -26,16 +26,22 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
 import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
+import Cardano.DbSync.Era.Conway.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
-import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (whenStrictJust)
-import Cardano.DbSync.Util.Constraint (constraintNameEpochStake, constraintNameReward)
-import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
+import Cardano.DbSync.Util.Constraint (
+  constraintNameEpochStake,
+  constraintNameReward,
+ )
+import Cardano.Ledger.BaseTypes (
+  Network,
+  unEpochInterval,
+ )
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Binary.Version (getVersion)
 import qualified Cardano.Ledger.Coin as Shelley
@@ -50,8 +56,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Database.Persist.Sql (SqlBackend)
-
-{- HLINT ignore "Use readTVarIO" -}
 
 --------------------------------------------------------------------------------------------
 -- Insert Epoch

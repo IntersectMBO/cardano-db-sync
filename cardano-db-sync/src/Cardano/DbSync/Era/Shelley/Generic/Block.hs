@@ -25,6 +25,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Crypto.KES.Class as KES
+import Cardano.DbSync.Config.Types (PlutusConfig)
 import Cardano.DbSync.Era.Shelley.Generic.Tx
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Bech32 (serialiseVerKeyVrfToBech32)
@@ -120,8 +121,8 @@ fromMaryBlock blk =
     , blkTxs = map fromMaryTx (getTxs blk)
     }
 
-fromAlonzoBlock :: Bool -> Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
-fromAlonzoBlock iope mprices blk =
+fromAlonzoBlock :: PlutusConfig -> Maybe Prices -> ShelleyBlock TPraosStandard StandardAlonzo -> Block
+fromAlonzoBlock plutusConfig mprices blk =
   Block
     { blkEra = Alonzo
     , blkHash = blockHash blk
@@ -134,11 +135,11 @@ fromAlonzoBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
-    , blkTxs = map (fromAlonzoTx iope mprices) (getTxs blk)
+    , blkTxs = map (fromAlonzoTx plutusConfig mprices) (getTxs blk)
     }
 
-fromBabbageBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
-fromBabbageBlock iope mprices blk =
+fromBabbageBlock :: PlutusConfig -> Maybe Prices -> ShelleyBlock PraosStandard StandardBabbage -> Block
+fromBabbageBlock plutusConfig mprices blk =
   Block
     { blkEra = Babbage
     , blkHash = blockHash blk
@@ -151,11 +152,11 @@ fromBabbageBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
-    , blkTxs = map (fromBabbageTx iope mprices) (getTxs blk)
+    , blkTxs = map (fromBabbageTx plutusConfig mprices) (getTxs blk)
     }
 
-fromConwayBlock :: Bool -> Maybe Prices -> ShelleyBlock PraosStandard StandardConway -> Block
-fromConwayBlock iope mprices blk =
+fromConwayBlock :: PlutusConfig -> Maybe Prices -> ShelleyBlock PraosStandard StandardConway -> Block
+fromConwayBlock plutusConfig mprices blk =
   Block
     { blkEra = Conway
     , blkHash = blockHash blk
@@ -168,7 +169,7 @@ fromConwayBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
-    , blkTxs = map (fromConwayTx iope mprices) (getTxs blk)
+    , blkTxs = map (fromConwayTx plutusConfig mprices) (getTxs blk)
     }
 
 -- -------------------------------------------------------------------------------------------------

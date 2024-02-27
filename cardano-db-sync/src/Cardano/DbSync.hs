@@ -47,7 +47,6 @@ import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
-import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -160,8 +159,7 @@ runSyncNode ::
   IO ()
 runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
-    \enpLedgerStateDir -> do
-      createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
+    \enpLedgerStateDir -> createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
   logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
@@ -170,39 +168,38 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
 
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
-      \backend -> liftIO $ do
-        runOrThrowIO $ runExceptT $ do
-          genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          logProtocolMagicId trce $ genesisProtocolMagicId genCfg
-          syncEnv <-
-            ExceptT $
-              mkSyncEnvFromConfig
-                trce
-                backend
-                dbConnString
-                syncOptions
-                genCfg
-                syncNodeConfigFromFile
-                syncNodeParams
-                ranMigrations
-                runMigrationFnc
-          liftIO $ runExtraMigrationsMaybe syncEnv
-          unless useLedger $ liftIO $ do
-            logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations backend trce
-          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
+      \backend -> liftIO $ runOrThrowIO $ runExceptT $ do
+        genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
+        logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+        syncEnv <-
+          ExceptT $
+            mkSyncEnvFromConfig
+              trce
+              backend
+              dbConnString
+              syncOptions
+              genCfg
+              syncNodeConfigFromFile
+              syncNodeParams
+              ranMigrations
+              runMigrationFnc
+        liftIO $ runExtraMigrationsMaybe syncEnv
+        unless useLedger $ liftIO $ do
+          logInfo trce "Migrating to a no ledger schema"
+          Db.noLedgerMigrations backend trce
+        insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
-          -- communication channel between datalayer thread and chainsync-client thread
-          threadChannels <- liftIO newThreadChannels
-          liftIO $
-            mapConcurrently_
-              id
-              [ runDbThread syncEnv metricsSetters threadChannels
-              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv
-              , runFetchOffChainVoteThread syncEnv
-              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-              ]
+        -- communication channel between datalayer thread and chainsync-client thread
+        threadChannels <- liftIO newThreadChannels
+        liftIO $
+          mapConcurrently_
+            id
+            [ runDbThread syncEnv metricsSetters threadChannels
+            , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+            , runFetchOffChainPoolThread syncEnv
+            , runFetchOffChainVoteThread syncEnv
+            , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+            ]
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -245,12 +242,6 @@ extractSyncOptions snp aop snc =
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
-    maybeKeepMNames =
-      case sioMetadata (dncInsertOptions snc) of
-        MetadataKeys ks -> Strict.Just (map fromIntegral $ toList ks)
-        MetadataEnable -> Strict.Nothing
-        MetadataDisable -> Strict.Nothing
-
     iopts =
       InsertOptions
         { ioInOut = isTxOutEnabled'
@@ -258,10 +249,9 @@ extractSyncOptions snp aop snc =
         , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
         , -- Rewards are only disabled on "disable_all" and "only_gov" presets
           ioRewards = True
-        , ioMultiAssets = isMultiAssetEnabled (sioMultiAsset (dncInsertOptions snc))
-        , ioMetadata = isMetadataEnabled (sioMetadata (dncInsertOptions snc))
-        , ioKeepMetadataNames = maybeKeepMNames
-        , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
+        , ioMultiAssets = sioMultiAsset (dncInsertOptions snc)
+        , ioMetadata = sioMetadata (dncInsertOptions snc)
+        , ioPlutus = sioPlutus (dncInsertOptions snc)
         , ioOffChainPoolData = useOffchainPoolData
         , ioGov = useGovernance
         }
