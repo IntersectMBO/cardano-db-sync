@@ -48,7 +48,6 @@ import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
-import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
@@ -163,8 +162,7 @@ runSyncNode ::
   IO ()
 runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
-    \enpLedgerStateDir -> do
-      createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
+    \enpLedgerStateDir -> createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
   logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
@@ -259,24 +257,17 @@ extractSyncOptions snp aop snc =
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
-    maybeKeepMNames =
-      case sioMetadata (dncInsertOptions snc) of
-        MetadataKeys ks -> Strict.Just (map fromIntegral $ toList ks)
-        MetadataEnable -> Strict.Nothing
-        MetadataDisable -> Strict.Nothing
-
     iopts =
       InsertOptions
         { ioInOut = isTxOutEnabled'
         , ioTxCBOR = isTxCBOREnabled (sioTxCBOR (dncInsertOptions snc))
         , ioUseLedger = useLedger
-        , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
+        , ioShelley = sioShelley (dncInsertOptions snc)
         , -- Rewards are only disabled on "disable_all" and "only_gov" presets
           ioRewards = True
-        , ioMultiAssets = isMultiAssetEnabled (sioMultiAsset (dncInsertOptions snc))
-        , ioMetadata = isMetadataEnabled (sioMetadata (dncInsertOptions snc))
-        , ioKeepMetadataNames = maybeKeepMNames
-        , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
+        , ioMultiAssets = sioMultiAsset (dncInsertOptions snc)
+        , ioMetadata = sioMetadata (dncInsertOptions snc)
+        , ioPlutus = sioPlutus (dncInsertOptions snc)
         , ioOffChainPoolData = useOffchainPoolData
         , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance

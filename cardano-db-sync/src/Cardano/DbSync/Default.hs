@@ -18,6 +18,7 @@ import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
+
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal)
 import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent, hasNewEpochEvent)
@@ -165,15 +166,15 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     BlockAlonzo blk ->
       newExceptT $
         insertBlockUniversal' $
-          Generic.fromAlonzoBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+          Generic.fromAlonzoBlock (ioPlutus iopts) (getPrices applyResult) blk
     BlockBabbage blk ->
       newExceptT $
         insertBlockUniversal' $
-          Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+          Generic.fromBabbageBlock (ioPlutus iopts) (getPrices applyResult) blk
     BlockConway blk ->
       newExceptT $
         insertBlockUniversal' $
-          Generic.fromConwayBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+          Generic.fromConwayBlock (ioPlutus iopts) (getPrices applyResult) blk
   -- update the epoch
   updateEpoch details isNewEpochEvent
   whenPruneTxOut syncEnv $

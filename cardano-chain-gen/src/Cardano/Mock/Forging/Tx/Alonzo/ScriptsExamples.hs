@@ -23,6 +23,7 @@ module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
   alwaysMintScriptHash,
   alwaysMintScriptAddr,
   alwaysMintScriptStake,
+  alwaysMintScriptHashRandomPolicyVal,
   scriptHash,
   assetNames,
   plutusData2,
@@ -47,6 +48,7 @@ import Codec.Serialise
 import Codec.Serialise.Encoding
 import Data.ByteString.Short
 import Data.Maybe
+import Numeric.Natural (Natural)
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
 import qualified PlutusCore.Data as Plutus
 import qualified PlutusLedgerApi.Test.Examples as Plutus
@@ -102,6 +104,15 @@ alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 
 mkPlutusScriptEra :: AlonzoEraScript era => PlutusBinary -> AlonzoScript era
 mkPlutusScriptEra sh = PlutusScript $ fromJust $ mkBinaryPlutusScript PlutusV1 sh
+
+alwaysMintScriptHashRandomPolicyVal :: Natural -> ScriptHash StandardCrypto
+alwaysMintScriptHashRandomPolicyVal n = scriptHash @StandardAlonzo $ alwaysMintRandomScript n
+
+alwaysMintRandomScript :: AlonzoEraScript era => Natural -> AlonzoScript era
+alwaysMintRandomScript n = mkPlutusScriptEra $ alwaysMintRandomPlutusBinary n
+
+alwaysMintRandomPlutusBinary :: Natural -> PlutusBinary
+alwaysMintRandomPlutusBinary n = PlutusBinary $ Plutus.alwaysFailingNAryFunction n
 
 scriptHash ::
   forall era.

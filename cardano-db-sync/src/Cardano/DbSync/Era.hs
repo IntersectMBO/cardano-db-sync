@@ -9,7 +9,7 @@ module Cardano.DbSync.Era (
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
-import qualified Cardano.DbSync.Era.Shelley.Genesis as Shelley
+import qualified Cardano.DbSync.Era.Universal.Genesis as Shelley
 import Cardano.DbSync.Error
 import Cardano.Prelude
 

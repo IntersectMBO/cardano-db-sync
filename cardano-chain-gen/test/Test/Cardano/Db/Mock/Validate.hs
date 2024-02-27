@@ -40,7 +40,8 @@ module Test.Cardano.Db.Mock.Validate (
   assertPoolCounters,
   poolCountersQuery,
   checkStillRuns,
-) where
+)
+where
 
 import Cardano.Db
 import qualified Cardano.Db as DB
@@ -219,7 +220,7 @@ assertAddrValues env ix expected sta = do
       q = queryAddressOutputs TxOutCore address
   assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
-assertRight :: Show err => Either err a -> IO a
+assertRight :: (Show err) => Either err a -> IO a
 assertRight ei =
   case ei of
     Right a -> pure a
@@ -246,7 +247,7 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts ::
-  EraCrypto era ~ StandardCrypto =>
+  (EraCrypto era ~ StandardCrypto) =>
   DBSyncEnv ->
   LedgerState (ShelleyBlock p era) ->
   Bool ->
@@ -494,11 +495,11 @@ poolCountersQuery = do
       <$> (select . from $ \(_a :: SqlExpr (Entity PoolRelay)) -> pure countRows)
   pure (poolHash, poolMetadataRef, poolUpdate, poolOwner, poolRetire, poolRelay)
 
-addPoolCounters :: Num a => (a, a, a, a, a, a) -> (a, a, a, a, a, a) -> (a, a, a, a, a, a)
+addPoolCounters :: (Num a) => (a, a, a, a, a, a) -> (a, a, a, a, a, a) -> (a, a, a, a, a, a)
 addPoolCounters (a, b, c, d, e, f) (a', b', c', d', e', f') = (a + a', b + b', c + c', d + d', e + e', f + f')
 
 assertPoolLayerCounters ::
-  EraCrypto era ~ StandardCrypto =>
+  (EraCrypto era ~ StandardCrypto) =>
   DBSyncEnv ->
   (Word64, Word64) ->
   [(PoolIndex, (Either DBFail Bool, Bool, Bool))] ->

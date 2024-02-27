@@ -27,6 +27,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Config.Types (PlutusConfig, isPlutusModeActive)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.ScriptData (ScriptData (..))
@@ -67,8 +68,8 @@ import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
 
-fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
-fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
+fromAlonzoTx :: PlutusConfig -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
+fromAlonzoTx plutusConfig mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txLedgerTxId = mkTxId tx
@@ -133,7 +134,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
         MaryValue ada (MultiAsset maMap) = txOut ^. Core.valueTxOutL
         mDataHash = txOut ^. Alonzo.dataHashTxOutL
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (Left . toShelleyCert)
+    (finalMaps, redeemers) = resolveRedeemers plutusConfig mprices tx (Left . toShelleyCert)
 
     -- This is true if second stage contract validation passes or there are no contracts.
     isValid2 :: Bool
@@ -183,13 +184,13 @@ resolveRedeemers ::
   , Core.EraTx era
   , DBScriptPurpose era
   ) =>
-  Bool ->
+  PlutusConfig ->
   Maybe Alonzo.Prices ->
   Core.Tx era ->
   (TxCert era -> Cert) ->
   (RedeemerMaps, [(Word64, TxRedeemer)])
-resolveRedeemers ioExtraPlutus mprices tx toCert =
-  if not ioExtraPlutus
+resolveRedeemers plutusConfig mprices tx toCert =
+  if not $ isPlutusModeActive plutusConfig
     then (initRedeemersMaps, [])
     else
       mkRdmrAndUpdateRec (initRedeemersMaps, []) $
