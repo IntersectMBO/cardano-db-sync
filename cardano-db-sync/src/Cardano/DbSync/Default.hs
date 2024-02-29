@@ -22,7 +22,8 @@ import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import Cardano.DbSync.Era.Shelley.Adjust (adjustEpochRewards)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock, mkAdaPots)
+import Cardano.DbSync.Era.Shelley.Insert (insertShelleyBlock)
+import Cardano.DbSync.Era.Shelley.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Shelley.Insert.Epoch (insertInstantRewards, insertPoolDepositRefunds, insertRewards)
 import Cardano.DbSync.Era.Shelley.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
