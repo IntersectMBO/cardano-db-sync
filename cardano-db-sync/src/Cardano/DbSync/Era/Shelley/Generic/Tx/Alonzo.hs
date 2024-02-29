@@ -66,6 +66,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import qualified Data.ByteString.Short as SBS
 
+import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (..))
 import qualified Cardano.Ledger.TxIn as Ledger
 import qualified Data.Map.Strict as Map
@@ -250,8 +251,8 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
           Just (Right (ConwaySpending txIn)) -> handleTxInPtr rdmrIx (Alonzo.unAsItem txIn) rdmrMps
           Just (Right (ConwayRewarding rwdAcnt)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
           Just (Right (ConwayCertifying dcert)) -> handleCertPtr rdmrIx (toCert $ Alonzo.unAsItem dcert) rdmrMps
-          Just (Right (ConwayVoting _)) -> (rdmrMps, Nothing)
-          Just (Right (ConwayProposing _)) -> (rdmrMps, Nothing)
+          Just (Right (ConwayVoting voter)) -> (rdmrMps, Right <$> getConwayVotingScriptHash (Alonzo.unAsItem voter))
+          Just (Right (ConwayProposing proposal)) -> (rdmrMps, Right <$> getConwayProposalScriptHash (Alonzo.unAsItem proposal))
           Nothing -> (rdmrMps, Nothing)
 
         (tag, idx) = getPurpose ptr
@@ -384,15 +385,20 @@ scriptHashCert cert = case cert of
   Left scert -> scriptHashCertShelley scert
   Right ccert -> scriptHashCertConway ccert
 
--- TODO: Conway
 scriptHashCertConway :: ConwayCert -> Maybe ByteString
-scriptHashCertConway _cert = Nothing
+scriptHashCertConway cert = unScriptHash <$> getScriptWitnessTxCert cert
 
 scriptHashCertShelley :: ShelleyCert -> Maybe ByteString
-scriptHashCertShelley cert =
-  case cert of
-    Shelley.ShelleyTxCertDelegCert (Shelley.ShelleyUnRegCert cred) ->
-      getCredentialScriptHash cred
-    Shelley.ShelleyTxCertDelegCert (Shelley.ShelleyDelegCert cred _) ->
-      getCredentialScriptHash cred
-    _ -> Nothing
+scriptHashCertShelley cert = unScriptHash <$> getScriptWitnessTxCert cert
+
+getConwayVotingScriptHash :: Voter StandardCrypto -> Maybe ByteString
+getConwayVotingScriptHash = \case
+  CommitteeVoter cred -> getCredentialScriptHash cred
+  DRepVoter cred -> getCredentialScriptHash cred
+  StakePoolVoter _ -> Nothing
+
+getConwayProposalScriptHash :: EraCrypto era ~ StandardCrypto => ProposalProcedure era -> Maybe ByteString
+getConwayProposalScriptHash pp = case pProcGovAction pp of
+  ParameterChange _ _ p -> unScriptHash <$> strictMaybeToMaybe p
+  TreasuryWithdrawals _ p -> unScriptHash <$> strictMaybeToMaybe p
+  _ -> Nothing
