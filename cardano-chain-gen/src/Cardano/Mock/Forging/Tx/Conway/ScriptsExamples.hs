@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -7,18 +6,15 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
-  alwaysSucceedsPlutusBinary,
   alwaysSucceedsScript,
   alwaysSucceedsScriptHash,
   alwaysSucceedsScriptAddr,
   alwaysSucceedsScriptStake,
-  alwaysFailsPlutusBinary,
   alwaysFailsScript,
   alwaysFailsScriptHash,
   alwaysFailsScriptAddr,
   alwaysFailsScriptStake,
   plutusDataList,
-  alwaysMintPlutusBinary,
   alwaysMintScript,
   alwaysMintScriptHash,
   alwaysMintScriptAddr,
@@ -28,6 +24,7 @@ module Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
   plutusData2,
   plutusDataEncLen,
   plutusDataEncIndef,
+  toBinaryPlutus,
 ) where
 
 import Cardano.Ledger.Address
@@ -42,20 +39,17 @@ import Cardano.Ledger.Hashes
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Plutus.Data
 import Cardano.Ledger.Plutus.Language
+import Cardano.Prelude (panic)
 import Codec.CBOR.Write (toStrictByteString)
 import Codec.Serialise
 import Codec.Serialise.Encoding
 import Data.ByteString.Short
-import Data.Maybe
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
 import qualified PlutusCore.Data as Plutus
 import qualified PlutusLedgerApi.Test.Examples as Plutus
 
-alwaysSucceedsPlutusBinary :: PlutusBinary
-alwaysSucceedsPlutusBinary = PlutusBinary $ Plutus.alwaysSucceedingNAryFunction 0
-
-alwaysSucceedsScript :: AlonzoEraScript era => AlonzoScript era
-alwaysSucceedsScript = mkPlutusScriptEra alwaysSucceedsPlutusBinary
+alwaysSucceedsScript :: forall era. AlonzoScript era
+alwaysSucceedsScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysSucceedingNAryFunction 0)
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
 alwaysSucceedsScriptHash = scriptHash @StandardAlonzo alwaysSucceedsScript
@@ -66,11 +60,8 @@ alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash)
 alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
-alwaysFailsPlutusBinary :: PlutusBinary
-alwaysFailsPlutusBinary = PlutusBinary $ Plutus.alwaysFailingNAryFunction 0
-
-alwaysFailsScript :: AlonzoEraScript era => AlonzoScript era
-alwaysFailsScript = mkPlutusScriptEra alwaysFailsPlutusBinary
+alwaysFailsScript :: forall era. AlonzoScript era
+alwaysFailsScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
 alwaysFailsScriptHash = scriptHash @StandardAlonzo alwaysFailsScript
@@ -85,11 +76,8 @@ alwaysFailsScriptStake = ScriptHashObj alwaysFailsScriptHash
 plutusDataList :: forall era. Era era => Data era
 plutusDataList = Data $ Plutus.List []
 
-alwaysMintPlutusBinary :: PlutusBinary
-alwaysMintPlutusBinary = PlutusBinary $ Plutus.alwaysFailingNAryFunction 1
-
-alwaysMintScript :: AlonzoEraScript era => AlonzoScript era
-alwaysMintScript = mkPlutusScriptEra alwaysMintPlutusBinary
+alwaysMintScript :: forall era. AlonzoScript era
+alwaysMintScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysFailingNAryFunction 1)
 
 alwaysMintScriptHash :: ScriptHash StandardCrypto
 alwaysMintScriptHash = scriptHash @StandardAlonzo alwaysMintScript
@@ -99,9 +87,6 @@ alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRe
 
 alwaysMintScriptStake :: StakeCredential StandardCrypto
 alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
-
-mkPlutusScriptEra :: AlonzoEraScript era => PlutusBinary -> AlonzoScript era
-mkPlutusScriptEra sh = PlutusScript $ fromJust $ mkBinaryPlutusScript PlutusV1 sh
 
 scriptHash ::
   forall era.
@@ -129,7 +114,7 @@ plutusDataEncLen = toShort $ toStrictByteString $ mconcat (encodeListLen 2 : (en
 plutusDataEncIndef :: ShortByteString
 plutusDataEncIndef = toShort $ toStrictByteString $ encodeList plutusData2
 
--- toBinaryPlutus :: AlonzoEraScript era => AlonzoScript era -> PlutusBinary
--- toBinaryPlutus as = case mkPlutusScript as of
---   Nothing -> panic "expected Alonzo script"
---   PlutusScript (Plutus _ sbs) -> sbs
+toBinaryPlutus :: AlonzoEraScript era => AlonzoScript era -> PlutusBinary
+toBinaryPlutus as = case as of
+  TimelockScript _ -> panic "expected Alonzo script"
+  PlutusScript (Plutus _ sbs) -> sbs
