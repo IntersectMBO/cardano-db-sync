@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Mock.Forging.Tx.Conway (
   Babbage.TxOutScriptType (..),
@@ -36,7 +37,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkDelegTxCert,
   Babbage.mkParamUpdateTx,
   mkFullTx,
-  mkScriptMint,
+  mkScriptMint',
   Babbage.mkScriptInp,
   mkWitnesses,
   mkUTxOConway,
@@ -49,15 +50,15 @@ import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), mkAlonzoTxAuxData)
-import Cardano.Ledger.Alonzo.TxWits (RdmrPtr (..))
+import Cardano.Ledger.Babbage.TxOut (BabbageEraTxOut, BabbageTxOut (..))
 import Cardano.Ledger.BaseTypes (EpochNo (..), Network (..))
 import Cardano.Ledger.Binary (Sized (..))
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (VotingProcedures (..))
+import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
 import Cardano.Ledger.Conway.TxCert hiding (mkDelegTxCert)
-import Cardano.Ledger.Conway.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
 import Cardano.Ledger.Crypto (ADDRHASH ())
@@ -71,6 +72,7 @@ import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Ledger.Val (Val (..), coin)
 import Cardano.Mock.Forging.Tx.Alonzo (
   addValidityInterval,
+  mkScriptMint,
   mkScriptTx,
   mkUTxOAlonzo,
   mkWitnesses,
@@ -87,7 +89,7 @@ import Data.Maybe.Strict (StrictMaybe (..), maybeToStrictMaybe)
 import Data.Sequence.Strict (StrictSeq ())
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
-import Ouroboros.Consensus.Cardano.Block (LedgerState ())
+import Ouroboros.Consensus.Cardano.Block (EraCrypto, LedgerState ())
 import Ouroboros.Consensus.Shelley.Eras (StandardConway (), StandardCrypto ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
@@ -359,7 +361,7 @@ mkScriptDCertTx consCert isValid' state' = do
           mkRedeemer n (alwaysSucceedsScriptHash, alwaysSucceedsScript)
     prepareRedeemer _ = Nothing
 
-    mkRedeemer n (a, b) = Just (RdmrPtr Cert n, Just (a, b))
+    mkRedeemer n (a, b) = Just (ConwayCertifying (AsIndex n), Just (a, b))
 
 mkMultiAssetsScriptTx ::
   [ConwayUTxOIndex] ->
@@ -382,7 +384,7 @@ mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees 
       colInputs' = Set.singleton $ fst colInput
 
   pure $
-    mkScriptTx succeeds (mkScriptInps (map fst inputs) ++ mkScriptMint minted) $
+    mkScriptTx succeeds (mkScriptInps (map fst inputs) ++ mkScriptMint' minted) $
       consTxBody
         inputs'
         colInputs'
@@ -488,7 +490,7 @@ mkFullTx ::
   Either ForgingError (AlonzoTx StandardConway)
 mkFullTx n m state' = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') inputs
-  let redeemers = mapMaybe Babbage.mkScriptInp $ zip [0 ..] inputPairs
+  let redeemers = mkScriptInps inputPairs
       witnesses =
         mkWitnesses
           redeemers
@@ -625,11 +627,17 @@ mkFullTx n m state' = do
       AlonzoTxAuxData auxiliaryDataMap mempty (Map.singleton PlutusV2 auxiliaryDataScripts)
     auxiliaryDataMap = Map.fromList [(1, List []), (2, List [])]
     auxiliaryDataScripts =
-      NonEmpty.fromList [toBinaryPlutus alwaysFailsScript]
+      NonEmpty.fromList [alwaysFailsPlutusBinary]
 
+mkScriptMint' ::
+  MultiAsset StandardCrypto ->
+  [(ConwayPlutusPurpose AsIndex era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+mkScriptMint' = fmap (first (ConwayMinting . AsIndex)) . mkScriptMint
+
+{-}
 mkScriptMint ::
   MultiAsset StandardCrypto ->
-  [(RdmrPtr, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+  [(AlonzoPlutusPurpose AsIndex era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
 mkScriptMint (MultiAsset m) =
   mapMaybe mkMint . zip [0 ..] . map policyID $ Map.keys m
   where
@@ -645,7 +653,7 @@ mkScriptMint (MultiAsset m) =
     alwaysFails = (alwaysFailsScriptHash, alwaysFailsScript)
     alwaysSucceeds = (alwaysFailsScriptHash, alwaysSucceedsScript)
     alwaysMint = (alwaysMintScriptHash, alwaysMintScript)
-
+-}
 consPaymentTxBody ::
   Set (TxIn StandardCrypto) ->
   Set (TxIn StandardCrypto) ->
@@ -692,8 +700,14 @@ mkOutFromType amount txOutType =
 
 mkScriptInps ::
   [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
-  [(RdmrPtr, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
-mkScriptInps = mapMaybe Babbage.mkScriptInp . zip [0 ..]
+  [(ConwayPlutusPurpose AsIndex StandardConway, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript StandardConway))]
+mkScriptInps = mapMaybe mkScriptInp . zip [0 ..]
+
+mkScriptInp ::
+  (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
+  (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
+  Maybe (ConwayPlutusPurpose AsIndex era, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript era))
+mkScriptInp = fmap (first $ ConwaySpending . AsIndex) . Babbage.mkScriptInp
 
 mkUnlockScriptTx' ::
   [ConwayUTxOIndex] ->

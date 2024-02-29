@@ -32,8 +32,7 @@ module Cardano.Mock.Forging.Interpreter (
   mkTxId,
 ) where
 
-import Cardano.Ledger.Block (txid)
-import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Core (txIdTx)
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
@@ -66,7 +65,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Word (Word64)
 import GHC.Generics (Generic)
-import Lens.Micro
 import NoThunks.Class (OnlyCheckWhnfNamed (..))
 import Ouroboros.Consensus.Block (
   BlockForging,
@@ -545,10 +543,10 @@ withShelleyLedgerState inter mk = do
 mkTxId :: TxEra -> Ledger.TxId StandardCrypto
 mkTxId txe =
   case txe of
-    TxAlonzo tx -> txid @StandardAlonzo (tx ^. Core.bodyTxL)
-    TxBabbage tx -> txid @StandardBabbage (tx ^. Core.bodyTxL)
-    TxConway tx -> txid @StandardConway (tx ^. Core.bodyTxL)
-    TxShelley tx -> txid @StandardShelley (tx ^. Core.bodyTxL)
+    TxAlonzo tx -> txIdTx @StandardAlonzo tx
+    TxBabbage tx -> txIdTx @StandardBabbage tx
+    TxConway tx -> txIdTx @StandardConway tx
+    TxShelley tx -> txIdTx @StandardShelley tx
 
 mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
 mkValidated txe =

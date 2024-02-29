@@ -20,6 +20,7 @@ module Cardano.Mock.Forging.Tx.Alonzo (
   mkUnlockScriptTx,
   mkScriptInp,
   mkScriptMint,
+  mkScriptMint',
   mkMAssetsScriptTx,
   mkDCertTx,
   mkSimpleDCertTx,
@@ -44,11 +45,10 @@ import Cardano.Ledger.Alonzo.Tx
 import Cardano.Ledger.Alonzo.TxBody
 import Cardano.Ledger.Alonzo.TxWits
 import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Block (txid)
 import Cardano.Ledger.Coin
+import Cardano.Ledger.Core
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
-import Cardano.Ledger.Hashes
 import Cardano.Ledger.Keys
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.TxCert
@@ -203,38 +203,45 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
 
 mkScriptInp' ::
   (Word64, (TxIn StandardCrypto, Core.TxOut StandardAlonzo)) ->
-  Maybe (RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
+  Maybe (AlonzoPlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
 mkScriptInp' = map (second Just) . mkScriptInp
 
 mkScriptInp ::
   (Word64, (TxIn StandardCrypto, Core.TxOut StandardAlonzo)) ->
-  Maybe (RdmrPtr, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
+  Maybe (AlonzoPlutusPurpose AsIndex era, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
 mkScriptInp (n, (_txIn, txOut))
   | addr == alwaysFailsScriptAddr =
       Just
-        (RdmrPtr Spend n, (alwaysFailsScriptHash, alwaysFailsScript))
+        (AlonzoSpending (AsIndex $ fromIntegral n), (alwaysFailsScriptHash, alwaysFailsScript))
   | addr == alwaysSucceedsScriptAddr =
       Just
-        (RdmrPtr Spend n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+        (AlonzoSpending (AsIndex $ fromIntegral n), (alwaysSucceedsScriptHash, alwaysSucceedsScript))
   | addr == alwaysMintScriptAddr =
-      Just (RdmrPtr Spend n, (alwaysMintScriptHash, alwaysMintScript))
+      Just (AlonzoSpending (AsIndex $ fromIntegral n), (alwaysMintScriptHash, alwaysMintScript))
   | otherwise = Nothing
   where
     addr = txOut ^. Core.addrTxOutL
 
-mkScriptMint ::
+mkScriptMint' ::
+  AlonzoEraScript era =>
   MultiAsset StandardCrypto ->
-  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))]
+  [(AlonzoPlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, AlonzoScript era))]
+mkScriptMint' = fmap (first $ AlonzoMinting . AsIndex) . mkScriptMint
+
+mkScriptMint ::
+  AlonzoEraScript era =>
+  MultiAsset StandardCrypto ->
+  [(Word32, Maybe (ScriptHash StandardCrypto, AlonzoScript era))]
 mkScriptMint (MultiAsset mp) = mapMaybe f $ zip [0 ..] (Map.keys mp)
   where
     f (n, policyId)
       | policyID policyId == alwaysFailsScriptHash =
-          Just (RdmrPtr Mint n, Just (alwaysFailsScriptHash, alwaysFailsScript))
+          Just (n, Just (alwaysFailsScriptHash, alwaysFailsScript))
       | policyID policyId == alwaysSucceedsScriptHash =
           Just
-            (RdmrPtr Mint n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+            (n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
       | policyID policyId == alwaysMintScriptHash =
-          Just (RdmrPtr Mint n, Just (alwaysMintScriptHash, alwaysMintScript))
+          Just (n, Just (alwaysMintScriptHash, alwaysMintScript))
       | otherwise = Nothing
 
 mkMAssetsScriptTx ::
@@ -256,7 +263,7 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta 
     $ mkScriptTx
       succeeds
       ( mapMaybe mkScriptInp' (zip [0 ..] inputPairs)
-          ++ mkScriptMint minted
+          ++ mkScriptMint' minted
       )
     $ consPaymentTxBody inpts colInput (StrictSeq.fromList outps) (Coin fees) minted
   where
@@ -314,8 +321,8 @@ mkScriptDCertTx consDert valid st = do
         else
           Just $
             if bl
-              then (RdmrPtr Cert n, (alwaysFailsScriptHash, alwaysFailsScript))
-              else (RdmrPtr Cert n, (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+              then (AlonzoCertifying (AsIndex n), (alwaysFailsScriptHash, alwaysFailsScript))
+              else (AlonzoCertifying (AsIndex n), (alwaysSucceedsScriptHash, alwaysSucceedsScript))
     prepareRedeemer _ = Nothing
 
 mkDepositTxPools ::
@@ -355,13 +362,13 @@ consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
 mkScriptTx ::
   forall era.
-  ( Core.Era era
-  , Core.EraCrypto era ~ StandardCrypto
+  ( Core.EraCrypto era ~ StandardCrypto
   , Core.Script era ~ AlonzoScript era
   , Core.TxWits era ~ AlonzoTxWits era
+  , AlonzoEraScript era
   ) =>
   Bool ->
-  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
+  [(PlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
   Core.TxBody era ->
   AlonzoTx era
 mkScriptTx valid rdmrs txBody =
@@ -378,8 +385,11 @@ mkScriptTx valid rdmrs txBody =
         [(hashData @era plutusDataList, plutusDataList)]
 
 mkWitnesses ::
-  (Core.Era era, Core.EraCrypto era ~ StandardCrypto, Script era ~ AlonzoScript era) =>
-  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
+  ( Core.EraCrypto era ~ StandardCrypto
+  , Script era ~ AlonzoScript era
+  , AlonzoEraScript era
+  ) =>
+  [(PlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
   [(DataHash StandardCrypto, Data era)] ->
   AlonzoTxWits era
 mkWitnesses rdmrs datas =
@@ -404,7 +414,7 @@ mkUTxOAlonzo tx =
   | (out, idx) <- zip (toList (tx ^. outputsL)) (TxIx <$> [0 ..])
   ]
   where
-    transId = txid $ getField @"body" tx
+    transId = txIdTx tx
     outputsL = Core.bodyTxL . Core.outputsTxBodyL
 
 emptyTxBody :: AlonzoTxBody StandardAlonzo
