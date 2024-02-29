@@ -46,29 +46,20 @@ import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Governance
+import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (..))
 import qualified Cardano.Ledger.Core as Core
-
--- import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), policyID)
-
--- import Cardano.Ledger.Plutus.Language (Plutus (..))
--- import qualified Cardano.Ledger.Plutus.Language as Alonzo
 import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (ScriptHash)
-
--- import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert as Shelley
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
-
 import qualified Data.ByteString.Short as SBS
-
-import Cardano.Ledger.Conway.Governance
-import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (..))
-import qualified Cardano.Ledger.TxIn as Ledger
 import qualified Data.Map.Strict as Map
 import qualified Data.Maybe.Strict as Strict
 import qualified Data.Set as Set

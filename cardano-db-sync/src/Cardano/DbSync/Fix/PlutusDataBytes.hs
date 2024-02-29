@@ -291,7 +291,7 @@ scrapDatumsTxAlonzo tx =
 
 scrapRedeemerDataBlock :: CardanoBlock -> Map ByteString ByteString
 scrapRedeemerDataBlock cblk = case cblk of
-  BlockConway _blk -> mempty -- panic "TODO: Conway 5"
+  BlockConway _blk -> mempty
   BlockBabbage blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockAlonzo blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockByron _ -> error "No RedeemerData in Byron"
