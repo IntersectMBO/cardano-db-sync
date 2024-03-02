@@ -460,6 +460,7 @@ share
     pvtCommitteeNormal       Double Maybe   -- sqltype=rational
     pvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
     pvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    pvtppSecurityGroup       Double Maybe   -- sqltype=rational
     dvtMotionNoConfidence    Double Maybe   -- sqltype=rational
     dvtCommitteeNormal       Double Maybe   -- sqltype=rational
     dvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
@@ -519,6 +520,7 @@ share
     pvtCommitteeNormal       Double Maybe   -- sqltype=rational
     pvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
     pvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    pvtppSecurityGroup       Double Maybe   -- sqltype=rational
     dvtMotionNoConfidence    Double Maybe   -- sqltype=rational
     dvtCommitteeNormal       Double Maybe   -- sqltype=rational
     dvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
@@ -595,7 +597,7 @@ share
     expiration         Word64 Maybe          sqltype=word31type
     votingAnchorId     VotingAnchorId Maybe  noreference
     type               GovActionType         sqltype=govactiontype
-    description        Text
+    description        Text                  sqltype=jsonb
     paramProposal      ParamProposalId Maybe noreference
     ratifiedEpoch      Word64 Maybe          sqltype=word31type
     enactedEpoch       Word64 Maybe          sqltype=word31type
