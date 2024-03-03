@@ -5,7 +5,6 @@
 {-# OPTIONS_GHC -Wno-x-partial #-}
 #endif
 
-
 module Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference (
   unlockDatumOutput,
   unlockDatumOutputSameBlock,
