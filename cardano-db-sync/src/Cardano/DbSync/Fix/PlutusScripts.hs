@@ -110,17 +110,10 @@ findWrongPlutusScripts tracer =
       Just prevPoint
 
     hashPlutusScript dbScript = do
-      --      lang <- getLang -- TODO: Conway
       bytes <- maybeToEither "No bytes found for plutus script" id $ DB_V_13_0.scriptBytes dbScript
       let script :: AlonzoScript StandardAlonzo = PlutusScript (AlonzoPlutusV1 (Plutus $ PlutusBinary $ SBS.toShort bytes))
       let hsh :: Ledger.ScriptHash StandardCrypto = Ledger.hashScript @StandardAlonzo script
       Right $ Generic.unScriptHash hsh
-
---      where
---        getLang = case DB_V_13_0.scriptType dbScript of
---          PlutusV1 -> Right Ledger.PlutusV1
---          PlutusV2 -> Right Ledger.PlutusV2
---          _ -> Left "Non plutus script found where it shouldn't."
 
 fixPlutusScripts :: MonadIO m => Trace IO Text -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
 fixPlutusScripts tracer cblk fpss = do
