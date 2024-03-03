@@ -578,7 +578,7 @@ share
   DrepRegistration
     txId                TxId                noreference
     certIndex           Word16
-    deposit             Int64 Maybe                             -- Needs to allow negaitve values.
+    deposit             Int64 Maybe
     votingAnchorId      VotingAnchorId Maybe  noreference
     drepHashId          DrepHashId          noreference
 

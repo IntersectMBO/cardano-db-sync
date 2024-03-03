@@ -128,8 +128,3 @@ plutusDataEncLen = toShort $ toStrictByteString $ mconcat (encodeListLen 2 : (en
 
 plutusDataEncIndef :: ShortByteString
 plutusDataEncIndef = toShort $ toStrictByteString $ encodeList plutusData2
-
--- toBinaryPlutus :: AlonzoEraScript era => AlonzoScript era -> PlutusBinary
--- toBinaryPlutus as = case mkPlutusScript as of
---   Nothing -> panic "expected Alonzo script"
---   PlutusScript (Plutus _ sbs) -> sbs
