@@ -34,16 +34,18 @@ import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.OffChain
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+
+import Cardano.DbSync.Era.Shelley.Insert.Certificate (insertPots)
+import Cardano.DbSync.Era.Shelley.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
+import Cardano.DbSync.Era.Shelley.Insert.Other (toDouble)
+import Cardano.DbSync.Era.Shelley.Insert.Pool (IsPoolMember)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Conway.Core (DRepVotingThresholds (..), PoolVotingThresholds (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Keys
-import Cardano.DbSync.Era.Shelley.Insert.Certificate (insertPots)
-import Cardano.DbSync.Era.Shelley.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
-import Cardano.DbSync.Era.Shelley.Insert.Other (toDouble)
-import Cardano.DbSync.Era.Shelley.Insert.Pool (IsPoolMember)
 import Cardano.Prelude
+
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import Data.Either.Extra (eitherToMaybe)

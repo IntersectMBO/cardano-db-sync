@@ -47,6 +47,7 @@ import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.DRep (DRepState (..))
 import Cardano.Ledger.Keys (KeyRole (..))
+import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
 import Cardano.Ledger.Shelley.API (Coin (..))
 import Cardano.Prelude
@@ -59,7 +60,6 @@ import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
-import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 
 insertGovActionProposal ::
   (MonadIO m, MonadBaseControl IO m) =>
@@ -213,7 +213,7 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> pppDRepVotingThresholds pp
       , DB.paramProposalCommitteeMinSize = DbWord64 . fromIntegral <$> pppCommitteeMinSize pp
       , DB.paramProposalCommitteeMaxTermLength = DbWord64 . fromIntegral . unEpochInterval <$> pppCommitteeMaxTermLength pp
-      , DB.paramProposalGovActionLifetime = fromIntegral . unEpochInterval  <$> pppGovActionLifetime pp
+      , DB.paramProposalGovActionLifetime = fromIntegral . unEpochInterval <$> pppGovActionLifetime pp
       , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
       , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
       , DB.paramProposalDrepActivity = fromIntegral . unEpochInterval <$> pppDRepActivity pp
@@ -336,7 +336,6 @@ insertDrepDistr e pSnapshot = do
       DRepAlwaysAbstain -> Nothing
       DRepAlwaysNoConfidence -> Nothing
       DRepCredential cred -> drepExpiry <$> Map.lookup cred (psDRepState pSnapshot)
-
 
 insertCostModel ::
   (MonadBaseControl IO m, MonadIO m) =>
