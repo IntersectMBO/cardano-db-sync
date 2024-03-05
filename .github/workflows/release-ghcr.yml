@@ -4,10 +4,12 @@ on:
   release:
     types:
       - published
-  push:
-    tags:
-      - '**'
+  push: {}
+  pull_request: {}
   workflow_dispatch: {}
+  schedule:
+    # Everyday at 4:00 AM UTC
+    - cron: "0 4 * * *"
 
 env:
   REGISTRY: ghcr.io
@@ -46,6 +48,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload to ghcr.io
+        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
         run: |
           # Downcase the package repository, because docker reference
           # are required to be lower case
