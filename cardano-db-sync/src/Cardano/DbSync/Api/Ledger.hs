@@ -13,8 +13,8 @@ import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import qualified Cardano.DbSync.Era.Shelley.Insert as Insert
-import Cardano.DbSync.Era.Shelley.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
@@ -171,7 +171,7 @@ prepareTxOut syncEnv txCache (TxIn txHash (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txHash
   let genTxOut = fromTxOut index txOut
   txId <- queryTxIdWithCache txCache txHashByteString
-  Insert.prepareTxOut trce cache iopts (txId, txHashByteString) genTxOut
+  insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv

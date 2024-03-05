@@ -63,17 +63,16 @@ library
                         Cardano.DbSync.Era.Byron.Util
                         Cardano.DbSync.Era.Cardano.Insert
                         Cardano.DbSync.Era.Cardano.Util
-                        Cardano.DbSync.Era.Shelley.Adjust
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
                         Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
+                        Cardano.DbSync.Era.Shelley.Generic.Metadata
+                        Cardano.DbSync.Era.Shelley.Generic.ParamProposal
                         Cardano.DbSync.Era.Shelley.Generic.ProtoParams
                         Cardano.DbSync.Era.Shelley.Generic.Rewards
                         Cardano.DbSync.Era.Shelley.Generic.Script
                         Cardano.DbSync.Era.Shelley.Generic.ScriptData
                         Cardano.DbSync.Era.Shelley.Generic.StakeDist
-                        Cardano.DbSync.Era.Shelley.Generic.Metadata
-                        Cardano.DbSync.Era.Shelley.Generic.ParamProposal
                         Cardano.DbSync.Era.Shelley.Generic.Tx
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
@@ -85,11 +84,19 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Util
                         Cardano.DbSync.Era.Shelley.Generic.Witness
                         Cardano.DbSync.Era.Shelley.Genesis
-                        Cardano.DbSync.Era.Shelley.Insert
-                        Cardano.DbSync.Era.Shelley.Insert.Epoch
-                        Cardano.DbSync.Era.Shelley.Insert.Grouped
                         Cardano.DbSync.Era.Shelley.Query
-                        Cardano.DbSync.Era.Shelley.Validate
+                        Cardano.DbSync.Era.Universal.Adjust
+                        Cardano.DbSync.Era.Universal.Block
+                        Cardano.DbSync.Era.Universal.Epoch
+                        Cardano.DbSync.Era.Universal.Validate
+                        Cardano.DbSync.Era.Universal.Insert.Certificate
+                        Cardano.DbSync.Era.Universal.Insert.GovAction
+                        Cardano.DbSync.Era.Universal.Insert.Grouped
+                        Cardano.DbSync.Era.Universal.Insert.LedgerEvent
+                        Cardano.DbSync.Era.Universal.Insert.Other
+                        Cardano.DbSync.Era.Universal.Insert.Pool
+                        Cardano.DbSync.Era.Universal.Insert.Tx
+
 
                         -- Temporary debugging validation
                         Cardano.DbSync.Era.Shelley.ValidateWithdrawal
