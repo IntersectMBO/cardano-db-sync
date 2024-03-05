@@ -13,10 +13,11 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   build:
-    name: "Upload to ghcr.io"
+    name: "Build image"
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix with good defaults
@@ -36,19 +37,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Wait for Hydra
+        uses: input-output-hk/actions/wait-for-hydra@latest
+        with:
+          check: ci/hydra-build:x86_64-linux.required
+
       - name: Download image from cache
         run:
           nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
 
-      - name: Log in to ghcr.io
-        uses: docker/login-action@v2.1.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload to ghcr.io
-        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
+      - name: Load image
         run: |
           # Downcase the package repository, because docker reference
           # are required to be lower case
@@ -67,6 +65,16 @@ jobs:
           docker image tag \
             cardano-db-sync:latest  \
             "${IMAGE_REF}:latest"
-          # Push the tags above
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v2.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to ghcr.io
+        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
+        run: |
           docker push "${IMAGE_REF}:${IMAGE_TAG}"
           docker push "${IMAGE_REF}:latest"
