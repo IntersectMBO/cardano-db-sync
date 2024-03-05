@@ -4,10 +4,12 @@ on:
   release:
     types:
       - published
-  push:
-    tags:
-      - '**'
+  push: {}
+  pull_request: {}
   workflow_dispatch: {}
+  schedule:
+    # Everyday at 4:00 AM UTC
+    - cron: "0 4 * * *"
 
 env:
   REGISTRY: ghcr.io
@@ -52,6 +54,7 @@ jobs:
           echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
 
       - name: Upload ${{ github.actor }}/cardano-db-sync
+        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
         run: |
           # Download the image from the nix binary cachhe
           nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
@@ -67,6 +70,7 @@ jobs:
             docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
 
       - name: Upload ${{ github.actor }}/cardano-smash-server
+        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
         run: |
           # Download the image from the nix binary cachhe
           nix build --builders "" --max-jobs 0 .#cardano-smash-server-docker
