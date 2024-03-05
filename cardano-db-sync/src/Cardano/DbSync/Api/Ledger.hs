@@ -13,8 +13,8 @@ import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import Cardano.DbSync.Era.Shelley.Insert.Grouped
-import Cardano.DbSync.Era.Shelley.Insert.Tx (insertTxOut)
+import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State

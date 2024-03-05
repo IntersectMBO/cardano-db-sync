@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Validate (
+module Cardano.DbSync.Era.Universal.Validate (
   validateEpochRewards,
 ) where
 

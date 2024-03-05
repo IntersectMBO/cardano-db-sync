@@ -8,7 +8,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.StakeDist hiding (getStakeSlice)
-import Cardano.DbSync.Era.Shelley.Insert.Epoch
+import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Ledger.Types

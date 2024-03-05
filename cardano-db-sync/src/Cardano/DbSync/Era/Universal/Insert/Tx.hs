@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.Tx (
+module Cardano.DbSync.Era.Universal.Insert.Tx (
   insertTx,
   insertTxOut,
 ) where
@@ -22,14 +22,14 @@ import Cardano.DbSync.Cache.Types (Cache (..))
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
-import Cardano.DbSync.Era.Shelley.Insert.Certificate (insertCertificate)
-import Cardano.DbSync.Era.Shelley.Insert.GovAction (
+import Cardano.DbSync.Era.Universal.Insert.Certificate (insertCertificate)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertGovActionProposal,
   insertParamProposal,
   insertVotingProcedures,
  )
-import Cardano.DbSync.Era.Shelley.Insert.Grouped
-import Cardano.DbSync.Era.Shelley.Insert.Other (
+import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Other (
   insertDatum,
   insertExtraKeyWitness,
   insertMultiAsset,
@@ -38,7 +38,7 @@ import Cardano.DbSync.Era.Shelley.Insert.Other (
   insertStakeAddressRefIfMissing,
   insertWithdrawals,
  )
-import Cardano.DbSync.Era.Shelley.Insert.Pool (IsPoolMember)
+import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)

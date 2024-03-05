@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Adjust (
+module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
 ) where
 

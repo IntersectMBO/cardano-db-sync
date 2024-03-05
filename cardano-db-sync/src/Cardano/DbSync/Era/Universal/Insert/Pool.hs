@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.Pool (
+module Cardano.DbSync.Era.Universal.Insert.Pool (
   IsPoolMember,
   insertPoolRegister,
   insertPoolRetire,
@@ -41,7 +41,6 @@ import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.PoolParams as PoolP
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Prelude
-
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)

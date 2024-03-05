@@ -17,9 +17,9 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (envBackend))
 import Cardano.DbSync.Cache.Types (Cache (..), uninitiatedCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import Cardano.DbSync.Era.Shelley.Insert.Certificate (insertDelegation, insertStakeRegistration)
-import Cardano.DbSync.Era.Shelley.Insert.Other (insertStakeAddressRefIfMissing)
-import Cardano.DbSync.Era.Shelley.Insert.Pool (insertPoolRegister)
+import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insertStakeRegistration)
+import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
+import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util

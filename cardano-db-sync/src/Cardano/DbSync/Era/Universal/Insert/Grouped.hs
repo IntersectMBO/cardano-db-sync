@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.Grouped (
+module Cardano.DbSync.Era.Universal.Insert.Grouped (
   BlockGroupedData (..),
   MissingMaTxOut (..),
   ExtendedTxIn (..),

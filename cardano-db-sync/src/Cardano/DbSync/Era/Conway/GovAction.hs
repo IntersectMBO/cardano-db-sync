@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.GovAction (
+module Cardano.DbSync.Era.Conway.GovAction (
   insertConstitution,
   insertCostModel,
   insertCredDrepHash,
@@ -31,7 +31,7 @@ import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
-import Cardano.DbSync.Era.Shelley.Insert.Other (toDouble)
+import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util

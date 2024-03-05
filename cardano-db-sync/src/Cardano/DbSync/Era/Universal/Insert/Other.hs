@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.Other (
+module Cardano.DbSync.Era.Universal.Insert.Other (
   toDouble,
   insertRedeemer,
   insertDatum,
@@ -23,8 +23,8 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Shelley.Insert.Grouped
 import Cardano.DbSync.Era.Shelley.Query (queryStakeRefPtr)
+import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util

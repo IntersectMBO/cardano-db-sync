@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Insert.Certificate (
+module Cardano.DbSync.Era.Universal.Insert.Certificate (
   insertCertificate,
   insertDelegCert,
   insertConwayDelegCert,
@@ -35,8 +35,8 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Shelley.Insert.GovAction (insertCredDrepHash, insertDrep, insertVotingAnchor)
-import Cardano.DbSync.Era.Shelley.Insert.Pool (IsPoolMember, insertPoolCert)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCredDrepHash, insertDrep, insertVotingAnchor)
+import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
