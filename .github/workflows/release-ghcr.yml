@@ -13,10 +13,11 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   build:
-    name: "Upload to ghcr.io"
+    name: "Build image"
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix with good defaults
@@ -53,34 +54,48 @@ jobs:
           echo "REPO_OWNER=${REPO_OWNER}" >> "$GITHUB_ENV"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
 
+      - name: Wait for Hydra
+        uses: input-output-hk/actions/wait-for-hydra@latest
+        with:
+          check: ci/hydra-build:x86_64-linux.required
+
+      - name: Load images
+        run: |
+          # Download the images from the nix binary cachhe
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-cardano-db-sync \
+            .#cardano-db-sync-docker
+
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-cardano-smash-server
+            .#cardano-smash-server-docker
+
       - name: Upload ${{ github.actor }}/cardano-db-sync
         if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
         run: |
-          # Download the image from the nix binary cachhe
-          nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
-
           # Push the image
           skopeo copy \
-            docker-archive:./result \
+            docker-archive:./result-cardano-db-sync \
             docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:$IMAGE_TAG
 
           # Also tag it as latest
           skopeo copy \
-            docker-archive:./result \
+            docker-archive:./result-cardano-db-sync \
             docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
 
       - name: Upload ${{ github.actor }}/cardano-smash-server
         if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
         run: |
-          # Download the image from the nix binary cachhe
-          nix build --builders "" --max-jobs 0 .#cardano-smash-server-docker
-
           # Push the image
           skopeo copy \
-            docker-archive:./result \
+            docker-archive:./result-cardano-smash-server \
             docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:$IMAGE_TAG
 
           # Also tag it as latest
           skopeo copy \
-            docker-archive:./result \
+            docker-archive:./result-cardano-smash-server \
             docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:latest
