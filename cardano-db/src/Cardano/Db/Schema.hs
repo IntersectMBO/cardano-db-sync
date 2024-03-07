@@ -554,7 +554,12 @@ share
     raw                 ByteString Maybe   sqltype=hash28type
     view                Text
     hasScript           Bool
-    UniqueDrepHash      raw !force
+    UniqueDrepHash      raw hasScript !force
+
+  CommitteeHash
+    raw                 ByteString         sqltype=hash28type
+    hasScript           Bool
+    UniqueCommitteeHash raw hasScript
 
   DelegationVote
     addrId              StakeAddressId      noreference
@@ -567,7 +572,7 @@ share
     txId                TxId                noreference
     certIndex           Word16
     coldKey             ByteString          sqltype=hash28type
-    hotKey              ByteString          sqltype=hash28type
+    hotKeyId            CommitteeHashId     noreference
 
   CommitteeDeRegistration
     txId                TxId                noreference
@@ -626,7 +631,7 @@ share
     index                Word16
     govActionProposalId   GovActionProposalId   noreference
     voterRole            VoterRole            sqltype=voterrole
-    committeeVoter       ByteString Maybe
+    committeeVoter       CommitteeHashId Maybe noreference
     drepVoter            DrepHashId Maybe     noreference
     poolVoter            PoolHashId Maybe     noreference
     vote                 Vote                 sqltype=vote
@@ -1182,11 +1187,16 @@ schemaDocs =
 
     DrepHash --^ do
       "A table for every unique drep key hash.\
-      \ The existance of an entry doesn't mean the DRep is registered or in fact that is was ever registered.\
+      \ The existance of an entry doesn't mean the DRep is registered.\
       \ New in 13.2-Conway."
       DrepHashRaw # "The raw bytes of the DRep."
       DrepHashView # "The human readable encoding of the Drep."
       DrepHashHasScript # "Flag which shows if this DRep credentials are a script hash"
+
+    CommitteeHash --^ do
+      "A table for all committee hot credentials"
+      CommitteeHashRaw # "The key or script hash"
+      CommitteeHashHasScript # "Flag which shows if this credential is a script hash"
 
     DelegationVote --^ do
       "A table containing delegations from a stake address to a stake pool. New in 13.2-Conway."
@@ -1201,7 +1211,7 @@ schemaDocs =
       CommitteeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
       CommitteeRegistrationColdKey # "The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table?"
-      CommitteeRegistrationHotKey # "The registered hot hey hash"
+      CommitteeRegistrationHotKeyId # "The registered hot hey hash id"
 
     CommitteeDeRegistration --^ do
       "A table for every committee key de-registration. New in 13.2-Conway."
@@ -1273,7 +1283,9 @@ schemaDocs =
       VotingProcedureIndex # "The index of this VotingProcedure within this transaction."
       VotingProcedureGovActionProposalId # "The index of the GovActionProposal that this vote targets."
       VotingProcedureVoterRole # "The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO."
-      VotingProcedureCommitteeVoter # ""
+      VotingProcedureCommitteeVoter # "A reference to the hot key committee hash entry that voted"
+      VotingProcedureDrepVoter # "A reference to the drep hash entry that voted"
+      VotingProcedurePoolVoter # "A reference to the pool hash entry that voted"
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 
