@@ -60,6 +60,7 @@ module Cardano.Db.Query (
   queryGovActionProposalId,
   queryDrepHashAlwaysAbstain,
   queryDrepHashAlwaysNoConfidence,
+  queryCommitteeHash,
   -- queries used in smash
   queryOffChainPoolData,
   queryPoolRegister,
@@ -805,6 +806,14 @@ queryDrepHashAlwaysNoConfidence = do
     where_ (isNothing (dh ^. DrepHashRaw))
     where_ (dh ^. DrepHashView ==. val hardcodedAlwaysNoConfidence)
     pure $ dh ^. DrepHashId
+  pure $ unValue <$> listToMaybe res
+
+queryCommitteeHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe CommitteeHashId)
+queryCommitteeHash hash = do
+  res <- select $ do
+    ch <- from $ table @CommitteeHash
+    where_ (ch ^. CommitteeHashRaw ==. val hash)
+    pure $ ch ^. CommitteeHashId
   pure $ unValue <$> listToMaybe res
 
 {--------------------------------------------

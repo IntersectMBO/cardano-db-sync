@@ -74,6 +74,7 @@ module Cardano.Db.Insert (
   insertNewCommittee,
   insertVotingProcedure,
   insertDrepHash,
+  insertCommitteeHash,
   insertDelegationVote,
   insertCommitteeRegistration,
   insertCommitteeDeRegistration,
@@ -403,6 +404,9 @@ insertVotingProcedure = insertUnchecked "VotingProcedure"
 
 insertDrepHash :: (MonadBaseControl IO m, MonadIO m) => DrepHash -> ReaderT SqlBackend m DrepHashId
 insertDrepHash = insertCheckUnique "DrepHash"
+
+insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => CommitteeHash -> ReaderT SqlBackend m CommitteeHashId
+insertCommitteeHash = insertCheckUnique "CommitteeHash"
 
 insertDelegationVote :: (MonadBaseControl IO m, MonadIO m) => DelegationVote -> ReaderT SqlBackend m DelegationVoteId
 insertDelegationVote = insertUnchecked "DelegationVote"

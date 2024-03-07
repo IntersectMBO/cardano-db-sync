@@ -35,7 +35,7 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCredDrepHash, insertDrep, insertVotingAnchor)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCommitteeHash, insertCredDrepHash, insertDrep, insertVotingAnchor)
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
@@ -280,14 +280,15 @@ insertCommitteeRegistration ::
   Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
   Ledger.Credential 'HotCommitteeRole StandardCrypto ->
   ReaderT SqlBackend m ()
-insertCommitteeRegistration txId idx khCold khHot = do
+insertCommitteeRegistration txId idx khCold cred = do
+  khHotId <- insertCommitteeHash cred
   void
     . DB.insertCommitteeRegistration
     $ DB.CommitteeRegistration
       { DB.committeeRegistrationTxId = txId
       , DB.committeeRegistrationCertIndex = idx
       , DB.committeeRegistrationColdKey = Generic.unCredentialHash khCold
-      , DB.committeeRegistrationHotKey = Generic.unCredentialHash khHot
+      , DB.committeeRegistrationHotKeyId = khHotId
       }
 
 insertCommitteeDeRegistration ::

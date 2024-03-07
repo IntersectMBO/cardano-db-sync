@@ -17,6 +17,7 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertGovActionProposal,
   insertParamProposal,
   insertVotingProcedures,
+  insertCommitteeHash,
   insertVotingAnchor,
   resolveGovActionProposal,
   updateEnacted,
@@ -254,9 +255,10 @@ insertVotingProcedure ::
 insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal gaId
   votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor txId
-  (mCommitteeVoter, mDRepVoter, mStakePoolVoter) <- case voter of
-    CommitteeVoter cred ->
-      pure (Just $ Generic.unCredentialHash cred, Nothing, Nothing)
+  (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
+    CommitteeVoter cred -> do
+      khId <- lift $ insertCommitteeHash cred
+      pure (Just khId, Nothing, Nothing)
     DRepVoter cred -> do
       drep <- lift $ insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
@@ -270,7 +272,7 @@ insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
       { DB.votingProcedureTxId = txId
       , DB.votingProcedureIndex = index
       , DB.votingProcedureGovActionProposalId = govActionId
-      , DB.votingProcedureCommitteeVoter = mCommitteeVoter
+      , DB.votingProcedureCommitteeVoter = mCommitteeVoterId
       , DB.votingProcedureDrepVoter = mDRepVoter
       , DB.votingProcedurePoolVoter = mStakePoolVoter
       , DB.votingProcedureVoterRole = Generic.toVoterRole voter
@@ -294,6 +296,14 @@ insertAnchor txId anchor =
       { DB.votingAnchorTxId = txId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
+      }
+
+insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential kr StandardCrypto -> ReaderT SqlBackend m DB.CommitteeHashId
+insertCommitteeHash cred = do
+  DB.insertCommitteeHash
+    DB.CommitteeHash
+      { DB.committeeHashRaw = Generic.unCredentialHash cred
+      , DB.committeeHashHasScript = Generic.hasCredScript cred
       }
 
 --------------------------------------------------------------------------------------
