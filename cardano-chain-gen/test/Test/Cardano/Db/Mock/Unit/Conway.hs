@@ -113,6 +113,7 @@ unitTests iom knownMigrations =
         , test "tx with metadata" Tx.addTxMetadata
         , test "tx with metadata disabled" Tx.addTxMetadataDisabled
         , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
+        , test "tx with metadata whitelist multiple" Tx.addTxMetadataWhitelistMultiple
         ]
     , testGroup
         "stake addresses"

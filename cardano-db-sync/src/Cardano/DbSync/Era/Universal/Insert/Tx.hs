@@ -154,13 +154,14 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
         mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
-      txMetadata <-
+      txMetadata <- do
         case ioMetadata iopts of
           MetadataDisable -> pure mempty
           MetadataEnable ->
-            insertTxMetadata tracer Nothing txId (Generic.txMetadata tx)
+            prepareTxMetadata tracer Nothing txId (Generic.txMetadata tx)
           MetadataKeys whitelist ->
-            insertTxMetadata tracer (Just whitelist) txId (Generic.txMetadata tx)
+            prepareTxMetadata tracer (Just whitelist) txId (Generic.txMetadata tx)
+
       mapM_
         (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers)
         $ Generic.txCertificates tx
@@ -249,44 +250,57 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
-insertTxMetadata ::
-  (MonadBaseControl IO m, MonadIO m) =>
+prepareTxMetadata ::
+  (MonadIO m) =>
   Trace IO Text ->
   Maybe (NonEmpty Word) ->
   DB.TxId ->
   Maybe (Map Word64 TxMetadataValue) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.TxMetadata]
-insertTxMetadata tracer mWhitelist txId mmetadata = case mmetadata of
-  Nothing -> pure []
-  Just metadata -> mapMaybeM prepare $ Map.toList metadata
+  m [DB.TxMetadata]
+prepareTxMetadata tracer mWhitelist txId mmetadata =
+  case mmetadata of
+    Nothing -> pure []
+    Just metadata -> do
+      whitelistAndPrepare $ Map.toList metadata
   where
-    prepare ::
-      (MonadBaseControl IO m, MonadIO m) =>
-      (Word64, TxMetadataValue) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
-    prepare (key, md) = case mWhitelist of
-      Just whitelist ->
-        if fromIntegral key `elem` whitelist
-          then mkDbTxMetadata (key, md)
-          else pure Nothing
-      Nothing -> pure Nothing
+    whitelistAndPrepare ::
+      (MonadIO m) =>
+      [(Word64, TxMetadataValue)] ->
+      m [DB.TxMetadata]
+    whitelistAndPrepare metadataList =
+      case mWhitelist of
+        -- if we have any metadata key in the whitelist then keep all metadata
+        -- otherwise discard all metadata.
+        Just whitelist ->
+          if isAnyInWhitelist whitelist metadataList
+            then mapM mkDbTxMetadata metadataList
+            else pure []
+        -- not using a whitelist, keep all metadata
+        Nothing -> mapM mkDbTxMetadata metadataList
+
+    isAnyInWhitelist ::
+      NonEmpty Word ->
+      [(Word64, TxMetadataValue)] ->
+      Bool
+    isAnyInWhitelist whitelist metaDataList = do
+      let results = map (\(key, _) -> fromIntegral key `elem` whitelist) metaDataList
+      or results
 
     mkDbTxMetadata ::
-      (MonadBaseControl IO m, MonadIO m) =>
+      (MonadIO m) =>
       (Word64, TxMetadataValue) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
+      m DB.TxMetadata
     mkDbTxMetadata (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
-      mjson <- safeDecodeToJson tracer "insertTxMetadata" jsonbs
+      mjson <- safeDecodeToJson tracer "prepareTxMetadata" jsonbs
       pure $
-        Just $
-          DB.TxMetadata
-            { DB.txMetadataKey = DbWord64 key
-            , DB.txMetadataJson = mjson
-            , DB.txMetadataBytes = singleKeyCBORMetadata
-            , DB.txMetadataTxId = txId
-            }
+        DB.TxMetadata
+          { DB.txMetadataKey = DbWord64 key
+          , DB.txMetadataJson = mjson
+          , DB.txMetadataBytes = singleKeyCBORMetadata
+          , DB.txMetadataTxId = txId
+          }
 
 --------------------------------------------------------------------------------------
 -- INSERT MULTI ASSET
