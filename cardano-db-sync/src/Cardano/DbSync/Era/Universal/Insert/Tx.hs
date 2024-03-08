@@ -41,7 +41,7 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
+import Cardano.DbSync.Ledger.Types (ApplyResult (..), getCommittee, getGovExpiresAt, lookupDepositsMap)
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 import Cardano.Ledger.BaseTypes
@@ -175,7 +175,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (insertGovActionProposal cache blkId txId (getGovExpiresAt applyResult epochNo)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (insertGovActionProposal cache blkId txId (getGovExpiresAt applyResult epochNo) (getCommittee applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures tracer cache txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs

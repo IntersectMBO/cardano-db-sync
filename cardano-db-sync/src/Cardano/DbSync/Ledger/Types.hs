@@ -24,6 +24,9 @@ import Cardano.DbSync.Types (
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
+import Cardano.Ledger.Conway.Governance
+import Cardano.Ledger.Credential (Credential (..))
+import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
   EpochNo (..),
@@ -37,7 +40,9 @@ import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
+import Lens.Micro
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -131,6 +136,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
+  , apEnactState :: !(Maybe (EnactState StandardConway))
   , apDepositsMap :: !DepositsMap
   }
 
@@ -145,6 +151,7 @@ defaultApplyResult slotDetails =
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices
     , apEvents = []
+    , apEnactState = Nothing
     , apDepositsMap = emptyDepositsMap
     }
 
@@ -152,6 +159,30 @@ getGovExpiresAt :: ApplyResult -> EpochNo -> Maybe EpochNo
 getGovExpiresAt applyResult e = case apGovExpiresAfter applyResult of
   Strict.Just ei -> Just $ Ledger.addEpochInterval e ei
   Strict.Nothing -> Nothing
+
+getCommittee :: ApplyResult -> Maybe (Ledger.StrictMaybe (Committee StandardConway))
+getCommittee ar = case apEnactState ar of
+  Nothing -> Nothing
+  Just es -> Just $ es ^. ensCommitteeL
+
+-- TODO reuse this function rom ledger after it's exported.
+updatedCommittee ::
+  Set.Set (Credential 'ColdCommitteeRole StandardCrypto) ->
+  Map.Map (Credential 'ColdCommitteeRole StandardCrypto) EpochNo ->
+  Ledger.UnitInterval ->
+  Ledger.StrictMaybe (Committee StandardConway) ->
+  Committee StandardConway
+updatedCommittee membersToRemove membersToAdd newQuorum committee =
+  case committee of
+    Ledger.SNothing -> Committee membersToAdd newQuorum
+    Ledger.SJust (Committee currentMembers _) ->
+      let newCommitteeMembers =
+            Map.union
+              membersToAdd
+              (currentMembers `Map.withoutKeys` membersToRemove)
+       in Committee
+            newCommitteeMembers
+            newQuorum
 
 newtype LedgerDB = LedgerDB
   { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState

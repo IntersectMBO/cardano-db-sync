@@ -244,6 +244,7 @@ applyBlock env blk = do
                 , apSlotDetails = details
                 , apStakeSlice = getStakeSlice env newState False
                 , apEvents = ledgerEvents
+                , apEnactState = getEnacted newLedgerState
                 , apDepositsMap = DepositsMap deposits
                 }
             else defaultApplyResult details

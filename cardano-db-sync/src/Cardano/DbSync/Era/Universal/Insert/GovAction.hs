@@ -35,6 +35,7 @@ import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
 import Cardano.Ledger.BaseTypes
@@ -63,14 +64,16 @@ import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 insertGovActionProposal ::
+  forall m.
   (MonadIO m, MonadBaseControl IO m) =>
   Cache ->
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
+  Maybe (StrictMaybe (Committee StandardConway)) ->
   (Word64, ProposalProcedure StandardConway) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
+insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = do
   addrId <-
     lift $ queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
   votingAnchorId <- lift $ insertAnchor txId $ pProcAnchor pp
@@ -125,17 +128,39 @@ insertGovActionProposal cache blkId txId govExpiresAt (index, pp) = do
           , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
           }
 
-    insertNewCommittee gaId removed added q = do
-      void . DB.insertNewCommittee $
-        DB.NewCommittee
-          { DB.newCommitteeGovActionProposalId = gaId
-          , DB.newCommitteeQuorumNumerator = fromIntegral $ numerator r
-          , DB.newCommitteeQuorumDenominator = fromIntegral $ denominator r
-          , DB.newCommitteeDeletedMembers = textShow removed
-          , DB.newCommitteeAddedMembers = textShow added
+    insertNewCommittee ::
+      DB.GovActionProposalId ->
+      Set (Ledger.Credential 'ColdCommitteeRole StandardCrypto) ->
+      Map (Ledger.Credential 'ColdCommitteeRole StandardCrypto) EpochNo ->
+      UnitInterval ->
+      ReaderT SqlBackend m ()
+    insertNewCommittee gapId removed added q = do
+      insertNewCommitteeInfo gapId q
+      insertMembers gapId removed added q
+
+    insertNewCommitteeInfo gapId q =
+      void . DB.insertNewCommitteeInfo $
+        DB.NewCommitteeInfo
+          { DB.newCommitteeInfoGovActionProposalId = gapId
+          , DB.newCommitteeInfoQuorumNumerator = fromIntegral $ numerator r
+          , DB.newCommitteeInfoQuorumDenominator = fromIntegral $ denominator r
           }
       where
         r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
+    insertMembers gapId removed added q = do
+      whenJust mmCommittee $ \mCommittee -> do
+        -- Nothing means we're not in Conway so it can't happen.
+        let committee = updatedCommittee removed added q mCommittee
+        mapM_ (insertNewMember gapId) (Map.toList $ committeeMembers committee)
+
+    insertNewMember gapId (cred, e) = do
+      chId <- insertCommitteeHash cred
+      void . DB.insertNewCommitteeMember $
+        DB.NewCommitteeMember
+          { DB.newCommitteeMemberGovActionProposalId = gapId
+          , DB.newCommitteeMemberCommitteeHashId = chId
+          , DB.newCommitteeMemberExpirationEpoch = unEpochNo e
+          }
 
 --------------------------------------------------------------------------------------
 -- PROPOSAL
