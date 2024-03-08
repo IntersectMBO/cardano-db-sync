@@ -571,13 +571,13 @@ share
   CommitteeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    coldKey             ByteString          sqltype=hash28type
+    coldKeyId           CommitteeHashId     noreference
     hotKeyId            CommitteeHashId     noreference
 
   CommitteeDeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    coldKey             ByteString          sqltype=hash28type
+    coldKeyId           CommitteeHashId       noreference
     votingAnchorId      VotingAnchorId Maybe  noreference
 
   DrepRegistration
@@ -611,15 +611,18 @@ share
 
   TreasuryWithdrawal
     govActionProposalId  GovActionProposalId  noreference
-    stakeAddressId      StakeAddressId      noreference
-    amount              DbLovelace          sqltype=lovelace
+    stakeAddressId       StakeAddressId      noreference
+    amount               DbLovelace          sqltype=lovelace
 
-  NewCommittee
+  NewCommitteeInfo
     govActionProposalId  GovActionProposalId  noreference
-    quorumNumerator     Word64
-    quorumDenominator   Word64
-    deletedMembers      Text
-    addedMembers        Text
+    quorumNumerator      Word64
+    quorumDenominator    Word64
+
+  NewCommitteeMember
+    govActionProposalId  GovActionProposalId  noreference
+    committeeHashId      CommitteeHashId      noreference
+    expirationEpoch      Word64               sqltype=word31type
 
   Constitution
     govActionProposalId  GovActionProposalId  noreference
@@ -1210,14 +1213,14 @@ schemaDocs =
       "A table for every committee hot key registration. New in 13.2-Conway."
       CommitteeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
-      CommitteeRegistrationColdKey # "The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table?"
-      CommitteeRegistrationHotKeyId # "The registered hot hey hash id"
+      CommitteeRegistrationColdKeyId # "The reference to the registered cold key hash id"
+      CommitteeRegistrationHotKeyId # "The reference to the registered hot key hash id"
 
     CommitteeDeRegistration --^ do
       "A table for every committee key de-registration. New in 13.2-Conway."
       CommitteeDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
-      CommitteeDeRegistrationColdKey # "The deregistered cold key hash"
+      CommitteeDeRegistrationColdKeyId # "The reference to the the deregistered cold key hash id"
       CommitteeDeRegistrationVotingAnchorId # "The Voting anchor reference id"
 
     DrepRegistration --^ do
@@ -1263,13 +1266,11 @@ schemaDocs =
       TreasuryWithdrawalStakeAddressId # "The address that benefits from this withdrawal."
       TreasuryWithdrawalAmount # "The amount for this withdrawl."
 
-    NewCommittee --^ do
+    NewCommitteeInfo --^ do
       "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
-      NewCommitteeGovActionProposalId # "The GovActionProposal table index for this new committee."
-      NewCommitteeQuorumNumerator # "The proposed quorum nominator."
-      NewCommitteeQuorumDenominator # "The proposed quorum denominator."
-      NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
-      NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
+      NewCommitteeInfoGovActionProposalId # "The GovActionProposal table index for this new committee."
+      NewCommitteeInfoQuorumNumerator # "The proposed quorum nominator."
+      NewCommitteeInfoQuorumDenominator # "The proposed quorum denominator."
 
     Constitution --^ do
       "A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway."

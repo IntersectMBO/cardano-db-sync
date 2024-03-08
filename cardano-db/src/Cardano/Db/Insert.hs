@@ -71,7 +71,8 @@ module Cardano.Db.Insert (
   insertConstitution,
   insertGovActionProposal,
   insertTreasuryWithdrawal,
-  insertNewCommittee,
+  insertNewCommitteeInfo,
+  insertNewCommitteeMember,
   insertVotingProcedure,
   insertDrepHash,
   insertCommitteeHash,
@@ -396,8 +397,11 @@ insertGovActionProposal = insertUnchecked "GovActionProposal"
 insertTreasuryWithdrawal :: (MonadBaseControl IO m, MonadIO m) => TreasuryWithdrawal -> ReaderT SqlBackend m TreasuryWithdrawalId
 insertTreasuryWithdrawal = insertUnchecked "TreasuryWithdrawal"
 
-insertNewCommittee :: (MonadBaseControl IO m, MonadIO m) => NewCommittee -> ReaderT SqlBackend m NewCommitteeId
-insertNewCommittee = insertUnchecked "NewCommittee"
+insertNewCommitteeInfo :: (MonadBaseControl IO m, MonadIO m) => NewCommitteeInfo -> ReaderT SqlBackend m NewCommitteeInfoId
+insertNewCommitteeInfo = insertUnchecked "NewCommitteeInfo"
+
+insertNewCommitteeMember :: (MonadBaseControl IO m, MonadIO m) => NewCommitteeMember -> ReaderT SqlBackend m NewCommitteeMemberId
+insertNewCommitteeMember = insertUnchecked "NewCommitteeMember"
 
 insertVotingProcedure :: (MonadBaseControl IO m, MonadIO m) => VotingProcedure -> ReaderT SqlBackend m VotingProcedureId
 insertVotingProcedure = insertUnchecked "VotingProcedure"

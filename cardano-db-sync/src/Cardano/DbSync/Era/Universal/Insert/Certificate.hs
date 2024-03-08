@@ -282,12 +282,13 @@ insertCommitteeRegistration ::
   ReaderT SqlBackend m ()
 insertCommitteeRegistration txId idx khCold cred = do
   khHotId <- insertCommitteeHash cred
+  khColdId <- insertCommitteeHash khCold
   void
     . DB.insertCommitteeRegistration
     $ DB.CommitteeRegistration
       { DB.committeeRegistrationTxId = txId
       , DB.committeeRegistrationCertIndex = idx
-      , DB.committeeRegistrationColdKey = Generic.unCredentialHash khCold
+      , DB.committeeRegistrationColdKeyId = khColdId
       , DB.committeeRegistrationHotKeyId = khHotId
       }
 
@@ -300,12 +301,13 @@ insertCommitteeDeRegistration ::
   ReaderT SqlBackend m ()
 insertCommitteeDeRegistration txId idx khCold mAnchor = do
   votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId
+  khColdId <- insertCommitteeHash khCold
   void
     . DB.insertCommitteeDeRegistration
     $ DB.CommitteeDeRegistration
       { DB.committeeDeRegistrationTxId = txId
       , DB.committeeDeRegistrationCertIndex = idx
-      , DB.committeeDeRegistrationColdKey = Generic.unCredentialHash khCold
+      , DB.committeeDeRegistrationColdKeyId = khColdId
       , DB.committeeDeRegistrationVotingAnchorId = votingAnchorId
       }
 
