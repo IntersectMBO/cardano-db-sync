@@ -37,6 +37,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Short as SBS
+import Data.Either.Extra (mapLeft)
 import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.Map (Map)
@@ -108,7 +109,7 @@ getWrongPlutusData tracer = do
       (fmap f . DB_V_13_0.querydatumInfo . entityKey)
       (DB_V_13_0.datumHash . entityVal)
       (Just . getDatumBytes)
-      (hashPlutusData . getDatumBytes)
+      (mapLeft Just . hashPlutusData . getDatumBytes)
   redeemerDataList <-
     findWrongPlutusData
       tracer
@@ -118,7 +119,7 @@ getWrongPlutusData tracer = do
       (fmap f . DB_V_13_0.queryRedeemerDataInfo . entityKey)
       (DB_V_13_0.redeemerDataHash . entityVal)
       (Just . getRedeemerDataBytes)
-      (hashPlutusData . getRedeemerDataBytes)
+      (mapLeft Just . hashPlutusData . getRedeemerDataBytes)
   pure $ FixData datumList redeemerDataList
   where
     f queryRes = do
@@ -144,7 +145,7 @@ findWrongPlutusData ::
   (a -> m (Maybe CardanoPoint)) -> -- get previous block point
   (a -> ByteString) -> -- get the hash
   (a -> Maybe ByteString) -> -- get the stored bytes
-  (a -> Either String ByteString) -> -- hash the stored bytes
+  (a -> Either (Maybe String) ByteString) -> -- hash the stored bytes
   m [FixPlutusInfo]
 findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
   liftIO $
@@ -197,7 +198,8 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
 
     checkValidBytes :: a -> m Bool
     checkValidBytes a = case hashBytes a of
-      Left msg -> do
+      Left Nothing -> pure True
+      Left (Just msg) -> do
         liftIO $
           logWarning tracer $
             Text.concat ["Invalid Binary Data for hash ", textShow actualHash, ": ", Text.pack msg]
