@@ -109,11 +109,18 @@ findWrongPlutusScripts tracer =
       prevPoint <- convertToPoint (SlotNo prevSlotNo) prevBlockHsh
       Just prevPoint
 
+    hashPlutusScript :: DB_V_13_0.Script -> Either (Maybe String) ByteString
     hashPlutusScript dbScript = do
-      bytes <- maybeToEither "No bytes found for plutus script" id $ DB_V_13_0.scriptBytes dbScript
-      let script :: AlonzoScript StandardAlonzo = PlutusScript (AlonzoPlutusV1 (Plutus $ PlutusBinary $ SBS.toShort bytes))
-      let hsh :: Ledger.ScriptHash StandardCrypto = Ledger.hashScript @StandardAlonzo script
-      Right $ Generic.unScriptHash hsh
+      bytes <- maybeToEither (Just "No bytes found for plutus script") id $ DB_V_13_0.scriptBytes dbScript
+      case DB_V_13_0.scriptType dbScript of
+        PlutusV1 -> do
+          -- The bug only affected Alonzo script
+          let script :: AlonzoScript StandardAlonzo = PlutusScript (AlonzoPlutusV1 (Plutus $ PlutusBinary $ SBS.toShort bytes))
+          let hsh :: Ledger.ScriptHash StandardCrypto = Ledger.hashScript @StandardAlonzo script
+          Right $ Generic.unScriptHash hsh
+        PlutusV2 -> Left Nothing
+        PlutusV3 -> Left Nothing
+        _ -> Left $ Just "Non plutus script found where it shouldn't."
 
 fixPlutusScripts :: MonadIO m => Trace IO Text -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
 fixPlutusScripts tracer cblk fpss = do
