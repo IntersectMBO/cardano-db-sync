@@ -7,6 +7,7 @@ import Cardano.Db.Schema.Types (
   PoolUrl (..),
  )
 import Cardano.Db.Types (
+  AnchorType (..),
   DbInt65 (..),
   DbLovelace (..),
   DbWord64 (..),
@@ -18,6 +19,7 @@ import Cardano.Db.Types (
   Vote (..),
   VoteUrl (..),
   VoterRole (..),
+  readAnchorType,
   readDbInt65,
   readGovActionType,
   readRewardSource,
@@ -26,6 +28,7 @@ import Cardano.Db.Types (
   readSyncState,
   readVote,
   readVoterRole,
+  renderAnchorType,
   renderGovActionType,
   renderScriptPurpose,
   renderScriptType,
@@ -151,3 +154,9 @@ instance PersistField GovActionType where
   fromPersistValue (PersistLiteral bs) = Right $ readGovActionType (BS.unpack bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type GovActionType: ", Text.pack (show x)]
+
+instance PersistField AnchorType where
+  toPersistValue = PersistText . renderAnchorType
+  fromPersistValue (PersistLiteral bs) = Right $ readAnchorType (BS.unpack bs)
+  fromPersistValue x =
+    Left $ mconcat ["Failed to parse Haskell type AnchorType: ", Text.pack (show x)]

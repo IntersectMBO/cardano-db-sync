@@ -76,7 +76,7 @@ insertGovActionProposal ::
 insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = do
   addrId <-
     lift $ queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
-  votingAnchorId <- lift $ insertAnchor txId $ pProcAnchor pp
+  votingAnchorId <- lift $ insertVotingAnchor txId DB.GovActionAnchor $ pProcAnchor pp
   mParamProposalId <- lift $
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
@@ -248,7 +248,7 @@ insertParamProposal blkId txId pp = do
 
 insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m ()
 insertConstitution txId gapId constitution = do
-  votingAnchorId <- insertVotingAnchor txId $ constitutionAnchor constitution
+  votingAnchorId <- insertVotingAnchor txId DB.OtherAnchor $ constitutionAnchor constitution
   void . DB.insertConstitution $
     DB.Constitution
       { DB.constitutionGovActionProposalId = gapId
@@ -279,7 +279,7 @@ insertVotingProcedure ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal gaId
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor txId
+  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor txId DB.OtherAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred -> do
       khId <- lift $ insertCommitteeHash cred
@@ -305,22 +305,14 @@ insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
       , DB.votingProcedureVotingAnchorId = votingAnchorId
       }
 
-insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
-insertVotingAnchor txId anchor =
+insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
+insertVotingAnchor txId anchorType anchor =
   DB.insertAnchor $
     DB.VotingAnchor
       { DB.votingAnchorTxId = txId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
-      }
-
-insertAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
-insertAnchor txId anchor =
-  DB.insertAnchor $
-    DB.VotingAnchor
-      { DB.votingAnchorTxId = txId
-      , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
-      , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
+      , DB.votingAnchorType = anchorType
       }
 
 insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential kr StandardCrypto -> ReaderT SqlBackend m DB.CommitteeHashId
