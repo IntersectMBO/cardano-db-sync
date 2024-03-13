@@ -11,6 +11,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Tx (
   addTxMetadataWhitelistMultiple,
 ) where
 
+import Cardano.Api.Ledger (Coin (..))
 import Cardano.DbSync.Config (SyncNodeConfig (..))
 import Cardano.DbSync.Config.Types (MetadataConfig (..), SyncInsertOptions (..))
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
@@ -27,7 +28,6 @@ import qualified Test.Cardano.Db.Mock.UnifiedApi as UnifiedApi
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion ())
 import Prelude (head)
-import Cardano.Api.Ledger (Coin(..))
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
@@ -134,7 +134,6 @@ addTxMetadata ioManager metadata = do
         initConfigFile
           { dncInsertOptions = dncInsertOptions' {sioMetadata = MetadataEnable}
           }
-
 
 addTxMetadataDisabled :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadataDisabled ioManager metadata = do
@@ -248,6 +247,5 @@ addTxMetadataWhitelistMultiple ioManager metadata = do
       let dncInsertOptions' = dncInsertOptions initConfigFile
       pure $
         initConfigFile
-          { dncInsertOptions = dncInsertOptions' {sioMetadata = MetadataKeys $ fromList [1,6]}
+          { dncInsertOptions = dncInsertOptions' {sioMetadata = MetadataKeys $ fromList [1, 6]}
           }
-

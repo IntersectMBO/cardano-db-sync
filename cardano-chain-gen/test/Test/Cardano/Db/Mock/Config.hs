@@ -42,6 +42,7 @@ module Test.Cardano.Db.Mock.Config (
   withCustomConfigAndLogs,
   withFullConfig',
   replaceConfigFile,
+  expectFailSilent,
 ) where
 
 import Cardano.Api (NetworkMagic (..))
@@ -84,6 +85,9 @@ import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
 import System.FilePath.Posix (takeDirectory, (</>))
 import System.IO.Silently (hSilence)
+import Test.Tasty.HUnit (Assertion, testCase, assertFailure)
+import Control.Exception (catch)
+import Test.Tasty (TestTree)
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -516,3 +520,10 @@ replaceConfigFile newFilename dbSync@DBSyncEnv {..} = do
     configDir = mkConfigDir . takeDirectory . unConfigFile . enpConfigFile $ dbSyncParams
     newParams =
       dbSyncParams {enpConfigFile = ConfigFile $ configDir </> newFilename}
+
+expectFailSilent :: String -> Assertion -> TestTree
+expectFailSilent name action = testCase name $ do
+    result <- catch (Right <$> action) (\(_ :: SomeException) -> pure $ Left ())
+    case result of
+        Left _ -> pure ()  -- Test failed as expected, do nothing
+        Right _ -> assertFailure "Expected test to fail but it succeeded"

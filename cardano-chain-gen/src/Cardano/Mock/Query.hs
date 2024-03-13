@@ -6,10 +6,13 @@ module Cardano.Mock.Query (
   queryNullTxDepositExists,
   queryMultiAssetCount,
   queryTxMetadataCount,
+  queryMultiAssetMetadataPolicy,
 ) where
 
 import qualified Cardano.Db as Db
 import Cardano.Prelude hiding (from)
+import qualified Data.ByteString.Base16 as Base16
+import Data.ByteString.Short (ShortByteString, toShort)
 import Database.Esqueleto.Experimental
 import Prelude ()
 
@@ -68,3 +71,10 @@ queryTxMetadataCount = do
     pure countRows
 
   pure $ maybe 0 unValue res
+
+queryMultiAssetMetadataPolicy :: MonadIO io => ReaderT SqlBackend io (Maybe ShortByteString)
+queryMultiAssetMetadataPolicy = do
+  res <- selectOne $ do
+    metadataPolicy <- from $ table @Db.MultiAsset
+    pure $ metadataPolicy ^. Db.MultiAssetPolicy
+  pure $ toShort . Base16.encode . unValue <$> res

@@ -34,13 +34,13 @@ import Cardano.DbSync.Cache (
   queryPoolKeyOrInsert,
  )
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
-import Cardano.DbSync.Era.Conway.Insert.GovAction (
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertCommitteeHash,
   insertCredDrepHash,
   insertDrep,
   insertVotingAnchor,
  )
-import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types

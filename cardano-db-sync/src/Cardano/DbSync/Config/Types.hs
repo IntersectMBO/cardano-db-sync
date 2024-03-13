@@ -189,7 +189,7 @@ data LedgerInsertConfig
 data ShelleyInsertConfig
   = ShelleyEnable
   | ShelleyDisable
-  | -- Whitelist of Shelley stake addresses
+  | -- | Whitelist of Shelley stake addresses
     ShelleyStakeAddrs (NonEmpty ShortByteString)
   deriving (Eq, Show)
 

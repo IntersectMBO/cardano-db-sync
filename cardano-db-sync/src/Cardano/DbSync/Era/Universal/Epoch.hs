@@ -26,9 +26,9 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
 import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
-import Cardano.DbSync.Era.Conway.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))

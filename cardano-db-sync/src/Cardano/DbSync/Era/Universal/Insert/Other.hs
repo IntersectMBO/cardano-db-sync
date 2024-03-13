@@ -35,7 +35,7 @@ import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Data.ByteString.Short (ShortByteString, fromShort)
+import Data.ByteString.Short (ShortByteString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
@@ -164,12 +164,13 @@ insertStakeAddressRefIfMissing _trce cache addr =
 
 insertMultiAsset ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   Cache ->
   Maybe (NonEmpty ShortByteString) ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m (Maybe DB.MultiAssetId)
-insertMultiAsset cache mWhitelist policy aName = do
+insertMultiAsset _tracer cache mWhitelist policy aName = do
   mId <- queryMAWithCache cache policy aName
   case mId of
     Right maId -> pure $ Just maId
@@ -177,7 +178,7 @@ insertMultiAsset cache mWhitelist policy aName = do
       case mWhitelist of
         -- we want to check the whitelist at the begining
         Just whitelist ->
-          if policyBs `elem` (fromShort <$> whitelist)
+          if shortBsBase16Encode policyBs `elem` whitelist
             then Just <$> insertAssettIntoDB policyBs assetNameBs
             else pure Nothing
         Nothing -> Just <$> insertAssettIntoDB policyBs assetNameBs

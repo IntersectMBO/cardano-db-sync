@@ -63,7 +63,6 @@ library
                         Cardano.DbSync.Era.Byron.Util
                         Cardano.DbSync.Era.Cardano.Insert
                         Cardano.DbSync.Era.Cardano.Util
-                        Cardano.DbSync.Era.Conway.Insert.GovAction
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
                         Cardano.DbSync.Era.Shelley.Generic.EpochUpdate
@@ -90,6 +89,7 @@ library
                         Cardano.DbSync.Era.Universal.Epoch
                         Cardano.DbSync.Era.Universal.Genesis
                         Cardano.DbSync.Era.Universal.Insert.Certificate
+                        Cardano.DbSync.Era.Universal.Insert.GovAction
                         Cardano.DbSync.Era.Universal.Insert.Grouped
                         Cardano.DbSync.Era.Universal.Insert.LedgerEvent
                         Cardano.DbSync.Era.Universal.Insert.Other
