@@ -9,6 +9,7 @@
 
 module Cardano.Db.Types (
   Ada (..),
+  AnchorType (..),
   AssetFingerprint (..),
   DbLovelace (..),
   DbInt65 (..),
@@ -54,6 +55,8 @@ module Cardano.Db.Types (
   readVoterRole,
   renderGovActionType,
   readGovActionType,
+  renderAnchorType,
+  readAnchorType,
   word64ToAda,
   hardcodedAlwaysAbstain,
   hardcodedAlwaysNoConfidence,
@@ -264,6 +267,12 @@ data GovActionType
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet GovActionType)
 
+data AnchorType
+  = GovActionAnchor
+  | OtherAnchor
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet AnchorType)
+
 deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
 deltaCoinToDbInt65 (DeltaCoin dc) =
   if dc < 0
@@ -427,6 +436,19 @@ readGovActionType str =
     "NewCommittee" -> NewCommitteeType
     "NewConstitution" -> NewConstitution
     _other -> error $ "readGovActionType: Unknown GovActionType " ++ str
+
+renderAnchorType :: AnchorType -> Text
+renderAnchorType gav =
+  case gav of
+    GovActionAnchor -> "gov_action"
+    OtherAnchor -> "other"
+
+readAnchorType :: String -> AnchorType
+readAnchorType str =
+  case str of
+    "gov_action" -> GovActionAnchor
+    "other" -> OtherAnchor
+    _other -> error $ "readAnchorType: Unknown AnchorType " ++ str
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

@@ -243,7 +243,7 @@ insertDrepRegistration ::
   ReaderT SqlBackend m ()
 insertDrepRegistration txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId DB.OtherAnchor
   void
     . DB.insertDrepRegistration
     $ DB.DrepRegistration
@@ -300,7 +300,7 @@ insertCommitteeDeRegistration ::
   Maybe (Anchor StandardCrypto) ->
   ReaderT SqlBackend m ()
 insertCommitteeDeRegistration txId idx khCold mAnchor = do
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId DB.OtherAnchor
   khColdId <- insertCommitteeHash khCold
   void
     . DB.insertCommitteeDeRegistration

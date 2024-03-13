@@ -23,6 +23,7 @@ import Cardano.Db.Schema.Types (
   PoolUrl,
  )
 import Cardano.Db.Types (
+  AnchorType,
   DbInt65,
   DbLovelace,
   DbWord64,
@@ -591,7 +592,8 @@ share
     txId                TxId                noreference
     dataHash            ByteString
     url                 VoteUrl             sqltype=varchar
-    UniqueVotingAnchor  dataHash url
+    type                AnchorType          sqltype=anchorType
+    UniqueVotingAnchor  dataHash url type
 
   GovActionProposal
     txId               TxId                  noreference
