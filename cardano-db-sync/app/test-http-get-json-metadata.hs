@@ -1,6 +1,11 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+
+#if __GLASGOW_HASKELL__ >= 908
+{-# OPTIONS_GHC -Wno-x-partial #-}
+#endif
 
 import Cardano.Db (
   EntityField (..),
