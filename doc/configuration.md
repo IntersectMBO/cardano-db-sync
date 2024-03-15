@@ -117,7 +117,7 @@ This is equivalent to setting:
 "tx_out": {
   "value": "disable"
 },
-"ledger": "disable",
+"ledger": "enable",
 "shelley": {
   "enable": false
 },
