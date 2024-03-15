@@ -227,7 +227,7 @@ fullInsertOptions =
 onlyUTxOInsertOptions :: SyncInsertOptions
 onlyUTxOInsertOptions =
   SyncInsertOptions
-    { sioTxOut = TxOutEnable
+    { sioTxOut = TxOutBootstrap (ForceTxIn False)
     , sioLedger = LedgerIgnore
     , sioShelley = ShelleyDisable
     , sioRewards = RewardsConfig True
