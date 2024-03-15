@@ -15,11 +15,10 @@ import Cardano.Db (
  )
 import Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
-  parseOffChainPoolUrl,
+  parseOffChainUrl,
  )
 import Cardano.DbSync.Types (
   OffChainFetchError (..),
-  OffChainHashType (..),
   OffChainUrlType (..),
  )
 import Control.Monad (foldM)
@@ -61,10 +60,10 @@ main = do
     testOne :: Http.Manager -> TestFailure -> TestOffChain -> IO TestFailure
     testOne manager !accum testPoolOffChain = do
       let poolUrl = toUrl testPoolOffChain
-          mHash = Just $ OffChainPoolHash $ toHash testPoolOffChain
+          mHash = Just $ toHash testPoolOffChain
       eres <- runExceptT $ do
-        request <- parseOffChainPoolUrl poolUrl
-        httpGetOffChainPoolData manager request (OffChainPoolUrl poolUrl) mHash
+        request <- parseOffChainUrl (OffChainPoolUrl poolUrl)
+        httpGetOffChainPoolData manager request poolUrl mHash
       case eres of
         Left err -> do
           print err
