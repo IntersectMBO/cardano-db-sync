@@ -8,8 +8,8 @@ module Cardano.DbSync.OffChain.Query (
 ) where
 
 import Cardano.Db (
-  EntityField (..),
   AnchorType,
+  EntityField (..),
   OffChainPoolData,
   OffChainPoolFetchError,
   OffChainPoolFetchErrorId,
