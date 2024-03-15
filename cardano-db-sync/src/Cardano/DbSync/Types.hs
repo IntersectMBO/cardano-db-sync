@@ -43,6 +43,7 @@ import Cardano.Db (
   VoteUrl,
   VotingAnchorId,
  )
+import qualified Cardano.Db as DB
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
@@ -58,7 +59,6 @@ import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.Protocol.TPraos ()
 import Ouroboros.Network.Block (BlockNo, Point)
-import qualified Cardano.Db as DB
 
 type TPraosStandard = TPraos StandardCrypto
 
@@ -194,9 +194,10 @@ instance Show OffChainUrlType where
 
 getUrl :: OffChainUrlType -> String
 getUrl =
-    \case
-      OffChainPoolUrl url -> show url
-      OffChainVoteUrl url -> show url
+  \case
+    OffChainPoolUrl url -> show url
+    OffChainVoteUrl url -> show url
+
 -------------------------------------------------------------------------------------
 -- OffChain Fetch error for the HTTP client fetching the pool offchain metadata.
 -------------------------------------------------------------------------------------

@@ -1,13 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..))
-import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.Error (bsBase16Encode, runOrThrowIO)
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.Types
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as BSC
+import Data.ByteString.Lazy (fromStrict)
+import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Network.HTTP.Client as Http
@@ -21,19 +24,20 @@ import System.Console.ANSI.Types (
  )
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
-import qualified Data.List as List
+
+{-# ANN module ("HLint: ignore Avoid restricted qualification" :: Text.Text) #-}
 
 main :: IO ()
 main = do
   xs <- getArgs
   case cleanOpt xs of
-    [url] -> runGet (isItVote xs) (isItGa xs) (Text.pack url) Nothing
-    [url, hash] -> runGet (isItVote xs) (isItGa xs) (Text.pack url) (Just $ parseHash hash)
+    [url] -> runGet (isItVote xs) (isItGa xs) (isItLink xs) (Text.pack url) Nothing
+    [url, hash] -> runGet (isItVote xs) (isItGa xs) (isItLink xs) (Text.pack url) (Just $ parseHash hash)
     _otherwise -> usageExit
   where
     parseHash :: String -> BS.ByteString
     parseHash str =
-      case Base16.decode $ BS.pack str of
+      case Base16.decode $ BSC.pack str of
         Left err -> error $ "Failed to Base16 decode hash: " ++ err
         Right bs -> bs
 
@@ -42,12 +46,15 @@ main = do
 
     isItVote ls = List.elem "vote" ls || isItGa ls
     isItGa = List.elem "ga"
+    isItLink = List.elem "url"
 
-    runGet isVote isGa url mhsh =
-      if isVote then
-        runHttpGetVote (VoteUrl url) (VoteMetaHash <$> mhsh) isGa
-      else
-        runHttpGetPool (PoolUrl url) (PoolMetaHash <$> mhsh)
+    runGet isVote isGa isLink url mhsh
+      | isVote && isLink =
+          runHttpGetVote (VoteUrl url) (VoteMetaHash <$> mhsh) isGa
+      | isVote && not isLink =
+          runGetVote url (VoteMetaHash <$> mhsh) isGa
+      | otherwise =
+          runHttpGetPool (PoolUrl url) (PoolMetaHash <$> mhsh)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -81,30 +88,39 @@ runHttpGetPool poolUrl mHash =
       case spodContentType spod of
         Nothing -> putStrLn $ orangeText "Warning: No HTTP content-type returned in HTTP response (this should be fixed)."
         Just ct ->
-          if "application/json" `BS.isInfixOf` ct
+          if "application/json" `BSC.isInfixOf` ct
             then putStrLn $ greenText "Success"
-            else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BS.unpack ct)
+            else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BSC.unpack ct)
       Text.putStrLn $ spodJson spod
 
 runHttpGetVote :: VoteUrl -> Maybe VoteMetaHash -> Bool -> IO ()
-runHttpGetVote voteUrl mHash _isGa =
+runHttpGetVote voteUrl mHash isGa =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
     httpGet = do
       request <- parseOffChainUrl $ OffChainVoteUrl voteUrl
       manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetOffChainVoteData manager request voteUrl mHash
+      httpGetOffChainVoteData manager request voteUrl mHash isGa
 
     reportSuccess :: SimplifiedOffChainVoteData -> IO ()
     reportSuccess spod = do
       case sovaContentType spod of
         Nothing -> putStrLn $ orangeText "Warning: No HTTP content-type returned in HTTP response (this should be fixed)."
         Just ct ->
-          if "application/json" `BS.isInfixOf` ct
+          if "application/json" `BSC.isInfixOf` ct
             then putStrLn $ greenText "Success"
-            else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BS.unpack ct)
+            else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BSC.unpack ct)
       Text.putStrLn $ sovaJson spod
+
+runGetVote :: Text.Text -> Maybe VoteMetaHash -> Bool -> IO ()
+runGetVote file mExpectedHash isGa = do
+  respBs <- BS.readFile (Text.unpack file)
+  let respLBs = fromStrict respBs
+  (val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash isGa Nothing
+  print val
+  print $ bsBase16Encode hsh
+  print mWarning
 
 -- ------------------------------------------------------------------------------------------------
 

@@ -255,7 +255,7 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
     let url = oVoteWqUrl oVoteWorkQ
         metaHash = oVoteWqMetaHash oVoteWorkQ
     request <- parseOffChainUrl $ OffChainVoteUrl url
-    httpGetOffChainVoteData manager request url (Just metaHash)
+    httpGetOffChainVoteData manager request url (Just metaHash) (oVoteWqType oVoteWorkQ == DB.GovActionAnchor)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainVoteData -> OffChainVoteResult
     convert eres =

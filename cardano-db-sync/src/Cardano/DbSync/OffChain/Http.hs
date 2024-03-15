@@ -5,6 +5,7 @@
 module Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
   httpGetOffChainVoteData,
+  parseAndValidateVoteData,
   parseOffChainUrl,
 ) where
 
@@ -51,8 +52,9 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
   case unPoolMetaHash <$> expectedMetaHash of
-    Just expectedMetaHashBs | metadataHash /= expectedMetaHashBs ->
-      left $ OCFErrHashMismatch url (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
+    Just expectedMetaHashBs
+      | metadataHash /= expectedMetaHashBs ->
+          left $ OCFErrHashMismatch url (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
     _ -> pure ()
   decodedMetadata <-
     case Aeson.eitherDecode' respLBS of
@@ -78,18 +80,12 @@ httpGetOffChainVoteData ::
   Http.Request ->
   VoteUrl ->
   Maybe VoteMetaHash ->
+  Bool ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-httpGetOffChainVoteData manager request vurl metaHash = do
+httpGetOffChainVoteData manager request vurl metaHash isGovAction = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
-  mWarning <- case unVoteMetaHash <$> metaHash of
-    Nothing -> pure Nothing
-    Just _expectedMetaHash -> pure Nothing
-  let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
-  decodedValue <-
-    case Aeson.eitherDecode' @Aeson.Value respLBS of
-      Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
-      Right res -> pure res
+  (decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash isGovAction (Just $ OffChainVoteUrl vurl)
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash
@@ -101,6 +97,19 @@ httpGetOffChainVoteData manager request vurl metaHash = do
   where
     req = httpGetBytes manager request 10000 30000 url
     url = OffChainVoteUrl vurl
+
+parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> Bool -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Aeson.Value, ByteString, Maybe Text)
+parseAndValidateVoteData bs lbs metaHash _isGa murl = do
+  mWarning <- case unVoteMetaHash <$> metaHash of
+    Nothing -> pure Nothing
+    Just _expectedMetaHash -> pure Nothing
+  let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
+  decodedValue <-
+    case Aeson.eitherDecode' @Aeson.Value lbs of
+      Left err | Just url <- murl -> left $ OCFErrJsonDecodeFail url (Text.pack err)
+      Left err -> left $ OCFErrIOException (Text.pack err)
+      Right res -> pure res
+  pure (decodedValue, metadataHash, mWarning)
 
 httpGetBytes ::
   Http.Manager ->
