@@ -97,6 +97,12 @@ This is equivalent to setting:
 "shelley": {
   "enable": false
 },
+"metadata": {
+  "enable": "false"
+},
+"multi_asset": {
+  "enable": "false"
+},
 "plutus": {
   "enable": false
 },
