@@ -14,7 +14,6 @@ module Cardano.DbSync.Types (
   EpochSlot (..),
   OffChainPoolResult (..),
   OffChainVoteResult (..),
-  OffChainHashType (..),
   OffChainUrlType (..),
   OffChainFetchError (..),
   SlotDetails (..),
@@ -22,14 +21,13 @@ module Cardano.DbSync.Types (
   SyncState (..),
   TPraosStandard,
   MetricSetters (..),
-  OffChainWorkQueueType (..),
   OffChainPoolWorkQueue (..),
   OffChainVoteWorkQueue (..),
-  SimplifiedOffChainDataType (..),
   SimplifiedOffChainPoolData (..),
   SimplifiedOffChainVoteData (..),
   PraosStandard,
   Retry (..),
+  getUrl,
 ) where
 
 import Cardano.Db (
@@ -60,6 +58,7 @@ import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.Protocol.TPraos ()
 import Ouroboros.Network.Block (BlockNo, Point)
+import qualified Cardano.Db as DB
 
 type TPraosStandard = TPraos StandardCrypto
 
@@ -144,11 +143,6 @@ data OffChainVoteResult
   = OffChainVoteResultMetadata !OffChainVoteData
   | OffChainVoteResultError !OffChainVoteFetchError
 
-data OffChainWorkQueueType
-  = OffChainPoolWorkQueueType !OffChainPoolWorkQueue
-  | OffChainVoteWorkQueueType !OffChainVoteWorkQueue
-  deriving (Show)
-
 data OffChainPoolWorkQueue = OffChainPoolWorkQueue
   { oPoolWqHashId :: !PoolHashId
   , oPoolWqReferenceId :: !PoolMetadataRefId
@@ -161,14 +155,11 @@ data OffChainPoolWorkQueue = OffChainPoolWorkQueue
 data OffChainVoteWorkQueue = OffChainVoteWorkQueue
   { oVoteWqMetaHash :: !VoteMetaHash
   , oVoteWqReferenceId :: !VotingAnchorId
+  , oVoteWqType :: DB.AnchorType
   , oVoteWqRetry :: !Retry
   , oVoteWqUrl :: !VoteUrl
   }
   deriving (Show)
-
-data SimplifiedOffChainDataType
-  = SimplifiedOffChainPoolDataType !SimplifiedOffChainPoolData
-  | SimplifiedOffChainVoteDataType !SimplifiedOffChainVoteData
 
 data SimplifiedOffChainPoolData = SimplifiedOffChainPoolData
   { spodTickerName :: !Text
@@ -198,17 +189,14 @@ data OffChainUrlType
   | OffChainVoteUrl !VoteUrl
   deriving (Eq, Generic)
 
-data OffChainHashType
-  = OffChainPoolHash PoolMetaHash
-  | OffChainVoteHash VoteMetaHash
-  deriving (Eq, Generic)
-
 instance Show OffChainUrlType where
-  show =
+  show = getUrl
+
+getUrl :: OffChainUrlType -> String
+getUrl =
     \case
       OffChainPoolUrl url -> show url
       OffChainVoteUrl url -> show url
-
 -------------------------------------------------------------------------------------
 -- OffChain Fetch error for the HTTP client fetching the pool offchain metadata.
 -------------------------------------------------------------------------------------

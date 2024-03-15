@@ -223,8 +223,8 @@ fetchOffChainPoolData _tracer manager time oPoolWorkQ =
   convert <<$>> runExceptT $ do
     let url = oPoolWqUrl oPoolWorkQ
         metaHash = oPoolWqMetaHash oPoolWorkQ
-    request <- parseOffChainPoolUrl $ oPoolWqUrl oPoolWorkQ
-    httpGetOffChainPoolData manager request (OffChainPoolUrl url) (Just $ OffChainPoolHash metaHash)
+    request <- parseOffChainUrl $ OffChainPoolUrl url
+    httpGetOffChainPoolData manager request url (Just metaHash)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainPoolData -> OffChainPoolResult
     convert eres =
@@ -254,8 +254,8 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
   convert <<$>> runExceptT $ do
     let url = oVoteWqUrl oVoteWorkQ
         metaHash = oVoteWqMetaHash oVoteWorkQ
-    request <- parseOffChainVoteUrl $ oVoteWqUrl oVoteWorkQ
-    httpGetOffChainVoteData manager request (OffChainVoteUrl url) (Just $ OffChainVoteHash metaHash)
+    request <- parseOffChainUrl $ OffChainVoteUrl url
+    httpGetOffChainVoteData manager request url (Just metaHash)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainVoteData -> OffChainVoteResult
     convert eres =
