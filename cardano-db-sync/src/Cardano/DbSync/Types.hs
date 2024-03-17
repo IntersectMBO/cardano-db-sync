@@ -205,7 +205,7 @@ data OffChainFetchError
   = OCFErrHashMismatch !OffChainUrlType !Text !Text
   | OCFErrDataTooLong !OffChainUrlType
   | OCFErrUrlParseFail !OffChainUrlType !Text
-  | OCFErrJsonDecodeFail !OffChainUrlType !Text
+  | OCFErrJsonDecodeFail (Maybe OffChainUrlType) !Text
   | OCFErrHttpException !OffChainUrlType !Text
   | OCFErrHttpResponse !OffChainUrlType !Int !Text
   | OCFErrBadContentType !OffChainUrlType !Text
@@ -238,7 +238,7 @@ instance Show OffChainFetchError where
           [fetchUrlToString url, "URL parse error for ", show url, " resulted in : ", show err]
       OCFErrJsonDecodeFail url err ->
         mconcat
-          [fetchUrlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
+          [fetchMUtlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
       OCFErrHttpException url err ->
         mconcat [fetchUrlToString url, "HTTP Exception error for ", show url, " resulted in : ", show err]
       OCFErrHttpResponse url sc msg ->
@@ -253,6 +253,11 @@ instance Show OffChainFetchError where
         mconcat
           [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "'."]
       OCFErrIOException err -> "IO Exception: " <> show err
+
+fetchMUtlToString :: Maybe OffChainUrlType -> String
+fetchMUtlToString = \case
+  Nothing -> ""
+  Just url -> fetchUrlToString url
 
 fetchUrlToString :: OffChainUrlType -> String
 fetchUrlToString url =
