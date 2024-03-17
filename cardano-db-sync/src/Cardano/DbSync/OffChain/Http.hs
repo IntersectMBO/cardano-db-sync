@@ -16,6 +16,7 @@ import Cardano.DbSync.OffChain.Types (
   PoolOffChainMetadata (..),
   PoolTicker (..),
  )
+import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import Cardano.DbSync.Types (
   OffChainFetchError (..),
   OffChainUrlType (..),
@@ -58,7 +59,7 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
     _ -> pure ()
   decodedMetadata <-
     case Aeson.eitherDecode' respLBS of
-      Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
+      Left err -> left $ OCFErrJsonDecodeFail (Just url) (Text.pack err)
       Right res -> pure res
   pure $
     SimplifiedOffChainPoolData
@@ -106,9 +107,12 @@ parseAndValidateVoteData bs lbs metaHash _isGa murl = do
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
   decodedValue <-
     case Aeson.eitherDecode' @Aeson.Value lbs of
-      Left err | Just url <- murl -> left $ OCFErrJsonDecodeFail url (Text.pack err)
-      Left err -> left $ OCFErrIOException (Text.pack err)
+      Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
       Right res -> pure res
+  _cdcCip <-
+    case Aeson.eitherDecode' @(Vote.OffChainVoteData Vote.OtherOffChainData) lbs of
+      Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
+      Right res -> liftIO $ print res
   pure (decodedValue, metadataHash, mWarning)
 
 httpGetBytes ::
