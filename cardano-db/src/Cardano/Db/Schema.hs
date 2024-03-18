@@ -686,6 +686,7 @@ share
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     warning             Text Maybe
+    isValid             Bool Maybe
     UniqueOffChainVoteData votingAnchorId hash
     deriving Show
 
@@ -695,6 +696,7 @@ share
     witnessAlgorithm    Text
     publicKey           Text
     signature           Text
+    warning             Text Maybe
 
   OffChainVoteReference
     offChainVoteDataId  OffChainVoteDataId  noreference
@@ -1322,9 +1324,45 @@ schemaDocs =
       \ decribed in CIP-100. New in 13.2-Conway."
       OffChainVoteDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
       OffChainVoteDataHash # "The hash of the offchain data."
+      OffChainVoteDataLanguage # "The langauge described in the context of the metadata. Described in CIP-100. New in 13.3-Conway."
+      OffChainVoteDataComment # "The title of the metadata. Described in CIP-108. New in 13.3-Conway."
+      OffChainVoteDataAbstract # "The abstract of the metadata. Described in CIP-108. New in 13.3-Conway."
+      OffChainVoteDataMotivation # "The motivation of the metadata. Described in CIP-108. New in 13.3-Conway."
+      OffChainVoteDataRationale # "The rationale of the metadata. Described in CIP-108. New in 13.3-Conway."
       OffChainVoteDataJson # "The payload as JSON."
       OffChainVoteDataBytes # "The raw bytes of the payload."
       OffChainVoteDataWarning # "A warning that occured while validating the metadata."
+      OffChainVoteDataIsValid
+        # "False if the data is found invalid. db-sync leaves this field null \
+          \since it normally populates off_chain_vote_fetch_error for invalid data. \
+          \It can be used manually to mark some metadata invalid by clients."
+
+    OffChainVoteAuthor --^ do
+      "The table with offchain metadata authors, as decribed in CIP-100. New in 13.3-Conway."
+      OffChainVoteAuthorOffChainVoteDataId # "The OffChainVoteData table index this offchain data refers."
+      OffChainVoteAuthorName # "The name of the author."
+      OffChainVoteAuthorWitnessAlgorithm # "The witness algorithm used by the author."
+      OffChainVoteAuthorPublicKey # "The public key used by the author."
+      OffChainVoteAuthorSignature # "The signature of the author."
+      OffChainVoteAuthorWarning # "A warning related to verifying this metadata."
+
+    OffChainVoteReference --^ do
+      "The table with offchain metadata references, as decribed in CIP-100. New in 13.3-Conway."
+      OffChainVoteReferenceOffChainVoteDataId # "The OffChainVoteData table index this entry refers."
+      OffChainVoteReferenceLabel # "The label of this vote reference."
+      OffChainVoteReferenceUri # "The uri of this vote reference."
+      OffChainVoteReferenceHashDigest
+        # "The hash digest of this vote reference, as described in CIP-108. \
+          \This only appears for governance action metadata."
+      OffChainVoteReferenceHashAlgorithm
+        # "The hash algorithm of this vote reference, as described in CIP-108. \
+          \This only appears for governance action metadata."
+
+    OffChainVoteExternalUpdate --^ do
+      "The table with offchain metadata external updates, as decribed in CIP-100. New in 13.3-Conway."
+      OffChainVoteExternalUpdateOffChainVoteDataId # "The OffChainVoteData table index this entry refers."
+      OffChainVoteExternalUpdateTitle # "The title of this external update."
+      OffChainVoteExternalUpdateUri # "The uri of this external update."
 
     OffChainVoteFetchError --^ do
       "Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway."

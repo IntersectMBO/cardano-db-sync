@@ -284,6 +284,7 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
                 , DB.offChainVoteDataJson = sovaJson sVoteData
                 , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
                 , DB.offChainVoteDataWarning = sovaWarning sVoteData
+                , DB.offChainVoteDataIsValid = Nothing
                 }
             authorsF ocvdId = map (mkAuthor ocvdId) $ Vote.getAuthors offChainData
             referencesF ocvdId = map (mkReference ocvdId) $ mListToList $ Vote.references minimalBody
@@ -305,6 +306,7 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
         , DB.offChainVoteAuthorWitnessAlgorithm = Vote.witnessAlgorithm $ Vote.witness au
         , DB.offChainVoteAuthorPublicKey = Vote.publicKey $ Vote.witness au
         , DB.offChainVoteAuthorSignature = Vote.signature $ Vote.witness au
+        , DB.offChainVoteAuthorWarning = Just "Failed to validate this signature" -- TODO: Conway
         }
 
     mkReference ocvdId ref =
