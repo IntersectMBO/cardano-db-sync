@@ -31,22 +31,22 @@ getMinimalBody = \case
 getTitle :: OffChainVoteData -> Maybe Text
 getTitle = \case
   OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ title $ body ga
+  OffChainVoteDataGa ga -> Just $ textValue $ title $ body ga
 
 getAbstract :: OffChainVoteData -> Maybe Text
 getAbstract = \case
   OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ abstract $ body ga
+  OffChainVoteDataGa ga -> Just $ textValue $ abstract $ body ga
 
 getMotivation :: OffChainVoteData -> Maybe Text
 getMotivation = \case
   OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ motivation $ body ga
+  OffChainVoteDataGa ga -> Just $ textValue $ motivation $ body ga
 
 getRationale :: OffChainVoteData -> Maybe Text
 getRationale = \case
   OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ rationale $ body ga
+  OffChainVoteDataGa ga -> Just $ textValue $ rationale $ body ga
 
 eitherDecodeOffChainVoteData :: LBS.ByteString -> Bool -> Either String OffChainVoteData
 eitherDecodeOffChainVoteData lbs isGa
@@ -60,8 +60,8 @@ getAuthors = \case
 
 getHashAlgorithm :: OffChainVoteData -> Text
 getHashAlgorithm = \case
-  OffChainVoteDataOther dt -> hashAlgorithm dt
-  OffChainVoteDataGa dt -> hashAlgorithm dt
+  OffChainVoteDataOther dt -> textValue $ hashAlgorithm dt
+  OffChainVoteDataGa dt -> textValue $ hashAlgorithm dt
 
 getLanguage :: OffChainVoteData -> Text
 getLanguage = \case
@@ -69,61 +69,66 @@ getLanguage = \case
   OffChainVoteDataGa dt -> language $ context dt
 
 data OffChainVoteDataTp tp = OffChainVoteDataTp
-  { hashAlgorithm :: Text
+  { hashAlgorithm :: TextValue
   , authors :: [Author]
   , body :: Body tp
   , context :: Context
   }
 
+newtype TextValue = TextValue {textValue :: Text}
+
+instance Show TextValue where
+  show = show . textValue
+
 deriving instance (Show (Body tp)) => Show (OffChainVoteDataTp tp)
 deriving instance Generic (OffChainVoteDataTp tp)
 
 data Author = Author
-  { name :: Maybe Text
+  { name :: Maybe TextValue
   , witness :: Witness
   }
   deriving (Show, Generic, FromJSON)
 
 data Witness = Witness
-  { witnessAlgorithm :: Text
-  , publicKey :: Text
-  , signature :: Text
+  { witnessAlgorithm :: TextValue
+  , publicKey :: TextValue
+  , signature :: TextValue
   }
   deriving (Show, Generic, FromJSON)
 
 data MinimalBody = Body
   { references :: Maybe [Reference]
-  , comment :: Maybe Text
+  , comment :: Maybe TextValue
   , externalUpdates :: Maybe [ExternalUpdate]
   }
   deriving (Show, Generic, FromJSON)
 
 data GABody = GABody
   { minimalBody :: MinimalBody
-  , title :: Text -- 80 chars max
-  , abstract :: Text -- 2500 chars
-  , motivation :: Text
-  , rationale :: Text
+  , title :: TextValue -- 80 chars max
+  , abstract :: TextValue -- 2500 chars
+  , motivation :: TextValue
+  , rationale :: TextValue
   }
   deriving (Show)
 
 data Reference = Reference
-  { rtype :: Text -- key is @type. It can be "GovernanceMetadata" or "Other" or ?? "other" ??
-  , label :: Text
-  , uri :: Text
+  { rtype :: TextValue -- key is @type. It can be "GovernanceMetadata" or "Other" or ?? "other" ??
+  , label :: TextValue
+  , uri :: TextValue
   , referenceHash :: Maybe ReferenceHash
   }
   deriving (Show, Generic)
 
 data ReferenceHash = ReferenceHash
-  { hashDigest :: Text
-  , rhHashAlgorithm :: Text -- key 'hashAlgorithm'
+  { hashDigest :: TextValue
+  , rhHashAlgorithm :: TextValue -- key 'hashAlgorithm'
   }
   deriving (Show, Generic)
 
 data ExternalUpdate = ExternalUpdate
-  { euTitle :: Text -- key 'title'
-  , euUri :: Text -- key 'uri'
+  { euTitle :: TextValue -- key 'title'
+  , euUri :: TextValue -- key 'uri'
   }
   deriving (Show, Generic)
 
@@ -167,17 +172,17 @@ instance FromJSON ReferenceHash where
         <$> o .: "hashDigest"
         <*> o .: "hashAlgorithm"
 
-parseRefType :: Object -> Parser Text
+parseRefType :: Object -> Parser TextValue
 parseRefType obj = do
   tp <- obj .: "@type"
-  if tp `elem` ["GovernanceMetadata", "Other", "other"]
+  if textValue tp `elem` ["GovernanceMetadata", "Other", "other"]
     then pure tp
     else
       fail $
         mconcat
           [ "reference type should be GovernanceMetadata or Other other"
           , " but it's "
-          , Text.unpack tp
+          , Text.unpack (textValue tp)
           ]
 
 instance FromJSON ExternalUpdate where
@@ -199,10 +204,10 @@ instance FromJSON GABody where
     where
       withObjectV v' s p = withObject s p v'
 
-parseTextLimit :: Int -> Key -> Object -> Parser Text
+parseTextLimit :: Int -> Key -> Object -> Parser TextValue
 parseTextLimit maxSize str o = do
   txt <- o .: str
-  if Text.length txt <= maxSize
+  if Text.length (textValue txt) <= maxSize
     then pure txt
     else
       fail $
@@ -211,7 +216,7 @@ parseTextLimit maxSize str o = do
           , " must have at most "
           , show maxSize
           , "characters, but it has "
-          , show (Text.length txt)
+          , show (Text.length (textValue txt))
           , " characters."
           ]
 
@@ -228,3 +233,18 @@ instance FromJSON Context where
     withObject "Context" $ \o ->
       Context
         <$> o .: "@language"
+
+instance FromJSON TextValue where
+  parseJSON v = case v of
+    String txt -> pure $ TextValue txt
+    Object o -> TextValue <$> (o .: "@value")
+    _ -> fail $ "expected String or Object with @value but encountered " ++ typeOf v
+
+typeOf :: Value -> String
+typeOf v = case v of
+  Object _ -> "Object"
+  Array _ -> "Array"
+  String _ -> "String"
+  Number _ -> "Number"
+  Bool _ -> "Boolean"
+  Null -> "Null"

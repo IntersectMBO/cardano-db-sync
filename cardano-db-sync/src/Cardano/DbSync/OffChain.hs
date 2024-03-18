@@ -274,7 +274,7 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
             vdt =
               DB.OffChainVoteData
                 { DB.offChainVoteDataLanguage = Vote.getLanguage offChainData
-                , DB.offChainVoteDataComment = Vote.comment minimalBody
+                , DB.offChainVoteDataComment = Vote.textValue <$> Vote.comment minimalBody
                 , DB.offChainVoteDataTitle = Vote.getTitle offChainData
                 , DB.offChainVoteDataAbstract = Vote.getAbstract offChainData
                 , DB.offChainVoteDataMotivation = Vote.getMotivation offChainData
@@ -302,27 +302,27 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
     mkAuthor ocvdId au =
       DB.OffChainVoteAuthor
         { DB.offChainVoteAuthorOffChainVoteDataId = ocvdId
-        , DB.offChainVoteAuthorName = Vote.name au
-        , DB.offChainVoteAuthorWitnessAlgorithm = Vote.witnessAlgorithm $ Vote.witness au
-        , DB.offChainVoteAuthorPublicKey = Vote.publicKey $ Vote.witness au
-        , DB.offChainVoteAuthorSignature = Vote.signature $ Vote.witness au
+        , DB.offChainVoteAuthorName = Vote.textValue <$> Vote.name au
+        , DB.offChainVoteAuthorWitnessAlgorithm = Vote.textValue $ Vote.witnessAlgorithm $ Vote.witness au
+        , DB.offChainVoteAuthorPublicKey = Vote.textValue $ Vote.publicKey $ Vote.witness au
+        , DB.offChainVoteAuthorSignature = Vote.textValue $ Vote.signature $ Vote.witness au
         , DB.offChainVoteAuthorWarning = Just "Failed to validate this signature" -- TODO: Conway
         }
 
     mkReference ocvdId ref =
       DB.OffChainVoteReference
         { DB.offChainVoteReferenceOffChainVoteDataId = ocvdId
-        , DB.offChainVoteReferenceLabel = Vote.label ref
-        , DB.offChainVoteReferenceUri = Vote.uri ref
-        , DB.offChainVoteReferenceHashDigest = Vote.hashDigest <$> Vote.referenceHash ref
-        , DB.offChainVoteReferenceHashAlgorithm = Vote.rhHashAlgorithm <$> Vote.referenceHash ref
+        , DB.offChainVoteReferenceLabel = Vote.textValue $ Vote.label ref
+        , DB.offChainVoteReferenceUri = Vote.textValue $ Vote.uri ref
+        , DB.offChainVoteReferenceHashDigest = Vote.textValue . Vote.hashDigest <$> Vote.referenceHash ref
+        , DB.offChainVoteReferenceHashAlgorithm = Vote.textValue . Vote.rhHashAlgorithm <$> Vote.referenceHash ref
         }
 
     mkexternalUpdates ocvdId eupd =
       DB.OffChainVoteExternalUpdate
         { DB.offChainVoteExternalUpdateOffChainVoteDataId = ocvdId
-        , DB.offChainVoteExternalUpdateTitle = Vote.euTitle eupd
-        , DB.offChainVoteExternalUpdateUri = Vote.euUri eupd
+        , DB.offChainVoteExternalUpdateTitle = Vote.textValue $ Vote.euTitle eupd
+        , DB.offChainVoteExternalUpdateUri = Vote.textValue $ Vote.euUri eupd
         }
 
     mListToList :: Maybe [a] -> [a]
