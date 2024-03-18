@@ -28,7 +28,7 @@ module Cardano.DbSync.Types (
   SimplifiedOffChainVoteData (..),
   PraosStandard,
   Retry (..),
-  getUrl,
+  showUrl,
 ) where
 
 import Cardano.Db (
@@ -55,6 +55,7 @@ import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude hiding (Meta, show)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
+import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
@@ -202,13 +203,13 @@ data OffChainUrlType
   deriving (Eq, Generic)
 
 instance Show OffChainUrlType where
-  show = getUrl
+  show = showUrl
 
-getUrl :: OffChainUrlType -> String
-getUrl =
+showUrl :: OffChainUrlType -> String
+showUrl =
   \case
-    OffChainPoolUrl url -> show url
-    OffChainVoteUrl url -> show url
+    OffChainPoolUrl url -> Text.unpack $ DB.unPoolUrl url
+    OffChainVoteUrl url -> Text.unpack $ DB.unVoteUrl url
 
 -------------------------------------------------------------------------------------
 -- OffChain Fetch error for the HTTP client fetching the pool offchain metadata.
