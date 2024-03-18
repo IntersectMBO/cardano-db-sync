@@ -117,7 +117,8 @@ runGetVote :: Text.Text -> Maybe VoteMetaHash -> Bool -> IO ()
 runGetVote file mExpectedHash isGa = do
   respBs <- BS.readFile (Text.unpack file)
   let respLBs = fromStrict respBs
-  (val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash isGa Nothing
+  (ocvd, val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash isGa Nothing
+  print ocvd
   print val
   print $ bsBase16Encode hsh
   print mWarning
