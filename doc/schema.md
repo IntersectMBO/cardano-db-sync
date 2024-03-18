@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.1
+Schema version: 13.2.0.1 (from branch **master** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -557,7 +557,7 @@ A table containing redeemers. A redeemer is provided for all items that are vali
 | `unit_mem` | word63type | The budget in Memory to run a script. |
 | `unit_steps` | word63type | The budget in Cpu steps to run a script. |
 | `fee` | lovelace | The budget in fees to run a script. The fees depend on the ExUnits and the current prices. Is null when --disable-ledger is enabled. New in v13: became nullable. |
-| `purpose` | scriptpurposetype | What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'. |
+| `purpose` | scriptpurposetype | What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward', `voting`, `proposing` |
 | `index` | word31type | The index of the redeemer pointer in the transaction. |
 | `script_hash` | hash28type | The script hash this redeemer is used for. |
 | `redeemer_data_id` | integer (64) | The data related to this redeemer. New in v13: renamed from datum_id. |
@@ -662,6 +662,7 @@ A table containing block chain parameter change proposals.
 | `pvt_committee_normal` | double | Pool Voting threshold for new committee/threshold (normal state). New in 13.2-Conway. |
 | `pvt_committee_no_confidence` | double | Pool Voting threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
 | `pvt_hard_fork_initiation` | double | Pool Voting threshold for hard-fork initiation. New in 13.2-Conway. |
+| `pvtpp_security_group` | double |  |
 | `dvt_motion_no_confidence` | double | DRep Vote threshold for motion of no-confidence. New in 13.2-Conway. |
 | `dvt_committee_normal` | double | DRep Vote threshold for new committee/threshold (normal state). New in 13.2-Conway. |
 | `dvt_committee_no_confidence` | double | DRep Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
@@ -724,6 +725,7 @@ The accepted protocol parameters for an epoch.
 | `pvt_committee_normal` | double | Pool Voting threshold for new committee/threshold (normal state). New in 13.2-Conway. |
 | `pvt_committee_no_confidence` | double | Pool Voting threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
 | `pvt_hard_fork_initiation` | double | Pool Voting threshold for hard-fork initiation. New in 13.2-Conway. |
+| `pvtpp_security_group` | double |  |
 | `dvt_motion_no_confidence` | double | DRep Vote threshold for motion of no-confidence. New in 13.2-Conway. |
 | `dvt_committee_normal` | double | DRep Vote threshold for new committee/threshold (normal state). New in 13.2-Conway. |
 | `dvt_committee_no_confidence` | double | DRep Vote threshold for new committee/threshold (state of no-confidence). New in 13.2-Conway. |
@@ -768,7 +770,7 @@ Extra optional migrations. New in 13.2.
 
 ### `drep_hash`
 
-A table for every unique drep key hash. The existance of an entry doesn't mean the DRep is registered or in fact that is was ever registered. New in 13.2-Conway.
+A table for every unique drep key hash. The existance of an entry doesn't mean the DRep is registered. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -778,6 +780,18 @@ A table for every unique drep key hash. The existance of an entry doesn't mean t
 | `raw` | hash28type | The raw bytes of the DRep. |
 | `view` | string | The human readable encoding of the Drep. |
 | `has_script` | boolean | Flag which shows if this DRep credentials are a script hash |
+
+### `committee_hash`
+
+A table for all committee hot credentials
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `raw` | hash28type | The key or script hash |
+| `has_script` | boolean | Flag which shows if this credential is a script hash |
 
 ### `delegation_vote`
 
@@ -805,8 +819,8 @@ A table for every committee hot key registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this registration within the certificates of this transaction. |
-| `cold_key` | hash28type | The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table? |
-| `hot_key` | hash28type | The registered hot hey hash |
+| `cold_key_id` | integer (64) | The reference to the registered cold key hash id |
+| `hot_key_id` | integer (64) | The reference to the registered hot key hash id |
 
 ### `committee_de_registration`
 
@@ -819,7 +833,7 @@ A table for every committee key de-registration. New in 13.2-Conway.
 | `id` | integer (64) |  |
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this certificate. |
 | `cert_index` | integer (32) | The index of this deregistration within the certificates of this transaction. |
-| `cold_key` | hash28type | The deregistered cold key hash |
+| `cold_key_id` | integer (64) | The reference to the the deregistered cold key hash id |
 | `voting_anchor_id` | integer (64) | The Voting anchor reference id |
 
 ### `drep_registration`
@@ -849,6 +863,7 @@ A table for every Anchor that appears on Governance Actions. These are pointers 
 | `tx_id` | integer (64) | The Tx table index of the tx that includes this anchor. This only exists to facilitate rollbacks |
 | `data_hash` | blob | A hash of the contents of the metadata URL |
 | `url` | varchar | A URL to a JSON payload of metadata |
+| `type` | anchorType |  |
 
 ### `gov_action_proposal`
 
@@ -867,7 +882,7 @@ A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovP
 | `expiration` | word31type | Shows the epoch at which this governance action will expire. |
 | `voting_anchor_id` | integer (64) | The Anchor table index related to this proposal. |
 | `type` | govactiontype | Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction |
-| `description` | string | A Text describing the content of this GovActionProposal in a readable way. |
+| `description` | jsonb | A Text describing the content of this GovActionProposal in a readable way. |
 | `param_proposal` | integer (64) | If this is a param proposal action, this has the index of the param_proposal table. |
 | `ratified_epoch` | word31type | If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null. |
 | `enacted_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. |
@@ -887,7 +902,7 @@ A table for all treasury withdrawals proposed on a GovActionProposal. New in 13.
 | `stake_address_id` | integer (64) | The address that benefits from this withdrawal. |
 | `amount` | lovelace | The amount for this withdrawl. |
 
-### `new_committee`
+### `new_committee_info`
 
 A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 
@@ -899,8 +914,17 @@ A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 | `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. |
 | `quorum_numerator` | integer (64) | The proposed quorum nominator. |
 | `quorum_denominator` | integer (64) | The proposed quorum denominator. |
-| `deleted_members` | string | The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway. |
-| `added_members` | string | The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway. |
+
+### `new_committee_member`
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `gov_action_proposal_id` | integer (64) |  |
+| `committee_hash_id` | integer (64) |  |
+| `expiration_epoch` | word31type |  |
 
 ### `constitution`
 
@@ -928,9 +952,9 @@ A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New
 | `index` | integer (32) | The index of this VotingProcedure within this transaction. |
 | `gov_action_proposal_id` | integer (64) | The index of the GovActionProposal that this vote targets. |
 | `voter_role` | voterrole | The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO. |
-| `committee_voter` | blob |  |
-| `drep_voter` | integer (64) |  |
-| `pool_voter` | integer (64) |  |
+| `committee_voter` | integer (64) | A reference to the hot key committee hash entry that voted |
+| `drep_voter` | integer (64) | A reference to the drep hash entry that voted |
+| `pool_voter` | integer (64) | A reference to the pool hash entry that voted |
 | `vote` | vote | The Vote. Can be one of Yes, No, Abstain. |
 | `voting_anchor_id` | integer (64) | The VotingAnchor table index associated with this VotingProcedure. |
 
@@ -990,9 +1014,60 @@ The table with the offchain metadata related to Vote Anchors. It accepts metadat
 | `id` | integer (64) |  |
 | `voting_anchor_id` | integer (64) | The VotingAnchor table index this offchain data refers. |
 | `hash` | blob | The hash of the offchain data. |
+| `language` | string | The langauge described in the context of the metadata. Described in CIP-100. New in 13.3-Conway. |
+| `comment` | string | The title of the metadata. Described in CIP-108. New in 13.3-Conway. |
+| `title` | string |  |
+| `abstract` | string | The abstract of the metadata. Described in CIP-108. New in 13.3-Conway. |
+| `motivation` | string | The motivation of the metadata. Described in CIP-108. New in 13.3-Conway. |
+| `rationale` | string | The rationale of the metadata. Described in CIP-108. New in 13.3-Conway. |
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 | `warning` | string | A warning that occured while validating the metadata. |
+| `is_valid` | boolean | False if the data is found invalid. db-sync leaves this field null since it normally populates off_chain_vote_fetch_error for invalid data. It can be used manually to mark some metadata invalid by clients. |
+
+### `off_chain_vote_author`
+
+The table with offchain metadata authors, as decribed in CIP-100. New in 13.3-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `off_chain_vote_data_id` | integer (64) | The OffChainVoteData table index this offchain data refers. |
+| `name` | string | The name of the author. |
+| `witness_algorithm` | string | The witness algorithm used by the author. |
+| `public_key` | string | The public key used by the author. |
+| `signature` | string | The signature of the author. |
+| `warning` | string | A warning related to verifying this metadata. |
+
+### `off_chain_vote_reference`
+
+The table with offchain metadata references, as decribed in CIP-100. New in 13.3-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `off_chain_vote_data_id` | integer (64) | The OffChainVoteData table index this entry refers. |
+| `label` | string | The label of this vote reference. |
+| `uri` | string | The uri of this vote reference. |
+| `hash_digest` | string | The hash digest of this vote reference, as described in CIP-108. This only appears for governance action metadata. |
+| `hash_algorithm` | string | The hash algorithm of this vote reference, as described in CIP-108. This only appears for governance action metadata. |
+
+### `off_chain_vote_external_update`
+
+The table with offchain metadata external updates, as decribed in CIP-100. New in 13.3-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `off_chain_vote_data_id` | integer (64) | The OffChainVoteData table index this entry refers. |
+| `title` | string | The title of this external update. |
+| `uri` | string | The uri of this external update. |
 
 ### `off_chain_vote_fetch_error`
 
