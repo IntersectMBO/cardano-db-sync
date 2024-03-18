@@ -22,7 +22,7 @@ import Cardano.DbSync.Types (
   OffChainUrlType (..),
   SimplifiedOffChainPoolData (..),
   SimplifiedOffChainVoteData (..),
-  getUrl,
+  showUrl,
  )
 import Cardano.DbSync.Util (renderByteArray)
 import Cardano.Prelude hiding (show)
@@ -182,7 +182,7 @@ isPossiblyJsonObject bs =
 -------------------------------------------------------------------------------------
 parseOffChainUrl :: OffChainUrlType -> ExceptT OffChainFetchError IO Http.Request
 parseOffChainUrl url =
-  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (getUrl url)
+  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (showUrl url)
   where
     wrapHttpException :: HttpException -> OffChainFetchError
     wrapHttpException err = OCFErrHttpException url (textShow err)
