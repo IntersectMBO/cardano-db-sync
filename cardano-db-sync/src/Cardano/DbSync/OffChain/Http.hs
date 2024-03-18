@@ -86,21 +86,22 @@ httpGetOffChainVoteData ::
 httpGetOffChainVoteData manager request vurl metaHash isGovAction = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
-  (decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash isGovAction (Just $ OffChainVoteUrl vurl)
+  (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash isGovAction (Just $ OffChainVoteUrl vurl)
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash
       , sovaBytes = respBS
       , sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedValue)
       , sovaContentType = mContentType
+      , sovaOffChainVoteData = ocvd
       , sovaWarning = mWarning
       }
   where
     req = httpGetBytes manager request 10000 30000 url
     url = OffChainVoteUrl vurl
 
-parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> Bool -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Aeson.Value, ByteString, Maybe Text)
-parseAndValidateVoteData bs lbs metaHash _isGa murl = do
+parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> Bool -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
+parseAndValidateVoteData bs lbs metaHash isGa murl = do
   mWarning <- case unVoteMetaHash <$> metaHash of
     Nothing -> pure Nothing
     Just _expectedMetaHash -> pure Nothing
@@ -109,11 +110,11 @@ parseAndValidateVoteData bs lbs metaHash _isGa murl = do
     case Aeson.eitherDecode' @Aeson.Value lbs of
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
       Right res -> pure res
-  _cdcCip <-
-    case Aeson.eitherDecode' @(Vote.OffChainVoteData Vote.OtherOffChainData) lbs of
+  ocvd <-
+    case Vote.eitherDecodeOffChainVoteData lbs isGa of
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
-      Right res -> liftIO $ print res
-  pure (decodedValue, metadataHash, mWarning)
+      Right res -> pure res
+  pure (ocvd, decodedValue, metadataHash, mWarning)
 
 httpGetBytes ::
   Http.Manager ->

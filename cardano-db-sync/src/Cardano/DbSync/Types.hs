@@ -33,8 +33,11 @@ module Cardano.DbSync.Types (
 import Cardano.Db (
   OffChainPoolData,
   OffChainPoolFetchError,
+  OffChainVoteAuthor,
   OffChainVoteData,
+  OffChainVoteExternalUpdate,
   OffChainVoteFetchError,
+  OffChainVoteReference,
   PoolHashId,
   PoolMetaHash,
   PoolMetadataRefId,
@@ -44,6 +47,7 @@ import Cardano.Db (
   VotingAnchorId,
  )
 import qualified Cardano.Db as DB
+import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
@@ -140,7 +144,11 @@ data OffChainPoolResult
   | OffChainPoolResultError !OffChainPoolFetchError
 
 data OffChainVoteResult
-  = OffChainVoteResultMetadata !OffChainVoteData
+  = OffChainVoteResultMetadata
+      !OffChainVoteData
+      (DB.OffChainVoteDataId -> [OffChainVoteAuthor])
+      (DB.OffChainVoteDataId -> [OffChainVoteReference])
+      (DB.OffChainVoteDataId -> [OffChainVoteExternalUpdate])
   | OffChainVoteResultError !OffChainVoteFetchError
 
 data OffChainPoolWorkQueue = OffChainPoolWorkQueue
@@ -174,6 +182,7 @@ data SimplifiedOffChainVoteData = SimplifiedOffChainVoteData
   , sovaBytes :: !ByteString
   , sovaJson :: !Text
   , sovaContentType :: !(Maybe ByteString)
+  , sovaOffChainVoteData :: !Vote.OffChainVoteData
   , sovaWarning :: !(Maybe Text)
   }
 

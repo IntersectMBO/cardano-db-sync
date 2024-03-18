@@ -677,11 +677,36 @@ share
   OffChainVoteData
     votingAnchorId      VotingAnchorId      noreference
     hash                ByteString
+    language            Text
+    comment             Text Maybe
+    title               Text Maybe
+    abstract            Text Maybe
+    motivation          Text Maybe
+    rationale           Text Maybe
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     warning             Text Maybe
     UniqueOffChainVoteData votingAnchorId hash
     deriving Show
+
+  OffChainVoteAuthor
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    name                Text Maybe
+    witnessAlgorithm    Text
+    publicKey           Text
+    signature           Text
+
+  OffChainVoteReference
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    label               Text
+    uri                 Text
+    hashDigest          Text Maybe
+    hashAlgorithm       Text Maybe
+
+  OffChainVoteExternalUpdate
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    title               Text
+    uri                 Text
 
   OffChainVoteFetchError
     votingAnchorId      VotingAnchorId      noreference

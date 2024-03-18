@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -12,19 +13,70 @@ module Cardano.DbSync.OffChain.Vote.Types where
 
 import Data.Aeson
 import Data.Aeson.Types
+import qualified Data.ByteString.Lazy as LBS
 import Data.Text (Text)
 import qualified Data.Text as Text
 import GHC.Generics
 
-data OffChainVoteData tp = OffChainVoteData
+data OffChainVoteData
+  = OffChainVoteDataOther (OffChainVoteDataTp OtherOffChainData)
+  | OffChainVoteDataGa (OffChainVoteDataTp GovernanceOffChainData)
+  deriving (Show)
+
+getMinimalBody :: OffChainVoteData -> MinimalBody
+getMinimalBody = \case
+  OffChainVoteDataOther dt -> body dt
+  OffChainVoteDataGa dt -> minimalBody $ body dt
+
+getTitle :: OffChainVoteData -> Maybe Text
+getTitle = \case
+  OffChainVoteDataOther _ -> Nothing
+  OffChainVoteDataGa ga -> Just $ title $ body ga
+
+getAbstract :: OffChainVoteData -> Maybe Text
+getAbstract = \case
+  OffChainVoteDataOther _ -> Nothing
+  OffChainVoteDataGa ga -> Just $ abstract $ body ga
+
+getMotivation :: OffChainVoteData -> Maybe Text
+getMotivation = \case
+  OffChainVoteDataOther _ -> Nothing
+  OffChainVoteDataGa ga -> Just $ motivation $ body ga
+
+getRationale :: OffChainVoteData -> Maybe Text
+getRationale = \case
+  OffChainVoteDataOther _ -> Nothing
+  OffChainVoteDataGa ga -> Just $ rationale $ body ga
+
+eitherDecodeOffChainVoteData :: LBS.ByteString -> Bool -> Either String OffChainVoteData
+eitherDecodeOffChainVoteData lbs isGa
+  | isGa = OffChainVoteDataGa <$> eitherDecode' lbs
+  | otherwise = OffChainVoteDataOther <$> eitherDecode' lbs
+
+getAuthors :: OffChainVoteData -> [Author]
+getAuthors = \case
+  OffChainVoteDataOther dt -> authors dt
+  OffChainVoteDataGa dt -> authors dt
+
+getHashAlgorithm :: OffChainVoteData -> Text
+getHashAlgorithm = \case
+  OffChainVoteDataOther dt -> hashAlgorithm dt
+  OffChainVoteDataGa dt -> hashAlgorithm dt
+
+getLanguage :: OffChainVoteData -> Text
+getLanguage = \case
+  OffChainVoteDataOther dt -> language $ context dt
+  OffChainVoteDataGa dt -> language $ context dt
+
+data OffChainVoteDataTp tp = OffChainVoteDataTp
   { hashAlgorithm :: Text
   , authors :: [Author]
   , body :: Body tp
   , context :: Context
   }
 
-deriving instance (Show (Body tp)) => Show (OffChainVoteData tp)
-deriving instance Generic (OffChainVoteData tp)
+deriving instance (Show (Body tp)) => Show (OffChainVoteDataTp tp)
+deriving instance Generic (OffChainVoteDataTp tp)
 
 data Author = Author
   { name :: Maybe Text
@@ -53,6 +105,7 @@ data GABody = GABody
   , motivation :: Text
   , rationale :: Text
   }
+  deriving (Show)
 
 data Reference = Reference
   { rtype :: Text -- key is @type. It can be "GovernanceMetadata" or "Other" or ?? "other" ??
@@ -89,10 +142,10 @@ instance HasBody GovernanceOffChainData where
   type Body GovernanceOffChainData = GABody
   toMinimal = minimalBody
 
-instance FromJSON (Body tp) => FromJSON (OffChainVoteData tp) where
+instance FromJSON (Body tp) => FromJSON (OffChainVoteDataTp tp) where
   parseJSON =
-    withObject "offChainVoteData" $ \o ->
-      OffChainVoteData
+    withObject "offChainVoteDataTp" $ \o ->
+      OffChainVoteDataTp
         <$> o .: "hashAlgorithm"
         <*> o .: "authors"
         <*> o .: "body"
