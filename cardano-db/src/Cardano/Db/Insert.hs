@@ -56,6 +56,9 @@ module Cardano.Db.Insert (
   insertCheckOffChainPoolData,
   insertCheckOffChainPoolFetchError,
   insertOffChainVoteData,
+  insertOffChainVoteAuthors,
+  insertOffChainVoteReference,
+  insertOffChainVoteExternalUpdate,
   insertOffChainVoteFetchError,
   insertReservedPoolTicker,
   insertDelistedPool,
@@ -326,10 +329,21 @@ insertCheckOffChainPoolFetchError pofe = do
   foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
   when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
 
-insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m ()
+insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m (Maybe OffChainVoteDataId)
 insertOffChainVoteData ocvd = do
   foundVotingAnchor <- existsVotingAnchorId (offChainVoteDataVotingAnchorId ocvd)
-  when foundVotingAnchor . void $ insertCheckUnique "OffChainVoteData" ocvd
+  if foundVotingAnchor
+    then Just <$> insertCheckUnique "OffChainVoteData" ocvd
+    else pure Nothing
+
+insertOffChainVoteAuthors :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteAuthor] -> ReaderT SqlBackend m ()
+insertOffChainVoteAuthors = void . insertMany' "OffChainVoteAuthor"
+
+insertOffChainVoteReference :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteReference] -> ReaderT SqlBackend m ()
+insertOffChainVoteReference = void . insertMany' "OffChainVoteReference"
+
+insertOffChainVoteExternalUpdate :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteExternalUpdate] -> ReaderT SqlBackend m ()
+insertOffChainVoteExternalUpdate = void . insertMany' "OffChainVoteExternalUpdate"
 
 insertOffChainVoteFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteFetchError -> ReaderT SqlBackend m ()
 insertOffChainVoteFetchError ocvfe = do

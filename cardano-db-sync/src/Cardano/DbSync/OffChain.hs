@@ -33,6 +33,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   isEmptyTBQueue,
   writeTBQueue,
  )
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
@@ -139,9 +140,12 @@ insertOffChainVoteResults trce resultQueue = do
   where
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
     insert = \case
-      OffChainVoteResultMetadata md _ _ _ -> do
-        _ocvdId <- DB.insertOffChainVoteData md
-        pure ()
+      OffChainVoteResultMetadata md accessors -> do
+        mocvdId <- DB.insertOffChainVoteData md
+        whenJust mocvdId $ \ocvdId -> do
+          DB.insertOffChainVoteAuthors $ offChainVoteAuthors accessors ocvdId
+          DB.insertOffChainVoteReference $ offChainVoteReferences accessors ocvdId
+          DB.insertOffChainVoteExternalUpdate $ offChainVoteExternalUpdates accessors ocvdId
       OffChainVoteResultError fe -> void $ DB.insertOffChainVoteFetchError fe
 
     isFetchError :: OffChainVoteResult -> Bool
@@ -285,7 +289,7 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
             referencesF ocvdId = map (mkReference ocvdId) $ mListToList $ Vote.references minimalBody
             externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
            in
-            OffChainVoteResultMetadata vdt authorsF referencesF externalUpdatesF
+            OffChainVoteResultMetadata vdt (OffChainVoteAccessors authorsF referencesF externalUpdatesF)
         Left err ->
           OffChainVoteResultError $
             DB.OffChainVoteFetchError
