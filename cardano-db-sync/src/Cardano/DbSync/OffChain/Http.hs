@@ -102,10 +102,10 @@ httpGetOffChainVoteData manager request vurl metaHash isGovAction = do
 
 parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> Bool -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
 parseAndValidateVoteData bs lbs metaHash isGa murl = do
-  mWarning <- case unVoteMetaHash <$> metaHash of
-    Nothing -> pure Nothing
-    Just _expectedMetaHash -> pure Nothing
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
+  (hsh, mWarning) <- case unVoteMetaHash <$> metaHash of
+    Nothing -> pure (metadataHash, Nothing)
+    Just expectedMetaHash -> pure (expectedMetaHash, Just "Failed to validate metadata hash") -- TODO: Conway
   decodedValue <-
     case Aeson.eitherDecode' @Aeson.Value lbs of
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
@@ -114,7 +114,7 @@ parseAndValidateVoteData bs lbs metaHash isGa murl = do
     case Vote.eitherDecodeOffChainVoteData lbs isGa of
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
       Right res -> pure res
-  pure (ocvd, decodedValue, metadataHash, mWarning)
+  pure (ocvd, decodedValue, hsh, mWarning)
 
 httpGetBytes ::
   Http.Manager ->
