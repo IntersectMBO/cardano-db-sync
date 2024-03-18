@@ -14,6 +14,7 @@ module Cardano.DbSync.Types (
   EpochSlot (..),
   OffChainPoolResult (..),
   OffChainVoteResult (..),
+  OffChainVoteAccessors (..),
   OffChainUrlType (..),
   OffChainFetchError (..),
   SlotDetails (..),
@@ -144,12 +145,14 @@ data OffChainPoolResult
   | OffChainPoolResultError !OffChainPoolFetchError
 
 data OffChainVoteResult
-  = OffChainVoteResultMetadata
-      !OffChainVoteData
-      (DB.OffChainVoteDataId -> [OffChainVoteAuthor])
-      (DB.OffChainVoteDataId -> [OffChainVoteReference])
-      (DB.OffChainVoteDataId -> [OffChainVoteExternalUpdate])
+  = OffChainVoteResultMetadata !OffChainVoteData !OffChainVoteAccessors
   | OffChainVoteResultError !OffChainVoteFetchError
+
+data OffChainVoteAccessors = OffChainVoteAccessors
+  { offChainVoteAuthors :: DB.OffChainVoteDataId -> [OffChainVoteAuthor]
+  , offChainVoteReferences :: DB.OffChainVoteDataId -> [OffChainVoteReference]
+  , offChainVoteExternalUpdates :: DB.OffChainVoteDataId -> [OffChainVoteExternalUpdate]
+  }
 
 data OffChainPoolWorkQueue = OffChainPoolWorkQueue
   { oPoolWqHashId :: !PoolHashId
