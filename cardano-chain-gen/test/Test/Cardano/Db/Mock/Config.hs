@@ -67,7 +67,7 @@ import Control.Concurrent.STM.TMVar (
   tryPutTMVar,
   tryReadTMVar,
  )
-import Control.Exception (SomeException, bracket)
+import Control.Exception (SomeException, bracket, catch)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
 import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
@@ -85,9 +85,8 @@ import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
 import System.FilePath.Posix (takeDirectory, (</>))
 import System.IO.Silently (hSilence)
-import Test.Tasty.HUnit (Assertion, testCase, assertFailure)
-import Control.Exception (catch)
 import Test.Tasty (TestTree)
+import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -523,7 +522,7 @@ replaceConfigFile newFilename dbSync@DBSyncEnv {..} = do
 
 expectFailSilent :: String -> Assertion -> TestTree
 expectFailSilent name action = testCase name $ do
-    result <- catch (Right <$> action) (\(_ :: SomeException) -> pure $ Left ())
-    case result of
-        Left _ -> pure ()  -- Test failed as expected, do nothing
-        Right _ -> assertFailure "Expected test to fail but it succeeded"
+  result <- catch (Right <$> action) (\(_ :: SomeException) -> pure $ Left ())
+  case result of
+    Left _ -> pure () -- Test failed as expected, do nothing
+    Right _ -> assertFailure "Expected test to fail but it succeeded"

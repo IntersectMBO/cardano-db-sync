@@ -31,7 +31,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkDepositTxPools,
   mkDummyRegisterTx,
   mkDummyTxBody,
-  mkDummyTxBodyWithCoin,
+  mkDummyTxBodyWithFee,
   mkTxDelegCert,
   mkRegTxCert,
   mkUnRegTxCert,
@@ -484,10 +484,10 @@ mkDummyTxBody =
     mempty
     (Withdrawals mempty)
 
-mkDummyTxBodyWithCoin ::
+mkDummyTxBodyWithFee ::
   Coin ->
   ConwayTxBody StandardConway
-mkDummyTxBodyWithCoin coin' =
+mkDummyTxBodyWithFee coin' =
   consTxBody
     mempty
     mempty

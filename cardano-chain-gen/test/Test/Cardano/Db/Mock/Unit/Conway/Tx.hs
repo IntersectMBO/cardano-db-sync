@@ -181,12 +181,12 @@ addTxMetadataWhitelist ioManager metadata = do
       -- Add transactions with metadata
       void $ do
         UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-          let txBody = Conway.mkDummyTxBodyWithCoin $ Coin 1_000
+          let txBody = Conway.mkDummyTxBodyWithFee $ Coin 1_000
               auxData = Map.fromList [(1, I 1), (2, I 2), (3, I 3), (4, I 4)]
            in Right (Conway.mkAuxDataTx True txBody auxData)
       void $ do
         UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-          let txBody = Conway.mkDummyTxBodyWithCoin $ Coin 2_000
+          let txBody = Conway.mkDummyTxBodyWithFee $ Coin 2_000
               auxData = Map.fromList [(5, I 5), (6, I 6), (7, I 7), (8, I 8)]
            in Right (Conway.mkAuxDataTx True txBody auxData)
 
@@ -222,12 +222,12 @@ addTxMetadataWhitelistMultiple ioManager metadata = do
       -- Add transactions with metadata
       void $ do
         UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-          let txBody = Conway.mkDummyTxBodyWithCoin $ Coin 1_000
+          let txBody = Conway.mkDummyTxBodyWithFee $ Coin 1_000
               auxData = Map.fromList [(1, I 1), (2, I 2), (3, I 3), (4, I 4)]
            in Right (Conway.mkAuxDataTx True txBody auxData)
       void $ do
         UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-          let txBody = Conway.mkDummyTxBodyWithCoin $ Coin 2_000
+          let txBody = Conway.mkDummyTxBodyWithFee $ Coin 2_000
               auxData = Map.fromList [(5, I 5), (6, I 6), (7, I 7), (8, I 8)]
            in Right (Conway.mkAuxDataTx True txBody auxData)
 
