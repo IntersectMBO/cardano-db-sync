@@ -24,10 +24,6 @@
       url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    cardano-parts = {
-      url = "github:input-output-hk/cardano-parts";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs = { self, ... }@inputs:
@@ -63,8 +59,10 @@
                     };
                 })
 
-                # cardano-cli, cardano-node, and friends
-                (_: cardanoNodePkgs)
+                (final: prev: {
+                  inherit (project.hsPkgs.cardano-node.components.exes) cardano-node;
+                  inherit (project.hsPkgs.cardano-cli.components.exes) cardano-cli;
+                })
 
                 (final: prev: {
                   # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
@@ -91,17 +89,6 @@
                 })
               ];
           };
-
-          # Get cardano-node-pkgs from cardano-parts
-          cardanoNodePkgs = pkgs: with pkgs;
-            let
-              inherit (inputs.cardano-parts.cardano-parts.pkgs.special) cardano-node-pkgs;
-            in
-              # cardano-parts currently only supports x86_64-linux
-              lib.optionalAttrs (system == "x86_64-linux") {
-                inherit (cardano-node-pkgs system)
-                  cardano-cli cardano-node cardano-submit-api;
-              };
 
           # Set up and start Postgres before running database tests
           preCheck = ''
