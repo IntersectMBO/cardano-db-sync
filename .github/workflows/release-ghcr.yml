@@ -52,7 +52,8 @@ jobs:
           # are required to be lower case
           REPO_OWNER="$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
           IMAGE_REF="ghcr.io/$REPO_OWNER/cardano-db-sync"
-          IMAGE_TAG="$GITHUB_REF_NAME"
+          # `/`s are invalid in references, replace those too
+          IMAGE_TAG="$(echo $GITHUB_REF_NAME | ed -E 's;/;_;g')"
 
           # Load the image from the nix build result
           docker load < result
