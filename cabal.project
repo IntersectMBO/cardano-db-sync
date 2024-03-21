@@ -84,6 +84,7 @@ source-repository-package
   subdir:
     cardano-git-rev
     cardano-node
+    cardano-submit-api
     trace-dispatcher
     trace-forward
     trace-resources
