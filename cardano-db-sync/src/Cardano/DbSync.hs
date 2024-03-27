@@ -246,7 +246,7 @@ extractSyncOptions snp aop snc =
       InsertOptions
         { ioInOut = isTxOutEnabled'
         , ioUseLedger = useLedger
-        , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
+        , ioShelley = sioShelley (dncInsertOptions snc)
         , -- Rewards are only disabled on "disable_all" and "only_gov" presets
           ioRewards = True
         , ioMultiAssets = sioMultiAsset (dncInsertOptions snc)

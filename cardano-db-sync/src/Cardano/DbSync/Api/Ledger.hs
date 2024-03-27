@@ -39,6 +39,7 @@ import Data.ByteString (ByteString)
 import Data.List.Extra
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (catMaybes)
 import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
@@ -145,7 +146,7 @@ storePage ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv cache percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
-  txOuts <- mapM (prepareTxOut syncEnv cache) ls
+  txOuts <- catMaybes <$> mapM (prepareTxOut syncEnv cache) ls
   txOutIds <- lift . DB.insertManyTxOutPlex True False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
@@ -166,14 +167,13 @@ prepareTxOut ::
   SyncEnv ->
   TxCache ->
   (TxIn StandardCrypto, BabbageTxOut era) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe (ExtendedTxOut, [MissingMaTxOut]))
 prepareTxOut syncEnv txCache (TxIn txHash (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txHash
   let genTxOut = fromTxOut index txOut
   txId <- queryTxIdWithCache txCache txHashByteString
-  insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
+  insertTxOut syncEnv cache iopts (txId, txHashByteString) genTxOut
   where
-    trce = getTrace syncEnv
     cache = envCache syncEnv
     iopts = soptInsertOptions $ envOptions syncEnv
 

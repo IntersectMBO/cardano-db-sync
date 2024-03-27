@@ -5,15 +5,18 @@
 
 module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
-) where
+)
+where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as Db
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
   queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Types (StakeCred)
 import Cardano.Ledger.BaseTypes (Network)
@@ -48,17 +51,17 @@ import Database.Esqueleto.Experimental (
 
 adjustEpochRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
-  Cache ->
   EpochNo ->
   Generic.Rewards ->
   Set StakeCred ->
   ReaderT SqlBackend m ()
-adjustEpochRewards tracer nw cache epochNo rwds creds = do
+adjustEpochRewards syncEnv nw epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
-  liftIO . logInfo tracer $
-    mconcat
+  liftIO
+    . Cardano.BM.Trace.logInfo (getTrace syncEnv)
+    $ mconcat
       [ "Removing "
       , if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
       , show (length creds)
@@ -66,20 +69,20 @@ adjustEpochRewards tracer nw cache epochNo rwds creds = do
       ]
   forM_ eraIgnored $ \(cred, rewards) ->
     forM_ (Set.toList rewards) $ \rwd ->
-      deleteReward nw cache epochNo (cred, rwd)
-  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DontCacheNew nw)
+      deleteReward syncEnv nw epochNo (cred, rwd)
+  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache (envCache syncEnv) DontCacheNew nw)
   deleteOrphanedRewards epochNo crds
 
 deleteReward ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Network ->
-  Cache ->
   EpochNo ->
   (StakeCred, Generic.Reward) ->
   ReaderT SqlBackend m ()
-deleteReward nw cache epochNo (cred, rwd) = do
+deleteReward syncEnv nw epochNo (cred, rwd) = do
   mAddrId <- queryStakeAddrWithCache cache DontCacheNew nw cred
-  eiPoolId <- queryPoolKeyWithCache cache DontCacheNew (Generic.rewardPool rwd)
+  eiPoolId <- queryPoolKeyWithCache syncEnv DontCacheNew (Generic.rewardPool rwd)
   case (mAddrId, eiPoolId) of
     (Right addrId, Right poolId) -> do
       delete $ do
@@ -89,8 +92,10 @@ deleteReward nw cache epochNo (cred, rwd) = do
         where_ (rwdDb ^. Db.RewardSpendableEpoch ==. val (unEpochNo epochNo))
         where_ (rwdDb ^. Db.RewardPoolId ==. val poolId)
     _ -> pure ()
+  where
+    cache = envCache syncEnv
 
-deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
+deleteOrphanedRewards :: (MonadIO m) => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
 deleteOrphanedRewards (EpochNo epochNo) xs =
   delete $ do
     rwd <- from $ table @Db.Reward

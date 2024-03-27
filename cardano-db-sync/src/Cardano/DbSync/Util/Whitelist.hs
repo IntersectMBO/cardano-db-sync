@@ -1,11 +1,11 @@
 module Cardano.DbSync.Util.Whitelist where
 
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.Config.Types (MultiAssetConfig (..), PlutusConfig (..))
+import Cardano.DbSync.Config.Types (MultiAssetConfig (..), PlutusConfig (..), ShelleyInsertConfig (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Mary.Value (PolicyID (..))
-import Cardano.Prelude (NonEmpty)
+import Cardano.Prelude (ByteString, NonEmpty)
 import Data.ByteString.Short (ShortByteString, toShort)
 import Data.Map (keys)
 
@@ -55,3 +55,10 @@ multiAssetWhitelistCheck syncEnv txOuts = do
         checkMAValueMap :: NonEmpty ShortByteString -> PolicyID StandardCrypto -> Bool
         checkMAValueMap maWhitelist policyId =
           toShort (Generic.unScriptHash (policyID policyId)) `elem` maWhitelist
+
+shelleyInsertWhitelistCheck :: ShelleyInsertConfig -> ByteString -> Bool
+shelleyInsertWhitelistCheck shelleyInsertOpts stakeAddress = do
+  case shelleyInsertOpts of
+    ShelleyEnable -> True
+    ShelleyDisable -> True
+    ShelleyStakeAddrs shelleyWhitelist -> toShort stakeAddress `elem` shelleyWhitelist
