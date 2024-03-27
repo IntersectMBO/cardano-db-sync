@@ -1,4 +1,5 @@
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
@@ -28,10 +29,13 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
   mintMultiAssets,
   swapMultiAssets,
   swapMultiAssetsDisabled,
+  addTxMultiAssetsWhitelist,
 ) where
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Config (SyncNodeConfig (..))
+import Cardano.DbSync.Config.Types (MultiAssetConfig (..), SyncInsertOptions (..))
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
@@ -42,8 +46,10 @@ import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
-import Cardano.Mock.Query (queryMultiAssetCount)
+import Cardano.Mock.Query (queryMultiAssetCount, queryMultiAssetMetadataPolicy)
 import Cardano.Prelude hiding (head)
+import Data.ByteString.Short (toShort)
+import Data.List.NonEmpty (fromList)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
@@ -763,41 +769,133 @@ swapMultiAssets =
     testLabel = "conwaySwapMultiAssets"
 
 swapMultiAssetsDisabled :: IOManager -> [(Text, Text)] -> Assertion
-swapMultiAssetsDisabled =
-  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
-
-    -- Forge a block with multiple multi-asset scripts
-    void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
-      let policy = PolicyID Examples.alwaysMintScriptHash
-          assets = Map.singleton (Prelude.head Examples.assetNames) 1
-          mintedValue = MultiAsset $ Map.singleton policy assets
-          outValue = MaryValue (Coin 20) (MultiAsset $ Map.singleton policy assets)
-
-      -- Forge a multi-asset script
-      tx0 <-
-        Conway.mkMultiAssetsScriptTx
-          [UTxOIndex 0]
-          (UTxOIndex 1)
-          [(UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)]
-          []
-          mintedValue
-          True
-          100
-          state'
-
-      pure [tx0]
-
-    -- Wait for it to sync
-    assertBlockNoBackoff dbSync 1
-    -- Verify multi-assets
-    assertEqBackoff dbSync queryMultiAssetCount 0 [] "Unexpected multi-assets"
+swapMultiAssetsDisabled ioManager metadata = do
+  syncNodeConfig <- mksNodeConfig
+  withCustomConfig cmdlArgs (Just syncNodeConfig) cfgDir testLabel action ioManager metadata
   where
-    args =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-no-multi-assets.json"
-        , claFullMode = False
-        }
+    action = \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+
+      -- Forge a block with multiple multi-asset scripts
+      void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+        let policy = PolicyID Examples.alwaysMintScriptHash
+            assets = Map.singleton (Prelude.head Examples.assetNames) 1
+            mintedValue = MultiAsset $ Map.singleton policy assets
+            outValue = MaryValue (Coin 20) (MultiAsset $ Map.singleton policy assets)
+
+        -- Forge a multi-asset script
+        tx0 <-
+          Conway.mkMultiAssetsScriptTx
+            [UTxOIndex 0]
+            (UTxOIndex 1)
+            [(UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)]
+            []
+            mintedValue
+            True
+            100
+            state'
+
+        pure [tx0]
+
+      -- Wait for it to sync
+      assertBlockNoBackoff dbSync 1
+      -- Verify multi-assets
+      assertEqBackoff dbSync queryMultiAssetCount 0 [] "Unexpected multi-assets"
+
+    cmdlArgs = initCommandLineArgs {claFullMode = False}
+
+    mksNodeConfig :: IO SyncNodeConfig
+    mksNodeConfig = do
+      initConfigFile <- mkSyncNodeConfig cfgDir cmdlArgs
+      let dncInsertOptions' = dncInsertOptions initConfigFile
+      pure $
+        initConfigFile
+          { dncInsertOptions = dncInsertOptions' {sioMultiAsset = MultiAssetDisable}
+          }
 
     testLabel = "conwayConfigMultiAssetsDisabled"
     cfgDir = conwayConfigDir
+
+addTxMultiAssetsWhitelist :: IOManager -> [(Text, Text)] -> Assertion
+addTxMultiAssetsWhitelist ioManager metadata = do
+  syncNodeConfig <- mksNodeConfig
+  withCustomConfig args (Just syncNodeConfig) cfgDir testLabel action ioManager metadata
+  where
+    action = \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      -- Forge a block with multiple multi-asset scripts
+      void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+        let assetsMinted =
+              Map.fromList [(head Examples.assetNames, 10), (Examples.assetNames !! 1, 4)]
+            policy0 = PolicyID $ Examples.alwaysMintScriptHashRandomPolicyVal 1
+            policy1 = PolicyID $ Examples.alwaysMintScriptHashRandomPolicyVal 2
+            mintValue =
+              MultiAsset $
+                Map.fromList [(policy0, assetsMinted), (policy1, assetsMinted)]
+            assets =
+              Map.fromList [(head Examples.assetNames, 5), (Examples.assetNames !! 1, 2)]
+            outValue =
+              MaryValue (Coin 20) $
+                MultiAsset $
+                  Map.fromList [(policy0, assets), (policy1, assets)]
+
+        -- Forge a multi-asset script
+        tx0 <-
+          Conway.mkMultiAssetsScriptTx
+            [UTxOIndex 0]
+            (UTxOIndex 1)
+            [ (UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)
+            , (UTxOAddress Examples.alwaysMintScriptAddr, outValue)
+            ]
+            []
+            mintValue
+            True
+            100
+            state'
+
+        -- Consume the outputs from tx0
+        let utxos = Conway.mkUTxOConway tx0
+        tx1 <-
+          Conway.mkMultiAssetsScriptTx
+            [UTxOPair (head utxos), UTxOPair (utxos !! 1), UTxOIndex 2]
+            (UTxOIndex 3)
+            [ (UTxOAddress Examples.alwaysSucceedsScriptAddr, outValue)
+            , (UTxOAddress Examples.alwaysMintScriptAddr, outValue)
+            , (UTxOAddressNew 0, outValue)
+            , (UTxOAddressNew 0, outValue)
+            ]
+            []
+            mintValue
+            True
+            200
+            state'
+        pure [tx0, tx1]
+
+      -- Verify script counts
+      assertBlockNoBackoff dbSync 1
+      assertAlonzoCounts dbSync (2, 4, 1, 2, 4, 2, 0, 0)
+      -- create 4 multi-assets but only 2 should be added due to the whitelist
+      assertEqBackoff dbSync queryMultiAssetCount 2 [] "Expected 2 multi-assets"
+      -- do the policy match the whitelist
+      assertEqBackoff dbSync queryMultiAssetMetadataPolicy (Just policyShortBs) [] "Expected correct policy in db"
+
+    args = initCommandLineArgs {claFullMode = False}
+    testLabel = "conwayConfigMultiAssetsWhitelist"
+
+    cfgDir = conwayConfigDir
+
+    policyShortBs = toShort "4509cdddad21412c22c9164e10bc6071340ba235562f1575a35ded4d"
+
+    mksNodeConfig :: IO SyncNodeConfig
+    mksNodeConfig = do
+      initConfigFile <- mkSyncNodeConfig cfgDir args
+      let dncInsertOptions' = dncInsertOptions initConfigFile
+      pure $
+        initConfigFile
+          { dncInsertOptions =
+              dncInsertOptions'
+                { sioMultiAsset =
+                    MultiAssetPolicies $
+                      fromList [policyShortBs]
+                }
+          }

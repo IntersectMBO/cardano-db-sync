@@ -8,6 +8,7 @@
 module Cardano.DbSync.Era.Shelley.Query (
   queryPoolHashId,
   queryStakeAddress,
+  queryMultipleStakeAddress,
   queryStakeRefPtr,
   resolveInputTxId,
   resolveInputTxOutId,
@@ -29,6 +30,7 @@ import Database.Esqueleto.Experimental (
   Value (..),
   desc,
   from,
+  in_,
   innerJoin,
   just,
   limit,
@@ -37,6 +39,7 @@ import Database.Esqueleto.Experimental (
   select,
   table,
   val,
+  valList,
   where_,
   (:&) ((:&)),
   (==.),
@@ -63,6 +66,17 @@ queryStakeAddress addr = do
     where_ (saddr ^. StakeAddressHashRaw ==. val addr)
     pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> renderByteArray addr) unValue (listToMaybe res)
+
+queryMultipleStakeAddress ::
+  MonadIO m =>
+  [ByteString] ->
+  ReaderT SqlBackend m (Either LookupFail [StakeAddressId])
+queryMultipleStakeAddress addrs = do
+  res <- select $ do
+    saddr <- from $ table @StakeAddress
+    where_ (saddr ^. StakeAddressHashRaw `in_` valList addrs)
+    pure (saddr ^. StakeAddressId)
+  pure $ Right $ map unValue res
 
 resolveInputTxId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail TxId)
 resolveInputTxId = queryTxId . Generic.txInHash

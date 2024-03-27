@@ -2,6 +2,7 @@ module Test.Cardano.Db.Mock.Unit.Conway (unitTests) where
 
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Prelude
+import Test.Cardano.Db.Mock.Config (expectFailSilent)
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
@@ -16,7 +17,6 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
 import Test.Tasty (TestTree (), testGroup)
-import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion (), testCase)
 import Prelude (String ())
 
@@ -44,18 +44,9 @@ unitTests iom knownMigrations =
             , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
             , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
-            , expectFail $
-                test
-                  "restart with new consumed set to false"
-                  MigrateConsumedPruneTxOut.migrateAndPruneRestart
-            , expectFail $
-                test
-                  "set prune flag, restart missing prune flag"
-                  MigrateConsumedPruneTxOut.pruneRestartMissingFlag
-            , expectFail $
-                test
-                  "set bootstrap flag, restart missing bootstrap flag"
-                  MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
+            , expectFailSilent "restart with new consumed set to false" $ MigrateConsumedPruneTxOut.migrateAndPruneRestart iom knownMigrations
+            , expectFailSilent "set prune flag, restart missing prune flag" $ MigrateConsumedPruneTxOut.pruneRestartMissingFlag iom knownMigrations
+            , expectFailSilent "set bootstrap flag, restart missing bootstrap flag" $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag iom knownMigrations
             ]
         ]
     , testGroup
@@ -71,10 +62,7 @@ unitTests iom knownMigrations =
         "Command Line Arguments"
         [ testGroup
             "config"
-            [ expectFail $
-                test
-                  "fails if incorrect config file given"
-                  ConfigFile.checkConfigFileArg
+            [ expectFailSilent "fails if incorrect config file given" $ ConfigFile.checkConfigFileArg iom knownMigrations
             ]
         , testGroup
             "disable-epoch"
@@ -113,6 +101,7 @@ unitTests iom knownMigrations =
         , test "tx with metadata" Tx.addTxMetadata
         , test "tx with metadata disabled" Tx.addTxMetadataDisabled
         , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
+        , test "tx with metadata whitelist multiple" Tx.addTxMetadataWhitelistMultiple
         ]
     , testGroup
         "stake addresses"
@@ -173,6 +162,7 @@ unitTests iom knownMigrations =
         , test "mint many multi assets" Plutus.mintMultiAssets
         , test "swap many multi assets" Plutus.swapMultiAssets
         , test "swap with multi assets disabled" Plutus.swapMultiAssetsDisabled
+        , test "add multi assets with whitelist" Plutus.addTxMultiAssetsWhitelist
         ]
     , testGroup
         "Pools and smash"

@@ -15,17 +15,16 @@ import Cardano.BM.Trace (Trace, logDebug, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.Cache (
-  insertBlockAndCache,
-  queryPoolKeyWithCache,
-  queryPrevBlockWithCache,
- )
+import Cardano.DbSync.Cache (insertBlockAndCache, queryPoolKeyWithCache, queryPrevBlockWithCache)
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
-
+import Cardano.DbSync.Config.Types (isShelleyEnabled)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Pool (
+  IsPoolMember,
+ )
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTx)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -33,13 +32,10 @@ import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.OffChain
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-
-import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude
-
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import Data.Either.Extra (eitherToMaybe)
@@ -47,7 +43,6 @@ import Database.Persist.Sql (SqlBackend)
 
 --------------------------------------------------------------------------------------------
 -- Insert a universal Block.
--- This is the entry point for inserting a block into the database, used for all eras appart from Byron.
 --------------------------------------------------------------------------------------------
 insertBlockUniversal ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -68,10 +63,10 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
       Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
-    mPhid <- lift $ queryPoolKeyWithCache cache CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
+    mPhid <- lift $ queryPoolKeyWithCache syncEnv CacheNew $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
-    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
+    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (isShelleyEnabled $ ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
       lift . insertBlockAndCache cache $
         DB.Block
@@ -175,8 +170,8 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     renderErrorMessage :: Generic.BlockEra -> Text
     renderErrorMessage eraText =
       case eraText of
-        Generic.Shelley -> "insertBlockForEra"
-        other -> mconcat ["insertBlockForEra(", textShow other, ")"]
+        Generic.Shelley -> "insertBlockUniversal"
+        other -> mconcat ["insertBlockUniversal(", textShow other, ")"]
 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv

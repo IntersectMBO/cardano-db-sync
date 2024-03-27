@@ -85,7 +85,7 @@ insertBlockLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards syncEnv ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
         LedgerRestrainedRewards e rwd creds ->
-          lift $ adjustEpochRewards tracer ntw cache e rwd creds
+          lift $ adjustEpochRewards syncEnv ntw e rwd creds
         LedgerTotalRewards _e rwd ->
           lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
@@ -93,7 +93,7 @@ insertBlockLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
-            insertInstantRewards ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
+            insertInstantRewards syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs ->
           unless (Map.null $ Generic.unRewards drs) $ do
