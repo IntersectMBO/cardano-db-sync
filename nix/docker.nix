@@ -9,8 +9,8 @@
 
 , bashInteractive, cacert, cardano-cli, cardano-db-sync, cardano-db-tool
 , cardano-smash-server, coreutils, curl, findutils, getconf, glibcLocales
-, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn, libpqxx, postgresql
-, socat, utillinux
+, gnused, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn, libpqxx
+, postgresql, socat, utillinux
 }:
 
 let
@@ -37,6 +37,7 @@ let
         findutils # GNU find
         getconf # get num cpus
         glibcLocales # Locale information for the GNU C Library
+        gnused # GNU sed
         gnutar # GNU tar
         gzip # Gnuzip
         jq # JSON processor
