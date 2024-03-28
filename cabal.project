@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2024-02-06T15:14:59Z
-  , cardano-haskell-packages 2024-02-07T07:51:35Z
+  , hackage.haskell.org 2024-03-28T17:54:10Z
+  , cardano-haskell-packages 2024-03-27T12:45:54Z
 
 packages:
   cardano-db
