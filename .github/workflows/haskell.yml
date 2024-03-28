@@ -29,14 +29,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Install GHC and Cabal
-        uses: input-output-hk/actions/devx@latest
+        uses: sgillespie/actions/devx@latest
         with:
           platform: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-linux' || 'x86_64-darwin' }}
           target-platform: ""
           compiler-nix-name: ${{ matrix.compiler-nix-name }}
           minimal: false
-          # enable IOG flavour to bring in all the crypto libraries we need.
-          iog: true
+          # enable IOG full flavour to bring in all the crypto libraries we need.
+          iog-full: true
       - name: cache cabal
         uses: actions/cache@v3
         with:
