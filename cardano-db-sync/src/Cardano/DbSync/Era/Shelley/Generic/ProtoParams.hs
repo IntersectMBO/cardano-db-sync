@@ -5,7 +5,9 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.ProtoParams (
   ProtoParams (..),
+  Deposits (..),
   epochProtoParams,
+  getDeposits,
 ) where
 
 import Cardano.DbSync.Types
@@ -66,6 +68,11 @@ data ProtoParams = ProtoParams
   , ppDRepActivity :: !(Maybe EpochInterval)
   }
 
+data Deposits = Deposits
+  { stakeKeyDeposit :: Coin
+  , poolDeposit :: Coin
+  }
+
 epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
 epochProtoParams lstate =
   case ledgerState lstate of
@@ -82,6 +89,24 @@ getProtoParams ::
   LedgerState (ShelleyBlock p era) ->
   PParams era
 getProtoParams st = Shelley.nesEs (Consensus.shelleyLedgerState st) ^. Shelley.curPParamsEpochStateL
+
+getDeposits :: ExtLedgerState CardanoBlock -> Maybe Deposits
+getDeposits lstate =
+  case ledgerState lstate of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley st -> Just $ getDopositsShelley $ getProtoParams st
+    LedgerStateAllegra st -> Just $ getDopositsShelley $ getProtoParams st
+    LedgerStateMary st -> Just $ getDopositsShelley $ getProtoParams st
+    LedgerStateAlonzo st -> Just $ getDopositsShelley $ getProtoParams st
+    LedgerStateBabbage st -> Just $ getDopositsShelley $ getProtoParams st
+    LedgerStateConway st -> Just $ getDopositsShelley $ getProtoParams st
+  where
+    getDopositsShelley :: EraPParams era => PParams era -> Deposits
+    getDopositsShelley pp =
+      Deposits
+        { stakeKeyDeposit = pp ^. ppKeyDepositL
+        , poolDeposit = pp ^. ppPoolDepositL
+        }
 
 -- -------------------------------------------------------------------------------------------------
 
