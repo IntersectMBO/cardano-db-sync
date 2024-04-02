@@ -243,6 +243,7 @@ share
     metaId              PoolMetadataRefId Maybe noreference
     margin              Double                                  -- sqltype=percentage????
     fixedCost           DbLovelace          sqltype=lovelace
+    deposit             DbLovelace Maybe    sqltype=lovelace
     registeredTxId      TxId                noreference     -- Slot number in which the pool was registered.
 
   -- A Pool can have more than one owner, so we have a PoolOwner table.
@@ -268,6 +269,7 @@ share
     addrId              StakeAddressId      noreference
     certIndex           Word16
     epochNo             Word64              sqltype=word31type
+    deposit             DbLovelace Maybe    sqltype=lovelace
     txId                TxId                noreference
 
   -- When was a staking key/script deregistered

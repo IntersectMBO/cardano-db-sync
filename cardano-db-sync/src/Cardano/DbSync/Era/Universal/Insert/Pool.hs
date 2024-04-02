@@ -52,6 +52,7 @@ insertPoolRegister ::
   Trace IO Text ->
   Cache ->
   IsPoolMember ->
+  Maybe Generic.Deposits ->
   Ledger.Network ->
   EpochNo ->
   DB.BlockId ->
@@ -59,13 +60,15 @@ insertPoolRegister ::
   Word16 ->
   PoolP.PoolParams StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx params = do
+insertPoolRegister _tracer cache isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
   poolHashId <- lift $ insertPoolKeyWithCache cache CacheNew (PoolP.ppId params)
   mdId <- case strictMaybeToMaybe $ PoolP.ppMetadata params of
     Just md -> Just <$> insertPoolMetaDataRef poolHashId txId md
     Nothing -> pure Nothing
 
-  epochActivationDelay <- mkEpochActivationDelay poolHashId
+  isRegistration <- isPoolRegistration poolHashId
+  let epochActivationDelay = if isRegistration then 2 else 3
+      deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
 
   saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ PoolP.ppRewardAcnt params)
   poolUpdateId <-
@@ -81,22 +84,23 @@ insertPoolRegister _tracer cache isMember network (EpochNo epoch) blkId txId idx
         , DB.poolUpdateMetaId = mdId
         , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (PoolP.ppMargin params)
         , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (PoolP.ppCost params)
+        , DB.poolUpdateDeposit = deposit
         , DB.poolUpdateRegisteredTxId = txId
         }
 
   mapM_ (insertPoolOwner cache network poolUpdateId) $ toList (PoolP.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.ppRelays params)
   where
-    mkEpochActivationDelay :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-    mkEpochActivationDelay poolHashId =
+    isPoolRegistration :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    isPoolRegistration poolHashId =
       if isMember (PoolP.ppId params)
-        then pure 3
+        then pure False
         else do
           -- if the pool is not registered at the end of the previous block, check for
           -- other registrations at the current block. If this is the first registration
           -- then it's +2, else it's +3.
           otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
-          pure $ if otherUpdates then 3 else 2
+          pure $ not otherUpdates
 
     -- Ignore the network in the `RewardAcnt` and use the provided one instead.
     -- This is a workaround for https://github.com/IntersectMBO/cardano-db-sync/issues/546
@@ -196,6 +200,7 @@ insertPoolCert ::
   Trace IO Text ->
   Cache ->
   IsPoolMember ->
+  Maybe Generic.Deposits ->
   Ledger.Network ->
   EpochNo ->
   DB.BlockId ->
@@ -203,7 +208,7 @@ insertPoolCert ::
   Word16 ->
   PoolCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCert tracer cache isMember network epoch blkId txId idx pCert =
+insertPoolCert tracer cache isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of
-    RegPool pParams -> insertPoolRegister tracer cache isMember network epoch blkId txId idx pParams
+    RegPool pParams -> insertPoolRegister tracer cache isMember mdeposits network epoch blkId txId idx pParams
     RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash

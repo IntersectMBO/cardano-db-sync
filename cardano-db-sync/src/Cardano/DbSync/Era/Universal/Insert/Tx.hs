@@ -152,7 +152,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
             iopts
             (Generic.txMetadata tx)
       mapM_
-        (insertCertificate syncEnv isMember blkId txId epochNo slotNo redeemers)
+        (insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers)
         $ Generic.txCertificates tx
       when (ioShelley iopts) $
         mapM_ (insertWithdrawals tracer cache txId redeemers) $
@@ -184,6 +184,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
+    mDeposits = maybeFromStrict $ apDeposits applyResult
 
 --------------------------------------------------------------------------------------
 -- INSERT TXOUT
