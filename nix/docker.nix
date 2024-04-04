@@ -14,6 +14,9 @@
 }:
 
 let
+  concatMapAttrs = f: attrs:
+    lib.concatStringsSep "\n" (lib.mapAttrsToList f attrs);
+
   env-shim = runCommand "env-shim" { } ''
     mkdir -p $out/usr/bin
     ln -s ${coreutils}/bin/env $out/usr/bin/env
@@ -71,19 +74,17 @@ let
   dbSyncEntrypoint =
     let
       clusterStatements =
-        lib.concatStringsSep
-          "\n"
-          (lib.mapAttrsToList
-            (env: script:
-              let
-                dbSyncScript = script.db-sync;
-              in ''
-                elif [[ "$NETWORK" == "${env}" ]]; then
+        concatMapAttrs
+          (env: script:
+            let
+              dbSyncScript = script.db-sync;
+            in ''
+              elif [[ "$NETWORK" == "${env}" ]]; then
                 echo "Connecting to network: ${env}"
                 exec ${dbSyncScript}/bin/${dbSyncScript.name}
                 echo "Cleaning up"
               '')
-            scripts);
+            scripts;
 
       scripts = cardanoLib.forEnvironments (env: mkScript (mkService env));
 
@@ -127,14 +128,12 @@ let
     in
       writeScriptBin "entrypoint" ''
         #!${runtimeShell}
-        mkdir -p /configuration
-        if [ ! -f /configuration/pgpass ]; then
-          ${genPgpass} /run/secrets
-        fi
+
+        ${genPgpass}
         export PGPASSFILE=/configuration/pgpass
 
-        # set up /tmp (override with TMPDIR variable)
-        mkdir -p -m 1777 /tmp
+        ${setupTmp}
+
         if [[ -z "$NETWORK" ]]; then
           echo "Connecting to network specified in configuration.yaml"
           DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
@@ -169,19 +168,17 @@ let
   smashEntrypoint =
     let
       clusterStatements =
-        lib.concatStringsSep
-          "\n"
-          (lib.mapAttrsToList
-            (env: script:
-              let
-                smashScript = script.smash;
-              in ''
-                elif [[ "$NETWORK" == "${env}" ]]; then
-                  echo "Connecting to network: ${env}"
-                  exec ${smashScript}/bin/${smashScript.name}
-                  echo "Cleaning up"
-              '')
-            scripts);
+        concatMapAttrs
+          (env: script:
+            let
+              smashScript = script.smash;
+            in ''
+              elif [[ "$NETWORK" == "${env}" ]]; then
+                echo "Connecting to network: ${env}"
+                exec ${smashScript}/bin/${smashScript.name}
+                echo "Cleaning up"
+            '')
+          scripts;
 
       scripts = cardanoLib.forEnvironments (env: mkScript (mkService env));
 
@@ -225,21 +222,17 @@ let
     in
       writeScriptBin "entrypoint" ''
         #!${runtimeShell}
-        mkdir -p /configuration
-        if [ ! -f /configuration/pgpass ]; then
-          ${genPgpass} /run/secrets
-        fi
+
+        ${genPgpass}
         export PGPASSFILE=/configuration/pgpass
 
-        # set up /tmp (override with TMPDIR variable)
-        mkdir -p -m 1777 /tmp
+        ${setupTmp}
 
         # Add an admin csv
         SMASH_USER="''${SMASH_USER:-smash-admin}"
         SMASH_PASSWORD="''${SMASH_PASSWORD:-smash-password}"
         echo "''${SMASH_USER},''${SMASH_PASSWORD}" > /configuration/admins.csv
 
-        # config?
         if [[ -z "$NETWORK" ]]; then
           echo "Connecting to network specified in configuration.yaml"
           set -euo pipefail
@@ -257,7 +250,13 @@ let
   # Scripts supporting entrypoint
   genPgpass = writeScript "gen-pgpass" ''
     #!${runtimeShell}
-    SECRET_DIR=$1
+    mkdir -p /configuration
+    if [ -f /configuration/pgpass ]; then
+       # No need to generate pgpass
+      exit 0
+    fi
+
+    SECRET_DIR=/run/secrets
     echo $SECRET_DIR
     echo "Generating PGPASS file"
     POSTGRES_DB=''${POSTGRES_DB:-$(< ''${SECRET_DIR}/postgres_db)}
@@ -266,6 +265,9 @@ let
     echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /configuration/pgpass
     chmod 0600 /configuration/pgpass
   '';
+
+  # set up /tmp (override with TMPDIR variable)
+  setupTmp = "mkdir -p -m 1777 /tmp";
 
 in {
   cardano-db-sync-docker = dockerTools.buildImage {
