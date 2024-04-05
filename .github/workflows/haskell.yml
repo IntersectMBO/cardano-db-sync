@@ -37,6 +37,11 @@ jobs:
           minimal: false
           # enable IOG-full flavour to bring in all the crypto libraries we need.
           iog-full: true
+      - name: "macOS: clean up pre-installed libraries"
+        if: runner.os == 'macOS'
+        # Homebrew's icu4c conflics with Nix's
+        run: |
+          brew uninstall --ignore-dependencies icu4c
       - name: cache cabal
         uses: actions/cache@v3
         with:
