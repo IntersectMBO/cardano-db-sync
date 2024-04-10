@@ -17,7 +17,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   nonceToBytes,
   partitionMIRTargets,
   renderAddress,
-  renderRewardAcnt,
+  renderRewardAccount,
   stakingCredHash,
   unitIntervalToDouble,
   unCredentialHash,
@@ -37,7 +37,7 @@ import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util.Address (serialiseAddress, serialiseRewardAcnt)
+import Cardano.DbSync.Util.Address (serialiseAddress, serialiseRewardAccount)
 import Cardano.DbSync.Util.Bech32 (serialiseStakePoolKeyHashToBech32)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -61,8 +61,8 @@ import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
-annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAcnt era
-annotateStakingCred = Shelley.RewardAcnt
+annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAccount era
+annotateStakingCred = Shelley.RewardAccount
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
@@ -126,11 +126,11 @@ partitionMIRTargets =
 renderAddress :: Ledger.Addr StandardCrypto -> Text
 renderAddress = serialiseAddress
 
-renderRewardAcnt :: Ledger.RewardAcnt StandardCrypto -> Text
-renderRewardAcnt = serialiseRewardAcnt
+renderRewardAccount :: Ledger.RewardAccount StandardCrypto -> Text
+renderRewardAccount = serialiseRewardAccount
 
 stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString
-stakingCredHash network = Ledger.serialiseRewardAcnt . annotateStakingCred network
+stakingCredHash network = Ledger.serialiseRewardAccount . annotateStakingCred network
 
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Ledger.unboundRational

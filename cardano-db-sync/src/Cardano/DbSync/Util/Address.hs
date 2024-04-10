@@ -4,8 +4,8 @@ module Cardano.DbSync.Util.Address (
   serialiseAddress,
   deserialiseByronAddress,
   deserialiseShelleyAddress,
-  serialiseRewardAcnt,
-  deserialiseRewardAcnt,
+  serialiseRewardAccount,
+  deserialiseRewardAccount,
 ) where
 
 import Cardano.DbSync.Util.Bech32 (deserialiseFromBech32, serialiseToBech32)
@@ -39,16 +39,16 @@ deserialiseShelleyAddress bech32 = decodeAddrLenient =<< rawBytes
     rawBytes = rightToMaybe $ deserialiseFromBech32 bech32
 
 -- | Serialise a Shelley era stake address to bech32
-serialiseRewardAcnt :: Address.RewardAcnt StandardCrypto -> Text
-serialiseRewardAcnt acnt@(Address.RewardAcnt net _) =
-  serialiseToBech32 (prefix net) (Address.serialiseRewardAcnt acnt)
+serialiseRewardAccount :: Address.RewardAccount StandardCrypto -> Text
+serialiseRewardAccount acnt@(Address.RewardAccount net _) =
+  serialiseToBech32 (prefix net) (Address.serialiseRewardAccount acnt)
   where
     prefix Mainnet = "stake"
     prefix Testnet = "stake_test"
 
 -- | Deserialise a Shelley era stake address from bech32
-deserialiseRewardAcnt :: Crypto c => Text -> Maybe (Address.RewardAcnt c)
-deserialiseRewardAcnt bech32 = Address.deserialiseRewardAcnt =<< rawBytes
+deserialiseRewardAccount :: Crypto c => Text -> Maybe (Address.RewardAccount c)
+deserialiseRewardAccount bech32 = Address.deserialiseRewardAccount =<< rawBytes
   where
     rawBytes = rightToMaybe $ deserialiseFromBech32 bech32
 

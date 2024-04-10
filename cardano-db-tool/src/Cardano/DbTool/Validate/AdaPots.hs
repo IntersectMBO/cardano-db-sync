@@ -63,6 +63,8 @@ queryAdaPotsAccounting = do
                 + unDbLovelace (adaPotsReserves ap)
                 + unDbLovelace (adaPotsRewards ap)
                 + unDbLovelace (adaPotsUtxo ap)
-                + unDbLovelace (adaPotsDeposits ap)
+                + unDbLovelace (adaPotsDepositsStake ap)
+                + unDbLovelace (adaPotsDepositsDrep ap)
+                + unDbLovelace (adaPotsDepositsProposal ap)
                 + unDbLovelace (adaPotsFees ap)
         }

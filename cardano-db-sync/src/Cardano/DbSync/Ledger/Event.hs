@@ -385,7 +385,7 @@ pattern LEDepositsConway ::
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ ConwayLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
-  , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Alonzo.AlonzoUtxosEvent ledgerera
+  , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Conway.ConwayUtxosEvent ledgerera
   ) =>
   SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
   Coin ->
@@ -399,7 +399,7 @@ pattern LEDepositsConway hsh coin <-
                     ( WrappedShelleyEraEvent
                         ( UtxoEvent
                             ( UtxosEvent
-                                (Alonzo.TotalDeposits hsh coin)
+                                (Conway.TotalDeposits hsh coin)
                               )
                           )
                       )

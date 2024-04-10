@@ -64,6 +64,7 @@ library
                       , bytestring
                       , cardano-binary
                       , cardano-crypto-class
+                      , cardano-data
                       , cardano-db
                       , cardano-ledger-allegra
                       , cardano-ledger-alonzo

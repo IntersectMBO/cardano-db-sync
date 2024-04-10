@@ -375,15 +375,16 @@ chainSyncClient metricsSetters trce latestPoints currentTip tc = do
       case (mPoint, n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
         (Just points, _, _) -> drainThePipe n $ clientPipelinedStIdle clientTip points
         (_, _Zero, (Request, mkPipelineDecision')) ->
-          SendMsgRequestNext clientStNext (pure clientStNext)
+          SendMsgRequestNext (pure ()) clientStNext
           where
             clientStNext = mkClientStNext $ goTip mkPipelineDecision' n
         (_, _, (Pipeline, mkPipelineDecision')) ->
           SendMsgRequestNextPipelined
+            (pure ())
             (go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
         (_, Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
           CollectResponse
-            (Just . pure $ SendMsgRequestNextPipelined $ go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
+            (Just . pure $ SendMsgRequestNextPipelined (pure ()) $ go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
             (mkClientStNext $ goTip mkPipelineDecision' n')
         (_, Succ n', (Collect, mkPipelineDecision')) ->
           CollectResponse
@@ -470,7 +471,7 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
                   { Client.recvMsgIntersectFound = \_pnt _tip ->
                       Client.ChainSyncClient $
                         pure $
-                          Client.SendMsgRequestNext (clientStNext newLastSize fdOnPoint fdRest) (pure $ clientStNext newLastSize fdOnPoint fdRest)
+                          Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fdOnPoint fdRest)
                   , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
                       liftIO $
                         logWarning tracer $
@@ -481,7 +482,7 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
                             , textShow tip
                             , ". Sleeping for 3 mins and retrying.."
                             ]
-                      threadDelay $ 180 * 1_000_000
+                      liftIO $ threadDelay $ 180 * 1_000_000
                       pure $ Client.SendMsgFindIntersect [point] clientStIntersect
                   }
           pure $ Client.SendMsgFindIntersect [point] clientStIntersect
@@ -495,7 +496,7 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
         , Client.recvMsgRollBackward = \_point _tip ->
             Client.ChainSyncClient $
               pure $
-                Client.SendMsgRequestNext (clientStNext lastSize fdOnPoint fdRest) (pure $ clientStNext lastSize fdOnPoint fdRest)
+                Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fdOnPoint fdRest)
         }
 
 chainSyncClientFixScripts ::
@@ -530,7 +531,7 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
                   { Client.recvMsgIntersectFound = \_pnt _tip ->
                       Client.ChainSyncClient $
                         pure $
-                          Client.SendMsgRequestNext (clientStNext newLastSize fpsOnPoint fpsRest) (pure $ clientStNext newLastSize fpsOnPoint fpsRest)
+                          Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fpsOnPoint fpsRest)
                   , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
                       liftIO $
                         logWarning tracer $
@@ -541,7 +542,7 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
                             , textShow tip
                             , ". Sleeping for 3 mins and retrying.."
                             ]
-                      threadDelay $ 180 * 1_000_000
+                      liftIO $ threadDelay $ 180 * 1_000_000
                       pure $ Client.SendMsgFindIntersect [point] clientStIntersect
                   }
           pure $ Client.SendMsgFindIntersect [point] clientStIntersect
@@ -555,5 +556,5 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
         , Client.recvMsgRollBackward = \_point _tip ->
             Client.ChainSyncClient $
               pure $
-                Client.SendMsgRequestNext (clientStNext lastSize fpsOnPoint fpsRest) (pure $ clientStNext lastSize fpsOnPoint fpsRest)
+                Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fpsOnPoint fpsRest)
         }

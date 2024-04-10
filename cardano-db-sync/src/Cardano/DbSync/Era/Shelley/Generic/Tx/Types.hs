@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wall -fno-warn-deprecations #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Tx (..),
@@ -87,7 +88,7 @@ data TxCertificate = TxCertificate
 
 data TxWithdrawal = TxWithdrawal
   { txwRedeemerIndex :: !(Maybe Word64)
-  , txwRewardAccount :: !(Shelley.RewardAcnt StandardCrypto)
+  , txwRewardAccount :: !(Shelley.RewardAccount StandardCrypto)
   , txwAmount :: !Coin
   }
 
@@ -162,15 +163,15 @@ sumTxOutCoin :: [TxOut] -> Coin
 sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)
 
 class AlonzoEraTxBody era => DBScriptPurpose era where
-  getPurpose :: PlutusPurpose AsIndex era -> (DB.ScriptPurpose, Word32)
-  toAlonzoPurpose :: TxBody era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIndex era)) (ConwayPlutusPurpose AsItem era))
+  getPurpose :: PlutusPurpose AsIx era -> (DB.ScriptPurpose, Word32)
+  toAlonzoPurpose :: TxBody era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIx era)) (ConwayPlutusPurpose AsItem era))
 
 instance DBScriptPurpose StandardAlonzo where
   getPurpose = \case
-    AlonzoSpending idx -> (DB.Spend, unAsIndex idx)
-    AlonzoMinting idx -> (DB.Mint, unAsIndex idx)
-    AlonzoCertifying idx -> (DB.Cert, unAsIndex idx)
-    AlonzoRewarding idx -> (DB.Rewrd, unAsIndex idx)
+    AlonzoSpending idx -> (DB.Spend, unAsIx idx)
+    AlonzoMinting idx -> (DB.Mint, unAsIx idx)
+    AlonzoCertifying idx -> (DB.Cert, unAsIx idx)
+    AlonzoRewarding idx -> (DB.Rewrd, unAsIx idx)
 
   toAlonzoPurpose txBody pp = case pp of
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
@@ -180,10 +181,10 @@ instance DBScriptPurpose StandardAlonzo where
 
 instance DBScriptPurpose StandardBabbage where
   getPurpose = \case
-    AlonzoSpending idx -> (DB.Spend, unAsIndex idx)
-    AlonzoMinting idx -> (DB.Mint, unAsIndex idx)
-    AlonzoCertifying idx -> (DB.Cert, unAsIndex idx)
-    AlonzoRewarding idx -> (DB.Rewrd, unAsIndex idx)
+    AlonzoSpending idx -> (DB.Spend, unAsIx idx)
+    AlonzoMinting idx -> (DB.Mint, unAsIx idx)
+    AlonzoCertifying idx -> (DB.Cert, unAsIx idx)
+    AlonzoRewarding idx -> (DB.Rewrd, unAsIx idx)
 
   toAlonzoPurpose txBody pp = case pp of
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
@@ -193,12 +194,12 @@ instance DBScriptPurpose StandardBabbage where
 
 instance DBScriptPurpose StandardConway where
   getPurpose = \case
-    ConwaySpending idx -> (DB.Spend, unAsIndex idx)
-    ConwayMinting idx -> (DB.Mint, unAsIndex idx)
-    ConwayCertifying idx -> (DB.Cert, unAsIndex idx)
-    ConwayRewarding idx -> (DB.Rewrd, unAsIndex idx)
-    ConwayVoting idx -> (DB.Vote, unAsIndex idx)
-    ConwayProposing idx -> (DB.Propose, unAsIndex idx)
+    ConwaySpending idx -> (DB.Spend, unAsIx idx)
+    ConwayMinting idx -> (DB.Mint, unAsIx idx)
+    ConwayCertifying idx -> (DB.Cert, unAsIx idx)
+    ConwayRewarding idx -> (DB.Rewrd, unAsIx idx)
+    ConwayVoting idx -> (DB.Vote, unAsIx idx)
+    ConwayProposing idx -> (DB.Propose, unAsIx idx)
 
   toAlonzoPurpose _ = \case
     ConwayVoting _ -> Nothing

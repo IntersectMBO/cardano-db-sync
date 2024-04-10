@@ -203,21 +203,21 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
 
 mkScriptInp' ::
   (Word64, (TxIn StandardCrypto, Core.TxOut StandardAlonzo)) ->
-  Maybe (AlonzoPlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
+  Maybe (AlonzoPlutusPurpose AsIx era, Maybe (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
 mkScriptInp' = map (second Just) . mkScriptInp
 
 mkScriptInp ::
   (Word64, (TxIn StandardCrypto, Core.TxOut StandardAlonzo)) ->
-  Maybe (AlonzoPlutusPurpose AsIndex era, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
+  Maybe (AlonzoPlutusPurpose AsIx era, (ScriptHash StandardCrypto, Core.Script StandardAlonzo))
 mkScriptInp (n, (_txIn, txOut))
   | addr == alwaysFailsScriptAddr =
       Just
-        (AlonzoSpending (AsIndex $ fromIntegral n), (alwaysFailsScriptHash, alwaysFailsScript))
+        (AlonzoSpending (AsIx $ fromIntegral n), (alwaysFailsScriptHash, alwaysFailsScript))
   | addr == alwaysSucceedsScriptAddr =
       Just
-        (AlonzoSpending (AsIndex $ fromIntegral n), (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+        (AlonzoSpending (AsIx $ fromIntegral n), (alwaysSucceedsScriptHash, alwaysSucceedsScript))
   | addr == alwaysMintScriptAddr =
-      Just (AlonzoSpending (AsIndex $ fromIntegral n), (alwaysMintScriptHash, alwaysMintScript))
+      Just (AlonzoSpending (AsIx $ fromIntegral n), (alwaysMintScriptHash, alwaysMintScript))
   | otherwise = Nothing
   where
     addr = txOut ^. Core.addrTxOutL
@@ -225,8 +225,8 @@ mkScriptInp (n, (_txIn, txOut))
 mkScriptMint' ::
   AlonzoEraScript era =>
   MultiAsset StandardCrypto ->
-  [(AlonzoPlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, AlonzoScript era))]
-mkScriptMint' = fmap (first $ AlonzoMinting . AsIndex) . mkScriptMint
+  [(AlonzoPlutusPurpose AsIx era, Maybe (ScriptHash StandardCrypto, AlonzoScript era))]
+mkScriptMint' = fmap (first $ AlonzoMinting . AsIx) . mkScriptMint
 
 mkScriptMint ::
   AlonzoEraScript era =>
@@ -321,8 +321,8 @@ mkScriptDCertTx consDert valid st = do
         else
           Just $
             if bl
-              then (AlonzoCertifying (AsIndex n), (alwaysFailsScriptHash, alwaysFailsScript))
-              else (AlonzoCertifying (AsIndex n), (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+              then (AlonzoCertifying (AsIx n), (alwaysFailsScriptHash, alwaysFailsScript))
+              else (AlonzoCertifying (AsIx n), (alwaysSucceedsScriptHash, alwaysSucceedsScript))
     prepareRedeemer _ = Nothing
 
 mkDepositTxPools ::
@@ -368,7 +368,7 @@ mkScriptTx ::
   , AlonzoEraScript era
   ) =>
   Bool ->
-  [(PlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
+  [(PlutusPurpose AsIx era, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
   Core.TxBody era ->
   AlonzoTx era
 mkScriptTx valid rdmrs txBody =
@@ -389,7 +389,7 @@ mkWitnesses ::
   , Script era ~ AlonzoScript era
   , AlonzoEraScript era
   ) =>
-  [(PlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
+  [(PlutusPurpose AsIx era, Maybe (ScriptHash StandardCrypto, Core.Script era))] ->
   [(DataHash StandardCrypto, Data era)] ->
   AlonzoTxWits era
 mkWitnesses rdmrs datas =

@@ -70,7 +70,7 @@ insertPoolRegister _tracer cache isMember mdeposits network (EpochNo epoch) blkI
   let epochActivationDelay = if isRegistration then 2 else 3
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
 
-  saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ PoolP.ppRewardAcnt params)
+  saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ PoolP.ppRewardAccount params)
   poolUpdateId <-
     lift
       . DB.insertPoolUpdate
@@ -102,10 +102,10 @@ insertPoolRegister _tracer cache isMember mdeposits network (EpochNo epoch) blkI
           otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
           pure $ not otherUpdates
 
-    -- Ignore the network in the `RewardAcnt` and use the provided one instead.
+    -- Ignore the network in the `RewardAccount` and use the provided one instead.
     -- This is a workaround for https://github.com/IntersectMBO/cardano-db-sync/issues/546
-    adjustNetworkTag :: Ledger.RewardAcnt StandardCrypto -> Ledger.RewardAcnt StandardCrypto
-    adjustNetworkTag (Shelley.RewardAcnt _ cred) = Shelley.RewardAcnt network cred
+    adjustNetworkTag :: Ledger.RewardAccount StandardCrypto -> Ledger.RewardAccount StandardCrypto
+    adjustNetworkTag (Shelley.RewardAccount _ cred) = Shelley.RewardAccount network cred
 
 insertPoolRetire ::
   (MonadBaseControl IO m, MonadIO m) =>

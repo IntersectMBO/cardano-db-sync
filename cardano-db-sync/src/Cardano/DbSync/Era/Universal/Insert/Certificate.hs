@@ -40,11 +40,11 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.CertState
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Ledger.Conway.TxCert
 import qualified Cardano.Ledger.Credential as Ledger
-import Cardano.Ledger.DRep (DRep)
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.AdaPots as Shelley
@@ -339,7 +339,7 @@ insertStakeRegistration ::
   Maybe Generic.Deposits ->
   DB.TxId ->
   Word16 ->
-  Shelley.RewardAcnt StandardCrypto ->
+  Shelley.RewardAccount StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration epochNo mDeposits txId idx rewardAccount = do
   -- We by-pass the cache here It's likely it won't hit.
@@ -385,10 +385,14 @@ mkAdaPots blockId slotNo epochNo pots =
     , DB.adaPotsReserves = Generic.coinToDbLovelace $ Shelley.reservesAdaPot pots
     , DB.adaPotsRewards = Generic.coinToDbLovelace $ Shelley.rewardsAdaPot pots
     , DB.adaPotsUtxo = Generic.coinToDbLovelace $ Shelley.utxoAdaPot pots
-    , DB.adaPotsDeposits = Generic.coinToDbLovelace $ Shelley.depositsAdaPot pots
+    , DB.adaPotsDepositsStake = DB.DbLovelace $ fromIntegral $ unCoin (oblStake oblgs) + unCoin (oblPool oblgs)
+    , DB.adaPotsDepositsDrep = Generic.coinToDbLovelace $ oblDRep oblgs
+    , DB.adaPotsDepositsProposal = Generic.coinToDbLovelace $ oblProposal oblgs
     , DB.adaPotsFees = Generic.coinToDbLovelace $ Shelley.feesAdaPot pots
     , DB.adaPotsBlockId = blockId
     }
+  where
+    oblgs = Shelley.obligationsPot pots
 
 --------------------------------------------------------------------------------------------
 -- Insert Delegation

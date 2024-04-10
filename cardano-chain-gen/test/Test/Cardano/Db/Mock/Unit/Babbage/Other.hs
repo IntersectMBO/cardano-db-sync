@@ -36,6 +36,7 @@ import Cardano.Mock.Forging.Types (
  )
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
+import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Control.Exception (try)
@@ -179,7 +180,7 @@ poolDeReg =
             , PoolIndexNew 0
             , Babbage.consPoolParamsTwoOwners
             )
-          , ([], PoolIndexNew 0, \_ poolId -> ShelleyTxCertPool $ RetirePool poolId 1)
+          , ([], PoolIndexNew 0, \_ poolId -> ShelleyTxCertPool $ RetirePool poolId (EpochNo 1))
           ]
 
     assertBlockNoBackoff dbSync 2
@@ -221,7 +222,7 @@ poolDeRegMany =
             , Babbage.consPoolParamsTwoOwners
             )
           , -- de register
-            ([], PoolIndexNew 0, mkPoolDereg 4)
+            ([], PoolIndexNew 0, mkPoolDereg (EpochNo 4))
           , -- register
 
             ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
@@ -251,7 +252,7 @@ poolDeRegMany =
       tx1 <-
         Babbage.mkDCertPoolTx
           [ -- deregister
-            ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg 4)
+            ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg (EpochNo 4))
           , -- register
 
             ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
@@ -259,7 +260,7 @@ poolDeRegMany =
             , Babbage.consPoolParamsTwoOwners
             )
           , -- deregister
-            ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg 1)
+            ([] :: [StakeIndex], PoolIndexNew 0, mkPoolDereg (EpochNo 1))
           ]
           st
       pure [tx0, tx1]
@@ -328,7 +329,7 @@ poolDelist =
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkDCertPoolTx
-          [([], PoolIndexNew 0, \_ poolHash -> ShelleyTxCertPool $ RetirePool poolHash 1)]
+          [([], PoolIndexNew 0, \_ poolHash -> ShelleyTxCertPool $ RetirePool poolHash (EpochNo 1))]
 
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     assertBlockNoBackoff dbSync 5
