@@ -191,7 +191,7 @@ poolDeReg =
             , Conway.consTxCertPool
             )
           , -- Retire it
-            ([], PoolIndexNew 0, \_ poolId -> ConwayTxCertPool $ RetirePool poolId 1)
+            ([], PoolIndexNew 0, \_ poolId -> ConwayTxCertPool $ RetirePool poolId (EpochNo 1))
           ]
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
@@ -246,7 +246,7 @@ poolDeRegMany =
             , Conway.consTxCertPool
             )
           , -- Deregister
-            ([], PoolIndexNew 0, mkPoolDereg 4)
+            ([], PoolIndexNew 0, mkPoolDereg (EpochNo 4))
           , -- Register--this will be deduplicated by the ledger, so counts
             -- below will not include this cert
 
@@ -276,7 +276,7 @@ poolDeRegMany =
             state'
         , Conway.mkDCertPoolTx
             [ -- Deregister
-              ([], PoolIndexNew 0, mkPoolDereg 4)
+              ([], PoolIndexNew 0, mkPoolDereg (EpochNo 4))
             , -- Register
 
               ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
@@ -284,7 +284,7 @@ poolDeRegMany =
               , Conway.consTxCertPool
               )
             , -- Deregister
-              ([], PoolIndexNew 0, mkPoolDereg 1)
+              ([], PoolIndexNew 0, mkPoolDereg (EpochNo 1))
             ]
             state'
         ]
@@ -373,7 +373,7 @@ poolDelist =
 
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkDCertPoolTx [([], PoolIndexNew 0, mkPoolDereg 1)]
+        Conway.mkDCertPoolTx [([], PoolIndexNew 0, mkPoolDereg (EpochNo 1))]
 
     void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
   where

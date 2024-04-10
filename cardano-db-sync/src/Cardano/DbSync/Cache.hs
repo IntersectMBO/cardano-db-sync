@@ -85,7 +85,7 @@ queryOrInsertRewardAccount ::
   (MonadBaseControl IO m, MonadIO m) =>
   Cache ->
   CacheNew ->
-  Ledger.RewardAcnt StandardCrypto ->
+  Ledger.RewardAccount StandardCrypto ->
   ReaderT SqlBackend m DB.StakeAddressId
 queryOrInsertRewardAccount cache cacheNew rewardAddr = do
   eiAddrId <- queryRewardAccountWithCacheRetBs cache cacheNew rewardAddr
@@ -101,34 +101,34 @@ queryOrInsertStakeAddress ::
   StakeCred ->
   ReaderT SqlBackend m DB.StakeAddressId
 queryOrInsertStakeAddress cache cacheNew nw cred =
-  queryOrInsertRewardAccount cache cacheNew $ Ledger.RewardAcnt nw cred
+  queryOrInsertRewardAccount cache cacheNew $ Ledger.RewardAccount nw cred
 
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Ledger.RewardAcnt StandardCrypto ->
+  Ledger.RewardAccount StandardCrypto ->
   Maybe ByteString ->
   ReaderT SqlBackend m DB.StakeAddressId
 insertStakeAddress rewardAddr stakeCredBs =
   DB.insertStakeAddress $
     DB.StakeAddress
       { DB.stakeAddressHashRaw = addrBs
-      , DB.stakeAddressView = Generic.renderRewardAcnt rewardAddr
-      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
+      , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
+      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
       }
   where
-    addrBs = fromMaybe (Ledger.serialiseRewardAcnt rewardAddr) stakeCredBs
+    addrBs = fromMaybe (Ledger.serialiseRewardAccount rewardAddr) stakeCredBs
 
 queryRewardAccountWithCacheRetBs ::
   forall m.
   MonadIO m =>
   Cache ->
   CacheNew ->
-  Ledger.RewardAcnt StandardCrypto ->
+  Ledger.RewardAccount StandardCrypto ->
   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
 queryRewardAccountWithCacheRetBs cache cacheNew rwdAcc =
-  queryStakeAddrWithCacheRetBs cache cacheNew (Ledger.getRwdNetwork rwdAcc) (Ledger.getRwdCred rwdAcc)
+  queryStakeAddrWithCacheRetBs cache cacheNew (Ledger.raNetwork rwdAcc) (Ledger.raCredential rwdAcc)
 
 queryStakeAddrWithCache ::
   forall m.
@@ -152,7 +152,7 @@ queryStakeAddrWithCacheRetBs ::
 queryStakeAddrWithCacheRetBs cache cacheNew nw cred = do
   case cache of
     UninitiatedCache -> do
-      let !bs = Ledger.serialiseRewardAcnt (Ledger.RewardAcnt nw cred)
+      let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
       mapLeft (,bs) <$> queryStakeAddress bs
     Cache ci -> do
       mp <- liftIO $ readTVarIO (cStakeCreds ci)
@@ -177,7 +177,7 @@ queryStakeAddrAux cacheNew mp sts nw cred =
         _ -> pure (Right addrId, mp)
     Nothing -> do
       liftIO $ missCreds sts
-      let !bs = Ledger.serialiseRewardAcnt (Ledger.RewardAcnt nw cred)
+      let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
       mAddrId <- mapLeft (,bs) <$> queryStakeAddress bs
       case (mAddrId, cacheNew) of
         (Right addrId, CacheNew) -> pure (Right addrId, Map.insert cred addrId mp)

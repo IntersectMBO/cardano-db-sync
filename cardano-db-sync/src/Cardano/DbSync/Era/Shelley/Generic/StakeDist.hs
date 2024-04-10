@@ -99,7 +99,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
   | otherwise = Slice (mkSlice size) False
   where
     epoch :: EpochNo
-    epoch = 1 + Shelley.nesEL (Consensus.shelleyLedgerState lstate)
+    epoch = EpochNo $ 1 + unEpochNo (Shelley.nesEL (Consensus.shelleyLedgerState lstate))
 
     minSliceSize :: Word64
     minSliceSize = 2000

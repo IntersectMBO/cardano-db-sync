@@ -149,7 +149,9 @@ adaPotsZero bid =
     , adaPotsReserves = DbLovelace 0
     , adaPotsRewards = DbLovelace 0
     , adaPotsUtxo = DbLovelace 0
-    , adaPotsDeposits = DbLovelace 0
+    , adaPotsDepositsStake = DbLovelace 0
+    , adaPotsDepositsDrep = DbLovelace 0
+    , adaPotsDepositsProposal = DbLovelace 0
     , adaPotsFees = DbLovelace 0
     , adaPotsBlockId = bid
     }

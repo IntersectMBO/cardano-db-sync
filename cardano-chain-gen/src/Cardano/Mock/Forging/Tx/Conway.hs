@@ -45,7 +45,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   addValidityInterval,
 ) where
 
-import Cardano.Ledger.Address (Addr (..), RewardAcnt (..), Withdrawals (..))
+import Cardano.Ledger.Address (Addr (..), RewardAccount (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
@@ -86,6 +86,7 @@ import Data.List (nub)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..), maybeToStrictMaybe)
+import qualified Data.OSet.Strict as OSet
 import Data.Sequence.Strict (StrictSeq ())
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
@@ -118,7 +119,7 @@ consTxBody ins cols ref outs colOut fees minted certs withdrawals =
     , ctbOutputs = (`Sized` 0) <$> outs
     , ctbCollateralReturn = (`Sized` 0) <$> colOut
     , ctbTotalCollateral = SNothing
-    , ctbCerts = StrictSeq.fromList certs
+    , ctbCerts = OSet.fromList certs
     , ctbWithdrawals = withdrawals
     , ctbTxfee = fees
     , ctbVldt = ValidityInterval SNothing SNothing
@@ -361,7 +362,7 @@ mkScriptDCertTx consCert isValid' state' = do
           mkRedeemer n (alwaysSucceedsScriptHash, alwaysSucceedsScript)
     prepareRedeemer _ = Nothing
 
-    mkRedeemer n (a, b) = Just (ConwayCertifying (AsIndex n), Just (a, b))
+    mkRedeemer n (a, b) = Just (ConwayCertifying (AsIx n), Just (a, b))
 
 mkMultiAssetsScriptTx ::
   [ConwayUTxOIndex] ->
@@ -525,7 +526,7 @@ mkFullTx n m state' = do
         , ctbOutputs = (`Sized` 0) <$> outputs
         , ctbCollateralReturn = (`Sized` 0) <$> SJust out2
         , ctbTotalCollateral = SNothing
-        , ctbCerts = StrictSeq.fromList certs
+        , ctbCerts = OSet.fromList certs
         , ctbWithdrawals = withdrawals
         , ctbTxfee = Coin m
         , ctbVldt = ValidityInterval SNothing SNothing
@@ -580,6 +581,7 @@ mkFullTx n m state' = do
     mkInputs inputs' = Set.fromList $ fst <$> inputs'
 
     -- Certificates
+    certs :: [ConwayTxCert StandardConway]
     certs =
       [ ConwayTxCertDeleg $ ConwayRegCert (Prelude.head unregisteredStakeCredentials) SNothing
       , ConwayTxCertPool $ Core.RegPool poolParams0
@@ -606,8 +608,8 @@ mkFullTx n m state' = do
     withdrawals =
       Withdrawals $
         Map.fromList
-          [ (RewardAcnt Testnet (unregisteredStakeCredentials !! 1), Coin 100)
-          , (RewardAcnt Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+          [ (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+          , (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
           ]
 
     -- Witness keys
@@ -631,13 +633,13 @@ mkFullTx n m state' = do
 
 mkScriptMint' ::
   MultiAsset StandardCrypto ->
-  [(ConwayPlutusPurpose AsIndex era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
-mkScriptMint' = fmap (first (ConwayMinting . AsIndex)) . mkScriptMint
+  [(ConwayPlutusPurpose AsIx era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+mkScriptMint' = fmap (first (ConwayMinting . AsIx)) . mkScriptMint
 
 {-}
 mkScriptMint ::
   MultiAsset StandardCrypto ->
-  [(AlonzoPlutusPurpose AsIndex era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+  [(AlonzoPlutusPurpose AsIx era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
 mkScriptMint (MultiAsset m) =
   mapMaybe mkMint . zip [0 ..] . map policyID $ Map.keys m
   where
@@ -700,14 +702,14 @@ mkOutFromType amount txOutType =
 
 mkScriptInps ::
   [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
-  [(ConwayPlutusPurpose AsIndex StandardConway, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript StandardConway))]
+  [(ConwayPlutusPurpose AsIx StandardConway, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript StandardConway))]
 mkScriptInps = mapMaybe mkScriptInp . zip [0 ..]
 
 mkScriptInp ::
   (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
   (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
-  Maybe (ConwayPlutusPurpose AsIndex era, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript era))
-mkScriptInp = fmap (first $ ConwaySpending . AsIndex) . Babbage.mkScriptInp
+  Maybe (ConwayPlutusPurpose AsIx era, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript era))
+mkScriptInp = fmap (first $ ConwaySpending . AsIx) . Babbage.mkScriptInp
 
 mkUnlockScriptTx' ::
   [ConwayUTxOIndex] ->

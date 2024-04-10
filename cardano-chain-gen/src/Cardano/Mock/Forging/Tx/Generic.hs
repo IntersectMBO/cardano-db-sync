@@ -127,7 +127,7 @@ resolveStakeCreds indx st = case indx of
   StakeAddress addr -> Right addr
   StakeIndexNew n -> toEither $ unregisteredStakeCredentials !? n
   StakeIndexScript bl -> Right $ if bl then alwaysSucceedsScriptStake else alwaysFailsScriptStake
-  StakeIndexPoolLeader poolIndex -> Right $ getRwdCred $ ppRewardAcnt $ findPoolParams poolIndex
+  StakeIndexPoolLeader poolIndex -> Right $ raCredential $ ppRewardAccount $ findPoolParams poolIndex
   StakeIndexPoolMember n poolIndex -> Right $ resolvePoolMember n poolIndex
   where
     rewardAccs =
@@ -206,7 +206,7 @@ allPoolStakeCert st =
 
 getPoolStakeCreds :: PoolParams c -> [StakeCredential c]
 getPoolStakeCreds pparams =
-  getRwdCred (ppRewardAcnt pparams)
+  raCredential (ppRewardAccount pparams)
     : (KeyHashObj <$> Set.toList (ppOwners pparams))
 
 unregisteredStakeCredentials :: [StakeCredential StandardCrypto]
@@ -290,7 +290,7 @@ consPoolParams poolId rwCred owners =
     , ppPledge = Coin 1000
     , ppCost = Coin 10000
     , ppMargin = minBound
-    , ppRewardAcnt = RewardAcnt Testnet rwCred
+    , ppRewardAccount = RewardAccount Testnet rwCred
     , ppOwners = Set.fromList owners
     , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
     , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") "89237365492387654983275634298756"

@@ -34,7 +34,7 @@ import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
 import Ouroboros.Consensus.Cardano.Node
-import Ouroboros.Consensus.Config (TopLevelConfig (..))
+import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import qualified Ouroboros.Consensus.Mempool.Capacity as TxLimits
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
@@ -150,6 +150,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
             , triggerHardForkBabbage = dncBabbageHardFork dnc
             , triggerHardForkConway = dncConwayHardFork dnc
             }
+      , checkpoints = emptyCheckpointsMap
       }
   where
     GenesisCardano

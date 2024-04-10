@@ -221,7 +221,9 @@ share
     reserves            DbLovelace          sqltype=lovelace
     rewards             DbLovelace          sqltype=lovelace
     utxo                DbLovelace          sqltype=lovelace
-    deposits            DbLovelace          sqltype=lovelace
+    depositsStake       DbLovelace          sqltype=lovelace
+    depositsDrep        DbLovelace          sqltype=lovelace
+    depositsProposal    DbLovelace          sqltype=lovelace
     fees                DbLovelace          sqltype=lovelace
     blockId             BlockId             noreference
     deriving Eq
@@ -312,6 +314,9 @@ share
     -- Now the constraint is set manually inside of `applyAndInsertBlockMaybe` once the tip of
     -- the chain has been reached.
     deriving Show
+
+  UnlcaimedRewards
+    
 
   InstantReward
     addrId              StakeAddressId      noreference
@@ -876,7 +881,9 @@ schemaDocs =
       AdaPotsReserves # "The amount (in Lovelace) in the reserves pot."
       AdaPotsRewards # "The amount (in Lovelace) in the rewards pot."
       AdaPotsUtxo # "The amount (in Lovelace) in the UTxO set."
-      AdaPotsDeposits # "The amount (in Lovelace) in the deposit pot."
+      AdaPotsDepositsStake # "The amount (in Lovelace) in the obligation pot coming from stake key and pool deposits. Renamed from deposits in 13.3."
+      AdaPotsDepositsDrep # "The amount (in Lovelace) in the obligation pot coming from drep registrations deposits. New in 13.3."
+      AdaPotsDepositsProposal # "The amount (in Lovelace) in the obligation pot coming from governance proposal deposits. New in 13.3."
       AdaPotsFees # "The amount (in Lovelace) in the fee pot."
       AdaPotsBlockId # "The Block table index of the block for which this snapshot was taken."
 

@@ -5,7 +5,7 @@ module Cardano.DbSync.Util.AddressTest (tests) where
 
 import Cardano.Binary (FromCBOR (..), unsafeDeserialize')
 import Cardano.DbSync.Util.Address
-import Cardano.Ledger.Address (Addr (..), BootstrapAddress (..), RewardAcnt (..))
+import Cardano.Ledger.Address (Addr (..), BootstrapAddress (..), RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network (..))
 import qualified Cardano.Ledger.Binary.Decoding as Decoding
 import Cardano.Ledger.Crypto (StandardCrypto ())
@@ -26,8 +26,8 @@ tests =
       , ("serialiseAddress byron roundtrip", prop_serialiseAddress_byron_roundtrip)
       , ("serialiseAddress shelley simple", prop_serialiseAddress_shelley)
       , ("serialiseAddress shelley roundtrip", prop_serialiseAddress_shelley_roundtrip)
-      , ("serialiseRewardAcnt simple", prop_serialiseRewardAcnt)
-      , ("serialiseRewardAcnt roundtrip", prop_serialiseRewardAcnt_roundtrip)
+      , ("serialiseRewardAccount simple", prop_serialiseRewardAccount)
+      , ("serialiseRewardAccount roundtrip", prop_serialiseRewardAccount_roundtrip)
       ]
 
 prop_serialiseAddress_byron :: Property
@@ -57,20 +57,20 @@ prop_serialiseAddress_shelley_roundtrip = property $ do
 
   tripping addr serialiseAddress deserialiseShelleyAddress
 
-prop_serialiseRewardAcnt :: Property
-prop_serialiseRewardAcnt = property $ do
+prop_serialiseRewardAccount :: Property
+prop_serialiseRewardAccount = property $ do
   (cborHex, expected) <- forAll $ Gen.element knownStakeAddresses
   let addr = decodeBase16 cborHex
 
-  serialiseRewardAcnt addr === expected
+  serialiseRewardAccount addr === expected
 
-prop_serialiseRewardAcnt_roundtrip :: Property
-prop_serialiseRewardAcnt_roundtrip = property $ do
-  acnt <- forAll genRewardAcnt
-  cover 10 "mainnet" $ getRwdNetwork acnt == Mainnet
-  cover 10 "testnet" $ getRwdNetwork acnt == Testnet
+prop_serialiseRewardAccount_roundtrip :: Property
+prop_serialiseRewardAccount_roundtrip = property $ do
+  acnt <- forAll genRewardAccount
+  cover 10 "mainnet" $ raNetwork acnt == Mainnet
+  cover 10 "testnet" $ raNetwork acnt == Testnet
 
-  tripping acnt serialiseRewardAcnt deserialiseRewardAcnt
+  tripping acnt serialiseRewardAccount deserialiseRewardAccount
 
 knownByronAddresses :: [(Text, Text)]
 knownByronAddresses =
@@ -218,8 +218,8 @@ genByronAddress = arbitrary
 genShelleyAddress :: Gen (Addr StandardCrypto)
 genShelleyAddress = Addr <$> arbitrary <*> arbitrary <*> arbitrary
 
-genRewardAcnt :: Gen (RewardAcnt StandardCrypto)
-genRewardAcnt = arbitrary
+genRewardAccount :: Gen (RewardAccount StandardCrypto)
+genRewardAccount = arbitrary
 
 deserialiseBase16 :: FromCBOR a => Text -> a
 deserialiseBase16 = unsafeDeserialize' . decodeLenient . encodeUtf8

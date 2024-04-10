@@ -282,7 +282,7 @@ generateNewEpochEvents env details = do
       case esEpochNo oldEpochState of
         Strict.Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
         Strict.Just oldEpoch ->
-          if currentEpochNo == 1 + oldEpoch
+          if currentEpochNo == EpochNo (1 + unEpochNo oldEpoch)
             then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
             else Nothing
 

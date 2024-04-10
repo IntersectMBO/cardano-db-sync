@@ -37,7 +37,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.Alonzo.Scripts (AsIndex (..), ExUnits (..), PlutusPurpose (..), txscriptfee, unPlutusBinary)
+import Cardano.Ledger.Alonzo.Scripts (AsIx (..), ExUnits (..), PlutusPurpose (..), txscriptfee, unPlutusBinary)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), getAlonzoTxAuxDataScripts)
@@ -194,7 +194,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
     txBody :: Core.TxBody era
     txBody = tx ^. Core.bodyTxL
 
-    withdrawalsNoRedeemers :: Map (Shelley.RewardAcnt StandardCrypto) TxWithdrawal
+    withdrawalsNoRedeemers :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
     withdrawalsNoRedeemers =
       Map.mapWithKey (curry mkTxWithdrawal) $
         Shelley.unWithdrawals $
@@ -214,7 +214,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
 
     mkRdmrAndUpdateRec ::
       (RedeemerMaps, [(Word64, TxRedeemer)]) ->
-      [(Word64, (Alonzo.PlutusPurpose AsIndex era, (Alonzo.Data era, ExUnits)))] ->
+      [(Word64, (Alonzo.PlutusPurpose AsIx era, (Alonzo.Data era, ExUnits)))] ->
       (RedeemerMaps, [(Word64, TxRedeemer)])
     mkRdmrAndUpdateRec (rdmrMaps, rdmrsAcc) [] = (rdmrMaps, reverse rdmrsAcc)
     mkRdmrAndUpdateRec (rdmrMaps, rdmrsAcc) ((rdmrIx, rdmr) : rest) =
@@ -223,7 +223,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
 
     handleRedeemer ::
       Word64 ->
-      (PlutusPurpose AsIndex era, (Alonzo.Data era, ExUnits)) ->
+      (PlutusPurpose AsIx era, (Alonzo.Data era, ExUnits)) ->
       RedeemerMaps ->
       (TxRedeemer, RedeemerMaps)
     handleRedeemer rdmrIx (ptr, (dt, exUnits)) rdmrMps =
@@ -260,7 +260,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
 
         mkPurpose = \case
           Strict.SNothing -> Nothing
-          Strict.SJust a -> toAlonzoPurpose txBody a
+          Strict.SJust a -> toAlonzoPurpose txBody $ hoistPlutusPurpose Alonzo.toAsItem a
 
 handleTxInPtr :: Word64 -> Ledger.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
@@ -269,7 +269,7 @@ handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
     let gtxIn' = gtxIn {txInRedeemerIndex = Just rdmrIx}
      in (mps {rmInps = Map.insert txIn gtxIn' (rmInps mps)}, Just (Left gtxIn'))
 
-handleRewardPtr :: Word64 -> Shelley.RewardAcnt StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+handleRewardPtr :: Word64 -> Shelley.RewardAccount StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleRewardPtr rdmrIx rwdAcnt mps = case Map.lookup rwdAcnt (rmWdrl mps) of
   Nothing -> (mps, Nothing)
   Just wdrl ->
@@ -284,7 +284,7 @@ handleCertPtr rdmrIx dcert mps =
     f x = x
 
 data RedeemerMaps = RedeemerMaps
-  { rmWdrl :: Map (Shelley.RewardAcnt StandardCrypto) TxWithdrawal
+  { rmWdrl :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
   , rmCerts :: [(Cert, TxCertificate)]
   , rmInps :: Map (Ledger.TxIn StandardCrypto) TxIn
   }
@@ -368,8 +368,8 @@ extraKeyWits txBody =
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
       txBody ^. Alonzo.reqSignerHashesTxBodyL
 
-scriptHashAcnt :: Shelley.RewardAcnt StandardCrypto -> Maybe ByteString
-scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.getRwdCred rewardAddr
+scriptHashAcnt :: Shelley.RewardAccount StandardCrypto -> Maybe ByteString
+scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.raCredential rewardAddr
 
 scriptHashCert :: Cert -> Maybe ByteString
 scriptHashCert cert = case cert of

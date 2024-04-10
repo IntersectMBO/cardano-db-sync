@@ -125,7 +125,7 @@ import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
-import Prelude (String, id)
+import Prelude (String, error, id)
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -260,7 +260,7 @@ applyBlock env blk = do
         (Left err, _) -> Left err
         (_, Left err) -> Left err
         (Right currEpoch, Right prevEpoch) -> do
-          if currEpoch /= prevEpoch + 1
+          if currEpoch /= EpochNo (unEpochNo prevEpoch + 1)
             then Right Nothing
             else
               Right $
@@ -290,7 +290,7 @@ getDrepDistr ls = case ledgerState ls of
 getEnacted :: ExtLedgerState CardanoBlock -> Maybe (EnactState StandardConway)
 getEnacted ls = case ledgerState ls of
   LedgerStateConway cls ->
-    Just $ Consensus.shelleyLedgerState cls ^. (Shelley.nesEsL . Shelley.esLStateL . Shelley.lsUTxOStateL . Shelley.utxosGovStateL . cgEnactStateL)
+    Just $ Consensus.shelleyLedgerState cls ^. (Shelley.nesEsL . Shelley.esLStateL . Shelley.lsUTxOStateL . Shelley.utxosGovStateL . error "getEnacted") -- TODO: Conway
   _ -> Nothing
 
 getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes
@@ -321,7 +321,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
     Just newEpoch -> do
       let newEpochNo = Generic.neEpoch newEpoch
       -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-      liftIO $ saveCleanupState env oldState (Just $ newEpochNo - 1)
+      liftIO $ saveCleanupState env oldState (Just $ EpochNo $ unEpochNo newEpochNo - 1)
       pure True
     Nothing ->
       if timeToSnapshot syncState blkNo && isCons
@@ -746,7 +746,7 @@ getRegisteredPoolShelley lState =
 ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> Either SyncNodeError EpochNo
 ledgerEpochNo env cls =
   case ledgerTipSlot (ledgerState cls) of
-    Origin -> Right 0 -- An empty chain is in epoch 0
+    Origin -> Right $ EpochNo 0 -- An empty chain is in epoch 0
     NotOrigin slot ->
       case runExcept $ epochInfoEpoch epochInfo slot of
         Left err -> Left $ SNErrLedgerState $ "unable to use slot: " <> show slot <> "to get ledgerEpochNo: " <> show err

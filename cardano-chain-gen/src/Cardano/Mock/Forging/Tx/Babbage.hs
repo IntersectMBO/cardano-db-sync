@@ -304,8 +304,8 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
 mkScriptInp' ::
   (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
   (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
-  Maybe (AlonzoPlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, AlonzoScript era))
-mkScriptInp' = fmap (first $ AlonzoSpending . AsIndex) . mkScriptInp
+  Maybe (AlonzoPlutusPurpose AsIx era, Maybe (ScriptHash StandardCrypto, AlonzoScript era))
+mkScriptInp' = fmap (first $ AlonzoSpending . AsIx) . mkScriptInp
 
 mkScriptInp ::
   (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
@@ -416,8 +416,8 @@ mkScriptDCertTx consDert valid st = do
         else
           Just $
             if bl
-              then (AlonzoCertifying (AsIndex n), Just (alwaysFailsScriptHash, alwaysFailsScript))
-              else (AlonzoCertifying (AsIndex n), Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+              then (AlonzoCertifying (AsIx n), Just (alwaysFailsScriptHash, alwaysFailsScript))
+              else (AlonzoCertifying (AsIx n), Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
     prepareRedeemer _ = Nothing
 
 mkDepositTxPools ::
@@ -621,8 +621,8 @@ mkFullTx n m sta = do
     wthdr =
       Withdrawals $
         Map.fromList
-          [ (RewardAcnt Testnet (unregisteredStakeCredentials !! 1), Coin 100)
-          , (RewardAcnt Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+          [ (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+          , (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
           ]
 
     witKeys =
