@@ -70,6 +70,7 @@ import qualified Data.ByteString.Base16 as Base16
 
 import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
+import Cardano.Ledger.BaseTypes (StrictMaybe)
 import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Conway.Governance as Shelley
@@ -125,7 +126,7 @@ import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
-import Prelude (String, error, id)
+import Prelude (String, id)
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -245,7 +246,7 @@ applyBlock env blk = do
                 , apSlotDetails = details
                 , apStakeSlice = getStakeSlice env newState False
                 , apEvents = ledgerEvents
-                , apEnactState = getEnacted newLedgerState
+                , apCommittee = getCommittee newLedgerState
                 , apDepositsMap = DepositsMap deposits
                 }
             else defaultApplyResult details
@@ -270,7 +271,7 @@ applyBlock env blk = do
                     , Generic.neIsEBB = isJust $ blockIsEBB blk
                     , Generic.neAdaPots = maybeToStrict mPots
                     , Generic.neEpochUpdate = Generic.epochUpdate newState
-                    , Generic.neDRepState = maybeToStrict $ getDrepDistr newState
+                    , Generic.neDRepState = maybeToStrict $ getDrepState newState
                     , Generic.neEnacted = maybeToStrict $ getEnacted newState
                     }
 
@@ -281,16 +282,22 @@ applyBlock env blk = do
     applyToEpochBlockNo _ _ GenesisEpochBlockNo = EpochBlockNo 0
     applyToEpochBlockNo _ _ EBBEpochBlockNo = EpochBlockNo 0
 
-getDrepDistr :: ExtLedgerState CardanoBlock -> Maybe (DRepPulsingState StandardConway)
-getDrepDistr ls = case ledgerState ls of
+getEnacted :: ExtLedgerState CardanoBlock -> Maybe (GovRelation StrictMaybe StandardConway)
+getEnacted ls = case ledgerState ls of
+  LedgerStateConway cls ->
+    Just $ govStatePrevGovActionIds $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
+  _ -> Nothing
+
+getDrepState :: ExtLedgerState CardanoBlock -> Maybe (DRepPulsingState StandardConway)
+getDrepState ls = case ledgerState ls of
   LedgerStateConway cls ->
     Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateDRepPulsingStateL
   _ -> Nothing
 
-getEnacted :: ExtLedgerState CardanoBlock -> Maybe (EnactState StandardConway)
-getEnacted ls = case ledgerState ls of
+getCommittee :: ExtLedgerState CardanoBlock -> Maybe (StrictMaybe (Committee StandardConway))
+getCommittee ls = case ledgerState ls of
   LedgerStateConway cls ->
-    Just $ Consensus.shelleyLedgerState cls ^. (Shelley.nesEsL . Shelley.esLStateL . Shelley.lsUTxOStateL . Shelley.utxosGovStateL . error "getEnacted") -- TODO: Conway
+    Just $ Consensus.shelleyLedgerState cls ^. (Shelley.newEpochStateGovStateL . cgsCommitteeL)
   _ -> Nothing
 
 getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes

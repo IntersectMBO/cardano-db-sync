@@ -22,6 +22,7 @@ import Cardano.DbSync.Types (
   SlotDetails,
  )
 import Cardano.Ledger.Alonzo.Scripts (Prices)
+import Cardano.Ledger.BaseTypes (StrictMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
@@ -40,7 +41,6 @@ import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
-import Lens.Micro
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
@@ -137,7 +137,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
-  , apEnactState :: !(Maybe (EnactState StandardConway))
+  , apCommittee :: !(Maybe (StrictMaybe (Committee StandardConway)))
   , apDepositsMap :: !DepositsMap
   }
 
@@ -153,7 +153,7 @@ defaultApplyResult slotDetails =
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices
     , apEvents = []
-    , apEnactState = Nothing
+    , apCommittee = Nothing
     , apDepositsMap = emptyDepositsMap
     }
 
@@ -161,11 +161,6 @@ getGovExpiresAt :: ApplyResult -> EpochNo -> Maybe EpochNo
 getGovExpiresAt applyResult e = case apGovExpiresAfter applyResult of
   Strict.Just ei -> Just $ Ledger.addEpochInterval e ei
   Strict.Nothing -> Nothing
-
-getCommittee :: ApplyResult -> Maybe (Ledger.StrictMaybe (Committee StandardConway))
-getCommittee ar = case apEnactState ar of
-  Nothing -> Nothing
-  Just es -> Just $ es ^. ensCommitteeL
 
 -- TODO reuse this function rom ledger after it's exported.
 updatedCommittee ::

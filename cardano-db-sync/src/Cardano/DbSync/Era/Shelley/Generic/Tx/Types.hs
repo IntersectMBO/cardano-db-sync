@@ -3,7 +3,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wall -fno-warn-deprecations #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Tx (..),
@@ -177,7 +176,7 @@ instance DBScriptPurpose StandardAlonzo where
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
     AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
     AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
-    AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (redeemerPointer txBody pp))
+    AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
 instance DBScriptPurpose StandardBabbage where
   getPurpose = \case
@@ -190,7 +189,7 @@ instance DBScriptPurpose StandardBabbage where
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
     AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
     AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
-    AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (redeemerPointer txBody pp))
+    AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
 instance DBScriptPurpose StandardConway where
   getPurpose = \case

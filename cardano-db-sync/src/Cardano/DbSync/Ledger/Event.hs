@@ -24,9 +24,11 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.Ledger.Address (RewardAccount)
 import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
+import Cardano.Ledger.Api (GovActionId, GovActionState (..), ProposalProcedure (..))
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
@@ -70,9 +72,18 @@ data LedgerEvent
   | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set StakeCred)
   | LedgerTotalRewards !EpochNo !(Map StakeCred (Set (Ledger.Reward StandardCrypto)))
   | LedgerAdaPots !AdaPots
+  | LedgerGovInfo [GovActionRefunded] [GovActionRefunded] (Set (GovActionId StandardCrypto))
   | LedgerDeposits (SafeHash StandardCrypto Ledger.EraIndependentTxBody) Coin
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
+  deriving (Eq)
+
+data GovActionRefunded = GovActionRefunded
+  { garGovActionId :: GovActionId StandardCrypto
+  , garDeposit :: Coin
+  , garReturnAddr :: RewardAccount StandardCrypto
+  , garIsEnacted :: Bool -- True for enacted, False for retired, possibly redundant
+  }
   deriving (Eq)
 
 instance Ord LedgerEvent where
@@ -87,9 +98,10 @@ toOrdering ev = case ev of
   LedgerRestrainedRewards {} -> 4
   LedgerTotalRewards {} -> 5
   LedgerAdaPots {} -> 6
-  LedgerDeposits {} -> 7
-  LedgerStartAtEpoch {} -> 8
-  LedgerNewEpoch {} -> 9
+  LedgerGovInfo {} -> 7
+  LedgerDeposits {} -> 8
+  LedgerStartAtEpoch {} -> 9
+  LedgerNewEpoch {} -> 10
 
 convertAuxLedgerEvent :: Bool -> OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
 convertAuxLedgerEvent hasRewards = toLedgerEvent hasRewards . wrappedAuxLedgerEvent
@@ -104,6 +116,7 @@ ledgerEventName le =
     LedgerRestrainedRewards {} -> "LedgerRestrainedRewards"
     LedgerTotalRewards {} -> "LedgerTotalRewards"
     LedgerAdaPots {} -> "LedgerAdaPots"
+    LedgerGovInfo {} -> "LedgerGovInfo"
     LedgerDeposits {} -> "LedgerDeposits"
     LedgerStartAtEpoch {} -> "LedgerStartAtEpoch"
     LedgerNewEpoch {} -> "LedgerNewEpoch"
@@ -234,7 +247,27 @@ toLedgerEventConway evt hasRewards =
       ( TickNewEpochEvent
           (Conway.TotalAdaPotsEvent p)
         ) -> Just $ LedgerAdaPots p
+    ShelleyLedgerEventTICK
+      ( TickNewEpochEvent
+          ( Conway.EpochEvent
+              (Conway.GovInfoEvent en ex uncl)
+            )
+        ) ->
+        Just $
+          LedgerGovInfo
+            (toGovActionRefunded True <$> toList en)
+            (toGovActionRefunded False <$> toList ex)
+            uncl
     _ -> Nothing
+  where
+    toGovActionRefunded :: EraCrypto era ~ StandardCrypto => Bool -> GovActionState era -> GovActionRefunded
+    toGovActionRefunded isEnacted gas =
+      GovActionRefunded
+        { garGovActionId = gasId gas
+        , garDeposit = pProcDeposit $ gasProposalProcedure gas
+        , garReturnAddr = pProcReturnAddr $ gasProposalProcedure gas
+        , garIsEnacted = isEnacted
+        }
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
   toLedgerEvent hasRewards =

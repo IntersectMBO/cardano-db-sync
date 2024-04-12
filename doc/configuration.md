@@ -286,6 +286,8 @@ When this flag is enabled:
  * `drep_distr` is left empty
  * `governance_action.x_epoch` is left null
  * `governance_action.expiration` is left null
+ * `stake_registration.deposit` is left null
+ * `pool_update.deposit` is left null
 
 Warning: Running db-sync with this setting and restarting it with a different one will cause crashes
 and should be avoided.
