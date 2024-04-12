@@ -6,8 +6,8 @@
 module Cardano.DbSync.Era.Shelley.Generic.Rewards (
   Reward (..),
   Rewards (..),
-  InstantReward (..),
-  InstantRewards (..),
+  RewardRest (..),
+  RewardRests (..),
   rewardsCount,
   rewardsTotalAda,
 ) where
@@ -32,13 +32,13 @@ newtype Rewards = Rewards
   }
   deriving (Eq, Show)
 
-data InstantReward = InstantReward
+data RewardRest = RewardRest
   { irSource :: !RewardSource
   , irAmount :: !Coin
   }
   deriving (Eq, Ord, Show)
 
-newtype InstantRewards = InstantRewards
+newtype RewardRests = RewardRests
   { unIRewards :: Map StakeCred (Set Reward)
   }
   deriving (Eq, Show)

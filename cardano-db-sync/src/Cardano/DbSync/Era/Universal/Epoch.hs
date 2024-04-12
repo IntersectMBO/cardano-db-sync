@@ -14,7 +14,8 @@ module Cardano.DbSync.Era.Universal.Epoch (
   insertRewards,
   hasNewEpochEvent,
   hasEpochStartEvent,
-  insertInstantRewards,
+  insertRewardRests,
+  insertProposalRefunds,
   insertPoolDepositRefunds,
   insertStakeSlice,
   sumRewardTotal,
@@ -31,7 +32,6 @@ import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted, updateExpired, updateRatified)
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (whenStrictJust)
 import Cardano.DbSync.Util.Constraint (constraintNameEpochStake, constraintNameReward)
@@ -50,6 +50,8 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Database.Persist.Sql (SqlBackend)
+import Cardano.DbSync.Ledger.Event
+import Cardano.Ledger.Address (RewardAccount (..))
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -275,40 +277,67 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
-insertInstantRewards ::
+insertRewardRests ::
   (MonadBaseControl IO m, MonadIO m) =>
   Network ->
   EpochNo ->
   EpochNo ->
   Cache ->
-  [(StakeCred, Set Generic.InstantReward)] ->
+  [(StakeCred, Set Generic.RewardRest)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertInstantRewards nw earnedEpoch spendableEpoch cache rewardsChunk = do
+insertRewardRests nw earnedEpoch spendableEpoch cache rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   let chunckDbRewards = splittRecordsEvery 100000 dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyInstantRewards rws
+  forM_ chunckDbRewards $ \rws -> lift $ DB.insertManyRewardRests rws
   where
     mkRewards ::
       (MonadBaseControl IO m, MonadIO m) =>
-      (StakeCred, Set Generic.InstantReward) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.InstantReward]
+      (StakeCred, Set Generic.RewardRest) ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.RewardRest]
     mkRewards (saddr, rset) = do
       saId <- lift $ queryOrInsertStakeAddress cache CacheNew nw saddr
       pure $ map (prepareReward saId) (Set.toList rset)
 
     prepareReward ::
       DB.StakeAddressId ->
-      Generic.InstantReward ->
-      DB.InstantReward
+      Generic.RewardRest ->
+      DB.RewardRest
     prepareReward saId rwd =
-      DB.InstantReward
-        { DB.instantRewardAddrId = saId
-        , DB.instantRewardType = Generic.irSource rwd
-        , DB.instantRewardAmount = Generic.coinToDbLovelace (Generic.irAmount rwd)
-        , DB.instantRewardEarnedEpoch = unEpochNo earnedEpoch
-        , DB.instantRewardSpendableEpoch = unEpochNo spendableEpoch
+      DB.RewardRest
+        { DB.rewardRestAddrId = saId
+        , DB.rewardRestType = Generic.irSource rwd
+        , DB.rewardRestAmount = Generic.coinToDbLovelace (Generic.irAmount rwd)
+        , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
+        , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
         }
+
+insertProposalRefunds ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Network ->
+  EpochNo ->
+  EpochNo ->
+  Cache ->
+  [GovActionRefunded] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertProposalRefunds nw earnedEpoch spendableEpoch cache refunds = do
+  dbRewards <- mapM mkReward refunds
+  lift $ DB.insertManyRewardRests dbRewards
+  where
+    mkReward ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      GovActionRefunded ->
+      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RewardRest
+    mkReward refund = do
+      saId <- lift $ queryOrInsertStakeAddress cache CacheNew nw (raCredential $ garReturnAddr refund)
+      pure $
+        DB.RewardRest
+          { DB.rewardRestAddrId = saId
+          , DB.rewardRestType = DB.RwdProposalRefund
+          , DB.rewardRestAmount = Generic.coinToDbLovelace (garDeposit refund)
+          , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
+          , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
+          }
 
 splittRecordsEvery :: Int -> [a] -> [[a]]
 splittRecordsEvery val = go

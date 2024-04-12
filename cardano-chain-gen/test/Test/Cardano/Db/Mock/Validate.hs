@@ -14,7 +14,7 @@ module Test.Cardano.Db.Mock.Validate (
   assertTxInCount,
   assertUnspentTx,
   assertRewardCount,
-  assertInstantRewardCount,
+  assertRewardRestCount,
   assertBlockNoBackoff,
   assertBlockNoBackoffTimes,
   assertEqQuery,
@@ -113,9 +113,9 @@ assertRewardCount :: DBSyncEnv -> Word64 -> IO ()
 assertRewardCount env n =
   assertEqBackoff env queryRewardCount n defaultDelays "Unexpected rewards count"
 
-assertInstantRewardCount :: DBSyncEnv -> Word64 -> IO ()
-assertInstantRewardCount env n =
-  assertEqBackoff env queryInstantRewardCount n defaultDelays "Unexpected instant rewards count"
+assertRewardRestCount :: DBSyncEnv -> Word64 -> IO ()
+assertRewardRestCount env n =
+  assertEqBackoff env queryRewardRestCount n defaultDelays "Unexpected instant rewards count"
 
 assertBlockNoBackoff :: DBSyncEnv -> Int -> IO ()
 assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
@@ -276,6 +276,7 @@ assertRewardCounts env st filterAddr mEpoch expected = do
       RwdReserves -> (a, b, c + 1, d, e)
       RwdTreasury -> (a, b, c, d + 1, e)
       RwdDepositRefund -> (a, b, c, d, e + 1)
+      _ -> (a, b, c, d, e)
 
     updateMap ::
       (RewardSource, ByteString) ->
@@ -288,7 +289,7 @@ assertRewardCounts env st filterAddr mEpoch expected = do
       Just e -> rw ^. RewardSpendableEpoch ==. val e
     filterEpoch' rw = case mEpoch of
       Nothing -> val True
-      Just e -> rw ^. InstantRewardSpendableEpoch ==. val e
+      Just e -> rw ^. RewardRestSpendableEpoch ==. val e
 
     q = do
       res1 <- select . from $ \(reward `InnerJoin` stake_addr) -> do
@@ -296,9 +297,9 @@ assertRewardCounts env st filterAddr mEpoch expected = do
         where_ (filterEpoch reward)
         pure (reward ^. RewardType, stake_addr ^. StakeAddressHashRaw)
       res2 <- select . from $ \(ireward `InnerJoin` stake_addr) -> do
-        on (ireward ^. InstantRewardAddrId ==. stake_addr ^. StakeAddressId)
+        on (ireward ^. RewardRestAddrId ==. stake_addr ^. StakeAddressId)
         where_ (filterEpoch' ireward)
-        pure (ireward ^. InstantRewardType, stake_addr ^. StakeAddressHashRaw)
+        pure (ireward ^. RewardRestType, stake_addr ^. StakeAddressHashRaw)
       pure $ fmap (bimap unValue unValue) (res1 <> res2)
 
 assertEpochStake :: DBSyncEnv -> Word64 -> IO ()

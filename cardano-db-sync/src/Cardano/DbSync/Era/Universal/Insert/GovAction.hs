@@ -23,6 +23,7 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
   updateRatified,
   updateExpired,
   updateEnacted,
+  updateDropped,
 )
 where
 
@@ -398,7 +399,18 @@ updateExpired ::
 updateExpired epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal action
-    lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
+    lift $ DB.updateGovActionExpired gaId (unEpochNo epochNo)
+
+updateDropped ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  EpochNo ->
+  [GovActionId StandardCrypto] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+updateDropped epochNo ratifiedActions = do
+  forM_ ratifiedActions $ \action -> do
+    gaId <- resolveGovActionProposal action
+    lift $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
 
 updateEnacted ::
   forall m.

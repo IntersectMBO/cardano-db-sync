@@ -145,6 +145,7 @@ data RewardSource
   | RwdReserves
   | RwdTreasury
   | RwdDepositRefund
+  | RwdProposalRefund
   deriving (Bounded, Enum, Eq, Ord, Show)
 
 data SyncState
@@ -317,6 +318,7 @@ readRewardSource str =
     "reserves" -> RwdReserves
     "treasury" -> RwdTreasury
     "refund" -> RwdDepositRefund
+    "proposal_refund" -> RwdProposalRefund
     -- This should never happen. On the Postgres side we defined an ENUM with
     -- only the two values as above.
     _other -> error $ "readRewardSource: Unknown RewardSource " ++ Text.unpack str
@@ -365,6 +367,7 @@ showRewardSource rs =
     RwdReserves -> "reserves"
     RwdTreasury -> "treasury"
     RwdDepositRefund -> "refund"
+    RwdProposalRefund -> "proposal_refund"
 
 renderScriptType :: ScriptType -> Text
 renderScriptType st =

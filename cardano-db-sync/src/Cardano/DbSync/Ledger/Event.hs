@@ -13,6 +13,7 @@
 
 module Cardano.DbSync.Ledger.Event (
   LedgerEvent (..),
+  GovActionRefunded (..),
   convertAuxLedgerEvent,
   convertPoolRewards,
   ledgerEventName,
@@ -65,7 +66,7 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, ShelleyLedgerEvent (..)
 import Ouroboros.Consensus.TypeFamilyWrappers
 
 data LedgerEvent
-  = LedgerMirDist !(Map StakeCred (Set Generic.InstantReward))
+  = LedgerMirDist !(Map StakeCred (Set Generic.RewardRest))
   | LedgerPoolReap !EpochNo !Generic.Rewards
   | LedgerIncrementalRewards !EpochNo !Generic.Rewards
   | LedgerDeltaRewards !EpochNo !Generic.Rewards
@@ -299,20 +300,20 @@ convertPoolDepositRefunds rwds =
 convertMirRewards ::
   Map StakeCred Coin ->
   Map StakeCred Coin ->
-  Map StakeCred (Set Generic.InstantReward)
+  Map StakeCred (Set Generic.RewardRest)
 convertMirRewards resPay trePay =
   Map.unionWith Set.union (convertResPay resPay) (convertTrePay trePay)
   where
-    convertResPay :: Map StakeCred Coin -> Map StakeCred (Set Generic.InstantReward)
+    convertResPay :: Map StakeCred Coin -> Map StakeCred (Set Generic.RewardRest)
     convertResPay = Map.map (mkPayment RwdReserves)
 
-    convertTrePay :: Map StakeCred Coin -> Map StakeCred (Set Generic.InstantReward)
+    convertTrePay :: Map StakeCred Coin -> Map StakeCred (Set Generic.RewardRest)
     convertTrePay = Map.map (mkPayment RwdTreasury)
 
-    mkPayment :: RewardSource -> Coin -> Set Generic.InstantReward
+    mkPayment :: RewardSource -> Coin -> Set Generic.RewardRest
     mkPayment src coin =
       Set.singleton $
-        Generic.InstantReward
+        Generic.RewardRest
           { Generic.irSource = src
           , Generic.irAmount = coin
           }

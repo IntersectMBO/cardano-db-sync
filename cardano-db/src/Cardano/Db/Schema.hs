@@ -315,16 +315,13 @@ share
     -- the chain has been reached.
     deriving Show
 
-  UnlcaimedRewards
-    
-
-  InstantReward
+  RewardRest
     addrId              StakeAddressId      noreference
     type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
     earnedEpoch         Word64 generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
     spendableEpoch      Word64
-    UniqueInstantReward addrId earnedEpoch type
+    UniqueRewardRest addrId earnedEpoch type
     deriving Show
 
   Withdrawal
@@ -976,18 +973,18 @@ schemaDocs =
         # "The PoolHash table index for the pool the stake address was delegated to when\
           \ the reward is earned or for the pool that there is a deposit refund."
 
-    InstantReward --^ do
-      "A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury.\
-      \ This table only exists for historic reasons, since instant rewards are depredated after Conway.\
+    RewardRest --^ do
+      "A table for rewards which are not correlated to a pool. It includes 3 types of rewards: reserves, treasury and proposal_refund.\
+      \ Instant rewards are depredated after Conway.\
       \ The `reward.id` field has been removed and it only appears on docs due to a bug.\
       \ New in 13.2"
-      InstantRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
-      InstantRewardType # "The type of the rewards."
-      InstantRewardAmount # "The reward amount (in Lovelace)."
-      InstantRewardEarnedEpoch
+      RewardRestAddrId # "The StakeAddress table index for the stake address that earned the reward."
+      RewardRestType # "The type of the rewards."
+      RewardRestAmount # "The reward amount (in Lovelace)."
+      RewardRestEarnedEpoch
         # "The epoch in which the reward was earned. For rewards spendable in epoch `N`, this will be\
           \ `N - 1`."
-      InstantRewardSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
+      RewardRestSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
 
     Withdrawal --^ do
       "A table for withdrawals from a reward account."
@@ -1290,10 +1287,11 @@ schemaDocs =
       GovActionProposalType # "Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction"
       GovActionProposalDescription # "A Text describing the content of this GovActionProposal in a readable way."
       GovActionProposalParamProposal # "If this is a param proposal action, this has the index of the param_proposal table."
-      GovActionProposalRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null."
+      GovActionProposalRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch."
       GovActionProposalEnactedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
-      GovActionProposalDroppedEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
-      GovActionProposalExpiredEpoch # "If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null."
+      GovActionProposalExpiredEpoch # "If not null, then this proposal has been expired at the specfied epoch."
+      GovActionProposalDroppedEpoch # "If not null, then this proposal has been dropped at the specfied epoch. A proposal is dropped when it's \
+        \expired or enacted or when one of its dependencies is expired."
       GovActionProposalExpiration # "Shows the epoch at which this governance action will expire."
 
     TreasuryWithdrawal --^ do

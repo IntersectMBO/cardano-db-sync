@@ -18,18 +18,20 @@ import Cardano.DbSync.Cache.Types (textShowStats)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
-import Cardano.DbSync.Era.Universal.Epoch (insertInstantRewards, insertPoolDepositRefunds, insertRewards)
+import Cardano.DbSync.Era.Universal.Epoch (insertRewardRests, insertPoolDepositRefunds, insertRewards, insertProposalRefunds)
 import Cardano.DbSync.Era.Universal.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
+import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Database.Persist.SqlBackend.Internal
 import Database.Persist.SqlBackend.Internal.StatementCache
+import Cardano.DbSync.Era.Universal.Insert.GovAction (updateDropped)
 
 --------------------------------------------------------------------------------------------
 -- Insert LedgerEvents
@@ -91,11 +93,18 @@ insertBlockLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo en ex uncl -> do
-          pure () -- TODO: Conway
+          unless (Set.null uncl) $
+            liftIO $
+              logInfo tracer $
+                "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
+          updateDropped (EpochNo curEpoch) (garGovActionId <$> (en <> ex))
+          let en' = filter (\e -> Set.notMember (garGovActionId e) uncl) en
+              ex' = filter (\e -> Set.notMember (garGovActionId e) uncl) ex
+          insertProposalRefunds ntw (subFromCurrentEpoch 1) currentEpochNo cache (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
-            insertInstantRewards ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
+            insertRewardRests ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs ->
           unless (Map.null $ Generic.unRewards drs) $ do

@@ -18,7 +18,7 @@ module Cardano.Db.Insert (
   insertExtraKeyWitness,
   insertManyEpochStakes,
   insertManyRewards,
-  insertManyInstantRewards,
+  insertManyRewardRests,
   insertManyDrepDistr,
   insertManyTxIn,
   insertMaTxMint,
@@ -67,6 +67,8 @@ module Cardano.Db.Insert (
   updateSetComplete,
   updateGovActionEnacted,
   updateGovActionRatified,
+  updateGovActionDropped,
+  updateGovActionExpired,
   setNullEnacted,
   setNullRatified,
   replaceAdaPots,
@@ -206,11 +208,11 @@ insertManyRewards ::
   ReaderT SqlBackend m ()
 insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
-insertManyInstantRewards ::
+insertManyRewardRests ::
   (MonadBaseControl IO m, MonadIO m) =>
-  [InstantReward] ->
+  [RewardRest] ->
   ReaderT SqlBackend m ()
-insertManyInstantRewards = insertManyCheckUnique "Many Instant Rewards"
+insertManyRewardRests = insertManyCheckUnique "Many Rewards Rest"
 
 insertManyDrepDistr ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -378,6 +380,14 @@ updateGovActionEnacted gaid eNo =
 updateGovActionRatified :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
 updateGovActionRatified gaid eNo =
   updateWhere [GovActionProposalId ==. gaid, GovActionProposalRatifiedEpoch ==. Nothing] [GovActionProposalRatifiedEpoch =. Just eNo]
+
+updateGovActionDropped :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionDropped gaid eNo =
+  updateWhere [GovActionProposalId ==. gaid, GovActionProposalDroppedEpoch ==. Nothing] [GovActionProposalDroppedEpoch =. Just eNo]
+
+updateGovActionExpired :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionExpired gaid eNo =
+  updateWhere [GovActionProposalId ==. gaid, GovActionProposalExpiredEpoch ==. Nothing] [GovActionProposalExpiredEpoch =. Just eNo]
 
 setNullEnacted :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 setNullEnacted eNo =
