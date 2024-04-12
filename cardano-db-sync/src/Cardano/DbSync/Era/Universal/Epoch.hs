@@ -28,7 +28,7 @@ import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
 import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
-import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted, updateExpired, updateRatified)
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
@@ -73,10 +73,11 @@ insertOnNewEpoch tracer iopts blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.neDRepState newEpoch) $ \dreps -> when (ioGov iopts) $ do
     let (drepSnapshot, ratifyState) = finishDRepPulser dreps
     lift $ insertDrepDistr epochNo drepSnapshot
-    updateEnacted False epochNo (rsEnactState ratifyState)
+    updateRatified epochNo (toList $ rsEnacted ratifyState)
+    updateExpired epochNo (toList $ rsExpired ratifyState)
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt ->
     when (ioGov iopts) $
-      updateEnacted True epochNo enactedSt
+      updateEnacted epochNo enactedSt
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch

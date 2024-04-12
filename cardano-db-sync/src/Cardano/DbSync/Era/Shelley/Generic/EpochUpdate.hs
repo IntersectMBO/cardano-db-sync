@@ -9,6 +9,7 @@ module Cardano.DbSync.Era.Shelley.Generic.EpochUpdate (
 import Cardano.DbSync.Era.Shelley.Generic.ProtoParams
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.Ledger.BaseTypes (StrictMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
@@ -28,9 +29,9 @@ data NewEpoch = NewEpoch
   { neEpoch :: !EpochNo
   , neIsEBB :: !Bool
   , neAdaPots :: !(Maybe Shelley.AdaPots)
-  , neDRepState :: !(Maybe (DRepPulsingState StandardConway))
-  , neEnacted :: !(Maybe (EnactState StandardConway))
   , neEpochUpdate :: !EpochUpdate
+  , neDRepState :: !(Maybe (DRepPulsingState StandardConway))
+  , neEnacted :: !(Maybe (GovRelation StrictMaybe StandardConway))
   }
 
 data EpochUpdate = EpochUpdate

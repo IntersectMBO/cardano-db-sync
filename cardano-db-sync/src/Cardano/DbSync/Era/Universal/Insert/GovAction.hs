@@ -20,6 +20,8 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertCommitteeHash,
   insertVotingAnchor,
   resolveGovActionProposal,
+  updateRatified,
+  updateExpired,
   updateEnacted,
 )
 where
@@ -60,7 +62,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
-import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 insertGovActionProposal ::
@@ -377,12 +378,49 @@ insertCostModel _blkId cms =
       , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
       }
 
-updateEnacted :: forall m. (MonadBaseControl IO m, MonadIO m) => Bool -> EpochNo -> EnactState StandardConway -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-updateEnacted isEnacted epochNo enactedState = do
-  whenJust (strictMaybeToMaybe (enactedState ^. ensPrevPParamUpdateL)) $ \prevId -> do
+updateRatified ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  EpochNo ->
+  [GovActionState StandardConway] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+updateRatified epochNo ratifiedActions = do
+  forM_ ratifiedActions $ \action -> do
+    gaId <- resolveGovActionProposal $ gasId action
+    lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
+
+updateExpired ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  EpochNo ->
+  [GovActionId StandardCrypto] ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+updateExpired epochNo ratifiedActions = do
+  forM_ ratifiedActions $ \action -> do
+    gaId <- resolveGovActionProposal action
+    lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
+
+updateEnacted ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  EpochNo ->
+  GovRelation StrictMaybe StandardConway ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+updateEnacted epochNo enactedState = do
+  whenJust (strictMaybeToMaybe (grPParamUpdate enactedState)) $ \prevId -> do
     gaId <- resolveGovActionProposal $ getPrevId prevId
-    if isEnacted
-      then lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
-      else lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
+    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+
+  whenJust (strictMaybeToMaybe (grHardFork enactedState)) $ \prevId -> do
+    gaId <- resolveGovActionProposal $ getPrevId prevId
+    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+
+  whenJust (strictMaybeToMaybe (grCommittee enactedState)) $ \prevId -> do
+    gaId <- resolveGovActionProposal $ getPrevId prevId
+    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+
+  whenJust (strictMaybeToMaybe (grConstitution enactedState)) $ \prevId -> do
+    gaId <- resolveGovActionProposal $ getPrevId prevId
+    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
   where
     getPrevId = unGovPurposeId

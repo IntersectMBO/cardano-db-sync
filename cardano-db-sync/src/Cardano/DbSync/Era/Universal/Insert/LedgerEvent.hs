@@ -90,6 +90,8 @@ insertBlockLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
+        LedgerGovInfo en ex uncl -> do
+          pure () -- TODO: Conway
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
