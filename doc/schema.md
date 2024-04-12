@@ -1,6 +1,5 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.1 (from branch **master** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -239,7 +238,9 @@ The treasury and rewards fields will be correct for the whole epoch, but all oth
 | `reserves` | lovelace | The amount (in Lovelace) in the reserves pot. |
 | `rewards` | lovelace | The amount (in Lovelace) in the rewards pot. |
 | `utxo` | lovelace | The amount (in Lovelace) in the UTxO set. |
-| `deposits` | lovelace | The amount (in Lovelace) in the deposit pot. |
+| `deposits_stake` | lovelace | The amount (in Lovelace) in the obligation pot coming from stake key and pool deposits. Renamed from deposits in 13.3. |
+| `deposits_drep` | lovelace | The amount (in Lovelace) in the obligation pot coming from drep registrations deposits. New in 13.3. |
+| `deposits_proposal` | lovelace | The amount (in Lovelace) in the obligation pot coming from governance proposal deposits. New in 13.3. |
 | `fees` | lovelace | The amount (in Lovelace) in the fee pot. |
 | `block_id` | integer (64) | The Block table index of the block for which this snapshot was taken. |
 
@@ -275,6 +276,7 @@ An on-chain pool update.
 | `meta_id` | integer (64) | The PoolMetadataRef table index this pool update refers to. |
 | `margin` | double | The margin (as a percentage) this pool charges. |
 | `fixed_cost` | lovelace | The fixed per epoch fee (in ADA) this pool charges. |
+| `deposit` | lovelace |  |
 | `registered_tx_id` | integer (64) | The Tx table index of the transaction in which provided this pool update. |
 
 ### `pool_owner`
@@ -331,6 +333,7 @@ A table containing stake address registrations.
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this stake registration within the certificates of this transaction. |
 | `epoch_no` | word31type | The epoch in which the registration took place. |
+| `deposit` | lovelace |  |
 | `tx_id` | integer (64) | The Tx table index of the transaction where this stake address was registered. |
 
 ### `stake_deregistration`
@@ -395,9 +398,9 @@ A table for earned staking rewards. After 13.2 release it includes only 3 types 
 | `spendable_epoch` | integer (64) | The epoch in which the reward is actually distributed and can be spent. |
 | `pool_id` | integer (64) | The PoolHash table index for the pool the stake address was delegated to when the reward is earned or for the pool that there is a deposit refund. |
 
-### `instant_reward`
+### `reward_rest`
 
-A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury. This table only exists for historic reasons, since instant rewards are depredated after Conway. The `reward.id` field has been removed and it only appears on docs due to a bug. New in 13.2
+A table for rewards which are not correlated to a pool. It includes 3 types of rewards: reserves, treasury and proposal_refund. Instant rewards are depredated after Conway. The `reward.id` field has been removed and it only appears on docs due to a bug. New in 13.2
 
 * Primary Id: `id`
 
@@ -679,6 +682,7 @@ A table containing block chain parameter change proposals.
 | `gov_action_deposit` | word64type | Governance action deposit. New in 13.2-Conway. |
 | `drep_deposit` | word64type | DRep deposit amount. New in 13.2-Conway. |
 | `drep_activity` | word64type | DRep activity period. New in 13.2-Conway. |
+| `min_fee_ref_script_cost_per_byte` | double |  |
 | `registered_tx_id` | integer (64) | The Tx table index for the transaction that contains this parameter proposal. |
 
 ### `epoch_param`
@@ -742,6 +746,7 @@ The accepted protocol parameters for an epoch.
 | `gov_action_deposit` | word64type | Governance action deposit. New in 13.2-Conway. |
 | `drep_deposit` | word64type | DRep deposit amount. New in 13.2-Conway. |
 | `drep_activity` | word64type | DRep activity period. New in 13.2-Conway. |
+| `min_fee_ref_script_cost_per_byte` | double |  |
 | `block_id` | integer (64) | The Block table index for the first block where these parameters are valid. |
 
 ### `cost_model`
@@ -884,10 +889,10 @@ A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovP
 | `type` | govactiontype | Can be one of ParameterChange, HardForkInitiation, TreasuryWithdrawals, NoConfidence, NewCommittee, NewConstitution, InfoAction |
 | `description` | jsonb | A Text describing the content of this GovActionProposal in a readable way. |
 | `param_proposal` | integer (64) | If this is a param proposal action, this has the index of the param_proposal table. |
-| `ratified_epoch` | word31type | If not null, then this proposal has been ratified at the specfied epoch. TODO: This is currently always null. |
+| `ratified_epoch` | word31type | If not null, then this proposal has been ratified at the specfied epoch. |
 | `enacted_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. |
-| `dropped_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null. |
-| `expired_epoch` | word31type | If not null, then this proposal has been enacted at the specfied epoch. TODO: This is currently always null. |
+| `dropped_epoch` | word31type | If not null, then this proposal has been dropped at the specfied epoch. A proposal is dropped when it's expired or enacted or when one of its dependencies is expired. |
+| `expired_epoch` | word31type | If not null, then this proposal has been expired at the specfied epoch. |
 
 ### `treasury_withdrawal`
 
