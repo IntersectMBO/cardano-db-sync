@@ -54,6 +54,7 @@ syncPreConfig =
     <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
     <*> syncInsertConfig
+    <*> Gen.bool
 
 syncNodeParams :: MonadGen m => m SyncNodeParams
 syncNodeParams =

@@ -8,6 +8,9 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
   wrongConwayGenesisHash,
   insertConfig,
   defaultInsertConfig,
+  disableConway,
+  enableConway,
+  enableConwayDefault,
 ) where
 
 import Cardano.DbSync.Config
@@ -106,3 +109,52 @@ insertConfig = do
   dncInsertOptions cfg @?= expected
   where
     configDir = "config-conway-insert-options"
+
+disableConway :: Assertion
+disableConway = do
+  cfg <- mkSyncNodeConfig configDir args
+
+  -- Make the conway genesis invalid
+  hash <- Aeson.throwDecode "\"0000000000000000000000000000000000000000000000000000000000000000\""
+  let cfg' = cfg {dncConwayGenesisHash = Just hash}
+  -- Should not throw
+  void $ mkConfig configDir mutableDir args cfg'
+  where
+    configDir = "config-conway"
+    mutableDir = mkMutableDir "configDisableConway"
+    args =
+      initCommandLineArgs
+        { claConfigFilename = "test-db-sync-config-disable-conway.json"
+        }
+
+enableConway :: Assertion
+enableConway = do
+  cfg <- mkSyncNodeConfig configDir args
+
+  -- There's no way to verify the file was actually loaded
+  isJust (dncConwayGenesisHash cfg) @?= True
+  isJust (dncConwayGenesisFile cfg) @?= True
+
+  -- Should not throw
+  void $ mkConfig configDir mutableDir args cfg
+  where
+    configDir = "config-conway"
+    mutableDir = mkMutableDir "configDisableConway"
+    args =
+      initCommandLineArgs
+        { claConfigFilename = "test-db-sync-config-enable-conway.json"
+        }
+
+enableConwayDefault :: Assertion
+enableConwayDefault = do
+  cfg <- mkSyncNodeConfig configDir initCommandLineArgs
+
+  -- There's no way to verify the file was actually loaded
+  isJust (dncConwayGenesisHash cfg) @?= True
+  isJust (dncConwayGenesisFile cfg) @?= True
+
+  -- Should not throw
+  void $ mkConfig configDir mutableDir initCommandLineArgs cfg
+  where
+    configDir = "config-conway"
+    mutableDir = mkMutableDir "configDisableConway"

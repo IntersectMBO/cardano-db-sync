@@ -33,6 +33,9 @@ unitTests iom knownMigrations =
         , testCase "mismatched conway genesis hash" Config.wrongConwayGenesisHash
         , testCase "default insert config" Config.defaultInsertConfig
         , testCase "insert config" Config.insertConfig
+        , testCase "disable conway" Config.disableConway
+        , testCase "enable conway" Config.enableConway
+        , testCase "enable conway by default" Config.enableConwayDefault
         , testGroup
             "tx-out"
             [ test "consumed_by_tx_id column check" MigrateConsumedPruneTxOut.txConsumedColumnCheck

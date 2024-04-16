@@ -58,6 +58,11 @@ coalesceConfig ::
   IO SyncNodeConfig
 coalesceConfig pcfg ncfg adjustGenesisPath = do
   lc <- Logging.setupFromRepresentation $ pcLoggingConfig pcfg
+
+  let (conwayGenesisFile', conwayGenesisHash')
+        | pcEnableConway pcfg = (ncConwayGenesisFile ncfg, ncConwayGenesisHash ncfg)
+        | otherwise = (Nothing, Nothing)
+
   pure $
     SyncNodeConfig
       { dncNetworkName = pcNetworkName pcfg
@@ -76,8 +81,8 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncAlonzoGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncAlonzoGenesisFile ncfg)
       , dncAlonzoGenesisHash = ncAlonzoGenesisHash ncfg
       , dncConwayGenesisFile =
-          adjustGenesisFilePath adjustGenesisPath <$> ncConwayGenesisFile ncfg
-      , dncConwayGenesisHash = ncConwayGenesisHash ncfg
+          adjustGenesisFilePath adjustGenesisPath <$> conwayGenesisFile'
+      , dncConwayGenesisHash = conwayGenesisHash'
       , dncByronProtocolVersion = ncByronProtocolVersion ncfg
       , dncShelleyHardFork = ncShelleyHardFork ncfg
       , dncAllegraHardFork = ncAllegraHardFork ncfg

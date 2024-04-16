@@ -143,6 +143,7 @@ data SyncPreConfig = SyncPreConfig
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
+  , pcEnableConway :: !Bool
   }
   deriving (Show)
 
@@ -356,6 +357,7 @@ parseGenSyncNodeConfig o =
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
     <*> o .:? "insert_options" .!= def
+    <*> o .:? "enable_conway" .!= True
 
 instance FromJSON SyncProtocol where
   parseJSON o =
