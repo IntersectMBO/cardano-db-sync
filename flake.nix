@@ -142,10 +142,10 @@
             compiler-nix-name =
               if system == "x86_64-linux"
                 then lib.mkDefault "ghc810"
-                else lib.mkDefault "ghc963";
+                else lib.mkDefault "ghc96";
             flake.variants =
               let
-                compilers = lib.optionals (system == "x86_64-linux") ["ghc963"];
+                compilers = lib.optionals (system == "x86_64-linux") ["ghc96"];
               in
                 lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
@@ -154,7 +154,7 @@
             };
 
             shell.tools = {
-              cabal = "3.10.1.0";
+              cabal = "3.10.3.0";
               ghcid = "0.8.8";
               haskell-language-server = {
                 src = nixpkgs.haskell-nix.sources."hls-1.10";
@@ -319,8 +319,8 @@
             nonRequiredMacOSPaths = [
               "checks.cardano-chain-gen:test:cardano-chain-gen"
               "checks.cardano-db:test:test-db"
-              "ghc963.checks.cardano-chain-gen:test:cardano-chain-gen"
-              "ghc963.checks.cardano-db:test:test-db"
+              "ghc96.checks.cardano-chain-gen:test:cardano-chain-gen"
+              "ghc96.checks.cardano-db:test:test-db"
             ];
 
             nonRequiredPaths =
