@@ -246,6 +246,7 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
       , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
       , DB.paramProposalDrepActivity = fromIntegral . unEpochInterval <$> pppDRepActivity pp
+      , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
       }
 
 insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m ()

@@ -24,6 +24,7 @@
     "govActionDeposit": 1000000000,
     "dRepDeposit": 2000000,
     "dRepActivity": 20,
+    "minFeeRefScriptCostPerByte": 44,
     "constitution": {
       "anchor": {
         "url": "",

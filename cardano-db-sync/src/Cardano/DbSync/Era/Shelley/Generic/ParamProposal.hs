@@ -19,6 +19,7 @@ import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval, strictMaybeToMaybe
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin, unCoin)
 import Cardano.Ledger.Conway.Core
+import Cardano.Ledger.Conway.PParams (ppuMinFeeRefScriptCostPerByteL)
 import Cardano.Ledger.Crypto
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
@@ -70,6 +71,7 @@ data ParamProposal = ParamProposal
   , pppGovActionDeposit :: !(Maybe Natural)
   , pppDRepDeposit :: !(Maybe Natural)
   , pppDRepActivity :: !(Maybe EpochInterval)
+  , pppMinFeeRefScriptCostPerByte :: !(Maybe Rational)
   }
 
 convertParamProposal :: EraCrypto era ~ StandardCrypto => Witness era -> Shelley.Update era -> [ParamProposal]
@@ -139,6 +141,7 @@ convertConwayParamProposal pmap =
     , pppGovActionDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuGovActionDepositL)
     , pppDRepDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuDRepDepositL)
     , pppDRepActivity = strictMaybeToMaybe (pmap ^. ppuDRepActivityL)
+    , pppMinFeeRefScriptCostPerByte = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuMinFeeRefScriptCostPerByteL)
     }
 
 convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis StandardCrypto, PParamsUpdate StandardBabbage) -> ParamProposal
@@ -182,6 +185,7 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppGovActionDeposit = Nothing
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
+    , pppMinFeeRefScriptCostPerByte = Nothing
     }
 
 convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, PParamsUpdate StandardAlonzo) -> ParamProposal
@@ -226,6 +230,7 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppGovActionDeposit = Nothing
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
+    , pppMinFeeRefScriptCostPerByte = Nothing
     }
 
 -- | This works fine from Shelley to Mary. Not for Alonzo since 'ppuMinUTxOValueL' was removed
@@ -271,4 +276,5 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppGovActionDeposit = Nothing
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
+    , pppMinFeeRefScriptCostPerByte = Nothing
     }
