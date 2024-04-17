@@ -51,9 +51,9 @@ import Test.Cardano.Db.Mock.UnifiedApi (
 import Test.Cardano.Db.Mock.Validate (
   assertBlockNoBackoff,
   assertCurrentEpoch,
-  assertRewardRestCount,
   assertRewardCount,
   assertRewardCounts,
+  assertRewardRestCount,
  )
 import Test.Tasty.HUnit (Assertion)
 

@@ -483,6 +483,7 @@ share
     govActionDeposit         DbWord64 Maybe sqltype=word64type
     drepDeposit              DbWord64 Maybe sqltype=word64type
     drepActivity             Word64 Maybe sqltype=word64type
+    minFeeRefScriptCostPerByte Double Maybe  -- sqltype=rational
 
     registeredTxId      TxId                noreference
 
@@ -543,6 +544,7 @@ share
     govActionDeposit         DbWord64 Maybe sqltype=word64type
     drepDeposit              DbWord64 Maybe sqltype=word64type
     drepActivity             Word64 Maybe sqltype=word64type
+    minFeeRefScriptCostPerByte Double Maybe  -- sqltype=rational
 
     blockId             BlockId             noreference      -- The first block where these parameters are valid.
 
@@ -1290,8 +1292,9 @@ schemaDocs =
       GovActionProposalRatifiedEpoch # "If not null, then this proposal has been ratified at the specfied epoch."
       GovActionProposalEnactedEpoch # "If not null, then this proposal has been enacted at the specfied epoch."
       GovActionProposalExpiredEpoch # "If not null, then this proposal has been expired at the specfied epoch."
-      GovActionProposalDroppedEpoch # "If not null, then this proposal has been dropped at the specfied epoch. A proposal is dropped when it's \
-        \expired or enacted or when one of its dependencies is expired."
+      GovActionProposalDroppedEpoch
+        # "If not null, then this proposal has been dropped at the specfied epoch. A proposal is dropped when it's \
+          \expired or enacted or when one of its dependencies is expired."
       GovActionProposalExpiration # "Shows the epoch at which this governance action will expire."
 
     TreasuryWithdrawal --^ do

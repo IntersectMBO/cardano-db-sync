@@ -52,7 +52,7 @@ import Test.Cardano.Db.Mock.UnifiedApi (
   withAlonzoFindLeaderAndSubmit,
   withAlonzoFindLeaderAndSubmitTx,
  )
-import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertRewardRestCount, assertRewardCount, assertRewardCounts)
+import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertRewardCount, assertRewardCounts, assertRewardRestCount)
 import Test.Tasty.HUnit (Assertion)
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion

@@ -32,9 +32,11 @@ import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, updateEnacted, updateExpired, updateRatified)
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error
+import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (whenStrictJust)
 import Cardano.DbSync.Util.Constraint (constraintNameEpochStake, constraintNameReward)
+import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Binary.Version (getVersion)
@@ -50,8 +52,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Database.Persist.Sql (SqlBackend)
-import Cardano.DbSync.Ledger.Event
-import Cardano.Ledger.Address (RewardAccount (..))
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -149,6 +149,7 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamGovActionDeposit = DB.DbWord64 . fromIntegral <$> Generic.ppGovActionDeposit params
       , DB.epochParamDrepDeposit = DB.DbWord64 . fromIntegral <$> Generic.ppDRepDeposit params
       , DB.epochParamDrepActivity = fromIntegral . unEpochInterval <$> Generic.ppDRepActivity params
+      , DB.epochParamMinFeeRefScriptCostPerByte = fromRational <$> Generic.ppMinFeeRefScriptCostPerByte params
       , DB.epochParamBlockId = blkId
       }
 
