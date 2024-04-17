@@ -382,7 +382,7 @@ insertCostModel _blkId cms =
 
 updateRatified ::
   forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   EpochNo ->
   [GovActionState StandardConway] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -393,7 +393,7 @@ updateRatified epochNo ratifiedActions = do
 
 updateExpired ::
   forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   EpochNo ->
   [GovActionId StandardCrypto] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -404,7 +404,7 @@ updateExpired epochNo ratifiedActions = do
 
 updateDropped ::
   forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   EpochNo ->
   [GovActionId StandardCrypto] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
