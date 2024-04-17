@@ -157,7 +157,11 @@
               cabal = "3.10.3.0";
               ghcid = "0.8.8";
               haskell-language-server = {
-                src = nixpkgs.haskell-nix.sources."hls-1.10";
+                src =
+                  if config.compiler-nix-name == "ghc8107" then
+                    nixpkgs.haskell-nix.sources."hls-1.10"
+                  else
+                    nixpkgs.haskell-nix.sources."hls-2.7";
               };
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
