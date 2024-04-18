@@ -202,6 +202,7 @@ function restore_snapshot {
 	    --jobs="${numcores}" \
 	    --format=directory \
 	    --dbname="${PGDATABASE}" \
+		--no-owner \
 	    --exit-on-error \
 	    "${tmp_dir}/db/"
 	else
