@@ -3,6 +3,10 @@
 ## Next
 * Added an optional feature to store CBOR serialized transactions in `tx_cbor` table [#1723]
 
+## 13.2.0.2
+* Support node 8.9.x
+* Add a new db-sync config field `EnableFutureGenesis`. When false or missing, the conway genesis file is ignored
+
 ## 13.2.0.1
 * Added a new table `epoch_stake_progress` which indicates when `epoch_stake` is completed
 * Uses the cache for the computation of `epoch` table when following
