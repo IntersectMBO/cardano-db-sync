@@ -13,7 +13,6 @@ import Test.Tasty.HUnit (Assertion, testCase)
 
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled as EpochDisabled
-import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config.Parse as Config
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
@@ -69,11 +68,6 @@ unitTests iom knownMigrations =
             "disable-epoch"
             [ test "Epoch doesn't update when disabled" EpochDisabled.checkEpochDisabledArg
             , test "Epoch updates when enabled" EpochDisabled.checkEpochEnabled
-            ]
-        , testGroup
-            "force-indexes"
-            [ test "check force-index adds indexes" ForceIndex.checkForceIndexesArg
-            , test "check no force-index doesn't add indexes" ForceIndex.checkNoForceIndexesArg
             ]
         ]
     , testGroup

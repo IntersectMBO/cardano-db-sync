@@ -4,7 +4,6 @@ import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Prelude
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled as EpochDisabled
-import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
@@ -86,11 +85,6 @@ unitTests iom knownMigrations =
             "disable-epoch"
             [ test "Epoch doesn't update when disabled" EpochDisabled.checkEpochDisabledArg
             , test "Epoch updates when enabled" EpochDisabled.checkEpochEnabled
-            ]
-        , testGroup
-            "force-indexes"
-            [ test "check force-index adds indexes" ForceIndex.checkForceIndexesArg
-            , test "check no force-index doesn't add indexes" ForceIndex.checkNoForceIndexesArg
             ]
         ]
     , testGroup
