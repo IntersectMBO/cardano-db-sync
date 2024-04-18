@@ -1,6 +1,7 @@
 {
   "EnableLogMetrics": false,
   "EnableLogging": true,
+  "EnableFutureGenesis" : true,
   "NetworkName": "testing",
   "NodeConfigFile": "test-config.json",
   "PrometheusPort": 8080,
