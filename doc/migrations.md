@@ -9,15 +9,16 @@ different values.
 - `d`: no semantic change to the db.
 
 ## Upgrading to 13.2.0.x
+- Upgrading from 13.2.0.1 to 13.2.0.2 causes no resyncs, since the releases are identical.
 
-In order to upgrade from 13.1.x.x to 13.2.0.x resyncing is not necessary and no special
+- In order to upgrade from 13.1.x.x to 13.2.0.x resyncing is not necessary and no special
 flags are required from the user. DBSync will automatically perform the new migrations under `schema`
 directory. Details about these migrations can be found in the release `Changelog.md`, in the `schema.md`
 annotated as `13.2` or in the schema files directly. New stage 1 files starts from 1-10 and stage 2 starts from 2-26.
 These migrations takes a couple minutes, mosty because the instant rewards are moved from the `reward` table to a
 new `instant_reward` table. After that there is a ledger replay (read below), which takes a few hours.
 
-Upgrading from 13.0.x to 13.2.0.x should be possible but hasn't been tested.
+- Upgrading from 13.0.x to 13.2.0.x should be possible but hasn't been tested.
 
 ### Ledger replay
 
