@@ -76,8 +76,13 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncAlonzoGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncAlonzoGenesisFile ncfg)
       , dncAlonzoGenesisHash = ncAlonzoGenesisHash ncfg
       , dncConwayGenesisFile =
-          adjustGenesisFilePath adjustGenesisPath <$> ncConwayGenesisFile ncfg
-      , dncConwayGenesisHash = ncConwayGenesisHash ncfg
+          if pcEnableFutureGenesis pcfg
+            then adjustGenesisFilePath adjustGenesisPath <$> ncConwayGenesisFile ncfg
+            else Nothing
+      , dncConwayGenesisHash =
+          if pcEnableFutureGenesis pcfg
+            then ncConwayGenesisHash ncfg
+            else Nothing
       , dncByronProtocolVersion = ncByronProtocolVersion ncfg
       , dncShelleyHardFork = ncShelleyHardFork ncfg
       , dncAllegraHardFork = ncAllegraHardFork ncfg

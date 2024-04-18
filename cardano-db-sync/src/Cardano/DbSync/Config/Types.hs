@@ -139,6 +139,7 @@ data SyncPreConfig = SyncPreConfig
   { pcNetworkName :: !NetworkName
   , pcLoggingConfig :: !Logging.Representation
   , pcNodeConfigFile :: !NodeConfigFile
+  , pcEnableFutureGenesis :: !Bool
   , pcEnableLogging :: !Bool
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
@@ -352,6 +353,7 @@ parseGenSyncNodeConfig o =
     <$> fmap NetworkName (o .: "NetworkName")
     <*> parseJSON (Object o)
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
+    <*> fmap (fromMaybe False) (o .:? "EnableFutureGenesis")
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
