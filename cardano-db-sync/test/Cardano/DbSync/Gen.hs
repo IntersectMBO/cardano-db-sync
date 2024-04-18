@@ -52,6 +52,7 @@ syncPreConfig =
     <*> (NodeConfigFile <$> filePath)
     <*> Gen.bool
     <*> Gen.bool
+    <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
     <*> syncInsertConfig
 
