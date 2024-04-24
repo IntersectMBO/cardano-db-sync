@@ -71,6 +71,8 @@ module Cardano.Db.Insert (
   updateGovActionExpired,
   setNullEnacted,
   setNullRatified,
+  setNullExpired,
+  setNullDropped,
   replaceAdaPots,
   insertAnchor,
   insertConstitution,
@@ -396,6 +398,14 @@ setNullEnacted eNo =
 setNullRatified :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 setNullRatified eNo =
   updateWhere [GovActionProposalRatifiedEpoch !=. Nothing, GovActionProposalRatifiedEpoch >. Just eNo] [GovActionProposalRatifiedEpoch =. Nothing]
+
+setNullExpired :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullExpired eNo =
+  updateWhere [GovActionProposalExpiredEpoch !=. Nothing, GovActionProposalExpiredEpoch >. Just eNo] [GovActionProposalExpiredEpoch =. Nothing]
+
+setNullDropped :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullDropped eNo =
+  updateWhere [GovActionProposalDroppedEpoch !=. Nothing, GovActionProposalDroppedEpoch >. Just eNo] [GovActionProposalDroppedEpoch =. Nothing]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do

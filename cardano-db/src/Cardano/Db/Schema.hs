@@ -904,6 +904,7 @@ schemaDocs =
       PoolUpdateMetaId # "The PoolMetadataRef table index this pool update refers to."
       PoolUpdateMargin # "The margin (as a percentage) this pool charges."
       PoolUpdateFixedCost # "The fixed per epoch fee (in ADA) this pool charges."
+      PoolUpdateDeposit # "The deposit payed for this pool update. Null for reregistrations."
       PoolUpdateRegisteredTxId # "The Tx table index of the transaction in which provided this pool update."
 
     PoolOwner --^ do
@@ -1277,8 +1278,7 @@ schemaDocs =
 
     GovActionProposal --^ do
       "A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal.\
-      \ At most one of the ratified/enacted/dropped/expired\
-      \ epoch field can be non-null, indicating the current state of the proposal. This table may be referenced\
+      \ This table may be referenced\
       \ by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway."
       GovActionProposalTxId # "The Tx table index of the tx that includes this certificate."
       GovActionProposalIndex # "The index of this proposal procedure within its transaction."
