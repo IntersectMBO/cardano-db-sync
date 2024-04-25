@@ -23,6 +23,7 @@ import Cardano.Db.Schema.Types (
   PoolUrl,
  )
 import Cardano.Db.Types (
+  AnchorType,
   DbInt65,
   DbLovelace,
   DbWord64,
@@ -460,6 +461,7 @@ share
     pvtCommitteeNormal       Double Maybe   -- sqltype=rational
     pvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
     pvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    pvtppSecurityGroup       Double Maybe   -- sqltype=rational
     dvtMotionNoConfidence    Double Maybe   -- sqltype=rational
     dvtCommitteeNormal       Double Maybe   -- sqltype=rational
     dvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
@@ -519,6 +521,7 @@ share
     pvtCommitteeNormal       Double Maybe   -- sqltype=rational
     pvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
     pvtHardForkInitiation    Double Maybe   -- sqltype=rational
+    pvtppSecurityGroup       Double Maybe   -- sqltype=rational
     dvtMotionNoConfidence    Double Maybe   -- sqltype=rational
     dvtCommitteeNormal       Double Maybe   -- sqltype=rational
     dvtCommitteeNoConfidence Double Maybe   -- sqltype=rational
@@ -552,7 +555,12 @@ share
     raw                 ByteString Maybe   sqltype=hash28type
     view                Text
     hasScript           Bool
-    UniqueDrepHash      raw !force
+    UniqueDrepHash      raw hasScript !force
+
+  CommitteeHash
+    raw                 ByteString         sqltype=hash28type
+    hasScript           Bool
+    UniqueCommitteeHash raw hasScript
 
   DelegationVote
     addrId              StakeAddressId      noreference
@@ -564,19 +572,19 @@ share
   CommitteeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    coldKey             ByteString          sqltype=hash28type
-    hotKey              ByteString          sqltype=hash28type
+    coldKeyId           CommitteeHashId     noreference
+    hotKeyId            CommitteeHashId     noreference
 
   CommitteeDeRegistration
     txId                TxId                noreference
     certIndex           Word16
-    coldKey             ByteString          sqltype=hash28type
+    coldKeyId           CommitteeHashId       noreference
     votingAnchorId      VotingAnchorId Maybe  noreference
 
   DrepRegistration
     txId                TxId                noreference
     certIndex           Word16
-    deposit             Int64 Maybe                             -- Needs to allow negaitve values.
+    deposit             Int64 Maybe
     votingAnchorId      VotingAnchorId Maybe  noreference
     drepHashId          DrepHashId          noreference
 
@@ -584,7 +592,8 @@ share
     txId                TxId                noreference
     dataHash            ByteString
     url                 VoteUrl             sqltype=varchar
-    UniqueVotingAnchor  dataHash url
+    type                AnchorType          sqltype=anchorType
+    UniqueVotingAnchor  dataHash url type
 
   GovActionProposal
     txId               TxId                  noreference
@@ -595,7 +604,7 @@ share
     expiration         Word64 Maybe          sqltype=word31type
     votingAnchorId     VotingAnchorId Maybe  noreference
     type               GovActionType         sqltype=govactiontype
-    description        Text
+    description        Text                  sqltype=jsonb
     paramProposal      ParamProposalId Maybe noreference
     ratifiedEpoch      Word64 Maybe          sqltype=word31type
     enactedEpoch       Word64 Maybe          sqltype=word31type
@@ -604,15 +613,18 @@ share
 
   TreasuryWithdrawal
     govActionProposalId  GovActionProposalId  noreference
-    stakeAddressId      StakeAddressId      noreference
-    amount              DbLovelace          sqltype=lovelace
+    stakeAddressId       StakeAddressId      noreference
+    amount               DbLovelace          sqltype=lovelace
 
-  NewCommittee
+  NewCommitteeInfo
     govActionProposalId  GovActionProposalId  noreference
-    quorumNumerator     Word64
-    quorumDenominator   Word64
-    deletedMembers      Text
-    addedMembers        Text
+    quorumNumerator      Word64
+    quorumDenominator    Word64
+
+  NewCommitteeMember
+    govActionProposalId  GovActionProposalId  noreference
+    committeeHashId      CommitteeHashId      noreference
+    expirationEpoch      Word64               sqltype=word31type
 
   Constitution
     govActionProposalId  GovActionProposalId  noreference
@@ -624,7 +636,7 @@ share
     index                Word16
     govActionProposalId   GovActionProposalId   noreference
     voterRole            VoterRole            sqltype=voterrole
-    committeeVoter       ByteString Maybe
+    committeeVoter       CommitteeHashId Maybe noreference
     drepVoter            DrepHashId Maybe     noreference
     poolVoter            PoolHashId Maybe     noreference
     vote                 Vote                 sqltype=vote
@@ -665,11 +677,38 @@ share
   OffChainVoteData
     votingAnchorId      VotingAnchorId      noreference
     hash                ByteString
+    language            Text
+    comment             Text Maybe
+    title               Text Maybe
+    abstract            Text Maybe
+    motivation          Text Maybe
+    rationale           Text Maybe
     json                Text
     bytes               ByteString          sqltype=bytea
     warning             Text Maybe
+    isValid             Bool Maybe
     UniqueOffChainVoteData votingAnchorId hash
     deriving Show
+
+  OffChainVoteAuthor
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    name                Text Maybe
+    witnessAlgorithm    Text
+    publicKey           Text
+    signature           Text
+    warning             Text Maybe
+
+  OffChainVoteReference
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    label               Text
+    uri                 Text
+    hashDigest          Text Maybe
+    hashAlgorithm       Text Maybe
+
+  OffChainVoteExternalUpdate
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    title               Text
+    uri                 Text
 
   OffChainVoteFetchError
     votingAnchorId      VotingAnchorId      noreference
@@ -916,7 +955,7 @@ schemaDocs =
       \ since the other 2 types have moved to a separate table instant_reward.\
       \ The rewards are inserted incrementally and\
       \ this procedure is finalised when the spendable epoch comes. Before the epoch comes, some entries\
-      \ may be missing."
+      \ may be missing. The `reward.id` field has been removed and it only appears on docs due to a bug."
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The type of the rewards"
       RewardAmount # "The reward amount (in Lovelace)."
@@ -931,6 +970,7 @@ schemaDocs =
     InstantReward --^ do
       "A table for earned instant rewards. It includes only 2 types of rewards: reserves and treasury.\
       \ This table only exists for historic reasons, since instant rewards are depredated after Conway.\
+      \ The `reward.id` field has been removed and it only appears on docs due to a bug.\
       \ New in 13.2"
       InstantRewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       InstantRewardType # "The type of the rewards."
@@ -954,6 +994,11 @@ schemaDocs =
       EpochStakePoolId # "The PoolHash table index for the pool this entry is delegated to."
       EpochStakeAmount # "The amount (in Lovelace) being staked."
       EpochStakeEpochNo # "The epoch number."
+
+    EpochStakeProgress --^ do
+      "A table which shows when the epoch_stake for an epoch is complete"
+      EpochStakeProgressEpochNo # "The related epoch"
+      EpochStakeProgressCompleted # "True if completed. If not completed the entry won't exist or more rarely be False."
 
     Treasury --^ do
       "A table for payments from the treasury to a StakeAddress. Note: Before protocol version 5.0\
@@ -1016,7 +1061,7 @@ schemaDocs =
       RedeemerFee
         # "The budget in fees to run a script. The fees depend on the ExUnits and the current prices.\
           \ Is null when --disable-ledger is enabled. New in v13: became nullable."
-      RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward'."
+      RedeemerPurpose # "What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward', `voting`, `proposing`"
       RedeemerIndex # "The index of the redeemer pointer in the transaction."
       RedeemerScriptHash # "The script hash this redeemer is used for."
       RedeemerRedeemerDataId # "The data related to this redeemer. New in v13: renamed from datum_id."
@@ -1174,11 +1219,16 @@ schemaDocs =
 
     DrepHash --^ do
       "A table for every unique drep key hash.\
-      \ The existance of an entry doesn't mean the DRep is registered or in fact that is was ever registered.\
+      \ The existance of an entry doesn't mean the DRep is registered.\
       \ New in 13.2-Conway."
       DrepHashRaw # "The raw bytes of the DRep."
       DrepHashView # "The human readable encoding of the Drep."
       DrepHashHasScript # "Flag which shows if this DRep credentials are a script hash"
+
+    CommitteeHash --^ do
+      "A table for all committee hot credentials"
+      CommitteeHashRaw # "The key or script hash"
+      CommitteeHashHasScript # "Flag which shows if this credential is a script hash"
 
     DelegationVote --^ do
       "A table containing delegations from a stake address to a stake pool. New in 13.2-Conway."
@@ -1192,14 +1242,14 @@ schemaDocs =
       "A table for every committee hot key registration. New in 13.2-Conway."
       CommitteeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeRegistrationCertIndex # "The index of this registration within the certificates of this transaction."
-      CommitteeRegistrationColdKey # "The registered cold hey hash. TODO: should this reference DrepHashId or some separate hash table?"
-      CommitteeRegistrationHotKey # "The registered hot hey hash"
+      CommitteeRegistrationColdKeyId # "The reference to the registered cold key hash id"
+      CommitteeRegistrationHotKeyId # "The reference to the registered hot key hash id"
 
     CommitteeDeRegistration --^ do
       "A table for every committee key de-registration. New in 13.2-Conway."
       CommitteeDeRegistrationTxId # "The Tx table index of the tx that includes this certificate."
       CommitteeDeRegistrationCertIndex # "The index of this deregistration within the certificates of this transaction."
-      CommitteeDeRegistrationColdKey # "The deregistered cold key hash"
+      CommitteeDeRegistrationColdKeyId # "The reference to the the deregistered cold key hash id"
       CommitteeDeRegistrationVotingAnchorId # "The Voting anchor reference id"
 
     DrepRegistration --^ do
@@ -1245,13 +1295,11 @@ schemaDocs =
       TreasuryWithdrawalStakeAddressId # "The address that benefits from this withdrawal."
       TreasuryWithdrawalAmount # "The amount for this withdrawl."
 
-    NewCommittee --^ do
+    NewCommitteeInfo --^ do
       "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
-      NewCommitteeGovActionProposalId # "The GovActionProposal table index for this new committee."
-      NewCommitteeQuorumNumerator # "The proposed quorum nominator."
-      NewCommitteeQuorumDenominator # "The proposed quorum denominator."
-      NewCommitteeDeletedMembers # "The removed members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
-      NewCommitteeAddedMembers # "The new members of the committee. This is now given in a text as a description, but may change. TODO: Conway."
+      NewCommitteeInfoGovActionProposalId # "The GovActionProposal table index for this new committee."
+      NewCommitteeInfoQuorumNumerator # "The proposed quorum nominator."
+      NewCommitteeInfoQuorumDenominator # "The proposed quorum denominator."
 
     Constitution --^ do
       "A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway."
@@ -1265,7 +1313,9 @@ schemaDocs =
       VotingProcedureIndex # "The index of this VotingProcedure within this transaction."
       VotingProcedureGovActionProposalId # "The index of the GovActionProposal that this vote targets."
       VotingProcedureVoterRole # "The role of the voter. Can be one of ConstitutionalCommittee, DRep, SPO."
-      VotingProcedureCommitteeVoter # ""
+      VotingProcedureCommitteeVoter # "A reference to the hot key committee hash entry that voted"
+      VotingProcedureDrepVoter # "A reference to the drep hash entry that voted"
+      VotingProcedurePoolVoter # "A reference to the pool hash entry that voted"
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
 
@@ -1274,9 +1324,45 @@ schemaDocs =
       \ decribed in CIP-100. New in 13.2-Conway."
       OffChainVoteDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
       OffChainVoteDataHash # "The hash of the offchain data."
+      OffChainVoteDataLanguage # "The langauge described in the context of the metadata. Described in CIP-100. New in 13.3-Conway."
+      OffChainVoteDataComment # "The title of the metadata. Described in CIP-108. New in 13.3-Conway."
+      OffChainVoteDataAbstract # "The abstract of the metadata. Described in CIP-108. New in 13.3-Conway."
+      OffChainVoteDataMotivation # "The motivation of the metadata. Described in CIP-108. New in 13.3-Conway."
+      OffChainVoteDataRationale # "The rationale of the metadata. Described in CIP-108. New in 13.3-Conway."
       OffChainVoteDataJson # "The payload as JSON."
       OffChainVoteDataBytes # "The raw bytes of the payload."
       OffChainVoteDataWarning # "A warning that occured while validating the metadata."
+      OffChainVoteDataIsValid
+        # "False if the data is found invalid. db-sync leaves this field null \
+          \since it normally populates off_chain_vote_fetch_error for invalid data. \
+          \It can be used manually to mark some metadata invalid by clients."
+
+    OffChainVoteAuthor --^ do
+      "The table with offchain metadata authors, as decribed in CIP-100. New in 13.3-Conway."
+      OffChainVoteAuthorOffChainVoteDataId # "The OffChainVoteData table index this offchain data refers."
+      OffChainVoteAuthorName # "The name of the author."
+      OffChainVoteAuthorWitnessAlgorithm # "The witness algorithm used by the author."
+      OffChainVoteAuthorPublicKey # "The public key used by the author."
+      OffChainVoteAuthorSignature # "The signature of the author."
+      OffChainVoteAuthorWarning # "A warning related to verifying this metadata."
+
+    OffChainVoteReference --^ do
+      "The table with offchain metadata references, as decribed in CIP-100. New in 13.3-Conway."
+      OffChainVoteReferenceOffChainVoteDataId # "The OffChainVoteData table index this entry refers."
+      OffChainVoteReferenceLabel # "The label of this vote reference."
+      OffChainVoteReferenceUri # "The uri of this vote reference."
+      OffChainVoteReferenceHashDigest
+        # "The hash digest of this vote reference, as described in CIP-108. \
+          \This only appears for governance action metadata."
+      OffChainVoteReferenceHashAlgorithm
+        # "The hash algorithm of this vote reference, as described in CIP-108. \
+          \This only appears for governance action metadata."
+
+    OffChainVoteExternalUpdate --^ do
+      "The table with offchain metadata external updates, as decribed in CIP-100. New in 13.3-Conway."
+      OffChainVoteExternalUpdateOffChainVoteDataId # "The OffChainVoteData table index this entry refers."
+      OffChainVoteExternalUpdateTitle # "The title of this external update."
+      OffChainVoteExternalUpdateUri # "The uri of this external update."
 
     OffChainVoteFetchError --^ do
       "Errors while fetching or validating offchain Voting Anchor metadata. New in 13.2-Conway."

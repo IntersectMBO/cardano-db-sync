@@ -29,7 +29,6 @@ module Cardano.Mock.Forging.Tx.Babbage (
   mkUnlockScriptTx,
   mkUnlockScriptTxBabbage,
   mkScriptInp,
-  mkScriptMint,
   mkMAssetsScriptTx,
   mkDCertTx,
   mkSimpleDCertTx,
@@ -56,10 +55,10 @@ import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Core
 import Cardano.Ledger.Alonzo.Scripts
 import qualified Cardano.Ledger.Alonzo.TxAuxData as Alonzo
-import Cardano.Ledger.Alonzo.TxWits
 import Cardano.Ledger.Babbage.Collateral (collOuts)
 import Cardano.Ledger.Babbage.Tx
 import Cardano.Ledger.Babbage.TxBody
+import Cardano.Ledger.Babbage.TxOut
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Binary
 import Cardano.Ledger.Coin
@@ -76,7 +75,7 @@ import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Ledger.Val
-import Cardano.Mock.Forging.Tx.Alonzo (addValidityInterval, mkUTxOAlonzo, mkWitnesses)
+import Cardano.Mock.Forging.Tx.Alonzo (addValidityInterval, mkScriptMint', mkScriptTx, mkUTxOAlonzo, mkWitnesses)
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
@@ -170,9 +169,9 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
   addr <- resolveAddress outputIndex sta
 
   let input = Set.singleton $ fst inputPair
-      output = BabbageTxOut addr (valueFromList (Coin amount) []) NoDatum SNothing
+      output = BabbageTxOut addr (valueFromList (Coin amount) []) Alonzo.NoDatum SNothing
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) Alonzo.NoDatum SNothing
   Right $ mkSimpleTx True $ consPaymentTxBody input mempty mempty (StrictSeq.fromList [output, change]) SNothing (Coin fees) mempty
 
 mkPaymentTx' ::
@@ -187,12 +186,12 @@ mkPaymentTx' inputIndex outputIndex sta = do
   let inps = Set.singleton $ fst inputPair
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
       outValue = sum (unCoin . coin . snd <$> outputIndex)
-      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - outValue) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - outValue) []) Alonzo.NoDatum SNothing
   Right $ mkSimpleTx True $ consPaymentTxBody inps mempty mempty (StrictSeq.fromList $ outps ++ [change]) SNothing (Coin 0) mempty
   where
     mkOuts (outIx, vl) = do
       addr <- resolveAddress outIx sta
-      Right $ BabbageTxOut addr vl NoDatum SNothing
+      Right $ BabbageTxOut addr vl Alonzo.NoDatum SNothing
 
 scriptSucceeds :: TxOutScriptType -> Bool
 scriptSucceeds st =
@@ -228,7 +227,7 @@ mkLockByScriptTx inputIndex txOutTypes amount fees sta = do
   let input = Set.singleton $ fst inputPair
       outs = mkOutFromType amount <$> txOutTypes
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - amount - fees) []) Alonzo.NoDatum SNothing
   -- No witnesses are necessary when the outputs is a script address. Only when it's consumed.
   Right $ mkSimpleTx True $ consPaymentTxBody input mempty mempty (StrictSeq.fromList $ outs <> [change]) SNothing (Coin fees) mempty
 
@@ -237,9 +236,9 @@ mkOutFromType amount txOutType =
   let outAddress = if scriptSucceeds txOutType then alwaysSucceedsScriptAddr else alwaysFailsScriptAddr
       datahash = hashData @StandardBabbage plutusDataList
       dt = case getDatum txOutType of
-        NotInlineDatum -> DatumHash datahash
-        InlineDatum -> Datum (Alonzo.dataToBinaryData plutusDataList)
-        InlineDatumCBOR sbs -> Datum $ either error id $ Alonzo.makeBinaryData sbs
+        NotInlineDatum -> Alonzo.DatumHash datahash
+        InlineDatum -> Alonzo.Datum (Alonzo.dataToBinaryData plutusDataList)
+        InlineDatumCBOR sbs -> Alonzo.Datum $ either error id $ Alonzo.makeBinaryData sbs
       scpt :: StrictMaybe (AlonzoScript StandardBabbage) = case getInlineScript txOutType of
         SNothing -> SNothing
         SJust True -> SJust alwaysSucceedsScript
@@ -262,11 +261,11 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
 
   let inpts = Set.fromList $ fst <$> inputPairs
       colInput = Set.singleton $ fst colInputPair
-      output = BabbageTxOut addr (valueFromList (Coin amount) []) NoDatum SNothing
+      output = BabbageTxOut addr (valueFromList (Coin amount) []) Alonzo.NoDatum SNothing
   Right
     $ mkScriptTx
       succeeds
-      (mapMaybe mkScriptInp $ zip [0 ..] inputPairs)
+      (mapMaybe mkScriptInp' $ zip [0 ..] inputPairs)
     $ consPaymentTxBody inpts colInput mempty (StrictSeq.fromList [output]) SNothing (Coin fees) mempty
 
 mkUnlockScriptTxBabbage ::
@@ -290,11 +289,11 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
       colOut = maybeToStrictMaybe $ mkOutFromType amount <$> collTxOutType
       refInpts = Set.fromList $ fst <$> refInputPairs
       colInput = Set.singleton $ fst colInputPair
-      output = BabbageTxOut addr (valueFromList (Coin amount) []) NoDatum SNothing
+      output = BabbageTxOut addr (valueFromList (Coin amount) []) Alonzo.NoDatum SNothing
   Right
     $ mkScriptTx
       succeeds
-      (mapMaybe mkScriptInp $ zip [0 ..] inputPairs)
+      (mapMaybe mkScriptInp' $ zip [0 ..] inputPairs)
     $ consPaymentTxBody inpts colInput refInpts (StrictSeq.fromList [output]) colOut (Coin fees) mempty
   where
     collTxOutType =
@@ -302,42 +301,33 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
         then Just $ TxOutInline True InlineDatum (ReferenceScript True)
         else Just $ TxOutNoInline True
 
+mkScriptInp' ::
+  (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
+  (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
+  Maybe (AlonzoPlutusPurpose AsIndex era, Maybe (ScriptHash StandardCrypto, AlonzoScript era))
+mkScriptInp' = fmap (first $ AlonzoSpending . AsIndex) . mkScriptInp
+
 mkScriptInp ::
   (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
   (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
-  Maybe (RdmrPtr, Maybe (ScriptHash StandardCrypto, AlonzoScript era))
+  Maybe (Word32, Maybe (ScriptHash StandardCrypto, AlonzoScript era))
 mkScriptInp (n, (_txIn, txOut)) =
   case mscr of
     SNothing
       | addr == alwaysFailsScriptAddr ->
-          Just (RdmrPtr Spend n, Just (alwaysFailsScriptHash, alwaysFailsScript))
+          Just (fromIntegral n, Just (alwaysFailsScriptHash, alwaysFailsScript))
     SNothing
       | addr == alwaysSucceedsScriptAddr ->
-          Just (RdmrPtr Spend n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+          Just (fromIntegral n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
     SNothing
       | addr == alwaysMintScriptAddr ->
-          Just (RdmrPtr Spend n, Just (alwaysMintScriptHash, alwaysMintScript))
+          Just (fromIntegral n, Just (alwaysMintScriptHash, alwaysMintScript))
     SJust _ ->
-      Just (RdmrPtr Spend n, Nothing)
+      Just (fromIntegral n, Nothing)
     _ -> Nothing
   where
     addr = txOut ^. Core.addrTxOutL
     mscr = txOut ^. referenceScriptTxOutL
-
-mkScriptMint ::
-  MultiAsset StandardCrypto ->
-  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))]
-mkScriptMint (MultiAsset mp) = mapMaybe f $ zip [0 ..] (Map.keys mp)
-  where
-    f (n, policyId)
-      | policyID policyId == alwaysFailsScriptHash =
-          Just (RdmrPtr Mint n, Just (alwaysFailsScriptHash, alwaysFailsScript))
-      | policyID policyId == alwaysSucceedsScriptHash =
-          Just
-            (RdmrPtr Mint n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
-      | policyID policyId == alwaysMintScriptHash =
-          Just (RdmrPtr Mint n, Just (alwaysMintScriptHash, alwaysMintScript))
-      | otherwise = Nothing
 
 mkMAssetsScriptTx ::
   [BabbageUTxOIndex] ->
@@ -359,14 +349,14 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex refInput minted succeeds 
   Right
     $ mkScriptTx
       succeeds
-      ( mapMaybe mkScriptInp (zip [0 ..] inputPairs)
-          ++ mkScriptMint minted
+      ( mapMaybe mkScriptInp' (zip [0 ..] inputPairs)
+          ++ mkScriptMint' minted
       )
     $ consPaymentTxBody inpts colInput refInpts (StrictSeq.fromList outps) SNothing (Coin fees) minted
   where
     mkOuts (outIx, vl) = do
       addr <- resolveAddress outIx sta
-      Right $ BabbageTxOut addr vl (DatumHash (hashData @StandardBabbage plutusDataList)) SNothing
+      Right $ BabbageTxOut addr vl (Alonzo.DatumHash (hashData @StandardBabbage plutusDataList)) SNothing
 
 mkDCertTx ::
   [ShelleyTxCert StandardBabbage] ->
@@ -426,8 +416,8 @@ mkScriptDCertTx consDert valid st = do
         else
           Just $
             if bl
-              then (RdmrPtr Cert n, Just (alwaysFailsScriptHash, alwaysFailsScript))
-              else (RdmrPtr Cert n, Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
+              then (AlonzoCertifying (AsIndex n), Just (alwaysFailsScriptHash, alwaysFailsScript))
+              else (AlonzoCertifying (AsIndex n), Just (alwaysSucceedsScriptHash, alwaysSucceedsScript))
     prepareRedeemer _ = Nothing
 
 mkDepositTxPools ::
@@ -440,7 +430,7 @@ mkDepositTxPools inputIndex deposit sta = do
 
   let input = Set.singleton $ fst inputPair
       BabbageTxOut addr' (MaryValue inputValue _) _ _ = snd inputPair
-      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - deposit) []) NoDatum SNothing
+      change = BabbageTxOut addr' (valueFromList (Coin $ unCoin inputValue - deposit) []) Alonzo.NoDatum SNothing
   Right $ mkSimpleTx True $ consTxBody input mempty mempty (StrictSeq.fromList [change]) SNothing (Coin 0) mempty (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkDCertTxPools ::
@@ -464,21 +454,6 @@ consPoolParamsTwoOwners ::
 consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
   ShelleyTxCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
 consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
-
-mkScriptTx ::
-  Bool ->
-  [(RdmrPtr, Maybe (ScriptHash StandardCrypto, Core.Script StandardBabbage))] ->
-  BabbageTxBody StandardBabbage ->
-  AlonzoTx StandardBabbage
-mkScriptTx valid rdmrs txBody =
-  AlonzoTx
-    { body = txBody
-    , wits = witnesses
-    , isValid = IsValid valid
-    , auxiliaryData = maybeToStrictMaybe Nothing
-    }
-  where
-    witnesses = mkWitnesses rdmrs [(hashData @StandardBabbage plutusDataList, plutusDataList)]
 
 mkUTxOBabbage :: AlonzoTx StandardBabbage -> [(TxIn StandardCrypto, BabbageTxOut StandardBabbage)]
 mkUTxOBabbage = mkUTxOAlonzo
@@ -556,7 +531,7 @@ mkFullTx ::
   Either ForgingError (AlonzoTx StandardBabbage)
 mkFullTx n m sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inps
-  let rdmrs = mapMaybe mkScriptInp $ zip [0 ..] inputPairs
+  let rdmrs = mapMaybe mkScriptInp' $ zip [0 ..] inputPairs
   let witnesses = mkWitnesses rdmrs [(hashData @StandardBabbage plutusDataList, plutusDataList)]
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInps
   colInput <- Set.singleton . fst . fst <$> resolveUTxOIndex colInps sta
@@ -597,9 +572,9 @@ mkFullTx n m sta = do
     addr0 = Addr Testnet (Prelude.head unregisteredAddresses) (StakeRefBase $ Prelude.head unregisteredStakeCredentials)
     addr2 = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) (StakeRefBase $ unregisteredStakeCredentials !! 2)
     out0, out1, out2 :: BabbageTxOut StandardBabbage
-    out0 = BabbageTxOut addr0 outValue0 (DatumHash (hashData @StandardBabbage plutusDataList)) (Strict.SJust alwaysFailsScript)
-    out1 = BabbageTxOut alwaysSucceedsScriptAddr outValue0 (DatumHash (hashData @StandardBabbage plutusDataList)) Strict.SNothing
-    out2 = BabbageTxOut addr2 outValue0 (DatumHash (hashData @StandardBabbage plutusDataList)) (Strict.SJust alwaysFailsScript)
+    out0 = BabbageTxOut addr0 outValue0 (Alonzo.DatumHash (hashData @StandardBabbage plutusDataList)) (Strict.SJust alwaysFailsScript)
+    out1 = BabbageTxOut alwaysSucceedsScriptAddr outValue0 (Alonzo.DatumHash (hashData @StandardBabbage plutusDataList)) Strict.SNothing
+    out2 = BabbageTxOut addr2 outValue0 (Alonzo.DatumHash (hashData @StandardBabbage plutusDataList)) (Strict.SJust alwaysFailsScript)
     outs = StrictSeq.fromList [out0, out1]
     collOut = Strict.SJust out2
     assetsMinted0 = Map.fromList [(Prelude.head assetNames, 10), (assetNames !! 1, 4)]
@@ -657,10 +632,10 @@ mkFullTx n m sta = do
         ]
 
     auxiliaryDataMap = Map.fromList [(1, List []), (2, List [])]
-    auxiliaryDataScripts = NonEmpty.fromList [toBinaryPlutus alwaysFailsScript]
+    auxiliaryDataScripts = NonEmpty.fromList [alwaysFailsPlutusBinary]
     auxiliaryData' = Alonzo.AlonzoTxAuxData auxiliaryDataMap mempty (Map.singleton PlutusV2 auxiliaryDataScripts)
 
-    costModels = CostModels (Map.fromList [(PlutusV2, testingCostModelV2)]) mempty mempty
+    costModels = mkCostModels (Map.fromList [(PlutusV2, testingCostModelV2)])
     paramsUpdate = Core.emptyPParamsUpdate & ppuCostModelsL .~ Strict.SJust costModels -- {_costmdls = Strict.SJust costModels}
     proposed :: ProposedPPUpdates StandardBabbage
     proposed =

@@ -56,6 +56,9 @@ module Cardano.Db.Insert (
   insertCheckOffChainPoolData,
   insertCheckOffChainPoolFetchError,
   insertOffChainVoteData,
+  insertOffChainVoteAuthors,
+  insertOffChainVoteReference,
+  insertOffChainVoteExternalUpdate,
   insertOffChainVoteFetchError,
   insertReservedPoolTicker,
   insertDelistedPool,
@@ -71,9 +74,11 @@ module Cardano.Db.Insert (
   insertConstitution,
   insertGovActionProposal,
   insertTreasuryWithdrawal,
-  insertNewCommittee,
+  insertNewCommitteeInfo,
+  insertNewCommitteeMember,
   insertVotingProcedure,
   insertDrepHash,
+  insertCommitteeHash,
   insertDelegationVote,
   insertCommitteeRegistration,
   insertCommitteeDeRegistration,
@@ -113,6 +118,7 @@ import Database.Persist.Class (
   replaceUnique,
  )
 import Database.Persist.EntityDef.Internal (entityDB, entityUniques)
+import Database.Persist.Postgresql (upsertWhere)
 import Database.Persist.Sql (
   OnlyOneUniqueKey,
   PersistRecordBackend,
@@ -323,10 +329,21 @@ insertCheckOffChainPoolFetchError pofe = do
   foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
   when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
 
-insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m ()
+insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m (Maybe OffChainVoteDataId)
 insertOffChainVoteData ocvd = do
   foundVotingAnchor <- existsVotingAnchorId (offChainVoteDataVotingAnchorId ocvd)
-  when foundVotingAnchor . void $ insertCheckUnique "OffChainVoteData" ocvd
+  if foundVotingAnchor
+    then Just <$> insertCheckUnique "OffChainVoteData" ocvd
+    else pure Nothing
+
+insertOffChainVoteAuthors :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteAuthor] -> ReaderT SqlBackend m ()
+insertOffChainVoteAuthors = void . insertMany' "OffChainVoteAuthor"
+
+insertOffChainVoteReference :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteReference] -> ReaderT SqlBackend m ()
+insertOffChainVoteReference = void . insertMany' "OffChainVoteReference"
+
+insertOffChainVoteExternalUpdate :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteExternalUpdate] -> ReaderT SqlBackend m ()
+insertOffChainVoteExternalUpdate = void . insertMany' "OffChainVoteExternalUpdate"
 
 insertOffChainVoteFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteFetchError -> ReaderT SqlBackend m ()
 insertOffChainVoteFetchError ocvfe = do
@@ -352,7 +369,7 @@ insertEpochStakeProgress =
 
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
-  updateWhere [EpochStakeProgressEpochNo Database.Persist.==. epoch] [EpochStakeProgressCompleted Database.Persist.=. True]
+  upsertWhere (EpochStakeProgress epoch True) [EpochStakeProgressCompleted Database.Persist.=. True] [EpochStakeProgressEpochNo Database.Persist.==. epoch]
 
 updateGovActionEnacted :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
 updateGovActionEnacted gaid eNo =
@@ -394,14 +411,20 @@ insertGovActionProposal = insertUnchecked "GovActionProposal"
 insertTreasuryWithdrawal :: (MonadBaseControl IO m, MonadIO m) => TreasuryWithdrawal -> ReaderT SqlBackend m TreasuryWithdrawalId
 insertTreasuryWithdrawal = insertUnchecked "TreasuryWithdrawal"
 
-insertNewCommittee :: (MonadBaseControl IO m, MonadIO m) => NewCommittee -> ReaderT SqlBackend m NewCommitteeId
-insertNewCommittee = insertUnchecked "NewCommittee"
+insertNewCommitteeInfo :: (MonadBaseControl IO m, MonadIO m) => NewCommitteeInfo -> ReaderT SqlBackend m NewCommitteeInfoId
+insertNewCommitteeInfo = insertUnchecked "NewCommitteeInfo"
+
+insertNewCommitteeMember :: (MonadBaseControl IO m, MonadIO m) => NewCommitteeMember -> ReaderT SqlBackend m NewCommitteeMemberId
+insertNewCommitteeMember = insertUnchecked "NewCommitteeMember"
 
 insertVotingProcedure :: (MonadBaseControl IO m, MonadIO m) => VotingProcedure -> ReaderT SqlBackend m VotingProcedureId
 insertVotingProcedure = insertUnchecked "VotingProcedure"
 
 insertDrepHash :: (MonadBaseControl IO m, MonadIO m) => DrepHash -> ReaderT SqlBackend m DrepHashId
 insertDrepHash = insertCheckUnique "DrepHash"
+
+insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => CommitteeHash -> ReaderT SqlBackend m CommitteeHashId
+insertCommitteeHash = insertCheckUnique "CommitteeHash"
 
 insertDelegationVote :: (MonadBaseControl IO m, MonadIO m) => DelegationVote -> ReaderT SqlBackend m DelegationVoteId
 insertDelegationVote = insertUnchecked "DelegationVote"

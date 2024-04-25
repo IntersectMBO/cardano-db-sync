@@ -6,12 +6,17 @@
 , evalService, cardanoLib
 
 # Image dependencies
+
 , bashInteractive, cacert, cardano-cli, cardano-db-sync, cardano-db-tool
-, coreutils, curl, findutils, getconf, glibcLocales, gnutar, gzip, jq, iana-etc
-, iproute, iputils, lib, libidn, libpqxx, postgresql, socat, utillinux
+, cardano-smash-server, coreutils, curl, findutils, getconf, glibcLocales
+, gnused, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn, libpqxx
+, postgresql, socat, utillinux
 }:
 
 let
+  concatMapAttrs = f: attrs:
+    lib.concatStringsSep "\n" (lib.mapAttrsToList f attrs);
+
   env-shim = runCommand "env-shim" { } ''
     mkdir -p $out/usr/bin
     ln -s ${coreutils}/bin/env $out/usr/bin/env
@@ -32,6 +37,7 @@ let
         findutils # GNU find
         getconf # get num cpus
         glibcLocales # Locale information for the GNU C Library
+        gnused # GNU sed
         gnutar # GNU tar
         gzip # Gnuzip
         jq # JSON processor
@@ -55,8 +61,8 @@ let
     '';
   };
 
-  # Contains cardano-db-sync binary, but no application configuration
-  imageNoConfig = dockerTools.buildImage {
+  # Contains software binaries, but no application configuration or entrypoint
+  dbSyncBaseImage = dockerTools.buildImage {
     name = "cardano-db-sync-env";
     fromImage = baseImage;
     copyToRoot = buildEnv {
@@ -66,73 +72,30 @@ let
   };
 
   # Entrypoint for the final image layer
-  entrypoint = writeScriptBin "entrypoint" ''
-    #!${runtimeShell}
-    mkdir -p /configuration
-    if [ ! -f /configuration/pgpass ]; then
-      ${genPgpass} /run/secrets
-    fi
-    export PGPASSFILE=/configuration/pgpass
-
-    # set up /tmp (override with TMPDIR variable)
-    mkdir -p -m 1777 /tmp
-    if [[ -z "$NETWORK" ]]; then
-      echo "Connecting to network specified in configuration.yaml"
-      DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
-
-      set -euo pipefail
-      ${scripts.mainnet.db-sync.passthru.service.restoreSnapshotScript}
-
-      if [[ "''${DISABLE_LEDGER:-N}" == "Y" ]]; then
-        LEDGER_OPTS="--disable-ledger"
-      else
-        LEDGER_OPTS="--state-dir ${scripts.mainnet.db-sync.passthru.service.stateDir}"
-      fi
-
-      exec $DBSYNC --schema-dir ${../schema} ''${LEDGER_OPTS} $@
-
-    ${clusterStatements}
-
-    else
-      echo "Managed configuration for network "$NETWORK" does not exist"
-    fi
-  '';
-
-  # Scripts supporting entrypoint
-  genPgpass = writeScript "gen-pgpass" ''
-    #!${runtimeShell}
-    SECRET_DIR=$1
-    echo $SECRET_DIR
-    echo "Generating PGPASS file"
-    POSTGRES_DB=''${POSTGRES_DB:-$(< ''${SECRET_DIR}/postgres_db)}
-    POSTGRES_USER=''${POSTGRES_USER:-$(< ''${SECRET_DIR}/postgres_user)}
-    POSTGRES_PASSWORD=''${POSTGRES_PASSWORD:-$(< ''${SECRET_DIR}/postgres_password)}
-    echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /configuration/pgpass
-    chmod 0600 /configuration/pgpass
-  '';
-
-  clusterStatements =
-    lib.concatStringsSep
-      "\n"
-      (lib.mapAttrsToList
-        (env: script:
-          let
-            dbSyncScript = script.db-sync;
-          in ''
-            elif [[ "$NETWORK" == "${env}" ]]; then
-              echo "Connecting to network: ${env}"
-              exec ${dbSyncScript}/bin/${dbSyncScript.name}
-              echo "Cleaning up"
-          '')
-        scripts);
-
-  scripts =
+  dbSyncEntrypoint =
     let
-      defaultConfig = {
-        services.cardano-db-sync = {
-          restoreSnapshot = lib.mkDefault "$RESTORE_SNAPSHOT";
-          socketPath = lib.mkDefault ("/node-ipc/node.socket");
-          postgres.generatePGPASS = false;
+      clusterStatements =
+        concatMapAttrs
+          (env: script:
+            let
+              dbSyncScript = script.db-sync;
+            in ''
+              elif [[ "$NETWORK" == "${env}" ]]; then
+                echo "Connecting to network: ${env}"
+                exec ${dbSyncScript}/bin/${dbSyncScript.name}
+                echo "Cleaning up"
+              '')
+            scripts;
+
+      scripts = cardanoLib.forEnvironments (env: mkScript (mkService env));
+
+      mkScript = service: lib.recurseIntoAttrs {
+        db-sync = pkgs.writeScriptBin "cardano-db-sync-${service.cluster}" ''
+          #!${runtimeShell}
+          set -euo pipefail
+          ${service.script} $@
+        '' // {
+          passthru = { inherit service; };
         };
       };
 
@@ -155,26 +118,178 @@ let
         ];
       };
 
+      defaultConfig = {
+        services.cardano-db-sync = {
+          restoreSnapshot = lib.mkDefault "$RESTORE_SNAPSHOT";
+          socketPath = lib.mkDefault ("/node-ipc/node.socket");
+          postgres.generatePGPASS = false;
+        };
+      };
+
+    in
+      writeScriptBin "entrypoint" ''
+        #!${runtimeShell}
+
+        ${genPgpass}
+        export PGPASSFILE=/configuration/pgpass
+
+        ${setupTmp}
+
+        if [[ -z "$NETWORK" ]]; then
+          echo "Connecting to network specified in configuration.yaml"
+          DBSYNC=${cardano-db-sync}/bin/cardano-db-sync
+
+          set -euo pipefail
+          ${scripts.mainnet.db-sync.passthru.service.restoreSnapshotScript}
+
+          if [[ "''${DISABLE_LEDGER:-N}" == "Y" ]]; then
+            LEDGER_OPTS="--disable-ledger"
+          else
+            LEDGER_OPTS="--state-dir ${scripts.mainnet.db-sync.passthru.service.stateDir}"
+          fi
+
+          exec $DBSYNC --schema-dir ${../schema} ''${LEDGER_OPTS} $@
+
+        ${clusterStatements}
+        else
+          echo "Managed configuration for network "$NETWORK" does not exist"
+        fi
+      '';
+
+  # Contains software binaries, but no application configuration or entrypoint
+  smashBaseImage = dockerTools.buildImage {
+    name = "cardano-db-sync-env";
+    fromImage = baseImage;
+    copyToRoot = buildEnv {
+      name = "cardano-smash-server-image-bin-env";
+      paths = [ cardano-smash-server ];
+    };
+  };
+
+  smashEntrypoint =
+    let
+      clusterStatements =
+        concatMapAttrs
+          (env: script:
+            let
+              smashScript = script.smash;
+            in ''
+              elif [[ "$NETWORK" == "${env}" ]]; then
+                echo "Connecting to network: ${env}"
+                exec ${smashScript}/bin/${smashScript.name}
+                echo "Cleaning up"
+            '')
+          scripts;
+
+      scripts = cardanoLib.forEnvironments (env: mkScript (mkService env));
+
       mkScript = service: lib.recurseIntoAttrs {
-        db-sync = pkgs.writeScriptBin "cardano-db-sync-${service.cluster}" ''
+        smash = pkgs.writeScriptBin "smash-${service.environment.name}" ''
           #!${runtimeShell}
           set -euo pipefail
           ${service.script} $@
-        '' // {
-          passthru = { inherit service; };
-        };
-      } ;
-    in
-      cardanoLib.forEnvironments (env: mkScript (mkService env));
+        '';
+      } // {
+        passthru = { inherit service; };
+      };
 
-in
-  dockerTools.buildImage {
+      mkService = env: evalService {
+        inherit pkgs;
+        customConfigs = [defaultConfig];
+        serviceName = "smash";
+
+        modules = [
+          ./nixos/smash-service.nix
+
+          {
+            services.smash = {
+              postgres.user = lib.mkDefault "*";
+              environment = lib.mkDefault env;
+              dbSyncPkgs = lib.mkDefault pkgs;
+              package = lib.mkDefault pkgs.cardano-smash-server;
+              admins = lib.mkDefault "/configuration/admins.csv";
+            };
+          }
+        ];
+      };
+
+      defaultConfig = {
+        services.smash = {
+          socketPath = lib.mkDefault "/node-ipc/node.socket";
+          postgres.generetaePGPass = false;
+        };
+      };
+
+    in
+      writeScriptBin "entrypoint" ''
+        #!${runtimeShell}
+
+        ${genPgpass}
+        export PGPASSFILE=/configuration/pgpass
+
+        ${setupTmp}
+
+        # Add an admin csv
+        SMASH_USER="''${SMASH_USER:-smash-admin}"
+        SMASH_PASSWORD="''${SMASH_PASSWORD:-smash-password}"
+        echo "''${SMASH_USER},''${SMASH_PASSWORD}" > /configuration/admins.csv
+
+        if [[ -z "$NETWORK" ]]; then
+          echo "Connecting to network specified in configuration.yaml"
+          set -euo pipefail
+          SMASH=${cardano-smash-server}/bin/cardano-smash-server
+
+          exec $SMASH $@
+
+        ${clusterStatements}
+        else
+          echo "Managed configuration for network "$NETWORK" does not exist"
+          exec $@
+        fi
+      '';
+
+  # Scripts supporting entrypoint
+  genPgpass = writeScript "gen-pgpass" ''
+    #!${runtimeShell}
+    mkdir -p /configuration
+    if [ -f /configuration/pgpass ]; then
+       # No need to generate pgpass
+      exit 0
+    fi
+
+    SECRET_DIR=/run/secrets
+    echo $SECRET_DIR
+    echo "Generating PGPASS file"
+    POSTGRES_DB=''${POSTGRES_DB:-$(< ''${SECRET_DIR}/postgres_db)}
+    POSTGRES_USER=''${POSTGRES_USER:-$(< ''${SECRET_DIR}/postgres_user)}
+    POSTGRES_PASSWORD=''${POSTGRES_PASSWORD:-$(< ''${SECRET_DIR}/postgres_password)}
+    echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /configuration/pgpass
+    chmod 0600 /configuration/pgpass
+  '';
+
+  # set up /tmp (override with TMPDIR variable)
+  setupTmp = "mkdir -p -m 1777 /tmp";
+
+in {
+  cardano-db-sync-docker = dockerTools.buildImage {
     name = "cardano-db-sync";
-    fromImage = imageNoConfig;
+    fromImage = dbSyncBaseImage;
     tag = "latest";
     copyToRoot = buildEnv {
       name = "cardano-db-sync-entrypoint";
-      paths = [ entrypoint bashInteractive ];
+      paths = [ dbSyncEntrypoint bashInteractive ];
     };
-    config = { Entrypoint = [ "${entrypoint}/bin/entrypoint" ]; };
-  }
+    config = { Entrypoint = [ "${dbSyncEntrypoint}/bin/entrypoint" ]; };
+  };
+
+  cardano-smash-server-docker = dockerTools.buildImage {
+    name = "cardano-smash-server";
+    fromImage = smashBaseImage;
+    tag = "latest";
+    copyToRoot = buildEnv {
+      name = "cardano-smash-server-entrypoint";
+      paths = [ smashEntrypoint bashInteractive ];
+    };
+    config = { Entrypoint = [ "${smashEntrypoint}/bin/entrypoint" ]; };
+  };
+}

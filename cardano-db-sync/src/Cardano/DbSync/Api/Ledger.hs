@@ -11,9 +11,10 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import qualified Cardano.DbSync.Era.Shelley.Insert as Insert
-import Cardano.DbSync.Era.Shelley.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
@@ -105,6 +106,7 @@ storeUTxO ::
   , BabbageEraTxOut era
   , MonadIO m
   , MonadBaseControl IO m
+  , DBPlutusScript era
   ) =>
   SyncEnv ->
   TxCache ->
@@ -131,6 +133,7 @@ storePage ::
   , Cardano.Ledger.Core.Value era ~ MaryValue StandardCrypto
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
+  , DBPlutusScript era
   , BabbageEraTxOut era
   , MonadIO m
   , MonadBaseControl IO m
@@ -158,6 +161,7 @@ prepareTxOut ::
   , BabbageEraTxOut era
   , MonadIO m
   , MonadBaseControl IO m
+  , DBPlutusScript era
   ) =>
   SyncEnv ->
   TxCache ->
@@ -167,7 +171,7 @@ prepareTxOut syncEnv txCache (TxIn txHash (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txHash
   let genTxOut = fromTxOut index txOut
   txId <- queryTxIdWithCache txCache txHashByteString
-  Insert.prepareTxOut trce cache iopts (txId, txHashByteString) genTxOut
+  insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv

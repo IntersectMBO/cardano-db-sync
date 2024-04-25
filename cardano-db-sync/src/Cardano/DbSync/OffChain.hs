@@ -24,6 +24,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
+import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import Cardano.DbSync.Types
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -32,6 +33,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   isEmptyTBQueue,
   writeTBQueue,
  )
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
@@ -138,7 +140,12 @@ insertOffChainVoteResults trce resultQueue = do
   where
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
     insert = \case
-      OffChainVoteResultMetadata md -> void $ DB.insertOffChainVoteData md
+      OffChainVoteResultMetadata md accessors -> do
+        mocvdId <- DB.insertOffChainVoteData md
+        whenJust mocvdId $ \ocvdId -> do
+          DB.insertOffChainVoteAuthors $ offChainVoteAuthors accessors ocvdId
+          DB.insertOffChainVoteReference $ offChainVoteReferences accessors ocvdId
+          DB.insertOffChainVoteExternalUpdate $ offChainVoteExternalUpdates accessors ocvdId
       OffChainVoteResultError fe -> void $ DB.insertOffChainVoteFetchError fe
 
     isFetchError :: OffChainVoteResult -> Bool
@@ -223,8 +230,8 @@ fetchOffChainPoolData _tracer manager time oPoolWorkQ =
   convert <<$>> runExceptT $ do
     let url = oPoolWqUrl oPoolWorkQ
         metaHash = oPoolWqMetaHash oPoolWorkQ
-    request <- parseOffChainPoolUrl $ oPoolWqUrl oPoolWorkQ
-    httpGetOffChainPoolData manager request (OffChainPoolUrl url) (Just $ OffChainPoolHash metaHash)
+    request <- parseOffChainUrl $ OffChainPoolUrl url
+    httpGetOffChainPoolData manager request url (Just metaHash)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainPoolData -> OffChainPoolResult
     convert eres =
@@ -254,21 +261,36 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
   convert <<$>> runExceptT $ do
     let url = oVoteWqUrl oVoteWorkQ
         metaHash = oVoteWqMetaHash oVoteWorkQ
-    request <- parseOffChainVoteUrl $ oVoteWqUrl oVoteWorkQ
-    httpGetOffChainVoteData manager request (OffChainVoteUrl url) (Just $ OffChainVoteHash metaHash)
+    request <- parseOffChainUrl $ OffChainVoteUrl url
+    httpGetOffChainVoteData manager request url (Just metaHash) (oVoteWqType oVoteWorkQ == DB.GovActionAnchor)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainVoteData -> OffChainVoteResult
     convert eres =
       case eres of
         Right sVoteData ->
-          OffChainVoteResultMetadata $
-            DB.OffChainVoteData
-              { DB.offChainVoteDataBytes = sovaBytes sVoteData
-              , DB.offChainVoteDataHash = sovaHash sVoteData
-              , DB.offChainVoteDataJson = sovaJson sVoteData
-              , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
-              , DB.offChainVoteDataWarning = sovaWarning sVoteData
-              }
+          let
+            offChainData = sovaOffChainVoteData sVoteData
+            minimalBody = Vote.getMinimalBody offChainData
+            vdt =
+              DB.OffChainVoteData
+                { DB.offChainVoteDataLanguage = Vote.getLanguage offChainData
+                , DB.offChainVoteDataComment = Vote.textValue <$> Vote.comment minimalBody
+                , DB.offChainVoteDataTitle = Vote.getTitle offChainData
+                , DB.offChainVoteDataAbstract = Vote.getAbstract offChainData
+                , DB.offChainVoteDataMotivation = Vote.getMotivation offChainData
+                , DB.offChainVoteDataRationale = Vote.getRationale offChainData
+                , DB.offChainVoteDataBytes = sovaBytes sVoteData
+                , DB.offChainVoteDataHash = sovaHash sVoteData
+                , DB.offChainVoteDataJson = sovaJson sVoteData
+                , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
+                , DB.offChainVoteDataWarning = sovaWarning sVoteData
+                , DB.offChainVoteDataIsValid = Nothing
+                }
+            authorsF ocvdId = map (mkAuthor ocvdId) $ Vote.getAuthors offChainData
+            referencesF ocvdId = map (mkReference ocvdId) $ mListToList $ Vote.references minimalBody
+            externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
+           in
+            OffChainVoteResultMetadata vdt (OffChainVoteAccessors authorsF referencesF externalUpdatesF)
         Left err ->
           OffChainVoteResultError $
             DB.OffChainVoteFetchError
@@ -277,3 +299,33 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
               , DB.offChainVoteFetchErrorFetchTime = Time.posixSecondsToUTCTime time
               , DB.offChainVoteFetchErrorRetryCount = retryCount (oVoteWqRetry oVoteWorkQ)
               }
+    mkAuthor ocvdId au =
+      DB.OffChainVoteAuthor
+        { DB.offChainVoteAuthorOffChainVoteDataId = ocvdId
+        , DB.offChainVoteAuthorName = Vote.textValue <$> Vote.name au
+        , DB.offChainVoteAuthorWitnessAlgorithm = Vote.textValue $ Vote.witnessAlgorithm $ Vote.witness au
+        , DB.offChainVoteAuthorPublicKey = Vote.textValue $ Vote.publicKey $ Vote.witness au
+        , DB.offChainVoteAuthorSignature = Vote.textValue $ Vote.signature $ Vote.witness au
+        , DB.offChainVoteAuthorWarning = Just "Failed to validate this signature" -- TODO: Conway
+        }
+
+    mkReference ocvdId ref =
+      DB.OffChainVoteReference
+        { DB.offChainVoteReferenceOffChainVoteDataId = ocvdId
+        , DB.offChainVoteReferenceLabel = Vote.textValue $ Vote.label ref
+        , DB.offChainVoteReferenceUri = Vote.textValue $ Vote.uri ref
+        , DB.offChainVoteReferenceHashDigest = Vote.textValue . Vote.hashDigest <$> Vote.referenceHash ref
+        , DB.offChainVoteReferenceHashAlgorithm = Vote.textValue . Vote.rhHashAlgorithm <$> Vote.referenceHash ref
+        }
+
+    mkexternalUpdates ocvdId eupd =
+      DB.OffChainVoteExternalUpdate
+        { DB.offChainVoteExternalUpdateOffChainVoteDataId = ocvdId
+        , DB.offChainVoteExternalUpdateTitle = Vote.textValue $ Vote.euTitle eupd
+        , DB.offChainVoteExternalUpdateUri = Vote.textValue $ Vote.euUri eupd
+        }
+
+    mListToList :: Maybe [a] -> [a]
+    mListToList = \case
+      Nothing -> []
+      Just ls -> ls

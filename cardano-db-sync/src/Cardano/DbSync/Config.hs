@@ -26,6 +26,7 @@ import qualified Cardano.BM.Configuration.Model as Logging
 import qualified Cardano.BM.Setup as Logging
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.BM.Trace as Logging
+import Cardano.DbSync.Api (extractInsertOptions)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPreConfig, readByteStringFromFile)
 import Cardano.DbSync.Config.Shelley
@@ -84,6 +85,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncAlonzoHardFork = ncAlonzoHardFork ncfg
       , dncBabbageHardFork = ncBabbageHardFork ncfg
       , dncConwayHardFork = ncConwayHardFork ncfg
+      , dncInsertOptions = extractInsertOptions pcfg
       }
 
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)

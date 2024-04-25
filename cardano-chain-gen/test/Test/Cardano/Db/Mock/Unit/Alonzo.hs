@@ -10,6 +10,7 @@ import Data.Text (Text)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase)
 
+import qualified Test.Cardano.Db.Mock.Unit.Alonzo.Config as AlzConfig
 import qualified Test.Cardano.Db.Mock.Unit.Alonzo.Plutus as AlzPlutus
 import qualified Test.Cardano.Db.Mock.Unit.Alonzo.PoolAndSmash as AlzPnS
 import qualified Test.Cardano.Db.Mock.Unit.Alonzo.Reward as AlzReward
@@ -24,6 +25,11 @@ unitTests iom knownMigrations =
   testGroup
     "Alonzo unit tests"
     [ testGroup
+        "config"
+        [ testCase "default insert config" AlzConfig.defaultInsertConfig
+        , testCase "insert config" AlzConfig.insertConfig
+        ]
+    , testGroup
         "simple"
         [ test "simple forge blocks" AlzSimple.forgeBlocks
         , test "sync one block" AlzSimple.addSimple

@@ -24,10 +24,6 @@
       url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    cardano-parts = {
-      url = "github:input-output-hk/cardano-parts";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs = { self, ... }@inputs:
@@ -63,13 +59,18 @@
                     };
                 })
 
-                # cardano-cli, cardano-node, and friends
-                (_: cardanoNodePkgs)
+                (final: prev: {
+                  inherit (project.hsPkgs.cardano-node.components.exes) cardano-node;
+                  inherit (project.hsPkgs.cardano-cli.components.exes) cardano-cli;
+                })
 
                 (final: prev: {
                   # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
                   # expects these to be here
-                  inherit (project.exes) cardano-db-sync cardano-db-tool;
+                  inherit (project.exes)
+                    cardano-db-sync
+                    cardano-db-tool
+                    cardano-smash-server;
                   schema = ./schema;
                 })
 
@@ -91,17 +92,6 @@
                 })
               ];
           };
-
-          # Get cardano-node-pkgs from cardano-parts
-          cardanoNodePkgs = pkgs: with pkgs;
-            let
-              inherit (inputs.cardano-parts.cardano-parts.pkgs.special) cardano-node-pkgs;
-            in
-              # cardano-parts currently only supports x86_64-linux
-              lib.optionalAttrs (system == "x86_64-linux") {
-                inherit (cardano-node-pkgs system)
-                  cardano-cli cardano-node cardano-submit-api;
-              };
 
           # Set up and start Postgres before running database tests
           preCheck = ''
@@ -213,8 +203,11 @@
                 # Disable haddock on 8.x
                 lib.mkIf (lib.versionOlder config.compiler.version "9") {
                   packages.cardano-ledger-alonzo.doHaddock = false;
+                  packages.cardano-ledger-allegra.doHaddock = false;
+                  packages.cardano-ledger-api.doHaddock = false;
                   packages.cardano-ledger-babbage.doHaddock = false;
                   packages.cardano-ledger-conway.doHaddock = false;
+                  packages.cardano-ledger-shelley.doHaddock = false;
                   packages.cardano-protocol-tpraos.doHaddock = false;
                   packages.ouroboros-network-framework.doHaddock = false;
                 })
@@ -312,12 +305,14 @@
 
             cardano-db-sync-linux = mkDist "linux" project.projectCross.musl64;
             cardano-db-sync-macos = mkDist "macos" project;
-            cardano-db-sync-docker = callPackage ./nix/docker.nix {
-              inherit (inputs.iohkNix.lib) evalService;
-            };
             cardano-smash-server-no-basic-auth = (project.appendModule {
               modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
             }).exes.cardano-smash-server;
+
+            docker = callPackage ./nix/docker.nix {
+              inherit (inputs.iohkNix.lib) evalService;
+            };
+            inherit (docker) cardano-db-sync-docker cardano-smash-server-docker;
 
             # TODO: macOS builders are resource-constrained and cannot run the detabase
             # integration tests. Add these back when we get beefier builders.
@@ -340,7 +335,10 @@
               ciJobs = flake.hydraJobs;
               nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
             } // lib.optionalAttrs (system == "x86_64-linux") {
-              inherit cardano-db-sync-linux cardano-db-sync-docker;
+              inherit
+                cardano-db-sync-linux
+                cardano-db-sync-docker
+                cardano-smash-server-docker;
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
@@ -351,8 +349,12 @@
             legacyPackages = pkgs;
 
             packages = lib.optionalAttrs (system == "x86_64-linux") {
-              inherit cardano-db-sync-linux cardano-db-sync-docker;
-              inherit project;
+              inherit
+                cardano-db-sync-linux
+                cardano-db-sync-docker
+                cardano-smash-server-docker
+                project;
+
               default = flake.packages."cardano-db-sync:exe:cardano-db-sync";
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;

@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -36,7 +37,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.Alonzo.Scripts (ExUnits (..), txscriptfee, unBinaryPlutus)
+import Cardano.Ledger.Alonzo.Scripts (AsIndex (..), ExUnits (..), PlutusPurpose (..), txscriptfee, unPlutusBinary)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), getAlonzoTxAuxDataScripts)
@@ -45,22 +46,22 @@ import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Governance
+import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (..))
 import qualified Cardano.Ledger.Core as Core
-import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), policyID)
-import Cardano.Ledger.Plutus.Language (Plutus (..))
-import qualified Cardano.Ledger.Plutus.Language as Alonzo
 import qualified Cardano.Ledger.SafeHash as Ledger
 import Cardano.Ledger.Shelley.Scripts (ScriptHash)
-import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert as Shelley
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
+import qualified Data.Maybe.Strict as Strict
 import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
@@ -149,6 +150,7 @@ getScripts ::
   , Core.Script era ~ Alonzo.AlonzoScript era
   , Core.TxAuxData era ~ AlonzoTxAuxData era
   , Core.EraTx era
+  , DBPlutusScript era
   ) =>
   Core.Tx era ->
   [TxScript]
@@ -174,7 +176,7 @@ resolveRedeemers ::
   ( EraCrypto era ~ StandardCrypto
   , Alonzo.AlonzoEraTxWits era
   , Core.EraTx era
-  , Alonzo.MaryEraTxBody era
+  , DBScriptPurpose era
   ) =>
   Bool ->
   Maybe Alonzo.Prices ->
@@ -204,7 +206,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
         toList $
           toCert <$> (txBody ^. Core.certsTxBodyL)
 
-    txInsMissingRedeemer :: Map (ShelleyTx.TxIn StandardCrypto) TxIn
+    txInsMissingRedeemer :: Map (Ledger.TxIn StandardCrypto) TxIn
     txInsMissingRedeemer = Map.fromList $ fmap (\inp -> (inp, fromTxIn inp)) $ toList $ txBody ^. Core.inputsTxBodyL
 
     initRedeemersMaps :: RedeemerMaps
@@ -212,7 +214,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
 
     mkRdmrAndUpdateRec ::
       (RedeemerMaps, [(Word64, TxRedeemer)]) ->
-      [(Word64, (Alonzo.RdmrPtr, (Alonzo.Data era, ExUnits)))] ->
+      [(Word64, (Alonzo.PlutusPurpose AsIndex era, (Alonzo.Data era, ExUnits)))] ->
       (RedeemerMaps, [(Word64, TxRedeemer)])
     mkRdmrAndUpdateRec (rdmrMaps, rdmrsAcc) [] = (rdmrMaps, reverse rdmrsAcc)
     mkRdmrAndUpdateRec (rdmrMaps, rdmrsAcc) ((rdmrIx, rdmr) : rest) =
@@ -221,33 +223,46 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
 
     handleRedeemer ::
       Word64 ->
-      (Alonzo.RdmrPtr, (Alonzo.Data era, ExUnits)) ->
+      (PlutusPurpose AsIndex era, (Alonzo.Data era, ExUnits)) ->
       RedeemerMaps ->
       (TxRedeemer, RedeemerMaps)
-    handleRedeemer rdmrIx (ptr@(Alonzo.RdmrPtr tag index), (dt, exUnits)) rdmrMps =
+    handleRedeemer rdmrIx (ptr, (dt, exUnits)) rdmrMps =
       (txRdmr, rdmrMps')
       where
-        (rdmrMps', mScript) = case strictMaybeToMaybe (Alonzo.rdptrInv txBody ptr) of
-          Just (Alonzo.Minting policyId) -> (rdmrMps, Just $ Right $ unScriptHash $ policyID policyId)
-          Just (Alonzo.Spending txIn) -> handleTxInPtr rdmrIx txIn rdmrMps
-          Just (Alonzo.Rewarding rwdAcnt) -> handleRewardPtr rdmrIx rwdAcnt rdmrMps
-          Just prp@(Alonzo.Certifying dcert) -> case strictMaybeToMaybe (Alonzo.rdptr txBody prp) of
-            Just ptr' | ptr == ptr' -> handleCertPtr rdmrIx (toCert dcert) rdmrMps
-            _ -> (rdmrMps, Nothing)
+        (rdmrMps', mScript) = case mkPurpose $ Alonzo.redeemerPointerInverse txBody ptr of
+          Just (Left (Alonzo.AlonzoMinting policyId, _)) -> (rdmrMps, Just $ Right $ unScriptHash $ policyID (Alonzo.unAsItem policyId))
+          Just (Left (Alonzo.AlonzoSpending txIn, _)) -> handleTxInPtr rdmrIx (Alonzo.unAsItem txIn) rdmrMps
+          Just (Left (Alonzo.AlonzoRewarding rwdAcnt, _)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
+          Just (Left (Alonzo.AlonzoCertifying dcert, Just ptr')) ->
+            if ptr == ptr'
+              then handleCertPtr rdmrIx (toCert $ Alonzo.unAsItem dcert) rdmrMps
+              else (rdmrMps, Nothing)
+          Just (Left (Alonzo.AlonzoCertifying _, Nothing)) -> (rdmrMps, Nothing)
+          Just (Right (ConwayMinting policyId)) -> (rdmrMps, Just $ Right $ unScriptHash $ policyID (Alonzo.unAsItem policyId))
+          Just (Right (ConwaySpending txIn)) -> handleTxInPtr rdmrIx (Alonzo.unAsItem txIn) rdmrMps
+          Just (Right (ConwayRewarding rwdAcnt)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
+          Just (Right (ConwayCertifying dcert)) -> handleCertPtr rdmrIx (toCert $ Alonzo.unAsItem dcert) rdmrMps
+          Just (Right (ConwayVoting voter)) -> (rdmrMps, Right <$> getConwayVotingScriptHash (Alonzo.unAsItem voter))
+          Just (Right (ConwayProposing proposal)) -> (rdmrMps, Right <$> getConwayProposalScriptHash (Alonzo.unAsItem proposal))
           Nothing -> (rdmrMps, Nothing)
 
+        (tag, idx) = getPurpose ptr
         txRdmr =
           TxRedeemer
             { txRedeemerMem = fromIntegral $ exUnitsMem exUnits
             , txRedeemerSteps = fromIntegral $ exUnitsSteps exUnits
             , txRedeemerFee = (`txscriptfee` exUnits) <$> mprices
             , txRedeemerPurpose = tag
-            , txRedeemerIndex = index
+            , txRedeemerIndex = fromIntegral idx
             , txRedeemerScriptHash = mScript
             , txRedeemerData = mkTxData (Alonzo.hashData dt, dt)
             }
 
-handleTxInPtr :: Word64 -> ShelleyTx.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+        mkPurpose = \case
+          Strict.SNothing -> Nothing
+          Strict.SJust a -> toAlonzoPurpose txBody a
+
+handleTxInPtr :: Word64 -> Ledger.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
   Nothing -> (mps, Nothing)
   Just gtxIn ->
@@ -271,11 +286,11 @@ handleCertPtr rdmrIx dcert mps =
 data RedeemerMaps = RedeemerMaps
   { rmWdrl :: Map (Shelley.RewardAcnt StandardCrypto) TxWithdrawal
   , rmCerts :: [(Cert, TxCertificate)]
-  , rmInps :: Map (ShelleyTx.TxIn StandardCrypto) TxIn
+  , rmInps :: Map (Ledger.TxIn StandardCrypto) TxIn
   }
 
 mkTxScript ::
-  (Ledger.Era era) =>
+  DBPlutusScript era =>
   (ScriptHash StandardCrypto, Alonzo.AlonzoScript era) ->
   TxScript
 mkTxScript (hsh, script) =
@@ -291,9 +306,7 @@ mkTxScript (hsh, script) =
     getScriptType =
       case script of
         Alonzo.TimelockScript {} -> Timelock
-        Alonzo.PlutusScript (Plutus Alonzo.PlutusV1 _s) -> PlutusV1
-        Alonzo.PlutusScript (Plutus Alonzo.PlutusV2 _s) -> PlutusV2
-        Alonzo.PlutusScript (Plutus Alonzo.PlutusV3 _s) -> PlutusV3
+        Alonzo.PlutusScript ps -> getPlutusScriptType ps
 
     timelockJsonScript :: Maybe ByteString
     timelockJsonScript =
@@ -313,6 +326,7 @@ getPlutusSizes ::
   ( Core.EraTx era
   , Core.TxWits era ~ Alonzo.AlonzoTxWits era
   , Core.Script era ~ Alonzo.AlonzoScript era
+  , AlonzoEraScript era
   ) =>
   Core.Tx era ->
   [Word64]
@@ -322,11 +336,12 @@ getPlutusSizes tx =
       tx ^. (Core.witsTxL . Alonzo.scriptAlonzoTxWitsL)
 
 -- | Returns Nothing for non-plutus scripts.
-getPlutusScriptSize :: Alonzo.AlonzoScript era -> Maybe Word64
+getPlutusScriptSize :: AlonzoEraScript era => Alonzo.AlonzoScript era -> Maybe Word64
 getPlutusScriptSize script =
   case script of
     Alonzo.TimelockScript {} -> Nothing
-    Alonzo.PlutusScript (Plutus _lang sbs) -> Just $ fromIntegral (SBS.length $ unBinaryPlutus sbs)
+    Alonzo.PlutusScript ps ->
+      Just $ fromIntegral $ SBS.length $ unPlutusBinary $ Alonzo.plutusScriptBinary ps
 
 txDataWitness ::
   (Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era, EraCrypto era ~ StandardCrypto) =>
@@ -361,15 +376,20 @@ scriptHashCert cert = case cert of
   Left scert -> scriptHashCertShelley scert
   Right ccert -> scriptHashCertConway ccert
 
--- TODO: Conway
 scriptHashCertConway :: ConwayCert -> Maybe ByteString
-scriptHashCertConway _cert = Nothing
+scriptHashCertConway cert = unScriptHash <$> getScriptWitnessTxCert cert
 
 scriptHashCertShelley :: ShelleyCert -> Maybe ByteString
-scriptHashCertShelley cert =
-  case cert of
-    Shelley.ShelleyTxCertDelegCert (Shelley.ShelleyUnRegCert cred) ->
-      getCredentialScriptHash cred
-    Shelley.ShelleyTxCertDelegCert (Shelley.ShelleyDelegCert cred _) ->
-      getCredentialScriptHash cred
-    _ -> Nothing
+scriptHashCertShelley cert = unScriptHash <$> getScriptWitnessTxCert cert
+
+getConwayVotingScriptHash :: Voter StandardCrypto -> Maybe ByteString
+getConwayVotingScriptHash = \case
+  CommitteeVoter cred -> getCredentialScriptHash cred
+  DRepVoter cred -> getCredentialScriptHash cred
+  StakePoolVoter _ -> Nothing
+
+getConwayProposalScriptHash :: EraCrypto era ~ StandardCrypto => ProposalProcedure era -> Maybe ByteString
+getConwayProposalScriptHash pp = case pProcGovAction pp of
+  ParameterChange _ _ p -> unScriptHash <$> strictMaybeToMaybe p
+  TreasuryWithdrawals _ p -> unScriptHash <$> strictMaybeToMaybe p
+  _ -> Nothing

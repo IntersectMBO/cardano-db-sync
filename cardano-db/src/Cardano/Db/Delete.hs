@@ -147,7 +147,8 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     mgaId <- queryMinRefId GovActionProposalTxId txId
     whenJust mgaId $ \gaId -> do
       queryFirstAndDeleteAfter TreasuryWithdrawalGovActionProposalId gaId
-      queryFirstAndDeleteAfter NewCommitteeGovActionProposalId gaId
+      queryFirstAndDeleteAfter NewCommitteeInfoGovActionProposalId gaId
+      queryFirstAndDeleteAfter NewCommitteeMemberGovActionProposalId gaId
       queryFirstAndDeleteAfter ConstitutionGovActionProposalId gaId
       deleteWhere [GovActionProposalId >=. gaId]
     mvaId <- queryMinRefId VotingAnchorTxId txId

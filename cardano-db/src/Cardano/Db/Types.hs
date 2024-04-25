@@ -9,6 +9,7 @@
 
 module Cardano.Db.Types (
   Ada (..),
+  AnchorType (..),
   AssetFingerprint (..),
   DbLovelace (..),
   DbInt65 (..),
@@ -54,6 +55,8 @@ module Cardano.Db.Types (
   readVoterRole,
   renderGovActionType,
   readGovActionType,
+  renderAnchorType,
+  readAnchorType,
   word64ToAda,
   hardcodedAlwaysAbstain,
   hardcodedAlwaysNoConfidence,
@@ -154,6 +157,8 @@ data ScriptPurpose
   | Mint
   | Cert
   | Rewrd
+  | Vote
+  | Propose
   deriving (Eq, Generic, Show)
 
 data ScriptType
@@ -217,7 +222,7 @@ data PruneConsumeMigration = PruneConsumeMigration
     pcmConsumeOrPruneTxOut :: Bool
   , pcmSkipTxIn :: Bool
   }
-  deriving (Show)
+  deriving (Eq, Show)
 
 extraDescription :: ExtraMigration -> Text
 extraDescription = \case
@@ -261,6 +266,12 @@ data GovActionType
   | InfoAction
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet GovActionType)
+
+data AnchorType
+  = GovActionAnchor
+  | OtherAnchor
+  deriving (Eq, Ord, Generic)
+  deriving (Show) via (Quiet AnchorType)
 
 deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
 deltaCoinToDbInt65 (DeltaCoin dc) =
@@ -332,6 +343,8 @@ renderScriptPurpose ss =
     Mint -> "mint"
     Cert -> "cert"
     Rewrd -> "reward"
+    Vote -> "vote"
+    Propose -> "propose"
 
 readScriptPurpose :: String -> ScriptPurpose
 readScriptPurpose str =
@@ -340,6 +353,8 @@ readScriptPurpose str =
     "mint" -> Mint
     "cert" -> Cert
     "reward" -> Rewrd
+    "vote" -> Vote
+    "propose" -> Propose
     _other -> error $ "readScriptPurpose: Unknown ScriptPurpose " ++ str
 
 showRewardSource :: RewardSource -> Text
@@ -421,6 +436,19 @@ readGovActionType str =
     "NewCommittee" -> NewCommitteeType
     "NewConstitution" -> NewConstitution
     _other -> error $ "readGovActionType: Unknown GovActionType " ++ str
+
+renderAnchorType :: AnchorType -> Text
+renderAnchorType gav =
+  case gav of
+    GovActionAnchor -> "gov_action"
+    OtherAnchor -> "other"
+
+readAnchorType :: String -> AnchorType
+readAnchorType str =
+  case str of
+    "gov_action" -> GovActionAnchor
+    "other" -> OtherAnchor
+    _other -> error $ "readAnchorType: Unknown AnchorType " ++ str
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

@@ -23,9 +23,11 @@ import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
+import Cardano.Ledger.Babbage.TxOut
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Plutus.Data as Alonzo
+import qualified Cardano.Ledger.Plutus.Data as Plutus
 import Cardano.Prelude (mapMaybe)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (filterM, when)
@@ -35,6 +37,7 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Short as SBS
+import Data.Either.Extra (mapLeft)
 import Data.Foldable (toList)
 import Data.Int (Int64)
 import Data.Map (Map)
@@ -106,7 +109,7 @@ getWrongPlutusData tracer = do
       (fmap f . DB_V_13_0.querydatumInfo . entityKey)
       (DB_V_13_0.datumHash . entityVal)
       (Just . getDatumBytes)
-      (hashPlutusData . getDatumBytes)
+      (mapLeft Just . hashPlutusData . getDatumBytes)
   redeemerDataList <-
     findWrongPlutusData
       tracer
@@ -116,7 +119,7 @@ getWrongPlutusData tracer = do
       (fmap f . DB_V_13_0.queryRedeemerDataInfo . entityKey)
       (DB_V_13_0.redeemerDataHash . entityVal)
       (Just . getRedeemerDataBytes)
-      (hashPlutusData . getRedeemerDataBytes)
+      (mapLeft Just . hashPlutusData . getRedeemerDataBytes)
   pure $ FixData datumList redeemerDataList
   where
     f queryRes = do
@@ -142,7 +145,7 @@ findWrongPlutusData ::
   (a -> m (Maybe CardanoPoint)) -> -- get previous block point
   (a -> ByteString) -> -- get the hash
   (a -> Maybe ByteString) -> -- get the stored bytes
-  (a -> Either String ByteString) -> -- hash the stored bytes
+  (a -> Either (Maybe String) ByteString) -> -- hash the stored bytes
   m [FixPlutusInfo]
 findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
   liftIO $
@@ -195,7 +198,8 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
 
     checkValidBytes :: a -> m Bool
     checkValidBytes a = case hashBytes a of
-      Left msg -> do
+      Left Nothing -> pure True
+      Left (Just msg) -> do
         liftIO $
           logWarning tracer $
             Text.concat ["Invalid Binary Data for hash ", textShow actualHash, ": ", Text.pack msg]
@@ -273,9 +277,9 @@ scrapDatumsTxBabbage tx =
     outputData = mapMaybe getDatumOutput $ toList $ Babbage.outputs' txBody
     collOutputData = mapMaybe getDatumOutput $ toList $ Babbage.collateralReturn' txBody
 
-    getDatumOutput :: Babbage.BabbageTxOut StandardBabbage -> Maybe PlutusData
-    getDatumOutput txOut = case txOut ^. Babbage.datumTxOutL of
-      Babbage.Datum binaryData ->
+    getDatumOutput :: BabbageTxOut StandardBabbage -> Maybe PlutusData
+    getDatumOutput txOut = case txOut ^. datumTxOutL of
+      Plutus.Datum binaryData ->
         let plutusData = Alonzo.binaryDataToData binaryData
          in Just $ mkTxData (Alonzo.hashData plutusData, plutusData)
       _ -> Nothing
@@ -289,7 +293,7 @@ scrapDatumsTxAlonzo tx =
 
 scrapRedeemerDataBlock :: CardanoBlock -> Map ByteString ByteString
 scrapRedeemerDataBlock cblk = case cblk of
-  BlockConway _blk -> mempty -- panic "TODO: Conway 5"
+  BlockConway _blk -> mempty
   BlockBabbage blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockAlonzo blk -> Map.unions $ scrapRedeemerDataTx . snd <$> getTxs blk
   BlockByron _ -> error "No RedeemerData in Byron"

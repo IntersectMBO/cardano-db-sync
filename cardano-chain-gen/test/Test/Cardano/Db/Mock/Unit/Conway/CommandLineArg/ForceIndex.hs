@@ -17,7 +17,7 @@ checkForceIndexesArg =
     startDBSync dbSync
 
     -- Verify number of DB indexes
-    assertEqQuery dbSync DB.queryPgIndexesCount 162 "unexpected number of indexes"
+    assertEqQuery dbSync DB.queryPgIndexesCount 169 "unexpected number of indexes"
   where
     cliArgs = initCommandLineArgs {claForceIndexes = True}
     testLabel = "conwayCLACheckForceIndexesArg"
@@ -28,7 +28,7 @@ checkNoForceIndexesArg =
     startDBSync dbSync
 
     -- Verify number of DB indexes
-    assertEqQuery dbSync DB.queryPgIndexesCount 97 "unexpected number of indexes"
+    assertEqQuery dbSync DB.queryPgIndexesCount 104 "unexpected number of indexes"
   where
     cliArgs = initCommandLineArgs {claForceIndexes = False}
     testLabel = "conwayCLACheckNoForceIndexesArg"

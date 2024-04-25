@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
@@ -13,6 +17,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxScript (..),
   PlutusData (..),
   TxOutDatum (..),
+  DBScriptPurpose (..),
+  DBPlutusScript (..),
   toTxCert,
   whenInlineDatum,
   getTxOutDatumHash,
@@ -20,21 +26,25 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   sumTxOutCoin,
 ) where
 
-import Cardano.Db (ScriptType (..))
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..))
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.Alonzo.Scripts (Tag (..))
+import Cardano.Ledger.Alonzo.Scripts
+import Cardano.Ledger.Alonzo.TxBody
+import Cardano.Ledger.BaseTypes (strictMaybeToMaybe)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance
+import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
+import Cardano.Ledger.Core (TxBody)
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
-import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto, StandardShelley)
+import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
 
 data Tx = Tx
   { txHash :: !ByteString
@@ -100,7 +110,7 @@ data TxOut = TxOut
 data TxRedeemer = TxRedeemer
   { txRedeemerMem :: !Word64
   , txRedeemerSteps :: !Word64
-  , txRedeemerPurpose :: !Tag
+  , txRedeemerPurpose :: !DB.ScriptPurpose
   , txRedeemerFee :: !(Maybe Coin)
   , txRedeemerIndex :: !Word64
   , txRedeemerScriptHash :: Maybe (Either TxIn ByteString)
@@ -111,7 +121,7 @@ data TxRedeemer = TxRedeemer
 -- exists in db.
 data TxScript = TxScript
   { txScriptHash :: !ByteString
-  , txScriptType :: ScriptType
+  , txScriptType :: DB.ScriptType
   , txScriptPlutusSize :: Maybe Word64
   , txScriptJson :: Maybe ByteString
   , txScriptCBOR :: Maybe ByteString
@@ -150,3 +160,62 @@ getMaybeDatumHash (Just hsh) = DatumHash hsh
 
 sumTxOutCoin :: [TxOut] -> Coin
 sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)
+
+class AlonzoEraTxBody era => DBScriptPurpose era where
+  getPurpose :: PlutusPurpose AsIndex era -> (DB.ScriptPurpose, Word32)
+  toAlonzoPurpose :: TxBody era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIndex era)) (ConwayPlutusPurpose AsItem era))
+
+instance DBScriptPurpose StandardAlonzo where
+  getPurpose = \case
+    AlonzoSpending idx -> (DB.Spend, unAsIndex idx)
+    AlonzoMinting idx -> (DB.Mint, unAsIndex idx)
+    AlonzoCertifying idx -> (DB.Cert, unAsIndex idx)
+    AlonzoRewarding idx -> (DB.Rewrd, unAsIndex idx)
+
+  toAlonzoPurpose txBody pp = case pp of
+    AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
+    AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
+    AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
+    AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (redeemerPointer txBody pp))
+
+instance DBScriptPurpose StandardBabbage where
+  getPurpose = \case
+    AlonzoSpending idx -> (DB.Spend, unAsIndex idx)
+    AlonzoMinting idx -> (DB.Mint, unAsIndex idx)
+    AlonzoCertifying idx -> (DB.Cert, unAsIndex idx)
+    AlonzoRewarding idx -> (DB.Rewrd, unAsIndex idx)
+
+  toAlonzoPurpose txBody pp = case pp of
+    AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
+    AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
+    AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
+    AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (redeemerPointer txBody pp))
+
+instance DBScriptPurpose StandardConway where
+  getPurpose = \case
+    ConwaySpending idx -> (DB.Spend, unAsIndex idx)
+    ConwayMinting idx -> (DB.Mint, unAsIndex idx)
+    ConwayCertifying idx -> (DB.Cert, unAsIndex idx)
+    ConwayRewarding idx -> (DB.Rewrd, unAsIndex idx)
+    ConwayVoting idx -> (DB.Vote, unAsIndex idx)
+    ConwayProposing idx -> (DB.Propose, unAsIndex idx)
+
+  toAlonzoPurpose _ = \case
+    ConwayVoting _ -> Nothing
+    ConwayProposing _ -> Nothing
+    a -> Just $ Right a
+
+class AlonzoEraScript era => DBPlutusScript era where
+  getPlutusScriptType :: PlutusScript era -> DB.ScriptType
+
+instance DBPlutusScript StandardAlonzo where
+  getPlutusScriptType _ = DB.PlutusV1
+
+instance DBPlutusScript StandardBabbage where
+  getPlutusScriptType (BabbagePlutusV1 _) = DB.PlutusV1
+  getPlutusScriptType (BabbagePlutusV2 _) = DB.PlutusV2
+
+instance DBPlutusScript StandardConway where
+  getPlutusScriptType (ConwayPlutusV1 _) = DB.PlutusV1
+  getPlutusScriptType (ConwayPlutusV2 _) = DB.PlutusV2
+  getPlutusScriptType (ConwayPlutusV3 _) = DB.PlutusV3

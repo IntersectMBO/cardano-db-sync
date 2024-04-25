@@ -1,13 +1,12 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -25,6 +24,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Data.Foldable
 import Data.Maybe (isJust)
 import Data.Text (Text)
+import Data.TreeDiff as T
 import GHC.Generics (Generic, Generic1)
 import Ouroboros.Network.Block hiding (RollBack)
 import Test.Cardano.Db.Mock.Config
@@ -80,6 +80,23 @@ rollbackChain (Just blkNo) ls
   , length ls >= len =
       take len ls
 rollbackChain _ _ = error "failed to rollback"
+
+instance ToExpr x => CanDiff x where
+  type ADiff x = Edit EditExpr
+  type AnExpr x = Expr
+
+  toDiff = toExpr
+  exprDiff _ = T.exprDiff
+  diffToDocCompact _ = ansiWlBgEditExprCompact
+  diffToDoc _ = ansiWlBgEditExpr
+  exprToDoc _ = ansiWlBgExpr
+
+instance ToExpr (r k) => ToExpr (Reference k r)
+
+instance ToExpr (Opaque a) where
+  toExpr _ = App "Opaque" []
+
+instance ToExpr BlockNo
 
 instance ToExpr (Model Symbolic)
 

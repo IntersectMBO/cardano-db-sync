@@ -24,7 +24,7 @@ checkConfigFileArg =
     -- Expected to fail
     checkStillRuns dbSync
   where
-    cliArgs = initCommandLineArgs {claHasConfigFile = False} -- Invalid
+    cliArgs = initCommandLineArgs {claConfigFilename = "does-not-exist"}
     testLabel = "conwayCLACheckConfigFileArg"
 
 configResetJsonb :: IOManager -> [(Text, Text)] -> Assertion

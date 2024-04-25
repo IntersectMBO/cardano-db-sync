@@ -53,7 +53,7 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
   LocalStateQueryClient (..),
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure)
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure, Target (..))
 
 data NoLedgerEnv = NoLedgerEnv
   { nleTracer :: Trace IO Text
@@ -146,7 +146,7 @@ localStateQueryHandler nlEnv =
     idleState = do
       (query, respVar) <- atomically $ takeTMVar reqVar
       pure
-        . SendMsgAcquire Nothing
+        . SendMsgAcquire VolatileTip
         $ ClientStAcquiring
           { recvMsgAcquired =
               pure . SendMsgQuery query $

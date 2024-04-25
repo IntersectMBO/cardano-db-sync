@@ -40,8 +40,8 @@ import Cardano.Ledger.Crypto (ADDRHASH)
 import Cardano.Ledger.Era (Era (..), EraCrypto)
 import Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
 import Cardano.Ledger.Keys
+import Cardano.Ledger.PoolParams
 import Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
-import Cardano.Ledger.Shelley.TxBody
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
@@ -293,5 +293,5 @@ consPoolParams poolId rwCred owners =
     , ppRewardAcnt = RewardAcnt Testnet rwCred
     , ppOwners = Set.fromList owners
     , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
-    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl "best.pool") "89237365492387654983275634298756"
+    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") "89237365492387654983275634298756"
     }

@@ -5,8 +5,8 @@ import Cardano.Prelude
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
-import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
-import qualified Test.Cardano.Db.Mock.Unit.Conway.Config as ConConfig
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Plutus as Plutus
@@ -26,26 +26,16 @@ unitTests iom knownMigrations =
     "Conway unit tests"
     [ testGroup
         "config"
-        [ testCase "conway genesis and hash" ConConfig.conwayGenesis
-        , testCase "missing conway genesis file" ConConfig.missingConwayGenesis
-        , testCase "no conway genesis file" ConConfig.noConwayGenesis
-        , testCase "no conway genesis hash" ConConfig.noConwayGenesisHash
-        , testCase "mismatched conway genesis hash" ConConfig.wrongConwayGenesisHash
-        ]
-    , testGroup
-        "simple"
-        [ test "simple forge blocks" Simple.forgeBlocks
-        , test "sync one block" Simple.addSimple
-        , test "sync small chain" Simple.addSimpleChain
-        , test "restart db-sync" Simple.restartDBSync
-        , test "node restart" Simple.nodeRestart
-        , test "node restart boundary" Simple.nodeRestartBoundary
-        ]
-    , testGroup
-        "Command Line Arguments"
-        [ testGroup
-            "consumed-tx-out and prune-tx-out"
-            [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
+        [ testCase "conway genesis and hash" Config.conwayGenesis
+        , testCase "missing conway genesis file" Config.missingConwayGenesis
+        , testCase "no conway genesis file" Config.noConwayGenesis
+        , testCase "no conway genesis hash" Config.noConwayGenesisHash
+        , testCase "mismatched conway genesis hash" Config.wrongConwayGenesisHash
+        , testCase "default insert config" Config.defaultInsertConfig
+        , testCase "insert config" Config.insertConfig
+        , testGroup
+            "tx-out"
+            [ test "consumed_by_tx_id column check" MigrateConsumedPruneTxOut.txConsumedColumnCheck
             , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
@@ -67,7 +57,19 @@ unitTests iom knownMigrations =
                   "set bootstrap flag, restart missing bootstrap flag"
                   MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
             ]
-        , testGroup
+        ]
+    , testGroup
+        "simple"
+        [ test "simple forge blocks" Simple.forgeBlocks
+        , test "sync one block" Simple.addSimple
+        , test "sync small chain" Simple.addSimpleChain
+        , test "restart db-sync" Simple.restartDBSync
+        , test "node restart" Simple.nodeRestart
+        , test "node restart boundary" Simple.nodeRestartBoundary
+        ]
+    , testGroup
+        "Command Line Arguments"
+        [ testGroup
             "config"
             [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg
             , test "not using the reset-jsonb config should have no jsonb types in db" ConfigFile.configNoResetJsonb
@@ -105,7 +107,11 @@ unitTests iom knownMigrations =
         "blocks with txs"
         [ test "simple tx" Tx.addSimpleTx
         , test "simple tx in Shelley era" Tx.addSimpleTxShelley
+        , test "simple tx with ledger disabled" Tx.addSimpleTxNoLedger
         , test "consume utxo same block" Tx.consumeSameBlock
+        , test "tx with metadata" Tx.addTxMetadata
+        , test "tx with metadata disabled" Tx.addTxMetadataDisabled
+        , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
         ]
     , testGroup
         "stake addresses"
@@ -115,6 +121,8 @@ unitTests iom knownMigrations =
         , test "stake address pointers" Stake.stakeAddressPtr
         , test "stake address pointers deregistration" Stake.stakeAddressPtrDereg
         , test "stake address pointers. Use before registering." Stake.stakeAddressPtrUseBefore
+        , test "register stake creds" Stake.registerStakeCreds
+        , test "register stake creds with shelley disabled" Stake.registerStakeCredsNoShelley
         ]
     , testGroup
         "stake distribution"
@@ -135,6 +143,7 @@ unitTests iom knownMigrations =
         "plutus send scripts"
         [ test "simple script lock" Plutus.simpleScript
         , test "unlock script in same block" Plutus.unlockScriptSameBlock
+        , test "unlock script with plutus disabled" Plutus.unlockScriptNoPlutus
         , test "failed script" Plutus.failedScript
         , test "failed script fees" Plutus.failedScriptFees
         , test "failed script in same block" Plutus.failedScriptSameBlock
@@ -162,6 +171,7 @@ unitTests iom knownMigrations =
         [ test "mint simple multi asset" Plutus.mintMultiAsset
         , test "mint many multi assets" Plutus.mintMultiAssets
         , test "swap many multi assets" Plutus.swapMultiAssets
+        , test "swap with multi assets disabled" Plutus.swapMultiAssetsDisabled
         ]
     , testGroup
         "Pools and smash"

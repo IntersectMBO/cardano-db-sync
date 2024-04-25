@@ -19,10 +19,11 @@ import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
-import Cardano.Ledger.Shelley.Tx hiding (ShelleyTx)
 import qualified Cardano.Ledger.Shelley.Tx as ShelleyTx
 import Cardano.Ledger.Shelley.TxBody
 import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.Shelley.TxOut
+import Cardano.Ledger.TxIn
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude

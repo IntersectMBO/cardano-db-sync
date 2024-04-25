@@ -34,10 +34,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Download image from cache
-        run:
-          nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
-
       - name: Log in to ghcr.io
         uses: docker/login-action@v2.1.0
         with:
@@ -45,25 +41,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload to ghcr.io
+      - name: Set environment variables
         run: |
           # Downcase the package repository, because docker reference
           # are required to be lower case
           REPO_OWNER="$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
-          IMAGE_REF="ghcr.io/$REPO_OWNER/cardano-db-sync"
-          IMAGE_TAG="$GITHUB_REF_NAME"
+          IMAGE_TAG="$(echo $GITHUB_REF_NAME | tr '/' '_')"
 
-          # Load the image from the nix build result
-          docker load < result
+          echo "REPO_OWNER=${REPO_OWNER}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-          # Tag the image
-          docker image tag \
-            cardano-db-sync:latest  \
-            "${IMAGE_REF}:${IMAGE_TAG}"
+      - name: Upload ${{ github.actor }}/cardano-db-sync
+        run: |
+          # Download the image from the nix binary cachhe
+          nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
+
+          # Push the image
+          skopeo copy \
+            docker-archive:./result \
+            docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:$IMAGE_TAG
+
           # Also tag it as latest
-          docker image tag \
-            cardano-db-sync:latest  \
-            "${IMAGE_REF}:latest"
-          # Push the tags above
-          docker push "${IMAGE_REF}:${IMAGE_TAG}"
-          docker push "${IMAGE_REF}:latest"
+          skopeo copy \
+            docker-archive:./result \
+            docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
+
+      - name: Upload ${{ github.actor }}/cardano-smash-server
+        run: |
+          # Download the image from the nix binary cachhe
+          nix build --builders "" --max-jobs 0 .#cardano-smash-server-docker
+
+          # Push the image
+          skopeo copy \
+            docker-archive:./result \
+            docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:$IMAGE_TAG
+
+          # Also tag it as latest
+          skopeo copy \
+            docker-archive:./result \
+            docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:latest

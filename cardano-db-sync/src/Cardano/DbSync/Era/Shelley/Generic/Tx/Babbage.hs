@@ -61,7 +61,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
         if not isValid2
           then sumTxOutCoin collOutputs
           else sumTxOutCoin outputs
-    , txInvalidBefore = invalidBefore
+    , txInvalidBefore = invalidBef
     , txInvalidHereafter = invalidAfter
     , txWithdrawalSum = calcWithdrawalSum txBody
     , txMetadata = fromAlonzoMetadata <$> getTxMetadata tx
@@ -102,7 +102,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
         Alonzo.IsValid x -> x
 
     (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (Left . toShelleyCert)
-    (invalidBefore, invalidAfter) = getInterval txBody
+    (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody
 
@@ -113,6 +113,7 @@ fromTxOut ::
   , Core.Value era ~ MaryValue (EraCrypto era)
   , Core.TxOut era ~ BabbageTxOut era
   , Core.Script era ~ Alonzo.AlonzoScript era
+  , DBPlutusScript era
   ) =>
   Word64 ->
   BabbageTxOut era ->
@@ -135,17 +136,17 @@ fromScript ::
   forall era.
   ( EraCrypto era ~ StandardCrypto
   , Core.Script era ~ Alonzo.AlonzoScript era
-  , Core.EraScript era
+  , DBPlutusScript era
   ) =>
   Alonzo.AlonzoScript era ->
   TxScript
 fromScript scr = mkTxScript (Core.hashScript @era scr, scr)
 
-fromDatum :: (EraCrypto era ~ StandardCrypto, Ledger.Era era) => Babbage.Datum era -> TxOutDatum
+fromDatum :: (EraCrypto era ~ StandardCrypto, Ledger.Era era) => Alonzo.Datum era -> TxOutDatum
 fromDatum bdat =
   case bdat of
-    Babbage.NoDatum -> NoDatum
-    Babbage.DatumHash hdh -> DatumHash hdh
-    Babbage.Datum binaryData ->
+    Alonzo.NoDatum -> NoDatum
+    Alonzo.DatumHash hdh -> DatumHash hdh
+    Alonzo.Datum binaryData ->
       let plutusData = Alonzo.binaryDataToData binaryData
        in InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)

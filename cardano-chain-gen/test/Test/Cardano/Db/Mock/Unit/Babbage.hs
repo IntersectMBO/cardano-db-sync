@@ -15,7 +15,8 @@ import Test.Tasty.HUnit (Assertion, testCase)
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ForceIndex as ForceIndex
-import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
+import qualified Test.Cardano.Db.Mock.Unit.Babbage.Config.Parse as Config
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference as BabInlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Other as BabOther
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Plutus as BabPlutus
@@ -30,19 +31,12 @@ unitTests iom knownMigrations =
   testGroup
     "Babbage unit tests"
     [ testGroup
-        "simple"
-        [ test "simple forge blocks" BabSimple.forgeBlocks
-        , test "sync one block" BabSimple.addSimple
-        , test "sync small chain" BabSimple.addSimpleChain
-        , test "restart db-sync" BabSimple.restartDBSync
-        , test "node restart" BabSimple.nodeRestart
-        , test "node restart boundary" BabSimple.nodeRestartBoundary
-        ]
-    , testGroup
-        "Command Line Arguments"
-        [ testGroup
+        "config"
+        [ testCase "default insert config" Config.defaultInsertConfig
+        , testCase "insert config" Config.insertConfig
+        , testGroup
             "consumed-tx-out and prune-tx-out"
-            [ test "flag check" MigrateConsumedPruneTxOut.commandLineArgCheck
+            [ test "flag check" MigrateConsumedPruneTxOut.txConsumedColumnCheck
             , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
@@ -55,9 +49,21 @@ unitTests iom knownMigrations =
             , expectFail $ test "set prune flag, restart missing prune flag" MigrateConsumedPruneTxOut.pruneRestartMissingFlag
             , expectFail $ test "set bootstrap flag, restart missing bootstrap flag" MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
             ]
-        , testGroup
+        ]
+    , testGroup
+        "simple"
+        [ test "simple forge blocks" BabSimple.forgeBlocks
+        , test "sync one block" BabSimple.addSimple
+        , test "sync small chain" BabSimple.addSimpleChain
+        , test "restart db-sync" BabSimple.restartDBSync
+        , test "node restart" BabSimple.nodeRestart
+        , test "node restart boundary" BabSimple.nodeRestartBoundary
+        ]
+    , testGroup
+        "Command Line Arguments"
+        [ testGroup
             "config"
-            [ expectFail $ test "fails if incorrect or no config file given" ConfigFile.checkConfigFileArg
+            [ expectFail $ test "fails if incorrect config file given" ConfigFile.checkConfigFileArg
             , test "not using the reset-jsonb config should have no jsonb types in db" ConfigFile.configNoResetJsonb
             , test "reset-jsonb config should reset jsonb types in db" ConfigFile.configResetJsonb
             ]

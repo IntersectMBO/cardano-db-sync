@@ -31,7 +31,7 @@ import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Shelley.API (Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Ledger.Shelley.TxOut
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 import Cardano.Ledger.Val
 import Cardano.Prelude
@@ -102,7 +102,7 @@ getByronBalance addrText utxo = do
 
 getShelleyBalance ::
   forall era.
-  (EraCrypto era ~ StandardCrypto, Ledger.TxOut era ~ Shelley.ShelleyTxOut era) =>
+  (EraCrypto era ~ StandardCrypto, Ledger.TxOut era ~ ShelleyTxOut era) =>
   Val (Ledger.Value era) =>
   Text ->
   Shelley.UTxO era ->
@@ -113,7 +113,7 @@ getShelleyBalance addrText utxo = do
     Right cmpAddr -> Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue cmpAddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue :: CompactAddr (EraCrypto era) -> Ledger.TxOut era -> Maybe Coin
-    compactTxOutValue caddr (Shelley.TxOutCompact scaddr v) =
+    compactTxOutValue caddr (TxOutCompact scaddr v) =
       if caddr == scaddr
         then Just $ coin (fromCompact v)
         else Nothing

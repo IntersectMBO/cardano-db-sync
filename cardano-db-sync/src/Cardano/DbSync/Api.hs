@@ -8,6 +8,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Api (
+  extractInsertOptions,
   fullInsertOptions,
   onlyUTxOInsertOptions,
   onlyGovInsertOptions,
@@ -154,11 +155,11 @@ runIndexMigrations env = do
     atomically $ writeTVar (envIndexes env) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
-initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn =
+initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
   DB.PruneConsumeMigration
     { DB.pcmPruneTxOut = pruneTxOut || bootstrap
     , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut || bootstrap
-    , DB.pcmSkipTxIn = not forceTxIn && (consumed || pruneTxOut || bootstrap)
+    , DB.pcmSkipTxIn = not forceTxIn' && (consumed || pruneTxOut || bootstrap)
     }
 
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
@@ -204,52 +205,65 @@ getPrunes :: SyncEnv -> Bool
 getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
-fullInsertOptions :: Bool -> InsertOptions
-fullInsertOptions useLedger =
-  InsertOptions
-    { ioInOut = True
-    , ioUseLedger = useLedger
-    , ioShelley = True
-    , ioRewards = True
-    , ioMultiAssets = True
-    , ioMetadata = True
-    , ioKeepMetadataNames = Strict.Nothing
-    , ioPlutusExtra = True
-    , ioOffChainPoolData = True
-    , ioGov = True
+extractInsertOptions :: SyncPreConfig -> SyncInsertOptions
+extractInsertOptions cfg =
+  case pcInsertConfig cfg of
+    FullInsertOptions -> fullInsertOptions
+    OnlyUTxOInsertOptions -> onlyUTxOInsertOptions
+    OnlyGovInsertOptions -> onlyGovInsertOptions
+    DisableAllInsertOptions -> disableAllInsertOptions
+    SyncInsertConfig opts -> opts
+
+fullInsertOptions :: SyncInsertOptions
+fullInsertOptions =
+  SyncInsertOptions
+    { sioTxOut = TxOutEnable
+    , sioLedger = LedgerEnable
+    , sioShelley = ShelleyEnable
+    , sioRewards = RewardsConfig True
+    , sioMultiAsset = MultiAssetEnable
+    , sioMetadata = MetadataEnable
+    , sioPlutus = PlutusEnable
+    , sioGovernance = GovernanceConfig True
+    , sioOffchainPoolData = OffchainPoolDataConfig True
+    , sioJsonType = JsonTypeText
     }
 
-onlyUTxOInsertOptions :: InsertOptions
+onlyUTxOInsertOptions :: SyncInsertOptions
 onlyUTxOInsertOptions =
-  InsertOptions
-    { ioInOut = True
-    , ioUseLedger = False
-    , ioShelley = False
-    , ioRewards = False
-    , ioMultiAssets = True
-    , ioMetadata = False
-    , ioKeepMetadataNames = Strict.Nothing
-    , ioPlutusExtra = False
-    , ioOffChainPoolData = False
-    , ioGov = False
+  SyncInsertOptions
+    { sioTxOut = TxOutBootstrap (ForceTxIn False)
+    , sioLedger = LedgerIgnore
+    , sioShelley = ShelleyDisable
+    , sioRewards = RewardsConfig True
+    , sioMultiAsset = MultiAssetDisable
+    , sioMetadata = MetadataDisable
+    , sioPlutus = PlutusDisable
+    , sioGovernance = GovernanceConfig False
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioJsonType = JsonTypeText
     }
 
-onlyGovInsertOptions :: Bool -> InsertOptions
-onlyGovInsertOptions useLedger = (disableAllInsertOptions useLedger) {ioGov = True}
+onlyGovInsertOptions :: SyncInsertOptions
+onlyGovInsertOptions =
+  disableAllInsertOptions
+    { sioLedger = LedgerEnable
+    , sioGovernance = GovernanceConfig True
+    }
 
-disableAllInsertOptions :: Bool -> InsertOptions
-disableAllInsertOptions useLedger =
-  InsertOptions
-    { ioInOut = False
-    , ioUseLedger = useLedger
-    , ioShelley = False
-    , ioRewards = False
-    , ioMultiAssets = False
-    , ioMetadata = False
-    , ioKeepMetadataNames = Strict.Nothing
-    , ioPlutusExtra = False
-    , ioOffChainPoolData = False
-    , ioGov = False
+disableAllInsertOptions :: SyncInsertOptions
+disableAllInsertOptions =
+  SyncInsertOptions
+    { sioTxOut = TxOutDisable
+    , sioLedger = LedgerDisable
+    , sioShelley = ShelleyDisable
+    , sioRewards = RewardsConfig False
+    , sioMultiAsset = MultiAssetDisable
+    , sioMetadata = MetadataDisable
+    , sioPlutus = PlutusDisable
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioGovernance = GovernanceConfig False
+    , sioJsonType = JsonTypeText
     }
 
 initEpochState :: EpochState
@@ -381,7 +395,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (enpBootstrap syncNP) backend
+  bts <- getBootstrapInProgress trce (isTxOutBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -391,7 +405,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   epochVar <- newTVarIO initEpochState
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
-    case (enpMaybeLedgerStateDir syncNP, enpHasLedger syncNP) of
+    case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
       (Just dir, True) ->
         HasLedger
           <$> mkHasLedgerEnv
@@ -404,8 +418,8 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       (Just _, False) -> do
         logWarning trce $
-          "Using `--disable-ledger` doesn't require having a --state-dir."
-            <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#--disable-ledger"
+          "Disabling the ledger doesn't require having a --state-dir."
+            <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
         NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       -- This won't ever call because we error out this combination at parse time
       (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
@@ -434,6 +448,9 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }
+  where
+    hasLedger' = hasLedger . sioLedger . dncInsertOptions
+    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions
 
 -- mkSyncEnvFromConfig ::
 --   Trace IO Text ->

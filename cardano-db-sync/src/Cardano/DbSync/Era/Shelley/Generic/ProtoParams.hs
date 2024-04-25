@@ -11,15 +11,13 @@ module Cardano.DbSync.Era.Shelley.Generic.ProtoParams (
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Core
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import Cardano.Ledger.BaseTypes (UnitInterval)
+import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Core
-import Cardano.Ledger.Conway.PParams hiding (params)
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..))
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano (Nonce (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
@@ -30,12 +28,12 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 data ProtoParams = ProtoParams
   { ppMinfeeA :: !Natural
   , ppMinfeeB :: !Natural
-  , ppMaxBBSize :: !Natural
-  , ppMaxTxSize :: !Natural
-  , ppMaxBHSize :: !Natural
+  , ppMaxBBSize :: !Word32
+  , ppMaxTxSize :: !Word32
+  , ppMaxBHSize :: !Word16
   , ppKeyDeposit :: !Coin
   , ppPoolDeposit :: !Coin
-  , ppMaxEpoch :: !EpochNo
+  , ppMaxEpoch :: !EpochInterval
   , ppOptialPoolCount :: !Natural
   , ppInfluence :: !Rational
   , ppMonetaryExpandRate :: !UnitInterval
@@ -61,11 +59,11 @@ data ProtoParams = ProtoParams
     ppPoolVotingThresholds :: !(Maybe PoolVotingThresholds)
   , ppDRepVotingThresholds :: !(Maybe DRepVotingThresholds)
   , ppCommitteeMinSize :: !(Maybe Natural)
-  , ppCommitteeMaxTermLength :: !(Maybe Word64)
-  , ppGovActionLifetime :: !(Maybe EpochNo)
+  , ppCommitteeMaxTermLength :: !(Maybe EpochInterval)
+  , ppGovActionLifetime :: !(Maybe EpochInterval)
   , ppGovActionDeposit :: !(Maybe Natural)
   , ppDRepDeposit :: !(Maybe Natural)
-  , ppDRepActivity :: !(Maybe EpochNo)
+  , ppDRepActivity :: !(Maybe EpochInterval)
   }
 
 epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
@@ -121,7 +119,7 @@ fromConwayParams params =
     , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
     , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
     , ppCommitteeMinSize = Just $ params ^. ppCommitteeMinSizeL
-    , ppCommitteeMaxTermLength = Just . unEpochNo $ params ^. ppCommitteeMaxTermLengthL
+    , ppCommitteeMaxTermLength = Just $ params ^. ppCommitteeMaxTermLengthL
     , ppGovActionLifetime = Just $ params ^. ppGovActionLifetimeL
     , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL

@@ -21,6 +21,7 @@ module Cardano.DbSync (
   -- For testing and debugging
   OffChainFetchError (..),
   SimplifiedOffChainPoolData (..),
+  extractSyncOptions,
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
@@ -31,16 +32,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Types (
-  ConfigFile (..),
-  GenesisFile (..),
-  LedgerStateDir (..),
-  NetworkName (..),
-  SocketPath (..),
-  SyncCommand (..),
-  SyncNodeConfig (..),
-  SyncNodeParams (..),
- )
+import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
@@ -88,6 +80,7 @@ runDbSync ::
   IO ()
 runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic = do
   logInfo trce $ textShow syncOpts
+
   -- Read the PG connection info
   pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
 
@@ -127,7 +120,16 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce pgConfig slotNo
-  runSyncNode metricsSetters trce iomgr connectionString ranMigrations (void . runMigration) syncNodeConfigFromFile params syncOpts
+  runSyncNode
+    metricsSetters
+    trce
+    iomgr
+    connectionString
+    ranMigrations
+    (void . runMigration)
+    syncNodeConfigFromFile
+    params
+    syncOpts
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
@@ -142,7 +144,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         , " in the schema directory and restart it."
         ]
 
-    syncOpts = extractSyncOptions params abortOnPanic
+    syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
 
 runSyncNode ::
   MetricSetters ->
@@ -164,6 +166,9 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
+
+  let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
+
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
       \backend -> liftIO $ do
@@ -189,7 +194,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
           -- if user wants to reset columns in db that used to have the type jsonb
           when (enpResetJsonb syncNodeParams) $ liftIO $ runResetJsonb syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
-          unless (enpShouldUseLedger syncNodeParams) $ liftIO $ do
+          unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             Db.noLedgerMigrations backend trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
@@ -225,45 +230,60 @@ logProtocolMagicId tracer pm =
 
 -- -------------------------------------------------------------------------------------------------
 
-extractSyncOptions :: SyncNodeParams -> Bool -> SyncOptions
-extractSyncOptions snp aop =
+extractSyncOptions :: SyncNodeParams -> Bool -> SyncNodeConfig -> SyncOptions
+extractSyncOptions snp aop snc =
   SyncOptions
-    { soptEpochAndCacheEnabled = not (enpBootstrap snp) && ioInOut iopts && not (enpEpochDisabled snp && enpHasCache snp)
+    { soptEpochAndCacheEnabled =
+        not isTxOutBootstrap'
+          && ioInOut iopts
+          && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
     , soptOnlyFix = enpOnlyFix snp
-    , soptPruneConsumeMigration = initPruneConsumeMigration (enpMigrateConsumed snp) (enpPruneTxOut snp) (enpBootstrap snp) (enpForceTxIn snp)
+    , soptPruneConsumeMigration =
+        initPruneConsumeMigration
+          isTxOutConsumed'
+          isTxOutPrune'
+          isTxOutBootstrap'
+          forceTxIn'
     , soptInsertOptions = iopts
     , snapshotEveryFollowing = enpSnEveryFollowing snp
     , snapshotEveryLagging = enpSnEveryLagging snp
     }
   where
     maybeKeepMNames =
-      if null (enpKeepMetadataNames snp)
-        then Strict.Nothing
-        else Strict.Just (enpKeepMetadataNames snp)
+      case sioMetadata (dncInsertOptions snc) of
+        MetadataKeys ks -> Strict.Just (map fromIntegral $ toList ks)
+        MetadataEnable -> Strict.Nothing
+        MetadataDisable -> Strict.Nothing
 
-    iopts
-      | enpOnlyGov snp = onlyGovInsertOptions useLedger
-      | enpOnlyUTxO snp = onlyUTxOInsertOptions
-      | enpFullMode snp = fullInsertOptions useLedger
-      | enpDisableAllMode snp = disableAllInsertOptions useLedger
-      | otherwise =
-          InsertOptions
-            { ioInOut = enpHasInOut snp
-            , ioUseLedger = useLedger
-            , ioShelley = enpHasShelley snp
-            , ioRewards = True
-            , ioMultiAssets = enpHasMultiAssets snp
-            , ioMetadata = enpHasMetadata snp
-            , ioKeepMetadataNames = maybeKeepMNames
-            , ioPlutusExtra = enpHasPlutusExtra snp
-            , ioOffChainPoolData = enpHasOffChainPoolData snp
-            , ioGov = enpHasGov snp
-            }
+    iopts =
+      InsertOptions
+        { ioInOut = isTxOutEnabled'
+        , ioUseLedger = useLedger
+        , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
+        , -- Rewards are only disabled on "disable_all" and "only_gov" presets
+          ioRewards = True
+        , ioMultiAssets = isMultiAssetEnabled (sioMultiAsset (dncInsertOptions snc))
+        , ioMetadata = isMetadataEnabled (sioMetadata (dncInsertOptions snc))
+        , ioKeepMetadataNames = maybeKeepMNames
+        , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
+        , ioOffChainPoolData = useOffchainPoolData
+        , ioGov = useGovernance
+        }
 
-    useLedger = enpHasLedger snp && enpShouldUseLedger snp && not (enpOnlyUTxO snp)
+    useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable
+    useOffchainPoolData =
+      isOffchainPoolDataEnabled (sioOffchainPoolData (dncInsertOptions snc))
+    useGovernance =
+      isGovernanceEnabled (sioGovernance (dncInsertOptions snc))
+
+    isTxOutConsumed' = isTxOutConsumed . sioTxOut . dncInsertOptions $ snc
+    isTxOutPrune' = isTxOutPrune . sioTxOut . dncInsertOptions $ snc
+    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions $ snc
+    isTxOutEnabled' = isTxOutEnabled . sioTxOut . dncInsertOptions $ snc
+    forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do

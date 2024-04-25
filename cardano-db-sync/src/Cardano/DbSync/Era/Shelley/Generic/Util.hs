@@ -48,8 +48,9 @@ import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..))
 import qualified Cardano.Ledger.SafeHash as Ledger
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
-import Cardano.Ledger.Shelley.Tx (TxId (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
+import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Binary.Put as Binary
 import qualified Data.ByteString.Base16 as Base16
@@ -108,19 +109,19 @@ nonceToBytes nonce =
     Ledger.NeutralNonce -> Nothing
 
 partitionMIRTargets ::
-  [Shelley.MIRTarget StandardCrypto] ->
+  [MIRTarget StandardCrypto] ->
   ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
 partitionMIRTargets =
   List.foldl' foldfunc ([], [])
   where
     foldfunc ::
       ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin]) ->
-      Shelley.MIRTarget StandardCrypto ->
+      MIRTarget StandardCrypto ->
       ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
     foldfunc (xs, ys) mt =
       case mt of
-        Shelley.StakeAddressesMIR x -> (x : xs, ys)
-        Shelley.SendToOppositePotMIR y -> (xs, y : ys)
+        StakeAddressesMIR x -> (x : xs, ys)
+        SendToOppositePotMIR y -> (xs, y : ys)
 
 renderAddress :: Ledger.Addr StandardCrypto -> Text
 renderAddress = serialiseAddress

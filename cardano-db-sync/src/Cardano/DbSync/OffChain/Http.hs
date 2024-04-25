@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -6,8 +5,8 @@
 module Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
   httpGetOffChainVoteData,
-  parseOffChainPoolUrl,
-  parseOffChainVoteUrl,
+  parseAndValidateVoteData,
+  parseOffChainUrl,
 ) where
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
@@ -17,13 +16,13 @@ import Cardano.DbSync.OffChain.Types (
   PoolOffChainMetadata (..),
   PoolTicker (..),
  )
+import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import Cardano.DbSync.Types (
   OffChainFetchError (..),
-  OffChainHashType (..),
   OffChainUrlType (..),
-  SimplifiedOffChainDataType (..),
   SimplifiedOffChainPoolData (..),
   SimplifiedOffChainVoteData (..),
+  showUrl,
  )
 import Cardano.DbSync.Util (renderByteArray)
 import Cardano.Prelude hiding (show)
@@ -46,53 +45,85 @@ import qualified Network.HTTP.Types as Http
 httpGetOffChainPoolData ::
   Http.Manager ->
   Http.Request ->
-  OffChainUrlType ->
-  Maybe OffChainHashType ->
+  PoolUrl ->
+  Maybe PoolMetaHash ->
   ExceptT OffChainFetchError IO SimplifiedOffChainPoolData
-httpGetOffChainPoolData = do
-  httpGetOffChainData
-    ( \case
-        SimplifiedOffChainPoolDataType r -> Right r
-        _ -> Left $ OCFErrIOException "Incorrect SimplifiedOffChainDataType when calling httpGetOffChainPoolData"
-    )
+httpGetOffChainPoolData manager request purl expectedMetaHash = do
+  httpRes <- handleExceptT (convertHttpException url) req
+  (respBS, respLBS, mContentType) <- hoistEither httpRes
+  let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
+  case unPoolMetaHash <$> expectedMetaHash of
+    Just expectedMetaHashBs
+      | metadataHash /= expectedMetaHashBs ->
+          left $ OCFErrHashMismatch url (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
+    _ -> pure ()
+  decodedMetadata <-
+    case Aeson.eitherDecode' respLBS of
+      Left err -> left $ OCFErrJsonDecodeFail (Just url) (Text.pack err)
+      Right res -> pure res
+  pure $
+    SimplifiedOffChainPoolData
+      { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
+      , spodHash = metadataHash
+      , spodBytes = respBS
+      , -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
+        -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
+        -- that the Aeson parser accepts.
+        spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
+      , spodContentType = mContentType
+      }
+  where
+    req = httpGetBytes manager request 600 512 url
+    url = OffChainPoolUrl purl
 
 httpGetOffChainVoteData ::
   Http.Manager ->
   Http.Request ->
-  OffChainUrlType ->
-  Maybe OffChainHashType ->
+  VoteUrl ->
+  Maybe VoteMetaHash ->
+  Bool ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-httpGetOffChainVoteData = do
-  httpGetOffChainData
-    ( \case
-        SimplifiedOffChainVoteDataType r -> Right r
-        _ -> Left $ OCFErrIOException "Incorrect SimplifiedOffChainDataType when calling httpGetOffChainVoteData"
-    )
+httpGetOffChainVoteData manager request vurl metaHash isGovAction = do
+  httpRes <- handleExceptT (convertHttpException url) req
+  (respBS, respLBS, mContentType) <- hoistEither httpRes
+  (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash isGovAction (Just $ OffChainVoteUrl vurl)
+  pure $
+    SimplifiedOffChainVoteData
+      { sovaHash = metadataHash
+      , sovaBytes = respBS
+      , sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedValue)
+      , sovaContentType = mContentType
+      , sovaOffChainVoteData = ocvd
+      , sovaWarning = mWarning
+      }
+  where
+    req = httpGetBytes manager request 10000 30000 url
+    url = OffChainVoteUrl vurl
 
-httpGetOffChainData ::
-  (SimplifiedOffChainDataType -> Either OffChainFetchError a) -> -- conversion function
+parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> Bool -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
+parseAndValidateVoteData bs lbs metaHash isGa murl = do
+  let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
+  (hsh, mWarning) <- case unVoteMetaHash <$> metaHash of
+    Nothing -> pure (metadataHash, Nothing)
+    Just expectedMetaHash -> pure (expectedMetaHash, Just "Failed to validate metadata hash") -- TODO: Conway
+  decodedValue <-
+    case Aeson.eitherDecode' @Aeson.Value lbs of
+      Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
+      Right res -> pure res
+  ocvd <-
+    case Vote.eitherDecodeOffChainVoteData lbs isGa of
+      Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
+      Right res -> pure res
+  pure (ocvd, decodedValue, hsh, mWarning)
+
+httpGetBytes ::
   Http.Manager ->
   Http.Request ->
+  Int ->
+  Int ->
   OffChainUrlType ->
-  Maybe OffChainHashType -> -- metahash
-  ExceptT OffChainFetchError IO a
-httpGetOffChainData convert manager request urlType metaHash = do
-  let httpGet = httpGetOffChain manager request metaHash urlType
-  httpRes <- handleExceptT (convertHttpException urlType) httpGet
-  case httpRes of
-    Left err -> hoistEither $ Left err
-    Right res ->
-      case convert res of
-        Left err -> left err
-        Right r -> hoistEither $ Right r
-
-httpGetOffChain ::
-  Http.Manager ->
-  Http.Request ->
-  Maybe OffChainHashType ->
-  OffChainUrlType ->
-  IO (Either OffChainFetchError SimplifiedOffChainDataType)
-httpGetOffChain manager request mHash url =
+  IO (Either OffChainFetchError (ByteString, LBS.ByteString, Maybe ByteString))
+httpGetBytes manager request bytesToRead maxBytes url =
   Http.withResponse request manager $ \responseBR -> do
     runExceptT $ do
       let status = Http.responseStatus responseBR
@@ -100,10 +131,6 @@ httpGetOffChain manager request mHash url =
         . left
         $ OCFErrHttpResponse url (Http.statusCode status) (Text.decodeLatin1 $ Http.statusMessage status)
 
-      let (bytesToRead, maxBytes) =
-            case url of
-              OffChainPoolUrl _ -> (600, 512)
-              OffChainVoteUrl _ -> (3000, 3000)
       respLBS <- liftIO $ Http.brReadSome (Http.responseBody responseBR) bytesToRead
       let respBS = LBS.toStrict respLBS
 
@@ -138,54 +165,7 @@ httpGetOffChain manager request mHash url =
       unless (BS.length respBS <= maxBytes)
         . left
         $ OCFErrDataTooLong url
-
-      let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) respBS
-
-      mWarning <- case mHash of
-        Nothing -> pure Nothing
-        Just expectedMetaHash -> do
-          case expectedMetaHash of
-            OffChainPoolHash (PoolMetaHash m) ->
-              if metadataHash /= m
-                then left $ OCFErrHashMismatch url (renderByteArray m) (renderByteArray metadataHash)
-                else pure Nothing
-            OffChainVoteHash (VoteMetaHash m) ->
-              if metadataHash /= m
-                then pure $ Just $ textShow $ OCFErrHashMismatch url (renderByteArray m) (renderByteArray metadataHash)
-                else pure Nothing
-
-      case url of
-        OffChainPoolUrl _ -> do
-          decodedMetadata <-
-            case Aeson.eitherDecode' respLBS of
-              Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
-              Right res -> pure res
-          pure $
-            SimplifiedOffChainPoolDataType
-              SimplifiedOffChainPoolData
-                { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
-                , spodHash = metadataHash
-                , spodBytes = respBS
-                , -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
-                  -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
-                  -- that the Aeson parser accepts.
-                  spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
-                , spodContentType = mContentType
-                }
-        OffChainVoteUrl _ -> do
-          decodedMetadata <-
-            case Aeson.eitherDecode' @Aeson.Value respLBS of
-              Left err -> left $ OCFErrJsonDecodeFail url (Text.pack err)
-              Right res -> pure res
-          pure $
-            SimplifiedOffChainVoteDataType
-              SimplifiedOffChainVoteData
-                { sovaHash = metadataHash
-                , sovaBytes = respBS
-                , sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
-                , sovaContentType = mContentType
-                , sovaWarning = mWarning
-                }
+      pure (respBS, respLBS, mContentType)
 
 -- | Is the provided ByteSring possibly JSON object?
 -- Ignoring any leading whitespace, if the ByteString starts with a '{` character it might possibly
@@ -200,19 +180,12 @@ isPossiblyJsonObject bs =
 -------------------------------------------------------------------------------------
 -- Url
 -------------------------------------------------------------------------------------
-parseOffChainPoolUrl :: PoolUrl -> ExceptT OffChainFetchError IO Http.Request
-parseOffChainPoolUrl poolUrl =
-  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (Text.unpack $ unPoolUrl poolUrl)
+parseOffChainUrl :: OffChainUrlType -> ExceptT OffChainFetchError IO Http.Request
+parseOffChainUrl url =
+  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (showUrl url)
   where
     wrapHttpException :: HttpException -> OffChainFetchError
-    wrapHttpException err = OCFErrHttpException (OffChainPoolUrl poolUrl) (textShow err)
-
-parseOffChainVoteUrl :: VoteUrl -> ExceptT OffChainFetchError IO Http.Request
-parseOffChainVoteUrl voteUrl =
-  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (Text.unpack $ unVoteUrl voteUrl)
-  where
-    wrapHttpException :: HttpException -> OffChainFetchError
-    wrapHttpException err = OCFErrHttpException (OffChainVoteUrl voteUrl) (textShow err)
+    wrapHttpException err = OCFErrHttpException url (textShow err)
 
 applyContentType :: Http.Request -> Http.Request
 applyContentType req =

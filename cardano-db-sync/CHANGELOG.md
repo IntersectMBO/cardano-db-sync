@@ -1,6 +1,7 @@
 # Revision history for cardano-db-sync
 
-## 13.2.0.0
+## 13.2.0.1
+* Added a new table `epoch_stake_progress` which indicates when `epoch_stake` is completed
 * Uses the cache for the computation of `epoch` table when following
 * `epoch_stake` is now computed earlier, before the epoch is reached
 * Exception handling and concurrency improved.
@@ -19,6 +20,7 @@
 * Partial Conway integration. You can read more in `doc/schema.md` (tagged as Conway). Also in files
 `schema/cardano-chain-gen/schema/migration-2-0032-20230815.sql` and `schema/cardano-chain-gen/schema/migration-2-0032-20230815.sql`
 for the raw sql migrations.
+* Removed `reward.id` field. `instant_reward` table also doesn't have an id field.
 
 ## 13.1.1.3
 * Adds compatibility with node-8.0.0 [#1403] and node-8.1.1 [#1455]

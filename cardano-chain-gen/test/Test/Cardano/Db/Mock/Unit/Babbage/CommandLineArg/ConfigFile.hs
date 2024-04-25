@@ -20,7 +20,6 @@ checkConfigFileArg =
     checkStillRuns dbSyncEnv
   where
     testLabel = "CLAcheckConfigFileArg"
-    commandLineConfigArgs = initCommandLineArgs {claHasConfigFile = False}
 
 configResetJsonb :: IOManager -> [(Text, Text)] -> Assertion
 configResetJsonb =
@@ -59,3 +58,4 @@ configNoResetJsonb =
   where
     cmdLineArgs = initCommandLineArgs {claResetJsonb = False}
     testLabel = "babbageCLANoResetJsonb"
+    commandLineConfigArgs = initCommandLineArgs {claConfigFilename = "does-not-exist"}

@@ -8,6 +8,7 @@ module Cardano.DbSync.OffChain.Query (
 ) where
 
 import Cardano.Db (
+  AnchorType,
   EntityField (..),
   OffChainPoolData,
   OffChainPoolFetchError,
@@ -92,14 +93,16 @@ queryNewVoteWorkQueue now maxCount = do
       ( va ^. VotingAnchorId
       , va ^. VotingAnchorDataHash
       , va ^. VotingAnchorUrl
+      , va ^. VotingAnchorType
       )
   pure $ map convert res
   where
-    convert :: (Value VotingAnchorId, Value ByteString, Value VoteUrl) -> OffChainVoteWorkQueue
-    convert (Value vaId, Value vaHash, Value url) =
+    convert :: (Value VotingAnchorId, Value ByteString, Value VoteUrl, Value AnchorType) -> OffChainVoteWorkQueue
+    convert (Value vaId, Value vaHash, Value url, Value tp) =
       OffChainVoteWorkQueue
         { oVoteWqMetaHash = VoteMetaHash vaHash
         , oVoteWqReferenceId = vaId
+        , oVoteWqType = tp
         , oVoteWqRetry = newRetry now
         , oVoteWqUrl = url
         }
@@ -120,15 +123,17 @@ queryOffChainVoteWorkQueue _now maxCount = do
       , va ^. VotingAnchorId
       , va ^. VotingAnchorDataHash
       , va ^. VotingAnchorUrl
+      , va ^. VotingAnchorType
       , ocpfe ^. OffChainVoteFetchErrorRetryCount
       )
   pure $ map convert res
   where
-    convert :: (Value UTCTime, Value VotingAnchorId, Value ByteString, Value VoteUrl, Value Word) -> OffChainVoteWorkQueue
-    convert (Value time, Value vaId, Value vaHash, Value url, Value rCount) =
+    convert :: (Value UTCTime, Value VotingAnchorId, Value ByteString, Value VoteUrl, Value AnchorType, Value Word) -> OffChainVoteWorkQueue
+    convert (Value time, Value vaId, Value vaHash, Value url, Value tp, Value rCount) =
       OffChainVoteWorkQueue
         { oVoteWqMetaHash = VoteMetaHash vaHash
         , oVoteWqReferenceId = vaId
+        , oVoteWqType = tp
         , oVoteWqRetry = retryAgain (Time.utcTimeToPOSIXSeconds time) rCount
         , oVoteWqUrl = url
         }

@@ -29,10 +29,10 @@ tests iom = do
   pure $
     testGroup
       "cardano-chain-gen"
-      [ testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
+      [ Conway.unitTests iom knownMigrationsPlain
       , Babbage.unitTests iom knownMigrationsPlain
-      , Conway.unitTests iom knownMigrationsPlain
       , Alonzo.unitTests iom knownMigrationsPlain
+      , testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
       ]
   where
     knownMigrationsPlain :: [(Text, Text)]

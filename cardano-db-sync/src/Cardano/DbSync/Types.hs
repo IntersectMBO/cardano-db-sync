@@ -14,7 +14,7 @@ module Cardano.DbSync.Types (
   EpochSlot (..),
   OffChainPoolResult (..),
   OffChainVoteResult (..),
-  OffChainHashType (..),
+  OffChainVoteAccessors (..),
   OffChainUrlType (..),
   OffChainFetchError (..),
   SlotDetails (..),
@@ -22,21 +22,23 @@ module Cardano.DbSync.Types (
   SyncState (..),
   TPraosStandard,
   MetricSetters (..),
-  OffChainWorkQueueType (..),
   OffChainPoolWorkQueue (..),
   OffChainVoteWorkQueue (..),
-  SimplifiedOffChainDataType (..),
   SimplifiedOffChainPoolData (..),
   SimplifiedOffChainVoteData (..),
   PraosStandard,
   Retry (..),
+  showUrl,
 ) where
 
 import Cardano.Db (
   OffChainPoolData,
   OffChainPoolFetchError,
+  OffChainVoteAuthor,
   OffChainVoteData,
+  OffChainVoteExternalUpdate,
   OffChainVoteFetchError,
+  OffChainVoteReference,
   PoolHashId,
   PoolMetaHash,
   PoolMetadataRefId,
@@ -45,12 +47,15 @@ import Cardano.Db (
   VoteUrl,
   VotingAnchorId,
  )
+import qualified Cardano.Db as DB
+import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude hiding (Meta, show)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
+import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
@@ -141,13 +146,14 @@ data OffChainPoolResult
   | OffChainPoolResultError !OffChainPoolFetchError
 
 data OffChainVoteResult
-  = OffChainVoteResultMetadata !OffChainVoteData
+  = OffChainVoteResultMetadata !OffChainVoteData !OffChainVoteAccessors
   | OffChainVoteResultError !OffChainVoteFetchError
 
-data OffChainWorkQueueType
-  = OffChainPoolWorkQueueType !OffChainPoolWorkQueue
-  | OffChainVoteWorkQueueType !OffChainVoteWorkQueue
-  deriving (Show)
+data OffChainVoteAccessors = OffChainVoteAccessors
+  { offChainVoteAuthors :: DB.OffChainVoteDataId -> [OffChainVoteAuthor]
+  , offChainVoteReferences :: DB.OffChainVoteDataId -> [OffChainVoteReference]
+  , offChainVoteExternalUpdates :: DB.OffChainVoteDataId -> [OffChainVoteExternalUpdate]
+  }
 
 data OffChainPoolWorkQueue = OffChainPoolWorkQueue
   { oPoolWqHashId :: !PoolHashId
@@ -161,14 +167,11 @@ data OffChainPoolWorkQueue = OffChainPoolWorkQueue
 data OffChainVoteWorkQueue = OffChainVoteWorkQueue
   { oVoteWqMetaHash :: !VoteMetaHash
   , oVoteWqReferenceId :: !VotingAnchorId
+  , oVoteWqType :: DB.AnchorType
   , oVoteWqRetry :: !Retry
   , oVoteWqUrl :: !VoteUrl
   }
   deriving (Show)
-
-data SimplifiedOffChainDataType
-  = SimplifiedOffChainPoolDataType !SimplifiedOffChainPoolData
-  | SimplifiedOffChainVoteDataType !SimplifiedOffChainVoteData
 
 data SimplifiedOffChainPoolData = SimplifiedOffChainPoolData
   { spodTickerName :: !Text
@@ -183,6 +186,7 @@ data SimplifiedOffChainVoteData = SimplifiedOffChainVoteData
   , sovaBytes :: !ByteString
   , sovaJson :: !Text
   , sovaContentType :: !(Maybe ByteString)
+  , sovaOffChainVoteData :: !Vote.OffChainVoteData
   , sovaWarning :: !(Maybe Text)
   }
 
@@ -198,16 +202,14 @@ data OffChainUrlType
   | OffChainVoteUrl !VoteUrl
   deriving (Eq, Generic)
 
-data OffChainHashType
-  = OffChainPoolHash PoolMetaHash
-  | OffChainVoteHash VoteMetaHash
-  deriving (Eq, Generic)
-
 instance Show OffChainUrlType where
-  show =
-    \case
-      OffChainPoolUrl url -> show url
-      OffChainVoteUrl url -> show url
+  show = showUrl
+
+showUrl :: OffChainUrlType -> String
+showUrl =
+  \case
+    OffChainPoolUrl url -> Text.unpack $ DB.unPoolUrl url
+    OffChainVoteUrl url -> Text.unpack $ DB.unVoteUrl url
 
 -------------------------------------------------------------------------------------
 -- OffChain Fetch error for the HTTP client fetching the pool offchain metadata.
@@ -216,7 +218,7 @@ data OffChainFetchError
   = OCFErrHashMismatch !OffChainUrlType !Text !Text
   | OCFErrDataTooLong !OffChainUrlType
   | OCFErrUrlParseFail !OffChainUrlType !Text
-  | OCFErrJsonDecodeFail !OffChainUrlType !Text
+  | OCFErrJsonDecodeFail (Maybe OffChainUrlType) !Text
   | OCFErrHttpException !OffChainUrlType !Text
   | OCFErrHttpResponse !OffChainUrlType !Int !Text
   | OCFErrBadContentType !OffChainUrlType !Text
@@ -249,7 +251,7 @@ instance Show OffChainFetchError where
           [fetchUrlToString url, "URL parse error for ", show url, " resulted in : ", show err]
       OCFErrJsonDecodeFail url err ->
         mconcat
-          [fetchUrlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
+          [fetchMUtlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
       OCFErrHttpException url err ->
         mconcat [fetchUrlToString url, "HTTP Exception error for ", show url, " resulted in : ", show err]
       OCFErrHttpResponse url sc msg ->
@@ -264,6 +266,11 @@ instance Show OffChainFetchError where
         mconcat
           [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "'."]
       OCFErrIOException err -> "IO Exception: " <> show err
+
+fetchMUtlToString :: Maybe OffChainUrlType -> String
+fetchMUtlToString = \case
+  Nothing -> ""
+  Just url -> fetchUrlToString url
 
 fetchUrlToString :: OffChainUrlType -> String
 fetchUrlToString url =
