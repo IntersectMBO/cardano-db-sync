@@ -84,7 +84,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime, diffUTCTime, getCurrentTime)
 import GHC.IO.Exception (userError)
-import Lens.Micro ((^.))
+import Lens.Micro ((%~), (^.), (^?))
 import Ouroboros.Consensus.Block (
   CodecConfig,
   Point (..),
@@ -226,7 +226,7 @@ applyBlock env blk = do
     !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
     let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (lrEvents result)
     let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
-    let !newLedgerState = lrResult result
+    let !newLedgerState = finaliseDrepDistr (lrResult result)
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
     !newEpoch <- fromEitherSTM $ mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
     let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
@@ -282,16 +282,17 @@ applyBlock env blk = do
     applyToEpochBlockNo _ _ GenesisEpochBlockNo = EpochBlockNo 0
     applyToEpochBlockNo _ _ EBBEpochBlockNo = EpochBlockNo 0
 
+    getDrepState :: ExtLedgerState CardanoBlock -> Maybe (DRepPulsingState StandardConway)
+    getDrepState ls = ls ^? newEpochStateT . Shelley.newEpochStateDRepPulsingStateL
+
+    finaliseDrepDistr :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock
+    finaliseDrepDistr ledger =
+      ledger & newEpochStateT %~ forceDRepPulsingState @StandardConway
+
 getEnacted :: ExtLedgerState CardanoBlock -> Maybe (GovRelation StrictMaybe StandardConway)
 getEnacted ls = case ledgerState ls of
   LedgerStateConway cls ->
     Just $ govStatePrevGovActionIds $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
-  _ -> Nothing
-
-getDrepState :: ExtLedgerState CardanoBlock -> Maybe (DRepPulsingState StandardConway)
-getDrepState ls = case ledgerState ls of
-  LedgerStateConway cls ->
-    Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateDRepPulsingStateL
   _ -> Nothing
 
 getCommittee :: ExtLedgerState CardanoBlock -> Maybe (StrictMaybe (Committee StandardConway))
