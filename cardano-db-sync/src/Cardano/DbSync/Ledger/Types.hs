@@ -218,9 +218,45 @@ instance HasNewEpochState StandardShelley where
     hApplyExtLedgerState $
       fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* fn id :* Nil
 
+instance HasNewEpochState StandardAllegra where
+  getNewEpochState st = case ledgerState st of
+    LedgerStateAllegra allegra -> Just (shelleyLedgerState allegra)
+    _ -> Nothing
+
+  applyNewEpochState st =
+    hApplyExtLedgerState $
+      fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* Nil
+
+instance HasNewEpochState StandardMary where
+  getNewEpochState st = case ledgerState st of
+    LedgerStateMary mary -> Just (shelleyLedgerState mary)
+    _ -> Nothing
+
+  applyNewEpochState st =
+    hApplyExtLedgerState $
+      fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* Nil
+
+instance HasNewEpochState StandardAlonzo where
+  getNewEpochState st = case ledgerState st of
+    LedgerStateAlonzo alonzo -> Just (shelleyLedgerState alonzo)
+    _ -> Nothing
+
+  applyNewEpochState st =
+    hApplyExtLedgerState $
+      fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* Nil
+
+instance HasNewEpochState StandardBabbage where
+  getNewEpochState st = case ledgerState st of
+    LedgerStateBabbage babbage -> Just (shelleyLedgerState babbage)
+    _ -> Nothing
+
+  applyNewEpochState st =
+    hApplyExtLedgerState $
+      fn id :* fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* Nil
+
 instance HasNewEpochState StandardConway where
   getNewEpochState st = case ledgerState st of
-    LedgerStateConway shelley -> Just (shelleyLedgerState shelley)
+    LedgerStateConway conway -> Just (shelleyLedgerState conway)
     _ -> Nothing
 
   applyNewEpochState st =
