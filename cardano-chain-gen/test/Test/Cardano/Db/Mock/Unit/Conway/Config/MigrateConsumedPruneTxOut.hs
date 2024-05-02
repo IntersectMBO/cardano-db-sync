@@ -406,7 +406,7 @@ migrateAndPruneRestart =
     newEnv <- replaceConfigFile "test-db-sync-config.json" dbSync
     startDBSync newEnv
     -- There is a slight delay before the flag is checked
-    threadDelay 3_000_000
+    threadDelay 6_000_000
     -- Expected to fail
     checkStillRuns dbSync
   where
@@ -432,7 +432,7 @@ pruneRestartMissingFlag =
     newEnv <- replaceConfigFile "test-db-sync-config.json" dbSync
     startDBSync newEnv
     -- There is a slight delay before the flag is checked
-    threadDelay 3_000_000
+    threadDelay 6_000_000
     -- Expected to fail
     checkStillRuns dbSync
   where
@@ -458,7 +458,7 @@ bootstrapRestartMissingFlag =
     newEnv <- replaceConfigFile "test-db-sync-config.json" dbSync
     startDBSync newEnv
     -- There is a slight delay befor the flag is checked
-    threadDelay 3_000_000
+    threadDelay 6_000_000
     -- Expected to fail
     checkStillRuns dbSync
   where
