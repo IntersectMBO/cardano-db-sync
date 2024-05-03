@@ -67,6 +67,14 @@ When building an application that will be querying the database, remember that f
 low latency disk access is far more important than high throughput (assuming the minimal IOPS
 above is met).
 
+## How to Contact the Cardano DB Sync Team
+
+You can discuss development or find help at the following places:
+
+ * The [cardano-db-sync channel](https://matrix.to/#/#cardano-db-sync:matrix.org) on
+   [Matrix Chat](https://matrix.org/)
+ * [GitHub Issues](https://github.com/IntersectMBO/cardano-db-sync/issues)
+
 ## Installation
 
 Install db-sync with one of the following methods:
