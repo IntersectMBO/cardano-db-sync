@@ -261,8 +261,10 @@ in {
         config.services.postgresql.package
         netcat
         bash
+        gnugrep
         gnutar
         gzip
+        tree
       ];
       preStart = ''
         for x in {1..60}; do

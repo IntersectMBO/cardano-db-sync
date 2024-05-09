@@ -9,8 +9,8 @@
 
 , bashInteractive, cacert, cardano-cli, cardano-db-sync, cardano-db-tool
 , cardano-smash-server, coreutils, curl, findutils, getconf, glibcLocales
-, gnused, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn, libpqxx
-, postgresql, socat, utillinux
+, gnugrep, gnused, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn
+, libpqxx, postgresql, socat, tree, utillinux
 }:
 
 let
@@ -20,6 +20,11 @@ let
   env-shim = runCommand "env-shim" { } ''
     mkdir -p $out/usr/bin
     ln -s ${coreutils}/bin/env $out/usr/bin/env
+  '';
+
+  postgresql-setup-sh = runCommand "postgresql-setup.sh" {} ''
+    mkdir -p $out/usr/bin
+    cp "${../scripts/postgresql-setup.sh}" $out/usr/bin/postgresql-setup.sh
   '';
 
   baseImage = dockerTools.buildImage {
@@ -37,6 +42,7 @@ let
         findutils # GNU find
         getconf # get num cpus
         glibcLocales # Locale information for the GNU C Library
+        gnugrep # GNU grep
         gnused # GNU sed
         gnutar # GNU tar
         gzip # Gnuzip
@@ -51,6 +57,8 @@ let
         utillinux # System utilities for Linux
         cardano-cli # tool for interacting with cardano-node
         cardano-db-tool # utilities for creating database snapshots
+        postgresql-setup-sh # script for creating snapshots
+        tree # list contents of directories in a tree
       ];
     };
 
