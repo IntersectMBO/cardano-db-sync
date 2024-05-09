@@ -3,7 +3,7 @@
 Schema management for the Cardano PostgreSQL database is a little more complicated than we would
 like, but the scheme chosen allows for easy development, evolution and management of the database.
 
-The database schema is defined in three stages, each stage consisting of one or more SQL migrations.
+The database schema is defined in four stages, each stage consisting of one or more SQL migrations.
 The stages are:
 
 - `stage 1`: introduces basic postgres types. These cannot be modified or extended.
