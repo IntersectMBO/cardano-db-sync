@@ -321,6 +321,7 @@
 
             docker = callPackage ./nix/docker.nix {
               inherit (inputs.iohkNix.lib) evalService;
+              postgresql = postgresql_14; # Much match the postgresql server version
             };
             inherit (docker) cardano-db-sync-docker cardano-smash-server-docker;
 
