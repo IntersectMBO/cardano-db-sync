@@ -439,6 +439,7 @@ Enables or disables most tables and entries related to plutus and scripts.
 `add_jsonb_to_schema`
 
 Jsonb data types were removed from the schema to improve inserting performance, but if required, they can be reintroduced by enabling this config.
+cardano-db-sync` will throw an error if `add_jsonb_to_schema` was previously set to `enable` and then either removed from the configuration file or set to `disabled`.
 
 * Type: `string`
 
