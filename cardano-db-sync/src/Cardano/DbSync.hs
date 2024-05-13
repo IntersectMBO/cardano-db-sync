@@ -224,7 +224,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
       case dncShelleyHardFork cfg of
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
         _other -> False
-    -- isJsonBInSchemaConfig = isAddJsonbToSchemaEnabled (sioAddJsonbToSchema (dncInsertOptions syncNodeConfigFromFile))
     isJsonBInSchemaConfig = ioAddJsonbToSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 

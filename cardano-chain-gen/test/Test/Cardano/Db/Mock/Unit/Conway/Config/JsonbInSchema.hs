@@ -23,7 +23,7 @@ configJsonbInSchemaTrue ioManager metadata = do
   where
     action = \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
-      threadDelay 2_000_000
+      threadDelay 7_000_000
       assertEqQuery
         dbSync
         DB.queryJsonbInSchemaExists
@@ -52,7 +52,7 @@ configJsonbInSchemaFalse ioManager metadata = do
   where
     action = \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
-      threadDelay 2_000_000
+      threadDelay 7_000_000
       assertEqQuery
         dbSync
         DB.queryJsonbInSchemaExists
@@ -81,7 +81,7 @@ configJsonbInSchemaShouldError ioManager metadata = do
   where
     action = \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
-      threadDelay 2_000_000
+      threadDelay 7_000_000
       stopDBSync dbSync
       let newDbSyncEnv =
             dbSync
@@ -94,7 +94,7 @@ configJsonbInSchemaShouldError ioManager metadata = do
                     }
               }
       startDBSync newDbSyncEnv
-      threadDelay 2_000_000
+      threadDelay 7_000_000
       -- Expected to fail
       checkStillRuns dbSync
 
