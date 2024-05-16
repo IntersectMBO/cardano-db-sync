@@ -115,7 +115,7 @@ import Ouroboros.Consensus.Protocol.Abstract (
   LedgerView,
   tickChainDepState,
  )
-import Ouroboros.Consensus.Protocol.Praos.Translate ()
+import Ouroboros.Consensus.Protocol.Praos ()
 import Ouroboros.Consensus.Protocol.TPraos ()
 import Ouroboros.Consensus.Shelley.HFEras ()
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock, Ticked, shelleyLedgerState)

@@ -55,7 +55,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Time.Clock as Time
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
-import Ouroboros.Consensus.Protocol.Praos.Translate ()
+import Ouroboros.Consensus.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.HFEras ()
 import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import Ouroboros.Network.Block (blockSlot, getPoint)

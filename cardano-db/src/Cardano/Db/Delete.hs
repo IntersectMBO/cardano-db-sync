@@ -45,8 +45,8 @@ import Database.Persist.Sql (
   deleteWhereCount,
   selectKeysList,
   (==.),
-  (>=.),
   (>.),
+  (>=.),
  )
 
 deleteBlocksSlotNoNoTrace :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
