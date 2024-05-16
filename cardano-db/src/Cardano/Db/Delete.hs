@@ -14,6 +14,7 @@ module Cardano.Db.Delete (
   deleteBlocksBlockIdNotrace,
   deleteBlock,
   deleteEpochRows,
+  deleteDrepDistr,
   deleteAdaPots,
   deleteTxOut,
   -- for testing
@@ -45,6 +46,7 @@ import Database.Persist.Sql (
   selectKeysList,
   (==.),
   (>=.),
+  (>.),
  )
 
 deleteBlocksSlotNoNoTrace :: MonadIO m => SlotNo -> ReaderT SqlBackend m Bool
@@ -219,6 +221,10 @@ deleteBlock block = do
 deleteEpochRows :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 deleteEpochRows epochNum =
   deleteWhere [EpochNo >=. epochNum]
+
+deleteDrepDistr :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+deleteDrepDistr epochNum =
+  deleteWhere [DrepDistrEpochNo >. epochNum]
 
 deleteAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m ()
 deleteAdaPots blkId = do
