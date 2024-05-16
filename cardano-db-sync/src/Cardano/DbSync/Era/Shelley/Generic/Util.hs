@@ -153,7 +153,7 @@ unTxHash :: TxId era -> ByteString
 unTxHash (TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
 
 unAssetName :: AssetName -> ByteString
-unAssetName = SBS.fromShort . assetName
+unAssetName = SBS.fromShort . assetNameBytes
 
 dataHashToBytes :: DataHash -> ByteString
 dataHashToBytes = Crypto.hashToBytes . Ledger.extractHash

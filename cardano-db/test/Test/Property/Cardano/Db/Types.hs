@@ -48,7 +48,7 @@ prop_AssetFingerprint =
     unScriptHash (Ledger.ScriptHash h) = Crypto.hashToBytes h
 
     unAssetName :: AssetName -> ByteString
-    unAssetName = SBS.fromShort . assetName
+    unAssetName = SBS.fromShort . assetNameBytes
 
     testVectors :: [(PolicyID StandardCrypto, AssetName, AssetFingerprint)]
     testVectors =
