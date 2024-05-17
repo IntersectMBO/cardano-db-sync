@@ -6,10 +6,11 @@ module Cardano.Mock.Query (
   queryNullTxDepositExists,
   queryMultiAssetCount,
   queryTxMetadataCount,
+  queryDRepDistrAmount,
 ) where
 
 import qualified Cardano.Db as Db
-import Cardano.Prelude hiding (from)
+import Cardano.Prelude hiding (from, on)
 import Database.Esqueleto.Experimental
 import Prelude ()
 
@@ -66,5 +67,25 @@ queryTxMetadataCount = do
   res <- selectOne $ do
     _ <- from (table @Db.TxMetadata)
     pure countRows
+
+  pure $ maybe 0 unValue res
+
+queryDRepDistrAmount ::
+  MonadIO io =>
+  ByteString ->
+  Word64 ->
+  ReaderT SqlBackend io Word64
+queryDRepDistrAmount drepHash epochNo = do
+  res <- selectOne $ do
+    (distr :& hash) <-
+      from
+        $ table @Db.DrepDistr
+          `innerJoin` table @Db.DrepHash
+        `on` (\(distr :& hash) -> (hash ^. Db.DrepHashId) ==. (distr ^. Db.DrepDistrHashId))
+
+    where_ $ hash ^. Db.DrepHashRaw ==. just (val drepHash)
+    where_ $ distr ^. Db.DrepDistrEpochNo ==. val epochNo
+
+    pure (distr ^. Db.DrepDistrAmount)
 
   pure $ maybe 0 unValue res
