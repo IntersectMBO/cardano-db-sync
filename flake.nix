@@ -214,6 +214,7 @@
                   packages.cardano-ledger-shelley.doHaddock = false;
                   packages.cardano-protocol-tpraos.doHaddock = false;
                   packages.ouroboros-network-framework.doHaddock = false;
+                  packages.ouroboros-consensus-cardano.doHaddock = false;
                 })
 
               ({ lib, pkgs, config, ... }:
