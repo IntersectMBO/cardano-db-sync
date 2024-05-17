@@ -214,7 +214,7 @@ insertManyRewardRests ::
   (MonadBaseControl IO m, MonadIO m) =>
   [RewardRest] ->
   ReaderT SqlBackend m ()
-insertManyRewardRests = insertManyCheckUnique "Many Rewards Rest"
+insertManyRewardRests = insertManyUnique "Many Rewards Rest" Nothing
 
 insertManyDrepDistr ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -517,11 +517,10 @@ insertManyUnique ::
   ) =>
   String ->
   -- | Does constraint already exists
-  Bool ->
-  ConstraintNameDB ->
+  Maybe ConstraintNameDB ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyUnique vtype constraintExists constraintName records = do
+insertManyUnique vtype mConstraintName records = do
   unless (null records) $
     handle exceptHandler (rawExecute query values)
   where
@@ -546,14 +545,14 @@ insertManyUnique vtype constraintExists constraintName records = do
 
     conflictQuery :: Text
     conflictQuery =
-      if constraintExists
-        then
+      case mConstraintName of
+        Just constraintName ->
           Text.concat
             [ " ON CONFLICT ON CONSTRAINT "
             , unConstraintNameDB constraintName
             , " DO NOTHING"
             ]
-        else ""
+        _ -> ""
 
     fieldNames, placeholders :: [Text]
     (fieldNames, placeholders) =
@@ -575,7 +574,10 @@ insertManyWithManualUnique ::
   ConstraintNameDB ->
   [record] ->
   ReaderT SqlBackend m ()
-insertManyWithManualUnique = insertManyUnique
+insertManyWithManualUnique str contraintExists constraintName =
+  insertManyUnique str mConstraintName
+  where
+    mConstraintName = if contraintExists then Just constraintName else Nothing
 
 insertManyCheckUnique ::
   forall m record.
@@ -588,7 +590,7 @@ insertManyCheckUnique ::
   ReaderT SqlBackend m ()
 insertManyCheckUnique vtype records = do
   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
-  insertManyUnique vtype True constraintName records
+  insertManyUnique vtype (Just constraintName) records
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.

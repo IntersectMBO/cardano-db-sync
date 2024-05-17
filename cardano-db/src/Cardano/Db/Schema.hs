@@ -321,7 +321,6 @@ share
     amount              DbLovelace          sqltype=lovelace
     earnedEpoch         Word64 generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
     spendableEpoch      Word64
-    UniqueRewardRest addrId earnedEpoch type
     deriving Show
 
   Withdrawal
