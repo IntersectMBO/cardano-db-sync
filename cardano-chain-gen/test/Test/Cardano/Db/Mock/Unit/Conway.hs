@@ -7,6 +7,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Governance as Governance
 import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Plutus as Plutus
@@ -213,6 +214,10 @@ unitTests iom knownMigrations =
         [ test "fork from Babbage to Conway fixed epoch" Other.forkFixedEpoch
         , test "fork from Babbage to Conway and rollback" Other.rollbackFork
         , test "fork with protocol change proposal" Other.forkParam
+        ]
+    , testGroup
+        "Governance"
+        [ test "drep distribution" Governance.drepDistr
         ]
     ]
   where

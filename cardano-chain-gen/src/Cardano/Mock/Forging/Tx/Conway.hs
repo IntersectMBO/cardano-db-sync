@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -29,12 +30,14 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkScriptDCertTx,
   mkMultiAssetsScriptTx,
   mkDepositTxPools,
+  mkRegisterDRepTx,
   mkDummyRegisterTx,
   mkDummyTxBody,
   mkTxDelegCert,
   mkRegTxCert,
   mkUnRegTxCert,
   mkDelegTxCert,
+  mkRegDelegTxCert,
   Babbage.mkParamUpdateTx,
   mkFullTx,
   mkScriptMint',
@@ -436,6 +439,14 @@ mkDepositTxPools inputIndex deposit state' = do
         (allPoolStakeCert' state')
         (Withdrawals mempty)
 
+mkRegisterDRepTx ::
+  Credential 'DRepRole StandardCrypto ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkRegisterDRepTx cred = mkDCertTx [cert] (Withdrawals mempty) Nothing
+  where
+    cert = ConwayTxCertGov (ConwayRegDRep cred deposit SNothing)
+    deposit = Coin 500_000_000
+
 mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardConway)
 mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
   where
@@ -458,6 +469,14 @@ mkUnRegTxCert ::
   StakeCredential StandardCrypto ->
   ConwayTxCert StandardConway
 mkUnRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayUnRegCert cred coin'
+
+mkRegDelegTxCert ::
+  Coin ->
+  Delegatee StandardCrypto ->
+  StakeCredential StandardCrypto ->
+  ConwayTxCert StandardConway
+mkRegDelegTxCert deposit delegatee =
+  mkTxDelegCert $ \cred -> ConwayRegDelegCert cred delegatee deposit
 
 mkDelegTxCert ::
   Delegatee StandardCrypto ->
