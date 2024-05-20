@@ -3,11 +3,13 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Cardano.Mock.Forging.Tx.Conway (
+  ConwayLedgerState,
   Babbage.TxOutScriptType (..),
   Babbage.DatumType (..),
   Babbage.ReferenceScript (..),
@@ -38,6 +40,9 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkUnRegTxCert,
   mkDelegTxCert,
   mkRegDelegTxCert,
+  mkAddCommitteeTx,
+  mkGovActionProposalTx,
+  mkGovVoteTx,
   Babbage.mkParamUpdateTx,
   mkFullTx,
   mkScriptMint',
@@ -54,10 +59,10 @@ import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), mkAlonzoTxAuxData)
 import Cardano.Ledger.Babbage.TxOut (BabbageEraTxOut, BabbageTxOut (..))
-import Cardano.Ledger.BaseTypes (EpochNo (..), Network (..))
+import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Binary (Sized (..))
 import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Conway.Governance (VotingProcedures (..))
+import qualified Cardano.Ledger.Conway.Governance as Governance
 import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
@@ -88,7 +93,7 @@ import Cardano.Prelude
 import Data.List (nub)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
-import Data.Maybe.Strict (StrictMaybe (..), maybeToStrictMaybe)
+import Data.Maybe (fromJust)
 import qualified Data.OSet.Strict as OSet
 import Data.Sequence.Strict (StrictSeq ())
 import qualified Data.Sequence.Strict as StrictSeq
@@ -131,7 +136,7 @@ consTxBody ins cols ref outs colOut fees minted certs withdrawals =
     , ctbScriptIntegrityHash = SNothing
     , ctbAdHash = SNothing
     , ctbTxNetworkId = SJust Testnet
-    , ctbVotingProcedures = VotingProcedures mempty
+    , ctbVotingProcedures = Governance.VotingProcedures mempty
     , ctbProposalProcedures = mempty
     , ctbCurrentTreasuryValue = SNothing
     , ctbTreasuryDonation = Coin 0
@@ -490,6 +495,52 @@ mkTxDelegCert ::
   ConwayTxCert StandardConway
 mkTxDelegCert f = ConwayTxCertDeleg . f
 
+mkAddCommitteeTx ::
+  Credential 'ColdCommitteeRole StandardCrypto ->
+  AlonzoTx StandardConway
+mkAddCommitteeTx cred = mkGovActionProposalTx govAction
+  where
+    govAction = Governance.UpdateCommittee SNothing mempty newMembers threshold
+    newMembers = Map.singleton cred (EpochNo 20)
+    threshold = fromJust $ boundRational (1 % 1)
+
+mkGovActionProposalTx ::
+  Governance.GovAction StandardConway ->
+  AlonzoTx StandardConway
+mkGovActionProposalTx govAction = mkSimpleTx True txBody
+  where
+    txBody = mkDummyTxBody {ctbProposalProcedures = OSet.singleton proposal}
+
+    proposal =
+      Governance.ProposalProcedure
+        { Governance.pProcDeposit = Coin 50_000_000_000
+        , Governance.pProcReturnAddr =
+            RewardAccount Testnet (Prelude.head unregisteredStakeCredentials)
+        , Governance.pProcGovAction = govAction
+        , Governance.pProcAnchor = anchor
+        }
+
+    anchor =
+      Governance.Anchor
+        { Governance.anchorUrl = fromJust (textToUrl 64 "best.cc")
+        , Governance.anchorDataHash = hashAnchorData (Governance.AnchorData mempty)
+        }
+
+mkGovVoteTx ::
+  Governance.GovActionId StandardCrypto ->
+  [Governance.Voter StandardCrypto] ->
+  AlonzoTx StandardConway
+mkGovVoteTx govAction voters = mkSimpleTx True txBody
+  where
+    txBody = mkDummyTxBody {ctbVotingProcedures = Governance.VotingProcedures votes}
+    votes = Map.fromList . map (,govActionVote) $ voters
+    govActionVote = Map.singleton govAction vote
+    vote =
+      Governance.VotingProcedure
+        { Governance.vProcVote = Governance.VoteYes
+        , Governance.vProcAnchor = SNothing
+        }
+
 mkDummyTxBody :: ConwayTxBody StandardConway
 mkDummyTxBody =
   consTxBody
@@ -554,7 +605,7 @@ mkFullTx n m state' = do
         , ctbScriptIntegrityHash = SNothing
         , ctbAdHash = SNothing
         , ctbTxNetworkId = SJust Testnet
-        , ctbVotingProcedures = VotingProcedures mempty
+        , ctbVotingProcedures = Governance.VotingProcedures mempty
         , ctbProposalProcedures = mempty
         , ctbCurrentTreasuryValue = SNothing
         , ctbTreasuryDonation = Coin 0

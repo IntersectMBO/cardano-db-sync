@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Mock.Query (
@@ -7,6 +8,7 @@ module Cardano.Mock.Query (
   queryMultiAssetCount,
   queryTxMetadataCount,
   queryDRepDistrAmount,
+  queryGovActionCounts,
 ) where
 
 import qualified Cardano.Db as Db
@@ -89,3 +91,26 @@ queryDRepDistrAmount drepHash epochNo = do
     pure (distr ^. Db.DrepDistrAmount)
 
   pure $ maybe 0 unValue res
+
+queryGovActionCounts ::
+  MonadIO io =>
+  ReaderT SqlBackend io (Word, Word, Word, Word)
+queryGovActionCounts = do
+  ratified <- countNonNulls Db.GovActionProposalRatifiedEpoch
+  enacted <- countNonNulls Db.GovActionProposalEnactedEpoch
+  dropped <- countNonNulls Db.GovActionProposalDroppedEpoch
+  expired <- countNonNulls Db.GovActionProposalExpiredEpoch
+
+  pure (ratified, enacted, dropped, expired)
+  where
+    countNonNulls ::
+      (MonadIO io, PersistField field) =>
+      EntityField Db.GovActionProposal (Maybe field) ->
+      ReaderT SqlBackend io Word
+    countNonNulls field = do
+      res <- selectOne $ do
+        e <- from $ table @Db.GovActionProposal
+        where_ $ not_ (isNothing_ (e ^. field))
+        pure countRows
+
+      pure (maybe 0 unValue res)

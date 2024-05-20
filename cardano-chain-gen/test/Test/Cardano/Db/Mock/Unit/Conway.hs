@@ -218,6 +218,7 @@ unitTests iom knownMigrations =
     , testGroup
         "Governance"
         [ test "drep distribution" Governance.drepDistr
+        , test "new committee member" Governance.newCommittee
         ]
     ]
   where
