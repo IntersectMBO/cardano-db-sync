@@ -10,7 +10,7 @@ module Cardano.DbSync.Api.Types (
   RunMigration,
   FixesRan (..),
   ConsistentLevel (..),
-  EpochState (..),
+  CurrentEpochNo (..),
 ) where
 
 import qualified Cardano.Db as DB
@@ -43,7 +43,7 @@ data SyncEnv = SyncEnv
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
-  , envEpochState :: !(StrictTVar IO EpochState)
+  , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
   , envIsFixed :: !(StrictTVar IO FixesRan)
@@ -99,7 +99,6 @@ data FixesRan = NoneFixRan | DataFixRan | AllFixRan
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
 
-data EpochState = EpochState
-  { esInitialized :: !Bool
-  , esEpochNo :: !(Strict.Maybe EpochNo)
+newtype CurrentEpochNo = CurrentEpochNo
+  { cenEpochNo :: Strict.Maybe EpochNo
   }

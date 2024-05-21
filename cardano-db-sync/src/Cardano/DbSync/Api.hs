@@ -261,36 +261,33 @@ disableAllInsertOptions =
     , sioJsonType = JsonTypeText
     }
 
-initEpochState :: EpochState
-initEpochState =
-  EpochState
-    { esInitialized = False
-    , esEpochNo = Strict.Nothing
+initCurrentEpochNo :: CurrentEpochNo
+initCurrentEpochNo =
+  CurrentEpochNo
+    { cenEpochNo = Strict.Nothing
     }
 
 generateNewEpochEvents :: SyncEnv -> SlotDetails -> STM [LedgerEvent]
 generateNewEpochEvents env details = do
-  !oldEpochState <- readTVar (envEpochState env)
-  writeTVar (envEpochState env) newEpochState
-  pure $ maybeToList (newEpochEvent oldEpochState)
+  !lastEpochNo <- readTVar (envCurrentEpochNo env)
+  writeTVar (envCurrentEpochNo env) newCurrentEpochNo
+  pure $ maybeToList (newEpochEvent lastEpochNo)
   where
     currentEpochNo :: EpochNo
     currentEpochNo = sdEpochNo details
 
-    newEpochEvent :: EpochState -> Maybe LedgerEvent
-    newEpochEvent oldEpochState =
-      case esEpochNo oldEpochState of
+    newEpochEvent :: CurrentEpochNo -> Maybe LedgerEvent
+    newEpochEvent lastEpochNo =
+      case cenEpochNo lastEpochNo of
         Strict.Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
-        Strict.Just oldEpoch ->
-          if currentEpochNo == EpochNo (1 + unEpochNo oldEpoch)
-            then Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
-            else Nothing
+        Strict.Just oldEpoch | currentEpochNo == EpochNo (1 + unEpochNo oldEpoch)
+            -> Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
+        _ -> Nothing
 
-    newEpochState :: EpochState
-    newEpochState =
-      EpochState
-        { esInitialized = True
-        , esEpochNo = Strict.Just currentEpochNo
+    newCurrentEpochNo :: CurrentEpochNo
+    newCurrentEpochNo =
+      CurrentEpochNo
+        { cenEpochNo = Strict.Just currentEpochNo
         }
 
 getTopLevelConfig :: SyncEnv -> TopLevelConfig CardanoBlock
@@ -395,7 +392,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   oprq <- newTBQueueIO 1000
   oawq <- newTBQueueIO 1000
   oarq <- newTBQueueIO 1000
-  epochVar <- newTVarIO initEpochState
+  epochVar <- newTVarIO initCurrentEpochNo
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
     case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
@@ -425,7 +422,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
       , envDbConstraints = dbCNamesVar
-      , envEpochState = epochVar
+      , envCurrentEpochNo = epochVar
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar
       , envIsFixed = fixDataVar
