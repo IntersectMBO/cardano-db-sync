@@ -265,7 +265,7 @@
 
           flake = project.flake (
             nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
-              crossPlatforms = p: [p.musl64];
+              crossPlatforms = p: [p.musl64 p.aarch64-multiplatform-musl];
             }
           );
         in with nixpkgs; lib.recursiveUpdate flake (
