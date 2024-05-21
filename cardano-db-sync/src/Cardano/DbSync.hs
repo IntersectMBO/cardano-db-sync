@@ -175,17 +175,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           resJsonbInSchema <- dbJsonbInSchema backend
-
-          -- if the database has jsonb datatypes and the configuration does not have add_jsonb_to_schema enabled, then warn the user
-          when (resJsonbInSchema && not isJsonBInSchemaConfig) $
-            liftIO $
-              logAndThrowIO trce $
-                SNErrJsonbInSchema
-                  ( "The database has jsonb datatypes active. "
-                      <> "Once jsonb datatypes have been enabled via `add_jsonb_to_schema` "
-                      <> "configuration you need to make sure that configuration is not removed and always present."
-                  )
-
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
@@ -199,6 +188,12 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 syncNodeParams
                 ranMigrations
                 runMigrationFnc
+
+          -- if the database has jsonb datatypes and the configuration does not have add_jsonb_to_schema enabled, then warn the user
+          when (resJsonbInSchema && not isJsonBInSchemaConfig) $ do
+            liftIO $ logWarning trce "The database has jsonb datatypes, but the configuration does not have add_jsonb_to_schema enabled. The all jsonb datatypes will be put back which can take time."
+            liftIO $ runDisableJsonbInSchema syncEnv
+
           -- if the database doesn't have jsonb datatypes and the configuration does have add_jsonb_to_schema enabled, then add jsonb datatypes to the database
           when (not resJsonbInSchema && isJsonBInSchemaConfig) $ liftIO $ runEnableJsonbInSchema syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
