@@ -54,6 +54,46 @@ enableJsonbInSchema = do
       "ALTER TABLE off_chain_vote_data ALTER COLUMN json TYPE jsonb USING json::jsonb"
       []
 
+disableJsonbInSchema ::
+  forall m.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  ) =>
+  ReaderT SqlBackend m ()
+disableJsonbInSchema = do
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'tx_metadata' ALTER COLUMN 'json' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'script' ALTER COLUMN 'json' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'datum' ALTER COLUMN 'value' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'redeemer_data' ALTER COLUMN 'value' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'cost_model' ALTER COLUMN 'costs' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'gov_action_proposal' ALTER COLUMN 'description' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'off_chain_pool_data' ALTER COLUMN 'json' TYPE VARCHAR"
+      []
+  handle exceptHandler $
+    rawExecute
+      "ALTER TABLE 'off_chain_vote_data' ALTER COLUMN 'json' TYPE VARCHAR"
+      []
+
 queryJsonbInSchemaExists ::
   (MonadIO m) =>
   ReaderT SqlBackend m Bool
