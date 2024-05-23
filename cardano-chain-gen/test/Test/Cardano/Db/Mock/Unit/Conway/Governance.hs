@@ -8,26 +8,21 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash)
-import Cardano.Ledger.Address (Withdrawals (..))
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx)
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..), Voter (..))
-import Cardano.Ledger.Conway.TxCert (Delegatee (..))
 import Cardano.Ledger.Core (txIdTx)
 import Cardano.Ledger.Credential (Credential (..))
-import Cardano.Ledger.DRep (DRep (..))
-import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
+import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Mock.ChainSync.Server (IOManager)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types
 import qualified Cardano.Mock.Query as Query
 import Cardano.Prelude
-import Ouroboros.Consensus.Shelley.Eras (StandardConway, StandardCrypto)
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion)
-import Prelude ()
+import qualified Prelude
 
 drepDistr :: IOManager -> [(Text, Text)] -> Assertion
 drepDistr =
@@ -37,14 +32,8 @@ drepDistr =
     -- Add stake
     void (Api.registerAllStakeCreds interpreter server)
 
-    -- Register a DRep
-    let drepHash = "0d94e174732ef9aae73f395ab44507bfa983d65023c11a951f0c32e4"
-        drepId = KeyHashObj (KeyHash drepHash)
-
     -- Register DRep and delegate votes to it
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger ->
-        registerDRepAndDelegateVotes drepId (StakeIndex 4) ledger
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
 
     -- DRep distribution is calculated at end of the current epoch
     epoch1 <- Api.fillUntilNextEpoch interpreter server
@@ -53,6 +42,7 @@ drepDistr =
     assertBlockNoBackoff dbSync (length epoch1 + 2)
 
     -- Should now have a DRep distribution
+    let drepId = Prelude.head Forging.unregisteredDRepIds
     assertEqQuery
       dbSync
       (Query.queryDRepDistrAmount (unCredentialHash drepId) 1)
@@ -69,14 +59,8 @@ newCommittee =
     -- Add stake
     void (Api.registerAllStakeCreds interpreter server)
 
-    -- Register a DRep
-    let drepHash = "0d94e174732ef9aae73f395ab44507bfa983d65023c11a951f0c32e4"
-        drepId = KeyHashObj (KeyHash drepHash)
-
-    -- Register DRep and delegate votes to it
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger ->
-        registerDRepAndDelegateVotes drepId (StakeIndex 4) ledger
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
 
     -- Create and vote for gov action
     let committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
@@ -92,7 +76,7 @@ newCommittee =
           addVoteTx =
             Conway.mkGovVoteTx
               govActionId
-              [ DRepVoter drepId
+              [ DRepVoter (Prelude.head Forging.unregisteredDRepIds)
               , StakePoolVoter (Forging.resolvePool (PoolIndex 0) ledger)
               , StakePoolVoter (Forging.resolvePool (PoolIndex 1) ledger)
               , StakePoolVoter (Forging.resolvePool (PoolIndex 2) ledger)
@@ -120,21 +104,3 @@ newCommittee =
       "Unexpected committee hashes"
   where
     testLabel = "conwayNewCommittee"
-
-registerDRepAndDelegateVotes ::
-  Credential 'DRepRole StandardCrypto ->
-  StakeIndex ->
-  Conway.ConwayLedgerState ->
-  Either ForgingError [AlonzoTx StandardConway]
-registerDRepAndDelegateVotes drepId stakeIx ledger = do
-  stakeCreds <- Forging.resolveStakeCreds stakeIx ledger
-
-  let utxoStake = UTxOAddressNewWithStake 0 stakeIx
-      regDelegCert =
-        Conway.mkDelegTxCert (DelegVote $ DRepCredential drepId) stakeCreds
-
-  paymentTx <- Conway.mkPaymentTx (UTxOIndex 0) utxoStake 10_000 500 ledger
-  regTx <- Conway.mkRegisterDRepTx drepId
-  delegTx <- Conway.mkDCertTx [regDelegCert] (Withdrawals mempty) Nothing
-
-  pure [paymentTx, regTx, delegTx]

@@ -21,12 +21,14 @@ module Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
   rollbackTo,
   registerAllStakeCreds,
+  registerDRepsAndDelegateVotes,
 ) where
 
 import Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
+import qualified Cardano.Mock.Forging.Tx.Conway.Scenarios as Conway
 import Cardano.Mock.Forging.Types
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (atomically)
@@ -205,6 +207,12 @@ registerAllStakeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO Carda
 registerAllStakeCreds interpreter mockServer = do
   blk <- forgeWithStakeCreds interpreter
   atomically $ addBlock mockServer blk
+  pure blk
+
+registerDRepsAndDelegateVotes :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
+registerDRepsAndDelegateVotes interpreter mockServer = do
+  blk <- Conway.registerDRepsAndDelegateVotes interpreter
+  atomically (addBlock mockServer blk)
   pure blk
 
 -- Expected number. This should be taken from the parameters, instead of hardcoded.

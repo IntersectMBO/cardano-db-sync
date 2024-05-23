@@ -1,16 +1,22 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Mock.Forging.Tx.Conway.Scenarios (
   delegateAndSendBlocks,
+  registerDRepsAndDelegateVotes,
 ) where
 
 import Cardano.Ledger.Address (Addr (..), Withdrawals (..))
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..))
 import Cardano.Ledger.BaseTypes (Network (..))
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.TxCert (Delegatee (..))
 import Cardano.Ledger.Core (Tx ())
-import Cardano.Ledger.Credential (StakeCredential (), StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeCredential (), StakeReference (..))
 import Cardano.Ledger.Crypto (StandardCrypto ())
+import Cardano.Ledger.DRep (DRep (..))
+import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..))
 import Cardano.Mock.Forging.Interpreter
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -22,7 +28,7 @@ import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock ())
-import Prelude ()
+import qualified Prelude
 
 newtype ShelleyLedgerState era = ShelleyLedgerState
   {unState :: LedgerState (ShelleyBlock PraosStandard era)}
@@ -81,3 +87,31 @@ forgeBlocksChunked interpreter vs f = forM (chunksOf 500 vs) $ \blockCreds -> do
     forM (chunksOf 10 blockCreds) $ \txCreds ->
       f txCreds (ShelleyLedgerState state')
   forgeNextFindLeader interpreter (TxConway <$> blockTxs)
+
+registerDRepsAndDelegateVotes :: Interpreter -> IO CardanoBlock
+registerDRepsAndDelegateVotes interpreter = do
+  blockTxs <-
+    withConwayLedgerState interpreter $
+      registerDRepAndDelegateVotes'
+        (Prelude.head unregisteredDRepIds)
+        (StakeIndex 4)
+
+  forgeNextFindLeader interpreter (map TxConway blockTxs)
+
+registerDRepAndDelegateVotes' ::
+  Credential 'DRepRole StandardCrypto ->
+  StakeIndex ->
+  Conway.ConwayLedgerState ->
+  Either ForgingError [AlonzoTx StandardConway]
+registerDRepAndDelegateVotes' drepId stakeIx ledger = do
+  stakeCreds <- resolveStakeCreds stakeIx ledger
+
+  let utxoStake = UTxOAddressNewWithStake 0 stakeIx
+      regDelegCert =
+        Conway.mkDelegTxCert (DelegVote $ DRepCredential drepId) stakeCreds
+
+  paymentTx <- Conway.mkPaymentTx (UTxOIndex 0) utxoStake 10_000 500 ledger
+  regTx <- Conway.mkRegisterDRepTx drepId
+  delegTx <- Conway.mkDCertTx [regDelegCert] (Withdrawals mempty) Nothing
+
+  pure [paymentTx, regTx, delegTx]

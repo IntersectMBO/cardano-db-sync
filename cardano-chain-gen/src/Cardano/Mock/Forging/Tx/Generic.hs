@@ -24,7 +24,8 @@ module Cardano.Mock.Forging.Tx.Generic (
   unregisteredPools,
   registeredByronGenesisKeys,
   registeredShelleyGenesisKeys,
-  bootstrapDRepIds,
+  bootstrapCommitteeCreds,
+  unregisteredDRepIds,
   consPoolParams,
   getPoolStakeCreds,
 ) where
@@ -263,13 +264,17 @@ registeredShelleyGenesisKeys =
   , KeyHash "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6"
   ]
 
-bootstrapDRepIds :: [Credential 'DRepRole StandardCrypto]
-bootstrapDRepIds =
+bootstrapCommitteeCreds :: [Credential 'ColdCommitteeRole StandardCrypto]
+bootstrapCommitteeCreds =
   [ KeyHashObj $ KeyHash "2c698e41831684b16477fb50082b0c0e396d436504e39037d5366582"
   , KeyHashObj $ KeyHash "8fc13431159fdda66347a38c55105d50d77d67abc1c368b876d52ad1"
   , KeyHashObj $ KeyHash "921e1ccb4812c4280510c9ccab81c561f3d413e7d744d48d61215d1f"
   , KeyHashObj $ KeyHash "d5d09d9380cf9dcde1f3c6cd88b08ca9e00a3d550022ca7ee4026342"
   ]
+
+unregisteredDRepIds :: [Credential 'DRepRole StandardCrypto]
+unregisteredDRepIds =
+  [KeyHashObj $ KeyHash "0d94e174732ef9aae73f395ab44507bfa983d65023c11a951f0c32e4"]
 
 createStakeCredentials :: Int -> [StakeCredential StandardCrypto]
 createStakeCredentials n =
