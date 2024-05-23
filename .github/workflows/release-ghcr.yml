@@ -70,7 +70,7 @@ jobs:
           nix build \
             --builders "" \
             --max-jobs 0 \
-            --out-link result-cardano-smash-server
+            --out-link result-cardano-smash-server \
             .#cardano-smash-server-docker
 
       - name: Upload ${{ github.actor }}/cardano-db-sync
