@@ -333,23 +333,26 @@
                 nonRequiredMacOSPaths
               else [];
 
+            extraCiJobs =
+              lib.optionalAttrs (system == "x86_64-linux") {
+                inherit
+                  cardano-db-sync-linux
+                  cardano-db-sync-docker
+                  cardano-smash-server-docker;
+              } // lib.optionalAttrs (system == "x86_64-darwin") {
+                inherit cardano-db-sync-macos;
+              } // {
+                inherit cardano-smash-server-no-basic-auth;
+                checks = staticChecks;
+              };
+
           in rec {
             checks = staticChecks;
 
             hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
-              ciJobs = flake.hydraJobs;
+              ciJobs = flake.hydraJobs // extraCiJobs;
               nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
-            } // lib.optionalAttrs (system == "x86_64-linux") {
-              inherit
-                cardano-db-sync-linux
-                cardano-db-sync-docker
-                cardano-smash-server-docker;
-            } // lib.optionalAttrs (system == "x86_64-darwin") {
-              inherit cardano-db-sync-macos;
-            } // {
-              inherit cardano-smash-server-no-basic-auth;
-              checks = staticChecks;
-            };
+            } // extraCiJobs;
 
             legacyPackages = pkgs;
 
