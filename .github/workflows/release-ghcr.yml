@@ -73,6 +73,10 @@ jobs:
             --out-link result-cardano-smash-server \
             .#cardano-smash-server-docker
 
+          # REMOVEME: debugging
+          echo "ref_type=${{ github.ref_type }}"
+          echo "event_name=${{ github.event_name  }}"
+
       - name: Upload ${{ github.actor }}/cardano-db-sync
         if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
         run: |
