@@ -78,7 +78,7 @@ jobs:
           echo "event_name=${{ github.event_name  }}"
 
       - name: Upload ${{ github.actor }}/cardano-db-sync
-        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
+        if: ${{ github.ref_type == 'tag' || github.event_name == 'release' }}
         run: |
           # Push the image
           skopeo copy \
@@ -91,7 +91,7 @@ jobs:
             docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
 
       - name: Upload ${{ github.actor }}/cardano-smash-server
-        if: ${{ github.ref_type == 'tags' || github.event_name == 'release' }}
+        if: ${{ github.ref_type == 'tag' || github.event_name == 'release' }}
         run: |
           # Push the image
           skopeo copy \
