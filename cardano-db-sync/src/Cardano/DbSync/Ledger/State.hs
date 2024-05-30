@@ -228,7 +228,7 @@ applyBlock env blk = do
     let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
     let !newLedgerState = finaliseDrepDistr (lrResult result)
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    !newEpoch <- fromEitherSTM $ mkNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
+    !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
     let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
     let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
     let !ledgerDB' = pushLedgerDB ledgerDB newState
@@ -252,28 +252,31 @@ applyBlock env blk = do
             else defaultApplyResult details
     pure (oldState, appResult)
   where
-    mkNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Either SyncNodeError (Maybe Generic.NewEpoch)
-    mkNewEpoch oldState newState mPots = do
-      let currEpochE = ledgerEpochNo env newState
-          prevEpochE = ledgerEpochNo env oldState
+    mkOnNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Either SyncNodeError (Maybe Generic.NewEpoch)
+    mkOnNewEpoch oldState newState mPots = do
       -- pass on error when trying to get ledgerEpochNo
-      case (currEpochE, prevEpochE) of
+      case (prevEpochE, currEpochE) of
         (Left err, _) -> Left err
         (_, Left err) -> Left err
-        (Right currEpoch, Right prevEpoch) -> do
-          if currEpoch /= EpochNo (unEpochNo prevEpoch + 1)
-            then Right Nothing
-            else
-              Right $
-                Just $
-                  Generic.NewEpoch
-                    { Generic.neEpoch = currEpoch
-                    , Generic.neIsEBB = isJust $ blockIsEBB blk
-                    , Generic.neAdaPots = maybeToStrict mPots
-                    , Generic.neEpochUpdate = Generic.epochUpdate newState
-                    , Generic.neDRepState = maybeToStrict $ getDrepState newState
-                    , Generic.neEnacted = maybeToStrict $ getEnacted newState
-                    }
+        (Right Nothing, Right (Just (EpochNo 0))) -> Right $ Just $ mkNewEpoch (EpochNo 0)
+        (Right (Just prevEpoch), Right (Just currEpoch))
+          | unEpochNo currEpoch == 1 + unEpochNo prevEpoch ->
+              Right $ Just $ mkNewEpoch currEpoch
+        _ -> Right Nothing
+      where
+        prevEpochE = ledgerEpochNo env oldState
+        currEpochE = ledgerEpochNo env newState
+
+        mkNewEpoch :: EpochNo -> Generic.NewEpoch
+        mkNewEpoch currEpoch =
+          Generic.NewEpoch
+            { Generic.neEpoch = currEpoch
+            , Generic.neIsEBB = isJust $ blockIsEBB blk
+            , Generic.neAdaPots = maybeToStrict mPots
+            , Generic.neEpochUpdate = Generic.epochUpdate newState
+            , Generic.neDRepState = maybeToStrict $ getDrepState newState
+            , Generic.neEnacted = maybeToStrict $ getEnacted newState
+            }
 
     applyToEpochBlockNo :: Bool -> Bool -> EpochBlockNo -> EpochBlockNo
     applyToEpochBlockNo True _ _ = EBBEpochBlockNo
@@ -326,12 +329,13 @@ storeSnapshotAndCleanupMaybe ::
   IO Bool
 storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
   case maybeFromStrict (apNewEpoch appResult) of
-    Just newEpoch -> do
-      let newEpochNo = Generic.neEpoch newEpoch
-      -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-      liftIO $ saveCleanupState env oldState (Just $ EpochNo $ unEpochNo newEpochNo - 1)
-      pure True
-    Nothing ->
+    Just newEpoch
+      | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
+      , newEpochNo > 0 -> do
+          -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+          liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
+          pure True
+    _ ->
       if timeToSnapshot syncState blkNo && isCons
         then do
           liftIO $ saveCleanupState env oldState Nothing
@@ -751,14 +755,14 @@ getRegisteredPoolShelley lState =
             Shelley.nesEs $
               Consensus.shelleyLedgerState lState
 
-ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> Either SyncNodeError EpochNo
+ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> Either SyncNodeError (Maybe EpochNo)
 ledgerEpochNo env cls =
   case ledgerTipSlot (ledgerState cls) of
-    Origin -> Right $ EpochNo 0 -- An empty chain is in epoch 0
+    Origin -> Right Nothing
     NotOrigin slot ->
       case runExcept $ epochInfoEpoch epochInfo slot of
         Left err -> Left $ SNErrLedgerState $ "unable to use slot: " <> show slot <> "to get ledgerEpochNo: " <> show err
-        Right en -> Right en
+        Right en -> Right (Just en)
   where
     epochInfo :: EpochInfo (Except Consensus.PastHorizonException)
     epochInfo = epochInfoLedger (configLedger $ getTopLevelconfigHasLedger env) (hardForkLedgerStatePerEra $ ledgerState cls)
