@@ -19,7 +19,7 @@ checkForceIndexesArg =
   withCustomConfig commandLineForceIndexArgs Nothing babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
     threadDelay 3_000_000
-    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 168 "there wasn't the correct number of indexes"
+    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 172 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckForceIndexesArg"
     commandLineForceIndexArgs =
@@ -32,7 +32,7 @@ checkNoForceIndexesArg =
   withCustomConfigAndDropDB commandLineNoForceIndexArgs Nothing babbageConfigDir testLabel $ \_ _ dbSyncEnv -> do
     startDBSync dbSyncEnv
     threadDelay 3_000_000
-    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 103 "there wasn't the correct number of indexes"
+    assertEqQuery dbSyncEnv DB.queryPgIndexesCount 107 "there wasn't the correct number of indexes"
   where
     testLabel = "CLAcheckNoForceIndexesArg"
     commandLineNoForceIndexArgs =
