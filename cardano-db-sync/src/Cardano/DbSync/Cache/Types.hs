@@ -7,7 +7,7 @@
 
 module Cardano.DbSync.Cache.Types (
   CacheStatus (..),
-  CacheUpdateAction (..),
+  UpdateCache (..),
   CacheEpoch (..),
   CacheInternal (..),
   EpochBlockDiff (..),
@@ -44,13 +44,14 @@ type StakeAddrCache = Map StakeCred DB.StakeAddressId
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
--- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
--- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
+-- The 'UninitiatedCache' makes it possible to call functions in this module
+-- without having actually initiated the cache yet. It is used by genesis
+-- insertions, where the cache has not been initiated yet.
 data CacheStatus
-  = NoCache
-  | ActiveCache !CacheInternal
+  = NoCache -- Indicates that the cache has not been initialized
+  | ActiveCache !CacheInternal -- Represents the initialized cache
 
-data CacheUpdateAction
+data UpdateCache
   = UpdateCache
   | DoNotUpdateCache
   | EvictAndUpdateCache
@@ -108,7 +109,7 @@ textShowStats (ActiveCache ic) = do
   mAssets <- readTVarIO (cMultiAssets ic)
   pure $
     mconcat
-      [ "\nCache Statistics:"
+      [ "\nCache Initiated Statistics:"
       , "\n  Stake Addresses: "
       , "cache size: "
       , DB.textShow (Map.size creds)

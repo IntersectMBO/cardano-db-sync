@@ -12,18 +12,16 @@ module Cardano.DbSync.Rollback (
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..), askTrace, runAppWithNoLogging)
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Era.Util
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error.Types (SyncNodeError)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.ByteString.Short as SBS
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
@@ -31,13 +29,13 @@ import Ouroboros.Network.Point
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
 rollbackFromBlockNo ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
   BlockNo ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-rollbackFromBlockNo syncEnv blkNo = do
-  nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
-  mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
+  App ()
+rollbackFromBlockNo blkNo = do
+  SyncEnv {envCache = cache} <- ask
+  trce <- askTrace
+  nBlocks <- dbQueryToApp $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
+  mres <- dbQueryToApp $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
     liftIO
       . logInfo trce
@@ -47,41 +45,34 @@ rollbackFromBlockNo syncEnv blkNo = do
         , " numbered equal to or greater than "
         , textShow blkNo
         ]
-    lift $ do
-      (mTxId, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
-      whenConsumeOrPruneTxOut syncEnv $
-        DB.setNullTxOut trce mTxId
-      DB.deleteEpochRows epochNo
-      DB.deleteDrepDistr epochNo
-      DB.deleteRewardRest epochNo
-      DB.setNullEnacted epochNo
-      DB.setNullRatified epochNo
-      DB.setNullDropped epochNo
-      DB.setNullExpired epochNo
-      when (deletedBlockCount > 0) $ do
-        -- We use custom constraints to improve input speeds when syncing.
-        -- If they don't already exists we add them here as once a rollback has happened
-        -- we always need a the constraints.
-        addConstraintsIfNotExist syncEnv trce
-
-    lift $ rollbackCache cache blockId
-
+    (mTxId, deletedBlockCount) <- dbQueryToApp $ DB.deleteBlocksBlockId trce blockId
+    whenConsumeOrPruneTxOut (dbQueryToApp $ DB.setNullTxOut trce mTxId)
+    dbQueryToApp $ DB.deleteEpochRows epochNo
+    dbQueryToApp $ DB.deleteDrepDistr epochNo
+    dbQueryToApp $ DB.deleteRewardRest epochNo
+    dbQueryToApp $ DB.setNullEnacted epochNo
+    dbQueryToApp $ DB.setNullRatified epochNo
+    dbQueryToApp $ DB.setNullDropped epochNo
+    dbQueryToApp $ DB.setNullExpired epochNo
+    when (deletedBlockCount > 0) $ do
+      -- We use custom constraints to improve input speeds when syncing.
+      -- If they don't already exists we add them here as once a rollback has happened
+      -- we always need a the constraints.
+      addConstraintsIfNotExist
+    rollbackCache cache blockId
     liftIO . logInfo trce $ "Blocks deleted"
-  where
-    trce = getTrace syncEnv
-    cache = envCache syncEnv
 
-prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback syncEnv point serverTip =
-  DB.runDbIohkNoLogging (envBackend syncEnv) $ runExceptT action
+prepareRollback :: CardanoPoint -> Tip CardanoBlock -> App (Either SyncNodeError Bool)
+prepareRollback point serverTip = do
+  syncEnv <- ask
+  liftIO $ DB.runDbIohkNoLogging (envBackend syncEnv) (runAppWithNoLogging syncEnv action)
   where
-    trce = getTrace syncEnv
-
-    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    action :: App (Either SyncNodeError Bool)
     action = do
+      trce <- askTrace
       case getPoint point of
         Origin -> do
-          nBlocks <- lift DB.queryCountSlotNo
+          nBlocks <- dbQueryToApp DB.queryCountSlotNo
           if nBlocks == 0
             then do
               liftIO . logInfo trce $ "Starting from Genesis"
@@ -97,10 +88,11 @@ prepareRollback syncEnv point serverTip =
                   , textShow serverTip
                   ]
         At blk -> do
-          nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
+          nBlocks <- dbQueryToApp $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
           mBlockNo <-
             liftLookupFail "Rollback.prepareRollback" $
-              DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+              dbQueryToApp $
+                DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
           liftIO
             . logInfo trce
             $ mconcat
@@ -113,7 +105,7 @@ prepareRollback syncEnv point serverTip =
               , "). Applying blocks until a new block is found. The node is currently at "
               , textShow serverTip
               ]
-      pure False
+      pure $ Right False
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())

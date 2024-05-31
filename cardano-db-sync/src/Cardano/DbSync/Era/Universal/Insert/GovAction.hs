@@ -28,17 +28,16 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
 )
 where
 
-import Cardano.BM.Trace (Trace, logWarning)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..))
 import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), CacheUpdateAction (..))
+import Cardano.DbSync.Cache.Types (UpdateCache (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Era.Util (liftLookupFail)
-import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
@@ -58,38 +57,33 @@ import Cardano.Ledger.Plutus.Language (Language)
 import Cardano.Ledger.Shelley.API (Coin (..))
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 insertGovActionProposal ::
-  forall m.
-  (MonadIO m, MonadBaseControl IO m) =>
-  CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
   Maybe (StrictMaybe (Committee StandardConway)) ->
   (Word64, ProposalProcedure StandardConway) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertGovActionProposal cacheStatus blkId txId govExpiresAt mmCommittee (index, pp) = do
-  addrId <-
-    lift $ queryOrInsertRewardAccount cacheStatus UpdateCache $ pProcReturnAddr pp
-  votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
-  mParamProposalId <- lift $
+  App ()
+insertGovActionProposal blkId txId govExpiresAt mmCommittee (index, pp) = do
+  cache <- asks envCache
+  addrId <- queryOrInsertRewardAccount cache UpdateCache $ pProcReturnAddr pp
+  votingAnchorId <- insertVotingAnchor txId DB.GovActionAnchor $ pProcAnchor pp
+  mParamProposalId <-
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
-      _ -> pure Nothing
+      _other -> pure Nothing
   prevGovActionDBId <- case mprevGovAction of
     Nothing -> pure Nothing
     Just prevGovActionId -> Just <$> resolveGovActionProposal prevGovActionId
   govActionProposalId <-
-    lift $
+    dbQueryToApp $
       DB.insertGovActionProposal $
         DB.GovActionProposal
           { DB.govActionProposalTxId = txId
@@ -108,10 +102,10 @@ insertGovActionProposal cacheStatus blkId txId govExpiresAt mmCommittee (index, 
           , DB.govActionProposalExpiredEpoch = Nothing
           }
   case pProcGovAction pp of
-    TreasuryWithdrawals mp _ -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
-    UpdateCommittee _ removed added q -> lift $ insertNewCommittee (Just govActionProposalId) removed added q
-    NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
-    _ -> pure ()
+    TreasuryWithdrawals mp _ -> mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
+    UpdateCommittee _ removed added q -> insertNewCommittee govActionProposalId removed added q
+    NewConstitution _ constitution -> insertConstitution txId govActionProposalId constitution
+    _other -> pure ()
   where
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
       ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
@@ -119,32 +113,37 @@ insertGovActionProposal cacheStatus blkId txId govExpiresAt mmCommittee (index, 
       NoConfidence prv -> unGovPurposeId <$> strictMaybeToMaybe prv
       UpdateCommittee prv _ _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       NewConstitution prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
-      _ -> Nothing
+      _other -> Nothing
 
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
-      addrId <-
-        queryOrInsertRewardAccount cacheStatus UpdateCache rwdAcc
-      DB.insertTreasuryWithdrawal $
-        DB.TreasuryWithdrawal
-          { DB.treasuryWithdrawalGovActionProposalId = gaId
-          , DB.treasuryWithdrawalStakeAddressId = addrId
-          , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
-          }
+      cache <- asks envCache
+      addrId <- queryOrInsertRewardAccount cache UpdateCache rwdAcc
+      dbQueryToApp $
+        DB.insertTreasuryWithdrawal $
+          DB.TreasuryWithdrawal
+            { DB.treasuryWithdrawalGovActionProposalId = gaId
+            , DB.treasuryWithdrawalStakeAddressId = addrId
+            , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
+            }
 
     insertNewCommittee ::
       Maybe DB.GovActionProposalId ->
       Set (Ledger.Credential 'ColdCommitteeRole StandardCrypto) ->
       Map (Ledger.Credential 'ColdCommitteeRole StandardCrypto) EpochNo ->
       UnitInterval ->
-      ReaderT SqlBackend m ()
+      App ()
     insertNewCommittee gapId removed added q = do
       void $ insertCommittee' gapId (updatedCommittee removed added q <$> mmCommittee) q
 
-insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.CommitteeId
+insertCommittee :: Maybe DB.GovActionProposalId -> Committee StandardConway -> App DB.CommitteeId
 insertCommittee mgapId committee = do
   insertCommittee' mgapId (Just committee) (committeeThreshold committee)
 
-insertCommittee' :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Maybe (Committee StandardConway) -> UnitInterval -> ReaderT SqlBackend m DB.CommitteeId
+insertCommittee' ::
+  Maybe DB.GovActionProposalId ->
+  Maybe (Committee StandardConway) ->
+  UnitInterval ->
+  App DB.CommitteeId
 insertCommittee' mgapId mcommittee q = do
   committeeId <- insertCommitteeDB
   whenJust mcommittee $ \committee ->
@@ -154,7 +153,7 @@ insertCommittee' mgapId mcommittee q = do
     r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
     insertNewMember committeeId (cred, e) = do
       chId <- insertCommitteeHash cred
-      void . DB.insertCommitteeMember $
+      void . dbQueryToApp $ DB.insertCommitteeMember $
         DB.CommitteeMember
           { DB.committeeMemberCommitteeId = committeeId
           , DB.committeeMemberCommitteeHashId = chId
@@ -162,7 +161,7 @@ insertCommittee' mgapId mcommittee q = do
           }
 
     insertCommitteeDB =
-      DB.insertCommittee $
+      dbQueryToApp $ DB.insertCommittee $
         DB.Committee
           { DB.committeeGovActionProposalId = mgapId
           , DB.committeeQuorumNumerator = fromIntegral $ numerator r
@@ -173,135 +172,130 @@ insertCommittee' mgapId mcommittee q = do
 -- PROPOSAL
 --------------------------------------------------------------------------------------
 resolveGovActionProposal ::
-  MonadIO m =>
   GovActionId StandardCrypto ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.GovActionProposalId
+  App DB.GovActionProposalId
 resolveGovActionProposal gaId = do
   gaTxId <-
     liftLookupFail "resolveGovActionProposal.queryTxId" $
-      DB.queryTxId $
-        Generic.unTxHash $
-          gaidTxId gaId
+      dbQueryToApp $
+        DB.queryTxId $
+          Generic.unTxHash $
+            gaidTxId gaId
   let (GovActionIx index) = gaidGovActionIx gaId
   liftLookupFail "resolveGovActionProposal.queryGovActionProposalId" $
-    DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
+    dbQueryToApp $
+      DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::
-  (MonadBaseControl IO m, MonadIO m) =>
   DB.BlockId ->
   DB.TxId ->
   ParamProposal ->
-  ReaderT SqlBackend m DB.ParamProposalId
+  App DB.ParamProposalId
 insertParamProposal blkId txId pp = do
   cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (pppCostmdls pp)
-  DB.insertParamProposal $
-    DB.ParamProposal
-      { DB.paramProposalRegisteredTxId = txId
-      , DB.paramProposalEpochNo = unEpochNo <$> pppEpochNo pp
-      , DB.paramProposalKey = pppKey pp
-      , DB.paramProposalMinFeeA = fromIntegral <$> pppMinFeeA pp
-      , DB.paramProposalMinFeeB = fromIntegral <$> pppMinFeeB pp
-      , DB.paramProposalMaxBlockSize = fromIntegral <$> pppMaxBlockSize pp
-      , DB.paramProposalMaxTxSize = fromIntegral <$> pppMaxTxSize pp
-      , DB.paramProposalMaxBhSize = fromIntegral <$> pppMaxBhSize pp
-      , DB.paramProposalKeyDeposit = Generic.coinToDbLovelace <$> pppKeyDeposit pp
-      , DB.paramProposalPoolDeposit = Generic.coinToDbLovelace <$> pppPoolDeposit pp
-      , DB.paramProposalMaxEpoch = fromIntegral . unEpochInterval <$> pppMaxEpoch pp
-      , DB.paramProposalOptimalPoolCount = fromIntegral <$> pppOptimalPoolCount pp
-      , DB.paramProposalInfluence = fromRational <$> pppInfluence pp
-      , DB.paramProposalMonetaryExpandRate = toDouble <$> pppMonetaryExpandRate pp
-      , DB.paramProposalTreasuryGrowthRate = toDouble <$> pppTreasuryGrowthRate pp
-      , DB.paramProposalDecentralisation = toDouble <$> pppDecentralisation pp
-      , DB.paramProposalEntropy = Generic.nonceToBytes =<< pppEntropy pp
-      , DB.paramProposalProtocolMajor = getVersion . Ledger.pvMajor <$> pppProtocolVersion pp
-      , DB.paramProposalProtocolMinor = fromIntegral . Ledger.pvMinor <$> pppProtocolVersion pp
-      , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> pppMinUtxoValue pp
-      , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> pppMinPoolCost pp
-      , -- New for Alonzo
-        DB.paramProposalCoinsPerUtxoSize = Generic.coinToDbLovelace <$> pppCoinsPerUtxo pp
-      , DB.paramProposalCostModelId = cmId
-      , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
-      , DB.paramProposalPriceStep = realToFrac <$> pppPriceStep pp
-      , DB.paramProposalMaxTxExMem = DbWord64 <$> pppMaxTxExMem pp
-      , DB.paramProposalMaxTxExSteps = DbWord64 <$> pppMaxTxExSteps pp
-      , DB.paramProposalMaxBlockExMem = DbWord64 <$> pppMaxBlockExMem pp
-      , DB.paramProposalMaxBlockExSteps = DbWord64 <$> pppMaxBlockExSteps pp
-      , DB.paramProposalMaxValSize = DbWord64 . fromIntegral <$> pppMaxValSize pp
-      , DB.paramProposalCollateralPercent = fromIntegral <$> pppCollateralPercentage pp
-      , DB.paramProposalMaxCollateralInputs = fromIntegral <$> pppMaxCollateralInputs pp
-      , -- New for Conway
-        DB.paramProposalPvtMotionNoConfidence = toDouble . pvtMotionNoConfidence <$> pppPoolVotingThresholds pp
-      , DB.paramProposalPvtCommitteeNormal = toDouble . pvtCommitteeNormal <$> pppPoolVotingThresholds pp
-      , DB.paramProposalPvtCommitteeNoConfidence = toDouble . pvtCommitteeNoConfidence <$> pppPoolVotingThresholds pp
-      , DB.paramProposalPvtHardForkInitiation = toDouble . pvtHardForkInitiation <$> pppPoolVotingThresholds pp
-      , DB.paramProposalPvtppSecurityGroup = toDouble . pvtPPSecurityGroup <$> pppPoolVotingThresholds pp
-      , DB.paramProposalDvtMotionNoConfidence = toDouble . dvtMotionNoConfidence <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtCommitteeNormal = toDouble . dvtCommitteeNormal <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtCommitteeNoConfidence = toDouble . dvtCommitteeNoConfidence <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtUpdateToConstitution = toDouble . dvtUpdateToConstitution <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtHardForkInitiation = toDouble . dvtHardForkInitiation <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtPPNetworkGroup = toDouble . dvtPPNetworkGroup <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtPPEconomicGroup = toDouble . dvtPPEconomicGroup <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtPPTechnicalGroup = toDouble . dvtPPTechnicalGroup <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtPPGovGroup = toDouble . dvtPPGovGroup <$> pppDRepVotingThresholds pp
-      , DB.paramProposalDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> pppDRepVotingThresholds pp
-      , DB.paramProposalCommitteeMinSize = DbWord64 . fromIntegral <$> pppCommitteeMinSize pp
-      , DB.paramProposalCommitteeMaxTermLength = DbWord64 . fromIntegral . unEpochInterval <$> pppCommitteeMaxTermLength pp
-      , DB.paramProposalGovActionLifetime = fromIntegral . unEpochInterval <$> pppGovActionLifetime pp
-      , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
-      , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
-      , DB.paramProposalDrepActivity = fromIntegral . unEpochInterval <$> pppDRepActivity pp
-      , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
-      }
+  dbQueryToApp $
+    DB.insertParamProposal $
+      DB.ParamProposal
+        { DB.paramProposalRegisteredTxId = txId
+        , DB.paramProposalEpochNo = unEpochNo <$> pppEpochNo pp
+        , DB.paramProposalKey = pppKey pp
+        , DB.paramProposalMinFeeA = fromIntegral <$> pppMinFeeA pp
+        , DB.paramProposalMinFeeB = fromIntegral <$> pppMinFeeB pp
+        , DB.paramProposalMaxBlockSize = fromIntegral <$> pppMaxBlockSize pp
+        , DB.paramProposalMaxTxSize = fromIntegral <$> pppMaxTxSize pp
+        , DB.paramProposalMaxBhSize = fromIntegral <$> pppMaxBhSize pp
+        , DB.paramProposalKeyDeposit = Generic.coinToDbLovelace <$> pppKeyDeposit pp
+        , DB.paramProposalPoolDeposit = Generic.coinToDbLovelace <$> pppPoolDeposit pp
+        , DB.paramProposalMaxEpoch = fromIntegral . unEpochInterval <$> pppMaxEpoch pp
+        , DB.paramProposalOptimalPoolCount = fromIntegral <$> pppOptimalPoolCount pp
+        , DB.paramProposalInfluence = fromRational <$> pppInfluence pp
+        , DB.paramProposalMonetaryExpandRate = toDouble <$> pppMonetaryExpandRate pp
+        , DB.paramProposalTreasuryGrowthRate = toDouble <$> pppTreasuryGrowthRate pp
+        , DB.paramProposalDecentralisation = toDouble <$> pppDecentralisation pp
+        , DB.paramProposalEntropy = Generic.nonceToBytes =<< pppEntropy pp
+        , DB.paramProposalProtocolMajor = getVersion . Ledger.pvMajor <$> pppProtocolVersion pp
+        , DB.paramProposalProtocolMinor = fromIntegral . Ledger.pvMinor <$> pppProtocolVersion pp
+        , DB.paramProposalMinUtxoValue = Generic.coinToDbLovelace <$> pppMinUtxoValue pp
+        , DB.paramProposalMinPoolCost = Generic.coinToDbLovelace <$> pppMinPoolCost pp
+        , -- New for Alonzo
+          DB.paramProposalCoinsPerUtxoSize = Generic.coinToDbLovelace <$> pppCoinsPerUtxo pp
+        , DB.paramProposalCostModelId = cmId
+        , DB.paramProposalPriceMem = realToFrac <$> pppPriceMem pp
+        , DB.paramProposalPriceStep = realToFrac <$> pppPriceStep pp
+        , DB.paramProposalMaxTxExMem = DbWord64 <$> pppMaxTxExMem pp
+        , DB.paramProposalMaxTxExSteps = DbWord64 <$> pppMaxTxExSteps pp
+        , DB.paramProposalMaxBlockExMem = DbWord64 <$> pppMaxBlockExMem pp
+        , DB.paramProposalMaxBlockExSteps = DbWord64 <$> pppMaxBlockExSteps pp
+        , DB.paramProposalMaxValSize = DbWord64 . fromIntegral <$> pppMaxValSize pp
+        , DB.paramProposalCollateralPercent = fromIntegral <$> pppCollateralPercentage pp
+        , DB.paramProposalMaxCollateralInputs = fromIntegral <$> pppMaxCollateralInputs pp
+        , -- New for Conway
+          DB.paramProposalPvtMotionNoConfidence = toDouble . pvtMotionNoConfidence <$> pppPoolVotingThresholds pp
+        , DB.paramProposalPvtCommitteeNormal = toDouble . pvtCommitteeNormal <$> pppPoolVotingThresholds pp
+        , DB.paramProposalPvtCommitteeNoConfidence = toDouble . pvtCommitteeNoConfidence <$> pppPoolVotingThresholds pp
+        , DB.paramProposalPvtHardForkInitiation = toDouble . pvtHardForkInitiation <$> pppPoolVotingThresholds pp
+        , DB.paramProposalPvtppSecurityGroup = toDouble . pvtPPSecurityGroup <$> pppPoolVotingThresholds pp
+        , DB.paramProposalDvtMotionNoConfidence = toDouble . dvtMotionNoConfidence <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtCommitteeNormal = toDouble . dvtCommitteeNormal <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtCommitteeNoConfidence = toDouble . dvtCommitteeNoConfidence <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtUpdateToConstitution = toDouble . dvtUpdateToConstitution <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtHardForkInitiation = toDouble . dvtHardForkInitiation <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtPPNetworkGroup = toDouble . dvtPPNetworkGroup <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtPPEconomicGroup = toDouble . dvtPPEconomicGroup <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtPPTechnicalGroup = toDouble . dvtPPTechnicalGroup <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtPPGovGroup = toDouble . dvtPPGovGroup <$> pppDRepVotingThresholds pp
+        , DB.paramProposalDvtTreasuryWithdrawal = toDouble . dvtTreasuryWithdrawal <$> pppDRepVotingThresholds pp
+        , DB.paramProposalCommitteeMinSize = DbWord64 . fromIntegral <$> pppCommitteeMinSize pp
+        , DB.paramProposalCommitteeMaxTermLength = DbWord64 . fromIntegral . unEpochInterval <$> pppCommitteeMaxTermLength pp
+        , DB.paramProposalGovActionLifetime = fromIntegral . unEpochInterval <$> pppGovActionLifetime pp
+        , DB.paramProposalGovActionDeposit = DbWord64 . fromIntegral <$> pppGovActionDeposit pp
+        , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
+        , DB.paramProposalDrepActivity = fromIntegral . unEpochInterval <$> pppDRepActivity pp
+        , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
+        }
 
-insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m DB.ConstitutionId
-insertConstitution blockId mgapId constitution = do
-  votingAnchorId <- insertVotingAnchor blockId DB.OtherAnchor $ constitutionAnchor constitution
-  DB.insertConstitution $
-    DB.Constitution
-      { DB.constitutionGovActionProposalId = mgapId
-      , DB.constitutionVotingAnchorId = votingAnchorId
-      , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
-      }
+insertConstitution :: DB.TxId -> DB.GovActionProposalId -> Constitution StandardConway -> App ()
+insertConstitution txId gapId constitution = do
+  votingAnchorId <- insertVotingAnchor txId DB.OtherAnchor $ constitutionAnchor constitution
+  void . dbQueryToApp $
+    DB.insertConstitution $
+      DB.Constitution
+        { DB.constitutionGovActionProposalId = gapId
+        , DB.constitutionVotingAnchorId = votingAnchorId
+        , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
+        }
 
 --------------------------------------------------------------------------------------
 -- VOTING PROCEDURES
 --------------------------------------------------------------------------------------
 insertVotingProcedures ::
-  (MonadIO m, MonadBaseControl IO m) =>
-  Trace IO Text ->
-  CacheStatus ->
-  DB.BlockId ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedures trce cache blkId txId (voter, actions) =
-  mapM_ (insertVotingProcedure trce cache blkId txId voter) (zip [0 ..] actions)
+  App ()
+insertVotingProcedures txId (voter, actions) =
+  mapM_ (insertVotingProcedure txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
-  (MonadIO m, MonadBaseControl IO m) =>
-  Trace IO Text ->
-  CacheStatus ->
-  DB.BlockId ->
   DB.TxId ->
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedure trce cacheStatus blkId txId voter (index, (gaId, vp)) = do
+  App ()
+insertVotingProcedure txId voter (index, (gaId, vp)) = do
+  cache <- asks envCache
   govActionId <- resolveGovActionProposal gaId
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.OtherAnchor
+  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ insertVotingAnchor txId DB.OtherAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred -> do
-      khId <- lift $ insertCommitteeHash cred
+      khId <- insertCommitteeHash cred
       pure (Just khId, Nothing, Nothing)
     DRepVoter cred -> do
-      drep <- lift $ insertCredDrepHash cred
+      drep <- insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
     StakePoolVoter poolkh -> do
-      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cacheStatus UpdateCache False poolkh
+      poolHashId <- queryPoolKeyOrInsert "insertVotingProcedure" cache UpdateCache False poolkh
       pure (Nothing, Nothing, Just poolHashId)
   void
-    . lift
+    . dbQueryToApp
     . DB.insertVotingProcedure
     $ DB.VotingProcedure
       { DB.votingProcedureTxId = txId
@@ -315,50 +309,53 @@ insertVotingProcedure trce cacheStatus blkId txId voter (index, (gaId, vp)) = do
       , DB.votingProcedureVotingAnchorId = votingAnchorId
       }
 
-insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
+insertVotingAnchor :: DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> App DB.VotingAnchorId
 insertVotingAnchor blockId anchorType anchor =
-  DB.insertAnchor $
-    DB.VotingAnchor
-      { DB.votingAnchorBlockId = blockId
-      , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
-      , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
-      , DB.votingAnchorType = anchorType
-      }
+  dbQueryToApp $
+    DB.insertAnchor $
+      DB.VotingAnchor
+        { DB.votingAnchorBlockId = blockId
+        , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
+        , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
+        , DB.votingAnchorType = anchorType
+        }
 
-insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential kr StandardCrypto -> ReaderT SqlBackend m DB.CommitteeHashId
+insertCommitteeHash :: Ledger.Credential kr StandardCrypto -> App DB.CommitteeHashId
 insertCommitteeHash cred = do
-  DB.insertCommitteeHash
-    DB.CommitteeHash
-      { DB.committeeHashRaw = Generic.unCredentialHash cred
-      , DB.committeeHashHasScript = Generic.hasCredScript cred
-      }
+  dbQueryToApp $
+    DB.insertCommitteeHash
+      DB.CommitteeHash
+        { DB.committeeHashRaw = Generic.unCredentialHash cred
+        , DB.committeeHashHasScript = Generic.hasCredScript cred
+        }
 
 --------------------------------------------------------------------------------------
 -- DREP
 --------------------------------------------------------------------------------------
-insertDrep :: (MonadBaseControl IO m, MonadIO m) => DRep StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
+insertDrep :: DRep StandardCrypto -> App DB.DrepHashId
 insertDrep = \case
   DRepCredential cred -> insertCredDrepHash cred
-  DRepAlwaysAbstain -> DB.insertAlwaysAbstainDrep
-  DRepAlwaysNoConfidence -> DB.insertAlwaysNoConfidence
+  DRepAlwaysAbstain -> dbQueryToApp DB.insertAlwaysAbstainDrep
+  DRepAlwaysNoConfidence -> dbQueryToApp DB.insertAlwaysNoConfidence
 
-insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'DRepRole StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
+insertCredDrepHash :: Ledger.Credential 'DRepRole StandardCrypto -> App DB.DrepHashId
 insertCredDrepHash cred = do
-  DB.insertDrepHash
-    DB.DrepHash
-      { DB.drepHashRaw = Just bs
-      , DB.drepHashView = serialiseDrepToBech32 bs
-      , DB.drepHashHasScript = Generic.hasCredScript cred
-      }
+  dbQueryToApp $
+    DB.insertDrepHash
+      DB.DrepHash
+        { DB.drepHashRaw = Just bs
+        , DB.drepHashView = serialiseDrepToBech32 bs
+        , DB.drepHashHasScript = Generic.hasCredScript cred
+        }
   where
     bs = Generic.unCredentialHash cred
 
-insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> PulsingSnapshot StandardConway -> ReaderT SqlBackend m ()
+insertDrepDistr :: EpochNo -> PulsingSnapshot StandardConway -> App ()
 insertDrepDistr e pSnapshot = do
   drepsDB <- mapM mkEntry (Map.toList $ psDRepDistr pSnapshot)
-  DB.insertManyDrepDistr drepsDB
+  dbQueryToApp $ DB.insertManyDrepDistr drepsDB
   where
-    mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
+    mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> App DB.DrepDistr
     mkEntry (drep, coin) = do
       drepId <- insertDrep drep
       pure $
@@ -376,73 +373,65 @@ insertDrepDistr e pSnapshot = do
       DRepCredential cred -> drepExpiry <$> Map.lookup cred (psDRepState pSnapshot)
 
 insertCostModel ::
-  (MonadBaseControl IO m, MonadIO m) =>
   DB.BlockId ->
   Map Language Ledger.CostModel ->
-  ReaderT SqlBackend m DB.CostModelId
+  App DB.CostModelId
 insertCostModel _blkId cms =
-  DB.insertCostModel $
-    DB.CostModel
-      { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.mkCostModels cms
-      , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
-      }
+  dbQueryToApp $
+    DB.insertCostModel $
+      DB.CostModel
+        { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.mkCostModels cms
+        , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
+        }
 
 updateRatified ::
-  forall m.
-  MonadIO m =>
   EpochNo ->
   [GovActionState StandardConway] ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  App ()
 updateRatified epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal $ gasId action
-    lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
+    dbQueryToApp $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
 
 updateExpired ::
-  forall m.
-  MonadIO m =>
   EpochNo ->
   [GovActionId StandardCrypto] ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  App ()
 updateExpired epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal action
-    lift $ DB.updateGovActionExpired gaId (unEpochNo epochNo)
+    dbQueryToApp $ DB.updateGovActionExpired gaId (unEpochNo epochNo)
 
 updateDropped ::
-  forall m.
-  MonadIO m =>
   EpochNo ->
   [GovActionId StandardCrypto] ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  App ()
 updateDropped epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal action
-    lift $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
+    dbQueryToApp $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
 
 insertUpdateEnacted ::
-  forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.BlockId ->
   EpochNo ->
   ConwayGovState StandardConway ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  App ()
 insertUpdateEnacted trce blkId epochNo enactedState = do
   whenJust (strictMaybeToMaybe (grPParamUpdate govIds)) $ \prevId -> do
     gaId <- resolveGovActionProposal $ unGovPurposeId prevId
-    void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+    void $ dbQueryToApp $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
 
   whenJust (strictMaybeToMaybe (grHardFork govIds)) $ \prevId -> do
     gaId <- resolveGovActionProposal $ unGovPurposeId prevId
-    void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+    void $ dbQueryToApp $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
 
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
 
   constitutionId <- handleConstitution
 
   void $
-    lift $
+    dbQueryToApp $
       DB.insertEpochState
         DB.EpochState
           { DB.epochStateCommitteeId = mcommitteeId
@@ -465,7 +454,7 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
         (Nothing, Nothing) -> pure (Nothing, Nothing)
         (Nothing, Just committee) -> do
           -- No enacted proposal means we're after conway genesis territory
-          committeeIds <- lift $ DB.queryProposalCommittee Nothing
+          committeeIds <- dbQueryToApp $ DB.queryProposalCommittee Nothing
           case committeeIds of
             [] -> do
               committeeId <- lift $ insertCommittee Nothing committee
@@ -476,7 +465,7 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
           -- No committee with enacted action means it's a no confidence action.
           pure (Nothing, Just committeeGaId)
         (Just committeeGaId, Just committee) -> do
-          committeeIds <- lift $ DB.queryProposalCommittee (Just committeeGaId)
+          committeeIds <- dbQueryToApp $ DB.queryProposalCommittee (Just committeeGaId)
           case committeeIds of
             [] -> do
               -- This should never happen. Having a committee and an enacted action, means
@@ -498,14 +487,14 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
         Nothing -> pure Nothing
         Just prevId -> do
           gaId <- resolveGovActionProposal $ unGovPurposeId prevId
-          _nConstitution <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+          _nConstitution <- dbQueryToApp $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
           pure $ Just gaId
 
-      constitutionIds <- lift $ DB.queryProposalConstitution mConstitutionGaId
+      constitutionIds <- dbQueryToApp $ DB.queryProposalConstitution mConstitutionGaId
       case constitutionIds of
         -- The first case can only happen once on the first Conway epoch.
         -- On next epochs there will be at least one constitution, so the query will return something.
-        [] -> lift $ insertConstitution blkId Nothing (cgsConstitution enactedState)
+        [] -> insertConstitution blkId Nothing (cgsConstitution enactedState)
         constitutionId : rest -> do
           unless (null rest) $
             liftIO $

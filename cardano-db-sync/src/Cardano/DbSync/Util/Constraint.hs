@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Util.Constraint (
   constraintNameEpochStake,
@@ -14,16 +15,12 @@ module Cardano.DbSync.Util.Constraint (
   addEpochStakeTableConstraint,
 ) where
 
-import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo)
 import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Api.Types (SyncEnv (..))
-import Cardano.Prelude (MonadIO (..), Proxy (..), ReaderT (runReaderT), atomically)
+import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..), askTrace)
+import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
-import Control.Monad (unless)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Data.Text (Text)
 import Database.Persist.EntityDef.Internal (EntityDef (..))
 import Database.Persist.Names (ConstraintNameDB (..), EntityNameDB (..), FieldNameDB (..))
 import Database.Persist.Postgresql (PersistEntity (..), SqlBackend)
@@ -52,87 +49,69 @@ queryRewardAndEpochStakeConstraints = do
       , dbConstraintEpochStake = resEpochStake
       }
 
-addConstraintsIfNotExist ::
-  forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
-  Trace IO Text ->
-  ReaderT SqlBackend m ()
-addConstraintsIfNotExist syncEnv trce = do
-  addStakeConstraintsIfNotExist syncEnv trce
-  addRewardConstraintsIfNotExist syncEnv trce
+addConstraintsIfNotExist :: App ()
+addConstraintsIfNotExist = do
+  addStakeConstraintsIfNotExist
+  addRewardConstraintsIfNotExist
 
-addStakeConstraintsIfNotExist ::
-  forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
-  Trace IO Text ->
-  ReaderT SqlBackend m ()
-addStakeConstraintsIfNotExist syncEnv trce = do
+addStakeConstraintsIfNotExist :: App ()
+addStakeConstraintsIfNotExist = do
+  syncEnv <- ask
   mdbc <- liftIO . readTVarIO $ envDbConstraints syncEnv
-  unless (dbConstraintEpochStake mdbc) (addEpochStakeTableConstraint trce)
+  unless (dbConstraintEpochStake mdbc) addEpochStakeTableConstraint
   liftIO
     . atomically
     $ writeTVar (envDbConstraints syncEnv) (mdbc {dbConstraintEpochStake = True})
 
-addRewardConstraintsIfNotExist ::
-  forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
-  Trace IO Text ->
-  ReaderT SqlBackend m ()
-addRewardConstraintsIfNotExist syncEnv trce = do
+addRewardConstraintsIfNotExist :: App ()
+addRewardConstraintsIfNotExist = do
+  syncEnv <- ask
   mdbc <- liftIO . readTVarIO $ envDbConstraints syncEnv
-  unless (dbConstraintRewards mdbc) (addRewardTableConstraint trce)
+  unless (dbConstraintRewards mdbc) addRewardTableConstraint
   liftIO
     . atomically
     $ writeTVar (envDbConstraints syncEnv) (mdbc {dbConstraintRewards = True})
 
-addRewardTableConstraint ::
-  forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  ReaderT SqlBackend m ()
-addRewardTableConstraint trce = do
+addRewardTableConstraint :: App ()
+addRewardTableConstraint = do
   let entityD = entityDef $ Proxy @DB.Reward
-  DB.alterTable
-    entityD
-    ( DB.AddUniqueConstraint
-        constraintNameReward
-        [ FieldNameDB "addr_id"
-        , FieldNameDB "type"
-        , FieldNameDB "earned_epoch"
-        , FieldNameDB "pool_id"
-        ]
-    )
-  liftIO $ logNewConstraint trce entityD (unConstraintNameDB constraintNameReward)
+  dbQueryToApp $
+    DB.alterTable
+      entityD
+      ( DB.AddUniqueConstraint
+          constraintNameReward
+          [ FieldNameDB "addr_id"
+          , FieldNameDB "type"
+          , FieldNameDB "earned_epoch"
+          , FieldNameDB "pool_id"
+          ]
+      )
+  logNewConstraint entityD (unConstraintNameDB constraintNameReward)
 
-addEpochStakeTableConstraint ::
-  forall m.
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  ReaderT SqlBackend m ()
-addEpochStakeTableConstraint trce = do
+addEpochStakeTableConstraint :: App ()
+addEpochStakeTableConstraint = do
   let entityD = entityDef $ Proxy @DB.EpochStake
-  DB.alterTable
-    entityD
-    ( DB.AddUniqueConstraint
-        constraintNameEpochStake
-        [ FieldNameDB "epoch_no"
-        , FieldNameDB "addr_id"
-        , FieldNameDB "pool_id"
-        ]
-    )
-  liftIO $ logNewConstraint trce entityD (unConstraintNameDB constraintNameEpochStake)
+  dbQueryToApp $
+    DB.alterTable
+      entityD
+      ( DB.AddUniqueConstraint
+          constraintNameEpochStake
+          [ FieldNameDB "epoch_no"
+          , FieldNameDB "addr_id"
+          , FieldNameDB "pool_id"
+          ]
+      )
+  logNewConstraint entityD (unConstraintNameDB constraintNameEpochStake)
 
 logNewConstraint ::
-  Trace IO Text ->
   EntityDef ->
   Text ->
-  IO ()
-logNewConstraint trce table constraintName =
-  logInfo trce $
-    "The table "
-      <> unEntityNameDB (entityDB table)
-      <> " was given a new unique constraint called "
-      <> constraintName
+  App ()
+logNewConstraint table constraintName = do
+  trce <- askTrace
+  liftIO $
+    logInfo trce $
+      "The table "
+        <> unEntityNameDB (entityDB table)
+        <> " was given a new unique constraint called "
+        <> constraintName

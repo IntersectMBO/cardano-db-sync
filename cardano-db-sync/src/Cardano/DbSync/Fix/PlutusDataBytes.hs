@@ -18,7 +18,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Era.Shelley.Generic.Block
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-import Cardano.DbSync.Error (bsBase16Encode)
+import Cardano.DbSync.Error.Types (bsBase16Encode)
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
@@ -282,7 +282,7 @@ scrapDatumsTxBabbage tx =
       Plutus.Datum binaryData ->
         let plutusData = Alonzo.binaryDataToData binaryData
          in Just $ mkTxData (Alonzo.hashData plutusData, plutusData)
-      _ -> Nothing
+      _other -> Nothing
 
 scrapDatumsTxAlonzo :: Core.Tx StandardAlonzo -> Map ByteString ByteString
 scrapDatumsTxAlonzo tx =

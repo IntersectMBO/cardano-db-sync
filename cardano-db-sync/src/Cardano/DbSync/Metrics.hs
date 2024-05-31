@@ -3,6 +3,7 @@
 
 module Cardano.DbSync.Metrics (
   Metrics (..),
+  MetricSetters (..),
   setNodeBlockHeight,
   setDbQueueLength,
   setDbBlockHeight,
@@ -10,9 +11,10 @@ module Cardano.DbSync.Metrics (
   makeMetrics,
   withMetricSetters,
   withMetricsServer,
+  nullMetricSetters,
 ) where
 
-import Cardano.DbSync.Types (MetricSetters (..))
+import Cardano.DbSync.AppT (App, runApp)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
 import Ouroboros.Network.Block (BlockNo (..))
@@ -37,32 +39,61 @@ data Metrics = Metrics
   -- ^ The slot tip number in the database.
   }
 
+-- The metrics we use.
+-- Kept as a separate struct and do not put into environment because
+-- when we need to test functions using this we need to initialize the
+-- whole environment and not just pass in the layer. This shows clearly
+-- that it needs to remain a separate parameter passed around where needed.
+data MetricSetters = MetricSetters
+  { metricsSetNodeBlockHeight :: BlockNo -> App ()
+  , metricsSetDbQueueLength :: Natural -> App ()
+  , metricsSetDbBlockHeight :: BlockNo -> App ()
+  , metricsSetDbSlotHeight :: SlotNo -> App ()
+  }
+
 -- This enables us to be much more flexibile with what we actually measure.
-withMetricSetters :: Int -> (MetricSetters -> IO a) -> IO a
+withMetricSetters :: Int -> (MetricSetters -> App a) -> App a
 withMetricSetters prometheusPort action =
   withMetricsServer prometheusPort $ \metrics -> do
     action $
       MetricSetters
         { metricsSetNodeBlockHeight = \(BlockNo nodeHeight) ->
-            Gauge.set (fromIntegral nodeHeight) $ mNodeBlockHeight metrics
+            liftIO $ Gauge.set (fromIntegral nodeHeight) $ mNodeBlockHeight metrics
         , metricsSetDbQueueLength = \queuePostWrite ->
-            Gauge.set (fromIntegral queuePostWrite) $ mDbQueueLength metrics
+            liftIO $ Gauge.set (fromIntegral queuePostWrite) $ mDbQueueLength metrics
         , metricsSetDbBlockHeight = \(BlockNo blockNo) ->
-            Gauge.set (fromIntegral blockNo) $ mDbBlockHeight metrics
+            liftIO $ Gauge.set (fromIntegral blockNo) $ mDbBlockHeight metrics
         , metricsSetDbSlotHeight = \(SlotNo slotNo) ->
-            Gauge.set (fromIntegral slotNo) $ mDbSlotHeight metrics
+            liftIO $ Gauge.set (fromIntegral slotNo) $ mDbSlotHeight metrics
         }
 
-withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
+-- | Eequired for testing or when disabling the metrics.
+nullMetricSetters :: MetricSetters
+nullMetricSetters =
+  MetricSetters
+    { metricsSetNodeBlockHeight = const $ pure ()
+    , metricsSetDbQueueLength = const $ pure ()
+    , metricsSetDbBlockHeight = const $ pure ()
+    , metricsSetDbSlotHeight = const $ pure ()
+    }
+
+withMetricsServer :: Int -> (Metrics -> App a) -> App a
 withMetricsServer port action = do
+  syncEnv <- ask
   -- Using both `RegistryT` and `bracket` here is overkill. Unfortunately the
   -- Prometheus API requires the use of a `Registry` and this seems to be the
   -- least sucky way of doing it.
-  (metrics, registry) <- runRegistryT $ (,) <$> makeMetrics <*> RegistryT ask
-  bracket
-    (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
-    cancel
-    (const $ action metrics)
+  (metrics, registry) <- liftIO $ runRegistryT $ (,) <$> makeMetrics <*> RegistryT ask
+  result <-
+    liftIO $
+      bracket
+        (async $ runReaderT (unRegistryT $ serveMetricsT port []) registry)
+        cancel
+        (\_ -> runApp syncEnv (action metrics))
+  -- Handle the result of the action
+  case result of
+    Left err -> throwError err
+    Right val -> pure val
 
 makeMetrics :: RegistryT IO Metrics
 makeMetrics =
@@ -72,15 +103,15 @@ makeMetrics =
     <*> registerGauge "cardano_db_sync_db_block_height" mempty
     <*> registerGauge "cardano_db_sync_db_slot_height" mempty
 
-setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> IO ()
+setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> App ()
 setNodeBlockHeight setters woBlkNo =
   metricsSetNodeBlockHeight setters (fromWithOrigin (BlockNo 0) woBlkNo)
 
-setDbQueueLength :: MetricSetters -> Natural -> IO ()
+setDbQueueLength :: MetricSetters -> Natural -> App ()
 setDbQueueLength = metricsSetDbQueueLength
 
-setDbBlockHeight :: MetricSetters -> BlockNo -> IO ()
+setDbBlockHeight :: MetricSetters -> BlockNo -> App ()
 setDbBlockHeight = metricsSetDbBlockHeight
 
-setDbSlotHeight :: MetricSetters -> SlotNo -> IO ()
+setDbSlotHeight :: MetricSetters -> SlotNo -> App ()
 setDbSlotHeight = metricsSetDbSlotHeight

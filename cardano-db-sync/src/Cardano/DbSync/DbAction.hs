@@ -14,6 +14,7 @@ module Cardano.DbSync.DbAction (
   runAndSetDone,
 ) where
 
+import Cardano.DbSync.AppT (App)
 import Cardano.DbSync.Types
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, newEmptyTMVarIO, newTVarIO, readTVar, readTVarIO, takeTMVar, writeTVar)
@@ -88,9 +89,9 @@ writeDbActionQueue = TBQ.writeTBQueue . tcQueue
 -- Need this because `flushTBQueue` never blocks and we want to block until
 -- there is one item or more.
 -- Use this instead of STM.check to make sure it blocks if the queue is empty.
-blockingFlushDbActionQueue :: ThreadChannels -> IO [DbAction]
+blockingFlushDbActionQueue :: ThreadChannels -> App [DbAction]
 blockingFlushDbActionQueue tc = do
-  STM.atomically $ do
+  liftIO $ STM.atomically $ do
     x <- TBQ.readTBQueue $ tcQueue tc
     xs <- TBQ.flushTBQueue $ tcQueue tc
     pure $ x : xs

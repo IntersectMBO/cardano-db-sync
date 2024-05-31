@@ -1,197 +1,88 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Error (
-  SyncInvariant (..),
-  SyncNodeError (..),
-  NodeConfigError (..),
   annotateInvariantTx,
-  bsBase16Encode,
-  dbSyncNodeError,
   dbSyncInvariant,
-  renderSyncInvariant,
   runOrThrowIO,
   fromEitherSTM,
   logAndThrowIO,
+  handleAndLogError,
   shouldAbortOnPanic,
   hasAbortOnPanicEnv,
+  runOrThrowApp,
+  runOrThrowAppUnit,
+  dbSyncNodeError,
+  throwAppError,
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
-import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
-import qualified Cardano.Crypto as Crypto (serializeCborHash)
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import Cardano.DbSync.Util
+import Cardano.DbSync.AppT (App)
+import Cardano.DbSync.Error.Types (SyncInvariant (..), SyncNodeError (..))
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
-import qualified Data.ByteString.Base16 as Base16
-import Data.String (String)
+import Data.Text (pack)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import System.Environment (lookupEnv)
 import System.Posix.Process (exitImmediately)
-import qualified Text.Show as Show
 
-data SyncInvariant
-  = EInvInOut !Word64 !Word64
-  | EInvTxInOut !Byron.Tx !Word64 !Word64
+runOrThrowApp :: forall e a. (Exception e) => Trace IO Text -> App (Either e a) -> App a
+runOrThrowApp tracer ioEither = do
+  et <- ioEither
+  case et of
+    Left err -> do
+      liftIO $ logError tracer $ pack $ show err
+      throwIO err
+    Right a -> pure a
 
-data SyncNodeError
-  = SNErrDefault !Text
-  | SNErrInvariant !Text !SyncInvariant
-  | SNEErrBlockMismatch !Word64 !ByteString !ByteString
-  | SNErrIgnoreShelleyInitiation
-  | SNErrByronConfig !FilePath !Byron.ConfigurationError
-  | SNErrShelleyConfig !FilePath !Text
-  | SNErrAlonzoConfig !FilePath !Text
-  | SNErrConwayConfig !FilePath !Text
-  | SNErrCardanoConfig !Text
-  | SNErrInsertGenesis !String
-  | SNErrLedgerState !String
-  | SNErrNodeConfig NodeConfigError
-  | SNErrLocalStateQuery !String
-  | SNErrByronGenesis !String
-  | SNErrExtraMigration !String
-  | SNErrDatabaseRollBackLedger !String
-  | SNErrDatabaseValConstLevel !String
+-- | A version of `runOrThrowApp` that returns `()` instead of `a`.
+runOrThrowAppUnit :: forall e. (Exception e) => Trace IO Text -> App (Either e ()) -> App ()
+runOrThrowAppUnit = runOrThrowApp
 
-instance Exception SyncNodeError
+dbSyncNodeError :: Trace IO Text -> SyncNodeError -> App (Either SyncNodeError ())
+dbSyncNodeError tracer err = do
+  liftIO $ logError tracer (pack $ show err)
+  pure $ Left err
 
-instance Show SyncNodeError where
-  show =
-    \case
-      SNErrDefault t -> "Error SNErrDefault: " <> show t
-      SNErrInvariant loc i -> "Error SNErrInvariant: " <> Show.show loc <> ": " <> show (renderSyncInvariant i)
-      SNEErrBlockMismatch blkNo hashDb hashBlk ->
-        mconcat
-          [ "Error SNEErrBlockMismatch: "
-          , "Block mismatch for block number "
-          , show blkNo
-          , ", db has "
-          , show $ bsBase16Encode hashDb
-          , " but chain provided "
-          , show $ bsBase16Encode hashBlk
-          ]
-      SNErrIgnoreShelleyInitiation ->
-        mconcat
-          [ "Error SNErrIgnoreShelleyInitiation: "
-          , "Node configs that don't fork to Shelley directly and initiate"
-          , " funds or stakes in Shelley Genesis are not supported."
-          ]
-      SNErrByronConfig fp ce ->
-        mconcat
-          [ "Error SNErrByronConfig: "
-          , "Failed reading Byron genesis file "
-          , show fp
-          , ": "
-          , show ce
-          ]
-      SNErrShelleyConfig fp txt ->
-        mconcat
-          [ "Error SNErrShelleyConfig: "
-          , "Failed reading Shelley genesis file "
-          , show fp
-          , ": "
-          , show txt
-          ]
-      SNErrAlonzoConfig fp txt ->
-        mconcat
-          [ "Error SNErrAlonzoConfig: "
-          , "Failed reading Alonzo genesis file "
-          , show fp
-          , ": "
-          , show txt
-          ]
-      SNErrConwayConfig fp txt ->
-        mconcat
-          [ "Error SNErrConwayConfig: "
-          , "Failed reading Conway genesis file "
-          , show fp
-          , ": "
-          , show txt
-          ]
-      SNErrCardanoConfig err ->
-        mconcat
-          [ "Error SNErrCardanoConfig: "
-          , "With Cardano protocol, Byron/Shelley config mismatch:\n"
-          , "   "
-          , show err
-          ]
-      SNErrInsertGenesis err -> "Error SNErrInsertGenesis: " <> err
-      SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
-      SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err
-      SNErrLocalStateQuery err -> "Error SNErrLocalStateQuery: " <> show err
-      SNErrByronGenesis err -> "Error SNErrByronGenesis:" <> show err
-      SNErrExtraMigration err -> "Error SNErrExtraMigration: " <> show err
-      SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
-      SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
-
-data NodeConfigError
-  = NodeConfigParseError !String
-  | ParseSyncPreConfigError !String
-  | ReadByteStringFromFileError !String
-
-instance Exception NodeConfigError
-
-instance Show NodeConfigError where
-  show =
-    \case
-      NodeConfigParseError err -> "NodeConfigParseError - " <> err
-      ParseSyncPreConfigError err -> "ParseSyncPreConfigError - " <> err
-      ReadByteStringFromFileError err -> "ReadByteStringFromFileError - " <> err
-
-annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
-annotateInvariantTx tx ei =
-  case ei of
-    EInvInOut inval outval -> EInvTxInOut tx inval outval
-    _other -> ei
-
-dbSyncNodeError :: (Monad m) => Text -> ExceptT SyncNodeError m a
-dbSyncNodeError = left . SNErrDefault
+throwAppError :: Trace IO Text -> SyncNodeError -> App ()
+throwAppError tracer err = do
+  liftIO $ logError tracer (pack $ show err)
+  throwIO err
 
 dbSyncInvariant :: (Monad m) => Text -> SyncInvariant -> ExceptT SyncNodeError m a
 dbSyncInvariant loc = left . SNErrInvariant loc
 
-renderSyncInvariant :: SyncInvariant -> Text
-renderSyncInvariant ei =
-  case ei of
-    EInvInOut inval outval ->
-      mconcat ["input value ", textShow inval, " < output value ", textShow outval]
-    EInvTxInOut tx inval outval ->
-      mconcat
-        [ "tx "
-        , bsBase16Encode (Byron.unTxHash $ Crypto.serializeCborHash tx)
-        , " : input value "
-        , textShow inval
-        , " < output value "
-        , textShow outval
-        , "\n"
-        , textShow tx
-        ]
-
 fromEitherSTM :: (Exception e) => Either e a -> STM a
 fromEitherSTM = either throwSTM return
 
-bsBase16Encode :: ByteString -> Text
-bsBase16Encode bs =
-  case Text.decodeUtf8' (Base16.encode bs) of
-    Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Show.show bs
-    Right txt -> txt
-
-runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
-runOrThrowIO ioEither = do
+runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => Trace m Text -> m (Either e a) -> m a
+runOrThrowIO tracer ioEither = do
   et <- ioEither
   case et of
-    Left err -> throwIO err
+    Left err -> do
+      logError tracer $ show err
+      throwIO err
     Right a -> pure a
 
 logAndThrowIO :: Trace IO Text -> SyncNodeError -> IO ()
 logAndThrowIO tracer err = do
   logError tracer $ show err
   throwIO err
+
+handleAndLogError ::
+  forall a m.
+  (MonadError SyncNodeError m, MonadIO m) =>
+  Trace IO Text ->
+  Either SyncNodeError a ->
+  m a
+handleAndLogError tracer result = case result of
+  Left err -> do
+    liftIO $ logError tracer $ Text.pack $ show err
+    throwError err
+  Right val -> pure val
 
 -- The network code catches all execptions and retries them, even exceptions generated by the
 -- 'error' or 'panic' function. To actually force the termination of 'db-sync' we therefore
@@ -207,3 +98,9 @@ shouldAbortOnPanic msg = do
 
 hasAbortOnPanicEnv :: IO Bool
 hasAbortOnPanicEnv = isJust <$> lookupEnv "DbSyncAbortOnPanic"
+
+annotateInvariantTx :: Byron.Tx -> SyncInvariant -> SyncInvariant
+annotateInvariantTx tx ei =
+  case ei of
+    EInvInOut inval outval -> EInvTxInOut tx inval outval
+    _other -> ei

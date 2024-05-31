@@ -14,20 +14,17 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   mkmaTxOuts,
 ) where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (logWarning)
 import Cardano.Db (DbLovelace (..), minIdsToText, textShow)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.AppT (App, MonadAppDB (..), askTrace)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
-import Cardano.DbSync.Error
 import Cardano.Prelude
-import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
 import qualified Data.Text as Text
-import Database.Persist.Sql (SqlBackend)
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -82,29 +79,25 @@ instance Semigroup BlockGroupedData where
       (groupedTxFees tgd1 + groupedTxFees tgd2)
       (groupedTxOutSum tgd1 + groupedTxOutSum tgd2)
 
-insertBlockGroupedData ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
-  BlockGroupedData ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
-insertBlockGroupedData syncEnv grouped = do
-  disInOut <- liftIO $ getDisableInOutState syncEnv
-  txOutIds <- lift . DB.insertManyTxOutPlex (getHasConsumedOrPruneTxOut syncEnv) disInOut $ etoTxOut . fst <$> groupedTxOut grouped
+insertBlockGroupedData :: BlockGroupedData -> App DB.MinIds
+insertBlockGroupedData grouped = do
+  disInOut <- getDisableInOutState
+  consumeOrPrune <- getHasConsumedOrPruneTxOut
+  txOutIds <- dbQueryToApp $ DB.insertManyTxOutPlex consumeOrPrune disInOut $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
-  maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
+  maTxOutIds <- dbQueryToApp $ DB.insertManyMaTxOut maTxOuts
+  skipTxIn <- getSkipTxIn
   txInIds <-
-    if getSkipTxIn syncEnv
+    if skipTxIn
       then pure []
-      else lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
-  whenConsumeOrPruneTxOut syncEnv $ do
+      else dbQueryToApp . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
+  whenConsumeOrPruneTxOut $ do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
-    updateTuples <- lift $ mapM (prepareUpdates tracer) etis
-    lift $ DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
-  void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
-  void . lift . DB.insertManyTxMint $ groupedTxMint grouped
+    updateTuples <- mapM prepareUpdates etis
+    dbQueryToApp $ DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
+  void . dbQueryToApp . DB.insertManyTxMetadata $ groupedTxMetadata grouped
+  void . dbQueryToApp . DB.insertManyTxMint $ groupedTxMint grouped
   pure $ DB.MinIds (listToMaybe txInIds) (listToMaybe txOutIds) (listToMaybe maTxOutIds)
-  where
-    tracer = getTrace syncEnv
 
 mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
 mkmaTxOuts (txOutId, mmtos) = mkmaTxOut <$> mmtos
@@ -118,23 +111,22 @@ mkmaTxOuts (txOutId, mmtos) = mkmaTxOut <$> mmtos
         }
 
 prepareUpdates ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
   ExtendedTxIn ->
-  m (Maybe (DB.TxOutId, DB.TxId))
-prepareUpdates trce eti = case etiTxOutId eti of
-  Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
-  Left _ -> do
-    liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
-    pure Nothing
+  App (Maybe (DB.TxOutId, DB.TxId))
+prepareUpdates eti = do
+  trce <- askTrace
+  case etiTxOutId eti of
+    Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
+    Left _ -> do
+      liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
+      pure Nothing
 
 insertReverseIndex ::
-  (MonadBaseControl IO m, MonadIO m) =>
   DB.BlockId ->
   DB.MinIds ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  App ()
 insertReverseIndex blockId minIds =
-  void . lift . DB.insertReverseIndex $
+  void . dbQueryToApp . DB.insertReverseIndex $
     DB.ReverseIndex
       { DB.reverseIndexBlockId = blockId
       , DB.reverseIndexMinIds = minIdsToText minIds
@@ -143,13 +135,12 @@ insertReverseIndex blockId minIds =
 -- | If we can't resolve from the db, we fall back to the provided outputs
 -- This happens the input consumes an output introduced in the same block.
 resolveTxInputs ::
-  MonadIO m =>
   Bool ->
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
-resolveTxInputs hasConsumed needsValue groupedOutputs txIn =
+  App (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
+resolveTxInputs hasConsumed needsValue groupedOutputs txIn = do
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
       case (hasConsumed, needsValue) of
@@ -177,10 +168,9 @@ resolveTxInputs hasConsumed needsValue groupedOutputs txIn =
     convertFoundAll (txId, txOutId, lovelace) = (txIn, txId, Right txOutId, Just lovelace)
 
 resolveRemainingInputs ::
-  MonadIO m =>
   [ExtendedTxIn] ->
   [(DB.TxOutId, ExtendedTxOut)] ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) [ExtendedTxIn]
+  App [ExtendedTxIn]
 resolveRemainingInputs etis mp =
   mapM f etis
   where
@@ -189,13 +179,12 @@ resolveRemainingInputs etis mp =
       Left txIn
         | Just txOutId <- fst <$> find (matches txIn . snd) mp ->
             pure eti {etiTxOutId = Right txOutId}
-      _ -> pure eti
+      _other -> pure eti
 
 resolveScriptHash ::
-  (MonadBaseControl IO m, MonadIO m) =>
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
+  App (Maybe ByteString)
 resolveScriptHash groupedOutputs txIn =
   liftLookupFail "resolveScriptHash" $ do
     qres <- fmap fst <$> queryResolveInputCredentials txIn

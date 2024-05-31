@@ -9,7 +9,7 @@ module Cardano.DbSync.Config.Byron (
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto (decodeAbstractHash)
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Except.Extra (firstExceptT, hoistEither)
 

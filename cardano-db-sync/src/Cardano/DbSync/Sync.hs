@@ -30,7 +30,7 @@ import qualified Cardano.BM.Trace as Logging
 import Cardano.Client.Subscription (subscribe)
 import Cardano.Db (runDbIohkLogging)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..), envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.AppT (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..), getTraceFromSyncEnv, runAppInIO)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
@@ -203,13 +203,13 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     localChainSyncTracer = toLogObject $ appendName "ChainSync" tracer
 
     tracer :: Trace IO Text
-    tracer = getTrace syncEnv
+    tracer = getTraceFromSyncEnv syncEnv
 
     backend :: SqlBackend
     backend = envBackend syncEnv
 
     initAction channel = do
-      fr <- getIsSyncFixed syncEnv
+      fr <- runAppInIO syncEnv getIsSyncFixed
       let skipFix = soptSkipFix $ envOptions syncEnv
       let onlyFix = soptOnlyFix $ envOptions syncEnv
       if noneFixed fr && (onlyFix || not skipFix)
@@ -226,8 +226,8 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                 )
           if onlyFix
             then do
-              setIsFixed syncEnv DataFixRan
-            else setIsFixedAndMigrate syncEnv DataFixRan
+              runAppInIO syncEnv $ setIsFixed DataFixRan
+            else runAppInIO syncEnv $ setIsFixedAndMigrate DataFixRan
           pure False
         else
           if isDataFixed fr && (onlyFix || not skipFix)
@@ -243,10 +243,10 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                         chainSyncClientFixScripts backend tracer ls
                     )
               when onlyFix $ panic "All Good! This error is only thrown to exit db-sync"
-              setIsFixed syncEnv AllFixRan
+              runAppInIO syncEnv $ setIsFixed AllFixRan
               pure False
             else do
-              when skipFix $ setIsFixedAndMigrate syncEnv AllFixRan
+              when skipFix $ runAppInIO syncEnv $ setIsFixedAndMigrate AllFixRan
               pure True
 
     localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
@@ -256,7 +256,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
           isInitComplete <- runAndSetDone tc $ initAction channel
           when isInitComplete $ do
             logInfo tracer "Starting ChainSync client"
-            setConsistentLevel syncEnv Unchecked
+            runAppInIO syncEnv $ setConsistentLevel Unchecked
 
             (latestPoints, currentTip) <- waitRestartState tc
             let (inMemory, onDisk) = List.span snd latestPoints
@@ -273,7 +273,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                 (cChainSyncCodec codecs)
                 channel
                 ( chainSyncClientPeerPipelined $
-                    chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
+                    chainSyncClient syncEnv metricsSetters tracer (fst <$> latestPoints) currentTip tc
                 )
             atomically $ writeDbActionQueue tc DbFinish
             -- We should return leftover bytes returned by 'runPipelinedPeer', but
@@ -326,13 +326,14 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
 -- be correct. This is not an issue, because we only use it for performance reasons
 -- in the pipeline policy.
 chainSyncClient ::
+  SyncEnv ->
   MetricSetters ->
   Trace IO Text ->
   [Point CardanoBlock] ->
   WithOrigin BlockNo ->
   ThreadChannels ->
   ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient metricsSetters trce latestPoints currentTip tc = do
+chainSyncClient syncEnv metricsSetters trce latestPoints currentTip tc = do
   ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
   where
     clientPipelinedStIdle ::
@@ -402,13 +403,13 @@ chainSyncClient metricsSetters trce latestPoints currentTip tc = do
       ClientStNext
         { recvMsgRollForward = \blk tip ->
             logException trce "recvMsgRollForward: " $ do
-              setNodeBlockHeight metricsSetters (getTipBlockNo tip)
+              runAppInIO syncEnv $ setNodeBlockHeight metricsSetters (getTipBlockNo tip)
 
               newSize <- atomically $ do
                 writeDbActionQueue tc $ mkDbApply blk
                 lengthDbActionQueue tc
 
-              setDbQueueLength metricsSetters newSize
+              runAppInIO syncEnv $ setDbQueueLength metricsSetters newSize
 
               pure $ finish (At (blockNo blk)) tip Nothing
         , recvMsgRollBackward = \point tip ->
@@ -558,3 +559,444 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
               pure $
                 Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fpsOnPoint fpsRest)
         }
+
+-- runSyncNodeClient ::
+--   Trace IO Text ->
+--   MetricSetters ->
+--   IOManager ->
+--   ThreadChannels ->
+--   SocketPath ->
+--   App ()
+-- runSyncNodeClient trce metricsSetters iomgr tc (SocketPath socketPath) = do
+--   syncEnv <- ask
+--   liftIO $ logInfo trce $ "Connecting to node via " <> textShow socketPath
+--   let protocol = dbSyncProtocols syncEnv trce metricsSetters tc (codecConfig syncEnv)
+
+--   let subscribeAction = subscribe
+--         (localSnocket iomgr)
+--         (envNetworkMagic syncEnv)
+--         (supportedNodeToClientVersions (Proxy @CardanoBlock))
+--         networkSubscriptionTracers
+--         clientSubscriptionParams
+
+--   void $ liftIO $ subscribeAction $ \version bversion -> pure $ protocol version bversion
+
+--   where
+--     codecConfig :: SyncEnv -> CodecConfig CardanoBlock
+--     codecConfig syncEnv = configCodec $ getTopLevelConfig syncEnv
+
+--     --    nonExperimentalVersions =
+--     --      filter (\a -> Just a <= snd (lastReleasedNodeVersion Proxy)) $ supportedNodeToClientVersions (Proxy @CardanoBlock)
+
+--     clientSubscriptionParams =
+--       ClientSubscriptionParams
+--         { cspAddress = Snocket.localAddressFromPath socketPath
+--         , cspConnectionAttemptDelay = Nothing
+--         , cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
+--         }
+
+--     networkSubscriptionTracers =
+--       NetworkSubscriptionTracers
+--         { nsMuxTracer = muxTracer
+--         , nsHandshakeTracer = handshakeTracer
+--         , nsErrorPolicyTracer = errorPolicyTracer
+--         , nsSubscriptionTracer = subscriptionTracer
+--         }
+
+--     errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
+--     errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
+
+--     muxTracer :: (Show peer, ToObject peer) => Tracer IO (WithMuxBearer peer MuxTrace)
+--     muxTracer = toLogObject $ appendName "Mux" trce
+
+--     subscriptionTracer :: Tracer IO (Identity (SubscriptionTrace LocalAddress))
+--     subscriptionTracer = toLogObject $ appendName "Subscription" trce
+
+--     handshakeTracer ::
+--       Tracer
+--         IO
+--         ( WithMuxBearer
+--             (ConnectionId LocalAddress)
+--             (TraceSendRecv (Handshake Network.NodeToClientVersion CBOR.Term))
+--         )
+--     handshakeTracer = toLogObject $ appendName "Handshake" trce
+
+-- dbSyncProtocols ::
+--   SyncEnv ->
+--   Trace IO Text ->
+--   MetricSetters ->
+--   ThreadChannels ->
+--   CodecConfig CardanoBlock ->
+--   Network.NodeToClientVersion ->
+--   BlockNodeToClientVersion CardanoBlock ->
+--   App (NodeToClientProtocols 'InitiatorMode LocalAddress BSL.ByteString IO () Void)
+-- dbSyncProtocols syncEnv tracer metricsSetters tc codecConfig version bversion = do
+--   let codecs = clientCodecs codecConfig bversion version
+--   pure $ NodeToClientProtocols
+--     { localChainSyncProtocol = localChainSyncPtcl codecs
+--     , localTxSubmissionProtocol = dummylocalTxSubmit codecs
+--     , localStateQueryProtocol = localStateQuery codecs
+--     , localTxMonitorProtocol =
+--         InitiatorProtocolOnly $
+--           mkMiniProtocolCbFromPeer $
+--             const
+--               (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
+--     }
+--   where
+--     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
+--     localChainSyncTracer = toLogObject $ appendName "ChainSync" tracer
+
+--     backend :: SqlBackend
+--     backend = envBackend syncEnv
+
+--     initAction channel codecs = do
+--       fr <- runAppInIO syncEnv getIsSyncFixed
+--       let skipFix = soptSkipFix $ envOptions syncEnv
+--       let onlyFix = soptOnlyFix $ envOptions syncEnv
+--       if noneFixed fr && (onlyFix || not skipFix)
+--         then do
+--           fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
+--           unless (nullData fd) $
+--             void $
+--               runPeer
+--                 localChainSyncTracer
+--                 (cChainSyncCodec codecs)
+--                 channel
+--                 ( Client.chainSyncClientPeer $
+--                     chainSyncClientFixData backend tracer fd
+--                 )
+--           if onlyFix
+--             then do
+--               runAppInIO syncEnv $ setIsFixed DataFixRan
+--             else runAppInIO syncEnv $ setIsFixedAndMigrate DataFixRan
+--           pure False
+--         else
+--           if isDataFixed fr && (onlyFix || not skipFix)
+--             then do
+--               ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
+--               unless (nullPlutusScripts ls) $
+--                 void $
+--                   runPeer
+--                     localChainSyncTracer
+--                     (cChainSyncCodec codecs)
+--                     channel
+--                     ( Client.chainSyncClientPeer $
+--                         chainSyncClientFixScripts backend tracer ls
+--                     )
+--               when onlyFix $ panic "All Good! This error is only thrown to exit db-sync"
+--               runAppInIO syncEnv $ setIsFixed AllFixRan
+--               pure False
+--             else do
+--               when skipFix $ runAppInIO syncEnv $ setIsFixedAndMigrate AllFixRan
+--               pure True
+
+--     localChainSyncPtcl :: ClientCodecs CardanoBlock IO -> RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+--     localChainSyncPtcl codecs = InitiatorProtocolOnly $
+--       MiniProtocolCb $ \_ctx channel ->
+--         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
+--           isInitComplete <- runAndSetDone tc $ initAction channel codecs
+--           when isInitComplete $ do
+--             logInfo tracer "Starting ChainSync client"
+--             runAppInIO syncEnv $ setConsistentLevel Unchecked
+
+--             (latestPoints, currentTip) <- waitRestartState tc
+--             let (inMemory, onDisk) = List.span snd latestPoints
+--             logInfo tracer $
+--               mconcat
+--                 [ "Suggesting intersection points from memory: "
+--                 , textShow (fst <$> inMemory)
+--                 , " and from disk: "
+--                 , textShow (fst <$> onDisk)
+--                 ]
+--             void $
+--               runPipelinedPeer
+--                 localChainSyncTracer
+--                 (cChainSyncCodec codecs)
+--                 channel
+--                 ( chainSyncClientPeerPipelined $
+--                     chainSyncClient syncEnv metricsSetters tracer (fst <$> latestPoints) currentTip tc
+--                 )
+--             atomically $ writeDbActionQueue tc DbFinish
+--             -- We should return leftover bytes returned by 'runPipelinedPeer', but
+--             -- client application do not care about them (it's only important if one
+--             -- would like to restart a protocol on the same mux and thus bearer).
+--             pure ()
+--           pure ((), Nothing)
+
+--     dummylocalTxSubmit :: ClientCodecs CardanoBlock IO -> RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+--     dummylocalTxSubmit codecs =
+--       InitiatorProtocolOnly $
+--         mkMiniProtocolCbFromPeer $
+--           const
+--             ( Logging.nullTracer
+--             , cTxSubmissionCodec codecs
+--             , localTxSubmissionPeerNull
+--             )
+
+--     localStateQuery :: ClientCodecs CardanoBlock IO ->  RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+--     localStateQuery codecs =
+--       case envLedgerEnv syncEnv of
+--         HasLedger _ ->
+--           InitiatorProtocolOnly $
+--             mkMiniProtocolCbFromPeer $
+--               const
+--                 ( Logging.nullTracer
+--                 , cStateQueryCodec codecs
+--                 , localStateQueryPeerNull
+--                 )
+--         NoLedger nle ->
+--           InitiatorProtocolOnly $
+--             mkMiniProtocolCbFromPeer $
+--               const
+--                 ( contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer
+--                 , cStateQueryCodec codecs
+--                 , localStateQueryClientPeer $ localStateQueryHandler nle
+--                 )
+
+-- -- | 'ChainSyncClient' which traces received blocks and ignores when it
+-- -- receives a request to rollbackwar.  A real wallet client should:
+-- --
+-- --  * at startup send the list of points of the chain to help synchronise with
+-- --    the node;
+-- --  * update its state when the client receives next block or is requested to
+-- --    rollback, see 'clientStNext' below.
+-- --
+-- -- When an intersect with the node is found, we are sure that the next message
+-- -- will trigger the 'recvMsgRollBackward', so this is where we actually handle
+-- -- any necessary rollback. This means that at this point, the 'currentTip' may not
+-- -- be correct. This is not an issue, because we only use it for performance reasons
+-- -- in the pipeline policy.
+-- chainSyncClient ::
+--   SyncEnv ->
+--   MetricSetters ->
+--   Trace IO Text ->
+--   [Point CardanoBlock] ->
+--   WithOrigin BlockNo ->
+--   ThreadChannels ->
+--   ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+-- chainSyncClient syncEnv metricsSetters trce latestPoints currentTip tc = do
+--   ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
+--   where
+--     clientPipelinedStIdle ::
+--       WithOrigin BlockNo ->
+--       [CardanoPoint] ->
+--       ClientPipelinedStIdle 'Z CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     clientPipelinedStIdle clientTip points =
+--       -- Notify the core node about the our latest points at which we are
+--       -- synchronised.  This client is not persistent and thus it just
+--       -- synchronises from the genesis block.  A real implementation should send
+--       -- a list of points up to a point which is k blocks deep.
+--       SendMsgFindIntersect
+--         (if null points then [genesisPoint] else points)
+--         ClientPipelinedStIntersect
+--           { recvMsgIntersectFound = \_hdr tip -> pure $ goTip policy Zero clientTip tip Nothing
+--           , recvMsgIntersectNotFound = \tip -> pure $ goTip policy Zero clientTip tip Nothing
+--           }
+
+--     policy :: MkPipelineDecision
+--     policy = pipelineDecisionLowHighMark 1 50
+
+--     goTip ::
+--       MkPipelineDecision ->
+--       Nat n ->
+--       WithOrigin BlockNo ->
+--       Tip CardanoBlock ->
+--       Maybe [CardanoPoint] ->
+--       ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     goTip mkPipelineDecision n clientTip serverTip =
+--       go mkPipelineDecision n clientTip (getTipBlockNo serverTip)
+
+--     go ::
+--       MkPipelineDecision ->
+--       Nat n ->
+--       WithOrigin BlockNo ->
+--       WithOrigin BlockNo ->
+--       Maybe [CardanoPoint] ->
+--       ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     go mkPipelineDecision n clientTip serverTip mPoint =
+--       case (mPoint, n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
+--         (Just points, _, _) -> drainThePipe n $ clientPipelinedStIdle clientTip points
+--         (_, _Zero, (Request, mkPipelineDecision')) ->
+--           SendMsgRequestNext (pure ()) clientStNext
+--           where
+--             clientStNext = mkClientStNext $ goTip mkPipelineDecision' n
+--         (_, _, (Pipeline, mkPipelineDecision')) ->
+--           SendMsgRequestNextPipelined
+--             (pure ())
+--             (go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
+--         (_, Succ n', (CollectOrPipeline, mkPipelineDecision')) ->
+--           CollectResponse
+--             (Just . pure $ SendMsgRequestNextPipelined (pure ()) $ go mkPipelineDecision' (Succ n) clientTip serverTip Nothing)
+--             (mkClientStNext $ goTip mkPipelineDecision' n')
+--         (_, Succ n', (Collect, mkPipelineDecision')) ->
+--           CollectResponse
+--             Nothing
+--             (mkClientStNext $ goTip mkPipelineDecision' n')
+
+--     mkClientStNext ::
+--       ( WithOrigin BlockNo ->
+--         Tip CardanoBlock ->
+--         Maybe [CardanoPoint] ->
+--         ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--       ) ->
+--       ClientStNext n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     mkClientStNext finish =
+--       ClientStNext
+--         { recvMsgRollForward = \blk tip ->
+--             logException trce "recvMsgRollForward: " $ do
+--               runAppInIO syncEnv $ setNodeBlockHeight metricsSetters (getTipBlockNo tip)
+
+--               newSize <- atomically $ do
+--                 writeDbActionQueue tc $ mkDbApply blk
+--                 lengthDbActionQueue tc
+
+--               runAppInIO syncEnv $ setDbQueueLength metricsSetters newSize
+
+--               pure $ finish (At (blockNo blk)) tip Nothing
+--         , recvMsgRollBackward = \point tip ->
+--             logException trce "recvMsgRollBackward: " $ do
+--               -- This will get the current tip rather than what we roll back to
+--               -- but will only be incorrect for a short time span.
+--               (mPoints, newTip) <- waitRollback tc point tip
+--               pure $ finish newTip tip mPoints
+--         }
+
+-- drainThePipe ::
+--   Nat n ->
+--   ClientPipelinedStIdle 'Z CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO () ->
+--   ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+-- drainThePipe n0 client = go n0
+--   where
+--     go ::
+--       forall n'.
+--       Nat n' ->
+--       ClientPipelinedStIdle n' CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     go n =
+--       case n of
+--         Zero -> client
+--         Succ n' ->
+--           CollectResponse Nothing $
+--             ClientStNext
+--               { recvMsgRollForward = \_hdr _tip -> pure $ go n'
+--               , recvMsgRollBackward = \_pt _tip -> pure $ go n'
+--               }
+
+-- chainSyncClientFixData ::
+--   SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+-- chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
+--   liftIO $ logInfo tracer "Starting chainsync to fix Plutus Data. This will update database values in tables datum and redeemer_data."
+--   clientStIdle True (sizeFixData fixData) fixData
+--   where
+--     updateSizeAndLog :: Int -> Int -> IO Int
+--     updateSizeAndLog lastSize currentSize = do
+--       let diffSize = lastSize - currentSize
+--       if lastSize >= currentSize && diffSize >= 200_000
+--         then do
+--           liftIO $ logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixData fixData - currentSize), " Plutus Data"]
+--           pure currentSize
+--         else pure lastSize
+
+--     clientStIdle :: Bool -> Int -> FixData -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
+--     clientStIdle shouldLog lastSize fds = do
+--       case spanFDOnNextPoint fds of
+--         Nothing -> do
+--           liftIO $ logInfo tracer "Finished chainsync to fix Plutus Data."
+--           pure $ Client.SendMsgDone ()
+--         Just (point, fdOnPoint, fdRest) -> do
+--           when shouldLog $
+--             liftIO $
+--               logInfo tracer $
+--                 mconcat ["Starting fixing Plutus Data ", textShow point]
+--           newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixData fds)
+--           let clientStIntersect =
+--                 Client.ClientStIntersect
+--                   { Client.recvMsgIntersectFound = \_pnt _tip ->
+--                       Client.ChainSyncClient $
+--                         pure $
+--                           Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fdOnPoint fdRest)
+--                   , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
+--                       liftIO $
+--                         logWarning tracer $
+--                           mconcat
+--                             [ "Node can't find block "
+--                             , textShow point
+--                             , ". It's probably behind, at "
+--                             , textShow tip
+--                             , ". Sleeping for 3 mins and retrying.."
+--                             ]
+--                       liftIO $ threadDelay $ 180 * 1_000_000
+--                       pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+--                   }
+--           pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+
+--     clientStNext :: Int -> FixData -> FixData -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     clientStNext lastSize fdOnPoint fdRest =
+--       Client.ClientStNext
+--         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
+--             runDbIohkLogging backend tracer $ fixPlutusData tracer blk fdOnPoint
+--             clientStIdle False lastSize fdRest
+--         , Client.recvMsgRollBackward = \_point _tip ->
+--             Client.ChainSyncClient $
+--               pure $
+--                 Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fdOnPoint fdRest)
+--         }
+
+-- chainSyncClientFixScripts ::
+--   SqlBackend -> Trace IO Text -> FixPlutusScripts -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+-- chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
+--   liftIO $ logInfo tracer "Starting chainsync to fix Plutus Scripts. This will update database values in tables script."
+--   clientStIdle True (sizeFixPlutusScripts fps) fps
+--   where
+--     updateSizeAndLog :: Int -> Int -> IO Int
+--     updateSizeAndLog lastSize currentSize = do
+--       let diffSize = lastSize - currentSize
+--       if lastSize >= currentSize && diffSize >= 200_000
+--         then do
+--           liftIO $ logInfo tracer $ mconcat ["Fixed ", textShow (sizeFixPlutusScripts fps - currentSize), " Plutus Scripts"]
+--           pure currentSize
+--         else pure lastSize
+
+--     clientStIdle :: Bool -> Int -> FixPlutusScripts -> IO (Client.ClientStIdle CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ())
+--     clientStIdle shouldLog lastSize fps' = do
+--       case spanFPSOnNextPoint fps' of
+--         Nothing -> do
+--           liftIO $ logInfo tracer "Finished chainsync to fix Plutus Scripts."
+--           pure $ Client.SendMsgDone ()
+--         Just (point, fpsOnPoint, fpsRest) -> do
+--           when shouldLog $
+--             liftIO $
+--               logInfo tracer $
+--                 mconcat ["Starting fixing Plutus Scripts ", textShow point]
+--           newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixPlutusScripts fps')
+--           let clientStIntersect =
+--                 Client.ClientStIntersect
+--                   { Client.recvMsgIntersectFound = \_pnt _tip ->
+--                       Client.ChainSyncClient $
+--                         pure $
+--                           Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fpsOnPoint fpsRest)
+--                   , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
+--                       liftIO $
+--                         logWarning tracer $
+--                           mconcat
+--                             [ "Node can't find block "
+--                             , textShow point
+--                             , ". It's probably behind, at "
+--                             , textShow tip
+--                             , ". Sleeping for 3 mins and retrying.."
+--                             ]
+--                       liftIO $ threadDelay $ 180 * 1_000_000
+--                       pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+--                   }
+--           pure $ Client.SendMsgFindIntersect [point] clientStIntersect
+
+--     clientStNext :: Int -> FixPlutusScripts -> FixPlutusScripts -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+--     clientStNext lastSize fpsOnPoint fpsRest =
+--       Client.ClientStNext
+--         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
+--             runDbIohkLogging backend tracer $ fixPlutusScripts tracer blk fpsOnPoint
+--             clientStIdle False lastSize fpsRest
+--         , Client.recvMsgRollBackward = \_point _tip ->
+--             Client.ChainSyncClient $
+--               pure $
+--                 Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fpsOnPoint fpsRest)
+--         }

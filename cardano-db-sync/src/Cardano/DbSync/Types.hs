@@ -23,7 +23,6 @@ module Cardano.DbSync.Types (
   TipInfo (..),
   SyncState (..),
   TPraosStandard,
-  MetricSetters (..),
   OffChainPoolWorkQueue (..),
   OffChainVoteWorkQueue (..),
   SimplifiedOffChainPoolData (..),
@@ -125,18 +124,6 @@ data TipInfo = TipInfo
   , bBlockNo :: !BlockNo
   }
   deriving (Eq, Show)
-
--- The metrics we use.
--- Kept as a separate struct and do not put into environment because
--- when we need to test functions using this we need to initialize the
--- whole environment and not just pass in the layer. This shows clearly
--- that it needs to remain a separate parameter passed around where needed.
-data MetricSetters = MetricSetters
-  { metricsSetNodeBlockHeight :: BlockNo -> IO ()
-  , metricsSetDbQueueLength :: Natural -> IO ()
-  , metricsSetDbBlockHeight :: BlockNo -> IO ()
-  , metricsSetDbSlotHeight :: SlotNo -> IO ()
-  }
 
 data SyncState = SyncLagging | SyncFollowing
   deriving (Eq, Show)

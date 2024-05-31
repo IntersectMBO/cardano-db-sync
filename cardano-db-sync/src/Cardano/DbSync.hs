@@ -29,18 +29,19 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
+import Cardano.DbSync.AppT (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv, runApp, runAppInIO)
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
-import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
+import Cardano.DbSync.Error (hasAbortOnPanicEnv, runOrThrowIO)
+import Cardano.DbSync.Error.Types (SyncNodeError)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (unsafeRollback)
-import Cardano.DbSync.Sync (runSyncNodeClient)
+import Cardano.DbSync.Sync (MetricSetters, runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.Prelude hiding (Nat, (%))
@@ -81,7 +82,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   logInfo trce $ textShow syncOpts
 
   -- Read the PG connection info
-  pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
+  pgConfig <- runOrThrowIO trce (Db.readPGPass $ enpPGPassSource params)
 
   mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
@@ -186,7 +187,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 syncNodeParams
                 ranMigrations
                 runMigrationFnc
-          liftIO $ runExtraMigrationsMaybe syncEnv
+          liftIO $ runAppInIO syncEnv runExtraMigrationsMaybe
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             Db.noLedgerMigrations backend trce
@@ -197,11 +198,11 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
           liftIO $
             mapConcurrently_
               id
-              [ runDbThread syncEnv metricsSetters threadChannels
-              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv
-              , runFetchOffChainVoteThread syncEnv
-              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+              [ runApp syncEnv $ runDbThread metricsSetters threadChannels
+              , runSyncNodeClient (getTrace syncEnv) metricsSetters iomgr threadChannels (enpSocketPath syncNodeParams)
+              , runApp syncEnv runFetchOffChainPoolThread
+              , runApp syncEnv runFetchOffChainVoteThread
+              , runApp syncEnv $ runLedgerStateWriteThread (envLedgerEnv syncEnv)
               ]
   where
     useShelleyInit :: SyncNodeConfig -> Bool

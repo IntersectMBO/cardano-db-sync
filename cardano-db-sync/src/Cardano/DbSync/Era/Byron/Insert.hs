@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 module Cardano.DbSync.Era.Byron.Insert (
   insertByronBlock,
@@ -20,7 +21,7 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..), SyncOptions (..))
+import Cardano.DbSync.AppT (App, SyncEnv (..), SyncOptions (..), askTrace, dbQueryToApp)
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
@@ -30,16 +31,15 @@ import Cardano.DbSync.Cache.Types (CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
+import Cardano.DbSync.Error.Types (SyncInvariant (..), SyncNodeError (..))
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
+import Control.Monad.Trans.Except.Extra (firstExceptT)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 
 -- Trivial local data type for use in place of a tuple.
@@ -49,45 +49,38 @@ data ValueFee = ValueFee
   }
 
 insertByronBlock ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
   Bool ->
   ByronBlock ->
   SlotDetails ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock syncEnv firstBlockOfEpoch blk details = do
-  res <- runExceptT $
+  App (Either SyncNodeError ())
+insertByronBlock firstBlockOfEpoch blk details = do
+  res <-
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
+      Byron.ABOBBlock ablk -> insertABlock firstBlockOfEpoch ablk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
-  when
-    (getSyncStatus details == SyncFollowing)
-    DB.transactionCommit
+  when (getSyncStatus details == SyncFollowing) $
+    dbQueryToApp DB.transactionCommit
   pure res
 
 insertABOBBoundary ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary syncEnv blk details = do
-  let tracer = getTrace syncEnv
-      cache = envCache syncEnv
+  App (Either SyncNodeError ())
+insertABOBBoundary blk details = do
   -- Will not get called in the OBFT part of the Byron era.
-  pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
+  pbid <- queryPrevBlockWithCache "insertABOBBoundary" (Byron.ebbPrevHash blk)
   let epochNo = unEpochNo $ sdEpochNo details
   slid <-
-    lift . DB.insertSlotLeader $
+    dbQueryToApp . DB.insertSlotLeader $
       DB.SlotLeader
         { DB.slotLeaderHash = BS.replicate 28 '\0'
         , DB.slotLeaderPoolHashId = Nothing
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
   blkId <-
-    lift . insertBlockAndCache cache $
+    insertBlockAndCache $
       DB.Block
         { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
         , DB.blockEpochNo = Just epochNo
@@ -108,44 +101,43 @@ insertABOBBoundary syncEnv blk details = do
         , DB.blockOpCert = Nothing
         , DB.blockOpCertCounter = Nothing
         }
-
+  syncEnv <- ask
+  tracer <- askTrace
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
   -- If have --dissable-epoch && --dissable-cache then no need to cache data.
-  when (soptEpochAndCacheEnabled $ envOptions syncEnv)
-    . newExceptT
-    $ writeEpochBlockDiffToCache
-      cache
-      EpochBlockDiff
-        { ebdBlockId = blkId
-        , ebdFees = 0
-        , ebdOutSum = 0
-        , ebdTxCount = 0
-        , ebdEpochNo = epochNo
-        , ebdTime = sdSlotTime details
-        }
-
-  liftIO . logInfo tracer $
-    Text.concat
-      [ "insertABOBBoundary: epoch "
-      , textShow (Byron.boundaryEpoch $ Byron.boundaryHeader blk)
-      , ", hash "
-      , Byron.renderAbstractHash (Byron.boundaryHashAnnotated blk)
-      ]
+  when (soptEpochAndCacheEnabled $ envOptions syncEnv) $
+    runOrThrowApp tracer $
+      writeEpochBlockDiffToCache
+        EpochBlockDiff
+          { ebdBlockId = blkId
+          , ebdFees = 0
+          , ebdOutSum = 0
+          , ebdTxCount = 0
+          , ebdEpochNo = epochNo
+          , ebdTime = sdSlotTime details
+          }
+  liftIO $
+    logInfo tracer $
+      Text.concat
+        [ "insertABOBBoundary: epoch "
+        , textShow (Byron.boundaryEpoch $ Byron.boundaryHeader blk)
+        , ", hash "
+        , Byron.renderAbstractHash (Byron.boundaryHashAnnotated blk)
+        ]
+  pure $ Right ()
 
 insertABlock ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
   Bool ->
   Byron.ABlock ByteString ->
   SlotDetails ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock syncEnv firstBlockOfEpoch blk details = do
-  pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
-  slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
+  App (Either SyncNodeError ())
+insertABlock firstBlockOfEpoch blk details = do
+  pbid <- queryPrevBlockWithCache "insertABlock" (Byron.blockPreviousHash blk)
+  slid <- dbQueryToApp . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
   blkId <-
-    lift . insertBlockAndCache cache $
+    insertBlockAndCache $
       DB.Block
         { DB.blockHash = Byron.blockHash blk
         , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -165,32 +157,35 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         , DB.blockOpCertCounter = Nothing
         }
 
-  txFees <- zipWithM (insertByronTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]
+  txFees <- zipWithM (insertByronTx blkId) (Byron.blockPayload blk) [0 ..]
   let byronTxOutValues = concatMap (toList . (\tx -> map Byron.txOutValue (Byron.txOutputs $ Byron.taTx tx))) txs
       outSum = sum $ map Byron.lovelaceToInteger byronTxOutValues
+
+  syncEnv <- ask
+  tracer <- askTrace
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
   -- when we later update the epoch values.
   -- If have --dissable-epoch && --dissable-cache then no need to cache data.
-  when (soptEpochAndCacheEnabled $ envOptions syncEnv)
-    . newExceptT
-    $ writeEpochBlockDiffToCache
-      cache
-      EpochBlockDiff
-        { ebdBlockId = blkId
-        , ebdFees = sum txFees
-        , ebdOutSum = fromIntegral outSum
-        , ebdTxCount = fromIntegral $ length txs
-        , ebdEpochNo = unEpochNo (sdEpochNo details)
-        , ebdTime = sdSlotTime details
-        }
+  when (soptEpochAndCacheEnabled $ envOptions syncEnv) $ do
+    cacheResult <-
+      writeEpochBlockDiffToCache
+        EpochBlockDiff
+          { ebdBlockId = blkId
+          , ebdFees = sum txFees
+          , ebdOutSum = fromIntegral outSum
+          , ebdTxCount = fromIntegral $ length txs
+          , ebdEpochNo = unEpochNo (sdEpochNo details)
+          , ebdTime = sdSlotTime details
+          }
+    handleAndLogError tracer cacheResult
 
-  liftIO $ do
-    let epoch = unEpochNo (sdEpochNo details)
-        slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-        followingClosely = getSyncStatus details == SyncFollowing
+  let epoch = unEpochNo (sdEpochNo details)
+      slotWithinEpoch = unEpochSlot (sdEpochSlot details)
+      followingClosely = getSyncStatus details == SyncFollowing
 
-    when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
+  when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
+    liftIO $
       logInfo tracer $
         mconcat
           [ "insertByronBlock: continuing epoch "
@@ -201,6 +196,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
           , textShow (unEpochSize $ sdEpochSize details)
           , ")"
           ]
+  liftIO $
     logger followingClosely tracer $
       mconcat
         [ "insertByronBlock: epoch "
@@ -212,13 +208,8 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         , ", hash "
         , renderByteArray (Byron.blockHash blk)
         ]
+  pure $ Right ()
   where
-    tracer :: Trace IO Text
-    tracer = getTrace syncEnv
-
-    cache :: CacheStatus
-    cache = envCache syncEnv
-
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | firstBlockOfEpoch = logInfo
@@ -227,17 +218,15 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
       | otherwise = logDebug
 
 insertByronTx ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
   DB.BlockId ->
   Byron.TxAux ->
   Word64 ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-insertByronTx syncEnv blkId tx blockIndex = do
-  disInOut <- liftIO $ getDisableInOutState syncEnv
+  App Word64
+insertByronTx blkId tx blockIndex = do
+  disInOut <- getDisableInOutState
   if disInOut
     then do
-      void . lift . DB.insertTx $
+      void . dbQueryToApp . DB.insertTx $
         DB.Tx
           { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
           , DB.txBlockId = blkId
@@ -254,20 +243,24 @@ insertByronTx syncEnv blkId tx blockIndex = do
           , DB.txScriptSize = 0
           }
       pure 0
-    else insertByronTx' syncEnv blkId tx blockIndex
+    else insertByronTx' blkId tx blockIndex
 
 insertByronTx' ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  SyncEnv ->
   DB.BlockId ->
   Byron.TxAux ->
   Word64 ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-insertByronTx' syncEnv blkId tx blockIndex = do
+  App Word64
+insertByronTx' blkId tx blockIndex = do
+  tracer <- askTrace
   resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
-  valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
+  valFee <-
+    runOrThrowApp tracer $
+      runExceptT $
+        firstExceptT annotateTx $
+          ExceptT $
+            pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
-    lift . DB.insertTx $
+    dbQueryToApp . DB.insertTx $
       DB.Tx
         { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
         , DB.txBlockId = blkId
@@ -283,22 +276,20 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         , DB.txValidContract = True
         , DB.txScriptSize = 0
         }
-
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
-  disInOut <- liftIO $ getDisableInOutState syncEnv
-  lift $ zipWithM_ (insertTxOut tracer (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-  unless (getSkipTxIn syncEnv) $
-    mapM_ (insertTxIn tracer txId) resolvedInputs
-  whenConsumeOrPruneTxOut syncEnv $
-    lift $
+  disInOut <- getDisableInOutState
+  hasConsumedOrPruneTxOut <- getHasConsumedOrPruneTxOut
+  zipWithM_ (insertTxOut hasConsumedOrPruneTxOut disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  skipTxIn <- getSkipTxIn
+  unless skipTxIn $
+    mapM_ (insertTxIn txId) resolvedInputs
+  whenConsumeOrPruneTxOut $
+    dbQueryToApp $
       DB.updateListTxOutConsumedByTxId (prepUpdate <$> resolvedInputs)
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
-    tracer :: Trace IO Text
-    tracer = getTrace syncEnv
-
     annotateTx :: SyncNodeError -> SyncNodeError
     annotateTx ee =
       case ee of
@@ -308,37 +299,34 @@ insertByronTx' syncEnv blkId tx blockIndex = do
     prepUpdate (_, txId, txOutId, _) = (txOutId, txId)
 
 insertTxOut ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
   Bool ->
   Bool ->
   DB.TxId ->
   Word32 ->
   Byron.TxOut ->
-  ReaderT SqlBackend m ()
-insertTxOut _tracer hasConsumed bootStrap txId index txout =
-  DB.insertTxOutPlex hasConsumed bootStrap $
-    DB.TxOut
-      { DB.txOutTxId = txId
-      , DB.txOutIndex = fromIntegral index
-      , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-      , DB.txOutAddressHasScript = False
-      , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
-      , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
-      , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
-      , DB.txOutDataHash = Nothing
-      , DB.txOutInlineDatumId = Nothing
-      , DB.txOutReferenceScriptId = Nothing
-      }
+  App ()
+insertTxOut hasConsumed bootStrap txId index txout =
+  dbQueryToApp $
+    DB.insertTxOutPlex hasConsumed bootStrap $
+      DB.TxOut
+        { DB.txOutTxId = txId
+        , DB.txOutIndex = fromIntegral index
+        , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+        , DB.txOutAddressHasScript = False
+        , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
+        , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
+        , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+        , DB.txOutDataHash = Nothing
+        , DB.txOutInlineDatumId = Nothing
+        , DB.txOutReferenceScriptId = Nothing
+        }
 
 insertTxIn ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
   DB.TxId ->
   (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxInId
-insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
-  lift . DB.insertTxIn $
+  App DB.TxInId
+insertTxIn txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
+  dbQueryToApp . DB.insertTxIn $
     DB.TxIn
       { DB.txInTxInId = txInTxId
       , DB.txInTxOutId = txOutTxId
@@ -348,9 +336,9 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = 
 
 -- -----------------------------------------------------------------------------
 
-resolveTxInputs :: MonadIO m => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
+resolveTxInputs :: Byron.TxIn -> App (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
 resolveTxInputs txIn@(Byron.TxInUtxo txHash index) = do
-  res <- liftLookupFail "resolveInput" $ DB.queryTxOutIdValue (Byron.unTxHash txHash, fromIntegral index)
+  res <- liftLookupFail "resolveInput" $ dbQueryToApp $ DB.queryTxOutIdValue (Byron.unTxHash txHash, fromIntegral index)
   pure $ convert res
   where
     convert :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)

@@ -10,7 +10,7 @@ module Cardano.DbSync.Config.Conway (
 
 import Cardano.Crypto.Hash (hashToBytes, hashWith)
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error (SyncNodeError (..))
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Cardano.Ledger.BaseTypes (EpochInterval (..))
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Genesis (ConwayGenesis (..))

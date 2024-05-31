@@ -18,7 +18,7 @@ module Cardano.DbSync.Config.Node (
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error (NodeConfigError (..), SyncNodeError (..))
+import Cardano.DbSync.Error.Types (NodeConfigError (..), SyncNodeError (..))
 import Cardano.Prelude
 import Data.Aeson (FromJSON (..), Object, (.:), (.:?))
 import qualified Data.Aeson as Aeson
@@ -71,7 +71,9 @@ readByteStringFromFile fp cfgType =
   catch (BS.readFile fp) $ \(_ :: IOException) ->
     throwIO $ SNErrNodeConfig $ NodeConfigParseError ("Cannot find the " <> show cfgType <> " configuration file at : " <> show fp)
 
--- -------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+-- JSON parsing of the node configuration
+---------------------------------------------------------------------------------------------------
 
 instance FromJSON NodeConfig where
   parseJSON v =

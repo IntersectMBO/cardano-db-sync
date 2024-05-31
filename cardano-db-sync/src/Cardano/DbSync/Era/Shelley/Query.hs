@@ -18,6 +18,7 @@ module Cardano.DbSync.Era.Shelley.Query (
 ) where
 
 import Cardano.Db
+import Cardano.DbSync.AppT (App, MonadAppDB (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Util
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
@@ -45,6 +46,25 @@ import Database.Esqueleto.Experimental (
 
 {- HLINT ignore "Fuse on/on" -}
 
+resolveInputTxId :: Generic.TxIn -> App (Either LookupFail TxId)
+resolveInputTxId = dbQueryToApp . queryTxId . Generic.txInHash
+
+resolveInputTxOutId :: Generic.TxIn -> App (Either LookupFail (TxId, TxOutId))
+resolveInputTxOutId txIn =
+  dbQueryToApp $ queryTxOutId (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+resolveInputValue :: Generic.TxIn -> App (Either LookupFail (TxId, DbLovelace))
+resolveInputValue txIn =
+  dbQueryToApp $ queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+resolveInputTxOutIdValue :: Generic.TxIn -> App (Either LookupFail (TxId, TxOutId, DbLovelace))
+resolveInputTxOutIdValue txIn =
+  dbQueryToApp $ queryTxOutIdValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+queryResolveInputCredentials :: Generic.TxIn -> App (Either LookupFail (Maybe ByteString, Bool))
+queryResolveInputCredentials txIn = do
+  dbQueryToApp $ queryTxOutCredentials (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+
 queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
 queryPoolHashId hash = do
   res <- select $ do
@@ -54,38 +74,18 @@ queryPoolHashId hash = do
   pure $ unValue <$> listToMaybe res
 
 queryStakeAddress ::
-  MonadIO m =>
   ByteString ->
-  ReaderT SqlBackend m (Either LookupFail StakeAddressId)
+  App (Either LookupFail StakeAddressId)
 queryStakeAddress addr = do
-  res <- select $ do
+  res <- dbQueryToApp $ select $ do
     saddr <- from $ table @StakeAddress
     where_ (saddr ^. StakeAddressHashRaw ==. val addr)
     pure (saddr ^. StakeAddressId)
   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> renderByteArray addr) unValue (listToMaybe res)
 
-resolveInputTxId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail TxId)
-resolveInputTxId = queryTxId . Generic.txInHash
-
-resolveInputTxOutId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId))
-resolveInputTxOutId txIn =
-  queryTxOutId (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
-
-resolveInputValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
-resolveInputValue txIn =
-  queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
-
-resolveInputTxOutIdValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
-resolveInputTxOutIdValue txIn =
-  queryTxOutIdValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
-
-queryResolveInputCredentials :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
-queryResolveInputCredentials txIn = do
-  queryTxOutCredentials (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
-
-queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
+queryStakeRefPtr :: Ptr -> App (Maybe StakeAddressId)
 queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
-  res <- select $ do
+  res <- dbQueryToApp $ select $ do
     (blk :& tx :& sr) <-
       from
         $ table @Block
@@ -105,9 +105,9 @@ queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
   pure $ unValue <$> listToMaybe res
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool
-queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool
+queryPoolUpdateByBlock :: BlockId -> PoolHashId -> App Bool
 queryPoolUpdateByBlock blkId poolHashId = do
-  res <- select $ do
+  res <- dbQueryToApp $ select $ do
     (blk :& _tx :& poolUpdate) <-
       from
         $ table @Block

@@ -10,7 +10,7 @@ module Cardano.DbSync.Config.Alonzo (
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Cardano.Ledger.Alonzo.Genesis
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)
@@ -53,7 +53,7 @@ readGenesis (GenesisFile file) mbExpectedGenesisHash = do
         Just expected
           | actual /= expected ->
               left (GenesisHashMismatch actual expected)
-        _ -> pure ()
+        _other -> pure ()
 
 renderAlonzoGenesisError :: AlonzoGenesisError -> Text
 renderAlonzoGenesisError age =

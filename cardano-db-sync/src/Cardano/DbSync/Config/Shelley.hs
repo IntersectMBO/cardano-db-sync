@@ -12,7 +12,7 @@ module Cardano.DbSync.Config.Shelley (
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
@@ -69,7 +69,7 @@ readGenesis (GenesisFile file) mbExpectedGenesisHash = do
         Just expected
           | actual /= expected ->
               left (GenesisHashMismatch actual expected)
-        _ -> pure ()
+        _other -> pure ()
 
 renderShelleyGenesisError :: ShelleyGenesisError -> Text
 renderShelleyGenesisError sge =

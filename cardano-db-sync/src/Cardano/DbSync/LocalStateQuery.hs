@@ -3,27 +3,21 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Cardano.DbSync.LocalStateQuery (
-  NoLedgerEnv (..),
-  mkNoLedgerEnv,
   getSlotDetailsNode,
   localStateQueryHandler,
-  newStateQueryTMVar,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.DbSync.Error (SyncNodeError (..))
+import Cardano.BM.Trace (logInfo)
+import Cardano.DbSync.AppT (App, NoLedgerEnv (..), StateQueryTMVar (..))
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
-import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Prelude hiding (atomically, (.))
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTMVar,
-  StrictTVar,
   atomically,
   newEmptyTMVarIO,
-  newTVarIO,
   putTMVar,
   readTVar,
   takeTMVar,
@@ -31,7 +25,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
 import Ouroboros.Consensus.Cardano.Node ()
 import Ouroboros.Consensus.HardFork.Combinator.Ledger.Query (
@@ -43,7 +36,6 @@ import Ouroboros.Consensus.HardFork.History.Qry (
   interpretQuery,
  )
 import Ouroboros.Consensus.Ledger.Query (Query (..))
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Network.Block (Point (..))
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (
   ClientStAcquired (..),
@@ -53,34 +45,7 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (
   LocalStateQueryClient (..),
  )
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
-import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure, Target (..))
-
-data NoLedgerEnv = NoLedgerEnv
-  { nleTracer :: Trace IO Text
-  , nleSystemStart :: !SystemStart
-  , nleQueryVar :: StateQueryTMVar CardanoBlock CardanoInterpreter
-  , nleHistoryInterpreterVar :: StrictTVar IO (Strict.Maybe CardanoInterpreter)
-  , nleNetwork :: !Ledger.Network
-  , nleProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
-  }
-
-newtype StateQueryTMVar blk result = StateQueryTMVar
-  { unStateQueryTMVar ::
-      StrictTMVar
-        IO
-        ( Query blk result
-        , StrictTMVar IO (Either AcquireFailure result)
-        )
-  }
-
-mkNoLedgerEnv :: Trace IO Text -> Consensus.ProtocolInfo CardanoBlock -> Ledger.Network -> SystemStart -> IO NoLedgerEnv
-mkNoLedgerEnv trce protoInfo network systemStart = do
-  qVar <- newStateQueryTMVar
-  interVar <- newTVarIO Strict.Nothing
-  pure $ NoLedgerEnv trce systemStart qVar interVar network protoInfo
-
-newStateQueryTMVar :: IO (StateQueryTMVar blk result)
-newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
+import Ouroboros.Network.Protocol.LocalStateQuery.Type (Target (..))
 
 -- Get the requested slot details using a history interpreter stashed in an IORef.
 -- If the history interpreter does not exist, get one.
@@ -88,9 +53,9 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 getSlotDetailsNode ::
   NoLedgerEnv ->
   SlotNo ->
-  IO SlotDetails
+  App SlotDetails
 getSlotDetailsNode nlEnv slot = do
-  einterp1 <- maybe (getHistoryInterpreter nlEnv) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
+  einterp1 <- maybe (getHistoryInterpreter nlEnv) pure =<< liftIO (atomically (fromStrictMaybe <$> readTVar interVar))
   case evalSlotDetails einterp1 of
     Right sd -> insertCurrentTime sd
     Left _ -> do
@@ -105,28 +70,26 @@ getSlotDetailsNode nlEnv slot = do
     evalSlotDetails interp =
       interpretQuery interp (querySlotDetails (nleSystemStart nlEnv) slot)
 
-    insertCurrentTime :: SlotDetails -> IO SlotDetails
+    insertCurrentTime :: SlotDetails -> App SlotDetails
     insertCurrentTime sd = do
-      time <- getCurrentTime
+      time <- liftIO getCurrentTime
       pure $ sd {sdCurrentTime = time}
 
     fromStrictMaybe :: Strict.Maybe a -> Maybe a
     fromStrictMaybe (Strict.Just a) = Just a
     fromStrictMaybe Strict.Nothing = Nothing
 
-getHistoryInterpreter ::
-  NoLedgerEnv ->
-  IO CardanoInterpreter
+getHistoryInterpreter :: NoLedgerEnv -> App CardanoInterpreter
 getHistoryInterpreter nlEnv = do
-  respVar <- newEmptyTMVarIO
-  atomically $ putTMVar reqVar (BlockQuery $ QueryHardFork GetInterpreter, respVar)
-  res <- atomically $ takeTMVar respVar
+  respVar <- liftIO newEmptyTMVarIO
+  liftIO $ atomically $ putTMVar reqVar (BlockQuery $ QueryHardFork GetInterpreter, respVar)
+  res <- liftIO $ atomically $ takeTMVar respVar
   case res of
     Left err ->
       throwIO $ SNErrLocalStateQuery $ "getHistoryInterpreter: " <> Prelude.show err
     Right interp -> do
-      logInfo tracer "getHistoryInterpreter: acquired"
-      atomically $ writeTVar interVar $ Strict.Just interp
+      liftIO $ logInfo tracer "getHistoryInterpreter: acquired"
+      liftIO $ atomically $ writeTVar interVar $ Strict.Just interp
       pure interp
   where
     reqVar = unStateQueryTMVar $ nleQueryVar nlEnv

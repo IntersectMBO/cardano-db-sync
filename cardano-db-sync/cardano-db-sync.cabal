@@ -42,9 +42,10 @@ library
 
   exposed-modules:      Cardano.DbSync
 
+                        Cardano.DbSync.AppT
+
                         Cardano.DbSync.Api
                         Cardano.DbSync.Api.Ledger
-                        Cardano.DbSync.Api.Types
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron
@@ -56,6 +57,8 @@ library
                         Cardano.DbSync.Database
                         Cardano.DbSync.DbAction
                         Cardano.DbSync.Error
+                        Cardano.DbSync.Error.Types
+                        Cardano.DbSync.Initialization
 
                         Cardano.DbSync.Era
                         Cardano.DbSync.Era.Byron.Genesis
@@ -211,6 +214,7 @@ library
                       , pretty-show
                       , prometheus
                       , psqueues
+                      , resourcet
                       , random-shuffle
                       , scientific
                       , serialise

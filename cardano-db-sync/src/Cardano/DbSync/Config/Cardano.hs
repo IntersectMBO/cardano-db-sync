@@ -14,29 +14,37 @@ module Cardano.DbSync.Config.Cardano (
 ) where
 
 import qualified Cardano.Chain.Genesis as Byron
-import Cardano.Chain.Update (ApplicationName (..), SoftwareVersion (..))
-import qualified Cardano.Crypto.Hash.Class as Crypto
+
+-- import Cardano.Chain.Update (ApplicationName (..), SoftwareVersion (..))
+-- import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import Cardano.DbSync.Config.Alonzo
 import Cardano.DbSync.Config.Byron
 import Cardano.DbSync.Config.Conway (readConwayGenesisConfig)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
-import qualified Cardano.Ledger.Api.Transition as Ledger
-import Cardano.Ledger.Binary.Version
+
+-- import qualified Cardano.Ledger.Api.Transition as Ledger
+-- import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
 import Control.Monad.Trans.Except (ExceptT)
-import Data.Word (Word64)
+
+-- import Data.Word (Word64)
 import Ouroboros.Consensus.Block.Forging
-import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
+
+-- import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
-import Ouroboros.Consensus.Cardano.Node
-import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
+
+-- import Ouroboros.Consensus.Cardano.Node
+-- import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
+import Ouroboros.Consensus.Config (TopLevelConfig (..))
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
-import qualified Ouroboros.Consensus.Mempool.Capacity as TxLimits
+
+-- import qualified Ouroboros.Consensus.Mempool.Capacity as TxLimits
+
+import Cardano.DbSync.Error.Types (SyncNodeError)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
@@ -89,89 +97,90 @@ mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
   (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
-mkProtocolInfoCardano genesisConfig shelleyCred =
-  protocolInfoCardano $
-    CardanoProtocolParams
-      { paramsByron =
-          Consensus.ProtocolParamsByron
-            { Consensus.byronGenesis = bGenesis
-            , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
-            , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
-            , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
-            , Consensus.byronLeaderCredentials = Nothing
-            , Consensus.byronMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-            }
-      , paramsShelleyBased =
-          Consensus.ProtocolParamsShelleyBased
-            { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
-            , Consensus.shelleyBasedLeaderCredentials = shelleyCred
-            }
-      , paramsShelley =
-          Consensus.ProtocolParamsShelley
-            { Consensus.shelleyProtVer = mkProtVer 3 0
-            , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-            }
-      , paramsAllegra =
-          Consensus.ProtocolParamsAllegra
-            { Consensus.allegraProtVer = mkProtVer 4 0
-            , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-            }
-      , paramsMary =
-          Consensus.ProtocolParamsMary
-            { Consensus.maryProtVer = mkProtVer 5 0
-            , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-            }
-      , paramsAlonzo =
-          Consensus.ProtocolParamsAlonzo
-            { Consensus.alonzoProtVer = mkProtVer 7 0
-            , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-            }
-      , paramsBabbage =
-          Consensus.ProtocolParamsBabbage
-            { Consensus.babbageProtVer = mkProtVer 9 0
-            , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
-            }
-      , paramsConway =
-          Consensus.ProtocolParamsConway
-            { Consensus.conwayProtVer = mkProtVer 10 0
-            , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
-            }
-      , ledgerTransitionConfig =
-          Ledger.mkLatestTransitionConfig
-            shelleyGenesis
-            alonzoGenesis
-            conwayGenesis
-      , hardForkTriggers =
-          Consensus.CardanoHardForkTriggers'
-            { triggerHardForkShelley = dncShelleyHardFork dnc
-            , triggerHardForkAllegra = dncAllegraHardFork dnc
-            , triggerHardForkMary = dncMaryHardFork dnc
-            , triggerHardForkAlonzo = dncAlonzoHardFork dnc
-            , triggerHardForkBabbage = dncBabbageHardFork dnc
-            , triggerHardForkConway = dncConwayHardFork dnc
-            }
-      , checkpoints = emptyCheckpointsMap
-      }
-  where
-    GenesisCardano
-      dnc
-      bGenesis
-      (ShelleyConfig shelleyGenesis genesisHash)
-      alonzoGenesis
-      conwayGenesis = genesisConfig
+mkProtocolInfoCardano _genesisConfig _shelleyCred = undefined
 
-shelleyPraosNonce :: GenesisHashShelley -> Nonce
-shelleyPraosNonce hsh = Nonce (Crypto.castHash . unGenesisHashShelley $ hsh)
+-- protocolInfoCardano $
+--   CardanoProtocolParams
+--     { paramsByron =
+--         Consensus.ProtocolParamsByron
+--           { Consensus.byronGenesis = bGenesis
+--           , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
+--           , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
+--           , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
+--           , Consensus.byronLeaderCredentials = Nothing
+--           , Consensus.byronMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+--           }
+--     , paramsShelleyBased =
+--         Consensus.ProtocolParamsShelleyBased
+--           { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
+--           , Consensus.shelleyBasedLeaderCredentials = shelleyCred
+--           }
+--     , paramsShelley =
+--         Consensus.ProtocolParamsShelley
+--           { Consensus.shelleyProtVer = mkProtVer 3 0
+--           , Consensus.shelleyMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+--           }
+--     , paramsAllegra =
+--         Consensus.ProtocolParamsAllegra
+--           { Consensus.allegraProtVer = mkProtVer 4 0
+--           , Consensus.allegraMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+--           }
+--     , paramsMary =
+--         Consensus.ProtocolParamsMary
+--           { Consensus.maryProtVer = mkProtVer 5 0
+--           , Consensus.maryMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+--           }
+--     , paramsAlonzo =
+--         Consensus.ProtocolParamsAlonzo
+--           { Consensus.alonzoProtVer = mkProtVer 7 0
+--           , Consensus.alonzoMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+--           }
+--     , paramsBabbage =
+--         Consensus.ProtocolParamsBabbage
+--           { Consensus.babbageProtVer = mkProtVer 9 0
+--           , Consensus.babbageMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure
+--           }
+--     , paramsConway =
+--         Consensus.ProtocolParamsConway
+--           { Consensus.conwayProtVer = mkProtVer 10 0
+--           , Consensus.conwayMaxTxCapacityOverrides = TxLimits.mkOverrides TxLimits.noOverridesMeasure -- TODO: Conway
+--           }
+--     , ledgerTransitionConfig =
+--         Ledger.mkLatestTransitionConfig
+--           shelleyGenesis
+--           alonzoGenesis
+--           conwayGenesis
+--     , hardForkTriggers =
+--         Consensus.CardanoHardForkTriggers'
+--           { triggerHardForkShelley = dncShelleyHardFork dnc
+--           , triggerHardForkAllegra = dncAllegraHardFork dnc
+--           , triggerHardForkMary = dncMaryHardFork dnc
+--           , triggerHardForkAlonzo = dncAlonzoHardFork dnc
+--           , triggerHardForkBabbage = dncBabbageHardFork dnc
+--           , triggerHardForkConway = dncConwayHardFork dnc
+--           }
+--     , checkpoints = emptyCheckpointsMap
+--     }
+-- where
+--   GenesisCardano
+--     dnc
+--     bGenesis
+--     (ShelleyConfig shelleyGenesis genesisHash)
+--     alonzoGenesis
+--     conwayGenesis = genesisConfig
 
-mkProtVer :: Word64 -> Word64 -> ProtVer
-mkProtVer a b =
-  case mkVersion64 a of
-    Nothing -> error $ "Impossible: Invalid version generated: " <> show a
-    Just v -> ProtVer v (fromIntegral b)
+-- shelleyPraosNonce :: GenesisHashShelley -> Nonce
+-- shelleyPraosNonce hsh = Nonce (Crypto.castHash . unGenesisHashShelley $ hsh)
 
-mkByronSoftwareVersion :: SoftwareVersion
-mkByronSoftwareVersion =
-  SoftwareVersion name ver
-  where
-    name = ApplicationName "cardano-sl"
-    ver = 1
+-- mkProtVer :: Word64 -> Word64 -> ProtVer
+-- mkProtVer a b =
+--   case mkVersion64 a of
+--     Nothing -> error $ "Impossible: Invalid version generated: " <> show a
+--     Just v -> ProtVer v (fromIntegral b)
+
+-- mkByronSoftwareVersion :: SoftwareVersion
+-- mkByronSoftwareVersion =
+--   SoftwareVersion name ver
+--   where
+--     name = ApplicationName "cardano-sl"
+--     ver = 1

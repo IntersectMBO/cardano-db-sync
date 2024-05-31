@@ -6,7 +6,7 @@ module Cardano.DbSyncTest (tests) where
 import qualified Cardano.BM.Configuration.Model as Logging
 import Cardano.DbSync
 import Cardano.DbSync.Api (initPruneConsumeMigration)
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncOptions (..))
+import Cardano.DbSync.AppT (InsertOptions (..), SyncOptions (..))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Gen as Gen
 import Cardano.Prelude

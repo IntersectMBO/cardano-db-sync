@@ -14,7 +14,6 @@ module Cardano.DbSync.Util (
   logException,
   maybeFromStrict,
   maybeToStrict,
-  nullMetricSetters,
   plusCoin,
   renderByteArray,
   renderPoint,
@@ -125,16 +124,6 @@ logException tracer txt action =
     logger e = do
       logError tracer $ txt <> textShow e
       throwIO e
-
--- | Eequired for testing or when disabling the metrics.
-nullMetricSetters :: MetricSetters
-nullMetricSetters =
-  MetricSetters
-    { metricsSetNodeBlockHeight = const $ pure ()
-    , metricsSetDbQueueLength = const $ pure ()
-    , metricsSetDbBlockHeight = const $ pure ()
-    , metricsSetDbSlotHeight = const $ pure ()
-    }
 
 plusCoin :: Coin -> Coin -> Coin
 plusCoin (Coin a) (Coin b) = Coin (a + b)

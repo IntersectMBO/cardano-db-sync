@@ -11,9 +11,10 @@ module Cardano.DbSync.Database (
   runDbThread,
 ) where
 
+import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.AppT (App, ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), askTrace, runApp, runOrThrowApp, throwAppError)
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Default
 import Cardano.DbSync.Error
@@ -27,7 +28,7 @@ import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Except.Extra (newExceptT)
+import qualified Data.Text as Text
 import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block (BlockNo, Point (..))
@@ -39,25 +40,28 @@ data NextState
   deriving (Eq)
 
 runDbThread ::
-  SyncEnv ->
   MetricSetters ->
   ThreadChannels ->
-  IO ()
-runDbThread syncEnv metricsSetters queue = do
-  logInfo trce "Running DB thread"
-  logException trce "runDBThread: " loop
-  logInfo trce "Shutting down DB thread"
+  App ()
+runDbThread metricsSetters queue = do
+  trce <- askTrace
+  liftIO $ logInfo trce "Running DB thread"
+  logExceptions "runDBThread: " loop
+  liftIO $ logInfo trce "Shutting down DB thread"
   where
-    trce = getTrace syncEnv
+    loop :: App ()
     loop = do
+      syncEnv <- ask
+      trce <- askTrace
+
       xs <- blockingFlushDbActionQueue queue
 
       when (length xs > 1) $ do
-        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+        liftIO $ logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
 
       case hasRestart xs of
         Nothing -> do
-          eNextState <- runExceptT $ runActions syncEnv xs
+          eNextState <- runActions syncEnv xs
 
           mBlock <- getDbLatestBlockInfo (envBackend syncEnv)
           whenJust mBlock $ \block -> do
@@ -65,63 +69,77 @@ runDbThread syncEnv metricsSetters queue = do
             setDbSlotHeight metricsSetters $ bSlotNo block
 
           case eNextState of
-            Left err -> logError trce $ show err
-            Right Continue -> loop
-            Right Done -> pure ()
+            Continue -> loop
+            Done -> pure ()
         Just resultVar -> do
           -- In this case the syncing thread has restarted, so ignore all blocks that are not
           -- inserted yet.
-          logInfo trce "Chain Sync client thread has restarted"
-          latestPoints <- getLatestPoints syncEnv
+          liftIO $ logInfo trce "Chain Sync client thread has restarted"
+          latestPoints <- getLatestPoints
           currentTip <- getCurrentTipBlockNo syncEnv
-          logDbState syncEnv
-          atomically $ putTMVar resultVar (latestPoints, currentTip)
+          logDbState
+          liftIO $ atomically $ putTMVar resultVar (latestPoints, currentTip)
           loop
+
+-- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
+-- code, the caught exception will not be logged. Therefore wrap all cardano-db-sync code that
+-- is called from network with an exception logger so at least the exception will be
+-- logged (instead of silently swallowed) and then rethrown.
+logExceptions :: Text -> App () -> App ()
+logExceptions context action = do
+  syncEnv <- ask
+  trce <- askTrace
+  result <- liftIO $ try $ runApp syncEnv action
+  case result of
+    Left ex -> liftIO $ logError trce (context <> Text.pack (show (ex :: SomeException)))
+    Right _ -> pure ()
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions ::
   SyncEnv ->
   [DbAction] ->
-  ExceptT SyncNodeError IO NextState
+  App NextState
 runActions syncEnv actions = do
   dbAction Continue actions
   where
-    dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
+    dbAction :: NextState -> [DbAction] -> App NextState
     dbAction next [] = pure next
     dbAction Done _ = pure Done
-    dbAction Continue xs =
+    dbAction Continue xs = do
+      tracer <- askTrace
       case spanDbApply xs of
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          deletedAllBlocks <- newExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
-          points <- lift $ rollbackLedger syncEnv chainSyncPoint
+          deletedAllBlocks <- runOrThrowApp tracer $ prepareRollback chainSyncPoint serverTip
+          points <- rollbackLedger syncEnv chainSyncPoint
 
           -- Ledger state always rollbacks at least back to the 'point' given by the Node.
           -- It needs to rollback even further, if 'points' is not 'Nothing'.
           -- The db may not rollback to the Node point.
           case (deletedAllBlocks, points) of
             (True, Nothing) -> do
-              liftIO $ setConsistentLevel syncEnv Consistent
-              liftIO $ validateConsistentLevel syncEnv chainSyncPoint
+              setConsistentLevel Consistent
+              validateConsistentLevel tracer chainSyncPoint
             (False, Nothing) -> do
-              liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
-              liftIO $ validateConsistentLevel syncEnv chainSyncPoint
+              setConsistentLevel DBAheadOfLedger
+              validateConsistentLevel tracer chainSyncPoint
             _anyOtherOption ->
               -- No need to validate here
-              liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
-          blockNo <- lift $ getDbTipBlockNo syncEnv
+              setConsistentLevel DBAheadOfLedger
+          blockNo <- getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbAction Continue ys
         (ys, zs) -> do
-          newExceptT $ insertListBlocks syncEnv ys
+          insertListBlocks ys
           if null zs
             then pure Continue
             else dbAction Continue zs
 
-rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
-rollbackLedger syncEnv point =
+rollbackLedger :: SyncEnv -> CardanoPoint -> App (Maybe [CardanoPoint])
+rollbackLedger syncEnv point = do
+  tracer <- askTrace
   case envLedgerEnv syncEnv of
     HasLedger hle -> do
       mst <- loadLedgerAtPoint hle point
@@ -130,7 +148,7 @@ rollbackLedger syncEnv point =
           let statePoint = headerStatePoint $ headerState $ clsState st
           -- This is an extra validation that should always succeed.
           unless (point == statePoint) $
-            logAndThrowIO (getTrace syncEnv) $
+            throwAppError tracer $
               SNErrDatabaseRollBackLedger $
                 mconcat
                   [ "Ledger "
@@ -141,19 +159,21 @@ rollbackLedger syncEnv point =
                   ]
           pure Nothing
         Left lsfs ->
-          Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
+          Just . fmap fst <$> verifySnapshotPoint (OnDisk <$> lsfs)
     NoLedger _ -> pure Nothing
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
 -- 'Consistent' Level is correct based on the db tip.
-validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
-validateConsistentLevel syncEnv stPoint = do
-  dbTipInfo <- getDbLatestBlockInfo (envBackend syncEnv)
-  cLevel <- getConsistentLevel syncEnv
+validateConsistentLevel :: Trace IO Text -> CardanoPoint -> App ()
+validateConsistentLevel tracer stPoint = do
+  backend <- asks envBackend
+  dbTipInfo <- getDbLatestBlockInfo backend
+  cLevel <- getConsistentLevel
   compareTips stPoint dbTipInfo cLevel
   where
-    compareTips _ dbTip Unchecked =
-      logAndThrowIO tracer $
+    compareTips :: CardanoPoint -> Maybe TipInfo -> ConsistentLevel -> App ()
+    compareTips _ dbTip Unchecked = do
+      throwAppError tracer $
         SNErrDatabaseValConstLevel $
           "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
@@ -165,11 +185,10 @@ validateConsistentLevel syncEnv stPoint = do
     compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
-      logAndThrowIO tracer $
+      throwAppError tracer $
         SNErrDatabaseValConstLevel $
           "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
-    tracer = getTrace syncEnv
     showContext dbTip cLevel =
       mconcat
         [ "Ledger state point is "

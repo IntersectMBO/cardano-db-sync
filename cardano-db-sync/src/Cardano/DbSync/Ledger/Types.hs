@@ -10,18 +10,10 @@
 
 module Cardano.DbSync.Ledger.Types where
 
-import Cardano.BM.Trace (Trace)
 import Cardano.Binary (Decoder, Encoding, FromCBOR (..), ToCBOR (..))
-import Cardano.DbSync.Config.Types (LedgerStateDir)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event (LedgerEvent)
-import Cardano.DbSync.Types (
-  CardanoBlock,
-  CardanoInterpreter,
-  CardanoPoint,
-  PoolKeyHash,
-  SlotDetails,
- )
+import Cardano.DbSync.Types (CardanoBlock, CardanoPoint, PoolKeyHash, SlotDetails)
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import Cardano.Ledger.BaseTypes (StrictMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -36,21 +28,16 @@ import Cardano.Slotting.Slot (
   SlotNo (..),
   WithOrigin (..),
  )
-import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
- )
-import Control.Concurrent.STM.TBQueue (TBQueue)
+
 import qualified Data.Map.Strict as Map
 import Data.SOP.Strict
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import Lens.Micro (Traversal')
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerState)
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
 import Prelude (fail, id)
@@ -58,22 +45,6 @@ import Prelude (fail, id)
 --------------------------------------------------------------------------
 -- Ledger Types
 --------------------------------------------------------------------------
-
-data HasLedgerEnv = HasLedgerEnv
-  { leTrace :: Trace IO Text
-  , leUseLedger :: !Bool
-  , leHasRewards :: !Bool
-  , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
-  , leDir :: !LedgerStateDir
-  , leNetwork :: !Ledger.Network
-  , leSystemStart :: !SystemStart
-  , leAbortOnPanic :: !Bool
-  , leSnapshotEveryFollowing :: !Word64
-  , leSnapshotEveryLagging :: !Word64
-  , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
-  , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
-  , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
-  }
 
 data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(ExtLedgerState CardanoBlock)
