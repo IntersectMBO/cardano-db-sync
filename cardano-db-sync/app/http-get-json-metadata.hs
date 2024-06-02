@@ -3,7 +3,8 @@
 
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..))
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Error (bsBase16Encode, runOrThrowIO)
+import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.Error.Types (bsBase16Encode)
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.Types
 import Control.Monad.IO.Class (liftIO)

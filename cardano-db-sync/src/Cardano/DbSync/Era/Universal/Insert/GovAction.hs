@@ -28,10 +28,11 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
 )
 where
 
+import Cardano.BM.Trace (logWarning)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
-import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..))
+import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..), askTrace)
 import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert)
 import Cardano.DbSync.Cache.Types (UpdateCache (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -73,7 +74,7 @@ insertGovActionProposal ::
 insertGovActionProposal blkId txId govExpiresAt mmCommittee (index, pp) = do
   cache <- asks envCache
   addrId <- queryOrInsertRewardAccount cache UpdateCache $ pProcReturnAddr pp
-  votingAnchorId <- insertVotingAnchor txId DB.GovActionAnchor $ pProcAnchor pp
+  votingAnchorId <- insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
   mParamProposalId <-
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
@@ -103,8 +104,8 @@ insertGovActionProposal blkId txId govExpiresAt mmCommittee (index, pp) = do
           }
   case pProcGovAction pp of
     TreasuryWithdrawals mp _ -> mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
-    UpdateCommittee _ removed added q -> insertNewCommittee govActionProposalId removed added q
-    NewConstitution _ constitution -> insertConstitution txId govActionProposalId constitution
+    UpdateCommittee _ removed added q -> insertNewCommittee (Just govActionProposalId) removed added q
+    NewConstitution _ constitution -> void $ insertConstitution blkId (Just govActionProposalId) constitution
     _other -> pure ()
   where
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
@@ -153,20 +154,22 @@ insertCommittee' mgapId mcommittee q = do
     r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
     insertNewMember committeeId (cred, e) = do
       chId <- insertCommitteeHash cred
-      void . dbQueryToApp $ DB.insertCommitteeMember $
-        DB.CommitteeMember
-          { DB.committeeMemberCommitteeId = committeeId
-          , DB.committeeMemberCommitteeHashId = chId
-          , DB.committeeMemberExpirationEpoch = unEpochNo e
-          }
+      void . dbQueryToApp $
+        DB.insertCommitteeMember $
+          DB.CommitteeMember
+            { DB.committeeMemberCommitteeId = committeeId
+            , DB.committeeMemberCommitteeHashId = chId
+            , DB.committeeMemberExpirationEpoch = unEpochNo e
+            }
 
     insertCommitteeDB =
-      dbQueryToApp $ DB.insertCommittee $
-        DB.Committee
-          { DB.committeeGovActionProposalId = mgapId
-          , DB.committeeQuorumNumerator = fromIntegral $ numerator r
-          , DB.committeeQuorumDenominator = fromIntegral $ denominator r
-          }
+      dbQueryToApp $
+        DB.insertCommittee $
+          DB.Committee
+            { DB.committeeGovActionProposalId = mgapId
+            , DB.committeeQuorumNumerator = fromIntegral $ numerator r
+            , DB.committeeQuorumDenominator = fromIntegral $ denominator r
+            }
 
 --------------------------------------------------------------------------------------
 -- PROPOSAL
@@ -254,10 +257,10 @@ insertParamProposal blkId txId pp = do
         , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
         }
 
-insertConstitution :: DB.TxId -> DB.GovActionProposalId -> Constitution StandardConway -> App ()
-insertConstitution txId gapId constitution = do
-  votingAnchorId <- insertVotingAnchor txId DB.OtherAnchor $ constitutionAnchor constitution
-  void . dbQueryToApp $
+insertConstitution :: DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> App DB.ConstitutionId
+insertConstitution blockId gapId constitution = do
+  votingAnchorId <- insertVotingAnchor blockId DB.OtherAnchor $ constitutionAnchor constitution
+  dbQueryToApp $
     DB.insertConstitution $
       DB.Constitution
         { DB.constitutionGovActionProposalId = gapId
@@ -269,21 +272,23 @@ insertConstitution txId gapId constitution = do
 -- VOTING PROCEDURES
 --------------------------------------------------------------------------------------
 insertVotingProcedures ::
+  DB.BlockId ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
   App ()
-insertVotingProcedures txId (voter, actions) =
-  mapM_ (insertVotingProcedure txId voter) (zip [0 ..] actions)
+insertVotingProcedures blkId txId (voter, actions) =
+  mapM_ (insertVotingProcedure blkId txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
+  DB.BlockId ->
   DB.TxId ->
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
   App ()
-insertVotingProcedure txId voter (index, (gaId, vp)) = do
+insertVotingProcedure blkId txId voter (index, (gaId, vp)) = do
   cache <- asks envCache
   govActionId <- resolveGovActionProposal gaId
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ insertVotingAnchor txId DB.OtherAnchor
+  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ insertVotingAnchor blkId DB.OtherAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred -> do
       khId <- insertCommitteeHash cred
@@ -412,12 +417,11 @@ updateDropped epochNo ratifiedActions = do
     dbQueryToApp $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
 
 insertUpdateEnacted ::
-  Trace IO Text ->
   DB.BlockId ->
   EpochNo ->
   ConwayGovState StandardConway ->
   App ()
-insertUpdateEnacted trce blkId epochNo enactedState = do
+insertUpdateEnacted blkId epochNo enactedState = do
   whenJust (strictMaybeToMaybe (grPParamUpdate govIds)) $ \prevId -> do
     gaId <- resolveGovActionProposal $ unGovPurposeId prevId
     void $ dbQueryToApp $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
@@ -443,11 +447,12 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
     govIds = govStatePrevGovActionIds enactedState
 
     handleCommittee = do
+      trce <- askTrace
       mCommitteeGaId <- case strictMaybeToMaybe (grCommittee govIds) of
         Nothing -> pure Nothing
         Just prevId -> do
           gaId <- resolveGovActionProposal $ unGovPurposeId prevId
-          _nCommittee <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+          _nCommittee <- dbQueryToApp $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
           pure $ Just gaId
 
       case (mCommitteeGaId, strictMaybeToMaybe (cgsCommittee enactedState)) of
@@ -457,7 +462,7 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
           committeeIds <- dbQueryToApp $ DB.queryProposalCommittee Nothing
           case committeeIds of
             [] -> do
-              committeeId <- lift $ insertCommittee Nothing committee
+              committeeId <- insertCommittee Nothing committee
               pure (Just committeeId, Nothing)
             (committeeId : _rest) ->
               pure (Just committeeId, Nothing)
@@ -482,7 +487,9 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
             (committeeId : _rest) ->
               pure (Just committeeId, Nothing)
 
+    handleConstitution :: App DB.ConstitutionId
     handleConstitution = do
+      trce <- askTrace
       mConstitutionGaId <- case strictMaybeToMaybe (grConstitution govIds) of
         Nothing -> pure Nothing
         Just prevId -> do

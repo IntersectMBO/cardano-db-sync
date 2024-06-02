@@ -12,7 +12,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
 
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Cardano.Prelude hiding (from, isNothing)
 import qualified Data.Aeson as Aeson
 import Data.Default.Class (Default (..))

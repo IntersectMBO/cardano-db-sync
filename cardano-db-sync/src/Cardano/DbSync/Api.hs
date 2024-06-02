@@ -50,12 +50,22 @@ module Cardano.DbSync.Api (
 
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (newEmptyCache, useNoCache)
-import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.AppT (
   App,
-  ConsistentLevel (..), EpochState (..), FixesRan (..), HasLedgerEnv (..), InsertOptions (..), LedgerEnv (..), MonadAppDB (..), NoLedgerEnv (..), SyncEnv (..), SyncOptions (..), askInsertOptions, askTrace, liftAtomicallyT)
+  ConsistentLevel (..),
+  CurrentEpochNo (..),
+  FixesRan (..),
+  HasLedgerEnv (..),
+  InsertOptions (..),
+  LedgerEnv (..),
+  MonadAppDB (..),
+  NoLedgerEnv (..),
+  SyncEnv (..),
+  SyncOptions (..),
+  askInsertOptions,
+  askTrace,
+  liftAtomicallyT,
+ )
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Ledger.State (
@@ -120,7 +130,7 @@ setIsFixedAndMigrate :: FixesRan -> App ()
 setIsFixedAndMigrate fr = do
   runDelayedMigration <- asks envRunDelayedMigration
   isFixed <- asks envIsFixed
-  runDelayedMigration DB.Fix
+  liftIO $ runDelayedMigration DB.Fix
   liftIO $ atomically $ writeTVar isFixed fr
 
 getDisableInOutState :: App Bool
@@ -140,7 +150,7 @@ runIndexMigrations = do
   indexes <- asks envIndexes
   haveRan <- liftIO $ readTVarIO indexes
   unless haveRan $ do
-    envRunDelayedMigration syncEnv DB.Indexes
+    liftIO $ envRunDelayedMigration syncEnv DB.Indexes
     liftIO $ logInfo trce "Indexes were created"
     liftIO $ atomically $ writeTVar indexes True
 
@@ -249,17 +259,11 @@ disableAllInsertOptions =
     , sioJsonType = JsonTypeText
     }
 
-initCurrentEpochNo :: CurrentEpochNo
-initCurrentEpochNo =
-  CurrentEpochNo
-    { cenEpochNo = Strict.Nothing
-    }
-
 generateNewEpochEvents :: SlotDetails -> App [LedgerEvent]
 generateNewEpochEvents details = do
-  epochState <- asks envEpochState
+  epochState <- asks envCurrentEpochNo
   !oldEpochState <- liftIO $ readTVarIO epochState
-  liftAtomicallyT $ writeTVar epochState newEpochState
+  liftAtomicallyT $ writeTVar epochState newCurrentEpochNo
   pure $ maybeToList (newEpochEvent oldEpochState)
   where
     currentEpochNo :: EpochNo

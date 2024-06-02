@@ -12,7 +12,7 @@ module Cardano.DbSync.Era.Universal.Insert.LedgerEvent (
 
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.AppT (App, SyncEnv (..), askTrace)
+import Cardano.DbSync.AppT (App, SyncEnv (..), askTrace, dbQueryToApp)
 import Cardano.DbSync.Cache.Types (textShowStats)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -26,6 +26,7 @@ import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Monad.Extra (whenJust)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Database.Persist.SqlBackend.Internal
@@ -93,12 +94,12 @@ insertNewEpochLedgerEvents currentEpochNo@(EpochNo curEpoch) =
           updateDropped (EpochNo curEpoch) (garGovActionId <$> (en <> ex))
           let en' = filter (\e -> Set.notMember (garGovActionId e) uncl) en
               ex' = filter (\e -> Set.notMember (garGovActionId e) uncl) ex
-          insertProposalRefunds ntw (subFromCurrentEpoch 1) currentEpochNo cache (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
+          insertProposalRefunds (subFromCurrentEpoch 1) currentEpochNo (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
           forM_ en $ \gar -> whenJust (garMTreasury gar) $ \treasuryMap -> do
             gaId <- resolveGovActionProposal (garGovActionId gar)
             void $ dbQueryToApp $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
             let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
-            insertRewardRests ntw (subFromCurrentEpoch 1) currentEpochNo cache (Map.toList rewards)
+            insertRewardRests (subFromCurrentEpoch 1) currentEpochNo (Map.toList rewards)
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd

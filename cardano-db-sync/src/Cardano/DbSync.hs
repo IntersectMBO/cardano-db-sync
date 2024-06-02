@@ -29,15 +29,16 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.AppT (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv, runApp, runAppInIO)
+import Cardano.DbSync.AppT (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv, runAppInIO)
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
-import Cardano.DbSync.Error (hasAbortOnPanicEnv, runOrThrowIO)
+import Cardano.DbSync.Error (hasAbortOnPanicEnv, runOrThrowIOAndTrace)
 import Cardano.DbSync.Error.Types (SyncNodeError)
+import Cardano.DbSync.Initialization (mkSyncEnvFromConfig)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (unsafeRollback)
@@ -82,7 +83,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   logInfo trce $ textShow syncOpts
 
   -- Read the PG connection info
-  pgConfig <- runOrThrowIO trce (Db.readPGPass $ enpPGPassSource params)
+  pgConfig <- runOrThrowIOAndTrace trce (Db.readPGPass $ enpPGPassSource params)
 
   mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
@@ -101,7 +102,10 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         logInfo trce msg
         when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
         Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode
-  (ranMigrations, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
+  (ranMigrations, unofficial) <-
+    if enpForceIndexes params
+      then runMigration Db.Full
+      else runMigration Db.Initial
   unless (null unofficial) $
     logWarning trce $
       "Unofficial migration scripts found: "
@@ -172,7 +176,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
       \backend -> liftIO $ do
-        runOrThrowIO $ runExceptT $ do
+        runOrThrowIOAndTrace trce $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
@@ -191,25 +195,25 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             Db.noLedgerMigrations backend trce
-          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
+          liftIO $ runAppInIO syncEnv $ insertValidateGenesisDist (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
           liftIO $
             mapConcurrently_
               id
-              [ runApp syncEnv $ runDbThread metricsSetters threadChannels
-              , runSyncNodeClient (getTrace syncEnv) metricsSetters iomgr threadChannels (enpSocketPath syncNodeParams)
-              , runApp syncEnv runFetchOffChainPoolThread
-              , runApp syncEnv runFetchOffChainVoteThread
-              , runApp syncEnv $ runLedgerStateWriteThread (envLedgerEnv syncEnv)
+              [ runAppInIO syncEnv $ runDbThread metricsSetters threadChannels
+              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runAppInIO syncEnv runFetchOffChainPoolThread
+              , runAppInIO syncEnv runFetchOffChainVoteThread
+              , runAppInIO syncEnv $ runLedgerStateWriteThread (envLedgerEnv syncEnv)
               ]
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
       case dncShelleyHardFork cfg of
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
-        _ -> False
+        _other -> False
 
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 

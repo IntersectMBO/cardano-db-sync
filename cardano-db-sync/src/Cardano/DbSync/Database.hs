@@ -14,10 +14,11 @@ module Cardano.DbSync.Database (
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
-import Cardano.DbSync.AppT (App, ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), askTrace, runApp, runOrThrowApp, throwAppError)
+import Cardano.DbSync.AppT (App, ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), askTrace, runApp)
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Default
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error (runOrThrowApp, throwAppError)
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
 import Cardano.DbSync.Metrics
@@ -65,8 +66,8 @@ runDbThread metricsSetters queue = do
 
           mBlock <- getDbLatestBlockInfo (envBackend syncEnv)
           whenJust mBlock $ \block -> do
-            setDbBlockHeight metricsSetters $ bBlockNo block
-            setDbSlotHeight metricsSetters $ bSlotNo block
+            liftIO $ setDbBlockHeight metricsSetters $ bBlockNo block
+            liftIO $ setDbSlotHeight metricsSetters $ bSlotNo block
 
           case eNextState of
             Continue -> loop

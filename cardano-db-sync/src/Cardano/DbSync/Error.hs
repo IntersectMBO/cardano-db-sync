@@ -8,6 +8,8 @@ module Cardano.DbSync.Error (
   dbSyncInvariant,
   runOrThrowIO,
   fromEitherSTM,
+  runOrThrowIOAndTraceUnit,
+  runOrThrowIOAndTrace,
   logAndThrowIO,
   handleAndLogError,
   shouldAbortOnPanic,
@@ -58,13 +60,23 @@ dbSyncInvariant loc = left . SNErrInvariant loc
 fromEitherSTM :: (Exception e) => Either e a -> STM a
 fromEitherSTM = either throwSTM return
 
-runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => Trace m Text -> m (Either e a) -> m a
-runOrThrowIO tracer ioEither = do
+runOrThrowIOAndTraceUnit :: forall e m. (MonadIO m) => (Exception e) => Trace m Text -> m (Either e ()) -> m ()
+runOrThrowIOAndTraceUnit = runOrThrowIOAndTrace
+
+runOrThrowIOAndTrace :: forall e a m. (MonadIO m) => (Exception e) => Trace m Text -> m (Either e a) -> m a
+runOrThrowIOAndTrace tracer ioEither = do
   et <- ioEither
   case et of
     Left err -> do
       logError tracer $ show err
       throwIO err
+    Right a -> pure a
+
+runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
+runOrThrowIO ioEither = do
+  et <- ioEither
+  case et of
+    Left err -> throwIO err
     Right a -> pure a
 
 logAndThrowIO :: Trace IO Text -> SyncNodeError -> IO ()

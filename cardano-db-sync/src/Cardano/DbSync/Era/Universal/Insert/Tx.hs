@@ -164,7 +164,7 @@ insertTx isMember blkId epochNo slotNo applyResult blockIndex tx grouped = do
 
       when (ioGov iopts) $ do
         mapM_ (insertGovActionProposal blkId txId (getGovExpiresAt applyResult epochNo) (apCommittee applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
-        mapM_ (insertVotingProcedures txId) (Generic.txVotingProcedure tx)
+        mapM_ (insertVotingProcedures blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)

@@ -31,7 +31,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..), askNetwork, askTrace)
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (CacheInternal (..), CacheStatistics (..), CacheStatus (..), UpdateCache (..), StakeAddrCache, initCacheStatistics)
+import Cardano.DbSync.Cache.Types (CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeAddrCache, UpdateCache (..), initCacheStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -65,7 +65,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
-rollbackCache :: MonadIO m => CacheStatus -> DB.BlockId -> App ()
+rollbackCache :: CacheStatus -> DB.BlockId -> App ()
 rollbackCache NoCache _ = pure ()
 rollbackCache (ActiveCache cache) blockId = do
   liftIO $ do
@@ -77,10 +77,9 @@ getCacheStatistics :: CacheStatus -> App CacheStatistics
 getCacheStatistics cs =
   case cs of
     NoCache -> pure initCacheStatistics
-    ActiveCache ci -> readTVarIO (cStats ci)
+    ActiveCache ci -> liftIO $ readTVarIO (cStats ci)
 
 queryOrInsertRewardAccount ::
-  (MonadBaseControl IO m, MonadIO m) =>
   CacheStatus ->
   UpdateCache ->
   Ledger.RewardAccount StandardCrypto ->
@@ -163,7 +162,7 @@ queryStakeAddrAux cacheUA mp sts nw cred =
     Just addrId -> do
       liftIO $ hitCreds sts
       case cacheUA of
-        EvictAndReturn -> pure (Right addrId, Map.delete cred mp)
+        EvictAndUpdateCache -> pure (Right addrId, Map.delete cred mp)
         _other -> pure (Right addrId, mp)
     Nothing -> do
       liftIO $ missCreds sts

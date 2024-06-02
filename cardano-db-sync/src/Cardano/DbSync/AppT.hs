@@ -33,7 +33,7 @@ module Cardano.DbSync.AppT (
   StateQueryTMVar (..),
   FixesRan (..),
   ConsistentLevel (..),
-  EpochState (..),
+  CurrentEpochNo (..),
   RunMigration,
 )
 where
@@ -117,7 +117,7 @@ data SyncEnv = SyncEnv
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
-  , envEpochState :: !(StrictTVar IO EpochState)
+  , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
   , envIsFixed :: !(StrictTVar IO FixesRan)
@@ -196,16 +196,15 @@ newtype StateQueryTMVar blk result = StateQueryTMVar
       StrictTMVar IO (Query blk result, StrictTMVar IO (Either AcquireFailure result))
   }
 
-type RunMigration = DB.MigrationToRun -> App ()
+type RunMigration = DB.MigrationToRun -> IO ()
 
 data FixesRan = NoneFixRan | DataFixRan | AllFixRan
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)
 
-data EpochState = EpochState
-  { esInitialized :: !Bool
-  , esEpochNo :: !(Strict.Maybe EpochNo)
+newtype CurrentEpochNo = CurrentEpochNo
+  { cenEpochNo :: Strict.Maybe EpochNo
   }
 
 --------------------------------------------------------------------------------

@@ -14,14 +14,15 @@ module Cardano.DbSync.Era.Shelley.Genesis (
 import Cardano.BM.Trace (logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (envBackend), askTrace, runAppWithLogging, runAppWithNoLogging, throwAppError)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), useNoCache)
+import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (envBackend), askTrace, runAppWithLogging, runAppWithNoLogging)
+import Cardano.DbSync.Cache.Types (useNoCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insertStakeRegistration)
 import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
 import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Era.Util (liftLookupFail)
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error (handleAndLogError, throwAppError)
+import Cardano.DbSync.Error.Types (SyncNodeError (..))
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core

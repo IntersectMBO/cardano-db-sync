@@ -273,7 +273,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                 (cChainSyncCodec codecs)
                 channel
                 ( chainSyncClientPeerPipelined $
-                    chainSyncClient syncEnv metricsSetters tracer (fst <$> latestPoints) currentTip tc
+                    chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
                 )
             atomically $ writeDbActionQueue tc DbFinish
             -- We should return leftover bytes returned by 'runPipelinedPeer', but
@@ -326,14 +326,13 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
 -- be correct. This is not an issue, because we only use it for performance reasons
 -- in the pipeline policy.
 chainSyncClient ::
-  SyncEnv ->
   MetricSetters ->
   Trace IO Text ->
   [Point CardanoBlock] ->
   WithOrigin BlockNo ->
   ThreadChannels ->
   ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient syncEnv metricsSetters trce latestPoints currentTip tc = do
+chainSyncClient metricsSetters trce latestPoints currentTip tc = do
   ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
   where
     clientPipelinedStIdle ::
@@ -403,13 +402,13 @@ chainSyncClient syncEnv metricsSetters trce latestPoints currentTip tc = do
       ClientStNext
         { recvMsgRollForward = \blk tip ->
             logException trce "recvMsgRollForward: " $ do
-              runAppInIO syncEnv $ setNodeBlockHeight metricsSetters (getTipBlockNo tip)
+              setNodeBlockHeight metricsSetters (getTipBlockNo tip)
 
               newSize <- atomically $ do
                 writeDbActionQueue tc $ mkDbApply blk
                 lengthDbActionQueue tc
 
-              runAppInIO syncEnv $ setDbQueueLength metricsSetters newSize
+              setDbQueueLength metricsSetters newSize
 
               pure $ finish (At (blockNo blk)) tip Nothing
         , recvMsgRollBackward = \point tip ->

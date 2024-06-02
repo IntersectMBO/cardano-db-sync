@@ -73,7 +73,7 @@ insertOnNewEpoch iopts blkId slotNo epochNo newEpoch = do
     updateExpired epochNo (toList $ rsExpired ratifyState)
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt -> do
     when (ioGov iopts) $ do
-      insertUpdateEnacted tracer blkId epochNo enactedSt
+      insertUpdateEnacted blkId epochNo enactedSt
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch

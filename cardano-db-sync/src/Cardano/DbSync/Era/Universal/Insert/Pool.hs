@@ -26,7 +26,7 @@ import Cardano.DbSync.Cache (
   queryOrInsertStakeAddress,
   queryPoolKeyOrInsert,
  )
-import Cardano.DbSync.Cache.Types (UpdateCache (..), CacheStatus)
+import Cardano.DbSync.Cache.Types (CacheStatus, UpdateCache (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Types (PoolKeyHash)

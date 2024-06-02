@@ -14,7 +14,7 @@ import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
   queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Types (CacheStatus, UpdateCache (..))
+import Cardano.DbSync.Cache.Types (UpdateCache (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Types (StakeCred)
 import Cardano.Prelude hiding (from, groupBy, on)

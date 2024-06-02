@@ -16,7 +16,7 @@ import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (generateNewEpochEvents, getPruneInterval, getRanIndexes, getSafeBlockNoDiff, hasLedgerState, isConsistent, runIndexMigrations, setConsistentLevel, whenPruneTxOut)
 import Cardano.DbSync.Api.Ledger (bootStrapMaybe)
-import Cardano.DbSync.AppT (App, ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), MonadAppDB (..), SyncEnv (..), SyncOptions (..), askInsertOptions, askTrace, runOrThrowApp)
+import Cardano.DbSync.AppT (App, ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), MonadAppDB (..), SyncEnv (..), SyncOptions (..), askInsertOptions, askTrace)
 import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -24,8 +24,7 @@ import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal)
 import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent, hasNewEpochEvent)
 import Cardano.DbSync.Era.Universal.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
-import Cardano.DbSync.Error
-import Cardano.DbSync.Fix.EpochStake
+import Cardano.DbSync.Error (runOrThrowApp)
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.LocalStateQuery
@@ -120,7 +119,7 @@ insertBlock cblk applyRes firstAfterRollback tookSnapshot = do
   let !details = apSlotDetails applyResult
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
-  insertBlockLedgerEvents (sdEpochNo details) (apEvents applyResult)
+  insertNewEpochLedgerEvents (sdEpochNo details) (apEvents applyResult)
   let isNewEpochEvent = hasNewEpochEvent (apEvents applyResult)
   let isStartEventOrRollback = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let isMember poolId = Set.member poolId (apPoolsRegistered applyResult)

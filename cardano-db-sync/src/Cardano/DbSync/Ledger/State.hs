@@ -341,7 +341,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
           -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
           saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
           pure True
-    Nothing ->
+    _other ->
       if timeToSnapshot syncState blkNo && isCons
         then do
           saveCleanupState env oldState Nothing
@@ -483,7 +483,7 @@ parseLedgerStateFileName (LedgerStateDir stateDir) fp =
 
 cleanupLedgerStateFiles :: HasLedgerEnv -> SlotNo -> App ()
 cleanupLedgerStateFiles env slotNo = do
-  files <- listLedgerStateFilesOrdered (leDir env)
+  files <- liftIO $ listLedgerStateFilesOrdered (leDir env)
   let (epochBoundary, valid, invalid) = foldr groupFiles ([], [], []) files
   -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
   deleteAndLogFiles env "invalid" invalid
@@ -541,7 +541,7 @@ loadLedgerAtPoint hasLedgerEnv point = do
 
 deleteNewerFiles :: HasLedgerEnv -> CardanoPoint -> App ()
 deleteNewerFiles env point = do
-  files <- listLedgerStateFilesOrdered (leDir env)
+  files <- liftIO $ listLedgerStateFilesOrdered (leDir env)
   -- Genesis can be reproduced from configuration.
   -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
   case getPoint point of
@@ -558,17 +558,18 @@ deleteAndLogFiles env descr files =
     [] -> pure ()
     [fl] -> do
       liftIO $ logInfo (leTrace env) $ mconcat ["Removing ", descr, " file ", Text.pack fl]
-      safeRemoveFile fl
+      liftIO $ safeRemoveFile fl
     _other -> do
       liftIO $ logInfo (leTrace env) $ mconcat ["Removing ", descr, " files ", textShow files]
-      mapM_ safeRemoveFile files
+      mapM_ (liftIO . safeRemoveFile) files
 
 deleteAndLogStateFile :: HasLedgerEnv -> Text -> [LedgerStateFile] -> App ()
 deleteAndLogStateFile env descr lsfs = deleteAndLogFiles env descr (lsfFilePath <$> lsfs)
 
 findStateFromPoint :: HasLedgerEnv -> CardanoPoint -> App (Either [LedgerStateFile] CardanoLedgerState)
 findStateFromPoint env point = do
-  files <- listLedgerStateFilesOrdered (leDir env)
+  tracer <- askTrace
+  files <- liftIO $ listLedgerStateFilesOrdered (leDir env)
   -- Genesis can be reproduced from configuration.
   -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
   case getPoint point of
@@ -581,7 +582,7 @@ findStateFromPoint env point = do
       deleteAndLogStateFile env "newer" newerFiles
       case found of
         Just lsf -> do
-          mState <- loadLedgerStateFromFile (getTopLevelconfigHasLedger env) False point lsf
+          mState <- liftIO $ loadLedgerStateFromFile tracer (getTopLevelconfigHasLedger env) False point lsf
           case mState of
             Left err -> do
               deleteLedgerFile err lsf
@@ -603,7 +604,7 @@ findStateFromPoint env point = do
             , err
             , "'. Deleting it."
             ]
-      safeRemoveFile $ lsfFilePath lsf
+      liftIO $ safeRemoveFile $ lsfFilePath lsf
 
     logNewerFiles :: [LedgerStateFile] -> App ()
     logNewerFiles lsfs =
@@ -645,37 +646,41 @@ comparePointToFile lsf (blSlotNo, blHash) =
         else GT
     x -> x
 
-loadLedgerStateFromFile :: TopLevelConfig CardanoBlock -> Bool -> CardanoPoint -> LedgerStateFile -> App (Either Text CardanoLedgerState)
-loadLedgerStateFromFile config delete point lsf = do
+loadLedgerStateFromFile ::
+  Trace IO Text ->
+  TopLevelConfig CardanoBlock ->
+  Bool ->
+  CardanoPoint ->
+  LedgerStateFile ->
+  IO (Either Text CardanoLedgerState)
+loadLedgerStateFromFile tracer config delete point lsf = do
   mst <- safeReadFile (lsfFilePath lsf)
   case mst of
     Left err -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure (Left err)
     Right st -> pure $ Right st
   where
-    safeReadFile :: FilePath -> App (Either Text CardanoLedgerState)
+    safeReadFile :: FilePath -> IO (Either Text CardanoLedgerState)
     safeReadFile fp = do
-      tracer <- askTrace
-      startTime <- liftIO getCurrentTime
-      mbs <- liftIO $ Exception.try $ BS.readFile fp
+      startTime <- getCurrentTime
+      mbs <- Exception.try $ BS.readFile fp
       case mbs of
         Left (err :: IOException) -> pure $ Left (Text.pack $ displayException err)
         Right bs -> do
-          mediumTime <- liftIO getCurrentTime
+          mediumTime <- getCurrentTime
           case decode bs of
             Left err -> pure $ Left $ textShow err
             Right ls -> do
-              endTime <- liftIO getCurrentTime
-              liftIO $
-                logInfo tracer $
-                  mconcat
-                    [ "Found snapshot file for "
-                    , renderPoint point
-                    , ". It took "
-                    , textShow (diffUTCTime mediumTime startTime)
-                    , " to read from disk and "
-                    , textShow (diffUTCTime endTime mediumTime)
-                    , " to parse."
-                    ]
+              endTime <- getCurrentTime
+              logInfo tracer $
+                mconcat
+                  [ "Found snapshot file for "
+                  , renderPoint point
+                  , ". It took "
+                  , textShow (diffUTCTime mediumTime startTime)
+                  , " to read from disk and "
+                  , textShow (diffUTCTime endTime mediumTime)
+                  , " to parse."
+                  ]
               pure $ Right ls
 
     codecConfig :: CodecConfig CardanoBlock
@@ -703,7 +708,7 @@ getSlotNoSnapshot (InMemory cp) = pointSlot cp
 listKnownSnapshots :: HasLedgerEnv -> App [SnapshotPoint]
 listKnownSnapshots env = do
   inMem <- fmap InMemory <$> listMemorySnapshots env
-  onDisk <- fmap OnDisk <$> listLedgerStateFilesOrdered (leDir env)
+  onDisk <- fmap OnDisk <$> liftIO (listLedgerStateFilesOrdered (leDir env))
   pure $ reverse $ List.sortOn getSlotNoSnapshot $ inMem <> onDisk
 
 listMemorySnapshots :: HasLedgerEnv -> App [CardanoPoint]
@@ -726,7 +731,7 @@ listMemorySnapshots env = do
     notGenesis (BlockPoint _ _) = True
 
 -- Get a list of the ledger state files order most recent
-listLedgerStateFilesOrdered :: LedgerStateDir -> App [LedgerStateFile]
+listLedgerStateFilesOrdered :: LedgerStateDir -> IO [LedgerStateFile]
 listLedgerStateFilesOrdered dir = do
   files <- liftIO $ filter isLedgerStateFile <$> listDirectory (unLedgerStateDir dir)
   pure . List.sortBy revSlotNoOrder $ mapMaybe (parseLedgerStateFileName dir) files
@@ -741,7 +746,7 @@ writeLedgerState :: HasLedgerEnv -> Strict.Maybe LedgerDB -> App ()
 writeLedgerState env mLedgerDb = liftIO $ atomically $ writeTVar (leStateVar env) mLedgerDb
 
 -- | Remove given file path and ignore any IOEXceptions.
-safeRemoveFile :: FilePath -> App ()
+safeRemoveFile :: FilePath -> IO ()
 safeRemoveFile fp = liftIO $ handle (\(_ :: IOException) -> pure ()) $ removeFile fp
 
 getRegisteredPools :: CardanoLedgerState -> Set.Set PoolKeyHash

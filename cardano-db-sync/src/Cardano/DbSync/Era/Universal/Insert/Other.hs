@@ -22,7 +22,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
 import qualified Cardano.Db as DB
 import Cardano.DbSync.AppT (App, MonadAppDB (..), SyncEnv (..))
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
-import Cardano.DbSync.Cache.Types (UpdateCache (..), CacheStatus)
+import Cardano.DbSync.Cache.Types (CacheStatus, UpdateCache (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query (queryStakeRefPtr)
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -139,7 +139,7 @@ insertStakeAddressRefIfMissing cache addr =
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress cacheStatus DoNotUpdateCache nw cred
+          Just <$> queryOrInsertStakeAddress cache DoNotUpdateCache nw cred
         Ledger.StakeRefPtr ptr -> do
           queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing

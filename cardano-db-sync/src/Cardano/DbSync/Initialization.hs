@@ -16,7 +16,7 @@ import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.AppT (
   ConsistentLevel (..),
-  EpochState (..),
+  CurrentEpochNo (..),
   FixesRan (..),
   LedgerEnv (..),
   NoLedgerEnv (..),
@@ -25,7 +25,7 @@ import Cardano.DbSync.AppT (
   SyncEnv (..),
   SyncOptions (..),
  )
-import Cardano.DbSync.Cache.Types (CacheStatus (..), newEmptyCache)
+import Cardano.DbSync.Cache.Types (newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
@@ -77,7 +77,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   oprq <- newTBQueueIO 1000
   oawq <- newTBQueueIO 1000
   oarq <- newTBQueueIO 1000
-  epochVar <- newTVarIO initEpochState
+  epochVar <- newTVarIO initCurrentEpochNo
   epochSyncTime <- newTVarIO =<< getCurrentTime
   ledgerEnvType <-
     case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
@@ -107,7 +107,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
       , envDbConstraints = dbCNamesVar
-      , envEpochState = epochVar
+      , envCurrentEpochNo = epochVar
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar
       , envIsFixed = fixDataVar
@@ -230,9 +230,8 @@ getBootstrapInProgress trce bootstrapFlag sqlBackend = do
               ]
         pure False
 
-initEpochState :: EpochState
-initEpochState =
-  EpochState
-    { esInitialized = False
-    , esEpochNo = Strict.Nothing
+initCurrentEpochNo :: CurrentEpochNo
+initCurrentEpochNo =
+  CurrentEpochNo
+    { cenEpochNo = Strict.Nothing
     }

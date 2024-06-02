@@ -50,7 +50,8 @@ import Cardano.DbSync
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Error (runOrThrowIO)
-import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
+import Cardano.DbSync.Metrics (MetricSetters (..))
+import Cardano.DbSync.Types (CardanoBlock)
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import Cardano.Node.Protocol.Shelley (readLeaderCredentials)

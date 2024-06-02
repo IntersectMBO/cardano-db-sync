@@ -83,15 +83,15 @@ insertCertificate isMember mDeposits blkId txId epochNo slotNo redeemers (Generi
     Right (ConwayTxCertGov c) ->
       when isGov $ case c of
         ConwayRegDRep cred coin anchor ->
-          insertDrepRegistration txId idx cred (Just coin) (strictMaybeToMaybe anchor)
+          insertDrepRegistration blkId txId idx cred (Just coin) (strictMaybeToMaybe anchor)
         ConwayUnRegDRep cred coin ->
           insertDrepDeRegistration txId idx cred coin
         ConwayAuthCommitteeHotKey khCold khHot ->
           insertCommitteeRegistration txId idx khCold khHot
         ConwayResignCommitteeColdKey khCold anchor ->
-          insertCommitteeDeRegistration txId idx khCold (strictMaybeToMaybe anchor)
+          insertCommitteeDeRegistration blkId txId idx khCold (strictMaybeToMaybe anchor)
         ConwayUpdateDRep cred anchor ->
-          insertDrepRegistration txId idx cred Nothing (strictMaybeToMaybe anchor)
+          insertDrepRegistration blkId txId idx cred Nothing (strictMaybeToMaybe anchor)
   where
     mRedeemerId = mlookup ridx redeemers
 
@@ -214,13 +214,14 @@ insertMirCert txId idx mcert = do
 -- Insert Registration
 --------------------------------------------------------------------------------------------
 insertDrepRegistration ::
+  DB.BlockId ->
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'DRepRole StandardCrypto ->
   Maybe Coin ->
   Maybe (Anchor StandardCrypto) ->
   App ()
-insertDrepRegistration txId idx cred mcoin mAnchor = do
+insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
   votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blkId DB.DrepAnchor
   void
@@ -273,13 +274,14 @@ insertCommitteeRegistration txId idx khCold cred = do
       }
 
 insertCommitteeDeRegistration ::
+  DB.BlockId ->
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
   Maybe (Anchor StandardCrypto) ->
   App ()
-insertCommitteeDeRegistration txId idx khCold mAnchor = do
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId DB.OtherAnchor
+insertCommitteeDeRegistration blkId txId idx khCold mAnchor = do
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blkId DB.OtherAnchor
   khColdId <- insertCommitteeHash khCold
   void
     . dbQueryToApp
@@ -301,7 +303,7 @@ insertStakeDeregistration ::
 insertStakeDeregistration epochNo txId idx mRedeemerId cred = do
   network <- askNetwork
   cache <- asks envCache
-  scId <- queryOrInsertStakeAddress cache EvictAndReturn network cred
+  scId <- queryOrInsertStakeAddress cache EvictAndUpdateCache network cred
   void
     . dbQueryToApp
     . DB.insertStakeDeregistration
