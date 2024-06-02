@@ -12,6 +12,7 @@ module Cardano.DbSync.OffChain.Http (
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..), textShow)
+import qualified Cardano.Db as DB
 import Cardano.DbSync.OffChain.Types (
   PoolOffChainMetadata (..),
   PoolTicker (..),
@@ -81,12 +82,12 @@ httpGetOffChainVoteData ::
   Http.Request ->
   VoteUrl ->
   Maybe VoteMetaHash ->
-  Bool ->
+  DB.AnchorType ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-httpGetOffChainVoteData manager request vurl metaHash isGovAction = do
+httpGetOffChainVoteData manager request vurl metaHash anchorType = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
-  (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash isGovAction (Just $ OffChainVoteUrl vurl)
+  (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash
@@ -100,8 +101,8 @@ httpGetOffChainVoteData manager request vurl metaHash isGovAction = do
     req = httpGetBytes manager request 10000 30000 url
     url = OffChainVoteUrl vurl
 
-parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> Bool -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
-parseAndValidateVoteData bs lbs metaHash isGa murl = do
+parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> DB.AnchorType -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
+parseAndValidateVoteData bs lbs metaHash anchorType murl = do
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
   (hsh, mWarning) <- case unVoteMetaHash <$> metaHash of
     Nothing -> pure (metadataHash, Nothing)
@@ -111,7 +112,7 @@ parseAndValidateVoteData bs lbs metaHash isGa murl = do
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
       Right res -> pure res
   ocvd <-
-    case Vote.eitherDecodeOffChainVoteData lbs isGa of
+    case Vote.eitherDecodeOffChainVoteData lbs anchorType of
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
       Right res -> pure res
   pure (ocvd, decodedValue, hsh, mWarning)

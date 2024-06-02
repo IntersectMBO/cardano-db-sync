@@ -1,6 +1,8 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..))
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Error (bsBase16Encode, runOrThrowIO)
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.Types
@@ -30,9 +32,10 @@ import System.Exit (exitFailure)
 main :: IO ()
 main = do
   xs <- getArgs
+  let voteType = getVoteType xs
   case cleanOpt xs of
-    [url] -> runGet (isItVote xs) (isItGa xs) (isItLink xs) (Text.pack url) Nothing
-    [url, hash] -> runGet (isItVote xs) (isItGa xs) (isItLink xs) (Text.pack url) (Just $ parseHash hash)
+    [url] -> runGet voteType (isItLink xs) (Text.pack url) Nothing
+    [url, hash] -> runGet voteType (isItLink xs) (Text.pack url) (Just $ parseHash hash)
     _otherwise -> usageExit
   where
     parseHash :: String -> BS.ByteString
@@ -44,17 +47,30 @@ main = do
     cleanOpt :: [String] -> [String]
     cleanOpt ls = List.delete "ga" $ List.delete "vote" $ List.delete "pool" ls
 
-    isItVote ls = List.elem "vote" ls || isItGa ls
-    isItGa = List.elem "ga"
+    getVoteType :: [String] -> Maybe OffChainVoteType
+    getVoteType ls
+      | "ga" `List.elem` ls = Just GovAction
+      | "drep" `List.elem` ls = Just DrepReg
+      | "vote" `List.elem` ls = Just Other
+      | otherwise = Nothing
     isItLink = List.elem "url"
 
-    runGet isVote isGa isLink url mhsh
-      | isVote && isLink =
-          runHttpGetVote (VoteUrl url) (VoteMetaHash <$> mhsh) isGa
-      | isVote && not isLink =
-          runGetVote url (VoteMetaHash <$> mhsh) isGa
-      | otherwise =
-          runHttpGetPool (PoolUrl url) (PoolMetaHash <$> mhsh)
+    runGet mvtype isLink url mhsh = case mvtype of
+      Just vtype
+        | isLink ->
+            runHttpGetVote (VoteUrl url) (VoteMetaHash <$> mhsh) (toDBOffChainVoteType vtype)
+      Just vtype ->
+        runGetVote url (VoteMetaHash <$> mhsh) (toDBOffChainVoteType vtype)
+      _ ->
+        runHttpGetPool (PoolUrl url) (PoolMetaHash <$> mhsh)
+
+data OffChainVoteType = GovAction | DrepReg | Other
+
+toDBOffChainVoteType :: OffChainVoteType -> DB.AnchorType
+toDBOffChainVoteType = \case
+  GovAction -> DB.GovActionAnchor
+  DrepReg -> DB.DrepAnchor
+  Other -> DB.OtherAnchor
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -93,15 +109,15 @@ runHttpGetPool poolUrl mHash =
             else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BSC.unpack ct)
       Text.putStrLn $ spodJson spod
 
-runHttpGetVote :: VoteUrl -> Maybe VoteMetaHash -> Bool -> IO ()
-runHttpGetVote voteUrl mHash isGa =
+runHttpGetVote :: VoteUrl -> Maybe VoteMetaHash -> DB.AnchorType -> IO ()
+runHttpGetVote voteUrl mHash vtype =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
     httpGet = do
       request <- parseOffChainUrl $ OffChainVoteUrl voteUrl
       manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetOffChainVoteData manager request voteUrl mHash isGa
+      httpGetOffChainVoteData manager request voteUrl mHash vtype
 
     reportSuccess :: SimplifiedOffChainVoteData -> IO ()
     reportSuccess spod = do
@@ -113,11 +129,11 @@ runHttpGetVote voteUrl mHash isGa =
             else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BSC.unpack ct)
       Text.putStrLn $ sovaJson spod
 
-runGetVote :: Text.Text -> Maybe VoteMetaHash -> Bool -> IO ()
-runGetVote file mExpectedHash isGa = do
+runGetVote :: Text.Text -> Maybe VoteMetaHash -> DB.AnchorType -> IO ()
+runGetVote file mExpectedHash vtype = do
   respBs <- BS.readFile (Text.unpack file)
   let respLBs = fromStrict respBs
-  (ocvd, val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash isGa Nothing
+  (ocvd, val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash vtype Nothing
   print ocvd
   print val
   print $ bsBase16Encode hsh
