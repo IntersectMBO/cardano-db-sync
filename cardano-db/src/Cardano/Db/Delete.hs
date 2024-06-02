@@ -117,6 +117,8 @@ deleteTablesAfterBlockId blkId mtxId minIds = do
   whenJust mvaId $ \vaId -> do
     mocvdId <- queryMinRefId OffChainVoteDataVotingAnchorId vaId
     whenJust mocvdId $ \ocvdId -> do
+      queryFirstAndDeleteAfter OffChainVoteGovActionDataOffChainVoteDataId ocvdId
+      queryFirstAndDeleteAfter OffChainVoteDrepDataOffChainVoteDataId ocvdId
       queryFirstAndDeleteAfter OffChainVoteAuthorOffChainVoteDataId ocvdId
       queryFirstAndDeleteAfter OffChainVoteReferenceOffChainVoteDataId ocvdId
       queryFirstAndDeleteAfter OffChainVoteExternalUpdateOffChainVoteDataId ocvdId
