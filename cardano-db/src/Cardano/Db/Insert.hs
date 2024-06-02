@@ -56,6 +56,8 @@ module Cardano.Db.Insert (
   insertCheckOffChainPoolData,
   insertCheckOffChainPoolFetchError,
   insertOffChainVoteData,
+  insertOffChainVoteGovActionData,
+  insertOffChainVoteDrepData,
   insertOffChainVoteAuthors,
   insertOffChainVoteReference,
   insertOffChainVoteExternalUpdate,
@@ -342,6 +344,12 @@ insertOffChainVoteData ocvd = do
   if foundVotingAnchor
     then Just <$> insertCheckUnique "OffChainVoteData" ocvd
     else pure Nothing
+
+insertOffChainVoteGovActionData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteGovActionData -> ReaderT SqlBackend m OffChainVoteGovActionDataId
+insertOffChainVoteGovActionData = insertUnchecked "OffChainVoteGovActionData"
+
+insertOffChainVoteDrepData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteDrepData -> ReaderT SqlBackend m OffChainVoteDrepDataId
+insertOffChainVoteDrepData = insertUnchecked "OffChainVoteDrepData"
 
 insertOffChainVoteAuthors :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteAuthor] -> ReaderT SqlBackend m ()
 insertOffChainVoteAuthors = void . insertMany' "OffChainVoteAuthor"

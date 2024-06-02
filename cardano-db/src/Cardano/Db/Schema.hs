@@ -690,16 +690,27 @@ share
     hash                ByteString
     language            Text
     comment             Text Maybe
-    title               Text Maybe
-    abstract            Text Maybe
-    motivation          Text Maybe
-    rationale           Text Maybe
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     warning             Text Maybe
     isValid             Bool Maybe
     UniqueOffChainVoteData votingAnchorId hash
     deriving Show
+
+  OffChainVoteGovActionData
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    title               Text
+    abstract            Text
+    motivation          Text
+    rationale           Text
+
+  OffChainVoteDrepData
+    offChainVoteDataId  OffChainVoteDataId  noreference
+    paymentAddress      Text Maybe
+    givenName           Text
+    objectives          Text Maybe
+    motivations         Text Maybe
+    qualifications      Text Maybe
 
   OffChainVoteAuthor
     offChainVoteDataId  OffChainVoteDataId  noreference
@@ -1340,10 +1351,6 @@ schemaDocs =
       OffChainVoteDataVotingAnchorId # "The VotingAnchor table index this offchain data refers."
       OffChainVoteDataHash # "The hash of the offchain data."
       OffChainVoteDataLanguage # "The langauge described in the context of the metadata. Described in CIP-100. New in 13.3-Conway."
-      OffChainVoteDataComment # "The title of the metadata. Described in CIP-108. New in 13.3-Conway."
-      OffChainVoteDataAbstract # "The abstract of the metadata. Described in CIP-108. New in 13.3-Conway."
-      OffChainVoteDataMotivation # "The motivation of the metadata. Described in CIP-108. New in 13.3-Conway."
-      OffChainVoteDataRationale # "The rationale of the metadata. Described in CIP-108. New in 13.3-Conway."
       OffChainVoteDataJson # "The payload as JSON."
       OffChainVoteDataBytes # "The raw bytes of the payload."
       OffChainVoteDataWarning # "A warning that occured while validating the metadata."
@@ -1351,6 +1358,23 @@ schemaDocs =
         # "False if the data is found invalid. db-sync leaves this field null \
           \since it normally populates off_chain_vote_fetch_error for invalid data. \
           \It can be used manually to mark some metadata invalid by clients."
+
+    OffChainVoteGovActionData --^ do
+      "The table with offchain metadata for Governance Actions. Implementes CIP-108. New in 13.3-Conway."
+      OffChainVoteGovActionDataOffChainVoteDataId # "The vote metadata table index this offchain data belongs to."
+      OffChainVoteGovActionDataTitle # "The title"
+      OffChainVoteGovActionDataAbstract # "The abstract"
+      OffChainVoteGovActionDataMotivation # "The motivation"
+      OffChainVoteGovActionDataRationale # "The rationale"
+
+    OffChainVoteDrepData --^ do
+      "The table with offchain metadata for Drep Registrations. Implementes CIP-108. New in 13.3-Conway."
+      OffChainVoteDrepDataOffChainVoteDataId # "The vote metadata table index this offchain data belongs to."
+      OffChainVoteDrepDataPaymentAddress # "The payment address"
+      OffChainVoteDrepDataGivenName # "The name. This is the only mandatory field"
+      OffChainVoteDrepDataObjectives # "The objectives"
+      OffChainVoteDrepDataMotivations # "The motivations"
+      OffChainVoteDrepDataQualifications # "The qualifications"
 
     OffChainVoteAuthor --^ do
       "The table with offchain metadata authors, as decribed in CIP-100. New in 13.3-Conway."

@@ -143,6 +143,10 @@ insertOffChainVoteResults trce resultQueue = do
       OffChainVoteResultMetadata md accessors -> do
         mocvdId <- DB.insertOffChainVoteData md
         whenJust mocvdId $ \ocvdId -> do
+          whenJust (offChainVoteGovAction accessors ocvdId) $ \ocvga ->
+            void $ DB.insertOffChainVoteGovActionData ocvga
+          whenJust (offChainVoteDrep accessors ocvdId) $ \ocvdr ->
+            void $ DB.insertOffChainVoteDrepData ocvdr
           DB.insertOffChainVoteAuthors $ offChainVoteAuthors accessors ocvdId
           DB.insertOffChainVoteReference $ offChainVoteReferences accessors ocvdId
           DB.insertOffChainVoteExternalUpdate $ offChainVoteExternalUpdates accessors ocvdId
@@ -275,10 +279,6 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
               DB.OffChainVoteData
                 { DB.offChainVoteDataLanguage = Vote.getLanguage offChainData
                 , DB.offChainVoteDataComment = Vote.textValue <$> Vote.comment minimalBody
-                , DB.offChainVoteDataTitle = Vote.getTitle offChainData
-                , DB.offChainVoteDataAbstract = Vote.getAbstract offChainData
-                , DB.offChainVoteDataMotivation = Vote.getMotivation offChainData
-                , DB.offChainVoteDataRationale = Vote.getRationale offChainData
                 , DB.offChainVoteDataBytes = sovaBytes sVoteData
                 , DB.offChainVoteDataHash = sovaHash sVoteData
                 , DB.offChainVoteDataJson = sovaJson sVoteData
@@ -286,11 +286,13 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
                 , DB.offChainVoteDataWarning = sovaWarning sVoteData
                 , DB.offChainVoteDataIsValid = Nothing
                 }
+            gaF ocvdId = mkGovAction ocvdId offChainData
+            drepF ocvdId = mkDrep ocvdId offChainData
             authorsF ocvdId = map (mkAuthor ocvdId) $ Vote.getAuthors offChainData
             referencesF ocvdId = map (mkReference ocvdId) $ mListToList $ Vote.references minimalBody
             externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
            in
-            OffChainVoteResultMetadata vdt (OffChainVoteAccessors authorsF referencesF externalUpdatesF)
+            OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
         Left err ->
           OffChainVoteResultError $
             DB.OffChainVoteFetchError
@@ -299,6 +301,31 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
               , DB.offChainVoteFetchErrorFetchTime = Time.posixSecondsToUTCTime time
               , DB.offChainVoteFetchErrorRetryCount = retryCount (oVoteWqRetry oVoteWorkQ)
               }
+    mkGovAction ocvdId = \case
+      Vote.OffChainVoteDataGa dt ->
+        Just $
+          DB.OffChainVoteGovActionData
+            { DB.offChainVoteGovActionDataOffChainVoteDataId = ocvdId
+            , DB.offChainVoteGovActionDataTitle = Vote.textValue $ Vote.title $ Vote.body dt
+            , DB.offChainVoteGovActionDataAbstract = Vote.textValue $ Vote.abstract $ Vote.body dt
+            , DB.offChainVoteGovActionDataMotivation = Vote.textValue $ Vote.motivation $ Vote.body dt
+            , DB.offChainVoteGovActionDataRationale = Vote.textValue $ Vote.rationale $ Vote.body dt
+            }
+      _ -> Nothing
+
+    mkDrep ocvdId = \case
+      Vote.OffChainVoteDataDr dt ->
+        Just $
+          DB.OffChainVoteDrepData
+            { DB.offChainVoteDrepDataOffChainVoteDataId = ocvdId
+            , DB.offChainVoteDrepDataPaymentAddress = Vote.textValue <$> Vote.paymentAddress (Vote.body dt)
+            , DB.offChainVoteDrepDataGivenName = Vote.textValue $ Vote.givenName $ Vote.body dt
+            , DB.offChainVoteDrepDataObjectives = Vote.textValue <$> Vote.objectives (Vote.body dt)
+            , DB.offChainVoteDrepDataMotivations = Vote.textValue <$> Vote.motivations (Vote.body dt)
+            , DB.offChainVoteDrepDataQualifications = Vote.textValue <$> Vote.qualifications (Vote.body dt)
+            }
+      _ -> Nothing
+
     mkAuthor ocvdId au =
       DB.OffChainVoteAuthor
         { DB.offChainVoteAuthorOffChainVoteDataId = ocvdId

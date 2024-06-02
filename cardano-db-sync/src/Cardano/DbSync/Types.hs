@@ -153,7 +153,9 @@ data OffChainVoteResult
   | OffChainVoteResultError !OffChainVoteFetchError
 
 data OffChainVoteAccessors = OffChainVoteAccessors
-  { offChainVoteAuthors :: DB.OffChainVoteDataId -> [OffChainVoteAuthor]
+  { offChainVoteGovAction :: DB.OffChainVoteDataId -> Maybe DB.OffChainVoteGovActionData
+  , offChainVoteDrep :: DB.OffChainVoteDataId -> Maybe DB.OffChainVoteDrepData
+  , offChainVoteAuthors :: DB.OffChainVoteDataId -> [OffChainVoteAuthor]
   , offChainVoteReferences :: DB.OffChainVoteDataId -> [OffChainVoteReference]
   , offChainVoteExternalUpdates :: DB.OffChainVoteDataId -> [OffChainVoteExternalUpdate]
   }

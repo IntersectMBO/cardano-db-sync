@@ -157,7 +157,10 @@ data DrepBody = DrepBody
   }
   deriving (Show, Generic)
 
-data Image = Image TextValue
+data Image = Image
+  { contentUrl :: Text
+  , sha256 :: Text
+  }
   deriving (Show, Generic, FromJSON)
 
 data Reference tp = Reference
