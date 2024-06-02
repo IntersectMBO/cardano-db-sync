@@ -270,6 +270,7 @@ data GovActionType
 
 data AnchorType
   = GovActionAnchor
+  | DrepAnchor
   | OtherAnchor
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet AnchorType)
@@ -444,12 +445,14 @@ renderAnchorType :: AnchorType -> Text
 renderAnchorType gav =
   case gav of
     GovActionAnchor -> "gov_action"
+    DrepAnchor -> "drep"
     OtherAnchor -> "other"
 
 readAnchorType :: String -> AnchorType
 readAnchorType str =
   case str of
     "gov_action" -> GovActionAnchor
+    "drep" -> DrepAnchor
     "other" -> OtherAnchor
     _other -> error $ "readAnchorType: Unknown AnchorType " ++ str
 

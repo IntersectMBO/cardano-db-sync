@@ -245,7 +245,7 @@ insertDrepRegistration ::
   ReaderT SqlBackend m ()
 insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blkId DB.OtherAnchor
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blkId DB.DrepAnchor
   void
     . DB.insertDrepRegistration
     $ DB.DrepRegistration
