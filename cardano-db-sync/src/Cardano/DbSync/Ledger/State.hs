@@ -289,10 +289,10 @@ applyBlock env blk = do
     finaliseDrepDistr ledger =
       ledger & newEpochStateT %~ forceDRepPulsingState @StandardConway
 
-getEnacted :: ExtLedgerState CardanoBlock -> Maybe (GovRelation StrictMaybe StandardConway)
+getEnacted :: ExtLedgerState CardanoBlock -> Maybe (ConwayGovState StandardConway)
 getEnacted ls = case ledgerState ls of
   LedgerStateConway cls ->
-    Just $ govStatePrevGovActionIds $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
+    Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
   _ -> Nothing
 
 getCommittee :: ExtLedgerState CardanoBlock -> Maybe (StrictMaybe (Committee StandardConway))

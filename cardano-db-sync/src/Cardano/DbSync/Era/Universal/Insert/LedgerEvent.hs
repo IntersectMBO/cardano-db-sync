@@ -7,7 +7,7 @@
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Cardano.DbSync.Era.Universal.Insert.LedgerEvent (
-  insertBlockLedgerEvents,
+  insertNewEpochLedgerEvents,
 ) where
 
 import Cardano.BM.Trace (logInfo)
@@ -36,13 +36,13 @@ import Database.Persist.SqlBackend.Internal.StatementCache
 --------------------------------------------------------------------------------------------
 -- Insert LedgerEvents
 --------------------------------------------------------------------------------------------
-insertBlockLedgerEvents ::
+insertNewEpochLedgerEvents ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   EpochNo ->
   [LedgerEvent] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertBlockLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
+insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
     tracer = getTrace syncEnv

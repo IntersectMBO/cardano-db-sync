@@ -280,8 +280,9 @@ generateNewEpochEvents env details = do
     newEpochEvent lastEpochNo =
       case cenEpochNo lastEpochNo of
         Strict.Nothing -> Just $ LedgerStartAtEpoch currentEpochNo
-        Strict.Just oldEpoch | currentEpochNo == EpochNo (1 + unEpochNo oldEpoch)
-            -> Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
+        Strict.Just oldEpoch
+          | currentEpochNo == EpochNo (1 + unEpochNo oldEpoch) ->
+              Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
         _ -> Nothing
 
     newCurrentEpochNo :: CurrentEpochNo
