@@ -18,16 +18,17 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertParamProposal,
   insertVotingProcedures,
   insertCommitteeHash,
+  insertCommittee,
   insertVotingAnchor,
   resolveGovActionProposal,
   updateRatified,
   updateExpired,
-  updateEnacted,
+  insertUpdateEnacted,
   updateDropped,
 )
 where
 
-import Cardano.BM.Trace (Trace)
+import Cardano.BM.Trace (Trace, logWarning)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
@@ -78,7 +79,7 @@ insertGovActionProposal ::
 insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = do
   addrId <-
     lift $ queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
-  votingAnchorId <- lift $ insertVotingAnchor txId DB.GovActionAnchor $ pProcAnchor pp
+  votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
   mParamProposalId <- lift $
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
@@ -108,8 +109,8 @@ insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = 
           }
   case pProcGovAction pp of
     TreasuryWithdrawals mp _ -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
-    UpdateCommittee _ removed added q -> lift $ insertNewCommittee govActionProposalId removed added q
-    NewConstitution _ constitution -> lift $ insertConstitution txId govActionProposalId constitution
+    UpdateCommittee _ removed added q -> lift $ insertNewCommittee (Just govActionProposalId) removed added q
+    NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
     _ -> pure ()
   where
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
@@ -131,37 +132,41 @@ insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = 
           }
 
     insertNewCommittee ::
-      DB.GovActionProposalId ->
+      Maybe DB.GovActionProposalId ->
       Set (Ledger.Credential 'ColdCommitteeRole StandardCrypto) ->
       Map (Ledger.Credential 'ColdCommitteeRole StandardCrypto) EpochNo ->
       UnitInterval ->
       ReaderT SqlBackend m ()
     insertNewCommittee gapId removed added q = do
-      insertNewCommitteeInfo gapId q
-      insertMembers gapId removed added q
+      void $ insertCommittee' gapId (updatedCommittee removed added q <$> mmCommittee) q
 
-    insertNewCommitteeInfo gapId q =
-      void . DB.insertNewCommitteeInfo $
-        DB.NewCommitteeInfo
-          { DB.newCommitteeInfoGovActionProposalId = gapId
-          , DB.newCommitteeInfoQuorumNumerator = fromIntegral $ numerator r
-          , DB.newCommitteeInfoQuorumDenominator = fromIntegral $ denominator r
-          }
-      where
-        r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
-    insertMembers gapId removed added q = do
-      whenJust mmCommittee $ \mCommittee -> do
-        -- Nothing means we're not in Conway so it can't happen.
-        let committee = updatedCommittee removed added q mCommittee
-        mapM_ (insertNewMember gapId) (Map.toList $ committeeMembers committee)
+insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.NewCommitteeInfoId
+insertCommittee mgapId committee = do
+  insertCommittee' mgapId (Just committee) (committeeThreshold committee)
 
-    insertNewMember gapId (cred, e) = do
+insertCommittee' :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Maybe (Committee StandardConway) -> UnitInterval -> ReaderT SqlBackend m DB.NewCommitteeInfoId
+insertCommittee' mgapId mcommittee q = do
+  infoId <- insertNewCommitteeInfo
+  whenJust mcommittee $ \committee ->
+    mapM_ (insertNewMember infoId) (Map.toList $ committeeMembers committee)
+  pure infoId
+  where
+    r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
+    insertNewMember infoId (cred, e) = do
       chId <- insertCommitteeHash cred
       void . DB.insertNewCommitteeMember $
         DB.NewCommitteeMember
-          { DB.newCommitteeMemberGovActionProposalId = gapId
+          { DB.newCommitteeMemberNewCommitteeInfoId = infoId
           , DB.newCommitteeMemberCommitteeHashId = chId
           , DB.newCommitteeMemberExpirationEpoch = unEpochNo e
+          }
+
+    insertNewCommitteeInfo =
+      DB.insertNewCommitteeInfo $
+        DB.NewCommitteeInfo
+          { DB.newCommitteeInfoGovActionProposalId = mgapId
+          , DB.newCommitteeInfoQuorumNumerator = fromIntegral $ numerator r
+          , DB.newCommitteeInfoQuorumDenominator = fromIntegral $ denominator r
           }
 
 --------------------------------------------------------------------------------------
@@ -249,12 +254,12 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
       }
 
-insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m ()
-insertConstitution txId gapId constitution = do
-  votingAnchorId <- insertVotingAnchor txId DB.OtherAnchor $ constitutionAnchor constitution
-  void . DB.insertConstitution $
+insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m DB.ConstitutionId
+insertConstitution blockId mgapId constitution = do
+  votingAnchorId <- insertVotingAnchor blockId DB.OtherAnchor $ constitutionAnchor constitution
+  DB.insertConstitution $
     DB.Constitution
-      { DB.constitutionGovActionProposalId = gapId
+      { DB.constitutionGovActionProposalId = mgapId
       , DB.constitutionVotingAnchorId = votingAnchorId
       , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
       }
@@ -266,23 +271,25 @@ insertVotingProcedures ::
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
   Cache ->
+  DB.BlockId ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedures trce cache txId (voter, actions) =
-  mapM_ (insertVotingProcedure trce cache txId voter) (zip [0 ..] actions)
+insertVotingProcedures trce cache blkId txId (voter, actions) =
+  mapM_ (insertVotingProcedure trce cache blkId txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
   Cache ->
+  DB.BlockId ->
   DB.TxId ->
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
+insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal gaId
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor txId DB.OtherAnchor
+  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.OtherAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred -> do
       khId <- lift $ insertCommitteeHash cred
@@ -308,11 +315,11 @@ insertVotingProcedure trce cache txId voter (index, (gaId, vp)) = do
       , DB.votingProcedureVotingAnchorId = votingAnchorId
       }
 
-insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.TxId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
-insertVotingAnchor txId anchorType anchor =
+insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
+insertVotingAnchor blockId anchorType anchor =
   DB.insertAnchor $
     DB.VotingAnchor
-      { DB.votingAnchorTxId = txId
+      { DB.votingAnchorBlockId = blockId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
       , DB.votingAnchorType = anchorType
@@ -413,27 +420,100 @@ updateDropped epochNo ratifiedActions = do
     gaId <- resolveGovActionProposal action
     lift $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
 
-updateEnacted ::
+insertUpdateEnacted ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  DB.BlockId ->
   EpochNo ->
-  GovRelation StrictMaybe StandardConway ->
+  ConwayGovState StandardConway ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-updateEnacted epochNo enactedState = do
-  whenJust (strictMaybeToMaybe (grPParamUpdate enactedState)) $ \prevId -> do
-    gaId <- resolveGovActionProposal $ getPrevId prevId
-    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+insertUpdateEnacted trce blkId epochNo enactedState = do
+  whenJust (strictMaybeToMaybe (grPParamUpdate govIds)) $ \prevId -> do
+    gaId <- resolveGovActionProposal $ unGovPurposeId prevId
+    void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
 
-  whenJust (strictMaybeToMaybe (grHardFork enactedState)) $ \prevId -> do
-    gaId <- resolveGovActionProposal $ getPrevId prevId
-    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+  whenJust (strictMaybeToMaybe (grHardFork govIds)) $ \prevId -> do
+    gaId <- resolveGovActionProposal $ unGovPurposeId prevId
+    void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
 
-  whenJust (strictMaybeToMaybe (grCommittee enactedState)) $ \prevId -> do
-    gaId <- resolveGovActionProposal $ getPrevId prevId
-    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+  (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
 
-  whenJust (strictMaybeToMaybe (grConstitution enactedState)) $ \prevId -> do
-    gaId <- resolveGovActionProposal $ getPrevId prevId
-    lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+  constitutionId <- handleConstitution
+
+  void $
+    lift $
+      DB.insertEpochState
+        DB.EpochState
+          { DB.epochStateCommitteeId = mcommitteeId
+          , DB.epochStateNoConfidenceId = mnoConfidenceGaId
+          , DB.epochStateConstitutionId = Just constitutionId
+          , DB.epochStateEpochNo = unEpochNo epochNo
+          }
   where
-    getPrevId = unGovPurposeId
+    govIds = govStatePrevGovActionIds enactedState
+
+    handleCommittee = do
+      mCommitteeGaId <- case strictMaybeToMaybe (grCommittee govIds) of
+        Nothing -> pure Nothing
+        Just prevId -> do
+          gaId <- resolveGovActionProposal $ unGovPurposeId prevId
+          _nCommittee <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+          pure $ Just gaId
+
+      case (mCommitteeGaId, strictMaybeToMaybe (cgsCommittee enactedState)) of
+        (Nothing, Nothing) -> pure (Nothing, Nothing)
+        (Nothing, Just committee) -> do
+          -- No enacted proposal means we're after conway genesis territory
+          committeeIds <- lift $ DB.queryProposalNewCommitteeInfo Nothing
+          case committeeIds of
+            [] -> do
+              committeeId <- lift $ insertCommittee Nothing committee
+              pure (Just committeeId, Nothing)
+            (committeeId : _rest) ->
+              pure (Just committeeId, Nothing)
+        (Just committeeGaId, Nothing) ->
+          -- No committee with enacted action means it's a no confidence action.
+          pure (Nothing, Just committeeGaId)
+        (Just committeeGaId, Just committee) -> do
+          committeeIds <- lift $ DB.queryProposalNewCommitteeInfo (Just committeeGaId)
+          case committeeIds of
+            [] -> do
+              -- This should never happen. Having a committee and an enacted action, means
+              -- the committee came from a proposal which should be returned from the query.
+              liftIO $
+                logWarning trce $
+                  mconcat
+                    [ "The impossible happened! Couldn't find the committee "
+                    , textShow committee
+                    , " which was enacted by a proposal "
+                    , textShow committeeGaId
+                    ]
+              pure (Nothing, Nothing)
+            (committeeId : _rest) ->
+              pure (Just committeeId, Nothing)
+
+    handleConstitution = do
+      mConstitutionGaId <- case strictMaybeToMaybe (grConstitution govIds) of
+        Nothing -> pure Nothing
+        Just prevId -> do
+          gaId <- resolveGovActionProposal $ unGovPurposeId prevId
+          _nConstitution <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+          pure $ Just gaId
+
+      constitutionIds <- lift $ DB.queryProposalConstitution mConstitutionGaId
+      case constitutionIds of
+        -- The first case can only happen once on the first Conway epoch.
+        -- On next epochs there will be at least one constitution, so the query will return something.
+        [] -> lift $ insertConstitution blkId Nothing (cgsConstitution enactedState)
+        constitutionId : rest -> do
+          unless (null rest) $
+            liftIO $
+              logWarning trce $
+                mconcat
+                  [ "Found multiple constitutions for proposal "
+                  , textShow mConstitutionGaId
+                  , ": "
+                  , textShow constitutionIds
+                  ]
+          pure constitutionId

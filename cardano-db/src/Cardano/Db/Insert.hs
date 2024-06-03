@@ -87,6 +87,7 @@ module Cardano.Db.Insert (
   insertCommitteeRegistration,
   insertCommitteeDeRegistration,
   insertDrepRegistration,
+  insertEpochState,
   insertAlwaysAbstainDrep,
   insertAlwaysNoConfidence,
   insertUnchecked,
@@ -105,6 +106,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.ByteString.Char8 as BS
+import Data.Int (Int64)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Proxy (Proxy (..))
 import Data.Text (Text)
@@ -137,6 +139,7 @@ import Database.Persist.Sql (
   toPersistValue,
   uniqueDBName,
   uniqueFields,
+  updateWhereCount,
  )
 import qualified Database.Persist.Sql.Util as Util
 import Database.Persist.Types (
@@ -375,9 +378,9 @@ updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
   upsertWhere (EpochStakeProgress epoch True) [EpochStakeProgressCompleted Database.Persist.=. True] [EpochStakeProgressEpochNo Database.Persist.==. epoch]
 
-updateGovActionEnacted :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
+updateGovActionEnacted :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m Int64
 updateGovActionEnacted gaid eNo =
-  updateWhere [GovActionProposalId ==. gaid, GovActionProposalEnactedEpoch ==. Nothing] [GovActionProposalEnactedEpoch =. Just eNo]
+  updateWhereCount [GovActionProposalId ==. gaid, GovActionProposalEnactedEpoch ==. Nothing] [GovActionProposalEnactedEpoch =. Just eNo]
 
 updateGovActionRatified :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
 updateGovActionRatified gaid eNo =
@@ -457,6 +460,9 @@ insertCommitteeDeRegistration = insertUnchecked "CommitteeDeRegistration"
 
 insertDrepRegistration :: (MonadBaseControl IO m, MonadIO m) => DrepRegistration -> ReaderT SqlBackend m DrepRegistrationId
 insertDrepRegistration = insertUnchecked "DrepRegistration"
+
+insertEpochState :: (MonadBaseControl IO m, MonadIO m) => EpochState -> ReaderT SqlBackend m EpochStateId
+insertEpochState = insertUnchecked "EpochState"
 
 insertAlwaysAbstainDrep :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m DrepHashId
 insertAlwaysAbstainDrep = do

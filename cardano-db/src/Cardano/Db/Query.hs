@@ -49,6 +49,7 @@ module Cardano.Db.Query (
   queryForEpochId,
   queryLatestEpoch,
   queryMinRefId,
+  queryMinRefIdNullable,
   queryMaxRefId,
   existsPoolHashId,
   existsPoolMetadataRefId,
@@ -61,6 +62,8 @@ module Cardano.Db.Query (
   queryDrepHashAlwaysAbstain,
   queryDrepHashAlwaysNoConfidence,
   queryCommitteeHash,
+  queryProposalConstitution,
+  queryProposalNewCommitteeInfo,
   -- queries used in smash
   queryOffChainPoolData,
   queryPoolRegister,
@@ -695,6 +698,22 @@ queryMinRefId txIdField txId = do
     pure $ rec ^. persistIdField
   pure $ unValue <$> listToMaybe res
 
+queryMinRefIdNullable ::
+  forall m field record.
+  (MonadIO m, PersistEntity record, PersistField field) =>
+  EntityField record (Maybe field) ->
+  field ->
+  ReaderT SqlBackend m (Maybe (Key record))
+queryMinRefIdNullable txIdField txId = do
+  res <- select $ do
+    rec <- from $ table @record
+    where_ (isJust (rec ^. txIdField))
+    where_ (rec ^. txIdField >=. just (val txId))
+    orderBy [asc (rec ^. persistIdField)]
+    limit 1
+    pure $ rec ^. persistIdField
+  pure $ unValue <$> listToMaybe res
+
 queryMaxRefId ::
   forall m field record.
   (MonadIO m, PersistEntity record, PersistField field) =>
@@ -815,6 +834,22 @@ queryCommitteeHash hash = do
     where_ (ch ^. CommitteeHashRaw ==. val hash)
     pure $ ch ^. CommitteeHashId
   pure $ unValue <$> listToMaybe res
+
+queryProposalConstitution :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [ConstitutionId]
+queryProposalConstitution mgapId = do
+  res <- select $ do
+    c <- from $ table @Constitution
+    where_ (c ^. ConstitutionGovActionProposalId ==. val mgapId)
+    pure $ c ^. ConstitutionId
+  pure $ unValue <$> res
+
+queryProposalNewCommitteeInfo :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [NewCommitteeInfoId]
+queryProposalNewCommitteeInfo mgapId = do
+  res <- select $ do
+    c <- from $ table @NewCommitteeInfo
+    where_ (c ^. NewCommitteeInfoGovActionProposalId ==. val mgapId)
+    pure $ c ^. NewCommitteeInfoId
+  pure $ unValue <$> res
 
 {--------------------------------------------
   Queries use in SMASH

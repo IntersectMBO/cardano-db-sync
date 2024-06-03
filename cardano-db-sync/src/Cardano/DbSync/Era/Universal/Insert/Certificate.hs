@@ -88,15 +88,15 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
     Right (ConwayTxCertGov c) ->
       when (ioGov iopts) $ case c of
         ConwayRegDRep cred coin anchor ->
-          lift $ insertDrepRegistration txId idx cred (Just coin) (strictMaybeToMaybe anchor)
+          lift $ insertDrepRegistration blkId txId idx cred (Just coin) (strictMaybeToMaybe anchor)
         ConwayUnRegDRep cred coin ->
           lift $ insertDrepDeRegistration txId idx cred coin
         ConwayAuthCommitteeHotKey khCold khHot ->
           lift $ insertCommitteeRegistration txId idx khCold khHot
         ConwayResignCommitteeColdKey khCold anchor ->
-          lift $ insertCommitteeDeRegistration txId idx khCold (strictMaybeToMaybe anchor)
+          lift $ insertCommitteeDeRegistration blkId txId idx khCold (strictMaybeToMaybe anchor)
         ConwayUpdateDRep cred anchor ->
-          lift $ insertDrepRegistration txId idx cred Nothing (strictMaybeToMaybe anchor)
+          lift $ insertDrepRegistration blkId txId idx cred Nothing (strictMaybeToMaybe anchor)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv
@@ -236,15 +236,16 @@ insertMirCert _tracer cache network txId idx mcert = do
 --------------------------------------------------------------------------------------------
 insertDrepRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
+  DB.BlockId ->
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'DRepRole StandardCrypto ->
   Maybe Coin ->
   Maybe (Anchor StandardCrypto) ->
   ReaderT SqlBackend m ()
-insertDrepRegistration txId idx cred mcoin mAnchor = do
+insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId DB.OtherAnchor
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blkId DB.OtherAnchor
   void
     . DB.insertDrepRegistration
     $ DB.DrepRegistration
@@ -295,13 +296,14 @@ insertCommitteeRegistration txId idx khCold cred = do
 
 insertCommitteeDeRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
+  DB.BlockId ->
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
   Maybe (Anchor StandardCrypto) ->
   ReaderT SqlBackend m ()
-insertCommitteeDeRegistration txId idx khCold mAnchor = do
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor txId DB.OtherAnchor
+insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blockId DB.OtherAnchor
   khColdId <- insertCommitteeHash khCold
   void
     . DB.insertCommitteeDeRegistration

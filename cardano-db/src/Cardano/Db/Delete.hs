@@ -45,6 +45,7 @@ import Database.Persist.Sql (
   delete,
   deleteWhereCount,
   selectKeysList,
+  (!=.),
   (==.),
   (>.),
   (>=.),
@@ -112,6 +113,17 @@ deleteTablesAfterBlockId blkId mtxId minIds = do
   deleteWhere [AdaPotsBlockId >=. blkId]
   deleteWhere [ReverseIndexBlockId >=. blkId]
   deleteWhere [EpochParamBlockId >=. blkId]
+  mvaId <- queryMinRefId VotingAnchorBlockId blkId
+  whenJust mvaId $ \vaId -> do
+    mocvdId <- queryMinRefId OffChainVoteDataVotingAnchorId vaId
+    whenJust mocvdId $ \ocvdId -> do
+      queryFirstAndDeleteAfter OffChainVoteAuthorOffChainVoteDataId ocvdId
+      queryFirstAndDeleteAfter OffChainVoteReferenceOffChainVoteDataId ocvdId
+      queryFirstAndDeleteAfter OffChainVoteExternalUpdateOffChainVoteDataId ocvdId
+      deleteWhere [OffChainVoteDataId >=. ocvdId]
+    queryFirstAndDeleteAfter OffChainVoteDataVotingAnchorId vaId
+    queryFirstAndDeleteAfter OffChainVoteFetchErrorVotingAnchorId vaId
+    deleteWhere [VotingAnchorId >=. vaId]
   deleteTablesAfterTxId mtxId (minTxInId minIds) (minTxOutId minIds) (minMaTxOutId minIds)
   deleteWhereCount [BlockId >=. blkId]
 
@@ -141,7 +153,6 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     queryFirstAndDeleteAfter RedeemerDataTxId txId
     queryFirstAndDeleteAfter ExtraKeyWitnessTxId txId
     queryFirstAndDeleteAfter ParamProposalRegisteredTxId txId
-    queryFirstAndDeleteAfter VotingAnchorTxId txId
     queryFirstAndDeleteAfter DelegationVoteTxId txId
     queryFirstAndDeleteAfter CommitteeRegistrationTxId txId
     queryFirstAndDeleteAfter CommitteeDeRegistrationTxId txId
@@ -150,21 +161,9 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     mgaId <- queryMinRefId GovActionProposalTxId txId
     whenJust mgaId $ \gaId -> do
       queryFirstAndDeleteAfter TreasuryWithdrawalGovActionProposalId gaId
-      queryFirstAndDeleteAfter NewCommitteeInfoGovActionProposalId gaId
-      queryFirstAndDeleteAfter NewCommitteeMemberGovActionProposalId gaId
-      queryFirstAndDeleteAfter ConstitutionGovActionProposalId gaId
+      queryFirstAndDeleteAfter' NewCommitteeInfoGovActionProposalId gaId
+      queryFirstAndDeleteAfter' ConstitutionGovActionProposalId gaId
       deleteWhere [GovActionProposalId >=. gaId]
-    mvaId <- queryMinRefId VotingAnchorTxId txId
-    whenJust mvaId $ \vaId -> do
-      mocvdId <- queryMinRefId OffChainVoteDataVotingAnchorId vaId
-      whenJust mocvdId $ \ocvdId -> do
-        queryFirstAndDeleteAfter OffChainVoteAuthorOffChainVoteDataId ocvdId
-        queryFirstAndDeleteAfter OffChainVoteReferenceOffChainVoteDataId ocvdId
-        queryFirstAndDeleteAfter OffChainVoteExternalUpdateOffChainVoteDataId ocvdId
-        deleteWhere [OffChainVoteDataId >=. ocvdId]
-      queryFirstAndDeleteAfter OffChainVoteDataVotingAnchorId vaId
-      queryFirstAndDeleteAfter OffChainVoteFetchErrorVotingAnchorId vaId
-      deleteWhere [VotingAnchorId >=. vaId]
     minPmr <- queryMinRefId PoolMetadataRefRegisteredTxId txId
     whenJust minPmr $ \pmrId -> do
       queryFirstAndDeleteAfter OffChainPoolDataPmrId pmrId
@@ -187,6 +186,17 @@ queryFirstAndDeleteAfter txIdField txId = do
   mRecordId <- queryMinRefId txIdField txId
   whenJust mRecordId $ \recordId ->
     deleteWhere [persistIdField @record >=. recordId]
+
+queryFirstAndDeleteAfter' ::
+  forall m record field.
+  (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
+  EntityField record (Maybe field) ->
+  field ->
+  ReaderT SqlBackend m ()
+queryFirstAndDeleteAfter' txIdField txId = do
+  mRecordId <- queryMinRefIdNullable txIdField txId
+  whenJust mRecordId $ \recordId ->
+    deleteWhere [persistIdField @record >=. recordId, txIdField !=. Nothing]
 
 -- | Delete a delisted pool if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.

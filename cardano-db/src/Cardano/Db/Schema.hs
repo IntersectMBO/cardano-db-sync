@@ -594,7 +594,7 @@ share
     drepHashId          DrepHashId          noreference
 
   VotingAnchor
-    txId                TxId                noreference
+    blockId             BlockId             noreference
     dataHash            ByteString
     url                 VoteUrl             sqltype=varchar
     type                AnchorType          sqltype=anchorType
@@ -622,17 +622,17 @@ share
     amount               DbLovelace          sqltype=lovelace
 
   NewCommitteeInfo
-    govActionProposalId  GovActionProposalId  noreference
+    govActionProposalId  GovActionProposalId Maybe noreference
     quorumNumerator      Word64
     quorumDenominator    Word64
 
   NewCommitteeMember
-    govActionProposalId  GovActionProposalId  noreference
+    newCommitteeInfoId   NewCommitteeInfoId   -- here intentionally we use foreign keys
     committeeHashId      CommitteeHashId      noreference
     expirationEpoch      Word64               sqltype=word31type
 
   Constitution
-    govActionProposalId  GovActionProposalId  noreference
+    govActionProposalId  GovActionProposalId Maybe noreference
     votingAnchorId       VotingAnchorId       noreference
     scriptHash           ByteString Maybe     sqltype=hash28type
 
@@ -653,6 +653,12 @@ share
     epochNo                 Word64              sqltype=word31type
     activeUntil             Word64 Maybe        sqltype=word31type
     UniqueDrepDistr hashId epochNo
+
+  EpochState
+    committeeId             NewCommitteeInfoId Maybe noreference
+    noConfidenceId          GovActionProposalId Maybe noreference
+    constitutionId          ConstitutionId Maybe noreference
+    epochNo                 Word64              sqltype=word31type
 
   -- -----------------------------------------------------------------------------------------------
   -- OffChain (ie not on the blockchain) data.
@@ -1271,7 +1277,7 @@ schemaDocs =
     VotingAnchor --^ do
       "A table for every Anchor that appears on Governance Actions. These are pointers to offchain metadata. \
       \ The tuple of url and hash is unique. New in 13.2-Conway."
-      VotingAnchorTxId # "The Tx table index of the tx that includes this anchor. This only exists to facilitate rollbacks"
+      VotingAnchorBlockId # "The Block table index of the tx that includes this anchor. This only exists to facilitate rollbacks"
       VotingAnchorDataHash # "A hash of the contents of the metadata URL"
       VotingAnchorUrl # "A URL to a JSON payload of metadata"
 
@@ -1306,7 +1312,7 @@ schemaDocs =
 
     NewCommitteeInfo --^ do
       "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
-      NewCommitteeInfoGovActionProposalId # "The GovActionProposal table index for this new committee."
+      NewCommitteeInfoGovActionProposalId # "The GovActionProposal table index for this new committee. This can be null for genesis committees."
       NewCommitteeInfoQuorumNumerator # "The proposed quorum nominator."
       NewCommitteeInfoQuorumDenominator # "The proposed quorum denominator."
 
