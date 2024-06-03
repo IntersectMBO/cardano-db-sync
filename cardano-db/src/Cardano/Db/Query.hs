@@ -63,7 +63,7 @@ module Cardano.Db.Query (
   queryDrepHashAlwaysNoConfidence,
   queryCommitteeHash,
   queryProposalConstitution,
-  queryProposalNewCommitteeInfo,
+  queryProposalCommittee,
   -- queries used in smash
   queryOffChainPoolData,
   queryPoolRegister,
@@ -839,17 +839,25 @@ queryProposalConstitution :: MonadIO m => Maybe GovActionProposalId -> ReaderT S
 queryProposalConstitution mgapId = do
   res <- select $ do
     c <- from $ table @Constitution
-    where_ (c ^. ConstitutionGovActionProposalId ==. val mgapId)
+    where_ (bl c)
     pure $ c ^. ConstitutionId
   pure $ unValue <$> res
+  where
+    bl c = case mgapId of
+      Nothing -> isNothing (c ^. ConstitutionGovActionProposalId)
+      Just vl -> c ^. ConstitutionGovActionProposalId ==. val (Just vl)
 
-queryProposalNewCommitteeInfo :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [NewCommitteeInfoId]
-queryProposalNewCommitteeInfo mgapId = do
+queryProposalCommittee :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [CommitteeId]
+queryProposalCommittee mgapId = do
   res <- select $ do
-    c <- from $ table @NewCommitteeInfo
-    where_ (c ^. NewCommitteeInfoGovActionProposalId ==. val mgapId)
-    pure $ c ^. NewCommitteeInfoId
+    c <- from $ table @Committee
+    where_ (bl c)
+    pure $ c ^. CommitteeId
   pure $ unValue <$> res
+  where
+    bl c = case mgapId of
+      Nothing -> isNothing (c ^. CommitteeGovActionProposalId)
+      Just vl -> c ^. CommitteeGovActionProposalId ==. val (Just vl)
 
 {--------------------------------------------
   Queries use in SMASH
