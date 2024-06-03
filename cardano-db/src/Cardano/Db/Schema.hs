@@ -621,13 +621,13 @@ share
     stakeAddressId       StakeAddressId      noreference
     amount               DbLovelace          sqltype=lovelace
 
-  NewCommitteeInfo
+  Committee
     govActionProposalId  GovActionProposalId Maybe noreference
     quorumNumerator      Word64
     quorumDenominator    Word64
 
-  NewCommitteeMember
-    newCommitteeInfoId   NewCommitteeInfoId   -- here intentionally we use foreign keys
+  CommitteeMember
+    committeeId          CommitteeId   -- here intentionally we use foreign keys
     committeeHashId      CommitteeHashId      noreference
     expirationEpoch      Word64               sqltype=word31type
 
@@ -655,7 +655,7 @@ share
     UniqueDrepDistr hashId epochNo
 
   EpochState
-    committeeId             NewCommitteeInfoId Maybe noreference
+    committeeId             CommitteeId Maybe noreference
     noConfidenceId          GovActionProposalId Maybe noreference
     constitutionId          ConstitutionId Maybe noreference
     epochNo                 Word64              sqltype=word31type
@@ -1321,11 +1321,17 @@ schemaDocs =
       TreasuryWithdrawalStakeAddressId # "The address that benefits from this withdrawal."
       TreasuryWithdrawalAmount # "The amount for this withdrawl."
 
-    NewCommitteeInfo --^ do
+    Committee --^ do
       "A table for new committee proposed on a GovActionProposal. New in 13.2-Conway."
-      NewCommitteeInfoGovActionProposalId # "The GovActionProposal table index for this new committee. This can be null for genesis committees."
-      NewCommitteeInfoQuorumNumerator # "The proposed quorum nominator."
-      NewCommitteeInfoQuorumDenominator # "The proposed quorum denominator."
+      CommitteeGovActionProposalId # "The GovActionProposal table index for this new committee. This can be null for genesis committees."
+      CommitteeQuorumNumerator # "The proposed quorum nominator."
+      CommitteeQuorumDenominator # "The proposed quorum denominator."
+
+    CommitteeMember --^ do
+      "A table for members of the committee. A committee can have multiple members. New in 13.3-Conway."
+      CommitteeMemberCommitteeId # "The reference to the committee"
+      CommitteeMemberCommitteeHashId # "The reference to the committee hash"
+      CommitteeMemberExpirationEpoch # "The epoch this member expires"
 
     Constitution --^ do
       "A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway."

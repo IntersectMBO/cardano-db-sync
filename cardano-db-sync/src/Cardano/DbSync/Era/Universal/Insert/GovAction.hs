@@ -28,7 +28,7 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
 )
 where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
@@ -140,33 +140,33 @@ insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = 
     insertNewCommittee gapId removed added q = do
       void $ insertCommittee' gapId (updatedCommittee removed added q <$> mmCommittee) q
 
-insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.NewCommitteeInfoId
+insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.CommitteeId
 insertCommittee mgapId committee = do
   insertCommittee' mgapId (Just committee) (committeeThreshold committee)
 
-insertCommittee' :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Maybe (Committee StandardConway) -> UnitInterval -> ReaderT SqlBackend m DB.NewCommitteeInfoId
+insertCommittee' :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Maybe (Committee StandardConway) -> UnitInterval -> ReaderT SqlBackend m DB.CommitteeId
 insertCommittee' mgapId mcommittee q = do
-  infoId <- insertNewCommitteeInfo
+  committeeId <- insertCommitteeDB
   whenJust mcommittee $ \committee ->
-    mapM_ (insertNewMember infoId) (Map.toList $ committeeMembers committee)
-  pure infoId
+    mapM_ (insertNewMember committeeId) (Map.toList $ committeeMembers committee)
+  pure committeeId
   where
     r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
-    insertNewMember infoId (cred, e) = do
+    insertNewMember committeeId (cred, e) = do
       chId <- insertCommitteeHash cred
-      void . DB.insertNewCommitteeMember $
-        DB.NewCommitteeMember
-          { DB.newCommitteeMemberNewCommitteeInfoId = infoId
-          , DB.newCommitteeMemberCommitteeHashId = chId
-          , DB.newCommitteeMemberExpirationEpoch = unEpochNo e
+      void . DB.insertCommitteeMember $
+        DB.CommitteeMember
+          { DB.committeeMemberCommitteeId = committeeId
+          , DB.committeeMemberCommitteeHashId = chId
+          , DB.committeeMemberExpirationEpoch = unEpochNo e
           }
 
-    insertNewCommitteeInfo =
-      DB.insertNewCommitteeInfo $
-        DB.NewCommitteeInfo
-          { DB.newCommitteeInfoGovActionProposalId = mgapId
-          , DB.newCommitteeInfoQuorumNumerator = fromIntegral $ numerator r
-          , DB.newCommitteeInfoQuorumDenominator = fromIntegral $ denominator r
+    insertCommitteeDB =
+      DB.insertCommittee $
+        DB.Committee
+          { DB.committeeGovActionProposalId = mgapId
+          , DB.committeeQuorumNumerator = fromIntegral $ numerator r
+          , DB.committeeQuorumDenominator = fromIntegral $ denominator r
           }
 
 --------------------------------------------------------------------------------------
@@ -465,7 +465,7 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
         (Nothing, Nothing) -> pure (Nothing, Nothing)
         (Nothing, Just committee) -> do
           -- No enacted proposal means we're after conway genesis territory
-          committeeIds <- lift $ DB.queryProposalNewCommitteeInfo Nothing
+          committeeIds <- lift $ DB.queryProposalCommittee Nothing
           case committeeIds of
             [] -> do
               committeeId <- lift $ insertCommittee Nothing committee
@@ -476,7 +476,7 @@ insertUpdateEnacted trce blkId epochNo enactedState = do
           -- No committee with enacted action means it's a no confidence action.
           pure (Nothing, Just committeeGaId)
         (Just committeeGaId, Just committee) -> do
-          committeeIds <- lift $ DB.queryProposalNewCommitteeInfo (Just committeeGaId)
+          committeeIds <- lift $ DB.queryProposalCommittee (Just committeeGaId)
           case committeeIds of
             [] -> do
               -- This should never happen. Having a committee and an enacted action, means
