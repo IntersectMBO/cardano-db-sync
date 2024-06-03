@@ -1376,7 +1376,7 @@ schemaDocs =
       OffChainVoteGovActionDataRationale # "The rationale"
 
     OffChainVoteDrepData --^ do
-      "The table with offchain metadata for Drep Registrations. Implementes CIP-108. New in 13.3-Conway."
+      "The table with offchain metadata for Drep Registrations. Implementes CIP-119. New in 13.3-Conway."
       OffChainVoteDrepDataOffChainVoteDataId # "The vote metadata table index this offchain data belongs to."
       OffChainVoteDrepDataPaymentAddress # "The payment address"
       OffChainVoteDrepDataGivenName # "The name. This is the only mandatory field"

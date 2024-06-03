@@ -276,7 +276,7 @@ An on-chain pool update.
 | `meta_id` | integer (64) | The PoolMetadataRef table index this pool update refers to. |
 | `margin` | double | The margin (as a percentage) this pool charges. |
 | `fixed_cost` | lovelace | The fixed per epoch fee (in ADA) this pool charges. |
-| `deposit` | lovelace |  |
+| `deposit` | lovelace | The deposit payed for this pool update. Null for reregistrations. |
 | `registered_tx_id` | integer (64) | The Tx table index of the transaction in which provided this pool update. |
 
 ### `pool_owner`
@@ -865,14 +865,14 @@ A table for every Anchor that appears on Governance Actions. These are pointers 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `tx_id` | integer (64) | The Tx table index of the tx that includes this anchor. This only exists to facilitate rollbacks |
+| `block_id` | integer (64) | The Block table index of the tx that includes this anchor. This only exists to facilitate rollbacks |
 | `data_hash` | blob | A hash of the contents of the metadata URL |
 | `url` | varchar | A URL to a JSON payload of metadata |
 | `type` | anchorType |  |
 
 ### `gov_action_proposal`
 
-A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal. At most one of the ratified/enacted/dropped/expired epoch field can be non-null, indicating the current state of the proposal. This table may be referenced by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway.
+A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal. This table may be referenced by TreasuryWithdrawal or NewCommittee. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -907,7 +907,7 @@ A table for all treasury withdrawals proposed on a GovActionProposal. New in 13.
 | `stake_address_id` | integer (64) | The address that benefits from this withdrawal. |
 | `amount` | lovelace | The amount for this withdrawl. |
 
-### `new_committee_info`
+### `committee`
 
 A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 
@@ -916,20 +916,22 @@ A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. |
+| `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. This can be null for genesis committees. |
 | `quorum_numerator` | integer (64) | The proposed quorum nominator. |
 | `quorum_denominator` | integer (64) | The proposed quorum denominator. |
 
-### `new_committee_member`
+### `committee_member`
+
+A table for members of the committee. A committee can have multiple members. New in 13.3-Conway.
 
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `gov_action_proposal_id` | integer (64) |  |
-| `committee_hash_id` | integer (64) |  |
-| `expiration_epoch` | word31type |  |
+| `committee_id` | integer (64) | The reference to the committee |
+| `committee_hash_id` | integer (64) | The reference to the committee hash |
+| `expiration_epoch` | word31type | The epoch this member expires |
 
 ### `constitution`
 
@@ -977,6 +979,18 @@ The table for the distribution of voting power per DRep per. Currently this has 
 | `epoch_no` | word31type | The epoch no this distribution is about. |
 | `active_until` | word31type | The epoch until which this drep is active. TODO: This currently remains null always. |
 
+### `epoch_state`
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `committee_id` | integer (64) |  |
+| `no_confidence_id` | integer (64) |  |
+| `constitution_id` | integer (64) |  |
+| `epoch_no` | word31type |  |
+
 ### `off_chain_pool_data`
 
 The pool offchain (ie not on chain) for a stake pool.
@@ -1020,15 +1034,44 @@ The table with the offchain metadata related to Vote Anchors. It accepts metadat
 | `voting_anchor_id` | integer (64) | The VotingAnchor table index this offchain data refers. |
 | `hash` | blob | The hash of the offchain data. |
 | `language` | string | The langauge described in the context of the metadata. Described in CIP-100. New in 13.3-Conway. |
-| `comment` | string | The title of the metadata. Described in CIP-108. New in 13.3-Conway. |
-| `title` | string |  |
-| `abstract` | string | The abstract of the metadata. Described in CIP-108. New in 13.3-Conway. |
-| `motivation` | string | The motivation of the metadata. Described in CIP-108. New in 13.3-Conway. |
-| `rationale` | string | The rationale of the metadata. Described in CIP-108. New in 13.3-Conway. |
+| `comment` | string |  |
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 | `warning` | string | A warning that occured while validating the metadata. |
 | `is_valid` | boolean | False if the data is found invalid. db-sync leaves this field null since it normally populates off_chain_vote_fetch_error for invalid data. It can be used manually to mark some metadata invalid by clients. |
+
+### `off_chain_vote_gov_action_data`
+
+The table with offchain metadata for Governance Actions. Implementes CIP-108. New in 13.3-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `off_chain_vote_data_id` | integer (64) | The vote metadata table index this offchain data belongs to. |
+| `title` | string | The title |
+| `abstract` | string | The abstract |
+| `motivation` | string | The motivation |
+| `rationale` | string | The rationale |
+
+### `off_chain_vote_drep_data`
+
+The table with offchain metadata for Drep Registrations. Implementes CIP-119. New in 13.3-Conway.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `off_chain_vote_data_id` | integer (64) | The vote metadata table index this offchain data belongs to. |
+| `payment_address` | string | The payment address |
+| `given_name` | string | The name. This is the only mandatory field |
+| `objectives` | string | The objectives |
+| `motivations` | string | The motivations |
+| `qualifications` | string | The qualifications |
+| `image_url` | string |  |
+| `image_hash` | string |  |
 
 ### `off_chain_vote_author`
 
