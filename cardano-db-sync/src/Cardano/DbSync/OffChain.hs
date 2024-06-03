@@ -323,6 +323,8 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
             , DB.offChainVoteDrepDataObjectives = Vote.textValue <$> Vote.objectives (Vote.body dt)
             , DB.offChainVoteDrepDataMotivations = Vote.textValue <$> Vote.motivations (Vote.body dt)
             , DB.offChainVoteDrepDataQualifications = Vote.textValue <$> Vote.qualifications (Vote.body dt)
+            , DB.offChainVoteDrepDataImageUrl = Vote.textValue . Vote.contentUrl <$> Vote.image (Vote.body dt)
+            , DB.offChainVoteDrepDataImageHash = Vote.textValue . Vote.sha256 <$> Vote.image (Vote.body dt)
             }
       _ -> Nothing
 
