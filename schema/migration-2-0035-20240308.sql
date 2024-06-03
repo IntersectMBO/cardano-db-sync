@@ -16,8 +16,6 @@ BEGIN
     EXECUTE 'ALTER TABLE "committee_registration" DROP COLUMN "hot_key"' ;
     EXECUTE 'ALTER TABLE "committee_de_registration" ADD COLUMN "cold_key_id" INT8 NOT NULL' ;
     EXECUTE 'ALTER TABLE "committee_de_registration" DROP COLUMN "cold_key"' ;
-    EXECUTE 'CREATe TABLE "new_committee_info"("id" SERIAL8  PRIMARY KEY UNIQUE,"gov_action_proposal_id" INT8 NOT NULL,"quorum_numerator" INT8 NOT NULL,"quorum_denominator" INT8 NOT NULL)' ;
-    EXECUTE 'CREATe TABLE "new_committee_member"("id" SERIAL8  PRIMARY KEY UNIQUE,"gov_action_proposal_id" INT8 NOT NULL,"committee_hash_id" INT8 NOT NULL,"expiration_epoch" word31type NOT NULL)' ;
     EXECUTE 'ALTER TABLE "voting_procedure" DROP COLUMN "committee_voter"';
     EXECUTE 'ALTER TABLE "voting_procedure" ADD COLUMN "committee_voter" INT8 NULL' ;
     -- Hand written SQL statements can be added here.
