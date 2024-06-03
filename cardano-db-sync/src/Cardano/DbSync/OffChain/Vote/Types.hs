@@ -59,7 +59,7 @@ getRationale = \case
 eitherDecodeOffChainVoteData :: LBS.ByteString -> DB.AnchorType -> Either String OffChainVoteData
 eitherDecodeOffChainVoteData lbs = \case
   DB.GovActionAnchor -> OffChainVoteDataGa <$> eitherDecode' lbs
-  DB.DrepAnchor -> Left "unimplemented"
+  DB.DrepAnchor -> OffChainVoteDataDr <$> eitherDecode' lbs
   DB.OtherAnchor -> OffChainVoteDataOther <$> eitherDecode' lbs
 
 getAuthors :: OffChainVoteData -> [Author]
@@ -158,8 +158,8 @@ data DrepBody = DrepBody
   deriving (Show, Generic)
 
 data Image = Image
-  { contentUrl :: Text
-  , sha256 :: Text
+  { contentUrl :: TextValue
+  , sha256 :: TextValue
   }
   deriving (Show, Generic, FromJSON)
 
@@ -276,11 +276,11 @@ instance FromJSON DrepBody where
       DrepBody mBody
         <$> o .:? "paymentAddress"
         <*> parseTextLimit 80 "givenName" o
-        <*> o .: "image"
+        <*> o .:? "image"
         <*> parseTextLimitMaybe 1000 "objectives" o
         <*> parseTextLimitMaybe 1000 "motivations" o
         <*> parseTextLimitMaybe 1000 "qualifications" o
-        <*> o .: "doNotList"
+        <*> o .:? "doNotList"
     where
       withObjectV v' s p = withObject s p v'
 

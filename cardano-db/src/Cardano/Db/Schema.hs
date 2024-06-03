@@ -711,6 +711,8 @@ share
     objectives          Text Maybe
     motivations         Text Maybe
     qualifications      Text Maybe
+    imageUrl            Text Maybe
+    imageHash           Text Maybe
 
   OffChainVoteAuthor
     offChainVoteDataId  OffChainVoteDataId  noreference
