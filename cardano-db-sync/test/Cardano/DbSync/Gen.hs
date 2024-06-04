@@ -115,7 +115,8 @@ syncInsertConfig =
 syncInsertOptions :: Gen SyncInsertOptions
 syncInsertOptions =
   SyncInsertOptions
-    <$> txOutConfig
+    <$> (TxCBORConfig <$> Gen.bool)
+    <*> txOutConfig
     <*> Gen.element [LedgerEnable, LedgerDisable, LedgerIgnore]
     <*> shelleyConfig
     <*> pure (RewardsConfig True)

@@ -131,6 +131,10 @@ share
     scriptSize          Word64              sqltype=word31type
     UniqueTx            hash
 
+  TxCbor
+    txId                TxId                noreference
+    bytes               ByteString          sqltype=bytea
+
   ReverseIndex
     blockId             BlockId             noreference
     minIds              Text
@@ -813,6 +817,11 @@ schemaDocs =
       TxInvalidHereafter # "Transaction in invalid at or after this slot number."
       TxValidContract # "False if the contract is invalid. True if the contract is valid or there is no contract."
       TxScriptSize # "The sum of the script sizes (in bytes) of scripts in the transaction."
+
+    TxCbor --^ do
+      "A table holding raw CBOR encoded transactions."
+      TxCborTxId # "The Tx table index of the transaction encoded in this table."
+      TxCborBytes # "CBOR encoded transaction."
 
     ReverseIndex --^ do
       "A table for reverse indexes for the minimum input output and multi asset output related with\

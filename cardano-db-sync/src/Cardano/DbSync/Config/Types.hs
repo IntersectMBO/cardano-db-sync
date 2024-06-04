@@ -22,6 +22,7 @@ module Cardano.DbSync.Config.Types (
   SyncPreConfig (..),
   SyncInsertConfig (..),
   SyncInsertOptions (..),
+  TxCBORConfig (..),
   TxOutConfig (..),
   ForceTxIn (..),
   LedgerInsertConfig (..),
@@ -155,7 +156,8 @@ data SyncInsertConfig
   deriving (Eq, Show)
 
 data SyncInsertOptions = SyncInsertOptions
-  { sioTxOut :: TxOutConfig
+  { sioTxCBOR :: TxCBORConfig
+  , sioTxOut :: TxOutConfig
   , sioLedger :: LedgerInsertConfig
   , sioShelley :: ShelleyInsertConfig
   , sioRewards :: RewardsConfig
@@ -165,6 +167,11 @@ data SyncInsertOptions = SyncInsertOptions
   , sioGovernance :: GovernanceConfig
   , sioOffchainPoolData :: OffchainPoolDataConfig
   , sioJsonType :: JsonTypeConfig
+  }
+  deriving (Eq, Show)
+
+newtype TxCBORConfig = TxCBORConfig
+  { isTxCBOREnabled :: Bool
   }
   deriving (Eq, Show)
 
@@ -384,7 +391,8 @@ instance ToJSON SyncInsertConfig where
 instance FromJSON SyncInsertOptions where
   parseJSON = Aeson.withObject "SyncInsertOptions" $ \obj ->
     SyncInsertOptions
-      <$> obj .:? "tx_out" .!= sioTxOut def
+      <$> obj .:? "tx_cbor" .!= sioTxCBOR def
+      <*> obj .:? "tx_out" .!= sioTxOut def
       <*> obj .:? "ledger" .!= sioLedger def
       <*> obj .:? "shelley" .!= sioShelley def
       <*> pure (sioRewards def)
@@ -398,7 +406,8 @@ instance FromJSON SyncInsertOptions where
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
     Aeson.object
-      [ "tx_out" .= sioTxOut
+      [ "tx_cbor" .= sioTxCBOR
+      , "tx_out" .= sioTxOut
       , "ledger" .= sioLedger
       , "shelley" .= sioShelley
       , "multi_asset" .= sioMultiAsset
@@ -408,6 +417,15 @@ instance ToJSON SyncInsertOptions where
       , "offchain_pool_data" .= sioOffchainPoolData
       , "json_type" .= sioJsonType
       ]
+
+instance ToJSON TxCBORConfig where
+  toJSON = boolToEnableDisable . isTxCBOREnabled
+
+instance FromJSON TxCBORConfig where
+  parseJSON = Aeson.withText "tx_cbor" $ \v ->
+    case enableDisableToBool v of
+      Just g -> pure (TxCBORConfig g)
+      Nothing -> fail $ "unexpected tx_cbor: " <> show v
 
 instance ToJSON TxOutConfig where
   toJSON cfg =
@@ -575,7 +593,8 @@ instance Default SyncInsertConfig where
 instance Default SyncInsertOptions where
   def =
     SyncInsertOptions
-      { sioTxOut = TxOutEnable
+      { sioTxCBOR = TxCBORConfig False
+      , sioTxOut = TxOutEnable
       , sioLedger = LedgerEnable
       , sioShelley = ShelleyEnable
       , sioRewards = RewardsConfig True

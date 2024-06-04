@@ -21,7 +21,8 @@ insertConfig = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
         SyncInsertOptions
-          { sioTxOut = TxOutDisable
+          { sioTxCBOR = TxCBORConfig False
+          , sioTxOut = TxOutDisable
           , sioLedger = LedgerDisable
           , sioShelley = ShelleyDisable
           , sioRewards = RewardsConfig True

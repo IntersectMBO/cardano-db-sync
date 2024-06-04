@@ -212,7 +212,8 @@ extractInsertOptions cfg =
 fullInsertOptions :: SyncInsertOptions
 fullInsertOptions =
   SyncInsertOptions
-    { sioTxOut = TxOutEnable
+    { sioTxCBOR = TxCBORConfig False
+    , sioTxOut = TxOutEnable
     , sioLedger = LedgerEnable
     , sioShelley = ShelleyEnable
     , sioRewards = RewardsConfig True
@@ -227,7 +228,8 @@ fullInsertOptions =
 onlyUTxOInsertOptions :: SyncInsertOptions
 onlyUTxOInsertOptions =
   SyncInsertOptions
-    { sioTxOut = TxOutBootstrap (ForceTxIn False)
+    { sioTxCBOR = TxCBORConfig False
+    , sioTxOut = TxOutBootstrap (ForceTxIn False)
     , sioLedger = LedgerIgnore
     , sioShelley = ShelleyDisable
     , sioRewards = RewardsConfig True
@@ -249,7 +251,8 @@ onlyGovInsertOptions =
 disableAllInsertOptions :: SyncInsertOptions
 disableAllInsertOptions =
   SyncInsertOptions
-    { sioTxOut = TxOutDisable
+    { sioTxCBOR = TxCBORConfig False
+    , sioTxOut = TxOutDisable
     , sioLedger = LedgerDisable
     , sioShelley = ShelleyDisable
     , sioRewards = RewardsConfig False
