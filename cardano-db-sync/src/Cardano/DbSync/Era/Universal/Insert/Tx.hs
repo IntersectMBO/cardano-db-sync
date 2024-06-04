@@ -119,6 +119,15 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         , DB.txScriptSize = sum $ Generic.txScriptSizes tx
         }
 
+  when (ioTxCBOR iopts) $ do
+    void
+      . lift
+      . DB.insertTxCBOR
+      $ DB.TxCbor
+        { DB.txCborTxId = txId
+        , DB.txCborBytes = Generic.txCBOR tx
+        }
+
   if not (Generic.txValidContract tx)
     then do
       !txOutsGrouped <- mapM (insertTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)

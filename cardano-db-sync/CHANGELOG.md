@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## Next
+* Added an optional feature to store CBOR serialized transactions in `tx_cbor` table [#1723]
+
 ## 13.2.0.1
 * Added a new table `epoch_stake_progress` which indicates when `epoch_stake` is completed
 * Uses the cache for the computation of `epoch` table when following

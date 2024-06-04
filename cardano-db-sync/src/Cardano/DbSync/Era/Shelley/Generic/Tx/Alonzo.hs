@@ -71,6 +71,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
+    , txCBOR = getTxCBOR tx
     , txSize = fromIntegral $ tx ^. Core.sizeTxF
     , txValidContract = isValid2
     , txInputs =

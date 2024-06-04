@@ -154,6 +154,7 @@ deleteTablesAfterTxId mtxId mtxInId mtxOutId mmaTxOutId = do
     queryFirstAndDeleteAfter DatumTxId txId
     queryFirstAndDeleteAfter RedeemerDataTxId txId
     queryFirstAndDeleteAfter ExtraKeyWitnessTxId txId
+    queryFirstAndDeleteAfter TxCborTxId txId
     queryFirstAndDeleteAfter ParamProposalRegisteredTxId txId
     queryFirstAndDeleteAfter DelegationVoteTxId txId
     queryFirstAndDeleteAfter CommitteeRegistrationTxId txId
