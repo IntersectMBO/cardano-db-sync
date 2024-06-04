@@ -113,10 +113,10 @@ handleEpochWhenFollowing ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache epochNo = do
   case newestEpochFromMap of
-    Just newestEpochFromMapache -> do
+    Just newestEpochFromMapCache -> do
       case epochBlockDiffCache of
         Nothing -> noCacheUseDB
-        Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromMapache currentEpCache epochNo
+        Just currentEpCache -> makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromMapCache currentEpCache epochNo
 
     -- If there isn't an epoch in cache, let's see if we can get one from the db. Otherwise
     -- calculate the epoch using the expensive db query.
