@@ -74,7 +74,8 @@ data SyncOptions = SyncOptions
   deriving (Show)
 
 data InsertOptions = InsertOptions
-  { ioInOut :: !Bool
+  { ioTxCBOR :: !Bool
+  , ioInOut :: !Bool
   , ioUseLedger :: !Bool
   , ioShelley :: !Bool
   , ioRewards :: !Bool

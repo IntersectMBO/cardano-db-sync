@@ -49,6 +49,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, Stand
 data Tx = Tx
   { txHash :: !ByteString
   , txBlockIndex :: !Word64
+  , txCBOR :: ByteString
   , txSize :: !Word64
   , txValidContract :: !Bool
   , txInputs :: ![TxIn]

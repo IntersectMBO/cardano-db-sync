@@ -20,7 +20,7 @@ import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..), SyncOptions (..))
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
   queryPrevBlockWithCache,
@@ -237,24 +237,37 @@ insertByronTx syncEnv blkId tx blockIndex = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
   if disInOut
     then do
-      void . lift . DB.insertTx $
-        DB.Tx
-          { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
-          , DB.txBlockId = blkId
-          , DB.txBlockIndex = blockIndex
-          , DB.txOutSum = DbLovelace 0
-          , DB.txFee = DbLovelace 0
-          , DB.txDeposit = Nothing -- Byron does not have deposits/refunds
-          -- Would be really nice to have a way to get the transaction size
-          -- without re-serializing it.
-          , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
-          , DB.txInvalidHereafter = Nothing
-          , DB.txInvalidBefore = Nothing
-          , DB.txValidContract = True
-          , DB.txScriptSize = 0
-          }
+      txId <-
+        lift . DB.insertTx $
+          DB.Tx
+            { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
+            , DB.txBlockId = blkId
+            , DB.txBlockIndex = blockIndex
+            , DB.txOutSum = DbLovelace 0
+            , DB.txFee = DbLovelace 0
+            , DB.txDeposit = Nothing -- Byron does not have deposits/refunds
+            -- Would be really nice to have a way to get the transaction size
+            -- without re-serializing it.
+            , DB.txSize = fromIntegral $ BS.length (serialize' $ Byron.taTx tx)
+            , DB.txInvalidHereafter = Nothing
+            , DB.txInvalidBefore = Nothing
+            , DB.txValidContract = True
+            , DB.txScriptSize = 0
+            }
+
+      when (ioTxCBOR iopts) $ do
+        void
+          . lift
+          . DB.insertTxCBOR
+          $ DB.TxCbor
+            { DB.txCborTxId = txId
+            , DB.txCborBytes = serialize' $ Byron.taTx tx
+            }
+
       pure 0
     else insertByronTx' syncEnv blkId tx blockIndex
+  where
+    iopts = getInsertOptions syncEnv
 
 insertByronTx' ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -284,6 +297,15 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         , DB.txScriptSize = 0
         }
 
+  when (ioTxCBOR iopts) $ do
+    void
+      . lift
+      . DB.insertTxCBOR
+      $ DB.TxCbor
+        { DB.txCborTxId = txId
+        , DB.txCborBytes = serialize' $ Byron.taTx tx
+        }
+
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
   disInOut <- liftIO $ getDisableInOutState syncEnv
@@ -296,6 +318,8 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
+    iopts = getInsertOptions syncEnv
+
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 

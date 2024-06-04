@@ -39,6 +39,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
+    , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx
     , txValidContract = isValid2
     , txInputs =

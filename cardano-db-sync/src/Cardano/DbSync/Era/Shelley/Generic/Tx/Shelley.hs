@@ -8,6 +8,7 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   fromShelleyTx,
+  getTxCBOR,
   getTxSize,
   mkTxIn,
   fromTxIn,
@@ -24,6 +25,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   txHashFromSafe,
 ) where
 
+import Cardano.Binary (serialize')
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (ScriptType (..))
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
@@ -53,6 +55,7 @@ fromShelleyTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
+    , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx
     , txValidContract = True
     , txInputs = mkTxIn txBody
@@ -132,6 +135,9 @@ txHashFromSafe = Crypto.hashToBytes . Ledger.extractHash
 
 getTxSize :: Core.EraTx era => Core.Tx era -> Word64
 getTxSize tx = fromIntegral $ tx ^. Core.sizeTxF
+
+getTxCBOR :: Core.EraTx era => Core.Tx era -> ByteString
+getTxCBOR = serialize'
 
 mkTxIn ::
   (Core.EraTxBody era, EraCrypto era ~ StandardCrypto) =>

@@ -19,6 +19,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   calcWithdrawalSum,
+  getTxCBOR,
   getTxMetadata,
   getTxSize,
   mkTxCertificates,
@@ -50,6 +51,7 @@ fromAllegraTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txBlockIndex = blkIndex
+    , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx
     , txValidContract = True
     , txInputs = mkTxIn txBody
