@@ -234,8 +234,8 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
 -- Helper functions
 -----------------------------------------------------------------------------------------------------
 
--- This is an expensive DB query so we minimise it's use to
--- server restarts when syncing or folloing and rollbacks
+-- This is an expensive DB query so we minimise its use to
+-- server restarts when syncing or following and rollbacks
 makeEpochWithDBQuery ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
