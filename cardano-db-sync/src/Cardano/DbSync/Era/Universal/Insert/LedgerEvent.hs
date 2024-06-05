@@ -25,6 +25,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Extra (whenJust)
@@ -105,9 +106,8 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           forM_ en $ \gar -> whenJust (garMTreasury gar) $ \treasuryMap -> do
             gaId <- resolveGovActionProposal (garGovActionId gar)
             lift $ void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
-            forM_ (Map.toList treasuryMap) $ \(_ra, _c) ->
-              -- TODO: Add reward
-              pure ()
+            let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
+            insertRewardRests ntw (subFromCurrentEpoch 1) currentEpochNo cache (Map.toList rewards)
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd

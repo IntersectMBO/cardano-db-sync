@@ -15,6 +15,7 @@ module Cardano.DbSync.Ledger.Event (
   LedgerEvent (..),
   GovActionRefunded (..),
   convertAuxLedgerEvent,
+  mkTreasuryReward,
   convertPoolRewards,
   ledgerEventName,
   splitDeposits,
@@ -323,6 +324,13 @@ convertMirRewards resPay trePay =
           { Generic.irSource = src
           , Generic.irAmount = coin
           }
+
+mkTreasuryReward :: Coin -> Generic.RewardRest
+mkTreasuryReward c =
+  Generic.RewardRest
+    { Generic.irSource = RwdTreasury
+    , Generic.irAmount = c
+    }
 
 convertPoolRewards ::
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
