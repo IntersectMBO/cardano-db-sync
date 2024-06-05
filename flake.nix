@@ -319,6 +319,23 @@
             };
             inherit (docker) cardano-db-sync-docker cardano-smash-server-docker;
 
+            profiled =
+              let
+                projectProfiled = (project.appendModule {
+                  modules = [{
+                    enableLibraryProfiling = true;
+                    enableProfiling = true;
+                    packages.cardano-db-sync.configureFlags =
+                      ["--ghc-option=-fprof-auto"];
+                    packages.cardano-smash-server.configureFlags =
+                      ["--ghc-option=-fprof-auto"];
+
+                  }];
+                });
+              in {
+                inherit (projectProfiled.exes) cardano-db-sync cardano-smash-server;
+              };
+
             # TODO: macOS builders are resource-constrained and cannot run the detabase
             # integration tests. Add these back when we get beefier builders.
             nonRequiredMacOSPaths = [
@@ -347,7 +364,8 @@
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
-              inherit cardano-smash-server-no-basic-auth;
+              inherit cardano-smash-server-no-basic-auth profiled;
+
               checks = staticChecks;
             };
 
@@ -364,7 +382,7 @@
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
-              inherit cardano-smash-server-no-basic-auth;
+              inherit cardano-smash-server-no-basic-auth profiled;
             };
           })) // {
             nixosModules = {
