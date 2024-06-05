@@ -18,6 +18,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashByron (..),
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
+  AddJsonbToSchemaConfig (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
@@ -165,6 +166,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioGovernance :: GovernanceConfig
   , sioOffchainPoolData :: OffchainPoolDataConfig
   , sioJsonType :: JsonTypeConfig
+  , sioAddJsonbToSchema :: AddJsonbToSchemaConfig
   }
   deriving (Eq, Show)
 
@@ -221,6 +223,11 @@ newtype GovernanceConfig = GovernanceConfig
 
 newtype OffchainPoolDataConfig = OffchainPoolDataConfig
   { isOffchainPoolDataEnabled :: Bool
+  }
+  deriving (Eq, Show)
+
+newtype AddJsonbToSchemaConfig = AddJsonbToSchemaConfig
+  { isAddJsonbToSchemaEnabled :: Bool
   }
   deriving (Eq, Show)
 
@@ -394,6 +401,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "governance" .!= sioGovernance def
       <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
       <*> obj .:? "json_type" .!= sioJsonType def
+      <*> obj .:? "add_jsonb_to_schema" .!= sioAddJsonbToSchema def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -407,6 +415,7 @@ instance ToJSON SyncInsertOptions where
       , "governance" .= sioGovernance
       , "offchain_pool_data" .= sioOffchainPoolData
       , "json_type" .= sioJsonType
+      , "add_jsonb_to_schema" .= sioAddJsonbToSchema
       ]
 
 instance ToJSON TxOutConfig where
@@ -551,6 +560,15 @@ instance FromJSON GovernanceConfig where
 instance ToJSON OffchainPoolDataConfig where
   toJSON = boolToEnableDisable . isOffchainPoolDataEnabled
 
+instance FromJSON AddJsonbToSchemaConfig where
+  parseJSON = Aeson.withText "add_jsonb_to_schema" $ \v ->
+    case enableDisableToBool v of
+      Just g -> pure (AddJsonbToSchemaConfig g)
+      Nothing -> fail $ "unexpected add_jsonb_to_schema: " <> show v
+
+instance ToJSON AddJsonbToSchemaConfig where
+  toJSON = boolToEnableDisable . isAddJsonbToSchemaEnabled
+
 instance FromJSON OffchainPoolDataConfig where
   parseJSON = Aeson.withText "offchain_pool_data" $ \v ->
     case enableDisableToBool v of
@@ -585,6 +603,7 @@ instance Default SyncInsertOptions where
       , sioGovernance = GovernanceConfig True
       , sioOffchainPoolData = OffchainPoolDataConfig True
       , sioJsonType = JsonTypeText
+      , sioAddJsonbToSchema = AddJsonbToSchemaConfig False
       }
 
 boolToEnableDisable :: IsString s => Bool -> s

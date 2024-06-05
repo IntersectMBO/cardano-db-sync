@@ -9,7 +9,6 @@ module Test.Cardano.Db.Mock.Unit.Babbage (
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion, testCase)
 
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile as ConfigFile
@@ -25,6 +24,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Babbage.Rollback as BabRollback
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Simple as BabSimple
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Stake as BabStake
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Tx as BabTx
+import Test.Cardano.Db.Mock.Validate (expectFailSilent)
 
 unitTests :: IOManager -> [(Text, Text)] -> TestTree
 unitTests iom knownMigrations =
@@ -45,9 +45,9 @@ unitTests iom knownMigrations =
             , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
             , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
-            , expectFail $ test "restart with new consumed set to false" MigrateConsumedPruneTxOut.migrateAndPruneRestart
-            , expectFail $ test "set prune flag, restart missing prune flag" MigrateConsumedPruneTxOut.pruneRestartMissingFlag
-            , expectFail $ test "set bootstrap flag, restart missing bootstrap flag" MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
+            , expectFailSilent "restart with new consumed set to false" $ MigrateConsumedPruneTxOut.migrateAndPruneRestart iom knownMigrations
+            , expectFailSilent "set prune flag, restart missing prune flag" $ MigrateConsumedPruneTxOut.pruneRestartMissingFlag iom knownMigrations
+            , expectFailSilent "set bootstrap flag, restart missing bootstrap flag" $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag iom knownMigrations
             ]
         ]
     , testGroup
@@ -63,7 +63,7 @@ unitTests iom knownMigrations =
         "Command Line Arguments"
         [ testGroup
             "config"
-            [ expectFail $ test "fails if incorrect config file given" ConfigFile.checkConfigFileArg
+            [ expectFailSilent "fails if incorrect config file given" $ ConfigFile.checkConfigFileArg iom knownMigrations
             ]
         , testGroup
             "disable-epoch"

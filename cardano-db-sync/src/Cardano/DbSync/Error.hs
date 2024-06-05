@@ -57,6 +57,7 @@ data SyncNodeError
   | SNErrExtraMigration !String
   | SNErrDatabaseRollBackLedger !String
   | SNErrDatabaseValConstLevel !String
+  | SNErrJsonbInSchema !String
 
 instance Exception SyncNodeError
 
@@ -128,6 +129,7 @@ instance Show SyncNodeError where
       SNErrExtraMigration err -> "Error SNErrExtraMigration: " <> show err
       SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
       SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
+      SNErrJsonbInSchema err -> "Error SNErrJsonbInSchema: " <> show err
 
 data NodeConfigError
   = NodeConfigParseError !String

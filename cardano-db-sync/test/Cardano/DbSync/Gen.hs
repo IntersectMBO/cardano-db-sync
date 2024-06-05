@@ -125,6 +125,7 @@ syncInsertOptions =
     <*> (GovernanceConfig <$> Gen.bool)
     <*> (OffchainPoolDataConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
+    <*> (AddJsonbToSchemaConfig <$> Gen.bool)
 
 txOutConfig :: Gen TxOutConfig
 txOutConfig =

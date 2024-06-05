@@ -101,6 +101,7 @@ insertConfig = do
           , sioGovernance = GovernanceConfig False
           , sioOffchainPoolData = OffchainPoolDataConfig False
           , sioJsonType = JsonTypeDisable
+          , sioAddJsonbToSchema = AddJsonbToSchemaConfig False
           }
 
   dncInsertOptions cfg @?= expected

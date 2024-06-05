@@ -15,6 +15,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Metadata (
   fromShelleyMetadata,
   fromMaryMetadata,
   metadataValueToJsonNoSchema,
+  txMetadataValueToText,
   fromMetadatum,
   toMetadatum,
 ) where
@@ -91,6 +92,14 @@ metadataValueToJsonNoSchema = conv
       Text.Lazy.toStrict
         . Aeson.Text.encodeToLazyText
         $ conv v
+
+txMetadataValueToText :: TxMetadataValue -> Text
+txMetadataValueToText val
+  | (TxMetaMap pairs) <- val = Text.intercalate ", " $ map (\(k, v) -> txMetadataValueToText k <> ": " <> txMetadataValueToText v) pairs
+  | (TxMetaList values) <- val = "[" <> Text.intercalate ", " (map txMetadataValueToText values) <> "]"
+  | (TxMetaNumber num) <- val = Text.pack (show num)
+  | (TxMetaBytes bytes) <- val = Text.decodeUtf8 bytes
+  | (TxMetaText text) <- val = text
 
 -- -------------------------------------------------------------------------------------------------
 
