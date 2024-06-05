@@ -19,7 +19,7 @@ import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
 import Cardano.DbSync.Era.Universal.Epoch (insertPoolDepositRefunds, insertProposalRefunds, insertRewardRests, insertRewards)
-import Cardano.DbSync.Era.Universal.Insert.GovAction (updateDropped)
+import Cardano.DbSync.Era.Universal.Insert.GovAction
 import Cardano.DbSync.Era.Universal.Validate (validateEpochRewards)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event
@@ -27,6 +27,7 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -101,6 +102,12 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           let en' = filter (\e -> Set.notMember (garGovActionId e) uncl) en
               ex' = filter (\e -> Set.notMember (garGovActionId e) uncl) ex
           insertProposalRefunds ntw (subFromCurrentEpoch 1) currentEpochNo cache (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
+          forM_ en $ \gar -> whenJust (garMTreasury gar) $ \treasuryMap -> do
+            gaId <- resolveGovActionProposal (garGovActionId gar)
+            lift $ void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
+            forM_ (Map.toList treasuryMap) $ \(_ra, _c) ->
+              -- TODO: Add reward
+              pure ()
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd

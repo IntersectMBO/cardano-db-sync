@@ -20,7 +20,7 @@ module Cardano.DbSync.Ledger.Event (
   splitDeposits,
 ) where
 
-import Cardano.Db hiding (AdaPots, EpochNo, SyncState, epochNo)
+import Cardano.Db hiding (AdaPots, EpochNo, SyncState, TreasuryWithdrawals, epochNo)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types
@@ -29,8 +29,8 @@ import Cardano.Ledger.Address (RewardAccount)
 import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
-import Cardano.Ledger.Api (GovActionId, GovActionState (..), ProposalProcedure (..))
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.SafeHash (SafeHash)
@@ -83,6 +83,7 @@ data GovActionRefunded = GovActionRefunded
   { garGovActionId :: GovActionId StandardCrypto
   , garDeposit :: Coin
   , garReturnAddr :: RewardAccount StandardCrypto
+  , garMTreasury :: Maybe (Map (RewardAccount StandardCrypto) Coin)
   , garIsEnacted :: Bool -- True for enacted, False for retired, possibly redundant
   }
   deriving (Eq)
@@ -267,8 +268,13 @@ toLedgerEventConway evt hasRewards =
         { garGovActionId = gasId gas
         , garDeposit = pProcDeposit $ gasProposalProcedure gas
         , garReturnAddr = pProcReturnAddr $ gasProposalProcedure gas
+        , garMTreasury = mWithrawal
         , garIsEnacted = isEnacted
         }
+      where
+        mWithrawal = case pProcGovAction (gasProposalProcedure gas) of
+          TreasuryWithdrawals mp _ -> Just mp
+          _ -> Nothing
 
 instance All ConvertLedgerEvent xs => ConvertLedgerEvent (HardForkBlock xs) where
   toLedgerEvent hasRewards =
