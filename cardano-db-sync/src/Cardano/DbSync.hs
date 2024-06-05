@@ -36,13 +36,14 @@ import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
-import Cardano.DbSync.Error (SyncNodeError, hasAbortOnPanicEnv, runOrThrowIO)
+import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Constraint (dbJsonbInSchema)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
@@ -136,7 +137,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     indexesMsg :: Text
     indexesMsg =
       mconcat
-        [ "Creating Indexes. This may take a while."
+        [ "Creating Indexes. This may require an extended period of time to perform."
         , " Setting a higher maintenance_work_mem from Postgres usually speeds up this process."
         , " These indexes are not used by db-sync but are meant for clients. If you want to skip"
         , " some of these indexes, you can stop db-sync, delete or modify any migration-4-* files"
@@ -173,6 +174,18 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
       \backend -> liftIO $ do
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
+          resJsonbInSchema <- dbJsonbInSchema backend
+
+          -- if the database has jsonb datatypes and the configuration does not have add_jsonb_to_schema enabled, then warn the user
+          when (resJsonbInSchema && not isJsonBInSchemaConfig) $
+            liftIO $
+              logAndThrowIO trce $
+                SNErrJsonbInSchema
+                  ( "The database has jsonb datatypes active. "
+                      <> "Once jsonb datatypes have been enabled via `add_jsonb_to_schema` "
+                      <> "configuration you need to make sure that configuration is not removed and always present."
+                  )
+
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
@@ -186,6 +199,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 syncNodeParams
                 ranMigrations
                 runMigrationFnc
+          -- if the database doesn't have jsonb datatypes and the configuration does have add_jsonb_to_schema enabled, then add jsonb datatypes to the database
+          when (not resJsonbInSchema && isJsonBInSchemaConfig) $ liftIO $ runEnableJsonbInSchema syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
@@ -208,8 +223,9 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
     useShelleyInit cfg =
       case dncShelleyHardFork cfg of
         HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
-        _ -> False
-
+        _other -> False
+    -- isJsonBInSchemaConfig = isAddJsonbToSchemaEnabled (sioAddJsonbToSchema (dncInsertOptions syncNodeConfigFromFile))
+    isJsonBInSchemaConfig = ioAddJsonbToSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 
 logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
@@ -264,6 +280,7 @@ extractSyncOptions snp aop snc =
         , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
         , ioOffChainPoolData = useOffchainPoolData
         , ioGov = useGovernance
+        , ioAddJsonbToSchema = isAddJsonbToSchemaEnabled (sioAddJsonbToSchema (dncInsertOptions snc))
         }
 
     useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable

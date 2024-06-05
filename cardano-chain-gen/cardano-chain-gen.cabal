@@ -156,6 +156,7 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex
+                        Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema
                         Test.Cardano.Db.Mock.Unit.Conway.Config.Parse
                         Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut
                         Test.Cardano.Db.Mock.Unit.Conway.Governance
@@ -200,7 +201,6 @@ test-suite cardano-chain-gen
                       , stm
                       , strict-stm
                       , tasty
-                      , tasty-expected-failure
                       , tasty-quickcheck
                       , text
                       , transformers
