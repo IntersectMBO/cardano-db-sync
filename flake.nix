@@ -64,15 +64,22 @@
                   inherit (project.hsPkgs.cardano-cli.components.exes) cardano-cli;
                 })
 
-                (final: prev: {
-                  # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
-                  # expects these to be here
-                  inherit (project.exes)
-                    cardano-db-sync
-                    cardano-db-tool
-                    cardano-smash-server;
-                  schema = ./schema;
-                })
+                (final: prev:
+                  let
+                    profiled = project.profiled.exes;
+                  in {
+                    # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
+                    # expects these to be here
+                    inherit (project.exes)
+                      cardano-db-sync
+                      cardano-db-tool
+                      cardano-smash-server;
+
+                    cardano-db-sync-profiled = profiled.cardano-db-sync;
+                    cardano-smash-server-profiled = profiled.cardano-smash-server;
+
+                    schema = ./schema;
+                  })
 
                 (final: prev: {
                   # HLint 3.2.x requires GHC >= 8.10 && < 9.0
@@ -251,6 +258,19 @@
                 "cardano-db-tool.components.exes.cardano-db-tool"
               ] prev.hsPkgs;
             })
+
+            (final: prev: {
+              profiled = final.appendModule {
+                modules = [{
+                  enableLibraryProfiling = true;
+                  enableProfiling = true;
+                  packages.cardano-db-sync.configureFlags =
+                    ["--ghc-option=-fprof-auto"];
+                  packages.cardano-smash-server.configureFlags =
+                    ["--ghc-option=-fprof-auto"];
+                }];
+              };
+            })
           ];
 
           staticChecks =
@@ -319,22 +339,9 @@
             };
             inherit (docker) cardano-db-sync-docker cardano-smash-server-docker;
 
-            profiled =
-              let
-                projectProfiled = (project.appendModule {
-                  modules = [{
-                    enableLibraryProfiling = true;
-                    enableProfiling = true;
-                    packages.cardano-db-sync.configureFlags =
-                      ["--ghc-option=-fprof-auto"];
-                    packages.cardano-smash-server.configureFlags =
-                      ["--ghc-option=-fprof-auto"];
-
-                  }];
-                });
-              in {
-                inherit (projectProfiled.exes) cardano-db-sync cardano-smash-server;
-              };
+            profiled = {
+              inherit (project.profiled.exes) cardano-db-sync cardano-smash-server;
+            };
 
             # TODO: macOS builders are resource-constrained and cannot run the detabase
             # integration tests. Add these back when we get beefier builders.
