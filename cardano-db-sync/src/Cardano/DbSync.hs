@@ -191,11 +191,13 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
 
           -- if the database has jsonb datatypes and the configuration does not have add_jsonb_to_schema enabled, then warn the user
           when (resJsonbInSchema && not isJsonBInSchemaConfig) $ do
-            liftIO $ logWarning trce "The database has jsonb datatypes, but the configuration does not have add_jsonb_to_schema enabled. The all jsonb datatypes will be put back which can take time."
+            liftIO $ logWarning trce "Removing jsonb datatypes from the database. This can take time."
             liftIO $ runDisableJsonbInSchema syncEnv
 
           -- if the database doesn't have jsonb datatypes and the configuration does have add_jsonb_to_schema enabled, then add jsonb datatypes to the database
-          when (not resJsonbInSchema && isJsonBInSchemaConfig) $ liftIO $ runEnableJsonbInSchema syncEnv
+          when (not resJsonbInSchema && isJsonBInSchemaConfig) $ do
+            liftIO $ logWarning trce "Adding jsonb datatypes to the database. This can take time."
+            liftIO $ runEnableJsonbInSchema syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
