@@ -399,7 +399,11 @@
                   let
                     pkgs' = self.legacyPackages.${pkgs.system};
                   in {
-                    inherit (pkgs') cardanoLib schema cardano-db-sync;
+                    inherit (pkgs')
+                      cardanoLib
+                      schema
+                      cardano-db-sync
+                      cardano-db-sync-profiled;
 
                     # cardano-db-tool
                     cardanoDbSyncHaskellPackages.cardano-db-tool.components.exes.cardano-db-tool =
