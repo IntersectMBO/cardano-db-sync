@@ -16,6 +16,27 @@ in {
         internal = true;
         type = lib.types.package;
       };
+      profiling = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Enable GHC profiling.
+        '';
+      };
+      rtsArgs = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default =
+          if cfg.profiling then
+            [ "-p" "-hc" "-L200"]
+          else
+            [ ];
+        apply = args:
+          if (args != []) then
+            ["+RTS"] ++ args ++ ["-RTS"]
+          else
+            [];
+        description = ''Extra CLI args, to be surrounded by "+RTS"/"-RTS"'';
+      };
       takeSnapshot = lib.mkOption {
         type = lib.types.enum [ "never" "once" "always" ];
         default = "never";
@@ -146,7 +167,11 @@ in {
       };
       package = lib.mkOption {
         type = lib.types.package;
-        default = self.cardano-db-sync;
+        default =
+          if cfg.profiling then
+            self.cardano-db-sync-profiled
+          else
+            self.cardano-db-sync;
       };
       postgres = {
         generatePGPASS = lib.mkOption {
@@ -196,6 +221,7 @@ in {
                 --config ${configFile} \
                 --socket-path "$CARDANO_NODE_SOCKET_PATH" \
                 --schema-dir ${self.schema} \
+                ${toString cfg.rtsArgs} \
                 ''${LEDGER_OPTS} \
                 ''${EXTRA_DB_SYNC_ARGS:-}
           '';
