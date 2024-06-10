@@ -149,6 +149,12 @@
               in
                 lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
+            crossPlatforms = p:
+              lib.optional (system == "x86_64-linux") p.musl64 ++
+              lib.optional
+                (system == "x86_64-linux" && config.compiler-nix-name == "ghc964")
+                p.aarch64-multiplatform-musl;
+
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
             };
@@ -263,11 +269,7 @@
                 shellcheck = callPackage shellCheck { inherit src; };
               };
 
-          flake = project.flake (
-            nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
-              crossPlatforms = p: [p.musl64 p.aarch64-multiplatform-musl];
-            }
-          );
+          flake = project.flake {};
         in with nixpkgs; lib.recursiveUpdate flake (
           let
             mkDist = platform: project:
