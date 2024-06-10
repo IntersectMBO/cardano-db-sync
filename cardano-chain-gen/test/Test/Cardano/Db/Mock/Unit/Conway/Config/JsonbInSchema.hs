@@ -4,7 +4,7 @@
 module Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema (
   configJsonbInSchemaTrue,
   configJsonbInSchemaFalse,
-  configJsonbInSchemaShouldError,
+  configJsonbInSchemaShouldAddThenRemove,
 ) where
 
 import qualified Cardano.Db as DB
@@ -74,8 +74,8 @@ configJsonbInSchemaFalse ioManager metadata = do
           { dncInsertOptions = dncInsertOptions' {sioAddJsonbToSchema = AddJsonbToSchemaConfig False}
           }
 
-configJsonbInSchemaShouldError :: IOManager -> [(Text, Text)] -> Assertion
-configJsonbInSchemaShouldError ioManager metadata = do
+configJsonbInSchemaShouldAddThenRemove :: IOManager -> [(Text, Text)] -> Assertion
+configJsonbInSchemaShouldAddThenRemove ioManager metadata = do
   syncNodeConfig <- mksNodeConfig
   withCustomConfigAndDropDB args (Just syncNodeConfig) cfgDir testLabel action ioManager metadata
   where
@@ -95,11 +95,16 @@ configJsonbInSchemaShouldError ioManager metadata = do
               }
       startDBSync newDbSyncEnv
       threadDelay 7_000_000
+      assertEqQuery
+        dbSync
+        DB.queryJsonbInSchemaExists
+        False
+        "There should be no jsonb types in database if option has been set to False"
       -- Expected to fail
       checkStillRuns dbSync
 
     args = initCommandLineArgs {claFullMode = False}
-    testLabel = "conwayConfigJsonbInSchemaShouldError"
+    testLabel = "configJsonbInSchemaShouldAddThenRemove"
 
     cfgDir = conwayConfigDir
 
