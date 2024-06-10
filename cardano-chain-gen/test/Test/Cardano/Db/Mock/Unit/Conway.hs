@@ -39,8 +39,9 @@ unitTests iom knownMigrations =
             "jsonb-in-schema"
             [ test "jsonb in schema true" Config.configJsonbInSchemaTrue
             , test "jsonb in schema false" Config.configJsonbInSchemaFalse
-            , expectFailSilent "jsonb in schema should Error" $
-                Config.configJsonbInSchemaShouldError iom knownMigrations
+            , test
+                "jsonb true then false should remove datatype from db"
+                Config.configJsonbInSchemaShouldAddThenRemove
             ]
         , testGroup
             "tx-out"
