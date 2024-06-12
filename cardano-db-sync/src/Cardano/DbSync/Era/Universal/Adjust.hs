@@ -55,7 +55,7 @@ adjustEpochRewards ::
   Generic.Rewards ->
   Set StakeCred ->
   ReaderT SqlBackend m ()
-adjustEpochRewards tracer nw cache epochNo rwds creds = do
+adjustEpochRewards tracer nw cacheStatus epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
   liftIO . logInfo tracer $
     mconcat
@@ -67,19 +67,20 @@ adjustEpochRewards tracer nw cache epochNo rwds creds = do
   forM_ eraIgnored $ \(cred, rewards) ->
     forM_ (Set.toList rewards) $ \rwd ->
       deleteReward nw cache epochNo (cred, rwd)
-  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache cache DoNotUpdateCache nw)
+  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache tracer cacheStatus DoNotUpdateCache nw)
   deleteOrphanedRewards epochNo crds
 
 deleteReward ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   Network ->
   CacheStatus ->
   EpochNo ->
   (StakeCred, Generic.Reward) ->
   ReaderT SqlBackend m ()
-deleteReward nw cache epochNo (cred, rwd) = do
-  mAddrId <- queryStakeAddrWithCache cache DoNotUpdateCache nw cred
-  eiPoolId <- queryPoolKeyWithCache cache DoNotUpdateCache (Generic.rewardPool rwd)
+deleteReward trce nw cache epochNo (cred, rwd) = do
+  mAddrId <- queryStakeAddrWithCache trce cache DoNotUpdateCache nw cred
+  eiPoolId <- queryPoolKeyWithCache trce cache DoNotUpdateCache (Generic.rewardPool rwd)
   case (mAddrId, eiPoolId) of
     (Right addrId, Right poolId) -> do
       delete $ do

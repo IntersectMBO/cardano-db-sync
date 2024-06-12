@@ -60,7 +60,7 @@ insertPoolRegister ::
   Word16 ->
   PoolP.PoolParams StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister _tracer cacheStatus isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
+insertPoolRegister trce cacheStatus isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
   poolHashId <- lift $ insertPoolKeyWithCache cacheStatus UpdateCache (PoolP.ppId params)
   mdId <- case strictMaybeToMaybe $ PoolP.ppMetadata params of
     Just md -> Just <$> insertPoolMetaDataRef poolHashId txId md
@@ -70,7 +70,7 @@ insertPoolRegister _tracer cacheStatus isMember mdeposits network (EpochNo epoch
   let epochActivationDelay = if isRegistration then 2 else 3
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
 
-  saId <- lift $ queryOrInsertRewardAccount cacheStatus UpdateCache (adjustNetworkTag $ PoolP.ppRewardAccount params)
+  saId <- lift $ queryOrInsertRewardAccount trce cacheStatus UpdateCache (adjustNetworkTag $ PoolP.ppRewardAccount params)
   poolUpdateId <-
     lift
       . DB.insertPoolUpdate
@@ -88,7 +88,7 @@ insertPoolRegister _tracer cacheStatus isMember mdeposits network (EpochNo epoch
         , DB.poolUpdateRegisteredTxId = txId
         }
 
-  mapM_ (insertPoolOwner cacheStatus network poolUpdateId) $ toList (PoolP.ppOwners params)
+  mapM_ (insertPoolOwner trce cacheStatus network poolUpdateId) $ toList (PoolP.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.ppRelays params)
   where
     isPoolRegistration :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
@@ -144,13 +144,14 @@ insertPoolMetaDataRef poolId txId md =
 
 insertPoolOwner ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   CacheStatus ->
   Ledger.Network ->
   DB.PoolUpdateId ->
   Ledger.KeyHash 'Ledger.Staking StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner cacheStatus network poolUpdateId skh = do
-  saId <- lift $ queryOrInsertStakeAddress cacheStatus UpdateCache network (Ledger.KeyHashObj skh)
+insertPoolOwner trce cacheStatus network poolUpdateId skh = do
+  saId <- lift $ queryOrInsertStakeAddress trce cacheStatus UpdateCache network (Ledger.KeyHashObj skh)
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId

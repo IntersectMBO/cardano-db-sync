@@ -97,6 +97,7 @@ import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
+import Cardano.DbSync.Cache.LRU (LRUCacheCapacity(..))
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -382,7 +383,15 @@ mkSyncEnv ::
   IO SyncEnv
 mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
-  cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure useNoCache
+  cache <-
+    if soptCache syncOptions
+      then newEmptyCache
+            LRUCacheCapacity
+            { lirCapacityStakeHashRaw = 300000,
+              lruCapacityDatum = 250000,
+              lruCapacityMultiAsset = 50000
+            }
+      else pure cacheStatusNoCache
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP

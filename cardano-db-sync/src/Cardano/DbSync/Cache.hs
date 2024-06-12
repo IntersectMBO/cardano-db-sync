@@ -83,106 +83,139 @@ getCacheStatistics cs =
 
 queryOrInsertRewardAccount ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   CacheStatus ->
   CacheUpdateAction ->
   Ledger.RewardAccount StandardCrypto ->
   ReaderT SqlBackend m DB.StakeAddressId
-queryOrInsertRewardAccount cacheStatus cacheUA rewardAddr = do
-  eiAddrId <- queryRewardAccountWithCacheRetBs cacheStatus cacheUA rewardAddr
+queryOrInsertRewardAccount trce cacheStatus cacheUA rewardAddr = do
+  eiAddrId <- queryRewardAccountWithCacheRetBs trce cacheStatus rewardAddr
   case eiAddrId of
-    Left (_err, bs) -> insertStakeAddress rewardAddr (Just bs)
+    Left (_err, bs) -> insertStakeAddress cacheStatus rewardAddr (Just bs)
     Right addrId -> pure addrId
 
 queryOrInsertStakeAddress ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   CacheStatus ->
   CacheUpdateAction ->
   Network ->
   StakeCred ->
   ReaderT SqlBackend m DB.StakeAddressId
-queryOrInsertStakeAddress cacheStatus cacheUA nw cred =
-  queryOrInsertRewardAccount cacheStatus cacheUA $ Ledger.RewardAccount nw cred
+queryOrInsertStakeAddress trce cacheStatus cacheUA nw cred =
+  queryOrInsertRewardAccount trce cacheStatus cacheUA $ Ledger.RewardAccount nw cred
 
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
   (MonadBaseControl IO m, MonadIO m) =>
+  CacheStatus ->
   Ledger.RewardAccount StandardCrypto ->
   Maybe ByteString ->
   ReaderT SqlBackend m DB.StakeAddressId
-insertStakeAddress rewardAddr stakeCredBs =
-  DB.insertStakeAddress $
-    DB.StakeAddress
-      { DB.stakeAddressHashRaw = addrBs
-      , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
-      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
-      }
+insertStakeAddress cacheStatus rewardAddr stakeCredBs = do
+  addrId <- DB.insertStakeAddress $
+      DB.StakeAddress
+        { DB.stakeAddressHashRaw = addrBs
+        , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
+        , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
+        }
+  case cacheStatus of
+    NoCache -> pure addrId
+    CacheActive ci -> do
+      liftIO $ atomically $ modifyTVar (cStakeRawHashes ci) $
+        LRU.insert addrBs addrId
+      pure addrId
   where
     addrBs = fromMaybe (Ledger.serialiseRewardAccount rewardAddr) stakeCredBs
 
 queryRewardAccountWithCacheRetBs ::
   forall m.
   MonadIO m =>
+  Trace IO Text ->
   CacheStatus ->
   CacheUpdateAction ->
   Ledger.RewardAccount StandardCrypto ->
   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
-queryRewardAccountWithCacheRetBs cacheStatus cacheUA rwdAcc =
-  queryStakeAddrWithCacheRetBs cacheStatus cacheUA (Ledger.raNetwork rwdAcc) (Ledger.raCredential rwdAcc)
+queryRewardAccountWithCacheRetBs trce cacheStatus cacheUA rwdAcc =
+  queryStakeAddrWithCacheRetBs trce cacheStatus cacheUA (Ledger.raNetwork rwdAcc) (Ledger.raCredential rwdAcc)
 
 queryStakeAddrWithCache ::
   forall m.
   MonadIO m =>
+  Trace IO Text ->
   CacheStatus ->
   CacheUpdateAction ->
   Network ->
   StakeCred ->
   ReaderT SqlBackend m (Either DB.LookupFail DB.StakeAddressId)
-queryStakeAddrWithCache cacheStatus cacheUA nw cred =
-  mapLeft fst <$> queryStakeAddrWithCacheRetBs cacheStatus cacheUA nw cred
+queryStakeAddrWithCache trce cacheStatus cacheUA nw cred =
+  mapLeft fst <$> queryStakeAddrWithCacheRetBs trce cacheStatus cacheUA nw cred
 
 queryStakeAddrWithCacheRetBs ::
   forall m.
   MonadIO m =>
+  Trace IO Text ->
   CacheStatus ->
   CacheUpdateAction ->
   Network ->
   StakeCred ->
   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
-queryStakeAddrWithCacheRetBs cacheStatus cacheUA nw cred = do
+queryStakeAddrWithCacheRetBs trce cacheStatus cacheUA nw cred = do
+  let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
   case cacheStatus of
     NoCache -> do
-      let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
       mapLeft (,bs) <$> queryStakeAddress bs
-    ActiveCache ci -> do
-      mp <- liftIO $ readTVarIO (cStakeCreds ci)
-      (mAddrId, mp') <- queryStakeAddrAux cacheUA mp (cStats ci) nw cred
-      liftIO $ atomically $ writeTVar (cStakeCreds ci) mp'
-      pure mAddrId
+    CacheActive ci -> do
+      currentCache <- liftIO $ readTVarIO (cStakeRawHashes ci)
+      let cacheSize = LRU.getSize currentCache
+      newCache <-
+            if cacheSize < 1
+              then do
+                liftIO $ logInfo trce "----------------- Cache is empty. Querying all addresses. ---------"
+                queryRes <- DB.queryLatestAddresses cacheSize
+                pure $ LRU.fromList queryRes currentCache
+                -- convert the results into the cache
+              else pure currentCache
+      case LRU.lookup bs newCache of
+        Just (addrId, mp') -> do
+          liftIO $ hitCreds (cStats ci)
+          liftIO $ atomically $ writeTVar (cStakeRawHashes ci) mp'
+          pure $ Right addrId
+        Nothing -> do
+          liftIO $ missCreds (cStats ci)
+          liftIO $ atomically $ writeTVar (cStakeRawHashes ci) newCache
+          queryRes <- mapLeft (,bs) <$> queryStakeAddress bs
+          case queryRes of
+            Left _ -> pure queryRes
+            Right stakeAddrsId -> do
+              liftIO $ atomically $ modifyTVar (cStakeRawHashes ci) $
+               LRU.insert bs stakeAddrsId
+              pure $ Right stakeAddrsId
 
-queryStakeAddrAux ::
-  MonadIO m =>
-  CacheUpdateAction ->
-  StakeAddrCache ->
-  StrictTVar IO CacheStatistics ->
-  Network ->
-  StakeCred ->
-  ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId, StakeAddrCache)
-queryStakeAddrAux cacheUA mp sts nw cred =
-  case Map.lookup cred mp of
-    Just addrId -> do
-      liftIO $ hitCreds sts
-      case cacheUA of
-        EvictAndUpdateCache -> pure (Right addrId, Map.delete cred mp)
-        _ -> pure (Right addrId, mp)
-    Nothing -> do
-      liftIO $ missCreds sts
-      let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
-      mAddrId <- mapLeft (,bs) <$> queryStakeAddress bs
-      case (mAddrId, cacheUA) of
-        (Right addrId, UpdateCache) -> pure (Right addrId, Map.insert cred addrId mp)
-        (Right addrId, _) -> pure (Right addrId, mp)
-        (err, _) -> pure (err, mp)
+-- queryStakeAddrAux ::
+--   MonadIO m =>
+--   CacheNew ->
+--   StakeAddrCache ->
+--   StrictTVar IO CacheStatistics ->
+--   Network ->
+--   StakeCred ->
+--   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId, StakeAddrCache)
+-- queryStakeAddrAux cacheNew mp sts nw cred =
+--   case Map.lookup cred mp of
+--     Just addrId -> do
+--       liftIO $ hitCreds sts
+--       case cacheNew of
+--         EvictAndReturn -> pure (Right addrId, Map.delete cred mp)
+--         _ -> pure (Right addrId, mp)
+--     Nothing -> do
+--       liftIO $ missCreds sts
+--       let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
+--       mAddrId <- mapLeft (,bs) <$> queryStakeAddress bs
+--       case (mAddrId, cacheNew) of
+--         (Right addrId, CacheNew) -> pure (Right addrId, Map.insert cred addrId mp)
+--         (Right addrId, _) -> pure (Right addrId, mp)
+--         (err, _) -> pure (err, mp)
 
 queryPoolKeyWithCache ::
   MonadIO m =>
@@ -372,7 +405,7 @@ queryDatum ::
 queryDatum cacheStatus hsh = do
   case cacheStatus of
     NoCache -> DB.queryDatum $ Generic.dataHashToBytes hsh
-    ActiveCache ci -> do
+    CacheActive ci -> do
       mp <- liftIO $ readTVarIO (cDatum ci)
       case LRU.lookup hsh mp of
         Just (datumId, mp') -> do

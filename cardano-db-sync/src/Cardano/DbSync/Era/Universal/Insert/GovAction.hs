@@ -69,6 +69,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 insertGovActionProposal ::
   forall m.
   (MonadIO m, MonadBaseControl IO m) =>
+  Trace IO Text ->
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
@@ -76,9 +77,9 @@ insertGovActionProposal ::
   Maybe (StrictMaybe (Committee StandardConway)) ->
   (Word64, ProposalProcedure StandardConway) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertGovActionProposal cacheStatus blkId txId govExpiresAt mmCommittee (index, pp) = do
+insertGovActionProposal trce cacheStatus blkId txId govExpiresAt mmCommittee (index, pp) = do
   addrId <-
-    lift $ queryOrInsertRewardAccount cacheStatus UpdateCache $ pProcReturnAddr pp
+    lift $ queryOrInsertRewardAccount trce cacheStatus UpdateCache $ pProcReturnAddr pp
   votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
   mParamProposalId <- lift $
     case pProcGovAction pp of
@@ -123,7 +124,7 @@ insertGovActionProposal cacheStatus blkId txId govExpiresAt mmCommittee (index, 
 
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
       addrId <-
-        queryOrInsertRewardAccount cacheStatus UpdateCache rwdAcc
+        queryOrInsertRewardAccount trce cacheStatus UpdateCache rwdAcc
       DB.insertTreasuryWithdrawal $
         DB.TreasuryWithdrawal
           { DB.treasuryWithdrawalGovActionProposalId = gaId
@@ -275,8 +276,8 @@ insertVotingProcedures ::
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedures trce cache blkId txId (voter, actions) =
-  mapM_ (insertVotingProcedure trce cache blkId txId voter) (zip [0 ..] actions)
+insertVotingProcedures trce cacheStatus blkId txId (voter, actions) =
+  mapM_ (insertVotingProcedure trce cacheStatus blkId txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
   (MonadIO m, MonadBaseControl IO m) =>

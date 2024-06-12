@@ -141,11 +141,11 @@ insertABlock ::
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABlock syncEnv firstBlockOfEpoch blk details = do
-  pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
+  pbid <- queryPrevBlockWithCache "insertABlock" cacheStatus (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
   blkId <-
-    lift . insertBlockAndCache cache $
+    lift . insertBlockAndCache cacheStatus $
       DB.Block
         { DB.blockHash = Byron.blockHash blk
         , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -175,7 +175,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
   when (soptEpochAndCacheEnabled $ envOptions syncEnv)
     . newExceptT
     $ writeEpochBlockDiffToCache
-      cache
+      cacheStatus
       EpochBlockDiff
         { ebdBlockId = blkId
         , ebdFees = sum txFees
@@ -216,8 +216,8 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    cache :: CacheStatus
-    cache = envCache syncEnv
+    cacheStatus :: CacheStatus
+    cacheStatus = envCache syncEnv
 
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
