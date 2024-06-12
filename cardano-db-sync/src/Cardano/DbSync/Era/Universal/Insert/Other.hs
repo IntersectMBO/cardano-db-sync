@@ -21,7 +21,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), CacheUpdateAction (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query (queryStakeRefPtr)
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -108,14 +108,14 @@ insertDatum ::
   DB.TxId ->
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
-insertDatum tracer cacheStatus txId txd = do
-  mDatumId <- lift $ queryDatum cacheStatus $ Generic.txDataHash txd
+insertDatum tracer cache txId txd = do
+  mDatumId <- lift $ queryDatum cache $ Generic.txDataHash txd
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
       lift $
-        insertDatumAndCache cacheStatus (Generic.txDataHash txd) $
+        insertDatumAndCache cache (Generic.txDataHash txd) $
           DB.Datum
             { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
             , DB.datumTxId = txId
@@ -131,9 +131,9 @@ insertWithdrawals ::
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals tracer cacheStatus txId redeemers txWdrl = do
+insertWithdrawals tracer cache txId redeemers txWdrl = do
   addrId <-
-    lift $ queryOrInsertRewardAccount tracer cacheStatus UpdateCache $ Generic.txwRewardAccount txWdrl
+    lift $ queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -150,13 +150,13 @@ insertStakeAddressRefIfMissing ::
   CacheStatus ->
   Ledger.Addr StandardCrypto ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing trce cacheStatus addr =
+insertStakeAddressRefIfMissing trce cache addr =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress trce cacheStatus DoNotUpdateCache nw cred
+          Just <$> queryOrInsertStakeAddress trce cache DoNotUpdateCache nw cred
         Ledger.StakeRefPtr ptr -> do
           queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing
@@ -167,8 +167,8 @@ insertMultiAsset ::
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cacheStatus policy aName = do
-  mId <- queryMAWithCache cacheStatus policy aName
+insertMultiAsset cache policy aName = do
+  mId <- queryMAWithCache cache policy aName
   case mId of
     Right maId -> pure maId
     Left (policyBs, assetNameBs) ->

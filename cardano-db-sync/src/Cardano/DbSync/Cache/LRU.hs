@@ -9,6 +9,7 @@ module Cardano.DbSync.Cache.LRU (
   trim,
   insert,
   fromList,
+  delete,
   lookup,
   getSize,
   getCapacity,
@@ -24,9 +25,9 @@ import qualified Data.OrdPSQ as OrdPSQ
 -- LRUCache represents a Least Recently Used (LRU) Cache.
 -- It uses an OrdPSQ to maintain the order of access.
 data LRUCache k v = LRUCache
-  { cCapacity :: !Word64  -- The maximum capacity of the cache
-  , cTick :: !Word64      -- A counter used to track the order of access
-  , cQueue :: !(OrdPSQ k Word64 v)  -- The priority search queue storing the cache entries
+  { cCapacity :: !Word64 -- The maximum capacity of the cache
+  , cTick :: !Word64 -- A counter used to track the order of access
+  , cQueue :: !(OrdPSQ k Word64 v) -- The priority search queue storing the cache entries
   }
 
 -- LRUCacheCapacity is used to define capacities for different types of cache entries.
@@ -57,9 +58,9 @@ cleanup cache =
 -- It removes the least recently used item if the cache is over capacity.
 trim :: Ord k => LRUCache k v -> LRUCache k v
 trim cache
-  | cTick cache == maxBound = empty (cCapacity cache)  -- Reset the cache if the tick counter overflows
+  | cTick cache == maxBound = empty (cCapacity cache) -- Reset the cache if the tick counter overflows
   | fromIntegral (OrdPSQ.size $ cQueue cache) > cCapacity cache =
-      cache {cQueue = OrdPSQ.deleteMin (cQueue cache)}  -- Remove the least recently used item
+      cache {cQueue = OrdPSQ.deleteMin (cQueue cache)} -- Remove the least recently used item
   | otherwise = cache
 
 -- insert adds a new key-value pair to the cache, updating the access order.
@@ -68,15 +69,19 @@ insert :: Ord k => k -> v -> LRUCache k v -> LRUCache k v
 insert k v cache =
   trim $!
     cache
-      { cTick = cTick cache + 1  -- Increment the tick counter
+      { cTick = cTick cache + 1 -- Increment the tick counter
       , cQueue = queue
       }
   where
-    (_mbOldVal, queue) = OrdPSQ.insertView k (cTick cache) v (cQueue cache)  -- Insert the new entry
+    (_mbOldVal, queue) = OrdPSQ.insertView k (cTick cache) v (cQueue cache) -- Insert the new entry
 
 -- fromList inserts into a cache from a list of key-value pairs.
 fromList :: Ord k => [(k, v)] -> LRUCache k v -> LRUCache k v
 fromList kvs cache = foldl' (\c (k, v) -> insert k v c) cache kvs
+
+delete :: Ord k => k -> LRUCache k v -> LRUCache k v
+delete key cache =
+  cache {cQueue = OrdPSQ.delete key (cQueue cache)}
 
 -- lookup retrieves a value from the cache by its key, updating the access order.
 -- It returns the value and the updated cache.
@@ -85,11 +90,11 @@ lookup key cache =
   case OrdPSQ.alter lookupAndUpdate key (cQueue cache) of
     (Nothing, _) -> Nothing
     (Just value, updatedQueue) ->
-      let !updatedCache = trim $ cache {cTick = cTick cache + 1, cQueue = updatedQueue}  -- Update the tick counter and trim the cache
+      let !updatedCache = trim $ cache {cTick = cTick cache + 1, cQueue = updatedQueue} -- Update the tick counter and trim the cache
        in Just (value, updatedCache)
   where
     lookupAndUpdate Nothing = (Nothing, Nothing)
-    lookupAndUpdate (Just (_, value)) = (Just value, Just (cTick cache, value))  -- Update the access order
+    lookupAndUpdate (Just (_, value)) = (Just value, Just (cTick cache, value)) -- Update the access order
 
 -- getSize returns the number of entries currently in the cache.
 getSize :: LRUCache k v -> Int
