@@ -24,6 +24,7 @@ Below is a sample `insert_options` section that shows all the defaults:
   // ...
 
   "insert_options": {
+    "tx_cbor": "disable",
     "tx_out": {
       "value": "enable"
     },
@@ -54,6 +55,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | Property                                     | Type       | Required |
 | :------------------------------------------- | :--------- | :------  |
 | [preset](#preset)                            | `enum`     | Optional |
+| [tx\_cbor](#tx-cbor)                         | `enum`     | Optional |
 | [tx\_out](#tx-out)                           | `object`   | Optional |
 | [ledger](#ledger)                            | `enum`     | Optional |
 | [shelley](#shelley)                          | `object`   | Optional |
@@ -67,7 +69,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 ### Preset
 
 Preset is an aggregate setting that overrides all other properties. For example, setting
-preset to `"full"` will enable all insert options.
+preset to `"full"` will enable all insert options except `"tx_cbor"`.
 
 `preset`
 
@@ -91,6 +93,7 @@ This is equivalent to enabling all other settings.
 This is equivalent to setting:
 
 ```
+"tx_cbor": "disable",
 "tx_out": {
   "value": "bootstrap"
 },
@@ -121,6 +124,7 @@ to the `tx_out` and `ma_tx_out` tables.  After that db-sync can be restarted wit
 This is equivalent to setting:
 
 ```
+"tx_cbor": "disable",
 "tx_out": {
   "value": "disable"
 },
@@ -146,6 +150,7 @@ Disables most data except `block`, `tx`, and governance data.
 This is equivalent to setting:
 
 ```
+"tx_cbor": "disable",
 "tx_out": {
   "value": "disable"
 },
@@ -164,6 +169,19 @@ This is equivalent to setting:
 ```
 
 Disables almost all data except `block` and `tx` tables.
+
+### Tx CBOR
+
+`tx_cbor`
+
+ * Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value       | Explanation                            |
+| :---------  | :------------------------------------- |
+| `"enable"`  | Enable transaction CBOR collection     |
+| `"disable"` | Disable transaction CBOR collection    |
 
 ### Tx Out
 
