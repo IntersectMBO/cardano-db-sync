@@ -152,7 +152,7 @@
             crossPlatforms = p:
               lib.optional (system == "x86_64-linux") p.musl64 ++
               lib.optional
-                (system == "x86_64-linux" && config.compiler-nix-name == "ghc964")
+                (system == "x86_64-linux" && config.compiler-nix-name == "ghc965")
                 p.aarch64-multiplatform-musl;
 
             inputMap = {
