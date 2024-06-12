@@ -182,6 +182,7 @@
               weeder
             ];
             shell.withHoogle = true;
+            shell.crossPlatforms = _: [];
 
             modules = [
               ({ lib, pkgs, ... }: {
