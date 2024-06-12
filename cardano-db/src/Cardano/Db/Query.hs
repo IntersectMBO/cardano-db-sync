@@ -26,6 +26,7 @@ module Cardano.Db.Query (
   queryShelleyGenesisSupply,
   queryLatestBlock,
   queryLatestPoints,
+  queryLatestAddresses,
   queryLatestEpochNo,
   queryLatestBlockId,
   queryLatestSlotNo,
@@ -494,6 +495,15 @@ queryLatestPoints = do
     orderBy [desc (blk ^. BlockSlotNo)]
     limit 5
     pure (blk ^. BlockSlotNo, blk ^. BlockHash)
+  pure $ fmap unValue2 res
+
+queryLatestAddresses :: MonadIO m => Int -> ReaderT SqlBackend m [(ByteString, StakeAddressId)]
+queryLatestAddresses limitNumber = do
+  res <- select $ do
+    stk <- from $ table @StakeAddress
+    orderBy [desc (stk ^. StakeAddressId)]
+    limit $ fromIntegral limitNumber
+    pure (stk ^. StakeAddressHashRaw, stk ^. StakeAddressId)
   pure $ fmap unValue2 res
 
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64

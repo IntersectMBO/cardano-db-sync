@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.DbSync.Cache.Types (
   CacheStatus (..),
@@ -11,7 +12,6 @@ module Cardano.DbSync.Cache.Types (
   CacheEpoch (..),
   CacheInternal (..),
   EpochBlockDiff (..),
-  StakeAddrCache,
   StakePoolCache,
 
   -- * Inits
@@ -27,7 +27,7 @@ module Cardano.DbSync.Cache.Types (
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Types (DataHash, PoolKeyHash, StakeCred)
+import Cardano.DbSync.Types (DataHash, PoolKeyHash)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -39,8 +39,6 @@ import qualified Data.Map.Strict as Map
 import Data.Time.Clock (UTCTime)
 import Data.WideWord.Word128 (Word128)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-
-type StakeAddrCache = Map StakeCred DB.StakeAddressId
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
@@ -57,7 +55,7 @@ data CacheUpdateAction
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cStakeCreds :: !(StrictTVar IO StakeAddrCache)
+  { cStakeRawHashes :: !(StrictTVar IO (LRUCache ByteString DB.StakeAddressId))
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
@@ -102,7 +100,7 @@ textShowStats :: CacheStatus -> IO Text
 textShowStats NoCache = pure "NoCache"
 textShowStats (ActiveCache ic) = do
   stats <- readTVarIO $ cStats ic
-  creds <- readTVarIO (cStakeCreds ic)
+  stakeHashRaws <- readTVarIO (cStakeRawHashes ic)
   pools <- readTVarIO (cPools ic)
   datums <- readTVarIO (cDatum ic)
   mAssets <- readTVarIO (cMultiAssets ic)
@@ -111,7 +109,7 @@ textShowStats (ActiveCache ic) = do
       [ "\nCache Statistics:"
       , "\n  Stake Addresses: "
       , "cache size: "
-      , DB.textShow (Map.size creds)
+      , DB.textShow (LRU.getCapacity stakeHashRaws)
       , if credsQueries stats == 0
           then ""
           else ", hit rate: " <> DB.textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
@@ -166,14 +164,14 @@ textShowStats (ActiveCache ic) = do
 useNoCache :: CacheStatus
 useNoCache = NoCache
 
-newEmptyCache :: MonadIO m => Word64 -> Word64 -> m CacheStatus
-newEmptyCache maCapacity daCapacity =
+newEmptyCache :: MonadIO m => LRU.LRUCacheCapacity -> m CacheStatus
+newEmptyCache LRU.LRUCacheCapacity {..} =
   liftIO . fmap ActiveCache $
     CacheInternal
-      <$> newTVarIO Map.empty
+      <$> newTVarIO (LRU.empty lirCapacityStakeHashRaw)
       <*> newTVarIO Map.empty
-      <*> newTVarIO (LRU.empty daCapacity)
-      <*> newTVarIO (LRU.empty maCapacity)
+      <*> newTVarIO (LRU.empty lruCapacityDatum)
+      <*> newTVarIO (LRU.empty lruCapacityMultiAsset)
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
       <*> newTVarIO initCacheEpoch

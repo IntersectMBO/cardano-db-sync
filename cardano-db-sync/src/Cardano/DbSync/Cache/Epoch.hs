@@ -26,16 +26,17 @@ import Database.Persist.Postgresql (SqlBackend)
 -- Epoch Cache
 -------------------------------------------------------------------------------------
 readCacheEpoch :: MonadIO m => CacheStatus -> m (Maybe CacheEpoch)
-readCacheEpoch cache =
-  case cache of
+readCacheEpoch cacheStatus =
+  case cacheStatus of
     NoCache -> pure Nothing
     ActiveCache ci -> do
       cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
       pure $ Just cacheEpoch
 
 readEpochBlockDiffFromCache :: MonadIO m => CacheStatus -> m (Maybe EpochBlockDiff)
-readEpochBlockDiffFromCache cache =
-  case cache of
+
+readEpochBlockDiffFromCache cacheStatus =
+  case cacheStatus of
     NoCache -> pure Nothing
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
@@ -43,8 +44,9 @@ readEpochBlockDiffFromCache cache =
         (_, epochInternal) -> pure epochInternal
 
 readLastMapEpochFromCache :: CacheStatus -> IO (Maybe DB.Epoch)
-readLastMapEpochFromCache cache =
-  case cache of
+
+readLastMapEpochFromCache cacheStatus =
+  case cacheStatus of
     NoCache -> pure Nothing
     ActiveCache ci -> do
       cE <- readTVarIO (cEpoch ci)
@@ -57,22 +59,23 @@ readLastMapEpochFromCache cache =
           Just (_, ep) -> pure $ Just ep
 
 rollbackMapEpochInCache :: MonadIO m => CacheInternal -> DB.BlockId -> m (Either SyncNodeError ())
-rollbackMapEpochInCache cache blockId = do
-  cE <- liftIO $ readTVarIO (cEpoch cache)
+rollbackMapEpochInCache cacheInternal blockId = do
+  cE <- liftIO $ readTVarIO (cEpoch cacheInternal)
   -- split the map and delete anything after blockId including it self as new blockId might be
   -- given when inserting the block again when doing rollbacks.
   let (newMapEpoch, _) = split blockId (ceMapEpoch cE)
-  writeToCache cache (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
+  writeToCache cacheInternal (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
 
 writeEpochBlockDiffToCache ::
   MonadIO m =>
   CacheStatus ->
   EpochBlockDiff ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-writeEpochBlockDiffToCache cache epCurrent =
-  case cache of
-    NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: CacheStatus is NoCache"
-    ActiveCache ci -> do
+
+writeEpochBlockDiffToCache cacheStatus epCurrent =
+  case cacheStatus of
+    NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is NoCache"
+    CacheActive ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
         (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epCurrent))
@@ -86,17 +89,17 @@ writeToMapEpochCache ::
   CacheStatus ->
   DB.Epoch ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-writeToMapEpochCache syncEnv cache latestEpoch = do
+writeToMapEpochCache syncEnv cacheStatus latestEpoch = do
   -- this can also be tought of as max rollback number
   let securityParam =
         case envLedgerEnv syncEnv of
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
-  case cache of
-    NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: CacheStatus is NoCache"
+  case cacheStatus of
+    NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is NoCache"
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
-      epochInternalCE <- readEpochBlockDiffFromCache cache
+      epochInternalCE <- readEpochBlockDiffFromCache cacheStatus
       case epochInternalCE of
         Nothing -> pure $ Left $ SNErrDefault "writeToMapEpochCache: No epochInternalEpochCache"
         Just ei -> do

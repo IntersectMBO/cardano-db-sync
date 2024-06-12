@@ -98,9 +98,9 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
-    -- now that we've inserted the Block and all it's txs lets cache what we'll need
+    -- now that we've inserted the Block and all it's txs lets cacheStatus what we'll need
     -- when we later update the epoch values.
-    -- if have --dissable-epoch && --dissable-cache then no need to cache data.
+    -- if have --dissable-epoch && --dissable-cacheStatus then no need to cacheStatus data.
     when (soptEpochAndCacheEnabled $ envOptions syncEnv)
       . newExceptT
       $ writeEpochBlockDiffToCache
