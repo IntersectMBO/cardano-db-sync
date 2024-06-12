@@ -244,6 +244,17 @@
                   packages.cardano-chain-gen.components.tests.cardano-chain-gen =
                     postgresTest;
                 })
+
+              ({
+                packages.double-conversion.ghcOptions = [
+                  # stop putting U __gxx_personality_v0 into the library!
+                  "-optcxx-fno-rtti"
+                  "-optcxx-fno-exceptions"
+                  # stop putting U __cxa_guard_release into the library!
+                  "-optcxx-std=gnu++98"
+                  "-optcxx-fno-threadsafe-statics"
+                ];
+              })
             ];
           })).appendOverlays [
             # Collect local package `exe`s
