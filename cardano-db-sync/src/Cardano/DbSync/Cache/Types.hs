@@ -2,13 +2,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.DbSync.Cache.Types (
   CacheStatus (..),
-  CacheUpdateAction (..),
+  CacheAction (..),
   CacheEpoch (..),
   CacheInternal (..),
   EpochBlockDiff (..),
@@ -18,6 +18,9 @@ module Cardano.DbSync.Cache.Types (
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
+
+  -- * Helpers
+  isCacheActionUpdate,
 
   -- * CacheStatistics
   CacheStatistics (..),
@@ -48,7 +51,7 @@ data CacheStatus
   = NoCache
   | ActiveCache !CacheInternal
 
-data CacheUpdateAction
+data CacheAction
   = UpdateCache
   | DoNotUpdateCache
   | EvictAndUpdateCache
@@ -181,3 +184,7 @@ initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing
+
+isCacheActionUpdate :: CacheAction -> Bool
+isCacheActionUpdate UpdateCache = True
+isCacheActionUpdate _other = False

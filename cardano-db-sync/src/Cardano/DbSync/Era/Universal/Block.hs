@@ -21,7 +21,7 @@ import Cardano.DbSync.Cache (
   queryPrevBlockWithCache,
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), CacheUpdateAction (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
@@ -67,13 +67,13 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
-      Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cacheStatus pHash
-    mPhid <- lift $ queryPoolKeyWithCache cacheStatus UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
+      Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
+    mPhid <- lift $ queryPoolKeyWithCache cache UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
-      lift . insertBlockAndCache cacheStatus $
+      lift . insertBlockAndCache cache $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo
@@ -98,13 +98,13 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
-    -- now that we've inserted the Block and all it's txs lets cacheStatus what we'll need
+    -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- when we later update the epoch values.
-    -- if have --dissable-epoch && --dissable-cacheStatus then no need to cacheStatus data.
+    -- if have --dissable-epoch && --dissable-cache then no need to cache data.
     when (soptEpochAndCacheEnabled $ envOptions syncEnv)
       . newExceptT
       $ writeEpochBlockDiffToCache
-        cacheStatus
+        cache
         EpochBlockDiff
           { ebdBlockId = blkId
           , ebdTime = sdSlotTime details
@@ -181,5 +181,5 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    cacheStatus :: CacheStatus
-    cacheStatus = envCache syncEnv
+    cache :: CacheStatus
+    cache = envCache syncEnv

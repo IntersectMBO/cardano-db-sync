@@ -26,17 +26,16 @@ import Database.Persist.Postgresql (SqlBackend)
 -- Epoch Cache
 -------------------------------------------------------------------------------------
 readCacheEpoch :: MonadIO m => CacheStatus -> m (Maybe CacheEpoch)
-readCacheEpoch cacheStatus =
-  case cacheStatus of
+readCacheEpoch cache =
+  case cache of
     NoCache -> pure Nothing
     ActiveCache ci -> do
       cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
       pure $ Just cacheEpoch
 
 readEpochBlockDiffFromCache :: MonadIO m => CacheStatus -> m (Maybe EpochBlockDiff)
-
-readEpochBlockDiffFromCache cacheStatus =
-  case cacheStatus of
+readEpochBlockDiffFromCache cache =
+  case cache of
     NoCache -> pure Nothing
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
@@ -44,9 +43,8 @@ readEpochBlockDiffFromCache cacheStatus =
         (_, epochInternal) -> pure epochInternal
 
 readLastMapEpochFromCache :: CacheStatus -> IO (Maybe DB.Epoch)
-
-readLastMapEpochFromCache cacheStatus =
-  case cacheStatus of
+readLastMapEpochFromCache cache =
+  case cache of
     NoCache -> pure Nothing
     ActiveCache ci -> do
       cE <- readTVarIO (cEpoch ci)
@@ -71,11 +69,10 @@ writeEpochBlockDiffToCache ::
   CacheStatus ->
   EpochBlockDiff ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-
-writeEpochBlockDiffToCache cacheStatus epCurrent =
-  case cacheStatus of
+writeEpochBlockDiffToCache cache epCurrent =
+  case cache of
     NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is NoCache"
-    CacheActive ci -> do
+    ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
         (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epCurrent))
@@ -89,17 +86,17 @@ writeToMapEpochCache ::
   CacheStatus ->
   DB.Epoch ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-writeToMapEpochCache syncEnv cacheStatus latestEpoch = do
+writeToMapEpochCache syncEnv cache latestEpoch = do
   -- this can also be tought of as max rollback number
   let securityParam =
         case envLedgerEnv syncEnv of
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
-  case cacheStatus of
+  case cache of
     NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is NoCache"
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
-      epochInternalCE <- readEpochBlockDiffFromCache cacheStatus
+      epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
         Nothing -> pure $ Left $ SNErrDefault "writeToMapEpochCache: No epochInternalEpochCache"
         Just ei -> do

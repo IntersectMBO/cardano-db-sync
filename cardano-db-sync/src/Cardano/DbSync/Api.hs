@@ -55,6 +55,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
+import Cardano.DbSync.Cache.LRU (LRUCacheCapacity (..))
 import Cardano.DbSync.Cache.Types (newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
@@ -97,7 +98,6 @@ import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
-import Cardano.DbSync.Cache.LRU (LRUCacheCapacity(..))
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -385,13 +385,14 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
-      then newEmptyCache
-            LRUCacheCapacity
-            { lirCapacityStakeHashRaw = 300000,
-              lruCapacityDatum = 250000,
-              lruCapacityMultiAsset = 50000
+      then
+        newEmptyCache
+          LRUCacheCapacity
+            { lirCapacityStakeHashRaw = 1600000
+            , lruCapacityDatum = 250000
+            , lruCapacityMultiAsset = 250000
             }
-      else pure cacheStatusNoCache
+      else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
