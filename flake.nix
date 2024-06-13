@@ -256,6 +256,40 @@
                   "-optcxx-fno-threadsafe-statics"
                 ];
               })
+
+              (lib.mkIf pkgs.haskell-nix.haskellLib.isCrossHost {
+                packages.text-icu.patches = [
+                  # Fix the following compilation error when cross-compiling:
+                  #
+                  # Char.hsc: In function ‘_hsc2hs_test45’:
+                  # Char.hsc:1227:20: error: storage size of ‘test_array’ isn’t constant
+                  # Char.hsc:1227:20: warning: unused variable ‘test_array’ [8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-variable-Wunused-variable8;;]
+                  # compilation failed
+                  #
+                  # U_NO_NUMERIC_VALUE is defined to be `((double)-123456789.)` which gcc can't
+                  # figure out at compile time.
+                  #
+                  # More context:
+                  #
+                  # https://github.com/haskell/text-icu/issues/7
+                  # https://gitlab.haskell.org/ghc/ghc/-/issues/7983
+                  # https://gitlab.haskell.org/ghc/ghc/-/issues/12849
+                  (builtins.toFile "text-icu.patch" ''
+                    diff --git c/Data/Text/ICU/Char.hsc i/Data/Text/ICU/Char.hsc
+                    index 6ea2b39..a0bf995 100644
+                    --- c/Data/Text/ICU/Char.hsc
+                    +++ i/Data/Text/ICU/Char.hsc
+                    @@ -1223,7 +1223,7 @@ digitToInt c
+                     -- fractions, negative, or too large to fit in a fixed-width integral type.
+                     numericValue :: Char -> Maybe Double
+                     numericValue c
+                    -    | v == (#const U_NO_NUMERIC_VALUE) = Nothing
+                    +    | v == -123456789 = Nothing
+                         | otherwise                        = Just v
+                         where v = u_getNumericValue . fromIntegral . ord $ c
+                  '')
+                ];
+              })
             ];
           })).appendOverlays [
             # Collect local package `exe`s
