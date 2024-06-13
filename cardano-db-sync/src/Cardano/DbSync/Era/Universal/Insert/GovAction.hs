@@ -33,7 +33,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert)
-import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus (..))
+import Cardano.DbSync.Cache.Types (CacheStatus (..), CacheUpdateAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
@@ -76,9 +76,9 @@ insertGovActionProposal ::
   Maybe (StrictMaybe (Committee StandardConway)) ->
   (Word64, ProposalProcedure StandardConway) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = do
+insertGovActionProposal cacheStatus blkId txId govExpiresAt mmCommittee (index, pp) = do
   addrId <-
-    lift $ queryOrInsertRewardAccount cache CacheNew $ pProcReturnAddr pp
+    lift $ queryOrInsertRewardAccount cacheStatus UpdateCache $ pProcReturnAddr pp
   votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
   mParamProposalId <- lift $
     case pProcGovAction pp of
@@ -123,7 +123,7 @@ insertGovActionProposal cache blkId txId govExpiresAt mmCommittee (index, pp) = 
 
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
       addrId <-
-        queryOrInsertRewardAccount cache CacheNew rwdAcc
+        queryOrInsertRewardAccount cacheStatus UpdateCache rwdAcc
       DB.insertTreasuryWithdrawal $
         DB.TreasuryWithdrawal
           { DB.treasuryWithdrawalGovActionProposalId = gaId
@@ -287,7 +287,7 @@ insertVotingProcedure ::
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
+insertVotingProcedure trce cacheStatus blkId txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal gaId
   votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.OtherAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
@@ -298,7 +298,7 @@ insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
       drep <- lift $ insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
     StakePoolVoter poolkh -> do
-      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cache CacheNew False poolkh
+      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cacheStatus UpdateCache False poolkh
       pure (Nothing, Nothing, Just poolHashId)
   void
     . lift

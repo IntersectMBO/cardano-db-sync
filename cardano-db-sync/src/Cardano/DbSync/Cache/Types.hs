@@ -7,7 +7,7 @@
 
 module Cardano.DbSync.Cache.Types (
   CacheStatus (..),
-  CacheNew (..),
+  CacheUpdateAction (..),
   CacheEpoch (..),
   CacheInternal (..),
   EpochBlockDiff (..),
@@ -50,10 +50,10 @@ data CacheStatus
   = NoCache
   | ActiveCache !CacheInternal
 
-data CacheNew
-  = CacheNew
-  | DontCacheNew
-  | EvictAndReturn
+data CacheUpdateAction
+  = UpdateCache
+  | DoNotUpdateCache
+  | EvictAndUpdateCache
   deriving (Eq)
 
 data CacheInternal = CacheInternal
