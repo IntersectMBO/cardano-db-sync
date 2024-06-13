@@ -26,7 +26,7 @@ import Cardano.DbSync.Cache (
   queryOrInsertStakeAddress,
   queryPoolKeyOrInsert,
  )
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheStatus (..), CacheUpdateAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error
@@ -50,7 +50,7 @@ type IsPoolMember = PoolKeyHash -> Bool
 insertPoolRegister ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
@@ -60,8 +60,8 @@ insertPoolRegister ::
   Word16 ->
   PoolP.PoolParams StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRegister _tracer cache isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
-  poolHashId <- lift $ insertPoolKeyWithCache cache CacheNew (PoolP.ppId params)
+insertPoolRegister _tracer cacheStatus isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
+  poolHashId <- lift $ insertPoolKeyWithCache cacheStatus UpdateCache (PoolP.ppId params)
   mdId <- case strictMaybeToMaybe $ PoolP.ppMetadata params of
     Just md -> Just <$> insertPoolMetaDataRef poolHashId txId md
     Nothing -> pure Nothing
@@ -70,7 +70,7 @@ insertPoolRegister _tracer cache isMember mdeposits network (EpochNo epoch) blkI
   let epochActivationDelay = if isRegistration then 2 else 3
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
 
-  saId <- lift $ queryOrInsertRewardAccount cache CacheNew (adjustNetworkTag $ PoolP.ppRewardAccount params)
+  saId <- lift $ queryOrInsertRewardAccount cacheStatus UpdateCache (adjustNetworkTag $ PoolP.ppRewardAccount params)
   poolUpdateId <-
     lift
       . DB.insertPoolUpdate
@@ -88,7 +88,7 @@ insertPoolRegister _tracer cache isMember mdeposits network (EpochNo epoch) blkI
         , DB.poolUpdateRegisteredTxId = txId
         }
 
-  mapM_ (insertPoolOwner cache network poolUpdateId) $ toList (PoolP.ppOwners params)
+  mapM_ (insertPoolOwner cacheStatus network poolUpdateId) $ toList (PoolP.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.ppRelays params)
   where
     isPoolRegistration :: MonadIO m => DB.PoolHashId -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
@@ -111,13 +111,13 @@ insertPoolRetire ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.TxId ->
-  Cache ->
+  CacheStatus ->
   EpochNo ->
   Word16 ->
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRetire trce txId cache epochNum idx keyHash = do
-  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache CacheNew True keyHash
+insertPoolRetire trce txId cacheStatus epochNum idx keyHash = do
+  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cacheStatus UpdateCache True keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -144,13 +144,13 @@ insertPoolMetaDataRef poolId txId md =
 
 insertPoolOwner ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Cache ->
+  CacheStatus ->
   Ledger.Network ->
   DB.PoolUpdateId ->
   Ledger.KeyHash 'Ledger.Staking StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolOwner cache network poolUpdateId skh = do
-  saId <- lift $ queryOrInsertStakeAddress cache CacheNew network (Ledger.KeyHashObj skh)
+insertPoolOwner cacheStatus network poolUpdateId skh = do
+  saId <- lift $ queryOrInsertStakeAddress cacheStatus UpdateCache network (Ledger.KeyHashObj skh)
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId
@@ -198,7 +198,7 @@ insertPoolRelay updateId relay =
 insertPoolCert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
@@ -208,7 +208,7 @@ insertPoolCert ::
   Word16 ->
   PoolCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCert tracer cache isMember mdeposits network epoch blkId txId idx pCert =
+insertPoolCert tracer cacheStatus isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of
-    RegPool pParams -> insertPoolRegister tracer cache isMember mdeposits network epoch blkId txId idx pParams
-    RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash
+    RegPool pParams -> insertPoolRegister tracer cacheStatus isMember mdeposits network epoch blkId txId idx pParams
+    RetirePool keyHash epochNum -> insertPoolRetire tracer txId cacheStatus epochNum idx keyHash

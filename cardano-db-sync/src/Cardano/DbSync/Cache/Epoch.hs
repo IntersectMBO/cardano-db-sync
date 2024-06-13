@@ -12,7 +12,7 @@ module Cardano.DbSync.Cache.Epoch (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
-import Cardano.DbSync.Cache.Types (Cache (..), CacheEpoch (..), CacheInternal (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheEpoch (..), CacheInternal (..), CacheStatus (..), EpochBlockDiff (..))
 import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
 import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
@@ -25,28 +25,28 @@ import Database.Persist.Postgresql (SqlBackend)
 -------------------------------------------------------------------------------------
 -- Epoch Cache
 -------------------------------------------------------------------------------------
-readCacheEpoch :: MonadIO m => Cache -> m (Maybe CacheEpoch)
+readCacheEpoch :: MonadIO m => CacheStatus -> m (Maybe CacheEpoch)
 readCacheEpoch cache =
   case cache of
-    UninitiatedCache -> pure Nothing
-    Cache ci -> do
+    NoCache -> pure Nothing
+    ActiveCache ci -> do
       cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
       pure $ Just cacheEpoch
 
-readEpochBlockDiffFromCache :: MonadIO m => Cache -> m (Maybe EpochBlockDiff)
+readEpochBlockDiffFromCache :: MonadIO m => CacheStatus -> m (Maybe EpochBlockDiff)
 readEpochBlockDiffFromCache cache =
   case cache of
-    UninitiatedCache -> pure Nothing
-    Cache ci -> do
+    NoCache -> pure Nothing
+    ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
         (_, epochInternal) -> pure epochInternal
 
-readLastMapEpochFromCache :: Cache -> IO (Maybe DB.Epoch)
+readLastMapEpochFromCache :: CacheStatus -> IO (Maybe DB.Epoch)
 readLastMapEpochFromCache cache =
   case cache of
-    UninitiatedCache -> pure Nothing
-    Cache ci -> do
+    NoCache -> pure Nothing
+    ActiveCache ci -> do
       cE <- readTVarIO (cEpoch ci)
       let mapEpoch = ceMapEpoch cE
       -- making sure db sync wasn't restarted on the last block in epoch
@@ -66,13 +66,13 @@ rollbackMapEpochInCache cache blockId = do
 
 writeEpochBlockDiffToCache ::
   MonadIO m =>
-  Cache ->
+  CacheStatus ->
   EpochBlockDiff ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
-    UninitiatedCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is UninitiatedCache"
-    Cache ci -> do
+    NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: CacheStatus is NoCache"
+    ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
         (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epCurrent))
@@ -83,7 +83,7 @@ writeEpochBlockDiffToCache cache epCurrent =
 writeToMapEpochCache ::
   MonadIO m =>
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   DB.Epoch ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 writeToMapEpochCache syncEnv cache latestEpoch = do
@@ -93,8 +93,8 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    UninitiatedCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is UninitiatedCache"
-    Cache ci -> do
+    NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: CacheStatus is NoCache"
+    ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
