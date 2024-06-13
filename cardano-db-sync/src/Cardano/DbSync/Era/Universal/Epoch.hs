@@ -26,7 +26,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
-import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, insertUpdateEnacted, updateExpired, updateRatified)
@@ -210,7 +210,7 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
   where
     mkStake ::
       (MonadBaseControl IO m, MonadIO m) =>
-      Cache ->
+      CacheStatus ->
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake cache (saddr, (coin, pool)) = do
@@ -233,7 +233,7 @@ insertRewards ::
   Network ->
   EpochNo ->
   EpochNo ->
-  Cache ->
+  CacheStatus ->
   [(StakeCred, Set Generic.Reward)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
@@ -283,7 +283,7 @@ insertRewardRests ::
   Network ->
   EpochNo ->
   EpochNo ->
-  Cache ->
+  CacheStatus ->
   [(StakeCred, Set Generic.RewardRest)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertRewardRests nw earnedEpoch spendableEpoch cache rewardsChunk = do
@@ -318,7 +318,7 @@ insertProposalRefunds ::
   Network ->
   EpochNo ->
   EpochNo ->
-  Cache ->
+  CacheStatus ->
   [GovActionRefunded] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertProposalRefunds nw earnedEpoch spendableEpoch cache refunds = do

@@ -13,7 +13,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache.Epoch (readEpochBlockDiffFromCache, readLastMapEpochFromCache, writeToMapEpochCache)
-import Cardano.DbSync.Cache.Types (Cache (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheStatus (..), EpochBlockDiff (..))
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types (
   BlockDetails (BlockDetails),
@@ -38,7 +38,7 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 epochHandler ::
   SyncEnv ->
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   Bool ->
   BlockDetails ->
   ReaderT SqlBackend (LoggingT IO) (Either SyncNodeError ())
@@ -71,7 +71,7 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
 
 updateEpochStart ::
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   SlotDetails ->
   Bool ->
   Bool ->
@@ -106,7 +106,7 @@ updateEpochStart syncEnv cache slotDetails isNewEpochEvent isBoundaryBlock = do
 handleEpochWhenFollowing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   Maybe DB.Epoch ->
   Maybe EpochBlockDiff ->
   Word64 ->
@@ -141,7 +141,7 @@ handleEpochWhenFollowing syncEnv cache newestEpochFromMap epochBlockDiffCache ep
 makeEpochWithCacheWhenFollowing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   DB.Epoch ->
   EpochBlockDiff ->
   Word64 ->
@@ -168,7 +168,7 @@ makeEpochWithCacheWhenFollowing syncEnv cache newestEpochFromMapache currentEpCa
 updateEpochWhenSyncing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   Maybe EpochBlockDiff ->
   Maybe DB.Epoch ->
   Word64 ->
@@ -213,7 +213,7 @@ updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epoc
 handleEpochCachingWhenSyncing ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   Maybe DB.Epoch ->
   Maybe EpochBlockDiff ->
   ReaderT SqlBackend m (Either SyncNodeError ())
@@ -239,7 +239,7 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
 makeEpochWithDBQuery ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Cache ->
+  CacheStatus ->
   Maybe DB.Epoch ->
   Word64 ->
   Text ->

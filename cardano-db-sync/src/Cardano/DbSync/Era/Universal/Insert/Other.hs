@@ -21,7 +21,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query (queryStakeRefPtr)
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -104,7 +104,7 @@ insertRedeemerData tracer txId txd = do
 insertDatum ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   DB.TxId ->
   Generic.PlutusData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.DatumId
@@ -126,7 +126,7 @@ insertDatum tracer cache txId txd = do
 insertWithdrawals ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
@@ -147,7 +147,7 @@ insertWithdrawals _tracer cache txId redeemers txWdrl = do
 insertStakeAddressRefIfMissing ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   Ledger.Addr StandardCrypto ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
 insertStakeAddressRefIfMissing _trce cache addr =
@@ -163,7 +163,7 @@ insertStakeAddressRefIfMissing _trce cache addr =
 
 insertMultiAsset ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Cache ->
+  CacheStatus ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m DB.MultiAssetId

@@ -55,7 +55,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.Types (newEmptyCache, uninitiatedCache)
+import Cardano.DbSync.Cache.Types (newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
@@ -382,7 +382,7 @@ mkSyncEnv ::
   IO SyncEnv
 mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
-  cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure uninitiatedCache
+  cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP

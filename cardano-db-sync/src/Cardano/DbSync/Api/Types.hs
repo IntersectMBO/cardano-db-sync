@@ -14,7 +14,7 @@ module Cardano.DbSync.Api.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (Cache)
+import Cardano.DbSync.Cache.Types (CacheStatus)
 import Cardano.DbSync.Config.Types (SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
@@ -39,7 +39,7 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 
 data SyncEnv = SyncEnv
   { envBackend :: !SqlBackend
-  , envCache :: !Cache
+  , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)

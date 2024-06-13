@@ -26,7 +26,7 @@ import Cardano.DbSync.Cache (
   queryPrevBlockWithCache,
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -216,7 +216,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    cache :: Cache
+    cache :: CacheStatus
     cache = envCache syncEnv
 
     logger :: Bool -> Trace IO a -> a -> IO ()

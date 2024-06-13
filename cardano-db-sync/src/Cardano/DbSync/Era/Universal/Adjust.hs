@@ -13,7 +13,7 @@ import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
   queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Types (Cache, CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Types (StakeCred)
 import Cardano.Ledger.BaseTypes (Network)
@@ -50,7 +50,7 @@ adjustEpochRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Network ->
-  Cache ->
+  CacheStatus ->
   EpochNo ->
   Generic.Rewards ->
   Set StakeCred ->
@@ -73,7 +73,7 @@ adjustEpochRewards tracer nw cache epochNo rwds creds = do
 deleteReward ::
   (MonadBaseControl IO m, MonadIO m) =>
   Network ->
-  Cache ->
+  CacheStatus ->
   EpochNo ->
   (StakeCred, Generic.Reward) ->
   ReaderT SqlBackend m ()

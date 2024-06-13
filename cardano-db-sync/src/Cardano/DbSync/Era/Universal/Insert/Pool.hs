@@ -26,7 +26,7 @@ import Cardano.DbSync.Cache (
   queryOrInsertStakeAddress,
   queryPoolKeyOrInsert,
  )
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error
@@ -50,7 +50,7 @@ type IsPoolMember = PoolKeyHash -> Bool
 insertPoolRegister ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
@@ -111,7 +111,7 @@ insertPoolRetire ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.TxId ->
-  Cache ->
+  CacheStatus ->
   EpochNo ->
   Word16 ->
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
@@ -144,7 +144,7 @@ insertPoolMetaDataRef poolId txId md =
 
 insertPoolOwner ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Cache ->
+  CacheStatus ->
   Ledger.Network ->
   DB.PoolUpdateId ->
   Ledger.KeyHash 'Ledger.Staking StandardCrypto ->
@@ -198,7 +198,7 @@ insertPoolRelay updateId relay =
 insertPoolCert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
   Ledger.Network ->

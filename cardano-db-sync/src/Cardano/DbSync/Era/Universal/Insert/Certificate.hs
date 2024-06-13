@@ -31,7 +31,7 @@ import Cardano.DbSync.Cache (
   queryOrInsertStakeAddress,
   queryPoolKeyOrInsert,
  )
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCommitteeHash, insertCredDrepHash, insertDrep, insertVotingAnchor)
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
@@ -107,7 +107,7 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
 insertDelegCert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
   DB.TxId ->
@@ -171,7 +171,7 @@ insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo dCer
 insertMirCert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   Ledger.Network ->
   DB.TxId ->
   Word16 ->
@@ -316,7 +316,7 @@ insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
 
 insertStakeDeregistration ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Cache ->
+  CacheStatus ->
   Ledger.Network ->
   EpochNo ->
   DB.TxId ->
@@ -402,7 +402,7 @@ mkAdaPots blockId slotNo epochNo pots =
 insertDelegation ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   Ledger.Network ->
   EpochNo ->
   SlotNo ->
@@ -428,7 +428,7 @@ insertDelegation trce cache network (EpochNo epoch) slotNo txId idx mRedeemerId 
 
 insertDelegationVote ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Cache ->
+  CacheStatus ->
   Ledger.Network ->
   DB.TxId ->
   Word16 ->

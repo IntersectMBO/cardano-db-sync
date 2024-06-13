@@ -33,7 +33,7 @@ import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert)
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
@@ -69,7 +69,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 insertGovActionProposal ::
   forall m.
   (MonadIO m, MonadBaseControl IO m) =>
-  Cache ->
+  CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
@@ -270,7 +270,7 @@ insertConstitution blockId mgapId constitution = do
 insertVotingProcedures ::
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
@@ -281,7 +281,7 @@ insertVotingProcedures trce cache blkId txId (voter, actions) =
 insertVotingProcedure ::
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   Voter StandardCrypto ->

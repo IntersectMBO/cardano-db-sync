@@ -18,7 +18,7 @@ import Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache.Types (Cache (..))
+import Cardano.DbSync.Cache.Types (CacheStatus (..))
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
@@ -192,7 +192,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
@@ -276,7 +276,7 @@ insertTxMetadata tracer txId inOpts mmetadata = do
 insertMaTxMint ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   DB.TxId ->
   MultiAsset StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
@@ -307,7 +307,7 @@ insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
 insertMaTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   Map (PolicyID StandardCrypto) (Map AssetName Integer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [MissingMaTxOut]
 insertMaTxOuts _tracer cache maMap =
@@ -339,7 +339,7 @@ insertMaTxOuts _tracer cache maMap =
 insertCollateralTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->

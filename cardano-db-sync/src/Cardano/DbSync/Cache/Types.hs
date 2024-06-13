@@ -6,7 +6,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Cache.Types (
-  Cache (..),
+  CacheStatus (..),
   CacheNew (..),
   CacheEpoch (..),
   CacheInternal (..),
@@ -15,7 +15,7 @@ module Cardano.DbSync.Cache.Types (
   StakePoolCache,
 
   -- * Inits
-  uninitiatedCache,
+  useNoCache,
   initCacheStatistics,
   newEmptyCache,
 
@@ -44,12 +44,11 @@ type StakeAddrCache = Map StakeCred DB.StakeAddressId
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
--- The 'UninitiatedCache' makes it possible to call functions in this module
--- without having actually initiated the cache yet. It is used by genesis
--- insertions, where the cache has not been initiated yet.
-data Cache
-  = UninitiatedCache
-  | Cache !CacheInternal
+-- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
+-- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
+data CacheStatus
+  = NoCache
+  | ActiveCache !CacheInternal
 
 data CacheNew
   = CacheNew
@@ -99,9 +98,9 @@ data CacheEpoch = CacheEpoch
   }
   deriving (Show)
 
-textShowStats :: Cache -> IO Text
-textShowStats UninitiatedCache = pure "UninitiatedCache"
-textShowStats (Cache ic) = do
+textShowStats :: CacheStatus -> IO Text
+textShowStats NoCache = pure "NoCache"
+textShowStats (ActiveCache ic) = do
   stats <- readTVarIO $ cStats ic
   creds <- readTVarIO (cStakeCreds ic)
   pools <- readTVarIO (cPools ic)
@@ -164,12 +163,12 @@ textShowStats (Cache ic) = do
       , DB.textShow (prevBlockQueries stats - prevBlockHits stats)
       ]
 
-uninitiatedCache :: Cache
-uninitiatedCache = UninitiatedCache
+useNoCache :: CacheStatus
+useNoCache = NoCache
 
-newEmptyCache :: MonadIO m => Word64 -> Word64 -> m Cache
+newEmptyCache :: MonadIO m => Word64 -> Word64 -> m CacheStatus
 newEmptyCache maCapacity daCapacity =
-  liftIO . fmap Cache $
+  liftIO . fmap ActiveCache $
     CacheInternal
       <$> newTVarIO Map.empty
       <*> newTVarIO Map.empty

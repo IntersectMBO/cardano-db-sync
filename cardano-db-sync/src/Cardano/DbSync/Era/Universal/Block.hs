@@ -21,7 +21,7 @@ import Cardano.DbSync.Cache (
   queryPrevBlockWithCache,
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
-import Cardano.DbSync.Cache.Types (Cache (..), CacheNew (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheNew (..), CacheStatus (..), EpochBlockDiff (..))
 
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
@@ -181,5 +181,5 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    cache :: Cache
+    cache :: CacheStatus
     cache = envCache syncEnv

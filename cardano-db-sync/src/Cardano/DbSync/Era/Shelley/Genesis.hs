@@ -15,7 +15,7 @@ import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (envBackend))
-import Cardano.DbSync.Cache.Types (Cache (..), uninitiatedCache)
+import Cardano.DbSync.Cache.Types (CacheStatus (..), useNoCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insertStakeRegistration)
 import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
@@ -154,7 +154,7 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
                 "Initial genesis distribution populated. Hash "
                   <> renderByteArray (configGenesisHash cfg)
               when hasStakes $
-                insertStaking tracer uninitiatedCache bid cfg
+                insertStaking tracer useNoCache bid cfg
               supply <- lift DB.queryTotalSupply
               liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
@@ -242,7 +242,7 @@ insertTxOuts trce hasConsumed disInOut blkId (TxIn txInId _, txOut) = do
         , DB.txValidContract = True
         , DB.txScriptSize = 0
         }
-  _ <- insertStakeAddressRefIfMissing trce uninitiatedCache (txOut ^. Core.addrTxOutL)
+  _ <- insertStakeAddressRefIfMissing trce useNoCache (txOut ^. Core.addrTxOutL)
   DB.insertTxOutPlex hasConsumed disInOut $
     DB.TxOut
       { DB.txOutTxId = txId
@@ -264,7 +264,7 @@ insertTxOuts trce hasConsumed disInOut blkId (TxIn txInId _, txOut) = do
 insertStaking ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
-  Cache ->
+  CacheStatus ->
   DB.BlockId ->
   ShelleyGenesis StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
@@ -290,7 +290,7 @@ insertStaking tracer cache blkId genesis = do
   let params = zip [0 ..] $ ListMap.elems $ sgsPools $ sgStaking genesis
   let network = sgNetworkId genesis
   -- TODO: add initial deposits for genesis pools.
-  forM_ params $ uncurry (insertPoolRegister tracer uninitiatedCache (const False) Nothing network (EpochNo 0) blkId txId)
+  forM_ params $ uncurry (insertPoolRegister tracer useNoCache (const False) Nothing network (EpochNo 0) blkId txId)
   let stakes = zip [0 ..] $ ListMap.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     -- TODO: add initial deposits for genesis stake keys.
