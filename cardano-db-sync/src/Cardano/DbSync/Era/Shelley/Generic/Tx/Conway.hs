@@ -21,10 +21,11 @@ import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxBody
 import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (StandardConway)
+import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
@@ -67,11 +68,14 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txScripts = getScripts tx
     , txExtraKeyWitnesses = extraKeyWits txBody
     , txVotingProcedure = Map.toList $ fmap Map.toList (unVotingProcedures $ ctbVotingProcedures txBody)
-    , txProposalProcedure = toList $ ctbProposalProcedures txBody
+    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ toList $ ctbProposalProcedures txBody
     }
   where
     txBody :: Core.TxBody StandardConway
     txBody = tx ^. Core.bodyTxL
+
+    txId :: TxId StandardCrypto
+    txId = mkTxId tx
 
     outputs :: [TxOut]
     outputs = zipWith Babbage.fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
@@ -97,3 +101,6 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody
+
+    mkProposalIndex :: Word32 -> a -> (GovActionId StandardCrypto, a)
+    mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
