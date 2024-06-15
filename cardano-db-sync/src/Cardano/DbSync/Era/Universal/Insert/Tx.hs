@@ -184,7 +184,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (insertGovActionProposal tracer cache blkId txId (getGovExpiresAt applyResult epochNo) (apCommittee applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (insertGovActionProposal tracer cache blkId txId (getGovExpiresAt applyResult epochNo) (apCommittee applyResult)) $ zip [0 ..] (snd <$> Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures tracer cache blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
