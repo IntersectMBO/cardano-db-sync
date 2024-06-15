@@ -23,7 +23,6 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Shelley.Query (queryStakeRefPtr)
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
@@ -158,7 +157,7 @@ insertStakeAddressRefIfMissing trce cache addr =
         Ledger.StakeRefBase cred -> do
           Just <$> queryOrInsertStakeAddress trce cache DoNotUpdateCache nw cred
         Ledger.StakeRefPtr ptr -> do
-          queryStakeRefPtr ptr
+          DB.queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing
 
 insertMultiAsset ::
