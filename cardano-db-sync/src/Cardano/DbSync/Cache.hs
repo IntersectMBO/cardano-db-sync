@@ -158,7 +158,7 @@ queryStakeAddrWithCacheRetBs trce cache cacheUA nw cred = do
   let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
   case cache of
     NoCache -> do
-      mapLeft (,bs) <$> queryStakeAddress bs
+      mapLeft (,bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do
       prevCache <- liftIO $ readTVarIO (cStakeRawHashes ci)
       let isNewCache = LRU.getSize prevCache < 1
@@ -184,7 +184,7 @@ queryStakeAddrWithCacheRetBs trce cache cacheUA nw cred = do
               liftIO $ atomically $ writeTVar (cStakeRawHashes ci) lruCache
               pure $ Right addrId
         Nothing -> do
-          queryRes <- mapLeft (,bs) <$> queryStakeAddress bs
+          queryRes <- mapLeft (,bs) <$> resolveStakeAddress bs
           liftIO $ missCreds (cStats ci)
           case queryRes of
             Left _ -> pure queryRes
@@ -205,7 +205,7 @@ queryPoolKeyWithCache ::
 queryPoolKeyWithCache cache cacheUA hsh =
   case cache of
     NoCache -> do
-      mPhId <- queryPoolHashId (Generic.unKeyHashRaw hsh)
+      mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
       case mPhId of
         Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
         Just phId -> pure $ Right phId
@@ -223,7 +223,7 @@ queryPoolKeyWithCache cache cacheUA hsh =
           pure $ Right phId
         Nothing -> do
           liftIO $ missPools (cStats ci)
-          mPhId <- queryPoolHashId (Generic.unKeyHashRaw hsh)
+          mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
           case mPhId of
             Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
             Just phId -> do

@@ -28,7 +28,6 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types (PoolKeyHash)
 import Cardano.DbSync.Util
@@ -99,7 +98,7 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
           -- if the pool is not registered at the end of the previous block, check for
           -- other registrations at the current block. If this is the first registration
           -- then it's +2, else it's +3.
-          otherUpdates <- lift $ queryPoolUpdateByBlock blkId poolHashId
+          otherUpdates <- lift $ DB.queryPoolUpdateByBlock blkId poolHashId
           pure $ not otherUpdates
 
     -- Ignore the network in the `RewardAccount` and use the provided one instead.
