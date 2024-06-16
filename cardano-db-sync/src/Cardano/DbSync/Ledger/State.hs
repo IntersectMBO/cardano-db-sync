@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -29,6 +30,7 @@ module Cardano.DbSync.Ledger.State (
   runLedgerStateWriteThread,
   getStakeSlice,
   getSliceMeta,
+  findProposedCommittee,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -856,3 +858,34 @@ findAdaPots = go
     go [] = Nothing
     go (LedgerAdaPots p : _) = Just p
     go (_ : rest) = go rest
+
+-- | Given an committee action id and the current GovState, return the proposed committee.
+-- If the id is not included in the proposals, return Nothing.
+findProposedCommittee :: GovActionId StandardCrypto -> ConwayGovState StandardConway -> Maybe (Committee StandardConway)
+findProposedCommittee gaId cgs = do
+  (rootCommittee, updateList) <- findRoot gaId
+  computeCommittee rootCommittee updateList
+  where
+    ps = cgsProposals cgs
+    findRoot = findRootRecursively []
+
+    findRootRecursively :: [GovAction StandardConway] -> GovActionId StandardCrypto -> Maybe (StrictMaybe (Committee StandardConway), [GovAction StandardConway])
+    findRootRecursively acc gid = do
+      gas <- proposalsLookupId gid ps
+      let ga = pProcGovAction (gasProposalProcedure gas)
+      case ga of
+        NoConfidence _ -> Just (Ledger.SNothing, acc)
+        UpdateCommittee Ledger.SNothing _ _ _ -> Just (cgsCommittee cgs, ga : acc)
+        UpdateCommittee gpid _ _ _
+          | gpid == ps ^. pRootsL . grCommitteeL . prRootL ->
+              Just (cgsCommittee cgs, ga : acc)
+        UpdateCommittee (Ledger.SJust gpid) _ _ _ -> findRootRecursively (ga : acc) (unGovPurposeId gpid)
+        _ -> Nothing
+
+    computeCommittee :: StrictMaybe (Committee StandardConway) -> [GovAction StandardConway] -> Maybe (Committee StandardConway)
+    computeCommittee sCommittee actions =
+      Ledger.strictMaybeToMaybe $ foldl applyCommitteeUpdate sCommittee actions
+
+    applyCommitteeUpdate scommittee = \case
+      UpdateCommittee _ toRemove toAdd q -> Ledger.SJust $ updatedCommittee toRemove toAdd q scommittee
+      _ -> Ledger.SNothing -- Should never happen since the accumulator only gets UpdateCommittee
