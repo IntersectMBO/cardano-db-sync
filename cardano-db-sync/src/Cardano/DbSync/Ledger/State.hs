@@ -248,7 +248,7 @@ applyBlock env blk = do
                 , apSlotDetails = details
                 , apStakeSlice = getStakeSlice env newState False
                 , apEvents = ledgerEvents
-                , apCommittee = getCommittee newLedgerState
+                , apGovActionState = getGovState newLedgerState
                 , apDepositsMap = DepositsMap deposits
                 }
             else defaultApplyResult details
@@ -277,7 +277,7 @@ applyBlock env blk = do
             , Generic.neAdaPots = maybeToStrict mPots
             , Generic.neEpochUpdate = Generic.epochUpdate newState
             , Generic.neDRepState = maybeToStrict $ getDrepState newState
-            , Generic.neEnacted = maybeToStrict $ getEnacted newState
+            , Generic.neEnacted = maybeToStrict $ getGovState newState
             }
 
     applyToEpochBlockNo :: Bool -> Bool -> EpochBlockNo -> EpochBlockNo
@@ -294,16 +294,10 @@ applyBlock env blk = do
     finaliseDrepDistr ledger =
       ledger & newEpochStateT %~ forceDRepPulsingState @StandardConway
 
-getEnacted :: ExtLedgerState CardanoBlock -> Maybe (ConwayGovState StandardConway)
-getEnacted ls = case ledgerState ls of
+getGovState :: ExtLedgerState CardanoBlock -> Maybe (ConwayGovState StandardConway)
+getGovState ls = case ledgerState ls of
   LedgerStateConway cls ->
     Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
-  _ -> Nothing
-
-getCommittee :: ExtLedgerState CardanoBlock -> Maybe (StrictMaybe (Committee StandardConway))
-getCommittee ls = case ledgerState ls of
-  LedgerStateConway cls ->
-    Just $ Consensus.shelleyLedgerState cls ^. (Shelley.newEpochStateGovStateL . cgsCommitteeL)
   _ -> Nothing
 
 getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes
@@ -860,8 +854,8 @@ findAdaPots = go
     go (_ : rest) = go rest
 
 -- | Given an committee action id and the current GovState, return the proposed committee.
--- If the id is not included in the proposals, return Nothing.
-findProposedCommittee :: GovActionId StandardCrypto -> ConwayGovState StandardConway -> Maybe (Committee StandardConway)
+-- If it's not a Committee action or is not included in the proposals, return Nothing.
+findProposedCommittee :: GovActionId StandardCrypto -> ConwayGovState StandardConway -> Either Text (Maybe (Committee StandardConway))
 findProposedCommittee gaId cgs = do
   (rootCommittee, updateList) <- findRoot gaId
   computeCommittee rootCommittee updateList
@@ -869,23 +863,24 @@ findProposedCommittee gaId cgs = do
     ps = cgsProposals cgs
     findRoot = findRootRecursively []
 
-    findRootRecursively :: [GovAction StandardConway] -> GovActionId StandardCrypto -> Maybe (StrictMaybe (Committee StandardConway), [GovAction StandardConway])
+    findRootRecursively :: [GovAction StandardConway] -> GovActionId StandardCrypto -> Either Text (StrictMaybe (Committee StandardConway), [GovAction StandardConway])
     findRootRecursively acc gid = do
-      gas <- proposalsLookupId gid ps
+      gas <- fromNothing ("Didn't find proposal " <> textShow gid) $ proposalsLookupId gid ps
       let ga = pProcGovAction (gasProposalProcedure gas)
       case ga of
-        NoConfidence _ -> Just (Ledger.SNothing, acc)
-        UpdateCommittee Ledger.SNothing _ _ _ -> Just (cgsCommittee cgs, ga : acc)
+        NoConfidence _ -> Right (Ledger.SNothing, acc)
+        UpdateCommittee Ledger.SNothing _ _ _ -> Right (cgsCommittee cgs, ga : acc)
         UpdateCommittee gpid _ _ _
           | gpid == ps ^. pRootsL . grCommitteeL . prRootL ->
-              Just (cgsCommittee cgs, ga : acc)
+              Right (cgsCommittee cgs, ga : acc)
         UpdateCommittee (Ledger.SJust gpid) _ _ _ -> findRootRecursively (ga : acc) (unGovPurposeId gpid)
-        _ -> Nothing
+        _ -> Left "Found invalid gov action referenced by committee"
 
-    computeCommittee :: StrictMaybe (Committee StandardConway) -> [GovAction StandardConway] -> Maybe (Committee StandardConway)
+    computeCommittee :: StrictMaybe (Committee StandardConway) -> [GovAction StandardConway] -> Either Text (Maybe (Committee StandardConway))
     computeCommittee sCommittee actions =
-      Ledger.strictMaybeToMaybe $ foldl applyCommitteeUpdate sCommittee actions
+      Ledger.strictMaybeToMaybe <$> foldM applyCommitteeUpdate sCommittee actions
 
     applyCommitteeUpdate scommittee = \case
-      UpdateCommittee _ toRemove toAdd q -> Ledger.SJust $ updatedCommittee toRemove toAdd q scommittee
-      _ -> Ledger.SNothing -- Should never happen since the accumulator only gets UpdateCommittee
+      UpdateCommittee _ toRemove toAdd q -> Right $ Ledger.SJust $ updatedCommittee toRemove toAdd q scommittee
+      _ -> Left "Unexpected gov action." -- Should never happen since the accumulator only includes UpdateCommittee
+    fromNothing err = maybe (Left err) Right

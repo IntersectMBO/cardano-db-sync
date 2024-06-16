@@ -39,7 +39,7 @@ import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Types
+import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
 import Cardano.Ledger.BaseTypes
@@ -74,10 +74,10 @@ insertGovActionProposal ::
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
-  Maybe (StrictMaybe (Committee StandardConway)) ->
-  (Word64, ProposalProcedure StandardConway) ->
+  Maybe (ConwayGovState StandardConway) ->
+  (Word64, (GovActionId StandardCrypto, ProposalProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertGovActionProposal trce cache blkId txId govExpiresAt mmCommittee (index, pp) = do
+insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, pp)) = do
   addrId <-
     lift $ queryOrInsertRewardAccount trce cache UpdateCache $ pProcReturnAddr pp
   votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
@@ -110,7 +110,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mmCommittee (index, p
           }
   case pProcGovAction pp of
     TreasuryWithdrawals mp _ -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
-    UpdateCommittee _ removed added q -> lift $ insertNewCommittee (Just govActionProposalId) removed added q
+    UpdateCommittee {} -> lift $ insertNewCommittee govActionProposalId
     NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
     _ -> pure ()
   where
@@ -133,26 +133,22 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mmCommittee (index, p
           }
 
     insertNewCommittee ::
-      Maybe DB.GovActionProposalId ->
-      Set (Ledger.Credential 'ColdCommitteeRole StandardCrypto) ->
-      Map (Ledger.Credential 'ColdCommitteeRole StandardCrypto) EpochNo ->
-      UnitInterval ->
+      DB.GovActionProposalId ->
       ReaderT SqlBackend m ()
-    insertNewCommittee gapId removed added q = do
-      void $ insertCommittee' gapId (updatedCommittee removed added q <$> mmCommittee) q
+    insertNewCommittee govActionProposalId = do
+      whenJust mcgs $ \cgs ->
+        case findProposedCommittee govId cgs of
+          Right (Just committee) -> void $ insertCommittee (Just govActionProposalId) committee
+          other ->
+            liftIO $ logWarning trce $ textShow other <> ": Failed to find committee for " <> textShow pp
 
 insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.CommitteeId
 insertCommittee mgapId committee = do
-  insertCommittee' mgapId (Just committee) (committeeThreshold committee)
-
-insertCommittee' :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Maybe (Committee StandardConway) -> UnitInterval -> ReaderT SqlBackend m DB.CommitteeId
-insertCommittee' mgapId mcommittee q = do
   committeeId <- insertCommitteeDB
-  whenJust mcommittee $ \committee ->
-    mapM_ (insertNewMember committeeId) (Map.toList $ committeeMembers committee)
+  mapM_ (insertNewMember committeeId) (Map.toList $ committeeMembers committee)
   pure committeeId
   where
-    r = unboundRational q -- TODO work directly with Ratio Word64. This is not currently supported in ledger
+    r = unboundRational $ committeeThreshold committee -- TODO work directly with Ratio Word64. This is not currently supported in ledger
     insertNewMember committeeId (cred, e) = do
       chId <- insertCommitteeHash cred
       void . DB.insertCommitteeMember $
