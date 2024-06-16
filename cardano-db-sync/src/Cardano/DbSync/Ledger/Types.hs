@@ -23,7 +23,6 @@ import Cardano.DbSync.Types (
   SlotDetails,
  )
 import Cardano.Ledger.Alonzo.Scripts (Prices)
-import Cardano.Ledger.BaseTypes (StrictMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
@@ -143,7 +142,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
-  , apCommittee :: !(Maybe (StrictMaybe (Committee StandardConway)))
+  , apGovActionState :: !(Maybe (ConwayGovState StandardConway))
   , apDepositsMap :: !DepositsMap
   }
 
@@ -159,7 +158,7 @@ defaultApplyResult slotDetails =
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices
     , apEvents = []
-    , apCommittee = Nothing
+    , apGovActionState = Nothing
     , apDepositsMap = emptyDepositsMap
     }
 
