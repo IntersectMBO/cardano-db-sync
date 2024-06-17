@@ -186,11 +186,18 @@
             # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
-              fourmolu
               hlint
             ] ++ lib.optionals (config.compiler-nix-name == "ghc8107") [
               # Weeder requires the GHC version to match HIE files
               weeder
+            ] ++ lib.optionals (system != "aarch64-darwin") [
+              # TODO: Fourmolu 0.10 is currently failing to build with aarch64-darwin
+              #
+              # Linking dist/build/fourmolu/fourmolu ...
+              # ld: line 269:  2352 Segmentation fault ...
+              # clang-11: error: linker command failed with exit code 139 (use -v to see invocation)
+              # `cc' failed in phase `Linker'. (Exit code: 139)
+              fourmolu
             ];
             shell.withHoogle = true;
             shell.crossPlatforms = _: [];
