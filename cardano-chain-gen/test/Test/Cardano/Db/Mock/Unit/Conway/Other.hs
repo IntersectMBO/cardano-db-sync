@@ -377,7 +377,7 @@ poolDelist =
 
     void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
   where
-    testLabel = "poolDelist"
+    testLabel = "conwayPoolDelist"
 
 mkPoolDereg ::
   EpochNo ->
