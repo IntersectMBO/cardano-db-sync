@@ -33,6 +33,8 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkMultiAssetsScriptTx,
   mkDepositTxPools,
   mkRegisterDRepTx,
+  mkCommitteeAuthTx,
+  mkNewConstitutionTx,
   mkDummyRegisterTx,
   mkDummyTxBody,
   mkTxDelegCert,
@@ -452,6 +454,14 @@ mkRegisterDRepTx cred = mkDCertTx [cert] (Withdrawals mempty) Nothing
     cert = ConwayTxCertGov (ConwayRegDRep cred deposit SNothing)
     deposit = Coin 500_000_000
 
+mkCommitteeAuthTx ::
+  Credential 'ColdCommitteeRole StandardCrypto ->
+  Credential 'HotCommitteeRole StandardCrypto ->
+  Either ForgingError (AlonzoTx StandardConway)
+mkCommitteeAuthTx cold hot = mkDCertTx [cert] (Withdrawals mempty) Nothing
+  where
+    cert = ConwayTxCertGov (ConwayAuthCommitteeHotKey cold hot)
+
 mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardConway)
 mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
   where
@@ -503,6 +513,14 @@ mkAddCommitteeTx cred = mkGovActionProposalTx govAction
     govAction = Governance.UpdateCommittee SNothing mempty newMembers threshold
     newMembers = Map.singleton cred (EpochNo 20)
     threshold = fromJust $ boundRational (1 % 1)
+
+mkNewConstitutionTx ::
+  Anchor StandardCrypto ->
+  AlonzoTx StandardConway
+mkNewConstitutionTx anchor = mkGovActionProposalTx govAction
+  where
+    govAction = Governance.NewConstitution SNothing constitution
+    constitution = Governance.Constitution anchor SNothing
 
 mkGovActionProposalTx ::
   Governance.GovAction StandardConway ->

@@ -1,23 +1,32 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
+  updateConstitution,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash)
+import Cardano.Ledger.BaseTypes (AnchorData (..), hashAnchorData, textToUrl)
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..), Voter (..))
+import qualified Cardano.Ledger.Conway.Governance as Governance
 import Cardano.Ledger.Core (txIdTx)
 import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyHash (..))
+import Cardano.Ledger.SafeHash (SafeToHash (..))
 import Cardano.Mock.ChainSync.Server (IOManager)
+import Cardano.Mock.Forging.Interpreter (getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types
 import qualified Cardano.Mock.Query as Query
 import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..))
+import Data.Maybe (fromJust)
+import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
@@ -104,3 +113,65 @@ newCommittee =
       "Unexpected committee hashes"
   where
     testLabel = "conwayNewCommittee"
+
+updateConstitution :: IOManager -> [(Text, Text)] -> Assertion
+updateConstitution =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+
+    -- Register committee hot credentials
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+        mapM (uncurry Conway.mkCommitteeAuthTx) Forging.bootstrapCommitteeCreds
+
+    let newUrl = fromJust (textToUrl 64 "constitution.new")
+        dataHash = hashAnchorData @Consensus.StandardCrypto (AnchorData "constitution content")
+        anchor = Governance.Anchor newUrl dataHash
+
+    -- Create and vote for a governance proposal
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ -> do
+        let
+          -- Create gov action tx
+          proposalTx = Conway.mkNewConstitutionTx anchor
+
+          -- Create votes
+          addVoteTx =
+            Conway.mkGovVoteTx
+              govActionId
+              ( DRepVoter (Prelude.head Forging.unregisteredDRepIds)
+                  : map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
+              )
+          govActionId =
+            GovActionId
+              { gaidTxId = txIdTx proposalTx
+              , gaidGovActionIx = GovActionIx 0
+              }
+
+        pure [proposalTx, addVoteTx]
+
+    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+    -- epoch and enacted on the following.
+    epoch1 <- Api.fillEpochs interpreter server 2
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length (epoch0 <> epoch1) + 4)
+
+    -- Constitution should now be updated
+    (EpochNo epochNo) <- getCurrentEpoch interpreter
+    assertEqQuery
+      dbSync
+      (Query.queryConstitutionAnchor epochNo)
+      (Just ("constitution.new", originalBytes dataHash))
+      "Unexpected constution voting anchor"
+  where
+    testLabel = "conwayUpdateConstitution"
