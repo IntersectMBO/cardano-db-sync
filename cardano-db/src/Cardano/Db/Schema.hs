@@ -1262,7 +1262,7 @@ schemaDocs =
       DrepHashHasScript # "Flag which shows if this DRep credentials are a script hash"
 
     CommitteeHash --^ do
-      "A table for all committee hot credentials"
+      "A table for all committee credentials hot or cold"
       CommitteeHashRaw # "The key or script hash"
       CommitteeHashHasScript # "Flag which shows if this credential is a script hash"
 
