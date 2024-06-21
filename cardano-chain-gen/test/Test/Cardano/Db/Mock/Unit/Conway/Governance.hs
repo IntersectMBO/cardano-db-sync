@@ -7,10 +7,14 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
   updateConstitution,
+  treasuryWithdrawal,
 ) where
 
+import qualified Cardano.Db as Db
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash)
-import Cardano.Ledger.BaseTypes (AnchorData (..), hashAnchorData, textToUrl)
+import Cardano.Ledger.Address (RewardAccount (..))
+import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), hashAnchorData, textToUrl)
+import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..), Voter (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
 import Cardano.Ledger.Core (txIdTx)
@@ -175,3 +179,71 @@ updateConstitution =
       "Unexpected constution voting anchor"
   where
     testLabel = "conwayUpdateConstitution"
+
+treasuryWithdrawal :: IOManager -> [(Text, Text)] -> Assertion
+treasuryWithdrawal =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+
+    -- Register committee hot credentials
+    -- TODO[sgillespie]: Let's get this in UnifiedApi or something
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+        mapM (uncurry Conway.mkCommitteeAuthTx) Forging.bootstrapCommitteeCreds
+
+    -- Make sure we have treasury to spend
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter server $ \_ ->
+        Right $ Conway.mkDonationTx (Coin 50_000)
+
+    -- Create and vote for a governance proposal
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+        rewardAccount <-
+          RewardAccount Testnet <$> Forging.resolveStakeCreds (StakeIndex 0) ledger
+
+        let
+          proposalTx =
+            Conway.mkTreasuryWithdrawalTx
+              rewardAccount
+              (Coin 10_000)
+
+          addVoteTx =
+            Conway.mkGovVoteTx
+              govActionId
+              ( DRepVoter (Prelude.head Forging.unregisteredDRepIds)
+                  : map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
+              )
+
+          govActionId =
+            GovActionId
+              { gaidTxId = txIdTx proposalTx
+              , gaidGovActionIx = GovActionIx 0
+              }
+
+        pure [proposalTx, addVoteTx]
+
+    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+    -- epoch and enacted on the following.
+    epoch1 <- Api.fillEpochs interpreter server 2
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length (epoch0 <> epoch1) + 5)
+
+    -- Should now have a treasury reward
+    assertEqQuery
+      dbSync
+      Query.queryRewardRests
+      [(Db.RwdTreasury, 10_000)]
+      "Unexpected constution voting anchor"
+  where
+    testLabel = "conwayTreasuryWithdrawal"
