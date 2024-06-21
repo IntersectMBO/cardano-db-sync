@@ -10,6 +10,7 @@ module Cardano.Mock.Query (
   queryDRepDistrAmount,
   queryGovActionCounts,
   queryConstitutionAnchor,
+  queryRewardRests,
 ) where
 
 import qualified Cardano.Db as Db
@@ -139,3 +140,13 @@ queryConstitutionAnchor epochNo = do
     pure (anchor ^. Db.VotingAnchorUrl, anchor ^. Db.VotingAnchorDataHash)
 
   pure $ bimap (Db.unVoteUrl . unValue) unValue <$> res
+
+queryRewardRests ::
+  MonadIO io =>
+  ReaderT SqlBackend io [(Db.RewardSource, Word64)]
+queryRewardRests = do
+  res <- select $ do
+    reward <- from $ table @Db.RewardRest
+    pure (reward ^. Db.RewardRestType, reward ^. Db.RewardRestAmount)
+
+  pure $ map (bimap unValue (Db.unDbLovelace . unValue)) res
