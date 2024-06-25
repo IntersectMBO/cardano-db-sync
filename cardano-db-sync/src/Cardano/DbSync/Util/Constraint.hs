@@ -7,7 +7,7 @@ module Cardano.DbSync.Util.Constraint (
   constraintNameEpochStake,
   constraintNameReward,
   dbConstraintNamesExists,
-  dbJsonbInSchema,
+  queryIsJsonbInSchema,
   addConstraintsIfNotExist,
   addStakeConstraintsIfNotExist,
   addRewardConstraintsIfNotExist,
@@ -41,8 +41,8 @@ dbConstraintNamesExists :: MonadIO m => SqlBackend -> m ManualDbConstraints
 dbConstraintNamesExists sqlBackend = do
   runReaderT queryRewardAndEpochStakeConstraints sqlBackend
 
-dbJsonbInSchema :: MonadIO m => SqlBackend -> m Bool
-dbJsonbInSchema sqlBackend = do
+queryIsJsonbInSchema :: MonadIO m => SqlBackend -> m Bool
+queryIsJsonbInSchema sqlBackend = do
   runReaderT DB.queryJsonbInSchemaExists sqlBackend
 
 queryRewardAndEpochStakeConstraints ::

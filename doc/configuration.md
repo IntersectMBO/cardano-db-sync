@@ -62,7 +62,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [plutus](#plutus)                            | `object`   | Optional |
 | [governance](#governance)                    | `enum`     | Optional |
 | [offchain\_pool\_data](#offchain-pool-data)  | `enum`     | Optional |
-| [add\_jsonb_to_schema](#add-jsonb-to-schema) | `enum`     | Optional |
+| [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 
 ### Preset
 
@@ -434,12 +434,12 @@ Enables or disables most tables and entries related to plutus and scripts.
 | `"disable"`| Disables fetching pool offchain metadata. |
 
 
-### Add Jsonb To Schema
+### Remove Jsonb From Schema
 
-`add_jsonb_to_schema`
+`remove_jsonb_from_schema`
 
-Jsonb data types were removed from the schema to improve inserting performance, but if required, they can be reintroduced by enabling this config.
-cardano-db-sync` will throw an error if `add_jsonb_to_schema` was previously set to `enable` and then either removed from the configuration file or set to `disabled`.
+To improve inserting performance you can remove Jsonb data types in the schema. They can be reintroduced by using `disable` or by simply not using all together.
+A warning will logw if `remove_jsonb_from_schema` was previously set to `enable` and then either removed from the configuration file or set to `disabled`.
 
 * Type: `string`
 
@@ -447,17 +447,17 @@ cardano-db-sync` will throw an error if `add_jsonb_to_schema` was previously set
 
 | Value      | Explanation                                                            |
 | :--------- | :--------------------------------------------------------------------- |
-| `"enable"` | Enables adding [jsonb data types](#data-types-effected) to the schema. |
-| `"disable"`| Does not add jsonb data types to the schema.                           |
+| `"enable"` | Enables removing [jsonb data types](#data-types-effected) from the schema. |
+| `"disable"`| keeps jsonb data types in the schema.                           |
 
 #### Example
 
 ```json
-"add_jsonb_to_schema": "enable"
+"remove_jsonb_from_schema": "enable"
 ```
 
 #### Data Types Effected
-When enabling this config, the following tables and columns will be set with the `jsonb` data type:
+When enabling this config, the following columns will no longer have the `jsonb` data type:
 
 | Table                 | Column        |
 | :--------------       | :------------ |
