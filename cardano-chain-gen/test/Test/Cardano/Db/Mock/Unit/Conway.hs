@@ -37,11 +37,11 @@ unitTests iom knownMigrations =
         , testCase "insert config" Config.insertConfig
         , testGroup
             "jsonb-in-schema"
-            [ test "jsonb in schema true" Config.configJsonbInSchemaTrue
-            , test "jsonb in schema false" Config.configJsonbInSchemaFalse
+            [ test "jsonb in schema true" Config.configRemoveJsonbFromSchemaEnabled
+            , test "jsonb in schema false" Config.configRemoveJsonbFromSchemaDisabled
             , test
-                "jsonb true then false should remove datatype from db"
-                Config.configJsonbInSchemaShouldAddThenRemove
+                "remove jsonb from schema and add back"
+                Config.configJsonbInSchemaShouldRemoveThenAdd
             ]
         , testGroup
             "tx-out"

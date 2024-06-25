@@ -84,7 +84,7 @@ data InsertOptions = InsertOptions
   , ioPlutusExtra :: !Bool
   , ioOffChainPoolData :: !Bool
   , ioGov :: !Bool
-  , ioAddJsonbToSchema :: !Bool
+  , ioRemoveJsonbFromSchema :: !Bool
   }
   deriving (Show)
 

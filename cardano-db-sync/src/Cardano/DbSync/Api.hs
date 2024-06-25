@@ -26,8 +26,8 @@ module Cardano.DbSync.Api (
   runIndexMigrations,
   initPruneConsumeMigration,
   runExtraMigrationsMaybe,
-  runEnableJsonbInSchema,
-  runDisableJsonbInSchema,
+  runAddJsonbToSchema,
+  runRemoveJsonbFromSchema,
   getSafeBlockNoDiff,
   getPruneInterval,
   whenConsumeOrPruneTxOut,
@@ -177,12 +177,12 @@ runExtraMigrationsMaybe syncEnv = do
       (getSafeBlockNoDiff syncEnv)
       pcm
 
-runEnableJsonbInSchema :: SyncEnv -> IO ()
-runEnableJsonbInSchema syncEnv =
+runAddJsonbToSchema :: SyncEnv -> IO ()
+runAddJsonbToSchema syncEnv =
   void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.enableJsonbInSchema
 
-runDisableJsonbInSchema :: SyncEnv -> IO ()
-runDisableJsonbInSchema syncEnv =
+runRemoveJsonbFromSchema :: SyncEnv -> IO ()
+runRemoveJsonbFromSchema syncEnv =
   void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.disableJsonbInSchema
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
@@ -233,7 +233,7 @@ fullInsertOptions =
     , sioGovernance = GovernanceConfig True
     , sioOffchainPoolData = OffchainPoolDataConfig True
     , sioJsonType = JsonTypeText
-    , sioAddJsonbToSchema = AddJsonbToSchemaConfig False
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -249,7 +249,7 @@ onlyUTxOInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioOffchainPoolData = OffchainPoolDataConfig False
     , sioJsonType = JsonTypeText
-    , sioAddJsonbToSchema = AddJsonbToSchemaConfig False
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -272,7 +272,7 @@ disableAllInsertOptions =
     , sioOffchainPoolData = OffchainPoolDataConfig False
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
-    , sioAddJsonbToSchema = AddJsonbToSchemaConfig False
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
 
 initCurrentEpochNo :: CurrentEpochNo
