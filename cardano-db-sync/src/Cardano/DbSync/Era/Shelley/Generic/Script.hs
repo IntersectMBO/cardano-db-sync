@@ -18,10 +18,12 @@ module Cardano.DbSync.Era.Shelley.Generic.Script (
 import Cardano.Crypto.Hash.Class
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
 import Cardano.Ledger.Core (EraCrypto ())
+import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Crypto
 import Cardano.Ledger.Era (Era ())
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), coerceKeyRole)
 import qualified Cardano.Ledger.Shelley.API.Types as Shelley
+import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 import Cardano.Ledger.Slot (SlotNo (..))
 import Cardano.Prelude hiding (show)
 import Control.Monad (MonadFail (..))
@@ -62,36 +64,37 @@ fromTimelock = TimelockScript
 toTimelock :: TimelockScript era -> Allegra.Timelock era
 toTimelock = unTimelockScript
 
-instance Era era => Aeson.ToJSON (MultiSigScript era) where
+instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era) => Aeson.ToJSON (MultiSigScript era) where
   toJSON (MultiSigScript script) = multiSigToJSON script
     where
       multiSigToJSON :: Shelley.MultiSig era -> Aeson.Value
       multiSigToJSON (Shelley.RequireMOf req scripts) =
-        requireMOfToJSON req (map multiSigToJSON scripts)
+        requireMOfToJSON req $ toList (map multiSigToJSON scripts)
       multiSigToJSON (Shelley.RequireAnyOf scripts) =
-        requireAnyOfToJSON (map multiSigToJSON scripts)
+        requireAnyOfToJSON $ toList (map multiSigToJSON scripts)
       multiSigToJSON (Shelley.RequireAllOf scripts) =
-        requireAllOfToJSON (map multiSigToJSON scripts)
+        requireAllOfToJSON $ toList (map multiSigToJSON scripts)
       multiSigToJSON (Shelley.RequireSignature sig) =
         requireSignatureToJSON sig
+      multiSigToJSON _ = Aeson.Null -- This can never happen
 
-instance (Era era, EraCrypto era ~ StandardCrypto) => FromJSON (MultiSigScript era) where
+instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era, EraCrypto era ~ StandardCrypto) => FromJSON (MultiSigScript era) where
   parseJSON v = MultiSigScript <$> parseMultiSig v
 
-instance Era era => ToJSON (TimelockScript era) where
+instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => ToJSON (TimelockScript era) where
   toJSON (TimelockScript script) = timelockToJSON script
     where
-      timelockToJSON (Allegra.RequireMOf req scripts) =
+      timelockToJSON (Shelley.RequireMOf req scripts) =
         requireMOfToJSON req (map timelockToJSON $ toList scripts)
-      timelockToJSON (Allegra.RequireAnyOf scripts) =
+      timelockToJSON (Shelley.RequireAnyOf scripts) =
         requireAnyOfToJSON (map timelockToJSON $ toList scripts)
-      timelockToJSON (Allegra.RequireAllOf scripts) =
+      timelockToJSON (Shelley.RequireAllOf scripts) =
         requireAllOfToJSON (map timelockToJSON $ toList scripts)
-      timelockToJSON (Allegra.RequireSignature sig) = requireSignatureToJSON sig
+      timelockToJSON (Shelley.RequireSignature sig) = requireSignatureToJSON sig
       timelockToJSON (Allegra.RequireTimeStart slot) = requireTimeStartToJSON slot
       timelockToJSON (Allegra.RequireTimeExpire slot) = requireTimeExpireToJSON slot
 
-instance (Era era, EraCrypto era ~ StandardCrypto) => FromJSON (TimelockScript era) where
+instance (Era era, Allegra.AllegraEraScript era, EraCrypto era ~ StandardCrypto, Core.NativeScript era ~ Allegra.Timelock era) => FromJSON (TimelockScript era) where
   parseJSON v = TimelockScript <$> parseTimelock v
 
 requireSignatureToJSON :: KeyHash discr c -> Aeson.Value
@@ -138,7 +141,7 @@ requireTimeStartToJSON slot =
     ]
 
 parseMultiSig ::
-  (Era era, EraCrypto era ~ StandardCrypto) =>
+  (Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era, EraCrypto era ~ StandardCrypto) =>
   Aeson.Value ->
   Parser (Shelley.MultiSig era)
 parseMultiSig v =
@@ -148,19 +151,19 @@ parseMultiSig v =
     <|> (uncurry Shelley.RequireMOf <$> parseScriptMOf')
   where
     parseScriptSig' = coerceKeyRole <$> parseScriptSig v
-    parseScriptAll' = map unMultiSigScript <$> parseScriptAll v
-    parseScriptAny' = map unMultiSigScript <$> parseScriptAny v
-    parseScriptMOf' = second (map unMultiSigScript) <$> parseScriptMOf v
+    parseScriptAll' = fromList . map unMultiSigScript <$> parseScriptAll v
+    parseScriptAny' = fromList . map unMultiSigScript <$> parseScriptAny v
+    parseScriptMOf' = second (fromList . map unMultiSigScript) <$> parseScriptMOf v
 
 parseTimelock ::
-  (Era era, EraCrypto era ~ StandardCrypto) =>
+  (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era, EraCrypto era ~ StandardCrypto) =>
   Aeson.Value ->
   Parser (Allegra.Timelock era)
 parseTimelock v =
-  (Allegra.RequireSignature <$> parseScriptSig')
-    <|> (Allegra.RequireAllOf <$> parseScriptAll')
-    <|> (Allegra.RequireAnyOf <$> parseScriptAny')
-    <|> (uncurry Allegra.RequireMOf <$> parseScriptMOf')
+  (Shelley.RequireSignature <$> parseScriptSig')
+    <|> (Shelley.RequireAllOf <$> parseScriptAll')
+    <|> (Shelley.RequireAnyOf <$> parseScriptAny')
+    <|> (uncurry Shelley.RequireMOf <$> parseScriptMOf')
     <|> parseTimelockExpire v
     <|> parseTimelockStart v
   where
@@ -234,7 +237,7 @@ parseScriptMOf = Aeson.withObject "atLeast" $ \obj -> do
           <> " Scripts: "
           <> show (length scripts)
 
-parseTimelockExpire :: Era era => Aeson.Value -> Parser (Allegra.Timelock era)
+parseTimelockExpire :: (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => Aeson.Value -> Parser (Allegra.Timelock era)
 parseTimelockExpire = Aeson.withObject "before" $ \obj -> do
   v <- obj .: "type"
 
@@ -242,7 +245,7 @@ parseTimelockExpire = Aeson.withObject "before" $ \obj -> do
     "before" -> Allegra.RequireTimeExpire <$> (obj .: "slot")
     _ -> fail "\"before\" script value not found"
 
-parseTimelockStart :: Era era => Aeson.Value -> Parser (Allegra.Timelock era)
+parseTimelockStart :: (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => Aeson.Value -> Parser (Allegra.Timelock era)
 parseTimelockStart =
   Aeson.withObject "after" $ \obj -> do
     v <- obj .: "type"

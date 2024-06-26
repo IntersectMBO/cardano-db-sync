@@ -167,9 +167,9 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
     [ offChainType
     , " Offchain "
     , "metadata fetch: "
-    , DB.textShow (resLength - resErrorsLength)
+    , textShow (resLength - resErrorsLength)
     , " results, "
-    , DB.textShow resErrorsLength
+    , textShow resErrorsLength
     , " fetch errors"
     ]
 

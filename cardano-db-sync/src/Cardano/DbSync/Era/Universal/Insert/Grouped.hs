@@ -15,7 +15,7 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 ) where
 
 import Cardano.BM.Trace (Trace, logWarning)
-import Cardano.Db (DbLovelace (..), minIdsToText, textShow)
+import Cardano.Db (DbLovelace (..), minIdsToText)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv)

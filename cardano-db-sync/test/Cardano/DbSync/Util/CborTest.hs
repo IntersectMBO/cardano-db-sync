@@ -35,7 +35,7 @@ prop_serialiseTxMetadataToCbor_roundtrip :: Property
 prop_serialiseTxMetadataToCbor_roundtrip = property $ do
   txData <- forAll genTxMetadata
 
-  cover 10 "number" (any isNumber txData)
+  cover 10 "number" (any isMetaNumber txData)
   cover 10 "bytes" (any isBytes txData)
   cover 10 "text" (any isText txData)
   cover 10 "list" (any isList txData)
@@ -134,9 +134,9 @@ genTxMetadataValue = Gen.sized $ \(Size size) -> do
       Gen.list (Range.linear 0 size) $
         (,) <$> genTxMetadataValue <*> genTxMetadataValue
 
-isNumber :: TxMetadataValue -> Bool
-isNumber (TxMetaNumber _) = True
-isNumber _ = False
+isMetaNumber :: TxMetadataValue -> Bool
+isMetaNumber (TxMetaNumber _) = True
+isMetaNumber _ = False
 
 isBytes :: TxMetadataValue -> Bool
 isBytes (TxMetaBytes _) = True

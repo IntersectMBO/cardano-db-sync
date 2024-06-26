@@ -11,7 +11,7 @@ module Cardano.DbSync.OffChain.Http (
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
-import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..), textShow)
+import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.OffChain.Types (
   PoolOffChainMetadata (..),

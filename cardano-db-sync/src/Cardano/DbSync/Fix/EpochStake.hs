@@ -54,16 +54,16 @@ migrateStakeDistr env mcls =
     logInsert :: Int -> IO ()
     logInsert n
       | n == 0 = logInfo trce "No missing epoch_stake found"
-      | n > 100000 = logWarning trce $ "Found " <> DB.textShow n <> " epoch_stake. This may take a while"
-      | otherwise = logInfo trce $ "Found " <> DB.textShow n <> " epoch_stake"
+      | n > 100000 = logWarning trce $ "Found " <> textShow n <> " epoch_stake. This may take a while"
+      | otherwise = logInfo trce $ "Found " <> textShow n <> " epoch_stake"
 
     logMinMax mmin mmax =
       logInfo trce $
         mconcat
           [ "Min epoch_stake at "
-          , DB.textShow mmin
+          , textShow mmin
           , " and max at "
-          , DB.textShow mmax
+          , textShow mmax
           ]
 
     runWhen :: Monad m => Bool -> m () -> m Bool

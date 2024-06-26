@@ -91,7 +91,7 @@ fromAllegraTx (blkIndex, tx) =
 
 getScripts ::
   forall era.
-  (EraCrypto era ~ StandardCrypto, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
+  (EraCrypto era ~ StandardCrypto, NativeScript era ~ Timelock era, AllegraEraScript era, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
   ShelleyTx era ->
   [TxScript]
 getScripts tx =
@@ -112,7 +112,7 @@ getAuxScripts maux =
       map (\scr -> (Core.hashScript @era scr, scr)) $ toList scrs
 
 mkTxScript ::
-  (Era era) =>
+  (NativeScript era ~ Timelock era, AllegraEraScript era) =>
   (ScriptHash StandardCrypto, Timelock era) ->
   TxScript
 mkTxScript (hsh, script) =

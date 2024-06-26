@@ -294,9 +294,9 @@ queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
           logWarning trce $
             mconcat
               [ "Failed with "
-              , DB.textShow err
+              , textShow err
               , " while trying to find pool "
-              , DB.textShow hsh
+              , textShow hsh
               , " for "
               , txt
               , ". We will assume that the pool exists and move on."

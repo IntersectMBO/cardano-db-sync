@@ -15,7 +15,6 @@ import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util (textShow)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Shelley.API (Network)

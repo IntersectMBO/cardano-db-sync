@@ -309,11 +309,11 @@ epochSucessMsg insertOrReplace callSite cacheOrDB newEpoch =
     [ "\n"
     , insertOrReplace
     , " epoch "
-    , DB.textShow $ DB.epochNo newEpoch
+    , textShow $ DB.epochNo newEpoch
     , " from "
     , callSite
     , " with "
     , cacheOrDB
     , ". \n epoch: "
-    , DB.textShow newEpoch
+    , textShow newEpoch
     ]

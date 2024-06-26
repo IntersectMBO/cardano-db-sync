@@ -2,13 +2,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.ScriptTest (tests) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Script
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
-import Cardano.Ledger.Api (Era (), Shelley ())
+import Cardano.Ledger.Api (Allegra (), Shelley ())
 import Cardano.Ledger.Binary.Decoding
+import Cardano.Ledger.Core (NativeScript)
 import qualified Cardano.Ledger.Shelley.Scripts as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
@@ -71,7 +73,7 @@ prop_timelockToJSON = property $ do
 
   Aeson.toJSON (fromTimelock timelock) === json
   where
-    decodeCbor :: Text -> Either DecoderError (Allegra.Timelock Shelley)
+    decodeCbor :: Text -> Either DecoderError (Allegra.Timelock Allegra)
     decodeCbor cbor = do
       let bytes = LByteString.fromStrict $ deserialiseCborFromBase16 cbor
       Annotator ann <- decodeFull shelleyProtVer bytes
@@ -82,12 +84,12 @@ prop_timelockToJSON_bad = property $ do
   jsonText <- forAll $ Gen.element knownBadMultiSigs
   assert $ isLeft (decodeJson jsonText)
   where
-    decodeJson :: Text -> Either String (TimelockScript Shelley)
+    decodeJson :: Text -> Either String (TimelockScript Allegra)
     decodeJson = Aeson.eitherDecodeStrict . encodeUtf8
 
 prop_timelockToJSON_roundtrip :: Property
 prop_timelockToJSON_roundtrip = property $ do
-  timelock <- forAll (genValidTimelock @Shelley)
+  timelock <- forAll (genValidTimelock @Allegra)
   tripping timelock Aeson.toJSON Aeson.fromJSON
 
 knownMultiSigs :: [(Text, Text)]
@@ -152,8 +154,8 @@ genValidLedgerMultiSigSized _ 0 = Ledger.RequireSignature <$> arbitrary
 genValidLedgerMultiSigSized maxListLen maxDepth =
   Gen.choice
     [ Ledger.RequireSignature <$> arbitrary
-    , Ledger.RequireAllOf <$> genList 0 maxListLen
-    , Ledger.RequireAnyOf <$> genList 0 maxListLen
+    , Ledger.RequireAllOf . fromList <$> genList 0 maxListLen
+    , Ledger.RequireAnyOf . fromList <$> genList 0 maxListLen
     , genRequireMOf
     ]
   where
@@ -165,20 +167,20 @@ genValidLedgerMultiSigSized maxListLen maxDepth =
 
     genRequireMOf = do
       req <- Gen.int (Range.linear 0 maxListLen)
-      Ledger.RequireMOf req <$> genList req maxListLen
+      Ledger.RequireMOf req . fromList <$> genList req maxListLen
 
-genValidTimelock :: Era era => Gen (TimelockScript era)
+genValidTimelock :: (Allegra.AllegraEraScript era, NativeScript era ~ Allegra.Timelock era) => Gen (TimelockScript era)
 genValidTimelock = fromTimelock <$> genValidLedgerTimelockSized 5 10
 
-genValidLedgerTimelockSized :: Era era => Int -> Size -> Gen (Allegra.Timelock era)
-genValidLedgerTimelockSized _ 0 = Allegra.RequireSignature <$> arbitrary
+genValidLedgerTimelockSized :: (Allegra.AllegraEraScript era, NativeScript era ~ Allegra.Timelock era) => Int -> Size -> Gen (Allegra.Timelock era)
+genValidLedgerTimelockSized _ 0 = Ledger.RequireSignature <$> arbitrary
 genValidLedgerTimelockSized maxListLen maxDepth =
   Gen.choice
-    [ Allegra.RequireSignature <$> arbitrary
+    [ Ledger.RequireSignature <$> arbitrary
     , Allegra.RequireTimeExpire <$> arbitrary
     , Allegra.RequireTimeStart <$> arbitrary
-    , Allegra.RequireAllOf <$> genList 0 maxListLen
-    , Allegra.RequireAnyOf <$> genList 0 maxListLen
+    , Ledger.RequireAllOf <$> genList 0 maxListLen
+    , Ledger.RequireAnyOf <$> genList 0 maxListLen
     , genRequireMOf
     ]
   where
@@ -191,7 +193,7 @@ genValidLedgerTimelockSized maxListLen maxDepth =
 
     genRequireMOf = do
       req <- Gen.int (Range.linear 0 maxListLen)
-      Allegra.RequireMOf req <$> genList req maxListLen
+      Ledger.RequireMOf req <$> genList req maxListLen
 
 genListSized :: Range Int -> Size -> (Size -> Gen a) -> Gen [a]
 genListSized listLen (Size size) f = Gen.list listLen (f size')

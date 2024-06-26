@@ -43,7 +43,7 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude (bimap, throwIO)
+import Cardano.Prelude (bimap, textShow, throwIO)
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
   atomically,
@@ -60,7 +60,6 @@ import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.SOP.Strict (NS (S, Z))
-import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Word (Word64)
@@ -625,9 +624,6 @@ mkForecast ::
   ExtLedgerState CardanoBlock ->
   Forecast (LedgerView (BlockProtocol CardanoBlock))
 mkForecast cfg st = ledgerViewForecastAt (configLedger cfg) (ledgerState st)
-
-textShow :: Show a => a -> Text
-textShow = Text.pack . show
 
 throwLeftIO :: Exception e => Either e a -> IO a
 throwLeftIO = either throwIO pure

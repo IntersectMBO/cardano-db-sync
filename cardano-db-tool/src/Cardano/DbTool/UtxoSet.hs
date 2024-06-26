@@ -6,6 +6,7 @@ module Cardano.DbTool.UtxoSet (
 
 import Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 import Cardano.Db
+import Cardano.Prelude (textShow)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map

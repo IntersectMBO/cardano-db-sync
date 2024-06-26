@@ -26,7 +26,6 @@ module Cardano.DbSync (
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
-import Cardano.Db (textShow)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
