@@ -19,6 +19,7 @@ import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
+import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Babbage.Core
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
@@ -28,7 +29,7 @@ import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
 import Cardano.Ledger.UTxO (UTxO (..))
-import Cardano.Prelude (lift)
+import Cardano.Prelude (lift, textShow)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -75,7 +76,7 @@ migrateBootstrapUTxO syncEnv txCache = do
       when (count > 0) $
         liftIO $
           logWarning trce $
-            "Found and deleted " <> DB.textShow count <> " tx_out."
+            "Found and deleted " <> textShow count <> " tx_out."
       storeUTxOFromLedger syncEnv txCache cls
       lift $ DB.insertExtraMigration DB.BootstrapFinished
       liftIO $ logInfo trce "UTxO bootstrap migration done"
@@ -107,6 +108,7 @@ storeUTxO ::
   , MonadIO m
   , MonadBaseControl IO m
   , DBPlutusScript era
+  , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
   TxCache ->
@@ -117,9 +119,9 @@ storeUTxO env txCache mp = do
     logInfo trce $
       mconcat
         [ "Inserting "
-        , DB.textShow size
+        , textShow size
         , " tx_out as pages of "
-        , DB.textShow pageSize
+        , textShow pageSize
         ]
   mapM_ (storePage env txCache pagePerc) . zip [0 ..] . chunksOf pageSize . Map.toList $ mp
   where
@@ -135,6 +137,7 @@ storePage ::
   , TxOut era ~ BabbageTxOut era
   , DBPlutusScript era
   , BabbageEraTxOut era
+  , NativeScript era ~ Timelock era
   , MonadIO m
   , MonadBaseControl IO m
   ) =>
@@ -162,6 +165,7 @@ prepareTxOut ::
   , MonadIO m
   , MonadBaseControl IO m
   , DBPlutusScript era
+  , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
   TxCache ->

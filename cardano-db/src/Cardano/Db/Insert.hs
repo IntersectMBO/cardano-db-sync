@@ -101,8 +101,8 @@ module Cardano.Db.Insert (
 
 import Cardano.Db.Query
 import Cardano.Db.Schema
-import Cardano.Db.Text
 import Cardano.Db.Types
+import Cardano.Prelude (textShow)
 import Control.Exception.Lifted (Exception, handle, throwIO)
 import Control.Monad (unless, void, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)

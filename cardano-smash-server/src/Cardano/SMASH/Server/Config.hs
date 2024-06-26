@@ -14,7 +14,6 @@ module Cardano.SMASH.Server.Config (
 import qualified Cardano.BM.Configuration.Model as Logging
 import qualified Cardano.BM.Setup as Logging
 import Cardano.BM.Trace (Trace)
-import Cardano.Db (textShow)
 import Cardano.Prelude
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.Aeson (FromJSON (..), ToJSON (..))

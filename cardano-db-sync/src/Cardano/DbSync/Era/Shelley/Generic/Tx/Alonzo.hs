@@ -26,7 +26,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (
 ) where
 
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (ScriptType (..))
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Script (fromTimelock)
 import Cardano.DbSync.Era.Shelley.Generic.ScriptData (ScriptData (..))
@@ -37,6 +37,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
+import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Alonzo.Scripts (AsIx (..), ExUnits (..), PlutusPurpose (..), txscriptfee, unPlutusBinary)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
@@ -152,6 +153,7 @@ getScripts ::
   , Core.TxAuxData era ~ AlonzoTxAuxData era
   , Core.EraTx era
   , DBPlutusScript era
+  , Core.NativeScript era ~ Timelock era
   ) =>
   Core.Tx era ->
   [TxScript]
@@ -291,7 +293,7 @@ data RedeemerMaps = RedeemerMaps
   }
 
 mkTxScript ::
-  DBPlutusScript era =>
+  (DBPlutusScript era, Core.NativeScript era ~ Timelock era) =>
   (ScriptHash StandardCrypto, Alonzo.AlonzoScript era) ->
   TxScript
 mkTxScript (hsh, script) =
@@ -303,10 +305,10 @@ mkTxScript (hsh, script) =
     , txScriptCBOR = plutusCborScript
     }
   where
-    getScriptType :: ScriptType
+    getScriptType :: DB.ScriptType
     getScriptType =
       case script of
-        Alonzo.TimelockScript {} -> Timelock
+        Alonzo.TimelockScript {} -> DB.Timelock
         Alonzo.PlutusScript ps -> getPlutusScriptType ps
 
     timelockJsonScript :: Maybe ByteString

@@ -36,7 +36,7 @@ module Cardano.DbSync.Util (
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
-import Cardano.Db (RewardSource (..), textShow)
+import Cardano.Db (RewardSource (..))
 import Cardano.DbSync.Config.Types ()
 import Cardano.DbSync.Types
 import Cardano.Ledger.Coin (Coin (..))

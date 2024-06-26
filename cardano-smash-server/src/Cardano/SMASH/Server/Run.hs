@@ -12,7 +12,6 @@ import Cardano.Db (
   PGPassSource (PGPassDefaultEnv),
   readPGPass,
   runOrThrowIODb,
-  textShow,
   toConnectionString,
  )
 import qualified Cardano.Db as Db

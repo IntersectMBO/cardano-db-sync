@@ -368,9 +368,9 @@ logDbState env = do
     showTip tipInfo =
       mconcat
         [ "slot "
-        , DB.textShow (unSlotNo $ bSlotNo tipInfo)
+        , textShow (unSlotNo $ bSlotNo tipInfo)
         , ", block "
-        , DB.textShow (unBlockNo $ bBlockNo tipInfo)
+        , textShow (unBlockNo $ bBlockNo tipInfo)
         ]
 
     tracer :: Trace IO Text
@@ -490,9 +490,9 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
             . SNErrCardanoConfig
             $ mconcat
               [ "ProtocolMagicId "
-              , DB.textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              , textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
               , " /= "
-              , DB.textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+              , textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
               ]
       | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
           pure
@@ -500,9 +500,9 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
             . SNErrCardanoConfig
             $ mconcat
               [ "SystemStart "
-              , DB.textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              , textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
               , " /= "
-              , DB.textShow (Shelley.sgSystemStart $ scConfig sCfg)
+              , textShow (Shelley.sgSystemStart $ scConfig sCfg)
               ]
       | otherwise ->
           Right

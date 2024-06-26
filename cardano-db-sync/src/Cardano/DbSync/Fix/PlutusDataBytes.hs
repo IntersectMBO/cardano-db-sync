@@ -12,7 +12,6 @@
 module Cardano.DbSync.Fix.PlutusDataBytes where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
-import Cardano.Db (textShow)
 import qualified Cardano.Db.Old.V13_0 as DB_V_13_0
 import Cardano.DbSync.Api
 import Cardano.DbSync.Era.Shelley.Generic.Block
@@ -28,7 +27,7 @@ import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Era as Ledger
 import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import qualified Cardano.Ledger.Plutus.Data as Plutus
-import Cardano.Prelude (mapMaybe)
+import Cardano.Prelude (mapMaybe, textShow)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (filterM, when)
 import Control.Monad.Extra (mapMaybeM)

@@ -7,7 +7,6 @@ module Cardano.SMASH.Server.Impl (
 ) where
 
 import Cardano.BM.Trace
-import Cardano.Db (textShow)
 import Cardano.Prelude hiding (Handler)
 import Cardano.SMASH.Server.Api
 import Cardano.SMASH.Server.FetchPolicies

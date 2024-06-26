@@ -112,56 +112,56 @@ textShowStats (ActiveCache ic) = do
       [ "\nCache Statistics:"
       , "\n  Stake Addresses: "
       , "cache size: "
-      , DB.textShow (LRU.getCapacity stakeHashRaws)
+      , textShow (LRU.getCapacity stakeHashRaws)
       , if credsQueries stats == 0
           then ""
-          else ", hit rate: " <> DB.textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
+          else ", hit rate: " <> textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
       , ", hits: "
-      , DB.textShow (credsHits stats)
+      , textShow (credsHits stats)
       , ", misses: "
-      , DB.textShow (credsQueries stats - credsHits stats)
+      , textShow (credsQueries stats - credsHits stats)
       , "\n  Pools: "
       , "cache size: "
-      , DB.textShow (Map.size pools)
+      , textShow (Map.size pools)
       , if poolsQueries stats == 0
           then ""
-          else ", hit rate: " <> DB.textShow (100 * poolsHits stats `div` poolsQueries stats) <> "%"
+          else ", hit rate: " <> textShow (100 * poolsHits stats `div` poolsQueries stats) <> "%"
       , ", hits: "
-      , DB.textShow (poolsHits stats)
+      , textShow (poolsHits stats)
       , ", misses: "
-      , DB.textShow (poolsQueries stats - poolsHits stats)
+      , textShow (poolsQueries stats - poolsHits stats)
       , "\n  Datums: "
       , "cache capacity: "
-      , DB.textShow (LRU.getCapacity datums)
+      , textShow (LRU.getCapacity datums)
       , ", cache size: "
-      , DB.textShow (LRU.getSize datums)
+      , textShow (LRU.getSize datums)
       , if datumQueries stats == 0
           then ""
-          else ", hit rate: " <> DB.textShow (100 * datumHits stats `div` datumQueries stats) <> "%"
+          else ", hit rate: " <> textShow (100 * datumHits stats `div` datumQueries stats) <> "%"
       , ", hits: "
-      , DB.textShow (datumHits stats)
+      , textShow (datumHits stats)
       , ", misses: "
-      , DB.textShow (datumQueries stats - datumHits stats)
+      , textShow (datumQueries stats - datumHits stats)
       , "\n  Multi Assets: "
       , "cache capacity: "
-      , DB.textShow (LRU.getCapacity mAssets)
+      , textShow (LRU.getCapacity mAssets)
       , ", cache size: "
-      , DB.textShow (LRU.getSize mAssets)
+      , textShow (LRU.getSize mAssets)
       , if multiAssetsQueries stats == 0
           then ""
-          else ", hit rate: " <> DB.textShow (100 * multiAssetsHits stats `div` multiAssetsQueries stats) <> "%"
+          else ", hit rate: " <> textShow (100 * multiAssetsHits stats `div` multiAssetsQueries stats) <> "%"
       , ", hits: "
-      , DB.textShow (multiAssetsHits stats)
+      , textShow (multiAssetsHits stats)
       , ", misses: "
-      , DB.textShow (multiAssetsQueries stats - multiAssetsHits stats)
+      , textShow (multiAssetsQueries stats - multiAssetsHits stats)
       , "\n  Previous Block: "
       , if prevBlockQueries stats == 0
           then ""
-          else "hit rate: " <> DB.textShow (100 * prevBlockHits stats `div` prevBlockQueries stats) <> "%"
+          else "hit rate: " <> textShow (100 * prevBlockHits stats `div` prevBlockQueries stats) <> "%"
       , ", hits: "
-      , DB.textShow (prevBlockHits stats)
+      , textShow (prevBlockHits stats)
       , ", misses: "
-      , DB.textShow (prevBlockQueries stats - prevBlockHits stats)
+      , textShow (prevBlockQueries stats - prevBlockHits stats)
       ]
 
 useNoCache :: CacheStatus

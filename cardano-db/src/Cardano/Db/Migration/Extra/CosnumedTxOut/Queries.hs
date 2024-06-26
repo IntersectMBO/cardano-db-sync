@@ -13,7 +13,7 @@ import Cardano.Db.Error (LookupFail (..))
 import Cardano.Db.Insert (insertMany', insertUnchecked)
 import Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
 import Cardano.Db.Query (isJust, listToMaybe, queryBlockHeight, queryMaxRefId)
-import Cardano.Db.Text
+import Cardano.Prelude (textShow)
 import Control.Exception.Lifted (handle, throwIO)
 import Control.Monad.Extra (unless, when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -21,8 +21,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Text (Text)
 import Data.Word (Word64)
-
--- import Database.Esqueleto.Experimental hiding (update, (<=.), (=.), (==.))
 import Database.Esqueleto.Experimental hiding (update, (<=.), (=.), (==.))
 import qualified Database.Esqueleto.Experimental as E
 import Database.Persist ((<=.), (=.), (==.))

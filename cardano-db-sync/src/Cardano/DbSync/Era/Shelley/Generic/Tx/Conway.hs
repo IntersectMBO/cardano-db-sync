@@ -103,5 +103,5 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
 
     collInputs = mkCollTxIn txBody
 
-    mkProposalIndex :: Word32 -> a -> (GovActionId StandardCrypto, a)
+    mkProposalIndex :: Word16 -> a -> (GovActionId StandardCrypto, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)

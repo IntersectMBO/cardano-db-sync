@@ -19,6 +19,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Witness
+import Cardano.Ledger.Allegra.Scripts (Timelock)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
@@ -115,6 +116,7 @@ fromTxOut ::
   , Core.TxOut era ~ BabbageTxOut era
   , Core.Script era ~ Alonzo.AlonzoScript era
   , DBPlutusScript era
+  , NativeScript era ~ Timelock era
   ) =>
   Word64 ->
   BabbageTxOut era ->
@@ -138,6 +140,7 @@ fromScript ::
   ( EraCrypto era ~ StandardCrypto
   , Core.Script era ~ Alonzo.AlonzoScript era
   , DBPlutusScript era
+  , NativeScript era ~ Timelock era
   ) =>
   Alonzo.AlonzoScript era ->
   TxScript

@@ -32,8 +32,7 @@ import Cardano.Db.PGConfig
 import Cardano.Db.Query
 import Cardano.Db.Run
 import Cardano.Db.Schema
-import Cardano.Db.Text
-import Cardano.Prelude (Typeable)
+import Cardano.Prelude (Typeable, textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)

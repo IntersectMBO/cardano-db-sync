@@ -8,6 +8,7 @@ module Cardano.DbTool.Report.StakeReward.History (
 
 import Cardano.Db
 import Cardano.DbTool.Report.Display
+import Cardano.Prelude (textShow)
 import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)

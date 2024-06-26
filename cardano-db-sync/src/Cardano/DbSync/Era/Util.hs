@@ -40,7 +40,7 @@ safeDecodeToJson tracer tracePrefix jsonBs = do
     Left err -> do
       liftIO . logWarning tracer $
         mconcat
-          [tracePrefix, ": Could not decode to UTF8: ", DB.textShow err]
+          [tracePrefix, ": Could not decode to UTF8: ", textShow err]
       -- We have to insert
       pure Nothing
     Right json ->

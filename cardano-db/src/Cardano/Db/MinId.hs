@@ -4,7 +4,6 @@
 module Cardano.Db.MinId where
 
 import Cardano.Db.Schema
-import Cardano.Db.Text
 import Cardano.Prelude
 import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend, ToBackendKey, fromSqlKey, toSqlKey)

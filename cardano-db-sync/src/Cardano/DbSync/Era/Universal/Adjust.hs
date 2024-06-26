@@ -60,7 +60,7 @@ adjustEpochRewards trce nw cache epochNo rwds creds = do
   liftIO . logInfo trce $
     mconcat
       [ "Removing "
-      , if null eraIgnored then "" else Db.textShow (length eraIgnored) <> " rewards and "
+      , if null eraIgnored then "" else textShow (length eraIgnored) <> " rewards and "
       , show (length creds)
       , " orphaned rewards"
       ]

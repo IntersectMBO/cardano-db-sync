@@ -8,10 +8,10 @@ module Cardano.DbSync.Config.Alonzo (
 ) where
 
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (textShow)
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
 import Cardano.Ledger.Alonzo.Genesis
+import Cardano.Prelude (textShow)
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
