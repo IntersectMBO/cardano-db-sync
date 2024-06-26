@@ -26,10 +26,10 @@ checkEpochDisabledArg =
     -- Add two blocks with transactions
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
     -- Add some more empty blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 60
 
@@ -50,10 +50,10 @@ checkEpochEnabled =
     -- Add two blocks with transactions
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
     -- Add some more empty blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 60
 

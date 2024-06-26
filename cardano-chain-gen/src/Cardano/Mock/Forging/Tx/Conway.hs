@@ -122,8 +122,9 @@ consTxBody ::
   MultiAsset StandardCrypto ->
   [ConwayTxCert StandardConway] ->
   Withdrawals StandardCrypto ->
+  Coin ->
   ConwayTxBody StandardConway
-consTxBody ins cols ref outs colOut fees minted certs withdrawals =
+consTxBody ins cols ref outs colOut fees minted certs withdrawals donation =
   ConwayTxBody
     { ctbSpendInputs = ins
     , ctbCollateralInputs = cols
@@ -143,7 +144,7 @@ consTxBody ins cols ref outs colOut fees minted certs withdrawals =
     , ctbVotingProcedures = Governance.VotingProcedures mempty
     , ctbProposalProcedures = mempty
     , ctbCurrentTreasuryValue = SNothing
-    , ctbTreasuryDonation = Coin 0
+    , ctbTreasuryDonation = donation
     }
 
 consCertTxBody ::
@@ -151,7 +152,18 @@ consCertTxBody ::
   [ConwayTxCert StandardConway] ->
   Withdrawals StandardCrypto ->
   ConwayTxBody StandardConway
-consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty SNothing (Coin 0) mempty
+consCertTxBody ref certs withdrawals =
+  consTxBody
+    mempty
+    mempty
+    (toSet ref)
+    mempty
+    SNothing
+    (Coin 0)
+    mempty
+    certs
+    withdrawals
+    (Coin 0)
   where
     toSet Nothing = mempty
     toSet (Just a) = Set.singleton a
@@ -176,9 +188,11 @@ mkPaymentTx ::
   ConwayUTxOIndex ->
   Integer ->
   Integer ->
+  Integer ->
   ConwayLedgerState ->
   Either ForgingError (AlonzoTx StandardConway)
-mkPaymentTx inputIndex outputIndex amount = mkPaymentTx' inputIndex outputIndices
+mkPaymentTx inputIndex outputIndex amount =
+  mkPaymentTx' inputIndex outputIndices
   where
     outputIndices = [(outputIndex, valueFromList (Coin amount) [])]
 
@@ -186,9 +200,10 @@ mkPaymentTx' ::
   ConwayUTxOIndex ->
   [(ConwayUTxOIndex, MaryValue StandardCrypto)] ->
   Integer ->
+  Integer ->
   ConwayLedgerState ->
   Either ForgingError (AlonzoTx StandardConway)
-mkPaymentTx' inputIndex outputIndices fees state' = do
+mkPaymentTx' inputIndex outputIndices fees donation state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
   outputs <- mapM mkOutputs outputIndices
 
@@ -212,6 +227,7 @@ mkPaymentTx' inputIndex outputIndices fees state' = do
         SNothing
         (Coin fees)
         mempty
+        (Coin donation)
   where
     mkOutputs (outIx, val) = do
       addr <- resolveAddress outIx state'
@@ -252,6 +268,7 @@ mkLockByScriptTx inputIndex txOutTypes amount fees state' = do
         SNothing
         (Coin fees)
         mempty
+        (Coin 0)
 
 mkUnlockScriptTx ::
   [ConwayUTxOIndex] ->
@@ -413,6 +430,7 @@ mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees 
         mempty
         mempty -- TODO[sgillespie]: minted?
         (Withdrawals mempty)
+        (Coin 0)
   where
     mkOuts (outIx, val) = do
       addr <- resolveAddress outIx state'
@@ -452,6 +470,7 @@ mkDepositTxPools inputIndex deposit state' = do
         mempty
         (allPoolStakeCert' state')
         (Withdrawals mempty)
+        (Coin 0)
 
 mkRegisterDRepTx ::
   Credential 'DRepRole StandardCrypto ->
@@ -588,6 +607,7 @@ mkDummyTxBody =
     mempty
     mempty
     (Withdrawals mempty)
+    mempty
 
 mkFullTx ::
   Int ->
@@ -769,6 +789,7 @@ consPaymentTxBody ::
   StrictMaybe (BabbageTxOut StandardConway) ->
   Coin ->
   MultiAsset StandardCrypto ->
+  Coin ->
   ConwayTxBody StandardConway
 consPaymentTxBody ins cols ref outs colOut fees minted =
   consTxBody ins cols ref outs colOut fees minted mempty (Withdrawals mempty)
@@ -853,6 +874,7 @@ mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds 
         (maybeToStrictMaybe colOut)
         (Coin fees)
         mempty
+        (Coin 0)
 
 allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)

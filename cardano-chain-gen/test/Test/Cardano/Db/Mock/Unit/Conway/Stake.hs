@@ -130,7 +130,7 @@ stakeAddressPtr =
     let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
 
     -- Wait for it to sync and verify counts
     assertBlockNoBackoff dbSync 2
@@ -156,6 +156,7 @@ stakeAddressPtrDereg =
             (UTxOAddressNewWithPtr 0 ptr0)
             20_000
             20_000
+            0
             state'
         , Conway.mkSimpleDCertTx
             [ (StakeIndexNew 0, Conway.mkUnRegTxCert SNothing)
@@ -173,12 +174,14 @@ stakeAddressPtrDereg =
             (UTxOAddressNewWithPtr 0 ptr1)
             20_000
             20_000
+            0
             state'
         , Conway.mkPaymentTx
             (UTxOIndex 2)
             (UTxOAddressNewWithPtr 0 ptr0)
             20_000
             20_000
+            0
             state'
         ]
 
@@ -206,6 +209,7 @@ stakeAddressPtrUseBefore =
           (UTxOAddressNewWithStake 0 $ StakeIndexNew 1)
           10_000
           500
+          0
     -- Register it
     blk <-
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
@@ -214,7 +218,7 @@ stakeAddressPtrUseBefore =
     let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
 
     -- Wait for it to sync and verify count
     assertBlockNoBackoff dbSync 3

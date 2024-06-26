@@ -32,7 +32,7 @@ simpleRewards =
     -- create any rewards
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 1000 1000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 1000 1000 0
     -- Fill up epochs
     epochs <- Api.fillEpochs interpreter mockServer 3
 
@@ -56,7 +56,7 @@ simpleRewards =
     -- distributed
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Fill more epochs
     epochs' <- Api.fillEpochs interpreter mockServer 2
     -- Wait for it to sync
@@ -153,7 +153,7 @@ rollbackBoundary =
     -- Forge a transaction to distribute rewards
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Create a point to rollback to
     blks <- Api.forgeAndSubmitBlocks interpreter mockServer 50
     -- Fill up the rest of the epoch
