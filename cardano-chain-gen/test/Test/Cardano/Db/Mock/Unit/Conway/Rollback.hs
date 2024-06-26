@@ -240,9 +240,9 @@ rollbackChangeTxOrder =
 
     -- Create some transactions
     state' <- getConwayLedgerState interpreter
-    let tx0 = Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 state'
-        tx1 = Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 500 state'
-        tx2 = Conway.mkPaymentTx (UTxOIndex 4) (UTxOIndex 5) 10_000 500 state'
+    let tx0 = Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0 state'
+        tx1 = Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 500 0 state'
+        tx2 = Conway.mkPaymentTx (UTxOIndex 4) (UTxOIndex 5) 10_000 500 0 state'
     -- Submit them
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \_ ->
       sequence [tx0, tx1]

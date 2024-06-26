@@ -72,7 +72,7 @@ mkDelegateBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txC
 mkPaymentBlocks :: UTxOIndex StandardConway -> [Addr StandardCrypto] -> Interpreter -> IO [CardanoBlock]
 mkPaymentBlocks utxoIx addresses interpreter =
   forgeBlocksChunked interpreter addresses $ \txAddrs ->
-    Conway.mkPaymentTx' utxoIx (map mkUTxOAddress txAddrs) 0 . unState
+    Conway.mkPaymentTx' utxoIx (map mkUTxOAddress txAddrs) 0 0 . unState
   where
     mkUTxOAddress addr = (UTxOAddress addr, MaryValue (Coin 1) mempty)
 
@@ -110,7 +110,7 @@ registerDRepAndDelegateVotes' drepId stakeIx ledger = do
       regDelegCert =
         Conway.mkDelegTxCert (DelegVote $ DRepCredential drepId) stakeCreds
 
-  paymentTx <- Conway.mkPaymentTx (UTxOIndex 0) utxoStake 10_000 500 ledger
+  paymentTx <- Conway.mkPaymentTx (UTxOIndex 0) utxoStake 10_000 500 0 ledger
   regTx <- Conway.mkRegisterDRepTx drepId
   delegTx <- Conway.mkDCertTx [regDelegCert] (Withdrawals mempty) Nothing
 

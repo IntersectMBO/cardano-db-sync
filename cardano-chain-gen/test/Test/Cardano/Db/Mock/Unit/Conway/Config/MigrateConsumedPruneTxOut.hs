@@ -45,7 +45,7 @@ txConsumedColumnCheck ioManager names = do
 
         void $
           withConwayFindLeaderAndSubmitTx interpreter mockServer $
-            Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+            Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
         assertBlockNoBackoff dbSync 1
         assertEqQuery
@@ -79,10 +79,10 @@ basicPrune = do
     -- Add blocks with transactions
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
 
     -- Check tx-out count before pruning
     assertBlockNoBackoff dbSync (fullBlockSize blks)
@@ -118,10 +118,10 @@ pruneWithSimpleRollback =
     -- Create some payment transactions
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
     assertEqQuery dbSync DB.queryTxOutCount 14 ""
 
     -- Submit some blocks
@@ -196,10 +196,10 @@ pruningShouldKeepSomeTx ioManager names = do
     -- blocks so should not be pruned
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 10_000 0
     blk2 <- forgeAndSubmitBlocks interpreter mockServer 18
     -- Verify the two transactions above weren't pruned
     assertBlockNoBackoff dbSync (fromIntegral $ length (blk1 <> blk2) + 2)
@@ -243,12 +243,12 @@ pruneAndRollBackOneBlock =
     -- blocks so should not be pruned
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Create a block to rollback to
     blk100 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     state' <- getConwayLedgerState interpreter
     -- Add some more blocks
-    let tx1 = Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 500 state'
+    let tx1 = Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 500 0 state'
     void $ withConwayFindLeaderAndSubmit interpreter mockServer (\_ -> sequence [tx1])
     -- Verify the last 2 transactions weren't pruned
     assertBlockNoBackoff dbSync 101
@@ -284,12 +284,12 @@ noPruneAndRollBack =
     -- Add a block with transactions
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Create a block to rollback to
     blk100 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Add some more blocks
     state' <- getConwayLedgerState interpreter
-    let tx1 = Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 500 state'
+    let tx1 = Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 500 0 state'
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \_ -> sequence [tx1]
 
     -- Verify the transactions weren't pruned
@@ -326,9 +326,9 @@ pruneSameBlock =
     blk77 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Add a block with transactions
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
-      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 state'
+      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 0 state'
       let utxo0 = Prelude.head (Conway.mkUTxOConway tx0)
-      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 state'
+      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 0 state'
       pure [tx0, tx1]
     -- Verify the transactions weren't pruned
     assertBlockNoBackoff dbSync 78
@@ -365,9 +365,9 @@ noPruneSameBlock =
     blk97 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Add a block with transactions
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
-      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 state'
+      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 0 state'
       let utxo0 = Prelude.head (Conway.mkUTxOConway tx0)
-      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 state'
+      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 0 state'
       pure [tx0, tx1]
     -- Add some more empty blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 2

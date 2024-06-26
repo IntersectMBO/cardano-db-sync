@@ -401,7 +401,7 @@ forkFixedEpoch =
     -- Add a simple Conway tx
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
     -- Fill the rest of the epoch
     epochs1 <- Api.fillUntilNextEpoch interpreter mockServer
 
@@ -429,7 +429,7 @@ rollbackFork =
     -- Forge a Conway tx
     blk <-
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1 <> epoch1')
@@ -490,7 +490,7 @@ forkParam =
     -- Add a simple Conway tx
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
     -- Wait for it to sync
     assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1)
   where

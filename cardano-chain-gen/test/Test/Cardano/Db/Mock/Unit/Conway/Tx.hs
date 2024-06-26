@@ -4,6 +4,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Tx (
   addSimpleTx,
   addSimpleTxShelley,
   addSimpleTxNoLedger,
+  addTxTreasuryDonation,
   consumeSameBlock,
   addTxMetadata,
   addTxMetadataDisabled,
@@ -18,6 +19,7 @@ import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Cardano.Mock.Query (queryNullTxDepositExists, queryTxMetadataCount)
+import qualified Cardano.Mock.Query as Query
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Test.Cardano.Db.Mock.Config
@@ -32,7 +34,7 @@ addSimpleTx =
     -- Forge a block
     void $
       UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     startDBSync dbSync
     -- Verify it syncs
@@ -64,7 +66,7 @@ addSimpleTxNoLedger = do
     -- Forge a block
     void $
       UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     startDBSync dbSync
     -- Verify it syncs
@@ -80,6 +82,25 @@ addSimpleTxNoLedger = do
         }
     testLabel = "conwayConfigLedgerDisabled"
 
+addTxTreasuryDonation :: IOManager -> [(Text, Text)] -> Assertion
+addTxTreasuryDonation =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block
+    void $
+      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 1_000
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 1
+    -- Should have a treasury donation
+    assertEqQuery dbSync Query.queryTreasuryDonations 1_000 "Unexpected treasury donations"
+
+    assertTxCount dbSync 12
+  where
+    testLabel = "conwayAddSimpleTx"
+
 consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 consumeSameBlock =
   withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
@@ -87,10 +108,10 @@ consumeSameBlock =
 
     -- Forge some transactions
     void $ UnifiedApi.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
-      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 state'
+      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 0 state'
       let utxo0 = head (Conway.mkUTxOConway tx0)
       -- Create a transaction with UTxOs from tx0
-      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 state'
+      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 500 0 state'
       pure [tx0, tx1]
 
     -- Verify the new transaction count

@@ -11,6 +11,7 @@ module Cardano.Mock.Query (
   queryGovActionCounts,
   queryConstitutionAnchor,
   queryRewardRests,
+  queryTreasuryDonations,
 ) where
 
 import qualified Cardano.Db as Db
@@ -150,3 +151,14 @@ queryRewardRests = do
     pure (reward ^. Db.RewardRestType, reward ^. Db.RewardRestAmount)
 
   pure $ map (bimap unValue (Db.unDbLovelace . unValue)) res
+
+queryTreasuryDonations ::
+  MonadIO io =>
+  ReaderT SqlBackend io Word64
+queryTreasuryDonations = do
+  res <- selectOne $ do
+    txs <- from $ table @Db.Tx
+    pure $ sum_ (txs ^. Db.TxTreasuryDonation)
+
+  let total = join (unValue <$> res)
+  pure $ maybe 0 Db.unDbLovelace total

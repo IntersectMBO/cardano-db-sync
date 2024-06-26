@@ -109,6 +109,7 @@ unitTests iom knownMigrations =
         [ test "simple tx" Tx.addSimpleTx
         , test "simple tx in Shelley era" Tx.addSimpleTxShelley
         , test "simple tx with ledger disabled" Tx.addSimpleTxNoLedger
+        , test "tx with treasury donation" Tx.addTxTreasuryDonation
         , test "consume utxo same block" Tx.consumeSameBlock
         , test "tx with metadata" Tx.addTxMetadata
         , test "tx with metadata disabled" Tx.addTxMetadataDisabled
