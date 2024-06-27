@@ -25,6 +25,7 @@ import Cardano.DbSync.Era.Universal.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Fix.EpochStake
+import Cardano.DbSync.KeysThread
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.LocalStateQuery
@@ -51,12 +52,19 @@ insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
-insertListBlocks synEnv blocks = do
-  DB.runDbIohkLogging (envBackend synEnv) tracer
+insertListBlocks syncEnv blocks = do
+  -- If it's initially consistent it will remain consistent. If that's the case
+  -- we spawn the second thread. This is the most common case during normal syncing.
+  bl <- liftIO $ isConsistent syncEnv
+  _ <-
+    if bl
+      then Just <$> spawnKeysThread syncEnv blocks
+      else pure Nothing
+  DB.runDbIohkLogging (envBackend syncEnv) tracer
     . runExceptT
-    $ traverse_ (applyAndInsertBlockMaybe synEnv tracer) blocks
+    $ traverse_ (applyAndInsertBlockMaybe syncEnv tracer) blocks
   where
-    tracer = getTrace synEnv
+    tracer = getTrace syncEnv
 
 applyAndInsertBlockMaybe ::
   SyncEnv ->

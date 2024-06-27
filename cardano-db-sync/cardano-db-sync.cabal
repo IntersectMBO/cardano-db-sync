@@ -56,6 +56,7 @@ library
                         Cardano.DbSync.Database
                         Cardano.DbSync.DbAction
                         Cardano.DbSync.Error
+                        Cardano.DbSync.KeysThread
 
                         Cardano.DbSync.Era
                         Cardano.DbSync.Era.Byron.Genesis
