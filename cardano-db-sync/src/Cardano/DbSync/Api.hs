@@ -386,6 +386,7 @@ getCurrentTipBlockNo env = do
 mkSyncEnv ::
   Trace IO Text ->
   SqlBackend ->
+  SecondaryBackends ->
   ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -397,7 +398,7 @@ mkSyncEnv ::
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
+mkSyncEnv trce backend secBackend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -444,6 +445,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   pure $
     SyncEnv
       { envBackend = backend
+      , encSecondaryBackends = secBackend
       , envBootstrap = bootstrapVar
       , envCache = cache
       , envConnectionString = connectionString
@@ -471,6 +473,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 mkSyncEnvFromConfig ::
   Trace IO Text ->
   SqlBackend ->
+  SecondaryBackends ->
   ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
@@ -481,7 +484,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+mkSyncEnvFromConfig trce backend secBackend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -509,6 +512,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
             <$> mkSyncEnv
               trce
               backend
+              secBackend
               connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])

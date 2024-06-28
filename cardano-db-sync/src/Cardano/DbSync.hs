@@ -28,7 +28,7 @@ import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
@@ -47,10 +47,12 @@ import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
+import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.Trans.Resource (MonadUnliftIO)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
-import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
+import Database.Persist.Postgresql (ConnectionString, SqlBackend, withPostgresqlConn)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
@@ -169,8 +171,8 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
 
   Db.runIohkLogging trce $
-    withPostgresqlConn dbConnString $
-      \backend -> liftIO $ do
+    withConnections dbConnString $
+      \(backend, secBackend) -> liftIO $ do
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- queryIsJsonbInSchema backend
@@ -180,6 +182,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
               mkSyncEnvFromConfig
                 trce
                 backend
+                secBackend
                 dbConnString
                 syncOptions
                 genCfg
@@ -297,3 +300,13 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Git hash: ", Db.gitRev]
   logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
   logInfo trce $ textShow params
+
+withConnections ::
+  (MonadUnliftIO m, MonadLoggerIO m) =>
+  ConnectionString ->
+  ((SqlBackend, SecondaryBackends) -> m a) ->
+  m a
+withConnections dbConnString action =
+  withPostgresqlConn dbConnString $ \backend ->
+    withPostgresqlConn dbConnString $ \secBackend ->
+      action (backend, SecondaryBackends secBackend)

@@ -4,6 +4,7 @@
 
 module Cardano.DbSync.Api.Types (
   SyncEnv (..),
+  SecondaryBackends (..),
   SyncOptions (..),
   InsertOptions (..),
   LedgerEnv (..),
@@ -39,6 +40,7 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 
 data SyncEnv = SyncEnv
   { envBackend :: !SqlBackend
+  , encSecondaryBackends :: SecondaryBackends
   , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
@@ -59,6 +61,8 @@ data SyncEnv = SyncEnv
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }
+
+newtype SecondaryBackends = SecondaryBackends {assetsBackend :: SqlBackend}
 
 data SyncOptions = SyncOptions
   { soptEpochAndCacheEnabled :: !Bool

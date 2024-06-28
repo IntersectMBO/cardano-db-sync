@@ -213,6 +213,7 @@ library
                       , prometheus
                       , psqueues
                       , random-shuffle
+                      , resourcet
                       , scientific
                       , serialise
                       , small-steps
