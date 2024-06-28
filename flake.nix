@@ -222,6 +222,9 @@
                   packages.cardano-protocol-tpraos.doHaddock = false;
                   packages.ouroboros-network-framework.doHaddock = false;
                   packages.ouroboros-consensus-cardano.doHaddock = false;
+                  packages.ouroboros-consensus.doHaddock = false;
+                  packages.cardano-ledger-core.doHaddock = false;
+                  packages.wai-extra.doHaddock = false;
                 })
 
               ({ lib, pkgs, config, ... }:
