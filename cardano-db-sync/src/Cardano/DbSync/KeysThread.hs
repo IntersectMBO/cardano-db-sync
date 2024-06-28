@@ -4,6 +4,7 @@
 
 module Cardano.DbSync.KeysThread where
 
+import Cardano.Prelude (liftIO)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.Block
@@ -12,13 +13,15 @@ import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.TxBody
 import Cardano.Ledger.Mary.Value (AssetName (..), MaryValue (..), MultiAsset (..), PolicyID (..))
 import Control.Concurrent.Async
-import Control.Concurrent.STM.TVar
+import Control.Concurrent.STM
 import Data.Foldable
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
+import Cardano.DbSync.Api
+import Cardano.DbSync.Era.Universal.Insert.Other
 
 data Thread = Thread
   { tResults :: ThreadResult
@@ -38,9 +41,14 @@ spawnKeysThread syncEnv blocks = do
   pure $ Thread threadResult asyncResult
 
 runThread :: SyncEnv -> ThreadResult -> [CardanoBlock] -> IO ()
-runThread _syncEnv _tr blocks = pure ()
+runThread syncEnv tr blocks = do
+    DB.runDbIohkLogging connection tracer $ forM_ assets $ \(policy, name) -> do
+      maId <- insertMultiAsset (envCache syncEnv) policy name
+      liftIO $ atomically $ modifyTVar (trAssets tr) $ Map.insert (policy, name) maId
   where
-    _assets = extractAssets blocks
+    assets = extractAssets blocks
+    connection = assetsBackend $ encSecondaryBackends syncEnv
+    tracer = getTrace syncEnv
 
 -- We want to extract them in the same order that they will be consumed.
 -- This is an optimization property and correctness doesn't rely on it.
