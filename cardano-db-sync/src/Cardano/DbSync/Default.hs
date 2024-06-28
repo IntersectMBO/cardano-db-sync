@@ -37,6 +37,7 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
+import Control.Monad.Extra
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.ByteString.Short as SBS
@@ -59,9 +60,10 @@ insertListBlocks syncEnv blocks = do
     if bl
       then Just <$> spawnKeysThread syncEnv blocks
       else pure Nothing
-  DB.runDbIohkLogging (envBackend syncEnv) tracer
-    . runExceptT
-    $ traverse_ (applyAndInsertBlockMaybe syncEnv mKeysThread) blocks
+  DB.runDbIohkLogging (envBackend syncEnv) tracer $ do
+    res <- runExceptT $ traverse_ (applyAndInsertBlockMaybe syncEnv mKeysThread) blocks
+    liftIO $ whenJust mKeysThread waitThread
+    pure res
   where
     tracer = getTrace syncEnv
 
@@ -215,18 +217,15 @@ insertBlock syncEnv mThread cblk applyRes firstAfterRollback tookSnapshot = do
 
     commitOrIndexes :: Bool -> Bool -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
     commitOrIndexes withinTwoMin withinHalfHour = do
-      commited <-
-        if withinTwoMin || tookSnapshot
-          then do
-            lift DB.transactionCommit
-            pure True
-          else pure False
+      when (withinTwoMin || tookSnapshot) $
+        lift $
+          waitThreadAndCommit mThread
       when withinHalfHour $ do
         bootStrapMaybe syncEnv
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         lift $ addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $ do
-          lift $ unless commited DB.transactionCommit
+          lift $ waitThreadAndCommit mThread
           liftIO $ runIndexMigrations syncEnv
 
     isWithinTwoMin :: SlotDetails -> Bool
@@ -236,3 +235,9 @@ insertBlock syncEnv mThread cblk applyRes firstAfterRollback tookSnapshot = do
     isWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
+
+-- We need to make sure that the keys thread has ended and committeed before we commit.
+waitThreadAndCommit :: Maybe Thread -> ReaderT SqlBackend (LoggingT IO) ()
+waitThreadAndCommit mThread = do
+  liftIO $ whenJust mThread waitThread
+  DB.transactionCommit

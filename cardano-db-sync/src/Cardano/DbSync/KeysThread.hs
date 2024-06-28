@@ -31,6 +31,9 @@ data Thread = Thread
 
 newtype ThreadResult = ThreadResult {trAssets :: TVar (Map (PolicyID StandardCrypto, AssetName) DB.MultiAssetId)}
 
+waitThread :: Thread -> IO ()
+waitThread = wait . tThread
+
 newEmptyThreadResult :: IO ThreadResult
 newEmptyThreadResult =
   ThreadResult <$> newTVarIO Map.empty
