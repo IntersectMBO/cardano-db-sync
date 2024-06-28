@@ -35,7 +35,6 @@ import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
-import Cardano.Node.Configuration.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 import Control.Monad.Logger (LoggingT)
@@ -56,27 +55,27 @@ insertListBlocks syncEnv blocks = do
   -- If it's initially consistent it will remain consistent. If that's the case
   -- we spawn the second thread. This is the most common case during normal syncing.
   bl <- liftIO $ isConsistent syncEnv
-  _ <-
+  mKeysThread <-
     if bl
       then Just <$> spawnKeysThread syncEnv blocks
       else pure Nothing
   DB.runDbIohkLogging (envBackend syncEnv) tracer
     . runExceptT
-    $ traverse_ (applyAndInsertBlockMaybe syncEnv tracer) blocks
+    $ traverse_ (applyAndInsertBlockMaybe syncEnv mKeysThread) blocks
   where
     tracer = getTrace syncEnv
 
 applyAndInsertBlockMaybe ::
   SyncEnv ->
-  Trace IO Text ->
+  Maybe Thread ->
   CardanoBlock ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-applyAndInsertBlockMaybe syncEnv tracer cblk = do
+applyAndInsertBlockMaybe syncEnv mThread cblk = do
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
-      insertBlock syncEnv cblk applyRes False tookSnapshot
+      insertBlock syncEnv mThread cblk applyRes False tookSnapshot
     else do
       eiBlockInDbAlreadyId <- lift (DB.queryBlockId (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk))
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
@@ -92,7 +91,7 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
           void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
-          insertBlock syncEnv cblk applyRes True tookSnapshot
+          insertBlock syncEnv mThread cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
@@ -122,8 +121,11 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
     getNewEpoch appRes =
       Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
 
+    tracer = getTrace syncEnv
+
 insertBlock ::
   SyncEnv ->
+  Maybe Thread ->
   CardanoBlock ->
   ApplyResult ->
   -- is first Block after rollback
@@ -131,7 +133,7 @@ insertBlock ::
   -- has snapshot been taken
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
+insertBlock syncEnv mThread cblk applyRes firstAfterRollback tookSnapshot = do
   !epochEvents <- liftIO $ atomically $ generateNewEpochEvents syncEnv (apSlotDetails applyRes)
   let !applyResult = applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}
   let !details = apSlotDetails applyResult
@@ -144,6 +146,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let insertBlockUniversal' blk =
         insertBlockUniversal
           syncEnv
+          mThread
           isStartEventOrRollback
           withinTwoMin
           withinHalfHour

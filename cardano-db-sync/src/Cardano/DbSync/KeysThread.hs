@@ -1,27 +1,28 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 
 module Cardano.DbSync.KeysThread where
 
-import Cardano.Prelude (liftIO)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
+import Cardano.DbSync.Cache.Types
 import Cardano.DbSync.Era.Shelley.Generic.Block
+import Cardano.DbSync.Era.Universal.Insert.Other
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.TxBody
 import Cardano.Ledger.Mary.Value (AssetName (..), MaryValue (..), MultiAsset (..), PolicyID (..))
-import Control.Concurrent.Async
+import Cardano.Prelude hiding ((.))
 import Control.Concurrent.STM
-import Data.Foldable
-import Data.Map.Strict (Map)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
+import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
-import Cardano.DbSync.Api
-import Cardano.DbSync.Era.Universal.Insert.Other
 
 data Thread = Thread
   { tResults :: ThreadResult
@@ -34,6 +35,13 @@ newEmptyThreadResult :: IO ThreadResult
 newEmptyThreadResult =
   ThreadResult <$> newTVarIO Map.empty
 
+getAssetId :: (MonadIO m, MonadBaseControl IO m) => Maybe Thread -> CacheStatus -> PolicyID StandardCrypto -> AssetName -> ReaderT SqlBackend m DB.MultiAssetId
+getAssetId mThread cache policy name = case mThread of
+  Nothing -> insertMultiAsset cache policy name
+  Just thread -> liftIO $ atomically $ do
+    mp <- readTVar $ trAssets (tResults thread)
+    maybe retry pure (Map.lookup (policy, name) mp)
+
 spawnKeysThread :: SyncEnv -> [CardanoBlock] -> IO Thread
 spawnKeysThread syncEnv blocks = do
   threadResult <- newEmptyThreadResult
@@ -42,9 +50,9 @@ spawnKeysThread syncEnv blocks = do
 
 runThread :: SyncEnv -> ThreadResult -> [CardanoBlock] -> IO ()
 runThread syncEnv tr blocks = do
-    DB.runDbIohkLogging connection tracer $ forM_ assets $ \(policy, name) -> do
-      maId <- insertMultiAsset (envCache syncEnv) policy name
-      liftIO $ atomically $ modifyTVar (trAssets tr) $ Map.insert (policy, name) maId
+  DB.runDbIohkLogging connection tracer $ forM_ assets $ \(policy, name) -> do
+    maId <- insertMultiAsset (envCache syncEnv) policy name
+    liftIO $ atomically $ modifyTVar (trAssets tr) $ Map.insert (policy, name) maId
   where
     assets = extractAssets blocks
     connection = assetsBackend $ encSecondaryBackends syncEnv

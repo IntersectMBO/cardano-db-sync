@@ -22,24 +22,22 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
-
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTx)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
+import Cardano.DbSync.KeysThread
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.OffChain
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-
-import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude
-
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import Data.Either.Extra (eitherToMaybe)
@@ -52,6 +50,7 @@ import Database.Persist.Sql (SqlBackend)
 insertBlockUniversal ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  Maybe Thread ->
   -- | Should log
   Bool ->
   -- | Within two minutes
@@ -63,7 +62,7 @@ insertBlockUniversal ::
   IsPoolMember ->
   ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
+insertBlockUniversal syncEnv mThread shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -94,7 +93,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
+    let txInserter = insertTx syncEnv mThread isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 

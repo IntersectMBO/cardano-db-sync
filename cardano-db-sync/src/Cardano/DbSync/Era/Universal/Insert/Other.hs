@@ -23,7 +23,6 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
@@ -41,14 +40,15 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 -- Insert Redeemer
 --------------------------------------------------------------------------------------------
 insertRedeemer ::
+  forall m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   Bool ->
-  [ExtendedTxOut] ->
+  (Generic.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)) ->
   DB.TxId ->
   (Word64, Generic.TxRedeemer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Word64, DB.RedeemerId)
-insertRedeemer tracer disInOut groupedOutputs txId (rix, redeemer) = do
+insertRedeemer tracer disInOut resolveScriptHash txId (rix, redeemer) = do
   tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
   scriptHash <- findScriptHash
   rid <-
@@ -67,14 +67,13 @@ insertRedeemer tracer disInOut groupedOutputs txId (rix, redeemer) = do
   pure (rix, rid)
   where
     findScriptHash ::
-      (MonadBaseControl IO m, MonadIO m) =>
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
     findScriptHash =
       case (disInOut, Generic.txRedeemerScriptHash redeemer) of
         (True, _) -> pure Nothing
         (_, Nothing) -> pure Nothing
         (_, Just (Right bs)) -> pure $ Just bs
-        (_, Just (Left txIn)) -> resolveScriptHash groupedOutputs txIn
+        (_, Just (Left txIn)) -> resolveScriptHash txIn
 
 insertRedeemerData ::
   (MonadBaseControl IO m, MonadIO m) =>
