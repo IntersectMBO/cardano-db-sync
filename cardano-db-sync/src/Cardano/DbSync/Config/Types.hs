@@ -98,6 +98,7 @@ data SyncNodeParams = SyncNodeParams
   , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool
   , enpHasInOut :: !Bool
+  , enpThreaded :: !Bool
   , enpSnEveryFollowing :: !Word64
   , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)

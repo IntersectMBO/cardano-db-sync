@@ -274,6 +274,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpOnlyFix = claOnlyFix
       , enpForceIndexes = claForceIndexes
       , enpHasInOut = True
+      , enpThreaded = False
       , enpSnEveryFollowing = 35
       , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing

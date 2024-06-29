@@ -67,6 +67,7 @@ newtype SecondaryBackends = SecondaryBackends {assetsBackend :: SqlBackend}
 data SyncOptions = SyncOptions
   { soptEpochAndCacheEnabled :: !Bool
   , soptAbortOnInvalid :: !Bool
+  , soptThreaded :: !Bool
   , soptCache :: !Bool
   , soptSkipFix :: !Bool
   , soptOnlyFix :: !Bool

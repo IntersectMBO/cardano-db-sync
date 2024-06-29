@@ -108,6 +108,7 @@ pRunDbSyncNode = do
     <*> pOnlyFix
     <*> pForceIndexes
     <*> pHasInOut
+    <*> pThreaded
     <*> pure 500
     <*> pure 10000
     <*> optional pSlotNo
@@ -227,6 +228,15 @@ pHasInOut =
     False
     ( Opt.long "disable-in-out"
         <> Opt.help "Disables the tx_in and tx_out table"
+    )
+
+pThreaded :: Parser Bool
+pThreaded =
+  Opt.flag
+    True
+    False
+    ( Opt.long "threaded-experimental"
+        <> Opt.help "Increases parallelism for DBSync. Still experimental."
     )
 
 pVersionCommand :: Parser SyncCommand

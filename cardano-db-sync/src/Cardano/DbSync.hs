@@ -245,6 +245,7 @@ extractSyncOptions snp aop snc =
           && ioInOut iopts
           && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
+    , soptThreaded = enpThreaded snp
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp
     , soptOnlyFix = enpOnlyFix snp
