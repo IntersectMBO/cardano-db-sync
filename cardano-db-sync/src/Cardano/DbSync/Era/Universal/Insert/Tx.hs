@@ -138,10 +138,6 @@ insertTx syncEnv mThread isMember blkId epochNo slotNo applyResult blockIndex tx
       -- Same happens bellow on last line of this function.
       pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
     else do
-      -- The following operations only happen if the script passes stage 2 validation (or the tx has
-      -- no script).
-      !txOutsGrouped <- mapM (insertTxOut mThread tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
-
       !redeemers <-
         Map.fromList
           <$> whenFalseMempty
@@ -171,11 +167,6 @@ insertTx syncEnv mThread isMember blkId epochNo slotNo applyResult blockIndex tx
         mapM_ (lift . insertParamProposal blkId txId) $
           Generic.txParamProposal tx
 
-      maTxMint <-
-        whenFalseMempty (ioMultiAssets iopts) $
-          insertMaTxMint mThread tracer cache txId $
-            Generic.txMint tx
-
       when (ioPlutusExtra iopts) $
         mapM_ (lift . insertScript tracer txId) $
           Generic.txScripts tx
@@ -189,6 +180,16 @@ insertTx syncEnv mThread isMember blkId epochNo slotNo applyResult blockIndex tx
         mapM_ (insertVotingProcedures tracer cache blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
+
+      -- The following operations only happen if the script passes stage 2 validation (or the tx has
+      -- no script).
+      !txOutsGrouped <- mapM (insertTxOut mThread tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+
+      maTxMint <-
+        whenFalseMempty (ioMultiAssets iopts) $
+          insertMaTxMint mThread tracer cache txId $
+            Generic.txMint tx
+
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
   where
     tracer = getTrace syncEnv
