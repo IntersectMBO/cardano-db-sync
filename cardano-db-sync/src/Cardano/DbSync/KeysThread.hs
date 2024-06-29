@@ -91,3 +91,9 @@ extractAssetsTxMary tx = outputsAssets <> mintassets
       concatMap (\(policy, names) -> (policy,) <$> names) $ Map.toList $ Map.map (fmap fst . Map.toList) maMap
     txMint = txBody ^. mintTxBodyL
     mintassets = extractMultiAsset txMint
+
+shouldMultiAssetRun :: SyncEnv -> Bool
+shouldMultiAssetRun syncEnv =
+  ioInOut insOptions && ioMultiAssets insOptions
+  where
+    insOptions = soptInsertOptions $ envOptions syncEnv

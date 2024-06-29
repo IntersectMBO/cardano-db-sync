@@ -57,7 +57,7 @@ insertListBlocks syncEnv blocks = do
   -- we spawn the second thread. This is the most common case during normal syncing.
   bl <- liftIO $ isConsistent syncEnv
   mKeysThread <-
-    if bl
+    if bl && shouldMultiAssetRun syncEnv
       then Just <$> spawnKeysThread syncEnv blocks
       else pure Nothing
   DB.runDbIohkLogging (envBackend syncEnv) tracer $ do
