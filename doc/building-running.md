@@ -55,15 +55,40 @@ make install
 
 ```
 
-- with cabal:
+### Clone repository
 
-```
+Start by cloning the `cardano-db-sync` repository from GitHub.
+```sh
 git clone https://github.com/IntersectMBO/cardano-db-sync
-cd cardano-db-sync
-PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
-git checkout <latest-official-tag> -b tag-<latest-official-tag>
+```
 
+Navigate into the cloned repository directory.
+```sh
+cd cardano-db-sync
+```
+
+**Checkout and Create Branch**: Check out the latest official tag and create a new branch based on that tag. Replace `<latest-official-tag>` with the specific tag you want to use.
+```sh
+git checkout <latest-official-tag> -b tag-<latest-official-tag>
+```
+
+## Using Cabal
+
+**Database Setup**: Set up the PostgreSQL database using the provided script with the configuration in `config/pgpass-mainnet`.
+```sh
+PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
+```
+
+**Build the Project**: Use Cabal to build the `cardano-db-sync` project.
+```sh
 cabal build cardano-db-sync
+```
+
+**Run the Sync Node**:
+- Ensure the `config/mainnet-config.yaml` file is correctly specified.
+- Use the appropriate socket path for the Cardano node.
+- Define the directories for storing ledger state and schema files.
+```sh
 PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-sync -- \
     --config config/mainnet-config.yaml \
     --socket-path ../cardano-node/state-node-mainnet/node.socket \
@@ -71,7 +96,7 @@ PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-sync -- \
     --schema-dir schema/
 ```
 
-to find `cardano-db-sync` executable location use:
+If building locally, to find `cardano-db-sync` executable location use:
 
 ```
 find . -name cardano-db-sync -executable -type f
@@ -82,14 +107,23 @@ On macOS `brew install postgresl openssl@1.1` and extend PKG_CONFIG_PATH with
 `PKG_CONFIG_PATH=/usr/local/opt/postgresql/lib/pkgconfig:/usr/local/opt/openssl/lib/pkgconfig cabal build all`
 when running cabal build
 
-- with nix:
+## Using Nix:
 
-```
-git clone https://github.com/IntersectMBO/cardano-db-sync
-cd cardano-db-sync
-git checkout <latest-official-tag> -b tag-<latest-official-tag>
+**Build the Project**: Build the cardano-db-sync project using Nix
+```sh
 nix build -v .#cardano-db-sync -o db-sync-node
+```
+
+Set up the PostgreSQL database using the provided script with the configuration in `config/pgpass-mainnet`
+```sh
 PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --createdb
+```
+
+**Run the Sync Node**:
+- Ensure the `config/mainnet-config.yaml` file is correctly specified.
+- Use the appropriate socket path for the Cardano node.
+- Define the directories for storing ledger state and schema files.
+```sh
 PGPASSFILE=config/pgpass-mainnet db-sync-node/bin/cardano-db-sync \
     --config config/mainnet-config.yaml \
     --socket-path ../cardano-node/state-node-mainnet/node.socket \
