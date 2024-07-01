@@ -21,7 +21,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), CacheUpdateAction (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query (queryStakeRefPtr)
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -131,9 +131,9 @@ insertWithdrawals ::
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals _tracer cache txId redeemers txWdrl = do
+insertWithdrawals tracer cache txId redeemers txWdrl = do
   addrId <-
-    lift $ queryOrInsertRewardAccount cache UpdateCache $ Generic.txwRewardAccount txWdrl
+    lift $ queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -150,13 +150,13 @@ insertStakeAddressRefIfMissing ::
   CacheStatus ->
   Ledger.Addr StandardCrypto ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing _trce cacheStatus addr =
+insertStakeAddressRefIfMissing trce cache addr =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress cacheStatus DoNotUpdateCache nw cred
+          Just <$> queryOrInsertStakeAddress trce cache DoNotUpdateCache nw cred
         Ledger.StakeRefPtr ptr -> do
           queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing

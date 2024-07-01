@@ -5,6 +5,7 @@ import Cardano.Prelude
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ForceIndex as ForceIndex
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Governance as Governance
@@ -16,8 +17,8 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
+import Test.Cardano.Db.Mock.Validate (expectFailSilent)
 import Test.Tasty (TestTree (), testGroup)
-import Test.Tasty.ExpectedFailure (expectFail)
 import Test.Tasty.HUnit (Assertion (), testCase)
 import Prelude (String ())
 
@@ -35,6 +36,14 @@ unitTests iom knownMigrations =
         , testCase "default insert config" Config.defaultInsertConfig
         , testCase "insert config" Config.insertConfig
         , testGroup
+            "jsonb-in-schema"
+            [ test "jsonb in schema true" Config.configRemoveJsonbFromSchemaEnabled
+            , test "jsonb in schema false" Config.configRemoveJsonbFromSchemaDisabled
+            , test
+                "remove jsonb from schema and add back"
+                Config.configJsonbInSchemaShouldRemoveThenAdd
+            ]
+        , testGroup
             "tx-out"
             [ test "consumed_by_tx_id column check" MigrateConsumedPruneTxOut.txConsumedColumnCheck
             , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
@@ -45,18 +54,15 @@ unitTests iom knownMigrations =
             , test "no pruning and rollback" MigrateConsumedPruneTxOut.noPruneAndRollBack
             , test "prune same block" MigrateConsumedPruneTxOut.pruneSameBlock
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
-            , expectFail $
-                test
-                  "restart with new consumed set to false"
-                  MigrateConsumedPruneTxOut.migrateAndPruneRestart
-            , expectFail $
-                test
-                  "set prune flag, restart missing prune flag"
-                  MigrateConsumedPruneTxOut.pruneRestartMissingFlag
-            , expectFail $
-                test
-                  "set bootstrap flag, restart missing bootstrap flag"
-                  MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag
+            , expectFailSilent
+                "restart with new consumed set to false"
+                $ MigrateConsumedPruneTxOut.migrateAndPruneRestart iom knownMigrations
+            , expectFailSilent
+                "set prune flag, restart missing prune flag"
+                $ MigrateConsumedPruneTxOut.pruneRestartMissingFlag iom knownMigrations
+            , expectFailSilent
+                "set bootstrap flag, restart missing bootstrap flag"
+                $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag iom knownMigrations
             ]
         ]
     , testGroup
@@ -72,10 +78,9 @@ unitTests iom knownMigrations =
         "Command Line Arguments"
         [ testGroup
             "config"
-            [ expectFail $
-                test
-                  "fails if incorrect config file given"
-                  ConfigFile.checkConfigFileArg
+            [ expectFailSilent
+                "fails if incorrect config file given"
+                $ ConfigFile.checkConfigFileArg iom knownMigrations
             ]
         , testGroup
             "disable-epoch"
@@ -219,6 +224,8 @@ unitTests iom knownMigrations =
         "Governance"
         [ test "drep distribution" Governance.drepDistr
         , test "new committee member" Governance.newCommittee
+        , test "update constitution" Governance.updateConstitution
+        , test "treasury withdrawal" Governance.treasuryWithdrawal
         ]
     ]
   where

@@ -57,12 +57,12 @@ readLastMapEpochFromCache cache =
           Just (_, ep) -> pure $ Just ep
 
 rollbackMapEpochInCache :: MonadIO m => CacheInternal -> DB.BlockId -> m (Either SyncNodeError ())
-rollbackMapEpochInCache cache blockId = do
-  cE <- liftIO $ readTVarIO (cEpoch cache)
+rollbackMapEpochInCache cacheInternal blockId = do
+  cE <- liftIO $ readTVarIO (cEpoch cacheInternal)
   -- split the map and delete anything after blockId including it self as new blockId might be
   -- given when inserting the block again when doing rollbacks.
   let (newMapEpoch, _) = split blockId (ceMapEpoch cE)
-  writeToCache cache (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
+  writeToCache cacheInternal (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
 
 writeEpochBlockDiffToCache ::
   MonadIO m =>
@@ -71,7 +71,7 @@ writeEpochBlockDiffToCache ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
-    NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: CacheStatus is NoCache"
+    NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is NoCache"
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
@@ -93,7 +93,7 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: CacheStatus is NoCache"
+    NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is NoCache"
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache

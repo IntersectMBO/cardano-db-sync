@@ -34,6 +34,7 @@ data LookupFail
   | DBMultipleGenesis
   | DBExtraMigration !String
   | DBPruneConsumed !String
+  | DBRJsonbInSchema !String
   deriving (Eq, Generic)
 
 instance Exception LookupFail
@@ -54,6 +55,7 @@ instance Show LookupFail where
       DBMultipleGenesis -> "Multiple Genesis blocks found. These are blocks without an EpochNo"
       DBExtraMigration e -> "DBExtraMigration : " <> e
       DBPruneConsumed e -> "DBExtraMigration" <> e
+      DBRJsonbInSchema e -> "DBRJsonbInSchema" <> e
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode

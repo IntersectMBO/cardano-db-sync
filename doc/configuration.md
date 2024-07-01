@@ -52,18 +52,19 @@ Below is a sample `insert_options` section that shows all the defaults:
 
 `insert_options` may contain the following elements:
 
-| Property                                    | Type       | Required |
-| :------------------------------------------ | :--------- | :------  |
-| [preset](#preset)                           | `enum`     | Optional |
-| [tx\_cbor](#tx-cbor)                        | `enum`     | Optional |
-| [tx\_out](#tx-out)                          | `object`   | Optional |
-| [ledger](#ledger)                           | `enum`     | Optional |
-| [shelley](#shelley)                         | `object`   | Optional |
-| [multi\_asset](#multi-asset)                | `object`   | Optional |
-| [metadata](#metadata)                       | `object`   | Optional |
-| [plutus](#plutus)                           | `object`   | Optional |
-| [governance](#governance)                   | `enum`     | Optional |
-| [offchain\_pool\_data](#offchain-pool-data) | `enum`     | Optional |
+| Property                                     | Type       | Required |
+| :------------------------------------------- | :--------- | :------  |
+| [preset](#preset)                            | `enum`     | Optional |
+| [tx\_cbor](#tx-cbor)                         | `enum`.    | Optional |
+| [tx\_out](#tx-out)                           | `object`   | Optional |
+| [ledger](#ledger)                            | `enum`     | Optional |
+| [shelley](#shelley)                          | `object`   | Optional |
+| [multi\_asset](#multi-asset)                 | `object`   | Optional |
+| [metadata](#metadata)                        | `object`   | Optional |
+| [plutus](#plutus)                            | `object`   | Optional |
+| [governance](#governance)                    | `enum`     | Optional |
+| [offchain\_pool\_data](#offchain-pool-data)  | `enum`     | Optional |
+| [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 
 ### Preset
 
@@ -449,3 +450,40 @@ Enables or disables most tables and entries related to plutus and scripts.
 | :--------- | :---------------------------------------- |
 | `"enable"` | Enables fetching offchain metadata.       |
 | `"disable"`| Disables fetching pool offchain metadata. |
+
+
+### Remove Jsonb From Schema
+
+`remove_jsonb_from_schema`
+
+To improve inserting performance you can remove Jsonb data types in the schema. They can be reintroduced by using `disable` or by simply not using all together.
+A warning will logw if `remove_jsonb_from_schema` was previously set to `enable` and then either removed from the configuration file or set to `disabled`.
+
+* Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value      | Explanation                                                            |
+| :--------- | :--------------------------------------------------------------------- |
+| `"enable"` | Enables removing [jsonb data types](#data-types-effected) from the schema. |
+| `"disable"`| keeps jsonb data types in the schema.                           |
+
+#### Example
+
+```json
+"remove_jsonb_from_schema": "enable"
+```
+
+#### Data Types Effected
+When enabling this config, the following columns will no longer have the `jsonb` data type:
+
+| Table                 | Column        |
+| :--------------       | :------------ |
+| `tx_metadata`         | `json`        |
+| `script`              | `json`        |
+| `datum`               | `value`       |
+| `redeemer_data`       | `value`       |
+| `cost_model`          | `costs`       |
+| `gov_action_proposal` | `description` |
+| `off_chain_pool_data` | `json`        |
+| `off_chain_vote_data` | `json`        |

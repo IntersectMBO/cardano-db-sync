@@ -26,6 +26,8 @@ module Cardano.DbSync.Api (
   runIndexMigrations,
   initPruneConsumeMigration,
   runExtraMigrationsMaybe,
+  runAddJsonbToSchema,
+  runRemoveJsonbFromSchema,
   getSafeBlockNoDiff,
   getPruneInterval,
   whenConsumeOrPruneTxOut,
@@ -55,6 +57,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
+import Cardano.DbSync.Cache.LRU (LRUCacheCapacity (..))
 import Cardano.DbSync.Cache.Types (newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
@@ -174,6 +177,14 @@ runExtraMigrationsMaybe syncEnv = do
       (getSafeBlockNoDiff syncEnv)
       pcm
 
+runAddJsonbToSchema :: SyncEnv -> IO ()
+runAddJsonbToSchema syncEnv =
+  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.enableJsonbInSchema
+
+runRemoveJsonbFromSchema :: SyncEnv -> IO ()
+runRemoveJsonbFromSchema syncEnv =
+  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.disableJsonbInSchema
+
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 
@@ -223,6 +234,7 @@ fullInsertOptions =
     , sioGovernance = GovernanceConfig True
     , sioOffchainPoolData = OffchainPoolDataConfig True
     , sioJsonType = JsonTypeText
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -239,6 +251,7 @@ onlyUTxOInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioOffchainPoolData = OffchainPoolDataConfig False
     , sioJsonType = JsonTypeText
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -262,6 +275,7 @@ disableAllInsertOptions =
     , sioOffchainPoolData = OffchainPoolDataConfig False
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
 
 initCurrentEpochNo :: CurrentEpochNo
@@ -385,7 +399,16 @@ mkSyncEnv ::
   IO SyncEnv
 mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
-  cache <- if soptCache syncOptions then newEmptyCache 250000 50000 else pure useNoCache
+  cache <-
+    if soptCache syncOptions
+      then
+        newEmptyCache
+          LRUCacheCapacity
+            { lirCapacityStakeHashRaw = 1600000
+            , lruCapacityDatum = 250000
+            , lruCapacityMultiAsset = 250000
+            }
+      else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP

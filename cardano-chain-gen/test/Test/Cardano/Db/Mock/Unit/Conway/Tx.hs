@@ -10,6 +10,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Tx (
   addTxMetadataWhitelist,
 ) where
 
+import Cardano.DbSync.Config (SyncNodeConfig (..))
+import Cardano.DbSync.Config.Types (MetadataConfig (..), SyncInsertOptions (..))
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -98,28 +100,37 @@ consumeSameBlock =
     testLabel = "conwayConsumeSameBlock"
 
 addTxMetadata :: IOManager -> [(Text, Text)] -> Assertion
-addTxMetadata = do
-  withCustomConfigAndDropDB args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
-
-    -- Add blocks with transactions
-    void $
-      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        let txBody = Conway.mkDummyTxBody
-            auxData = Map.fromList [(1, I 1), (2, I 2)]
-         in Right (Conway.mkAuxDataTx True txBody auxData)
-
-    -- Wait for it to sync
-    assertBlockNoBackoff dbSync 1
-    -- Should have tx metadata
-    assertEqBackoff dbSync queryTxMetadataCount 2 [] "Expected tx metadata"
+addTxMetadata ioManager metadata = do
+  syncNodeConfig <- mksNodeConfig
+  withCustomConfigAndDropDB args (Just syncNodeConfig) cfgDir testLabel action ioManager metadata
   where
-    args =
-      initCommandLineArgs
-        { claFullMode = False
-        }
+    action = \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      -- Add blocks with transactions
+      void $
+        UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+          let txBody = Conway.mkDummyTxBody
+              auxData = Map.fromList [(1, I 1), (2, I 2)]
+           in Right (Conway.mkAuxDataTx True txBody auxData)
+
+      -- Wait for it to sync
+      assertBlockNoBackoff dbSync 1
+      -- Should have tx metadata
+      assertEqBackoff dbSync queryTxMetadataCount 2 [] "Expected tx metadata"
+
+    args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayConfigMetadataEnabled"
+
     cfgDir = conwayConfigDir
+
+    mksNodeConfig :: IO SyncNodeConfig
+    mksNodeConfig = do
+      initConfigFile <- mkSyncNodeConfig cfgDir args
+      let dncInsertOptions' = dncInsertOptions initConfigFile
+      pure $
+        initConfigFile
+          { dncInsertOptions = dncInsertOptions' {sioMetadata = MetadataEnable}
+          }
 
 addTxMetadataWhitelist :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadataWhitelist = do
@@ -147,26 +158,34 @@ addTxMetadataWhitelist = do
     cfgDir = conwayConfigDir
 
 addTxMetadataDisabled :: IOManager -> [(Text, Text)] -> Assertion
-addTxMetadataDisabled = do
-  withCustomConfigAndDropDB args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
-
-    -- Add blocks with transactions
-    void $
-      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        let txBody = Conway.mkDummyTxBody
-            auxData = Map.singleton 1 (I 1)
-         in Right (Conway.mkAuxDataTx True txBody auxData)
-
-    -- Wait for it to sync
-    assertBlockNoBackoff dbSync 1
-    -- Should have tx metadata
-    assertEqBackoff dbSync queryTxMetadataCount 0 [] "Expected tx metadata"
+addTxMetadataDisabled ioManager metadata = do
+  syncNodeConfig <- mksNodeConfig
+  withCustomConfigAndDropDB args (Just syncNodeConfig) cfgDir testLabel action ioManager metadata
   where
-    args =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-no-metadata.json"
-        , claFullMode = False
-        }
+    action = \interpreter mockServer dbSync -> do
+      startDBSync dbSync
+      -- Add blocks with transactions
+      void $
+        UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+          let txBody = Conway.mkDummyTxBody
+              auxData = Map.fromList [(1, I 1), (2, I 2)]
+           in Right (Conway.mkAuxDataTx True txBody auxData)
+
+      -- Wait for it to sync
+      assertBlockNoBackoff dbSync 1
+      -- Should have tx metadata
+      assertEqBackoff dbSync queryTxMetadataCount 0 [] "Expected tx metadata"
+
+    args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayConfigMetadataDisabled"
+
     cfgDir = conwayConfigDir
+
+    mksNodeConfig :: IO SyncNodeConfig
+    mksNodeConfig = do
+      initConfigFile <- mkSyncNodeConfig cfgDir args
+      let dncInsertOptions' = dncInsertOptions initConfigFile
+      pure $
+        initConfigFile
+          { dncInsertOptions = dncInsertOptions' {sioMetadata = MetadataDisable}
+          }

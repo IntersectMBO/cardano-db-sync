@@ -26,6 +26,7 @@ module Cardano.Db.Query (
   queryShelleyGenesisSupply,
   queryLatestBlock,
   queryLatestPoints,
+  queryAddressWithReward,
   queryLatestEpochNo,
   queryLatestBlockId,
   queryLatestSlotNo,
@@ -153,6 +154,7 @@ import Database.Esqueleto.Experimental (
   count,
   countRows,
   desc,
+  distinct,
   entityKey,
   entityVal,
   from,
@@ -495,6 +497,20 @@ queryLatestPoints = do
     limit 5
     pure (blk ^. BlockSlotNo, blk ^. BlockHash)
   pure $ fmap unValue2 res
+
+-- This is an expensive query, but it is only used once when initiating the cStakeRawHashes LRU cache.
+-- The idea being to get a list of current registered stake addresses using rewards.
+queryAddressWithReward :: MonadIO m => Int -> ReaderT SqlBackend m [(ByteString, StakeAddressId)]
+queryAddressWithReward limitNumber = do
+  res <- select $ distinct $ do
+    (stk :& _) <-
+      from
+        $ table @StakeAddress
+          `innerJoin` table @Reward
+        `on` (\(stk :& rwd) -> stk ^. StakeAddressId ==. rwd ^. RewardAddrId)
+    limit $ fromIntegral limitNumber
+    pure (stk ^. StakeAddressHashRaw, stk ^. StakeAddressId)
+  pure $ fmap (\(Value hashRaw, Value stakeAddressId) -> (hashRaw, stakeAddressId)) res
 
 queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
 queryLatestEpochNo = do

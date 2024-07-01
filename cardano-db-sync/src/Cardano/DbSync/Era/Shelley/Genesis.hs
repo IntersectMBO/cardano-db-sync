@@ -294,7 +294,7 @@ insertStaking tracer cache blkId genesis = do
   let stakes = zip [0 ..] $ ListMap.toList (sgsStake $ sgStaking genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     -- TODO: add initial deposits for genesis stake keys.
-    insertStakeRegistration (EpochNo 0) Nothing txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
+    insertStakeRegistration tracer cache (EpochNo 0) Nothing txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
     insertDelegation tracer cache network (EpochNo 0) 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
 
 -- -----------------------------------------------------------------------------

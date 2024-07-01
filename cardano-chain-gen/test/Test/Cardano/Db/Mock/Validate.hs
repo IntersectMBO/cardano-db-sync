@@ -17,6 +17,7 @@ module Test.Cardano.Db.Mock.Validate (
   assertRewardRestCount,
   assertBlockNoBackoff,
   assertBlockNoBackoffTimes,
+  expectFailSilent,
   assertEqQuery,
   assertEqBackoff,
   assertBackoff,
@@ -85,7 +86,8 @@ import Database.PostgreSQL.Simple (SqlError (..))
 import Ouroboros.Consensus.Cardano.Block
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import Test.Cardano.Db.Mock.Config
-import Test.Tasty.HUnit (assertEqual, assertFailure)
+import Test.Tasty (TestTree)
+import Test.Tasty.HUnit (Assertion, assertEqual, assertFailure, testCase)
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -123,6 +125,13 @@ assertBlockNoBackoff = assertBlockNoBackoffTimes defaultDelays
 assertBlockNoBackoffTimes :: [Int] -> DBSyncEnv -> Int -> IO ()
 assertBlockNoBackoffTimes times env blockNo =
   assertEqBackoff env DB.queryBlockHeight (Just $ fromIntegral blockNo) times "Unexpected BlockNo"
+
+expectFailSilent :: String -> Assertion -> TestTree
+expectFailSilent name action = testCase name $ do
+  result <- catch (Right <$> action) (\(_ :: SomeException) -> pure $ Left ())
+  case result of
+    Left _ -> pure () -- Test failed as expected, do nothing
+    Right _ -> assertFailure "Expected test to fail but it succeeded"
 
 -- checking that unspent count matches from tx_in to tx_out
 assertUnspentTx :: DBSyncEnv -> IO ()

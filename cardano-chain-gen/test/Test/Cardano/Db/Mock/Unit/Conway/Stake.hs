@@ -64,7 +64,7 @@ registrationTx =
     assertBlockNoBackoff dbSync 4
     assertCertCounts dbSync (2, 2, 0, 0)
   where
-    testLabel = "registrationTx"
+    testLabel = "conwayRegistrationTx"
 
 registrationsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 registrationsSameBlock =

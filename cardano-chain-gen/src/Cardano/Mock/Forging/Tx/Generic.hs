@@ -264,12 +264,28 @@ registeredShelleyGenesisKeys =
   , KeyHash "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6"
   ]
 
-bootstrapCommitteeCreds :: [Credential 'ColdCommitteeRole StandardCrypto]
+bootstrapCommitteeCreds ::
+  [ ( Credential 'ColdCommitteeRole StandardCrypto
+    , Credential 'HotCommitteeRole StandardCrypto
+    )
+  ]
 bootstrapCommitteeCreds =
-  [ KeyHashObj $ KeyHash "2c698e41831684b16477fb50082b0c0e396d436504e39037d5366582"
-  , KeyHashObj $ KeyHash "8fc13431159fdda66347a38c55105d50d77d67abc1c368b876d52ad1"
-  , KeyHashObj $ KeyHash "921e1ccb4812c4280510c9ccab81c561f3d413e7d744d48d61215d1f"
-  , KeyHashObj $ KeyHash "d5d09d9380cf9dcde1f3c6cd88b08ca9e00a3d550022ca7ee4026342"
+  [
+    ( ScriptHashObj $ ScriptHash "2c698e41831684b16477fb50082b0c0e396d436504e39037d5366582"
+    , KeyHashObj $ KeyHash "583a4c8d5f9b3769f98135a2cc041a3118586bd5c74ca72e808af73b"
+    )
+  ,
+    ( ScriptHashObj $ ScriptHash "8fc13431159fdda66347a38c55105d50d77d67abc1c368b876d52ad1"
+    , KeyHashObj $ KeyHash "39c898a713b67e7e0ed2345753db246f0d812669445488943a9f851e"
+    )
+  ,
+    ( ScriptHashObj $ ScriptHash "921e1ccb4812c4280510c9ccab81c561f3d413e7d744d48d61215d1f"
+    , KeyHashObj $ KeyHash "7cad8428ef51c1eb1f916be74e43ad49fd022482484a770d43b003ea"
+    )
+  ,
+    ( ScriptHashObj $ ScriptHash "d5d09d9380cf9dcde1f3c6cd88b08ca9e00a3d550022ca7ee4026342"
+    , KeyHashObj $ KeyHash "ca283340187f1b87e871d903c0178ddfbf4aa896a398787ceba20f98"
+    )
   ]
 
 unregisteredDRepIds :: [Credential 'DRepRole StandardCrypto]
