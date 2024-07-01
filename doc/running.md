@@ -55,7 +55,7 @@ Finally, we can start `cardano-db-sync`:
 
 ```
 PGPASSFILE=config/pgpass-mainnet cardano-db-sync -- \
-    --config ~/src/cardano-environments/mainnet/config.json \
+    --config ~/src/cardano-environments/db-sync-config.json \
     --socket-path ~/src/cardano-environments/mainnet/node.socket \
     --state-dir ~/src/cardano-environments/mainnet/ledger-state \
     --schema-dir schema/
