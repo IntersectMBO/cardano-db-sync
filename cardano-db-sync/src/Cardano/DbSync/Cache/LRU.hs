@@ -3,7 +3,6 @@
 
 module Cardano.DbSync.Cache.LRU (
   LRUCache (..),
-  LRUCacheCapacity (..),
   empty,
   cleanup,
   trim,
@@ -28,13 +27,6 @@ data LRUCache k v = LRUCache
   { cCapacity :: !Word64 -- The maximum capacity of the cache
   , cTick :: !Word64 -- A counter used to track the order of access
   , cQueue :: !(OrdPSQ k Word64 v) -- The priority search queue storing the cache entries
-  }
-
--- LRUCacheCapacity is used to define capacities for different types of cache entries.
-data LRUCacheCapacity = LRUCacheCapacity
-  { lirCapacityStakeHashRaw :: !Word64
-  , lruCapacityDatum :: !Word64
-  , lruCapacityMultiAsset :: !Word64
   }
 
 -- empty creates an empty LRUCache with the specified capacity.

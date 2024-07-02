@@ -99,12 +99,12 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
             liftIO $
               logInfo tracer $
                 "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
-          updateDropped (EpochNo curEpoch) (garGovActionId <$> (en <> ex))
+          updateDropped cache (EpochNo curEpoch) (garGovActionId <$> (en <> ex))
           let en' = filter (\e -> Set.notMember (garGovActionId e) uncl) en
               ex' = filter (\e -> Set.notMember (garGovActionId e) uncl) ex
           insertProposalRefunds tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
           forM_ en $ \gar -> whenJust (garMTreasury gar) $ \treasuryMap -> do
-            gaId <- resolveGovActionProposal (garGovActionId gar)
+            gaId <- resolveGovActionProposal cache (garGovActionId gar)
             lift $ void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
             let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
             insertRewardRests tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache (Map.toList rewards)

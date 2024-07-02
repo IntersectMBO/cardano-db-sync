@@ -18,7 +18,8 @@ import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), minIdsToText)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Cache (resolveInputTxId)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -144,17 +145,18 @@ insertReverseIndex blockId minIds =
 -- This happens the input consumes an output introduced in the same block.
 resolveTxInputs ::
   MonadIO m =>
+  SyncEnv ->
   Bool ->
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
-resolveTxInputs hasConsumed needsValue groupedOutputs txIn =
+resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn =
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
       case (hasConsumed, needsValue) of
         (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
-        (False, _) -> fmap convertnotFound <$> resolveInputTxId txIn
+        (False, _) -> fmap convertnotFound <$> resolveInputTxId txIn (envCache syncEnv)
         (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId txIn
     case qres of
       Right ret -> pure $ Right ret

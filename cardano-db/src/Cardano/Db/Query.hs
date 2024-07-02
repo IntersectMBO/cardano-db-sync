@@ -636,14 +636,14 @@ queryTxCount = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Get the 'TxId' associated with the given hash.
+-- -- | Get the 'TxId' associated with the given hash.
 queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
 queryTxId hash = do
   res <- select $ do
     tx <- from $ table @Tx
     where_ (tx ^. TxHash ==. val hash)
-    pure tx
-  pure $ maybeToEither (DbLookupTxHash hash) entityKey (listToMaybe res)
+    pure (tx ^. TxId)
+  pure $ maybeToEither (DbLookupTxHash hash) unValue (listToMaybe res)
 
 -- | Like 'queryTxId' but also return the 'TxOutId'
 queryTxOutId :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId))

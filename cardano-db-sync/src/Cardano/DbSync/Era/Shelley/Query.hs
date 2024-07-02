@@ -5,7 +5,6 @@
 
 module Cardano.DbSync.Era.Shelley.Query (
   resolveStakeAddress,
-  resolveInputTxId,
   resolveInputTxOutId,
   resolveInputValue,
   resolveInputTxOutIdValue,
@@ -24,9 +23,6 @@ import Database.Esqueleto.Experimental (
 
 resolveStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 resolveStakeAddress addr = queryStakeAddress addr renderByteArray
-
-resolveInputTxId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail TxId)
-resolveInputTxId = queryTxId . Generic.txInHash
 
 resolveInputTxOutId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId))
 resolveInputTxOutId txIn =
