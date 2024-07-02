@@ -56,7 +56,7 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
   case unPoolMetaHash <$> expectedMetaHash of
     Just expectedMetaHashBs
       | metadataHash /= expectedMetaHashBs ->
-          left $ OCFErrHashMismatch url (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
+          left $ OCFErrHashMismatch (Just url) (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
     _ -> pure ()
   decodedMetadata <-
     case Aeson.eitherDecode' respLBS of
@@ -105,8 +105,10 @@ parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -
 parseAndValidateVoteData bs lbs metaHash anchorType murl = do
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
   (hsh, mWarning) <- case unVoteMetaHash <$> metaHash of
-    Nothing -> pure (metadataHash, Nothing)
-    Just expectedMetaHash -> pure (expectedMetaHash, Just "Failed to validate metadata hash") -- TODO: Conway
+    Just expectedMetaHashBs
+      | metadataHash /= expectedMetaHashBs ->
+          left $ OCFErrHashMismatch murl (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
+    _ -> pure (metadataHash, Nothing)
   decodedValue <-
     case Aeson.eitherDecode' @Aeson.Value lbs of
       Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
