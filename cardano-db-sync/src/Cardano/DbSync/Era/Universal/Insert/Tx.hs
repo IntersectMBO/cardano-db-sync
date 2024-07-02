@@ -20,8 +20,10 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (CacheStatus (..))
 
+import Cardano.DbSync.Cache (queryTxIdWithCache, tryUpdateCacheTx)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertCertificate)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertGovActionProposal,
@@ -39,7 +41,7 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertWithdrawals,
  )
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
-import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
+import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
 import Cardano.DbSync.Util
@@ -79,16 +81,17 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
       !treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
       hasConsumed = getHasConsumedOrPruneTxOut syncEnv
+      txIn = Generic.txInputs tx
   disInOut <- liftIO $ getDisableInOutState syncEnv
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
   -- In these cases we can avoid expensive queries.
   (resolvedInputs, fees', deposits) <- case (disInOut, mdeposits, unCoin <$> Generic.txFees tx) of
     (True, _, _) -> pure ([], 0, unCoin <$> mdeposits)
     (_, Just deposits, Just fees) -> do
-      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
       pure (resolvedInputs, fees, Just (unCoin deposits))
     (_, Nothing, Just fees) -> do
-      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
       if any isNothing amounts
         then pure (resolvedInputs, fees, Nothing)
         else
@@ -96,7 +99,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
            in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
     (_, _, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
-      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed True (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed True (fst <$> groupedTxOut grouped)) txIn
       let !inSum = sum $ map unDbLovelace $ catMaybes amounts
           !diffSum = if inSum >= outSum then inSum - outSum else 0
           !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -121,6 +124,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
         }
 
+  tryUpdateCacheTx cache (Generic.txLedgerTxId tx) txId
   when (ioTxCBOR iopts) $ do
     void
       . lift
@@ -151,8 +155,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
-        mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
-        mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
+        mapM_ (insertCollateralTxIn syncEnv tracer txId) (Generic.txCollateralInputs tx)
+        mapM_ (insertReferenceTxIn syncEnv tracer txId) (Generic.txReferenceInputs tx)
         mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
@@ -390,36 +394,42 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
 
 insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxIn _tracer txInId (Generic.TxIn txId index _) = do
-  txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTxId txId
+insertCollateralTxIn syncEnv _tracer txInId txIn = do
+  let txId = txInTxId txIn
+      txHash = txInHash txIn
+  txOutId <- queryTxIdWithCache (envCache syncEnv) txId txHash "insertCollateralTxIn"
   void
     . lift
     . DB.insertCollateralTxIn
     $ DB.CollateralTxIn
       { DB.collateralTxInTxInId = txInId
       , DB.collateralTxInTxOutId = txOutId
-      , DB.collateralTxInTxOutIndex = fromIntegral index
+      , DB.collateralTxInTxOutIndex = fromIntegral (txInIndex txIn)
       }
 
 insertReferenceTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertReferenceTxIn _tracer txInId (Generic.TxIn txId index _) = do
-  txOutId <- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
+insertReferenceTxIn syncEnv _tracer txInId txIn = do
+  let txId = txInTxId txIn
+      txHash = txInHash txIn
+  txOutId <- queryTxIdWithCache (envCache syncEnv) txId txHash "insertReferenceTxIn"
   void
     . lift
     . DB.insertReferenceTxIn
     $ DB.ReferenceTxIn
       { DB.referenceTxInTxInId = txInId
       , DB.referenceTxInTxOutId = txOutId
-      , DB.referenceTxInTxOutIndex = fromIntegral index
+      , DB.referenceTxInTxOutIndex = fromIntegral (txInIndex txIn)
       }
 
 --------------------------------------------------------------------------------------

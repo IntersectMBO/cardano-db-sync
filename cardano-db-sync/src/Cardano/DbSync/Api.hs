@@ -57,8 +57,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.LRU (LRUCacheCapacity (..))
-import Cardano.DbSync.Cache.Types (newEmptyCache, useNoCache)
+import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
@@ -403,10 +402,11 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
     if soptCache syncOptions
       then
         newEmptyCache
-          LRUCacheCapacity
-            { lirCapacityStakeHashRaw = 1600000
-            , lruCapacityDatum = 250000
-            , lruCapacityMultiAsset = 250000
+          CacheCapacity
+            { cacheCapacityStakeHashRaw = 1600000
+            , cacheCapacityDatum = 250000
+            , cacheCapacityMultiAsset = 250000
+            , cacheCapacityTx = 350000
             }
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked

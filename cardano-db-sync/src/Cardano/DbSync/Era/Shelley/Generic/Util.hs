@@ -149,7 +149,7 @@ unKeyHashView = serialiseStakePoolKeyHashToBech32
 unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
 unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
 
-unTxHash :: TxId era -> ByteString
+unTxHash :: TxId c -> ByteString
 unTxHash (TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
 
 unAssetName :: AssetName -> ByteString

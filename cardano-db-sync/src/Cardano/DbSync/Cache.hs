@@ -20,7 +20,10 @@ module Cardano.DbSync.Cache (
   queryOrInsertRewardAccount,
   insertStakeAddress,
   queryStakeAddrWithCache,
+  resolveInputTxId,
+  queryTxIdWithCache,
   rollbackCache,
+  tryUpdateCacheTx,
 
   -- * CacheStatistics
   getCacheStatistics,
@@ -29,8 +32,11 @@ module Cardano.DbSync.Cache (
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
+import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), initCacheStatistics, isCacheActionUpdate)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
+import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Types as Generic
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -39,6 +45,7 @@ import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Ledger.Mary.Value
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -73,6 +80,7 @@ rollbackCache (ActiveCache cache) blockId = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
+    atomically $ modifyTVar (cTxIds cache) FIFO.cleanupCache
     void $ rollbackMapEpochInCache cache blockId
 
 getCacheStatistics :: CacheStatus -> IO CacheStatistics
@@ -361,6 +369,72 @@ queryPrevBlockWithCache msg cache hsh =
       liftIO $ missPrevBlock (cStats ci)
       liftLookupFail msg $ DB.queryBlockId hsh
 
+queryTxIdWithCache ::
+  MonadIO m =>
+  CacheStatus ->
+  Ledger.TxId StandardCrypto ->
+  ByteString ->
+  Text ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxId
+queryTxIdWithCache cache ledgerTxId txHash errTxt = do
+  case cache of
+    NoCache -> liftLookupFail errTxt $ DB.queryTxId txHash
+    ActiveCache ci -> do
+      mp <- liftIO $ readTVarIO (cTxIds ci)
+      case FIFO.lookup ledgerTxId mp of
+        Just txId -> do
+          liftIO $ hitTxIds (cStats ci)
+          pure txId
+        Nothing -> do
+          resTxId <- liftLookupFail errTxt $ DB.queryTxId txHash
+          liftIO $ missTxIds (cStats ci)
+          liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId resTxId
+          pure resTxId
+
+resolveInputTxId ::
+  MonadIO m =>
+  Generic.TxIn ->
+  CacheStatus ->
+  ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
+resolveInputTxId txIn cache = do
+  let txHash = Generic.txInHash txIn
+  case cache of
+    -- Direct database query if no cache.
+    NoCache -> DB.queryTxId txHash
+    ActiveCache cacheInternal -> do
+      -- Read current cache state.
+      cacheTx <- liftIO $ readTVarIO (cTxIds cacheInternal)
+
+      case FIFO.lookup (txInTxId txIn) cacheTx of
+        -- Cache hit, return the transaction ID.
+        Just txId -> do
+          liftIO $ hitTxIds (cStats cacheInternal)
+          pure $ Right txId
+        -- Cache miss.
+        Nothing -> do
+          eTxId <- DB.queryTxId txHash
+          liftIO $ missTxIds (cStats cacheInternal)
+          case eTxId of
+            Right txId -> do
+              -- Update cache.
+              liftIO $ atomically $ modifyTVar (cTxIds cacheInternal) $ FIFO.insert (txInTxId txIn) txId
+              -- Return ID after updating cache.
+              pure $ Right txId
+            -- Return lookup failure.
+            Left _ -> pure $ Left $ DB.DbLookupTxHash txHash
+
+tryUpdateCacheTx ::
+  MonadIO m =>
+  CacheStatus ->
+  Ledger.TxId StandardCrypto ->
+  DB.TxId ->
+  m ()
+tryUpdateCacheTx cache ledgerTxId txId = do
+  case cache of
+    NoCache -> pure ()
+    ActiveCache ci -> do
+      liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId txId
+
 insertBlockAndCache ::
   (MonadIO m, MonadBaseControl IO m) =>
   CacheStatus ->
@@ -458,3 +532,12 @@ hitPBlock ref =
 missPrevBlock :: StrictTVar IO CacheStatistics -> IO ()
 missPrevBlock ref =
   atomically $ modifyTVar ref (\cs -> cs {prevBlockQueries = 1 + prevBlockQueries cs})
+
+-- TxIds
+hitTxIds :: StrictTVar IO CacheStatistics -> IO ()
+hitTxIds ref =
+  atomically $ modifyTVar ref (\cs -> cs {txIdsHits = 1 + txIdsHits cs, txIdsQueries = 1 + txIdsQueries cs})
+
+missTxIds :: StrictTVar IO CacheStatistics -> IO ()
+missTxIds ref =
+  atomically $ modifyTVar ref (\cs -> cs {txIdsQueries = 1 + txIdsQueries cs})

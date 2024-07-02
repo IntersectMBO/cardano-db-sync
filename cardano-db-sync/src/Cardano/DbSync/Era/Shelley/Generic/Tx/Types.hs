@@ -42,12 +42,14 @@ import Cardano.Ledger.Core (TxBody)
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
 
 data Tx = Tx
   { txHash :: !ByteString
+  , txLedgerTxId :: !(Ledger.TxId StandardCrypto)
   , txBlockIndex :: !Word64
   , txCBOR :: ByteString
   , txSize :: !Word64
@@ -96,6 +98,7 @@ data TxWithdrawal = TxWithdrawal
 data TxIn = TxIn
   { txInHash :: !ByteString
   , txInIndex :: !Word64
+  , txInTxId :: !(Ledger.TxId StandardCrypto)
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
   }
   deriving (Show)
