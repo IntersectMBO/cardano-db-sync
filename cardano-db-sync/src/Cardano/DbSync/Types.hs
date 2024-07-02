@@ -220,7 +220,7 @@ showUrl =
 -- OffChain Fetch error for the HTTP client fetching the pool offchain metadata.
 -------------------------------------------------------------------------------------
 data OffChainFetchError
-  = OCFErrHashMismatch !OffChainUrlType !Text !Text
+  = OCFErrHashMismatch !(Maybe OffChainUrlType) !Text !Text
   | OCFErrDataTooLong !OffChainUrlType
   | OCFErrUrlParseFail !OffChainUrlType !Text
   | OCFErrJsonDecodeFail (Maybe OffChainUrlType) !Text
