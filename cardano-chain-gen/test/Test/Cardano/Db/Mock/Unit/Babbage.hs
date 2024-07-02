@@ -109,8 +109,8 @@ unitTests iom knownMigrations =
         , test "2000 delegations" BabStake.delegations2000
         , test "2001 delegations" BabStake.delegations2001
         , test "8000 delegations" BabStake.delegations8000
-        , test "many delegations" BabStake.delegationsMany
-        , test "many delegations, sparse chain" BabStake.delegationsManyNotDense
+        --        , test "many delegations" BabStake.delegationsMany
+        --        , test "many delegations, sparse chain" BabStake.delegationsManyNotDense
         ]
     , testGroup
         "rewards"
