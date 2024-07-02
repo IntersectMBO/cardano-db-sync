@@ -209,7 +209,7 @@ Update the Nix equivalent of the newer ``index-state``::
 
 If there are updated configuration files, be sure to also update ``iohk-nix``::
 
-  nix flake lock --update-input nix flake lock --update-input hackageNix
+  nix flake lock --update-input hackageNix
 
 In rare cases, it may also be necessary to update haskell.nix::
 
