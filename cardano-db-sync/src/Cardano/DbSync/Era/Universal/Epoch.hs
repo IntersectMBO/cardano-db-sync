@@ -61,13 +61,14 @@ import Database.Persist.Sql (SqlBackend)
 insertOnNewEpoch ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  CacheStatus ->
   InsertOptions ->
   DB.BlockId ->
   SlotNo ->
   EpochNo ->
   Generic.NewEpoch ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertOnNewEpoch tracer iopts blkId slotNo epochNo newEpoch = do
+insertOnNewEpoch tracer cache iopts blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.euProtoParams epochUpdate) $ \params ->
     lift $ insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
@@ -75,11 +76,11 @@ insertOnNewEpoch tracer iopts blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.neDRepState newEpoch) $ \dreps -> when (ioGov iopts) $ do
     let (drepSnapshot, ratifyState) = finishDRepPulser dreps
     lift $ insertDrepDistr epochNo drepSnapshot
-    updateRatified epochNo (toList $ rsEnacted ratifyState)
-    updateExpired epochNo (toList $ rsExpired ratifyState)
+    updateRatified cache epochNo (toList $ rsEnacted ratifyState)
+    updateExpired cache epochNo (toList $ rsExpired ratifyState)
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt -> do
     when (ioGov iopts) $ do
-      insertUpdateEnacted tracer blkId epochNo enactedSt
+      insertUpdateEnacted tracer cache blkId epochNo enactedSt
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch

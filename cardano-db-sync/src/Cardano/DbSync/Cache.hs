@@ -20,6 +20,7 @@ module Cardano.DbSync.Cache (
   queryOrInsertRewardAccount,
   insertStakeAddress,
   queryStakeAddrWithCache,
+  queryTxIdWithCache,
   rollbackCache,
 
   -- * CacheStatistics
@@ -360,6 +361,21 @@ queryPrevBlockWithCache msg cache hsh =
     queryFromDb ci = do
       liftIO $ missPrevBlock (cStats ci)
       liftLookupFail msg $ DB.queryBlockId hsh
+
+queryTxIdWithCache ::
+  MonadIO m =>
+  CacheStatus ->
+  ByteString ->
+  Text ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxId
+queryTxIdWithCache cache hsh errTxt = do
+  case cache of
+    NoCache -> liftLookupFail errTxt $ DB.queryTxId hsh
+    ActiveCache ci -> do
+      mp <- liftIO $ readTVarIO (cTx ci)
+      case Map.lookup hsh mp of
+        Just txId -> pure txId
+        Nothing -> liftLookupFail errTxt $ DB.queryTxId hsh
 
 insertBlockAndCache ::
   (MonadIO m, MonadBaseControl IO m) =>

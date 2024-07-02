@@ -13,6 +13,7 @@ module Cardano.DbSync.Cache.Types (
   CacheInternal (..),
   EpochBlockDiff (..),
   StakePoolCache,
+  CacheTx,
 
   -- * Inits
   useNoCache,
@@ -45,6 +46,8 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
+type CacheTx = Map ByteString DB.TxId
+
 -- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
 data CacheStatus
@@ -65,6 +68,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
+  , cTx :: !(StrictTVar IO CacheTx)
   }
 
 data CacheStatistics = CacheStatistics
@@ -178,6 +182,7 @@ newEmptyCache LRU.LRUCacheCapacity {..} =
       <*> newTVarIO Nothing
       <*> newTVarIO initCacheStatistics
       <*> newTVarIO initCacheEpoch
+      <*> newTVarIO Map.empty
 
 initCacheStatistics :: CacheStatistics
 initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0

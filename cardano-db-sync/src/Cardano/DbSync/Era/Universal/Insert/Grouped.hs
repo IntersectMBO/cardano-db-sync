@@ -18,14 +18,17 @@ import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), minIdsToText)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Cache.Types (CacheInternal (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.Prelude
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend)
 
@@ -144,17 +147,18 @@ insertReverseIndex blockId minIds =
 -- This happens the input consumes an output introduced in the same block.
 resolveTxInputs ::
   MonadIO m =>
+  SyncEnv ->
   Bool ->
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
-resolveTxInputs hasConsumed needsValue groupedOutputs txIn =
+resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn =
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
       case (hasConsumed, needsValue) of
         (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
-        (False, _) -> fmap convertnotFound <$> resolveInputTxId txIn
+        (False, _) -> fmap convertnotFound <$> resolveInputTxId txIn (envCache syncEnv)
         (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId txIn
     case qres of
       Right ret -> pure $ Right ret
@@ -190,6 +194,17 @@ resolveRemainingInputs etis mp =
         | Just txOutId <- fst <$> find (matches txIn . snd) mp ->
             pure eti {etiTxOutId = Right txOutId}
       _ -> pure eti
+
+resolveInputTxId :: MonadIO m => Generic.TxIn -> CacheStatus -> ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
+resolveInputTxId txIn cache = do
+  case cache of
+    NoCache -> DB.queryTxId (Generic.txInHash txIn)
+    ActiveCache cacheInternal -> do
+      let txHash = Generic.txInHash txIn
+      cacheTx <- liftIO $ readTVarIO (cTx cacheInternal)
+      case Map.lookup txHash cacheTx of
+        Just txId -> pure $ Right txId
+        Nothing -> DB.queryTxId (Generic.txInHash txIn)
 
 resolveScriptHash ::
   (MonadBaseControl IO m, MonadIO m) =>

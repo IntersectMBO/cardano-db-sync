@@ -20,6 +20,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (CacheStatus (..))
 
+import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertCertificate)
@@ -39,7 +40,7 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertWithdrawals,
  )
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
-import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
+import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
 import Cardano.DbSync.Util
@@ -84,10 +85,10 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
   (resolvedInputs, fees', deposits) <- case (disInOut, mdeposits, unCoin <$> Generic.txFees tx) of
     (True, _, _) -> pure ([], 0, unCoin <$> mdeposits)
     (_, Just deposits, Just fees) -> do
-      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
       pure (resolvedInputs, fees, Just (unCoin deposits))
     (_, Nothing, Just fees) -> do
-      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
       if any isNothing amounts
         then pure (resolvedInputs, fees, Nothing)
         else
@@ -95,7 +96,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
            in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fromIntegral fees)
     (_, _, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
-      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed True (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
+      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed True (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
       let !inSum = sum $ map unDbLovelace $ catMaybes amounts
           !diffSum = if inSum >= outSum then inSum - outSum else 0
           !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -149,8 +150,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
-        mapM_ (insertCollateralTxIn tracer txId) (Generic.txCollateralInputs tx)
-        mapM_ (insertReferenceTxIn tracer txId) (Generic.txReferenceInputs tx)
+        mapM_ (insertCollateralTxIn syncEnv tracer txId) (Generic.txCollateralInputs tx)
+        mapM_ (insertReferenceTxIn syncEnv tracer txId) (Generic.txReferenceInputs tx)
         mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
@@ -388,12 +389,13 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
 
 insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxIn _tracer txInId (Generic.TxIn txId index _) = do
-  txOutId <- liftLookupFail "insertCollateralTxIn" $ DB.queryTxId txId
+insertCollateralTxIn syncEnv _tracer txInId (Generic.TxIn txId index _) = do
+  txOutId <- queryTxIdWithCache (envCache syncEnv) txId "insertCollateralTxIn"
   void
     . lift
     . DB.insertCollateralTxIn
@@ -405,12 +407,14 @@ insertCollateralTxIn _tracer txInId (Generic.TxIn txId index _) = do
 
 insertReferenceTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertReferenceTxIn _tracer txInId (Generic.TxIn txId index _) = do
-  txOutId <- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
+insertReferenceTxIn syncEnv _tracer txInId (Generic.TxIn txId index _) = do
+  txOutId <- queryTxIdWithCache (envCache syncEnv) txId "insertReferenceTxIn"
+  -- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
   void
     . lift
     . DB.insertReferenceTxIn
