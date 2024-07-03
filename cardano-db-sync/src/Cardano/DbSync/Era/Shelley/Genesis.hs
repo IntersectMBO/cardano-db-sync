@@ -241,6 +241,7 @@ insertTxOuts trce hasConsumed disInOut blkId (TxIn txInId _, txOut) = do
         , DB.txInvalidBefore = Nothing
         , DB.txValidContract = True
         , DB.txScriptSize = 0
+        , DB.txTreasuryDonation = DB.DbLovelace 0
         }
   _ <- insertStakeAddressRefIfMissing trce useNoCache (txOut ^. Core.addrTxOutL)
   DB.insertTxOutPlex hasConsumed disInOut $
@@ -286,6 +287,7 @@ insertStaking tracer cache blkId genesis = do
           , DB.txInvalidBefore = Nothing
           , DB.txValidContract = True
           , DB.txScriptSize = 0
+          , DB.txTreasuryDonation = DB.DbLovelace 0
           }
   let params = zip [0 ..] $ ListMap.elems $ sgsPools $ sgStaking genesis
   let network = sgNetworkId genesis

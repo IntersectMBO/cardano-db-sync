@@ -253,6 +253,7 @@ insertByronTx syncEnv blkId tx blockIndex = do
             , DB.txInvalidBefore = Nothing
             , DB.txValidContract = True
             , DB.txScriptSize = 0
+            , DB.txTreasuryDonation = DbLovelace 0
             }
 
       when (ioTxCBOR iopts) $ do
@@ -295,6 +296,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         , DB.txInvalidBefore = Nothing
         , DB.txValidContract = True
         , DB.txScriptSize = 0
+        , DB.txTreasuryDonation = DbLovelace 0
         }
 
   when (ioTxCBOR iopts) $ do

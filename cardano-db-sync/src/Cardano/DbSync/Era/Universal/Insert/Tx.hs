@@ -117,6 +117,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
         , DB.txValidContract = Generic.txValidContract tx
         , DB.txScriptSize = sum $ Generic.txScriptSizes tx
+        , DB.txTreasuryDonation = DB.DbLovelace 0
         }
 
   when (ioTxCBOR iopts) $ do
