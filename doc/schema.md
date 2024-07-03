@@ -1,6 +1,5 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.2.0.2
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -86,6 +85,18 @@ A table for transactions within a block on the chain.
 | `invalid_hereafter` | word64type | Transaction in invalid at or after this slot number. |
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
 | `script_size` | word31type | The sum of the script sizes (in bytes) of scripts in the transaction. |
+
+### `tx_cbor`
+
+A table holding raw CBOR encoded transactions.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index of the transaction encoded in this table. |
+| `bytes` | bytea | CBOR encoded transaction. |
 
 ### `reverse_index`
 
@@ -789,7 +800,7 @@ A table for every unique drep key hash. The existance of an entry doesn't mean t
 
 ### `committee_hash`
 
-A table for all committee hot credentials
+A table for all committee credentials hot or cold
 
 * Primary Id: `id`
 
