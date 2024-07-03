@@ -1,6 +1,10 @@
 # Revision history for cardano-db-sync
 
-## Next
+## 13.3.0.0
+* Support for Conway (see schema docs)
+* Fixed epoch_param missing for the first Shelley era [#1715]
+* Moved command line options that filter data to the config file
+* Added epoch_state table
 * Added an optional feature to store CBOR serialized transactions in `tx_cbor` table [#1723]
 
 ## 13.2.0.2
