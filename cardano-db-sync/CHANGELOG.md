@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 13.4.0.0
+
+* Added `tx.treasury_donation`
+
 ## 13.3.0.0
 * Support for Conway (see schema docs)
 * Fixed epoch_param missing for the first Shelley era [#1715]
