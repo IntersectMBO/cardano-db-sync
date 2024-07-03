@@ -294,7 +294,7 @@ poolDeRegMany =
     -- Verify pool counts
     -- (poolHashes, poolMetadataRefs, poolUpdates, poolOwners, poolRetires, poolRelays)
     -- TODO fix PoolOwner and PoolRelay unique key
-    assertPoolCounters dbSync (addPoolCounters (1, 1, 4, 8, 3, 4) initCounter)
+    assertPoolCounters dbSync (addPoolCounters (1, 4, 4, 8, 3, 4) initCounter)
 
     state' <- Api.getConwayLedgerState interpreter
     -- Not retired yet, because epoch hasn't changed
@@ -309,7 +309,7 @@ poolDeRegMany =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (length blks + 3)
     -- Pool counts should not have changed
-    assertPoolCounters dbSync (addPoolCounters (1, 1, 4, 8, 3, 4) initCounter)
+    assertPoolCounters dbSync (addPoolCounters (1, 4, 4, 8, 3, 4) initCounter)
     -- Only the latest certificate matters, so it should be retired in epoch 0
     assertPoolLayerCounters
       dbSync

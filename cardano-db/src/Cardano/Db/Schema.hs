@@ -237,7 +237,6 @@ share
     url                 PoolUrl             sqltype=varchar
     hash                ByteString          sqltype=hash32type
     registeredTxId      TxId                noreference     -- Only used for rollback.
-    UniquePoolMetadataRef poolId url hash
 
   PoolUpdate
     hashId              PoolHashId          noreference
@@ -297,7 +296,7 @@ share
 
   TxMetadata
     key                 DbWord64            sqltype=word64type
-    json                Text Maybe
+    json                Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     txId                TxId                noreference
 
@@ -407,7 +406,7 @@ share
     txId                TxId                noreference
     hash                ByteString          sqltype=hash28type
     type                ScriptType          sqltype=scripttype
-    json                Text Maybe
+    json                Text Maybe          sqltype=jsonb
     bytes               ByteString Maybe    sqltype=bytea
     serialisedSize      Word64 Maybe        sqltype=word31type
     UniqueScript        hash
@@ -415,14 +414,14 @@ share
   Datum
     hash                ByteString          sqltype=hash32type
     txId                TxId                noreference
-    value               Text Maybe
+    value               Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     UniqueDatum         hash
 
   RedeemerData
     hash                ByteString          sqltype=hash32type
     txId                TxId                noreference
-    value               Text Maybe
+    value               Text Maybe          sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     UniqueRedeemerData  hash
 
@@ -553,7 +552,7 @@ share
 
   CostModel
     hash                ByteString          sqltype=hash32type
-    costs               Text
+    costs               Text                sqltype=jsonb
     UniqueCostModel     hash
 
   ExtraMigrations
@@ -613,7 +612,7 @@ share
     expiration         Word64 Maybe          sqltype=word31type
     votingAnchorId     VotingAnchorId Maybe  noreference
     type               GovActionType         sqltype=govactiontype
-    description        Text
+    description        Text                  sqltype=jsonb
     paramProposal      ParamProposalId Maybe noreference
     ratifiedEpoch      Word64 Maybe          sqltype=word31type
     enactedEpoch       Word64 Maybe          sqltype=word31type
@@ -671,7 +670,7 @@ share
     poolId              PoolHashId          noreference
     tickerName          Text
     hash                ByteString          sqltype=hash32type
-    json                Text
+    json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     pmrId               PoolMetadataRefId   noreference
     UniqueOffChainPoolData  poolId hash
@@ -694,7 +693,7 @@ share
     hash                ByteString
     language            Text
     comment             Text Maybe
-    json                Text
+    json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     warning             Text Maybe
     isValid             Bool Maybe

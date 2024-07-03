@@ -267,7 +267,7 @@ poolDeRegMany =
 
     assertBlockNoBackoff dbSync 3
     -- TODO fix PoolOwner and PoolRelay unique key
-    assertPoolCounters dbSync (addPoolCounters (1, 1, 5, 10, 3, 5) initCounter)
+    assertPoolCounters dbSync (addPoolCounters (1, 5, 5, 10, 3, 5) initCounter)
 
     st <- getBabbageLedgerState interpreter
     -- Not retired yet, because epoch has not changed
@@ -278,7 +278,7 @@ poolDeRegMany =
 
     assertBlockNoBackoff dbSync (fromIntegral $ length a + 3)
     -- these counters are the same
-    assertPoolCounters dbSync (addPoolCounters (1, 1, 5, 10, 3, 5) initCounter)
+    assertPoolCounters dbSync (addPoolCounters (1, 5, 5, 10, 3, 5) initCounter)
 
     -- from all these certificates only the latest matters. So it will retire
     -- on epoch 0
