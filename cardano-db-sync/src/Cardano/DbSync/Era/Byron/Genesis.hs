@@ -201,6 +201,7 @@ insertTxOuts hasConsumed disInOut blkId (address, value) = do
               , DB.txInvalidBefore = Nothing
               , DB.txValidContract = True
               , DB.txScriptSize = 0
+              , DB.txTreasuryDonation = DB.DbLovelace 0
               }
       lift $
         DB.insertTxOutPlex hasConsumed disInOut $

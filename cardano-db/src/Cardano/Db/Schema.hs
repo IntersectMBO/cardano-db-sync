@@ -131,6 +131,9 @@ share
     scriptSize          Word64              sqltype=word31type
     UniqueTx            hash
 
+    -- New for Conway
+    treasuryDonation    DbLovelace          sqltype=lovelace default=0
+
   TxCbor
     txId                TxId                noreference
     bytes               ByteString          sqltype=bytea
