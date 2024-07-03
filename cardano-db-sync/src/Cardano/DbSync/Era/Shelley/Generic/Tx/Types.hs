@@ -74,6 +74,7 @@ data Tx = Tx
   , txExtraKeyWitnesses :: ![ByteString]
   , txVotingProcedure :: ![(Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)])]
   , txProposalProcedure :: ![(GovActionId StandardCrypto, ProposalProcedure StandardConway)]
+  , txTreasuryDonation :: !Coin
   }
 
 type ShelleyCert = ShelleyTxCert StandardShelley

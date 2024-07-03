@@ -81,6 +81,7 @@ fromShelleyTx (blkIndex, tx) =
     , txExtraKeyWitnesses = []
     , txVotingProcedure = []
     , txProposalProcedure = []
+    , txTreasuryDonation = mempty -- Shelley does not support treasury donations
     }
   where
     txBody :: Core.TxBody StandardShelley

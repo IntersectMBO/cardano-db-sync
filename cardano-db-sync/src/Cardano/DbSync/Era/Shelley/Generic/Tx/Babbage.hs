@@ -78,6 +78,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     , txExtraKeyWitnesses = extraKeyWits txBody
     , txVotingProcedure = []
     , txProposalProcedure = []
+    , txTreasuryDonation = mempty -- Babbage does not support treasury donations
     }
   where
     txBody :: Core.TxBody StandardBabbage
