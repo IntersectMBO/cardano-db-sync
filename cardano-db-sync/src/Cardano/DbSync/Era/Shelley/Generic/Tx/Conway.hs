@@ -70,6 +70,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txExtraKeyWitnesses = extraKeyWits txBody
     , txVotingProcedure = Map.toList $ fmap Map.toList (unVotingProcedures $ ctbVotingProcedures txBody)
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ toList $ ctbProposalProcedures txBody
+    , txTreasuryDonation = ctbTreasuryDonation txBody
     }
   where
     txBody :: Core.TxBody StandardConway

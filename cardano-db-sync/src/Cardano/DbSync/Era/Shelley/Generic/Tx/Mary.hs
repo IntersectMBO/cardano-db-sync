@@ -49,6 +49,7 @@ fromMaryTx (blkIndex, tx) =
     , txExtraKeyWitnesses = []
     , txVotingProcedure = []
     , txProposalProcedure = []
+    , txTreasuryDonation = mempty -- Mary does not support treasury donations
     }
   where
     txBody :: Core.TxBody StandardMary

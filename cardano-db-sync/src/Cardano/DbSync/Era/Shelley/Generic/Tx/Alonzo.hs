@@ -109,6 +109,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     , txExtraKeyWitnesses = extraKeyWits txBody
     , txVotingProcedure = []
     , txProposalProcedure = []
+    , txTreasuryDonation = mempty -- Alonzo does not support treasury donations
     }
   where
     txBody :: Alonzo.AlonzoTxBody StandardAlonzo

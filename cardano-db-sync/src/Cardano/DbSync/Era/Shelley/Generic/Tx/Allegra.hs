@@ -76,6 +76,7 @@ fromAllegraTx (blkIndex, tx) =
     , txExtraKeyWitnesses = []
     , txVotingProcedure = []
     , txProposalProcedure = []
+    , txTreasuryDonation = mempty -- Allegra does not support treasury donations
     }
   where
     txBody :: Core.TxBody StandardAllegra

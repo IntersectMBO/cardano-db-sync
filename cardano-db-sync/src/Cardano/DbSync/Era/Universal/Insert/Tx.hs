@@ -77,6 +77,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
+      !treasuryDonation = fromIntegral . unCoin $ Generic.txTreasuryDonation tx
       hasConsumed = getHasConsumedOrPruneTxOut syncEnv
   disInOut <- liftIO $ getDisableInOutState syncEnv
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
@@ -117,7 +118,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
         , DB.txValidContract = Generic.txValidContract tx
         , DB.txScriptSize = sum $ Generic.txScriptSizes tx
-        , DB.txTreasuryDonation = DB.DbLovelace 0
+        , DB.txTreasuryDonation = DB.DbLovelace treasuryDonation
         }
 
   when (ioTxCBOR iopts) $ do
