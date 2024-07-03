@@ -253,7 +253,7 @@ insertPoolHash :: (MonadBaseControl IO m, MonadIO m) => PoolHash -> ReaderT SqlB
 insertPoolHash = insertCheckUnique "PoolHash"
 
 insertPoolMetadataRef :: (MonadBaseControl IO m, MonadIO m) => PoolMetadataRef -> ReaderT SqlBackend m PoolMetadataRefId
-insertPoolMetadataRef = insertCheckUnique "PoolMetadataRef"
+insertPoolMetadataRef = insertUnchecked "PoolMetadataRef"
 
 insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
 insertPoolOwner = insertUnchecked "PoolOwner"
