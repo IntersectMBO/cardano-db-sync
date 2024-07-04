@@ -71,6 +71,7 @@ fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) 
 fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
     , txBlockIndex = blkIndex
     , txCBOR = getTxCBOR tx
     , txSize = fromIntegral $ tx ^. Core.sizeTxF

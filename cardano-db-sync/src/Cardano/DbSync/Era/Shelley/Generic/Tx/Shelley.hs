@@ -55,6 +55,7 @@ fromShelleyTx :: (Word64, Core.Tx StandardShelley) -> Tx
 fromShelleyTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
     , txBlockIndex = blkIndex
     , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx
@@ -126,6 +127,7 @@ fromTxIn (Ledger.TxIn (Ledger.TxId txid) (TxIx w64)) =
     { txInHash = safeHashToByteString txid
     , txInIndex = w64
     , txInRedeemerIndex = Nothing
+    , txInTxId = Ledger.TxId txid
     }
 
 txHashId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> ByteString

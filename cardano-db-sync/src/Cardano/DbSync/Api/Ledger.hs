@@ -11,7 +11,6 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache (queryTxIdWithCache)
-import Cardano.DbSync.Cache.Types (CacheInternal (..), CacheStatus (..))
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
@@ -54,14 +53,7 @@ bootStrapMaybe ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 bootStrapMaybe syncEnv = do
   bts <- liftIO $ readTVarIO (envBootstrap syncEnv)
-  when bts $ do
-    case envCache syncEnv of
-      NoCache -> migrateBootstrapUTxO syncEnv
-      ActiveCache ci -> do
-        -- TODO: hardcoded to empty
-        -- not sure if this functionality should be kept as not sure what this TODO is referring to
-        liftIO $ atomically $ writeTVar (cTx ci) Map.empty
-        migrateBootstrapUTxO syncEnv
+  when bts $ migrateBootstrapUTxO syncEnv
 
 migrateBootstrapUTxO ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -76,7 +68,7 @@ migrateBootstrapUTxO syncEnv = do
       when (count > 0) $
         liftIO $
           logWarning trce $
-            "Found and deleted " <> DB.textShow count <> " tx_out."
+            "Found and deleted " <> textShow count <> " tx_out."
       storeUTxOFromLedger syncEnv cls
       lift $ DB.insertExtraMigration DB.BootstrapFinished
       liftIO $ logInfo trce "UTxO bootstrap migration done"
@@ -168,10 +160,10 @@ prepareTxOut ::
   SyncEnv ->
   (TxIn StandardCrypto, BabbageTxOut era) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut syncEnv (TxIn txHash (TxIx index), txOut) = do
-  let txHashByteString = Generic.safeHashToByteString $ unTxId txHash
+prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
+  let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut index txOut
-  txId <- queryTxIdWithCache cache txHashByteString "prepareTxOut"
+  txId <- queryTxIdWithCache cache txIntxId txHashByteString "prepareTxOut"
   insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv

@@ -5,7 +5,6 @@
 
 module Cardano.DbSync.Era.Shelley.Query (
   resolveStakeAddress,
-  resolveInputTxId,
   resolveInputTxOutId,
   resolveInputValue,
   resolveInputTxOutIdValue,

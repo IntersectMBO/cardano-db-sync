@@ -13,7 +13,6 @@ module Cardano.DbSync.Cache.Types (
   CacheInternal (..),
   EpochBlockDiff (..),
   StakePoolCache,
-  CacheTx,
 
   -- * Inits
   useNoCache,
@@ -33,6 +32,7 @@ import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Types (DataHash, PoolKeyHash)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -45,8 +45,6 @@ import Data.WideWord.Word128 (Word128)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
-
-type CacheTx = Map ByteString DB.TxId
 
 -- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
@@ -68,7 +66,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
-  , cTx :: !(StrictTVar IO CacheTx)
+  , cTxIds :: !(StrictTVar IO (LRUCache (Ledger.TxId StandardCrypto) DB.TxId))
   }
 
 data CacheStatistics = CacheStatistics
@@ -82,6 +80,8 @@ data CacheStatistics = CacheStatistics
   , multiAssetsQueries :: !Word64
   , prevBlockHits :: !Word64
   , prevBlockQueries :: !Word64
+  , txIdsHits :: !Word64
+  , txIdsQueries :: !Word64
   }
 
 -- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
@@ -111,6 +111,7 @@ textShowStats (ActiveCache ic) = do
   pools <- readTVarIO (cPools ic)
   datums <- readTVarIO (cDatum ic)
   mAssets <- readTVarIO (cMultiAssets ic)
+  txIds <- readTVarIO (cTxIds ic)
   pure $
     mconcat
       [ "\nCache Statistics:"
@@ -166,26 +167,46 @@ textShowStats (ActiveCache ic) = do
       , textShow (prevBlockHits stats)
       , ", misses: "
       , textShow (prevBlockQueries stats - prevBlockHits stats)
+      , "\n  TxId: "
+      , "cache size: "
+      , textShow (LRU.getCapacity txIds)
+      , if credsQueries stats == 0
+          then ""
+          else ", hit rate: " <> textShow (100 * txIdsHits stats `div` txIdsQueries stats) <> "%"
+      , ", hits: "
+      , textShow (txIdsHits stats)
+      , ", misses: "
+      , textShow (credsQueries stats - txIdsHits stats)
       ]
 
 useNoCache :: CacheStatus
 useNoCache = NoCache
 
 newEmptyCache :: MonadIO m => LRU.LRUCacheCapacity -> m CacheStatus
-newEmptyCache LRU.LRUCacheCapacity {..} =
-  liftIO . fmap ActiveCache $
+newEmptyCache LRU.LRUCacheCapacity {..} = liftIO $ do
+  cStakeRawHashes <- newTVarIO (LRU.empty lirCapacityStakeHashRaw)
+  cPools <- newTVarIO Map.empty
+  cDatum <- newTVarIO (LRU.empty lruCapacityDatum)
+  cMultiAssets <- newTVarIO (LRU.empty lruCapacityMultiAsset)
+  cPrevBlock <- newTVarIO Nothing
+  cStats <- newTVarIO initCacheStatistics
+  cEpoch <- newTVarIO initCacheEpoch
+  cTxIds <- newTVarIO (LRU.empty lruCapacityTx)
+
+  pure . ActiveCache $
     CacheInternal
-      <$> newTVarIO (LRU.empty lirCapacityStakeHashRaw)
-      <*> newTVarIO Map.empty
-      <*> newTVarIO (LRU.empty lruCapacityDatum)
-      <*> newTVarIO (LRU.empty lruCapacityMultiAsset)
-      <*> newTVarIO Nothing
-      <*> newTVarIO initCacheStatistics
-      <*> newTVarIO initCacheEpoch
-      <*> newTVarIO Map.empty
+      { cStakeRawHashes = cStakeRawHashes
+      , cPools = cPools
+      , cDatum = cDatum
+      , cMultiAssets = cMultiAssets
+      , cPrevBlock = cPrevBlock
+      , cStats = cStats
+      , cEpoch = cEpoch
+      , cTxIds = cTxIds
+      }
 
 initCacheStatistics :: CacheStatistics
-initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
+initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing

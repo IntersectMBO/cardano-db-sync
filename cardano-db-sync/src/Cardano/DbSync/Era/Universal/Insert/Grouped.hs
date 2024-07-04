@@ -19,16 +19,14 @@ import Cardano.Db (DbLovelace (..), minIdsToText)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
-import Cardano.DbSync.Cache.Types (CacheInternal (..), CacheStatus (..))
+import Cardano.DbSync.Cache (resolveInputTxId)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.Prelude
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
-import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend)
 
@@ -194,17 +192,6 @@ resolveRemainingInputs etis mp =
         | Just txOutId <- fst <$> find (matches txIn . snd) mp ->
             pure eti {etiTxOutId = Right txOutId}
       _ -> pure eti
-
-resolveInputTxId :: MonadIO m => Generic.TxIn -> CacheStatus -> ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
-resolveInputTxId txIn cache = do
-  case cache of
-    NoCache -> DB.queryTxId (Generic.txInHash txIn)
-    ActiveCache cacheInternal -> do
-      let txHash = Generic.txInHash txIn
-      cacheTx <- liftIO $ readTVarIO (cTx cacheInternal)
-      case Map.lookup txHash cacheTx of
-        Just txId -> pure $ Right txId
-        Nothing -> DB.queryTxId (Generic.txInHash txIn)
 
 resolveScriptHash ::
   (MonadBaseControl IO m, MonadIO m) =>

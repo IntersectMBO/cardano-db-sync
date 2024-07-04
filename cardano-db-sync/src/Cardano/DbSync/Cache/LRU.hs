@@ -35,6 +35,7 @@ data LRUCacheCapacity = LRUCacheCapacity
   { lirCapacityStakeHashRaw :: !Word64
   , lruCapacityDatum :: !Word64
   , lruCapacityMultiAsset :: !Word64
+  , lruCapacityTx :: !Word64
   }
 
 -- empty creates an empty LRUCache with the specified capacity.

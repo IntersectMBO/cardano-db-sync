@@ -23,6 +23,7 @@ fromMaryTx :: (Word64, Core.Tx StandardMary) -> Tx
 fromMaryTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
     , txBlockIndex = blkIndex
     , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx

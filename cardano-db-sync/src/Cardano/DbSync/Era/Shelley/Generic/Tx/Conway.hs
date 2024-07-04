@@ -31,6 +31,7 @@ fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) 
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
     , txBlockIndex = blkIndex
     , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx

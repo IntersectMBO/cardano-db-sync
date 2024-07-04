@@ -23,6 +23,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   getTxMetadata,
   getTxSize,
   mkTxCertificates,
+  mkTxId,
   mkTxIn,
   mkTxOut,
   mkTxParamProposal,
@@ -50,6 +51,7 @@ fromAllegraTx :: (Word64, Core.Tx StandardAllegra) -> Tx
 fromAllegraTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
     , txBlockIndex = blkIndex
     , txCBOR = getTxCBOR tx
     , txSize = getTxSize tx
