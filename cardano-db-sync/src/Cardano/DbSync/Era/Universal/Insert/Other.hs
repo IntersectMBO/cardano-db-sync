@@ -155,7 +155,7 @@ insertStakeAddressRefIfMissing trce cache addr =
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress trce cache DoNotUpdateCache nw cred
+          Just <$> queryOrInsertStakeAddress trce cache UpdateCache nw cred
         Ledger.StakeRefPtr ptr -> do
           DB.queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing

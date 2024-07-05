@@ -150,7 +150,7 @@ insertPoolOwner ::
   Ledger.KeyHash 'Ledger.Staking StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner trce cache network poolUpdateId skh = do
-  saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache network (Ledger.KeyHashObj skh)
+  saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network (Ledger.KeyHashObj skh)
   void . lift . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId

@@ -403,10 +403,10 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       then
         newEmptyCache
           CacheCapacity
-            { cacheCapacityStake = 1600000
+            { cacheCapacityStake = 100000
             , cacheCapacityDatum = 250000
             , cacheCapacityMultiAsset = 250000
-            , cacheCapacityTx = 350000
+            , cacheCapacityTx = 100000
             }
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked

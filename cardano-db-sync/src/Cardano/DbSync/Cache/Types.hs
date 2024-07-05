@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -20,6 +21,9 @@ module Cardano.DbSync.Cache.Types (
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
+
+  -- * Utils
+  shouldCache,
 
   -- * CacheStatistics
   CacheStatistics (..),
@@ -47,6 +51,10 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
+-- | We use a stable cache for entries that are expected to be reused frequentyl.
+-- These are stake addresses that have rewards, delegations etc.
+-- They are never removed unless manually eg when it's deregistered
+-- The LRU cache is much smaller for the rest stake addresses.
 data StakeCache = StakeCache
   { scStableCache :: !(Map StakeCred DB.StakeAddressId)
   , scLruCache :: !(LRUCache StakeCred DB.StakeAddressId)
@@ -229,3 +237,9 @@ initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing
+
+shouldCache :: CacheAction -> Bool
+shouldCache = \case
+  UpdateCache -> True
+  UpdateCacheStrong -> True
+  _ -> False

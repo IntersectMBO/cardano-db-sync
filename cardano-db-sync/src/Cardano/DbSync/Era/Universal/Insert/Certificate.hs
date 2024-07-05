@@ -193,7 +193,7 @@ insertMirCert tracer cache network txId idx mcert = do
       (StakeCred, Ledger.DeltaCoin) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirReserves (cred, dcoin) = do
-      addrId <- lift $ queryOrInsertStakeAddress tracer cache UpdateCache network cred
+      addrId <- lift $ queryOrInsertStakeAddress tracer cache UpdateCacheStrong network cred
       void . lift . DB.insertReserve $
         DB.Reserve
           { DB.reserveAddrId = addrId
@@ -207,7 +207,7 @@ insertMirCert tracer cache network txId idx mcert = do
       (StakeCred, Ledger.DeltaCoin) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) ()
     insertMirTreasury (cred, dcoin) = do
-      addrId <- lift $ queryOrInsertStakeAddress tracer cache UpdateCache network cred
+      addrId <- lift $ queryOrInsertStakeAddress tracer cache UpdateCacheStrong network cred
       void . lift . DB.insertTreasury $
         DB.Treasury
           { DB.treasuryAddrId = addrId
@@ -413,7 +413,7 @@ insertDelegation ::
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation trce cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
-  addrId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache network cred
+  addrId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network cred
   poolHashId <- lift $ queryPoolKeyOrInsert "insertDelegation" trce cache UpdateCache True poolkh
   void . lift . DB.insertDelegation $
     DB.Delegation
@@ -437,7 +437,7 @@ insertDelegationVote ::
   DRep StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegationVote trce cache network txId idx cred drep = do
-  addrId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache network cred
+  addrId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network cred
   drepId <- lift $ insertDrep drep
   void
     . lift
