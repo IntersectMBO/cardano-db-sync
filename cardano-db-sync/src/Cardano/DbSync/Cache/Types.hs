@@ -30,7 +30,7 @@ module Cardano.DbSync.Cache.Types (
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Types (DataHash, PoolKeyHash)
+import Cardano.DbSync.Types (DataHash, PoolKeyHash, StakeCred)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -58,7 +58,7 @@ data CacheAction
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cStakeRawHashes :: !(StrictTVar IO (LRUCache ByteString DB.StakeAddressId))
+  { cStakeRawHashes :: !(StrictTVar IO (LRUCache StakeCred DB.StakeAddressId))
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
