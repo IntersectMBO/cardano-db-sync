@@ -25,6 +25,11 @@ jobs:
           - os: macos-latest
             compiler-nix-name: ghc96
 
+    env:
+      # Increment this value to "invalidate" the cabal cache. Be sure to do this
+      # after updating dependencies (Hackage or chap)
+      CABAL_CACHE_VERSION: 1
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -48,8 +53,8 @@ jobs:
           path: |
             ~/.cabal-devx/packages
             ~/.cabal-devx/store
-          key: ${{ runner.os }}-${{ matrix.compiler-nix-name }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.compiler-nix-name }}-
+          key: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
+          restore-keys: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-
       - name: cabal update
         run: cabal update
       - name: cabal build dependencies
