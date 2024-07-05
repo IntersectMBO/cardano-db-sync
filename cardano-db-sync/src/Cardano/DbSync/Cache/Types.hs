@@ -13,15 +13,13 @@ module Cardano.DbSync.Cache.Types (
   CacheEpoch (..),
   CacheInternal (..),
   EpochBlockDiff (..),
+  StakeCache (..),
   StakePoolCache,
 
   -- * Inits
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
-
-  -- * Helpers
-  isCacheActionUpdate,
 
   -- * CacheStatistics
   CacheStatistics (..),
@@ -49,6 +47,11 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
+data StakeCache = StakeCache
+  { scStableCache :: !(Map StakeCred DB.StakeAddressId)
+  , scLruCache :: !(LRUCache StakeCred DB.StakeAddressId)
+  }
+
 -- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
 data CacheStatus
@@ -57,12 +60,13 @@ data CacheStatus
 
 data CacheAction
   = UpdateCache
+  | UpdateCacheStrong
   | DoNotUpdateCache
   | EvictAndUpdateCache
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cStakeRawHashes :: !(StrictTVar IO (LRUCache StakeCred DB.StakeAddressId))
+  { cStake :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
@@ -89,7 +93,7 @@ data CacheStatistics = CacheStatistics
 
 -- CacheCapacity is used to define capacities for different types of cache entries.
 data CacheCapacity = CacheCapacity
-  { cacheCapacityStakeHashRaw :: !Word64
+  { cacheCapacityStake :: !Word64
   , cacheCapacityDatum :: !Word64
   , cacheCapacityMultiAsset :: !Word64
   , cacheCapacityTx :: !Word64
@@ -118,7 +122,7 @@ textShowStats :: CacheStatus -> IO Text
 textShowStats NoCache = pure "NoCache"
 textShowStats (ActiveCache ic) = do
   stats <- readTVarIO $ cStats ic
-  stakeHashRaws <- readTVarIO (cStakeRawHashes ic)
+  stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
   datums <- readTVarIO (cDatum ic)
   mAssets <- readTVarIO (cMultiAssets ic)
@@ -127,8 +131,10 @@ textShowStats (ActiveCache ic) = do
     mconcat
       [ "\nCache Statistics:"
       , "\n  Stake Addresses: "
-      , "cache size: "
-      , textShow (LRU.getCapacity stakeHashRaws)
+      , "cache sizes: "
+      , textShow (Map.size $ scStableCache stakeHashRaws)
+      , " and "
+      , textShow (LRU.getSize $ scLruCache stakeHashRaws)
       , if credsQueries stats == 0
           then ""
           else ", hit rate: " <> textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
@@ -197,7 +203,7 @@ useNoCache = NoCache
 
 newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
 newEmptyCache CacheCapacity {..} = liftIO $ do
-  cStakeRawHashes <- newTVarIO (LRU.empty cacheCapacityStakeHashRaw)
+  cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
   cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
   cMultiAssets <- newTVarIO (LRU.empty cacheCapacityMultiAsset)
@@ -208,7 +214,7 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
 
   pure . ActiveCache $
     CacheInternal
-      { cStakeRawHashes = cStakeRawHashes
+      { cStake = cStake
       , cPools = cPools
       , cDatum = cDatum
       , cMultiAssets = cMultiAssets
@@ -223,7 +229,3 @@ initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing
-
-isCacheActionUpdate :: CacheAction -> Bool
-isCacheActionUpdate UpdateCache = True
-isCacheActionUpdate _other = False
