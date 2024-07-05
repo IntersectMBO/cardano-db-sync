@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -19,6 +20,9 @@ module Cardano.DbSync.Cache.Types (
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
+
+  -- * Utils
+  shouldCache,
 
   -- * CacheStatistics
   CacheStatistics (..),
@@ -190,3 +194,9 @@ initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing
+
+shouldCache :: CacheAction -> Bool
+shouldCache = \case
+  UpdateCache -> True
+  UpdateCacheStrong -> True
+  _ -> False

@@ -30,7 +30,7 @@ import Cardano.BM.Trace
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics)
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -89,7 +89,7 @@ queryOrInsertRewardAccount ::
   Ledger.RewardAccount StandardCrypto ->
   ReaderT SqlBackend m DB.StakeAddressId
 queryOrInsertRewardAccount trce cache cacheUA rewardAddr = do
-  eiAddrId <- queryRewardAccountWithCacheRetBs trce cache cacheUA rewardAddr
+  eiAddrId <- queryStakeAddrWithCacheRetBs trce cache cacheUA rewardAddr
   case eiAddrId of
     Left (_err, bs) -> insertStakeAddress rewardAddr (Just bs)
     Right addrId -> pure addrId
@@ -122,17 +122,6 @@ insertStakeAddress rewardAddr stakeCredBs = do
   where
     addrBs = fromMaybe (Ledger.serialiseRewardAccount rewardAddr) stakeCredBs
 
-queryRewardAccountWithCacheRetBs ::
-  forall m.
-  MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
-  CacheAction ->
-  Ledger.RewardAccount StandardCrypto ->
-  ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
-queryRewardAccountWithCacheRetBs trce cache cacheUA rwdAcc =
-  queryStakeAddrWithCacheRetBs trce cache cacheUA (Ledger.raNetwork rwdAcc) (Ledger.raCredential rwdAcc)
-
 queryStakeAddrWithCache ::
   forall m.
   MonadIO m =>
@@ -143,7 +132,7 @@ queryStakeAddrWithCache ::
   StakeCred ->
   ReaderT SqlBackend m (Either DB.LookupFail DB.StakeAddressId)
 queryStakeAddrWithCache trce cache cacheUA nw cred =
-  mapLeft fst <$> queryStakeAddrWithCacheRetBs trce cache cacheUA nw cred
+  mapLeft fst <$> queryStakeAddrWithCacheRetBs trce cache cacheUA (Ledger.RewardAccount nw cred)
 
 queryStakeAddrWithCacheRetBs ::
   forall m.
@@ -151,11 +140,10 @@ queryStakeAddrWithCacheRetBs ::
   Trace IO Text ->
   CacheStatus ->
   CacheAction ->
-  Network ->
-  StakeCred ->
+  Ledger.RewardAccount StandardCrypto ->
   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
-queryStakeAddrWithCacheRetBs _trce cache cacheUA nw cred = do
-  let bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
+queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred) = do
+  let bs = Ledger.serialiseRewardAccount ra
   case cache of
     NoCache -> do
       mapLeft (,bs) <$> resolveStakeAddress bs
@@ -230,7 +218,7 @@ queryPoolKeyWithCache cache cacheUA hsh =
             Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
             Just phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
-              when (cacheUA == UpdateCache) $
+              when (shouldCache cacheUA) $
                 liftIO $
                   atomically $
                     modifyTVar (cPools ci) $
@@ -270,7 +258,7 @@ insertPoolKeyWithCache cache cacheUA pHash =
                 { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
                 , DB.poolHashView = Generic.unKeyHashView pHash
                 }
-          when (cacheUA == UpdateCache) $
+          when (shouldCache cacheUA) $
             liftIO $
               atomically $
                 modifyTVar (cPools ci) $

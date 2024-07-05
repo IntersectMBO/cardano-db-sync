@@ -404,7 +404,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       then
         newEmptyCache
           LRUCacheCapacity
-            { lirCapacityStakeHashRaw = 1600000
+            { lirCapacityStakeHashRaw = 100000
             , lruCapacityDatum = 250000
             , lruCapacityMultiAsset = 250000
             }

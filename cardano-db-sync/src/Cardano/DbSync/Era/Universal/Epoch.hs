@@ -214,7 +214,7 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake cache (saddr, (coin, pool)) = do
-      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache nw saddr
+      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
       poolId <- lift $ queryPoolKeyOrInsert "insertEpochStake" trce cache UpdateCache (ioShelley iopts) pool
       pure $
         DB.EpochStake
@@ -248,7 +248,7 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
       (StakeCred, Set Generic.Reward) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.Reward]
     mkRewards (saddr, rset) = do
-      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache nw saddr
+      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
       mapM (prepareReward saId) (Set.toList rset)
 
     prepareReward ::
@@ -298,7 +298,7 @@ insertRewardRests trce nw earnedEpoch spendableEpoch cache rewardsChunk = do
       (StakeCred, Set Generic.RewardRest) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.RewardRest]
     mkRewards (saddr, rset) = do
-      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache nw saddr
+      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
       pure $ map (prepareReward saId) (Set.toList rset)
 
     prepareReward ::
@@ -332,7 +332,7 @@ insertProposalRefunds trce nw earnedEpoch spendableEpoch cache refunds = do
       GovActionRefunded ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RewardRest
     mkReward refund = do
-      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCache nw (raCredential $ garReturnAddr refund)
+      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw (raCredential $ garReturnAddr refund)
       pure $
         DB.RewardRest
           { DB.rewardRestAddrId = saId
