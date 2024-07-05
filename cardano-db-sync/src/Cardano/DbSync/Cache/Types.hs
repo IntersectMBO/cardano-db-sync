@@ -12,15 +12,13 @@ module Cardano.DbSync.Cache.Types (
   CacheEpoch (..),
   CacheInternal (..),
   EpochBlockDiff (..),
+  StakeCache (..),
   StakePoolCache,
 
   -- * Inits
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
-
-  -- * Helpers
-  isCacheActionUpdate,
 
   -- * CacheStatistics
   CacheStatistics (..),
@@ -45,6 +43,11 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
+data StakeCache = StakeCache
+  { scStableCache :: !(Map StakeCred DB.StakeAddressId)
+  , scLruCache :: !(LRUCache StakeCred DB.StakeAddressId)
+  }
+
 -- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
 data CacheStatus
@@ -53,12 +56,13 @@ data CacheStatus
 
 data CacheAction
   = UpdateCache
+  | UpdateCacheStrong
   | DoNotUpdateCache
   | EvictAndUpdateCache
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cStakeRawHashes :: !(StrictTVar IO (LRUCache StakeCred DB.StakeAddressId))
+  { cStakeRawHashes :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
@@ -111,8 +115,10 @@ textShowStats (ActiveCache ic) = do
     mconcat
       [ "\nCache Statistics:"
       , "\n  Stake Addresses: "
-      , "cache size: "
-      , textShow (LRU.getCapacity stakeHashRaws)
+      , "cache sizes: "
+      , textShow (Map.size $ scStableCache stakeHashRaws)
+      , " and "
+      , textShow (LRU.getSize $ scLruCache stakeHashRaws)
       , if credsQueries stats == 0
           then ""
           else ", hit rate: " <> textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
@@ -171,7 +177,7 @@ newEmptyCache :: MonadIO m => LRU.LRUCacheCapacity -> m CacheStatus
 newEmptyCache LRU.LRUCacheCapacity {..} =
   liftIO . fmap ActiveCache $
     CacheInternal
-      <$> newTVarIO (LRU.empty lirCapacityStakeHashRaw)
+      <$> newTVarIO (StakeCache Map.empty (LRU.empty lirCapacityStakeHashRaw))
       <*> newTVarIO Map.empty
       <*> newTVarIO (LRU.empty lruCapacityDatum)
       <*> newTVarIO (LRU.empty lruCapacityMultiAsset)
@@ -184,7 +190,3 @@ initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing
-
-isCacheActionUpdate :: CacheAction -> Bool
-isCacheActionUpdate UpdateCache = True
-isCacheActionUpdate _other = False
