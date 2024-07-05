@@ -131,8 +131,8 @@ unitTests iom knownMigrations =
         , test "2000 delegations" Stake.delegations2000
         , test "2001 delegations" Stake.delegations2001
         , test "8000 delegations" Stake.delegations8000
-        --        , test "many delegations" Stake.delegationsMany
-        --        , test "many delegations, sparse chain" Stake.delegationsManyNotDense
+        , test "many delegations" Stake.delegationsMany
+        , test "many delegations, sparse chain" Stake.delegationsManyNotDense
         ]
     , testGroup
         "rewards"

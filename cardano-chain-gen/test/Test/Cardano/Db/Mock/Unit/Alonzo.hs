@@ -69,8 +69,8 @@ unitTests iom knownMigrations =
         , test "2000 delegations" AlzStake.delegations2000
         , test "2001 delegations" AlzStake.delegations2001
         , test "8000 delegations" AlzStake.delegations8000
-        --        , test "many delegations" AlzStake.delegationsMany
-        --        , test "many delegations, sparse chain" AlzStake.delegationsManyNotDense
+        , test "many delegations" AlzStake.delegationsMany
+        , test "many delegations, sparse chain" AlzStake.delegationsManyNotDense
         ]
     , testGroup
         "plutus spend scripts"
