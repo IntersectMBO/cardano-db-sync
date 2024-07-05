@@ -177,6 +177,13 @@ If this fails to build, it may also be necessary to update haskell.nix::
 
   nix flake lock --update-input haskellNix
 
+Increment ``CABAL_CACHE_VERSION`` in ``.github/workflows/haskell.yml``::
+
+  env:
+    # Increment this value to "invalidate" the cabal cache. Be sure to do this
+    # after updating dependencies (Hackage or chap)
+    CABAL_CACHE_VERSION: 2
+
 From the Cardano Haskell Package repository
 -------------------------------------------
 
@@ -214,6 +221,13 @@ If there are updated configuration files, be sure to also update ``iohk-nix``::
 In rare cases, it may also be necessary to update haskell.nix::
 
   nix flake lock --update-input haskellNix
+
+Increment ``CABAL_CACHE_VERSION`` in ``.github/workflows/haskell.yml``::
+
+  env:
+    # Increment this value to "invalidate" the cabal cache. Be sure to do this
+    # after updating dependencies (Hackage or chap)
+    CABAL_CACHE_VERSION: 2
 
 Using unreleased versions of dependencies
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
