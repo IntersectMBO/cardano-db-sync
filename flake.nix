@@ -190,9 +190,6 @@
                 packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
                 packages.ekg.components.library.enableSeparateDataOutput = true;
-                # Systemd can't be statically linked
-                packages.cardano-node.flags.systemd =
-                  !pkgs.stdenv.hostPlatform.isMusl;
               })
 
               ({
@@ -248,20 +245,6 @@
                   packages.cardano-chain-gen.components.tests.cardano-chain-gen =
                     postgresTest;
                 })
-
-              ({ lib, pkgs, ... }: {
-                # TODO[sgillespie]: The following line is currently required to avoid
-                # the following error:
-                #
-                #     error: The Haskell package set does not contain the package:
-                #     lobemo-scribe-systemd (build dependency).  If you are using Stackage,
-                #     make sure that you are using a snapshot that contains the
-                #     package. Otherwise you may need to update the Hackage snapshot you are
-                #     using, usually by updating haskell.nix.
-                #
-                # This started happening here: https://github.com/input-output-hk/hackage.nix/commit/958f69d793847b532874a66201a491423f2ec551
-                packages.cardano-node.flags.systemd = lib.mkForce false;
-              })
             ];
           })).appendOverlays [
             # Collect local package `exe`s
