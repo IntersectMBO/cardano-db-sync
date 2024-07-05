@@ -33,7 +33,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), initCacheStatistics, isCacheActionUpdate)
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -165,16 +165,16 @@ queryStakeAddrWithCacheRetBs _trce cache cacheUA nw cred = do
     NoCache -> do
       mapLeft (,bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do
-      currentCache <- liftIO $ readTVarIO (cStakeRawHashes ci)
-      case LRU.lookup cred currentCache of
-        Just (addrId, lruCache) -> do
+      stakeCache <- liftIO $ readTVarIO (cStake ci)
+      case queryStakeCache cred stakeCache of
+        Just (addrId, stakeCache', _) -> do
           liftIO $ hitCreds (cStats ci)
           case cacheUA of
             EvictAndUpdateCache -> do
-              liftIO $ atomically $ writeTVar (cStakeRawHashes ci) $ LRU.delete cred lruCache
+              liftIO $ atomically $ writeTVar (cStake ci) $ deleteStakeCache cred stakeCache'
               pure $ Right addrId
             _other -> do
-              liftIO $ atomically $ writeTVar (cStakeRawHashes ci) lruCache
+              liftIO $ atomically $ writeTVar (cStake ci) stakeCache'
               pure $ Right addrId
         Nothing -> do
           queryRes <- mapLeft (,bs) <$> resolveStakeAddress bs
@@ -182,12 +182,26 @@ queryStakeAddrWithCacheRetBs _trce cache cacheUA nw cred = do
           case queryRes of
             Left _ -> pure queryRes
             Right stakeAddrsId -> do
-              when (isCacheActionUpdate cacheUA) $
-                liftIO $
-                  atomically $
-                    modifyTVar (cStakeRawHashes ci) $
-                      LRU.insert cred stakeAddrsId
+              let !stakeCache' = case cacheUA of
+                    UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
+                    UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
+                    _ -> stakeCache
+              liftIO $
+                atomically $
+                  writeTVar (cStake ci) stakeCache'
               pure $ Right stakeAddrsId
+
+-- | True if it was found in LRU
+queryStakeCache :: StakeCred -> StakeCache -> Maybe (DB.StakeAddressId, StakeCache, Bool)
+queryStakeCache scred scache = case Map.lookup scred (scStableCache scache) of
+  Just addrId -> Just (addrId, scache, False)
+  Nothing -> case LRU.lookup scred (scLruCache scache) of
+    Just (addrId, lru') -> Just (addrId, scache {scLruCache = lru'}, True)
+    Nothing -> Nothing
+
+deleteStakeCache :: StakeCred -> StakeCache -> StakeCache
+deleteStakeCache scred scache =
+  scache {scStableCache = Map.delete scred (scStableCache scache)}
 
 queryPoolKeyWithCache ::
   MonadIO m =>

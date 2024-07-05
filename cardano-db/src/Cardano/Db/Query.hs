@@ -504,7 +504,7 @@ queryLatestPoints = do
     pure (blk ^. BlockSlotNo, blk ^. BlockHash)
   pure $ fmap unValue2 res
 
--- This is an expensive query, but it is only used once when initiating the cStakeRawHashes LRU cache.
+-- This is an expensive query, but it is only used once when initiating the cStake LRU cache.
 -- The idea being to get a list of current registered stake addresses using rewards.
 queryAddressWithReward :: MonadIO m => Int -> ReaderT SqlBackend m [(ByteString, StakeAddressId)]
 queryAddressWithReward limitNumber = do
