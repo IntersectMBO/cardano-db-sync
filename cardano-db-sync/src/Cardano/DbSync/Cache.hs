@@ -159,31 +159,19 @@ queryStakeAddrWithCacheRetBs ::
   Network ->
   StakeCred ->
   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
-queryStakeAddrWithCacheRetBs trce cache cacheUA nw cred = do
-  let !bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
+queryStakeAddrWithCacheRetBs _trce cache cacheUA nw cred = do
+  let bs = Ledger.serialiseRewardAccount (Ledger.RewardAccount nw cred)
   case cache of
     NoCache -> do
       mapLeft (,bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do
-      prevCache <- liftIO $ readTVarIO (cStakeRawHashes ci)
-      let isNewCache = LRU.getSize prevCache < 1
-      -- populate from db if the cache is empty
-      currentCache <-
-        if isNewCache
-          then do
-            liftIO $ logInfo trce "Stake Raw Hashes cache is new and empty. Populating with addresses from db..."
-            queryRes <- DB.queryAddressWithReward (fromIntegral $ LRU.getCapacity prevCache)
-            liftIO $ atomically $ writeTVar (cStakeRawHashes ci) $ LRU.fromList queryRes prevCache
-            liftIO $ logInfo trce "Population of cache complete."
-            liftIO $ readTVarIO (cStakeRawHashes ci)
-          else pure prevCache
-
-      case LRU.lookup bs currentCache of
+      currentCache <- liftIO $ readTVarIO (cStakeRawHashes ci)
+      case LRU.lookup cred currentCache of
         Just (addrId, lruCache) -> do
           liftIO $ hitCreds (cStats ci)
           case cacheUA of
             EvictAndUpdateCache -> do
-              liftIO $ atomically $ writeTVar (cStakeRawHashes ci) $ LRU.delete bs lruCache
+              liftIO $ atomically $ writeTVar (cStakeRawHashes ci) $ LRU.delete cred lruCache
               pure $ Right addrId
             _other -> do
               liftIO $ atomically $ writeTVar (cStakeRawHashes ci) lruCache
@@ -198,7 +186,7 @@ queryStakeAddrWithCacheRetBs trce cache cacheUA nw cred = do
                 liftIO $
                   atomically $
                     modifyTVar (cStakeRawHashes ci) $
-                      LRU.insert bs stakeAddrsId
+                      LRU.insert cred stakeAddrsId
               pure $ Right stakeAddrsId
 
 queryPoolKeyWithCache ::
