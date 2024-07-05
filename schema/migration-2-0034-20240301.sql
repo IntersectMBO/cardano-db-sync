@@ -8,8 +8,10 @@ BEGIN
   IF next_version = 34 THEN
     EXECUTE 'ALTER TABLE "param_proposal" ADD COLUMN "pvtpp_security_group" DOUBLE PRECISION NULL' ;
     EXECUTE 'ALTER TABLE "epoch_param" ADD COLUMN "pvtpp_security_group" DOUBLE PRECISION NULL' ;
-    EXECUTE 'ALTER TABLE "pool_update" ADD COLUMN "deposit" lovelace NULL' ;
-    EXECUTE 'ALTER TABLE "stake_registration" ADD COLUMN "deposit" lovelace NULL' ;
+    EXECUTE 'ALTER TABLE "pool_update" ADD COLUMN "deposit" lovelace NULL DEFAULT 500000000' ;
+    EXECUTE 'ALTER TABLE "pool_update" ALTER COLUMN "deposit" DROP DEFAULT' ;
+    EXECUTE 'ALTER TABLE "stake_registration" ADD COLUMN "deposit" lovelace NULL DEFAULT 2000000' ;
+    EXECUTE 'ALTER TABLE "stake_registration" ALTER COLUMN "deposit" DROP DEFAULT' ;
     EXECUTE 'ALTER TABLE "ada_pots" RENAME COLUMN "deposits" TO "deposits_stake"';
     EXECUTE 'ALTER TABLE "ada_pots" ADD COLUMN "deposits_drep" lovelace NOT NULL DEFAULT 0' ;
     EXECUTE 'ALTER TABLE "ada_pots" ADD COLUMN "deposits_proposal" lovelace NOT NULL DEFAULT 0';
