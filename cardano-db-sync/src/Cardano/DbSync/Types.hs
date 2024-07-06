@@ -241,7 +241,7 @@ instance Show OffChainFetchError where
       OCFErrHashMismatch url xpt act ->
         mconcat
           [ "Hash mismatch when fetching metadata from "
-          , show url
+          , showMUrl url
           , ". Expected "
           , show xpt
           , " but got "
@@ -256,7 +256,7 @@ instance Show OffChainFetchError where
           [fetchUrlToString url, "URL parse error for ", show url, " resulted in : ", show err]
       OCFErrJsonDecodeFail url err ->
         mconcat
-          [fetchMUtlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
+          [fetchMUrlToString url, "JSON decode error from when fetching metadata from ", show url, " resulted in : ", show err]
       OCFErrHttpException url err ->
         mconcat [fetchUrlToString url, "HTTP Exception error for ", show url, " resulted in : ", show err]
       OCFErrHttpResponse url sc msg ->
@@ -269,11 +269,16 @@ instance Show OffChainFetchError where
         mconcat [fetchUrlToString url, "Timeout error when fetching metadata from ", show url, ": ", show ctx]
       OCFErrConnectionFailure url ->
         mconcat
-          [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "'."]
+          [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "."]
       OCFErrIOException err -> "IO Exception: " <> show err
 
-fetchMUtlToString :: Maybe OffChainUrlType -> String
-fetchMUtlToString = \case
+showMUrl :: Maybe OffChainUrlType -> String
+showMUrl = \case
+  Nothing -> "unknown URL"
+  Just url -> show url
+
+fetchMUrlToString :: Maybe OffChainUrlType -> String
+fetchMUrlToString = \case
   Nothing -> ""
   Just url -> fetchUrlToString url
 
