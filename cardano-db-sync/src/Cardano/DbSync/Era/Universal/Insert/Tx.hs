@@ -77,7 +77,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-      !treasuryDonation = fromIntegral . unCoin $ Generic.txTreasuryDonation tx
+      !treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
       hasConsumed = getHasConsumedOrPruneTxOut syncEnv
   disInOut <- liftIO $ getDisableInOutState syncEnv
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
@@ -93,7 +93,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         then pure (resolvedInputs, fees, Nothing)
         else
           let !inSum = sum $ map unDbLovelace $ catMaybes amounts
-           in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fromIntegral fees)
+           in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
     (_, _, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
       (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs hasConsumed True (fst <$> groupedTxOut grouped)) (Generic.txInputs tx)
@@ -118,7 +118,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
         , DB.txValidContract = Generic.txValidContract tx
         , DB.txScriptSize = sum $ Generic.txScriptSizes tx
-        , DB.txTreasuryDonation = DB.DbLovelace treasuryDonation
+        , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
         }
 
   when (ioTxCBOR iopts) $ do
