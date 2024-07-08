@@ -111,6 +111,7 @@ library
 
                         Cardano.DbSync.Cache
                         Cardano.DbSync.Cache.Epoch
+                        Cardano.DbSync.Cache.FIFO
                         Cardano.DbSync.Cache.LRU
                         Cardano.DbSync.Cache.Types
                         Cardano.DbSync.Default
@@ -187,6 +188,7 @@ library
                       , extra
                       , filepath
                       , groups
+                      , hashable
                       , http-client
                       , http-client-tls
                       , http-types
@@ -227,6 +229,7 @@ library
                       , transformers-except
                       , typed-protocols
                       , unix
+                      , unordered-containers
                       , vector
                       , wide-word
                       , yaml

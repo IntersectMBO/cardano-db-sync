@@ -421,7 +421,6 @@ insertReferenceTxIn syncEnv _tracer txInId txIn = do
   let txId = txInTxId txIn
       txHash = txInHash txIn
   txOutId <- queryTxIdWithCache (envCache syncEnv) txId txHash "insertReferenceTxIn"
-  -- liftLookupFail "insertReferenceTxIn" $ DB.queryTxId txId
   void
     . lift
     . DB.insertReferenceTxIn

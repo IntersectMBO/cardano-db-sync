@@ -407,7 +407,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
             { lirCapacityStakeHashRaw = 1600000
             , lruCapacityDatum = 250000
             , lruCapacityMultiAsset = 250000
-            , lruCapacityTx = 250000
+            , lruCapacityTx = 400000
             }
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked

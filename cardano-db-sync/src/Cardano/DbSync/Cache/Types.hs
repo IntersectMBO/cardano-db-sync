@@ -28,11 +28,12 @@ module Cardano.DbSync.Cache.Types (
 ) where
 
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Cache.FIFO (FifoCache)
+import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Types (DataHash, PoolKeyHash)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
-import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -66,7 +67,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
-  , cTxIds :: !(StrictTVar IO (LRUCache (Ledger.TxId StandardCrypto) DB.TxId))
+  , cTxIds :: !(StrictTVar IO (FifoCache FIFO.HashableTxId DB.TxId))
   }
 
 data CacheStatistics = CacheStatistics
@@ -169,14 +170,16 @@ textShowStats (ActiveCache ic) = do
       , textShow (prevBlockQueries stats - prevBlockHits stats)
       , "\n  TxId: "
       , "cache size: "
-      , textShow (LRU.getCapacity txIds)
+      , textShow (FIFO.getSize txIds)
+      , ", cache capacity: "
+      , textShow (FIFO.getCapacity txIds)
       , if credsQueries stats == 0
           then ""
           else ", hit rate: " <> textShow (100 * txIdsHits stats `div` txIdsQueries stats) <> "%"
       , ", hits: "
       , textShow (txIdsHits stats)
       , ", misses: "
-      , textShow (credsQueries stats - txIdsHits stats)
+      , textShow (txIdsQueries stats - txIdsHits stats)
       ]
 
 useNoCache :: CacheStatus
@@ -191,7 +194,7 @@ newEmptyCache LRU.LRUCacheCapacity {..} = liftIO $ do
   cPrevBlock <- newTVarIO Nothing
   cStats <- newTVarIO initCacheStatistics
   cEpoch <- newTVarIO initCacheEpoch
-  cTxIds <- newTVarIO (LRU.empty lruCapacityTx)
+  cTxIds <- newTVarIO (FIFO.emptyTxIdCache lruCapacityTx)
 
   pure . ActiveCache $
     CacheInternal
