@@ -8,6 +8,7 @@
 
 module Cardano.DbSync.Cache.Types (
   CacheStatus (..),
+  CacheCapacity (..),
   CacheAction (..),
   CacheEpoch (..),
   CacheInternal (..),
@@ -28,12 +29,13 @@ module Cardano.DbSync.Cache.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.FIFO (FifoCache)
+import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Types (DataHash, PoolKeyHash)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -67,7 +69,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
-  , cTxIds :: !(StrictTVar IO (FifoCache FIFO.HashableTxId DB.TxId))
+  , cTxIds :: !(StrictTVar IO (FIFOCache (Ledger.TxId StandardCrypto) DB.TxId))
   }
 
 data CacheStatistics = CacheStatistics
@@ -83,6 +85,14 @@ data CacheStatistics = CacheStatistics
   , prevBlockQueries :: !Word64
   , txIdsHits :: !Word64
   , txIdsQueries :: !Word64
+  }
+
+-- CacheCapacity is used to define capacities for different types of cache entries.
+data CacheCapacity = CacheCapacity
+  { cacheCapacityStakeHashRaw :: !Word64
+  , cacheCapacityDatum :: !Word64
+  , cacheCapacityMultiAsset :: !Word64
+  , cacheCapacityTx :: !Word64
   }
 
 -- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
@@ -185,16 +195,16 @@ textShowStats (ActiveCache ic) = do
 useNoCache :: CacheStatus
 useNoCache = NoCache
 
-newEmptyCache :: MonadIO m => LRU.LRUCacheCapacity -> m CacheStatus
-newEmptyCache LRU.LRUCacheCapacity {..} = liftIO $ do
-  cStakeRawHashes <- newTVarIO (LRU.empty lirCapacityStakeHashRaw)
+newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
+newEmptyCache CacheCapacity {..} = liftIO $ do
+  cStakeRawHashes <- newTVarIO (LRU.empty cacheCapacityStakeHashRaw)
   cPools <- newTVarIO Map.empty
-  cDatum <- newTVarIO (LRU.empty lruCapacityDatum)
-  cMultiAssets <- newTVarIO (LRU.empty lruCapacityMultiAsset)
+  cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
+  cMultiAssets <- newTVarIO (LRU.empty cacheCapacityMultiAsset)
   cPrevBlock <- newTVarIO Nothing
   cStats <- newTVarIO initCacheStatistics
   cEpoch <- newTVarIO initCacheEpoch
-  cTxIds <- newTVarIO (FIFO.emptyTxIdCache lruCapacityTx)
+  cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
   pure . ActiveCache $
     CacheInternal

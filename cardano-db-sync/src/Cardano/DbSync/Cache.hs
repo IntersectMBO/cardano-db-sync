@@ -80,7 +80,7 @@ rollbackCache (ActiveCache cache) blockId = do
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
-    atomically $ modifyTVar (cTxIds cache) FIFO.cleanupTxIdCache
+    atomically $ modifyTVar (cTxIds cache) FIFO.cleanupCache
     void $ rollbackMapEpochInCache cache blockId
 
 getCacheStatistics :: CacheStatus -> IO CacheStatistics
@@ -381,14 +381,14 @@ queryTxIdWithCache cache ledgerTxId txHash errTxt = do
     NoCache -> liftLookupFail errTxt $ DB.queryTxId txHash
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cTxIds ci)
-      case FIFO.lookupTxIdCache ledgerTxId mp of
+      case FIFO.lookup ledgerTxId mp of
         Just txId -> do
           liftIO $ hitTxIds (cStats ci)
           pure txId
         Nothing -> do
           resTxId <- liftLookupFail errTxt $ DB.queryTxId txHash
           liftIO $ missTxIds (cStats ci)
-          liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insertTxIdCache ledgerTxId resTxId
+          liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId resTxId
           pure resTxId
 
 resolveInputTxId ::
@@ -405,7 +405,7 @@ resolveInputTxId txIn cache = do
       -- Read current cache state.
       cacheTx <- liftIO $ readTVarIO (cTxIds cacheInternal)
 
-      case FIFO.lookupTxIdCache (txInTxId txIn) cacheTx of
+      case FIFO.lookup (txInTxId txIn) cacheTx of
         -- Cache hit, return the transaction ID.
         Just txId -> do
           liftIO $ hitTxIds (cStats cacheInternal)
@@ -417,7 +417,7 @@ resolveInputTxId txIn cache = do
           case eTxId of
             Right txId -> do
               -- Update cache.
-              liftIO $ atomically $ modifyTVar (cTxIds cacheInternal) $ FIFO.insertTxIdCache (txInTxId txIn) txId
+              liftIO $ atomically $ modifyTVar (cTxIds cacheInternal) $ FIFO.insert (txInTxId txIn) txId
               -- Return ID after updating cache.
               pure $ Right txId
             -- Return lookup failure.
@@ -433,7 +433,7 @@ tryUpdateCacheTx cache ledgerTxId txId = do
   case cache of
     NoCache -> pure ()
     ActiveCache ci -> do
-      liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insertTxIdCache ledgerTxId txId
+      liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId txId
 
 insertBlockAndCache ::
   (MonadIO m, MonadBaseControl IO m) =>

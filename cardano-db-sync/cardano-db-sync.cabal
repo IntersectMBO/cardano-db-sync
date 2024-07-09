@@ -188,7 +188,6 @@ library
                       , extra
                       , filepath
                       , groups
-                      , hashable
                       , http-client
                       , http-client-tls
                       , http-types
@@ -229,7 +228,6 @@ library
                       , transformers-except
                       , typed-protocols
                       , unix
-                      , unordered-containers
                       , vector
                       , wide-word
                       , yaml
