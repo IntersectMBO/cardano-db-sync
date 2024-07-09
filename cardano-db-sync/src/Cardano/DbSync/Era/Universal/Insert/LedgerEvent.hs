@@ -14,7 +14,7 @@ import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
-import Cardano.DbSync.Cache.Types (textShowStats)
+import Cardano.DbSync.Cache.Types (resetCacheStatistics, textShowStats)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
@@ -75,6 +75,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
           stats <- liftIO $ textShowStats cache
           liftIO . logInfo tracer $ stats
+          liftIO $ resetCacheStatistics cache
           liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
         LedgerStartAtEpoch en ->
           -- This is different from the previous case in that the db-sync started

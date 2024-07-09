@@ -26,6 +26,7 @@ module Cardano.DbSync.Cache.Types (
   -- * CacheStatistics
   CacheStatistics (..),
   textShowStats,
+  resetCacheStatistics,
 ) where
 
 import qualified Cardano.Db as DB
@@ -39,6 +40,7 @@ import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
+  modifyTVar,
   newTVarIO,
   readTVarIO,
  )
@@ -183,7 +185,7 @@ textShowStats (ActiveCache ic) = do
       , textShow (FIFO.getSize txIds)
       , ", cache capacity: "
       , textShow (FIFO.getCapacity txIds)
-      , if credsQueries stats == 0
+      , if txIdsQueries stats == 0
           then ""
           else ", hit rate: " <> textShow (100 * txIdsHits stats `div` txIdsQueries stats) <> "%"
       , ", hits: "
@@ -217,6 +219,13 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
       , cEpoch = cEpoch
       , cTxIds = cTxIds
       }
+
+resetCacheStatistics :: CacheStatus -> IO ()
+resetCacheStatistics cache = do
+  case cache of
+    NoCache -> pure ()
+    ActiveCache CacheInternal {..} -> do
+      atomically $ modifyTVar cStats (const initCacheStatistics)
 
 initCacheStatistics :: CacheStatistics
 initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0
