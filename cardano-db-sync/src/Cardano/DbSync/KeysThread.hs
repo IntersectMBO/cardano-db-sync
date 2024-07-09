@@ -23,6 +23,7 @@ import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
+import Data.List (nub)
 
 data Thread = Thread
   { tResults :: ThreadResult
@@ -53,7 +54,7 @@ spawnKeysThread syncEnv blocks = do
 
 runThread :: SyncEnv -> ThreadResult -> [CardanoBlock] -> IO ()
 runThread syncEnv tr blocks = do
-  DB.runDbIohkLogging connection tracer $ forM_ assets $ \(policy, name) -> do
+  DB.runDbIohkLogging connection tracer $ forM_ (nub assets) $ \(policy, name) -> do
     maId <- insertMultiAsset (envCache syncEnv) policy name
     liftIO $ atomically $ modifyTVar (trAssets tr) $ Map.insert (policy, name) maId
   where

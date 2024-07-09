@@ -91,7 +91,7 @@ applyAndInsertBlockMaybe syncEnv mThread cblk = do
               , textShow (getHeaderFields cblk)
               , ". Time to restore consistency."
               ]
-          rollbackFromBlockNo syncEnv (blockNo cblk)
+          lift $ rollbackFromBlockNo syncEnv (blockNo cblk)
           void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
           insertBlock syncEnv mThread cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent

@@ -181,8 +181,6 @@ insertTx syncEnv mThread isMember blkId epochNo slotNo applyResult blockIndex tx
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
 
-      -- The following operations only happen if the script passes stage 2 validation (or the tx has
-      -- no script).
       !txOutsGrouped <- mapM (insertTxOut mThread tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
 
       maTxMint <-

@@ -69,6 +69,7 @@ module Cardano.Db.Query (
   queryStakeAddress,
   queryStakeRefPtr,
   queryPoolUpdateByBlock,
+  queryMaxBlockNo,
   -- queries used in smash
   queryOffChainPoolData,
   queryPoolRegister,
@@ -141,7 +142,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)
 import Data.Fixed (Micro)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Data.Ratio (numerator)
 import Data.Text (Text, unpack)
 import Data.Time.Clock (UTCTime (..))
@@ -311,6 +312,15 @@ queryBlockId hash = do
     where_ (blk ^. BlockHash ==. val hash)
     pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
+
+queryMaxBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+queryMaxBlockNo = do
+  res <- select $ do
+    blk <- from $ table @Block
+    orderBy [desc (blk ^. BlockBlockNo)]
+    limit 1
+    pure $ blk ^. BlockBlockNo
+  pure $ listToMaybe $ catMaybes (unValue <$> res)
 
 -----------------------------------------------------------------------------------------------
 

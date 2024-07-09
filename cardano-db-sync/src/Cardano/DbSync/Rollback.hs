@@ -7,6 +7,7 @@ module Cardano.DbSync.Rollback (
   prepareRollback,
   rollbackFromBlockNo,
   unsafeRollback,
+  restoreConsistency,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
@@ -34,10 +35,10 @@ rollbackFromBlockNo ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   BlockNo ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ReaderT SqlBackend m ()
 rollbackFromBlockNo syncEnv blkNo = do
-  nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
-  mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
+  nBlocks <- DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
+  mres <- DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
     liftIO
       . logInfo trce
@@ -47,24 +48,23 @@ rollbackFromBlockNo syncEnv blkNo = do
         , " numbered equal to or greater than "
         , textShow blkNo
         ]
-    lift $ do
-      (mTxId, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
-      whenConsumeOrPruneTxOut syncEnv $
-        DB.setNullTxOut trce mTxId
-      DB.deleteEpochRows epochNo
-      DB.deleteDrepDistr epochNo
-      DB.deleteRewardRest epochNo
-      DB.setNullEnacted epochNo
-      DB.setNullRatified epochNo
-      DB.setNullDropped epochNo
-      DB.setNullExpired epochNo
-      when (deletedBlockCount > 0) $ do
-        -- We use custom constraints to improve input speeds when syncing.
-        -- If they don't already exists we add them here as once a rollback has happened
-        -- we always need a the constraints.
-        addConstraintsIfNotExist syncEnv trce
+    (mTxId, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
+    whenConsumeOrPruneTxOut syncEnv $
+      DB.setNullTxOut trce mTxId
+    DB.deleteEpochRows epochNo
+    DB.deleteDrepDistr epochNo
+    DB.deleteRewardRest epochNo
+    DB.setNullEnacted epochNo
+    DB.setNullRatified epochNo
+    DB.setNullDropped epochNo
+    DB.setNullExpired epochNo
+    when (deletedBlockCount > 0) $ do
+      -- We use custom constraints to improve input speeds when syncing.
+      -- If they don't already exists we add them here as once a rollback has happened
+      -- we always need a the constraints.
+      addConstraintsIfNotExist syncEnv trce
 
-    lift $ rollbackCache cache blockId
+    rollbackCache cache blockId
 
     liftIO . logInfo trce $ "Blocks deleted"
   where
@@ -120,3 +120,12 @@ unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeE
 unsafeRollback trce config slotNo = do
   logInfo trce $ "Forced rollback to slot " <> textShow (unSlotNo slotNo)
   Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce slotNo)
+
+restoreConsistency ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  ReaderT SqlBackend m ()
+restoreConsistency sencEnv = do
+  mBLockNo <- DB.queryMaxBlockNo
+  whenJust mBLockNo $ \blkNo ->
+    rollbackFromBlockNo sencEnv (BlockNo blkNo)
