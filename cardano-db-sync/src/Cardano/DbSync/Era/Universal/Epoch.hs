@@ -6,6 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -34,15 +35,17 @@ import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util (whenStrictJust)
+import Cardano.DbSync.Util (whenDefault, whenStrictJust, whenStrictJustDefault)
 import Cardano.DbSync.Util.Constraint (constraintNameEpochStake, constraintNameReward)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Binary.Version (getVersion)
 import qualified Cardano.Ledger.Coin as Shelley
+import Cardano.Ledger.Compactible
 import Cardano.Ledger.Conway.Core (PoolVotingThresholds (..))
 import Cardano.Ledger.Conway.Governance (finishDRepPulser)
+import qualified Cardano.Ledger.Conway.Governance.DRepPulser as Ledger
 import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
 import Cardano.Prelude
@@ -73,17 +76,36 @@ insertOnNewEpoch tracer cache iopts blkId slotNo epochNo newEpoch = do
     lift $ insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
     insertPots blkId slotNo epochNo pots
-  whenStrictJust (Generic.neDRepState newEpoch) $ \dreps -> when (ioGov iopts) $ do
+  spoVoting <- whenStrictJustDefault Map.empty (Generic.neDRepState newEpoch) $ \dreps -> whenDefault Map.empty (ioGov iopts) $ do
     let (drepSnapshot, ratifyState) = finishDRepPulser dreps
     lift $ insertDrepDistr epochNo drepSnapshot
     updateRatified cache epochNo (toList $ rsEnacted ratifyState)
     updateExpired cache epochNo (toList $ rsExpired ratifyState)
+    pure (Ledger.psPoolDistr drepSnapshot)
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt -> do
     when (ioGov iopts) $ do
       insertUpdateEnacted tracer cache blkId epochNo enactedSt
+  whenStrictJust (Generic.nePoolDistr newEpoch) $ \(poolDistrDeleg, poolDistrNBlocks) -> do
+    let nothingMap = Map.fromList $ (,Nothing) <$> (Map.keys poolDistrNBlocks <> Map.keys spoVoting)
+    let mapWithAllKeys = Map.union (Map.map Just poolDistrDeleg) nothingMap
+    let _ = Map.mapWithKey (mkPoolStats poolDistrNBlocks spoVoting) mapWithAllKeys
+    pure ()
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch
+
+    mkPoolStats :: Map PoolKeyHash Natural -> Map PoolKeyHash (Shelley.CompactForm Shelley.Coin) -> PoolKeyHash -> Maybe (Shelley.Coin, Word64) -> Generic.PoolStats
+    mkPoolStats blocks voting pkh deleg =
+      let
+        mnBlock = Map.lookup pkh blocks
+        mVoting = Map.lookup pkh voting
+       in
+        Generic.PoolStats
+          { Generic.nBlocks = mnBlock
+          , Generic.nDelegators = snd <$> deleg
+          , Generic.stake = fst <$> deleg
+          , Generic.votingPower = fromCompact <$> mVoting
+          }
 
 insertEpochParam ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -372,3 +394,10 @@ sumRewardTotal =
     sumCoin :: Integer -> Set Generic.Reward -> Integer
     sumCoin !acc sr =
       acc + sum (map (Shelley.unCoin . Generic.rewardAmount) $ Set.toList sr)
+
+_inseertPoolStats ::
+  Monad m =>
+  SyncEnv ->
+  Map PoolKeyHash Generic.PoolStats ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+_inseertPoolStats _syncEnv _mp = pure () -- TODO

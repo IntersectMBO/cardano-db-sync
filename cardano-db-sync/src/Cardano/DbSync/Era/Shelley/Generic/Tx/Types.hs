@@ -17,6 +17,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxScript (..),
   PlutusData (..),
   TxOutDatum (..),
+  PoolStats (..),
   DBScriptPurpose (..),
   DBPlutusScript (..),
   toTxCert,
@@ -142,6 +143,13 @@ data PlutusData = PlutusData
   }
 
 data TxOutDatum = InlineDatum PlutusData | DatumHash DataHash | NoDatum
+
+data PoolStats = PoolStats
+  { nBlocks :: Maybe Natural
+  , nDelegators :: Maybe Word64
+  , stake :: Maybe Coin
+  , votingPower :: Maybe Coin
+  }
 
 toTxCert :: Word16 -> Cert -> TxCertificate
 toTxCert idx dcert =

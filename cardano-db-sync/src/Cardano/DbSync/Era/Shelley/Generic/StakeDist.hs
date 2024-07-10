@@ -14,6 +14,7 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
   StakeSlice (..),
   getSecurityParameter,
   getStakeSlice,
+  getPoolDistr,
 ) where
 
 import Cardano.DbSync.Types
@@ -24,11 +25,13 @@ import qualified Cardano.Ledger.EpochBoundary as Ledger
 import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import Cardano.Ledger.Val ((<+>))
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Data.VMap (VB, VMap (..), VP)
 import qualified Data.VMap as VMap
 import qualified Data.Vector.Generic as VG
+import Lens.Micro
 import Ouroboros.Consensus.Block
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
 import Ouroboros.Consensus.Config
@@ -172,3 +175,46 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
           VMap.toMap $
             VMap.mapMaybe id $
               VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced
+
+getPoolDistr ::
+  ExtLedgerState CardanoBlock ->
+  Maybe (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
+getPoolDistr els =
+  case ledgerState els of
+    LedgerStateByron _ -> Nothing
+    LedgerStateShelley sls -> Just $ genericPoolDistr sls
+    LedgerStateAllegra als -> Just $ genericPoolDistr als
+    LedgerStateMary mls -> Just $ genericPoolDistr mls
+    LedgerStateAlonzo als -> Just $ genericPoolDistr als
+    LedgerStateBabbage bls -> Just $ genericPoolDistr bls
+    LedgerStateConway cls -> Just $ genericPoolDistr cls
+
+genericPoolDistr ::
+  forall era p.
+  (EraCrypto era ~ StandardCrypto) =>
+  LedgerState (ShelleyBlock p era) ->
+  (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
+genericPoolDistr lstate =
+  (stakePerPool, blocksPerPool)
+  where
+    nes :: Shelley.NewEpochState era
+    nes = Consensus.shelleyLedgerState lstate
+
+    stakeMark :: Ledger.SnapShot StandardCrypto
+    stakeMark = Ledger.ssStakeMark $ Shelley.esSnapshots $ Shelley.nesEs nes
+
+    stakePerPool = countStakePerPool (Ledger.ssDelegations stakeMark) (Ledger.ssStake stakeMark)
+    blocksPerPool = nes ^. Shelley.nesBprevL
+
+countStakePerPool ::
+  VMap VB VB StakeCred PoolKeyHash ->
+  Ledger.Stake StandardCrypto ->
+  Map PoolKeyHash (Coin, Word64)
+countStakePerPool delegs (Ledger.Stake stake) = VMap.foldlWithKey accum Map.empty stake
+  where
+    accum !acc cred compactCoin =
+      case VMap.lookup cred delegs of
+        Nothing -> acc
+        Just kh -> Map.insertWith addDel kh (Ledger.fromCompact compactCoin, 1) acc
+
+    addDel (c, n) (c', _) = (c <+> c', n + 1)
