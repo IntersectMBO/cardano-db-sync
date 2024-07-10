@@ -28,6 +28,8 @@ module Cardano.DbSync.Util (
   splitLast,
   traverseMEither,
   whenStrictJust,
+  whenStrictJustDefault,
+  whenDefault,
   whenMaybe,
   mlookup,
   whenRight,
@@ -180,6 +182,15 @@ whenStrictJust ma f =
   case ma of
     Strict.Nothing -> pure ()
     Strict.Just a -> f a
+
+whenStrictJustDefault :: Applicative m => b -> Strict.Maybe a -> (a -> m b) -> m b
+whenStrictJustDefault b ma f =
+  case ma of
+    Strict.Nothing -> pure b
+    Strict.Just a -> f a
+
+whenDefault :: Applicative m => a -> Bool -> m a -> m a
+whenDefault a bl ma = if bl then ma else pure a
 
 whenMaybe :: Monad m => Maybe a -> (a -> m b) -> m (Maybe b)
 whenMaybe (Just a) f = Just <$> f a

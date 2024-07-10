@@ -10,6 +10,7 @@ import Cardano.DbSync.Era.Shelley.Generic.ProtoParams
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import Cardano.Prelude hiding (Maybe (..), fromMaybe)
@@ -31,6 +32,7 @@ data NewEpoch = NewEpoch
   , neEpochUpdate :: !EpochUpdate
   , neDRepState :: !(Maybe (DRepPulsingState StandardConway))
   , neEnacted :: !(Maybe (ConwayGovState StandardConway))
+  , nePoolDistr :: !(Maybe (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural))
   }
 
 data EpochUpdate = EpochUpdate

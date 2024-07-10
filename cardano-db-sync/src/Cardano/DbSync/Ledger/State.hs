@@ -278,6 +278,7 @@ applyBlock env blk = do
             , Generic.neEpochUpdate = Generic.epochUpdate newState
             , Generic.neDRepState = maybeToStrict $ getDrepState newState
             , Generic.neEnacted = maybeToStrict $ getGovState newState
+            , Generic.nePoolDistr = maybeToStrict $ Generic.getPoolDistr newState
             }
 
     applyToEpochBlockNo :: Bool -> Bool -> EpochBlockNo -> EpochBlockNo
