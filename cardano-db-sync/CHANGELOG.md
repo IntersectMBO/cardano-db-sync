@@ -10,6 +10,8 @@
 * Moved command line options that filter data to the config file
 * Added epoch_state table
 * Added an optional feature to store CBOR serialized transactions in `tx_cbor` table [#1723]
+* Added an optional feature to store pool stats per epoch transactions in `pool_stat` table
+* EnableFutureGenesis is now true by default
 
 ## 13.2.0.2
 * Support node 8.9.x
