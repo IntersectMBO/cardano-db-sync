@@ -41,7 +41,7 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertWithdrawals,
  )
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
-import Cardano.DbSync.Era.Util (safeDecodeToJson)
+import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
 import Cardano.DbSync.Util
@@ -401,8 +401,7 @@ insertCollateralTxIn ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCollateralTxIn syncEnv _tracer txInId txIn = do
   let txId = txInTxId txIn
-      txHash = txInHash txIn
-  txOutId <- queryTxIdWithCache (envCache syncEnv) txId txHash "insertCollateralTxIn"
+  txOutId <- liftLookupFail "insertCollateralTxIn" $ queryTxIdWithCache (envCache syncEnv) txId
   void
     . lift
     . DB.insertCollateralTxIn
@@ -421,8 +420,7 @@ insertReferenceTxIn ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertReferenceTxIn syncEnv _tracer txInId txIn = do
   let txId = txInTxId txIn
-      txHash = txInHash txIn
-  txOutId <- queryTxIdWithCache (envCache syncEnv) txId txHash "insertReferenceTxIn"
+  txOutId <- liftLookupFail "insertReferenceTxIn" $ queryTxIdWithCache (envCache syncEnv) txId
   void
     . lift
     . DB.insertReferenceTxIn

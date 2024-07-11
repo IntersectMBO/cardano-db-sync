@@ -125,8 +125,7 @@ mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBody
 fromTxIn :: Ledger.TxIn StandardCrypto -> TxIn
 fromTxIn (Ledger.TxIn (Ledger.TxId txid) (TxIx w64)) =
   TxIn
-    { txInHash = safeHashToByteString txid
-    , txInIndex = w64
+    { txInIndex = w64
     , txInRedeemerIndex = Nothing
     , txInTxId = Ledger.TxId txid
     }

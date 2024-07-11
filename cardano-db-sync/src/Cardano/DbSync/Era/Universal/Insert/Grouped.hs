@@ -19,7 +19,7 @@ import Cardano.Db (DbLovelace (..), minIdsToText)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
-import Cardano.DbSync.Cache (resolveInputTxId)
+import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -156,7 +156,7 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn =
     qres <-
       case (hasConsumed, needsValue) of
         (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
-        (False, _) -> fmap convertnotFound <$> resolveInputTxId txIn (envCache syncEnv)
+        (False, _) -> fmap convertnotFound <$> queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
         (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId txIn
     case qres of
       Right ret -> pure $ Right ret
@@ -214,5 +214,5 @@ resolveInMemory txIn =
 
 matches :: Generic.TxIn -> ExtendedTxOut -> Bool
 matches txIn eutxo =
-  Generic.txInHash txIn == etoTxHash eutxo
+  Generic.toTxHash txIn == etoTxHash eutxo
     && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
