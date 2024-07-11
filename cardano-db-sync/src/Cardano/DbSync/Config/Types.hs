@@ -24,6 +24,7 @@ module Cardano.DbSync.Config.Types (
   SyncInsertConfig (..),
   SyncInsertOptions (..),
   TxCBORConfig (..),
+  PoolStatsConfig (..),
   TxOutConfig (..),
   ForceTxIn (..),
   LedgerInsertConfig (..),
@@ -168,6 +169,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPlutus :: PlutusConfig
   , sioGovernance :: GovernanceConfig
   , sioOffchainPoolData :: OffchainPoolDataConfig
+  , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
   }
@@ -175,6 +177,11 @@ data SyncInsertOptions = SyncInsertOptions
 
 newtype TxCBORConfig = TxCBORConfig
   { isTxCBOREnabled :: Bool
+  }
+  deriving (Eq, Show)
+
+newtype PoolStatsConfig = PoolStatsConfig
+  { isPoolStatsEnabled :: Bool
   }
   deriving (Eq, Show)
 
@@ -410,6 +417,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "plutus" .!= sioPlutus def
       <*> obj .:? "governance" .!= sioGovernance def
       <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
+      <*> obj .:? "pool_stats" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
 
@@ -425,6 +433,7 @@ instance ToJSON SyncInsertOptions where
       , "plutus" .= sioPlutus
       , "governance" .= sioGovernance
       , "offchain_pool_data" .= sioOffchainPoolData
+      , "pool_stats" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
       ]
@@ -432,11 +441,20 @@ instance ToJSON SyncInsertOptions where
 instance ToJSON TxCBORConfig where
   toJSON = boolToEnableDisable . isTxCBOREnabled
 
+instance ToJSON PoolStatsConfig where
+  toJSON = boolToEnableDisable . isPoolStatsEnabled
+
 instance FromJSON TxCBORConfig where
   parseJSON = Aeson.withText "tx_cbor" $ \v ->
     case enableDisableToBool v of
       Just g -> pure (TxCBORConfig g)
       Nothing -> fail $ "unexpected tx_cbor: " <> show v
+
+instance FromJSON PoolStatsConfig where
+  parseJSON = Aeson.withText "pool_stat" $ \v ->
+    case enableDisableToBool v of
+      Just g -> pure (PoolStatsConfig g)
+      Nothing -> fail $ "unexpected pool_stat: " <> show v
 
 instance ToJSON TxOutConfig where
   toJSON cfg =
@@ -623,6 +641,7 @@ instance Default SyncInsertOptions where
       , sioPlutus = PlutusEnable
       , sioGovernance = GovernanceConfig True
       , sioOffchainPoolData = OffchainPoolDataConfig True
+      , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
       }

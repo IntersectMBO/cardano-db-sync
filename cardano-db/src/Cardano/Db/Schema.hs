@@ -558,6 +558,14 @@ share
     costs               Text                sqltype=jsonb
     UniqueCostModel     hash
 
+  PoolStat
+    poolHashId          PoolHashId
+    epochNo             Word64              sqltype=word31type
+    numberOfBlocks      Word64              sqltype=word31type
+    numberOfDelegators  Word64              sqltype=word31type
+    stake               Word64              sqltype=word31type
+    votingPower         Word64 Maybe        sqltype=word31type
+
   ExtraMigrations
     token               Text
     description         Text Maybe

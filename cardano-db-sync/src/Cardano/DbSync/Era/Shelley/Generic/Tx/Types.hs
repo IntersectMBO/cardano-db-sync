@@ -145,9 +145,9 @@ data PlutusData = PlutusData
 data TxOutDatum = InlineDatum PlutusData | DatumHash DataHash | NoDatum
 
 data PoolStats = PoolStats
-  { nBlocks :: Maybe Natural
-  , nDelegators :: Maybe Word64
-  , stake :: Maybe Coin
+  { nBlocks :: Natural
+  , nDelegators :: Word64
+  , stake :: Coin
   , votingPower :: Maybe Coin
   }
 
