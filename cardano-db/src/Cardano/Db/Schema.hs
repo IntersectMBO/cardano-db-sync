@@ -559,7 +559,7 @@ share
     UniqueCostModel     hash
 
   PoolStat
-    poolHashId          PoolHashId
+    poolHashId          PoolHashId          noreference
     epochNo             Word64              sqltype=word31type
     numberOfBlocks      Word64              sqltype=word31type
     numberOfDelegators  Word64              sqltype=word31type
@@ -1034,7 +1034,7 @@ schemaDocs =
       WithdrawalRedeemerId # "The Redeemer table index that is related with this withdrawal."
 
     EpochStake --^ do
-      "A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the epoch.\
+      "A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the previous epoch.\
       \ The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details."
       EpochStakeAddrId # "The StakeAddress table index for the stake address for this EpochStake entry."
       EpochStakePoolId # "The PoolHash table index for the pool this entry is delegated to."
@@ -1258,6 +1258,22 @@ schemaDocs =
       "CostModel for EpochParam and ParamProposal."
       CostModelHash # "The hash of cost model. It ensures uniqueness of entries. New in v13."
       CostModelCosts # "The actual costs formatted as json."
+
+    PoolStat --^ do
+      "Stats per pool and per epoch."
+      PoolStatPoolHashId # "The pool_hash_id reference."
+      PoolStatEpochNo # "The epoch number."
+      PoolStatNumberOfBlocks # "Number of blocks created on the previous epoch."
+      PoolStatNumberOfDelegators # "Number of delegators in the mark snapshot."
+      PoolStatStake # "Total stake in the mark snapshot."
+      PoolStatVotingPower # "Voting power of the SPO."
+
+    EpochState --^ do
+      "Table with governance (and in the future other) stats per epoch."
+      EpochStateCommitteeId # "The reference to the current committee."
+      EpochStateNoConfidenceId # "The reference to the current gov_action_proposal of no confidence. TODO: This remains NULL."
+      EpochStateConstitutionId # "The reference to the current constitution. Should never be null."
+      EpochStateEpochNo # "The epoch in question."
 
     ExtraMigrations --^ do
       "Extra optional migrations. New in 13.2."
