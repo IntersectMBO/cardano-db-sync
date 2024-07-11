@@ -113,6 +113,7 @@ This is equivalent to setting:
 },
 "governance": "disable",
 "offchain_pool_data": "disable"
+"pool_stat": "disable"
 ```
 
 Initially populates only a few tables, like `block` and `tx`. It maintains a ledger state but
@@ -141,6 +142,7 @@ This is equivalent to setting:
 },
 "governance": "enable",
 "offchain_pool_data": "disable"
+"pool_stat": "disable"
 
 ```
 
@@ -167,6 +169,7 @@ This is equivalent to setting:
 },
 "governance": "disable",
 "offchain_pool_data": "disable"
+"pool_stat": "disable"
 ```
 
 Disables almost all data except `block` and `tx` tables.
