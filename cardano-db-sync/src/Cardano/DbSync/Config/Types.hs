@@ -374,7 +374,7 @@ parseGenSyncNodeConfig o =
     <$> fmap NetworkName (o .: "NetworkName")
     <*> parseJSON (Object o)
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
-    <*> fmap (fromMaybe False) (o .:? "EnableFutureGenesis")
+    <*> fmap (fromMaybe True) (o .:? "EnableFutureGenesis")
     <*> o .: "EnableLogging"
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
