@@ -168,7 +168,7 @@
                   if config.compiler-nix-name == "ghc8107" then
                     nixpkgs.haskell-nix.sources."hls-1.10"
                   else
-                    nixpkgs.haskell-nix.sources."hls-2.7";
+                    nixpkgs.haskell-nix.sources."hls-2.9";
               };
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
