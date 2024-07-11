@@ -1,5 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
+Schema version: 13.3.0.0 (from branch **kderme/prepare-release-13.3** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -441,7 +442,7 @@ A table for withdrawals from a reward account.
 
 ### `epoch_stake`
 
-A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the epoch. The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details.
+A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the previous epoch. The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details.
 
 * Primary Id: `id`
 
@@ -773,6 +774,22 @@ CostModel for EpochParam and ParamProposal.
 | `hash` | hash32type | The hash of cost model. It ensures uniqueness of entries. New in v13. |
 | `costs` | jsonb | The actual costs formatted as json. |
 
+### `pool_stat`
+
+Stats per pool and per epoch.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `pool_hash_id` | integer (64) | The pool_hash_id reference. |
+| `epoch_no` | word31type | The epoch number. |
+| `number_of_blocks` | word31type | Number of blocks created on the previous epoch. |
+| `number_of_delegators` | word31type | Number of delegators in the mark snapshot. |
+| `stake` | word31type | Total stake in the mark snapshot. |
+| `voting_power` | word31type | Voting power of the SPO. |
+
 ### `extra_migrations`
 
 Extra optional migrations. New in 13.2.
@@ -993,15 +1010,17 @@ The table for the distribution of voting power per DRep per. Currently this has 
 
 ### `epoch_state`
 
+Table with governance (and in the future other) stats per epoch.
+
 * Primary Id: `id`
 
 | Column name | Type | Description |
 |-|-|-|
 | `id` | integer (64) |  |
-| `committee_id` | integer (64) |  |
-| `no_confidence_id` | integer (64) |  |
-| `constitution_id` | integer (64) |  |
-| `epoch_no` | word31type |  |
+| `committee_id` | integer (64) | The reference to the current committee. |
+| `no_confidence_id` | integer (64) | The reference to the current gov_action_proposal of no confidence. TODO: This remains NULL. |
+| `constitution_id` | integer (64) | The reference to the current constitution. Should never be null. |
+| `epoch_no` | word31type | The epoch in question. |
 
 ### `off_chain_pool_data`
 
