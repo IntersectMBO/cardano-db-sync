@@ -91,6 +91,7 @@ module Cardano.Db.Insert (
   insertCommitteeDeRegistration,
   insertDrepRegistration,
   insertEpochState,
+  insertManyPoolStat,
   insertAlwaysAbstainDrep,
   insertAlwaysNoConfidence,
   insertUnchecked,
@@ -475,6 +476,9 @@ insertDrepRegistration = insertUnchecked "DrepRegistration"
 
 insertEpochState :: (MonadBaseControl IO m, MonadIO m) => EpochState -> ReaderT SqlBackend m EpochStateId
 insertEpochState = insertUnchecked "EpochState"
+
+insertManyPoolStat :: (MonadBaseControl IO m, MonadIO m) => [PoolStat] -> ReaderT SqlBackend m ()
+insertManyPoolStat = void . insertMany' "EpochState"
 
 insertAlwaysAbstainDrep :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m DrepHashId
 insertAlwaysAbstainDrep = do

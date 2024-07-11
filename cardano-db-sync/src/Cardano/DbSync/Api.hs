@@ -232,6 +232,7 @@ fullInsertOptions =
     , sioPlutus = PlutusEnable
     , sioGovernance = GovernanceConfig True
     , sioOffchainPoolData = OffchainPoolDataConfig True
+    , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
@@ -249,6 +250,7 @@ onlyUTxOInsertOptions =
     , sioPlutus = PlutusDisable
     , sioGovernance = GovernanceConfig False
     , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
     }
@@ -272,6 +274,7 @@ disableAllInsertOptions =
     , sioMetadata = MetadataDisable
     , sioPlutus = PlutusDisable
     , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioPoolStats = PoolStatsConfig False
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False

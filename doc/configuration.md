@@ -64,6 +64,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [plutus](#plutus)                            | `object`   | Optional |
 | [governance](#governance)                    | `enum`     | Optional |
 | [offchain\_pool\_data](#offchain-pool-data)  | `enum`     | Optional |
+| [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 
 ### Preset
@@ -451,6 +452,18 @@ Enables or disables most tables and entries related to plutus and scripts.
 | `"enable"` | Enables fetching offchain metadata.       |
 | `"disable"`| Disables fetching pool offchain metadata. |
 
+### Pool Stat
+
+`pool_stat`
+
+ * Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value       | Explanation                            |
+| :---------  | :------------------------------------- |
+| `"enable"`  | Enable pool stats                      |
+| `"disable"` | Disable pool stats                     |
 
 ### Remove Jsonb From Schema
 

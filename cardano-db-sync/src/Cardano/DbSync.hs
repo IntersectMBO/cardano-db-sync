@@ -275,6 +275,7 @@ extractSyncOptions snp aop snc =
         , ioKeepMetadataNames = maybeKeepMNames
         , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
         , ioOffChainPoolData = useOffchainPoolData
+        , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance
         , ioRemoveJsonbFromSchema = isRemoveJsonbFromSchemaEnabled (sioRemoveJsonbFromSchema (dncInsertOptions snc))
         }

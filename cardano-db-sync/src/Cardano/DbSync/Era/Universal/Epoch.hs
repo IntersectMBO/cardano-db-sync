@@ -63,15 +63,13 @@ import Database.Persist.Sql (SqlBackend)
 --------------------------------------------------------------------------------------------
 insertOnNewEpoch ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
-  InsertOptions ->
+  SyncEnv ->
   DB.BlockId ->
   SlotNo ->
   EpochNo ->
   Generic.NewEpoch ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertOnNewEpoch tracer cache iopts blkId slotNo epochNo newEpoch = do
+insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.euProtoParams epochUpdate) $ \params ->
     lift $ insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
@@ -85,27 +83,27 @@ insertOnNewEpoch tracer cache iopts blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt -> do
     when (ioGov iopts) $ do
       insertUpdateEnacted tracer cache blkId epochNo enactedSt
-  whenStrictJust (Generic.nePoolDistr newEpoch) $ \(poolDistrDeleg, poolDistrNBlocks) -> do
-    let nothingMap = Map.fromList $ (,Nothing) <$> (Map.keys poolDistrNBlocks <> Map.keys spoVoting)
-    let mapWithAllKeys = Map.union (Map.map Just poolDistrDeleg) nothingMap
-    let _ = Map.mapWithKey (mkPoolStats poolDistrNBlocks spoVoting) mapWithAllKeys
-    pure ()
+  whenStrictJust (Generic.nePoolDistr newEpoch) $ \(poolDistrDeleg, poolDistrNBlocks) ->
+    when (ioPoolStats iopts) $ do
+      let nothingMap = Map.fromList $ (,Nothing) <$> (Map.keys poolDistrNBlocks <> Map.keys spoVoting)
+      let mapWithAllKeys = Map.union (Map.map Just poolDistrDeleg) nothingMap
+      let poolStats = Map.mapWithKey (mkPoolStats poolDistrNBlocks spoVoting) mapWithAllKeys
+      lift $ insertPoolStats syncEnv epochNo poolStats
   where
     epochUpdate :: Generic.EpochUpdate
     epochUpdate = Generic.neEpochUpdate newEpoch
 
     mkPoolStats :: Map PoolKeyHash Natural -> Map PoolKeyHash (Shelley.CompactForm Shelley.Coin) -> PoolKeyHash -> Maybe (Shelley.Coin, Word64) -> Generic.PoolStats
     mkPoolStats blocks voting pkh deleg =
-      let
-        mnBlock = Map.lookup pkh blocks
-        mVoting = Map.lookup pkh voting
-       in
-        Generic.PoolStats
-          { Generic.nBlocks = mnBlock
-          , Generic.nDelegators = snd <$> deleg
-          , Generic.stake = fst <$> deleg
-          , Generic.votingPower = fromCompact <$> mVoting
-          }
+      Generic.PoolStats
+        { Generic.nBlocks = fromMaybe 0 (Map.lookup pkh blocks)
+        , Generic.nDelegators = maybe 0 snd deleg
+        , Generic.stake = maybe (Shelley.Coin 0) fst deleg
+        , Generic.votingPower = fromCompact <$> Map.lookup pkh voting
+        }
+    tracer = getTrace syncEnv
+    cache = envCache syncEnv
+    iopts = getInsertOptions syncEnv
 
 insertEpochParam ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -395,9 +393,29 @@ sumRewardTotal =
     sumCoin !acc sr =
       acc + sum (map (Shelley.unCoin . Generic.rewardAmount) $ Set.toList sr)
 
-_inseertPoolStats ::
-  Monad m =>
+insertPoolStats ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  EpochNo ->
   Map PoolKeyHash Generic.PoolStats ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-_inseertPoolStats _syncEnv _mp = pure () -- TODO
+  ReaderT SqlBackend m ()
+insertPoolStats syncEnv epochNo mp = do
+  poolStats <- mapM preparePoolStat $ Map.toList mp
+  DB.insertManyPoolStat poolStats
+  where
+    preparePoolStat :: (PoolKeyHash, Generic.PoolStats) -> ReaderT SqlBackend m DB.PoolStat
+    preparePoolStat (pkh, ps) = do
+      poolId <- queryPoolKeyOrInsert "insertPoolStats" trce cache UpdateCache True pkh
+      pure
+        DB.PoolStat
+          { DB.poolStatPoolHashId = poolId
+          , DB.poolStatEpochNo = unEpochNo epochNo
+          , DB.poolStatNumberOfBlocks = fromIntegral $ Generic.nBlocks ps
+          , DB.poolStatNumberOfDelegators = fromIntegral $ Generic.nDelegators ps
+          , DB.poolStatStake = fromIntegral . Shelley.unCoin $ Generic.stake ps
+          , DB.poolStatVotingPower = fromIntegral . Shelley.unCoin <$> Generic.votingPower ps
+          }
+
+    cache = envCache syncEnv
+    trce = getTrace syncEnv

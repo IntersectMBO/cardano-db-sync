@@ -84,6 +84,7 @@ data InsertOptions = InsertOptions
   , ioKeepMetadataNames :: Strict.Maybe [Word64]
   , ioPlutusExtra :: !Bool
   , ioOffChainPoolData :: !Bool
+  , ioPoolStats :: !Bool
   , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
   }

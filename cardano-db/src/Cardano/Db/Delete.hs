@@ -16,6 +16,7 @@ module Cardano.Db.Delete (
   deleteEpochRows,
   deleteDrepDistr,
   deleteRewardRest,
+  deletePoolStat,
   deleteAdaPots,
   deleteTxOut,
   -- for testing
@@ -243,6 +244,10 @@ deleteDrepDistr epochNum =
 deleteRewardRest :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 deleteRewardRest epochNum =
   deleteWhere [RewardRestSpendableEpoch >. epochNum]
+
+deletePoolStat :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+deletePoolStat epochNum = do
+  deleteWhere [PoolStatEpochNo >. epochNum]
 
 deleteAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m ()
 deleteAdaPots blkId = do

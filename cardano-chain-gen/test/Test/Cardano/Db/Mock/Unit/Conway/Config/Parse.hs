@@ -101,6 +101,7 @@ insertConfig = do
           , sioPlutus = PlutusDisable
           , sioGovernance = GovernanceConfig False
           , sioOffchainPoolData = OffchainPoolDataConfig False
+          , sioPoolStats = PoolStatsConfig False
           , sioJsonType = JsonTypeDisable
           , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
           }
