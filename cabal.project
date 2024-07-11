@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2024-06-13T08:49:27Z
-  , cardano-haskell-packages 2024-06-28T18:16:58Z
+  , hackage.haskell.org 2024-06-23T23:01:13Z
+  , cardano-haskell-packages 2024-07-03T01:26:49Z
 
 packages:
   cardano-db
@@ -84,8 +84,8 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: 71f8c71fada068097dc4e62e2f94756576df8135
-  --sha256: sha256-jwDUgaysZXf2kSf3muAHyAnyTzSa8uwhMhrOYe1ti70=
+  tag: 2820a63dc934c6d5b5f450b6c2543b81c6476696
+  --sha256: sha256-ESE5/7XzXeIZldkYPbMd8CoMKQo9ghY1vOkhHpOj0K4=
   subdir:
     cardano-node
     cardano-submit-api
