@@ -32,7 +32,7 @@ services:
         max-file: "10"
 
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:8.12.2
+    image: ghcr.io/intersectmbo/cardano-node:9.0.0
     environment:
       - NETWORK=${NETWORK:-mainnet}
     volumes:
