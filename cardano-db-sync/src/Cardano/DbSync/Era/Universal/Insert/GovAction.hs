@@ -176,8 +176,7 @@ resolveGovActionProposal ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.GovActionProposalId
 resolveGovActionProposal cache gaId = do
   let txId = gaidTxId gaId
-      txHash = Generic.unTxHash txId
-  gaTxId <- queryTxIdWithCache cache txId txHash "resolveGovActionProposal.queryTxId"
+  gaTxId <- liftLookupFail "resolveGovActionProposal.queryTxId" $ queryTxIdWithCache cache txId
   let (GovActionIx index) = gaidGovActionIx gaId
   liftLookupFail "resolveGovActionProposal.queryGovActionProposalId" $
     DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?

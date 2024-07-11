@@ -24,11 +24,13 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   getTxOutDatumHash,
   getMaybeDatumHash,
   sumTxOutCoin,
+  toTxHash,
 ) where
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..))
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
+import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Alonzo.Scripts
@@ -96,8 +98,7 @@ data TxWithdrawal = TxWithdrawal
   }
 
 data TxIn = TxIn
-  { txInHash :: !ByteString
-  , txInIndex :: !Word64
+  { txInIndex :: !Word64
   , txInTxId :: !(Ledger.TxId StandardCrypto)
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
   }
@@ -165,6 +166,9 @@ getMaybeDatumHash (Just hsh) = DatumHash hsh
 
 sumTxOutCoin :: [TxOut] -> Coin
 sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)
+
+toTxHash :: TxIn -> ByteString
+toTxHash = unTxHash . txInTxId
 
 class AlonzoEraTxBody era => DBScriptPurpose era where
   getPurpose :: PlutusPurpose AsIx era -> (DB.ScriptPurpose, Word32)

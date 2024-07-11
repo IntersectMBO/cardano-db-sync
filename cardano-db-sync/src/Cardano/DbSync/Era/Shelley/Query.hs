@@ -26,16 +26,16 @@ resolveStakeAddress addr = queryStakeAddress addr renderByteArray
 
 resolveInputTxOutId :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId))
 resolveInputTxOutId txIn =
-  queryTxOutId (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+  queryTxOutId (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 resolveInputValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
 resolveInputValue txIn =
-  queryTxOutValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+  queryTxOutValue (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 resolveInputTxOutIdValue :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
 resolveInputTxOutIdValue txIn =
-  queryTxOutIdValue (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+  queryTxOutIdValue (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryResolveInputCredentials :: MonadIO m => Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
 queryResolveInputCredentials txIn = do
-  queryTxOutCredentials (Generic.txInHash txIn, fromIntegral (Generic.txInIndex txIn))
+  queryTxOutCredentials (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))

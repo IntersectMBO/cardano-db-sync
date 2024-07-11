@@ -20,7 +20,6 @@ module Cardano.DbSync.Cache (
   queryOrInsertRewardAccount,
   insertStakeAddress,
   queryStakeAddrWithCache,
-  resolveInputTxId,
   queryTxIdWithCache,
   rollbackCache,
   tryUpdateCacheTx,
@@ -35,8 +34,6 @@ import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), initCacheStatistics, isCacheActionUpdate)
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
-import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Types as Generic
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
@@ -373,31 +370,8 @@ queryTxIdWithCache ::
   MonadIO m =>
   CacheStatus ->
   Ledger.TxId StandardCrypto ->
-  ByteString ->
-  Text ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxId
-queryTxIdWithCache cache ledgerTxId txHash errTxt = do
-  case cache of
-    NoCache -> liftLookupFail errTxt $ DB.queryTxId txHash
-    ActiveCache ci -> do
-      mp <- liftIO $ readTVarIO (cTxIds ci)
-      case FIFO.lookup ledgerTxId mp of
-        Just txId -> do
-          liftIO $ hitTxIds (cStats ci)
-          pure txId
-        Nothing -> do
-          resTxId <- liftLookupFail errTxt $ DB.queryTxId txHash
-          liftIO $ missTxIds (cStats ci)
-          liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId resTxId
-          pure resTxId
-
-resolveInputTxId ::
-  MonadIO m =>
-  Generic.TxIn ->
-  CacheStatus ->
   ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
-resolveInputTxId txIn cache = do
-  let txHash = Generic.txInHash txIn
+queryTxIdWithCache cache txIdLedger = do
   case cache of
     -- Direct database query if no cache.
     NoCache -> DB.queryTxId txHash
@@ -405,7 +379,7 @@ resolveInputTxId txIn cache = do
       -- Read current cache state.
       cacheTx <- liftIO $ readTVarIO (cTxIds cacheInternal)
 
-      case FIFO.lookup (txInTxId txIn) cacheTx of
+      case FIFO.lookup txIdLedger cacheTx of
         -- Cache hit, return the transaction ID.
         Just txId -> do
           liftIO $ hitTxIds (cStats cacheInternal)
@@ -417,11 +391,13 @@ resolveInputTxId txIn cache = do
           case eTxId of
             Right txId -> do
               -- Update cache.
-              liftIO $ atomically $ modifyTVar (cTxIds cacheInternal) $ FIFO.insert (txInTxId txIn) txId
+              liftIO $ atomically $ modifyTVar (cTxIds cacheInternal) $ FIFO.insert txIdLedger txId
               -- Return ID after updating cache.
               pure $ Right txId
             -- Return lookup failure.
             Left _ -> pure $ Left $ DB.DbLookupTxHash txHash
+  where
+    txHash = Generic.unTxHash txIdLedger
 
 tryUpdateCacheTx ::
   MonadIO m =>
