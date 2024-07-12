@@ -417,7 +417,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "plutus" .!= sioPlutus def
       <*> obj .:? "governance" .!= sioGovernance def
       <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
-      <*> obj .:? "pool_stats" .!= sioPoolStats def
+      <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
 
@@ -433,7 +433,7 @@ instance ToJSON SyncInsertOptions where
       , "plutus" .= sioPlutus
       , "governance" .= sioGovernance
       , "offchain_pool_data" .= sioOffchainPoolData
-      , "pool_stats" .= sioPoolStats
+      , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
       ]
