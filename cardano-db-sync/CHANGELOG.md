@@ -1,9 +1,5 @@
 # Revision history for cardano-db-sync
 
-## 13.4.0.0
-
-* Added `tx.treasury_donation`
-
 ## 13.3.0.0
 * Support for Conway (see schema docs)
 * Fixed epoch_param missing for the first Shelley era [#1715]
@@ -12,6 +8,7 @@
 * Added an optional feature to store CBOR serialized transactions in `tx_cbor` table [#1723]
 * Added an optional feature to store pool stats per epoch transactions in `pool_stat` table
 * EnableFutureGenesis is now true by default
+* Added `tx.treasury_donation`
 
 ## 13.2.0.2
 * Support node 8.9.x
