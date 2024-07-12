@@ -1,6 +1,5 @@
 # Schema Documentation for cardano-db-sync
 
-Schema version: 13.3.0.0 (from branch **kderme/prepare-release-13.3** which may not accurately reflect the version number)
 **Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
 
 ### `schema_version`
@@ -86,6 +85,7 @@ A table for transactions within a block on the chain.
 | `invalid_hereafter` | word64type | Transaction in invalid at or after this slot number. |
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
 | `script_size` | word31type | The sum of the script sizes (in bytes) of scripts in the transaction. |
+| `treasury_donation` | lovelace |  |
 
 ### `tx_cbor`
 
@@ -785,10 +785,10 @@ Stats per pool and per epoch.
 | `id` | integer (64) |  |
 | `pool_hash_id` | integer (64) | The pool_hash_id reference. |
 | `epoch_no` | word31type | The epoch number. |
-| `number_of_blocks` | word31type | Number of blocks created on the previous epoch. |
-| `number_of_delegators` | word31type | Number of delegators in the mark snapshot. |
-| `stake` | word31type | Total stake in the mark snapshot. |
-| `voting_power` | word31type | Voting power of the SPO. |
+| `number_of_blocks` | word64type | Number of blocks created on the previous epoch. |
+| `number_of_delegators` | word64type | Number of delegators in the mark snapshot. |
+| `stake` | word64type | Total stake in the mark snapshot. |
+| `voting_power` | word64type | Voting power of the SPO. |
 
 ### `extra_migrations`
 
