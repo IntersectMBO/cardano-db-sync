@@ -561,10 +561,10 @@ share
   PoolStat
     poolHashId          PoolHashId          noreference
     epochNo             Word64              sqltype=word31type
-    numberOfBlocks      Word64              sqltype=word31type
-    numberOfDelegators  Word64              sqltype=word31type
-    stake               Word64              sqltype=word31type
-    votingPower         Word64 Maybe        sqltype=word31type
+    numberOfBlocks      Word64              sqltype=word64type
+    numberOfDelegators  Word64              sqltype=word64type
+    stake               Word64              sqltype=word64type
+    votingPower         Word64 Maybe        sqltype=word64type
 
   ExtraMigrations
     token               Text
