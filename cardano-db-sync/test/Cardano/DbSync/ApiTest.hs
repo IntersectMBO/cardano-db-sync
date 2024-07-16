@@ -7,6 +7,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Gen as Gen
 import Cardano.Prelude
+import Control.Monad (MonadFail (..))
 import Hedgehog
 
 tests :: IO Bool
@@ -22,46 +23,50 @@ prop_extractInsertOptions :: Property
 prop_extractInsertOptions = property $ do
   cfg <- forAll Gen.syncPreConfig
 
-  let insertOpts = pcInsertConfig cfg
-  coverInsertCfg insertOpts
+  let insertCfg = pcInsertConfig cfg
+  coverInsertCfg insertCfg
 
-  case insertOpts of
-    FullInsertOptions ->
+  case insertCfg of
+    SyncInsertConfig (Just "full") _ ->
       extractInsertOptions cfg === fullInsertOptions
-    OnlyUTxOInsertOptions ->
+    SyncInsertConfig (Just "only_utxo") _ ->
       extractInsertOptions cfg === onlyUTxOInsertOptions
-    OnlyGovInsertOptions ->
+    SyncInsertConfig (Just "only_gov") _ ->
       extractInsertOptions cfg === onlyGovInsertOptions
-    DisableAllInsertOptions ->
+    SyncInsertConfig (Just "disable_all") _ ->
       extractInsertOptions cfg === disableAllInsertOptions
-    SyncInsertConfig cfg' ->
-      extractInsertOptions cfg === cfg'
+    SyncInsertConfig Nothing opts ->
+      extractInsertOptions cfg === opts
+    _other -> fail "Unexpected SyncInsertConfig" -- This case should not happen if all presets are covered
 
 prop_extractInsertOptionsRewards :: Property
 prop_extractInsertOptionsRewards = property $ do
   cfg <- forAll Gen.syncPreConfig
 
-  let insertOpts = pcInsertConfig cfg
-  coverInsertCfg insertOpts
+  let insertCfg = pcInsertConfig cfg
+  coverInsertCfg insertCfg
 
   let areRewardsEnabled' = areRewardsEnabled $ sioRewards (extractInsertOptions cfg)
 
-  case insertOpts of
-    OnlyGovInsertOptions ->
+  case insertCfg of
+    SyncInsertConfig (Just "only_gov") _ ->
       assert $ not areRewardsEnabled'
-    DisableAllInsertOptions ->
+    SyncInsertConfig (Just "disable_all") _ ->
       assert $ not areRewardsEnabled'
-    _ -> assert areRewardsEnabled'
+    _other -> assert areRewardsEnabled'
 
-coverInsertCfg :: MonadTest m => SyncInsertConfig -> m ()
-coverInsertCfg insertOpts = do
-  cover 5 "full" (insertOpts == FullInsertOptions)
-  cover 5 "only utxo" (insertOpts == OnlyUTxOInsertOptions)
-  cover 5 "only gov" (insertOpts == OnlyGovInsertOptions)
-  cover 5 "disable all" (insertOpts == DisableAllInsertOptions)
-  cover 5 "config" isSyncInsertConfig
+coverInsertCfg :: SyncInsertConfig -> PropertyT IO ()
+coverInsertCfg cfg = do
+  cover 5 "full" $ isPreset "full" cfg
+  cover 5 "only utxo" $ isPreset "only_utxo" cfg
+  cover 5 "only gov" $ isPreset "only_gov" cfg
+  cover 5 "disable all" $ isPreset "disable_all" cfg
+  cover 5 "custom config" $ isCustomConfig cfg
   where
-    isSyncInsertConfig =
-      case insertOpts of
-        SyncInsertConfig _ -> True
-        _ -> False
+    isPreset :: Text -> SyncInsertConfig -> Bool
+    isPreset preset (SyncInsertConfig (Just p) _) = p == preset
+    isPreset _ _ = False
+
+    isCustomConfig :: SyncInsertConfig -> Bool
+    isCustomConfig (SyncInsertConfig Nothing _) = True
+    isCustomConfig _ = False

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -106,11 +107,11 @@ syncNodeConfig loggingCfg =
 syncInsertConfig :: Gen SyncInsertConfig
 syncInsertConfig =
   Gen.choice
-    [ pure FullInsertOptions
-    , pure OnlyUTxOInsertOptions
-    , pure OnlyGovInsertOptions
-    , pure DisableAllInsertOptions
-    , SyncInsertConfig <$> syncInsertOptions
+    [ pure $ SyncInsertConfig (Just "full") fullInsertOptions
+    , pure $ SyncInsertConfig (Just "only_utxo") onlyUTxOInsertOptions
+    , pure $ SyncInsertConfig (Just "only_gov") onlyGovInsertOptions
+    , pure $ SyncInsertConfig (Just "disable_all") disableAllInsertOptions
+    , SyncInsertConfig Nothing <$> syncInsertOptions
     ]
 
 syncInsertOptions :: Gen SyncInsertOptions

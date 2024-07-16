@@ -55,6 +55,10 @@ module Cardano.DbSync.Config.Types (
   isTxOutConsumed,
   isTxOutPrune,
   forceTxIn,
+  fullInsertOptions,
+  onlyUTxOInsertOptions,
+  onlyGovInsertOptions,
+  disableAllInsertOptions,
 ) where
 
 import qualified Cardano.BM.Configuration as Logging
@@ -68,7 +72,8 @@ import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (fail)
 import Data.Aeson (FromJSON (..), ToJSON (..), Value (..), (.!=), (.:), (.:?), (.=))
 import qualified Data.Aeson as Aeson
-import Data.Aeson.Types (Parser, typeMismatch)
+import Data.Aeson.Key (fromText)
+import Data.Aeson.Types (Pair, Parser, typeMismatch)
 import Data.ByteString.Short (ShortByteString (), fromShort, toShort)
 import Data.Default.Class (Default (..))
 import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
@@ -150,13 +155,19 @@ data SyncPreConfig = SyncPreConfig
   }
   deriving (Show)
 
-data SyncInsertConfig
-  = FullInsertOptions
-  | OnlyUTxOInsertOptions
-  | OnlyGovInsertOptions
-  | DisableAllInsertOptions
-  | SyncInsertConfig SyncInsertOptions
+data SyncInsertConfig = SyncInsertConfig
+  { sicPreset :: Maybe Text
+  , sicOptions :: SyncInsertOptions
+  }
   deriving (Eq, Show)
+
+-- data SyncInsertConfig
+--   = FullInsertOptions
+--   | OnlyUTxOInsertOptions
+--   | OnlyGovInsertOptions
+--   | DisableAllInsertOptions
+--   | SyncInsertConfig SyncInsertOptions
+--   deriving (Eq, Show)
 
 data SyncInsertOptions = SyncInsertOptions
   { sioTxCBOR :: TxCBORConfig
@@ -389,20 +400,57 @@ instance FromJSON SyncProtocol where
 instance FromJSON SyncInsertConfig where
   parseJSON = Aeson.withObject "SyncInsertConfig" $ \obj -> do
     preset <- obj .:? "preset"
-    case preset :: Maybe Text of
-      Nothing -> SyncInsertConfig <$> parseJSON (Aeson.Object obj)
-      Just "full" -> pure FullInsertOptions
-      Just "only_utxo" -> pure OnlyUTxOInsertOptions
-      Just "only_gov" -> pure OnlyGovInsertOptions
-      Just "disable_all" -> pure DisableAllInsertOptions
+    baseOptions <- case preset of
+      Just "full" -> pure fullInsertOptions
+      Just "only_utxo" -> pure onlyUTxOInsertOptions
+      Just "only_gov" -> pure onlyGovInsertOptions
+      Just "disable_all" -> pure disableAllInsertOptions
       Just other -> fail $ "unexpected preset: " <> show other
+      Nothing -> pure def -- Default options
+    options <- parseOverrides obj baseOptions
+    pure $ SyncInsertConfig preset options
+
+parseOverrides :: Aeson.Object -> SyncInsertOptions -> Parser SyncInsertOptions
+parseOverrides obj baseOptions = do
+  SyncInsertOptions
+    <$> obj .:? "tx_cbor" .!= sioTxCBOR baseOptions
+    <*> obj .:? "tx_out" .!= sioTxOut baseOptions
+    <*> obj .:? "ledger" .!= sioLedger baseOptions
+    <*> obj .:? "shelley" .!= sioShelley baseOptions
+    <*> pure (sioRewards baseOptions)
+    <*> obj .:? "multi_asset" .!= sioMultiAsset baseOptions
+    <*> obj .:? "metadata" .!= sioMetadata baseOptions
+    <*> obj .:? "plutus" .!= sioPlutus baseOptions
+    <*> obj .:? "governance" .!= sioGovernance baseOptions
+    <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData baseOptions
+    <*> obj .:? "pool_stats" .!= sioPoolStats baseOptions
+    <*> obj .:? "json_type" .!= sioJsonType baseOptions
+    <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
 
 instance ToJSON SyncInsertConfig where
-  toJSON (SyncInsertConfig opts) = toJSON opts
-  toJSON FullInsertOptions = Aeson.object ["preset" .= ("full" :: Text)]
-  toJSON OnlyUTxOInsertOptions = Aeson.object ["preset" .= ("only_utxo" :: Text)]
-  toJSON OnlyGovInsertOptions = Aeson.object ["preset" .= ("only_gov" :: Text)]
-  toJSON DisableAllInsertOptions = Aeson.object ["preset" .= ("disable_all" :: Text)]
+  toJSON (SyncInsertConfig preset options) =
+    Aeson.object $ maybe [] (\p -> [fromText "preset" .= p]) preset ++ optionsToList options
+
+optionsToList :: SyncInsertOptions -> [Pair]
+optionsToList SyncInsertOptions {..} =
+  catMaybes
+    [ toJsonIfSet "tx_cbor" sioTxCBOR
+    , toJsonIfSet "tx_out" sioTxOut
+    , toJsonIfSet "ledger" sioLedger
+    , toJsonIfSet "shelley" sioShelley
+    , toJsonIfSet "rewards" sioRewards
+    , toJsonIfSet "multi_asset" sioMultiAsset
+    , toJsonIfSet "metadata" sioMetadata
+    , toJsonIfSet "plutus" sioPlutus
+    , toJsonIfSet "governance" sioGovernance
+    , toJsonIfSet "offchain_pool_data" sioOffchainPoolData
+    , toJsonIfSet "pool_stats" sioPoolStats
+    , toJsonIfSet "json_type" sioJsonType
+    , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
+    ]
+
+toJsonIfSet :: ToJSON a => Text -> a -> Maybe Pair
+toJsonIfSet key value = Just $ fromText key .= value
 
 instance FromJSON SyncInsertOptions where
   parseJSON = Aeson.withObject "SyncInsertOptions" $ \obj ->
@@ -433,10 +481,13 @@ instance ToJSON SyncInsertOptions where
       , "plutus" .= sioPlutus
       , "governance" .= sioGovernance
       , "offchain_pool_data" .= sioOffchainPoolData
-      , "pool_stat" .= sioPoolStats
+      , "pool_stats" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
       ]
+
+instance ToJSON RewardsConfig where
+  toJSON (RewardsConfig enabled) = Aeson.Bool enabled
 
 instance ToJSON TxCBORConfig where
   toJSON = boolToEnableDisable . isTxCBOREnabled
@@ -626,7 +677,7 @@ instance FromJSON JsonTypeConfig where
     other -> fail $ "unexpected json_type: " <> show other
 
 instance Default SyncInsertConfig where
-  def = SyncInsertConfig def
+  def = SyncInsertConfig Nothing def
 
 instance Default SyncInsertOptions where
   def =
@@ -645,6 +696,67 @@ instance Default SyncInsertOptions where
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
       }
+
+fullInsertOptions :: SyncInsertOptions
+fullInsertOptions =
+  SyncInsertOptions
+    { sioTxCBOR = TxCBORConfig False
+    , sioTxOut = TxOutEnable
+    , sioLedger = LedgerEnable
+    , sioShelley = ShelleyEnable
+    , sioRewards = RewardsConfig True
+    , sioMultiAsset = MultiAssetEnable
+    , sioMetadata = MetadataEnable
+    , sioPlutus = PlutusEnable
+    , sioGovernance = GovernanceConfig True
+    , sioOffchainPoolData = OffchainPoolDataConfig True
+    , sioPoolStats = PoolStatsConfig True
+    , sioJsonType = JsonTypeText
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    }
+
+onlyUTxOInsertOptions :: SyncInsertOptions
+onlyUTxOInsertOptions =
+  SyncInsertOptions
+    { sioTxCBOR = TxCBORConfig False
+    , sioTxOut = TxOutBootstrap (ForceTxIn False)
+    , sioLedger = LedgerIgnore
+    , sioShelley = ShelleyDisable
+    , sioRewards = RewardsConfig True
+    , sioMultiAsset = MultiAssetDisable
+    , sioMetadata = MetadataDisable
+    , sioPlutus = PlutusDisable
+    , sioGovernance = GovernanceConfig False
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioPoolStats = PoolStatsConfig False
+    , sioJsonType = JsonTypeText
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    }
+
+onlyGovInsertOptions :: SyncInsertOptions
+onlyGovInsertOptions =
+  disableAllInsertOptions
+    { sioLedger = LedgerEnable
+    , sioGovernance = GovernanceConfig True
+    }
+
+disableAllInsertOptions :: SyncInsertOptions
+disableAllInsertOptions =
+  SyncInsertOptions
+    { sioTxCBOR = TxCBORConfig False
+    , sioTxOut = TxOutDisable
+    , sioLedger = LedgerDisable
+    , sioShelley = ShelleyDisable
+    , sioRewards = RewardsConfig False
+    , sioMultiAsset = MultiAssetDisable
+    , sioMetadata = MetadataDisable
+    , sioPlutus = PlutusDisable
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioPoolStats = PoolStatsConfig False
+    , sioGovernance = GovernanceConfig False
+    , sioJsonType = JsonTypeText
+    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    }
 
 boolToEnableDisable :: IsString s => Bool -> s
 boolToEnableDisable True = "enable"
