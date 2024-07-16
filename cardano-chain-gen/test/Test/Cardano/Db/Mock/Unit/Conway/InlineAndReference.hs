@@ -1,4 +1,9 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE NumericUnderscores #-}
+
+#if __GLASGOW_HASKELL__ >= 908
+{-# OPTIONS_GHC -Wno-x-partial #-}
+#endif
 
 module Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference (
   unlockDatumOutput,
