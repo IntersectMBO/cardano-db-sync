@@ -354,6 +354,8 @@
               "checks.cardano-db:test:test-db"
               "ghc96.checks.cardano-chain-gen:test:cardano-chain-gen"
               "ghc96.checks.cardano-db:test:test-db"
+              "ghc98.checks.cardano-chain-gen:test:cardano-chain-gen"
+              "ghc98.checks.cardano-db:test:test-db"
             ];
 
             nonRequiredPaths =
