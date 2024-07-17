@@ -152,7 +152,11 @@
                 else lib.mkDefault "ghc96";
             flake.variants =
               let
-                compilers = lib.optionals (system == "x86_64-linux") ["ghc96"];
+                compilers =
+                  if (system == "x86_64-linux") then
+                    ["ghc96" "ghc98"]
+                  else
+                    ["ghc98"];
               in
                 lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
