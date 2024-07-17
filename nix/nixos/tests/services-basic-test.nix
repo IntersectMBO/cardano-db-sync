@@ -47,7 +47,7 @@ with pkgs;
       systemd.services.cardano-db-sync.serviceConfig.SupplementaryGroups = "cardano-node";
       services.postgresql = {
         enable = true;
-        package = postgresql_12;
+        package = postgresql_14;
         enableTCPIP = false;
         ensureDatabases = [ "${config.services.cardano-db-sync.postgres.database}" ];
         initialScript = builtins.toFile "enable-pgcrypto.sql" ''

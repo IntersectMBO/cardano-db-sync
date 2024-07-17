@@ -254,7 +254,7 @@
                 # Database tests
                 let
                   postgresTest = {
-                    build-tools = [ pkgs.pkgsBuildHost.postgresql_12 ];
+                    build-tools = [ pkgs.pkgsBuildHost.postgresql_14 ];
                     inherit preCheck;
                     inherit postCheck;
                   };
