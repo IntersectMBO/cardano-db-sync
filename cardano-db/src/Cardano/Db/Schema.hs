@@ -160,6 +160,7 @@ share
     inlineDatumId       DatumId Maybe       noreference
     referenceScriptId   ScriptId Maybe      noreference
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
+    deriving Eq Show
 
   CollateralTxOut
     txId                TxId                noreference     -- This type is the primary key for the 'tx' table.

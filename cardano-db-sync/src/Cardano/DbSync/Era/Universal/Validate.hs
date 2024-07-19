@@ -12,6 +12,9 @@ module Cardano.DbSync.Era.Universal.Validate (
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
+import Cardano.DbSync.Config.Types (ShelleyInsertConfig (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
@@ -50,13 +53,14 @@ import GHC.Err (error)
 
 validateEpochRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   Network ->
   EpochNo ->
   EpochNo ->
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   ReaderT SqlBackend m ()
-validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
+validateEpochRewards syncEnv tracer network _earnedEpochNo spendableEpochNo rmap = do
   actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
   if actualCount /= expectedCount
     then do
@@ -69,7 +73,7 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
           , " but got "
           , textShow actualCount
           ]
-      logFullRewardMap tracer spendableEpochNo network (convertPoolRewards rmap)
+      logFullRewardMap syncEnv spendableEpochNo network (convertPoolRewards rmap)
     else do
       liftIO . logInfo tracer $
         mconcat
@@ -84,16 +88,16 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
 
 logFullRewardMap ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   EpochNo ->
   Network ->
   Generic.Rewards ->
   ReaderT SqlBackend m ()
-logFullRewardMap tracer epochNo network ledgerMap = do
+logFullRewardMap syncEnv epochNo network ledgerMap = do
   dbMap <- queryRewardMap epochNo
   when (Map.size dbMap > 0 && Map.size (Generic.unRewards ledgerMap) > 0) $
     liftIO $
-      diffRewardMap tracer network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
+      diffRewardMap syncEnv network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
   where
     convert :: Set Generic.Reward -> [(RewardSource, Coin)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
@@ -130,15 +134,18 @@ queryRewardMap (EpochNo epochNo) = do
         x : _ -> (fst x, List.sort $ map snd xs)
 
 diffRewardMap ::
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
   Map ByteString [(RewardSource, DbLovelace)] ->
   Map ByteString [(RewardSource, Coin)] ->
   IO ()
-diffRewardMap tracer _nw dbMap ledgerMap = do
+diffRewardMap syncEnv _nw dbMap ledgerMap = do
   when (Map.size diffMap > 0) $ do
-    logError tracer "diffRewardMap:"
-    mapM_ (logError tracer . render) $ Map.toList diffMap
+    case ioShelley $ soptInsertOptions (envOptions syncEnv) of
+      ShelleyStakeAddrs _ -> pure ()
+      _ -> do
+        logError tracer "diffRewardMap:"
+        mapM_ (logError tracer . render) $ Map.toList diffMap
   where
     keys :: [ByteString]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
@@ -162,3 +169,5 @@ diffRewardMap tracer _nw dbMap ledgerMap = do
 
     render :: (ByteString, ([(RewardSource, DbLovelace)], [(RewardSource, Coin)])) -> Text
     render (cred, (xs, ys)) = mconcat ["  ", show cred, ": ", show xs, " /= ", show ys]
+
+    tracer = getTrace syncEnv

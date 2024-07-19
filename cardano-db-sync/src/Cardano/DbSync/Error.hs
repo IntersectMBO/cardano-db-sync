@@ -9,6 +9,7 @@ module Cardano.DbSync.Error (
   NodeConfigError (..),
   annotateInvariantTx,
   bsBase16Encode,
+  shortBsBase16Encode,
   dbSyncNodeError,
   dbSyncInvariant,
   renderSyncInvariant,
@@ -28,6 +29,7 @@ import Cardano.DbSync.Util
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (left)
 import qualified Data.ByteString.Base16 as Base16
+import Data.ByteString.Short (ShortByteString, toShort)
 import Data.String (String)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -182,6 +184,9 @@ bsBase16Encode bs =
   case Text.decodeUtf8' (Base16.encode bs) of
     Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Show.show bs
     Right txt -> txt
+
+shortBsBase16Encode :: ByteString -> ShortByteString
+shortBsBase16Encode bs = toShort (Base16.encode bs)
 
 runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
 runOrThrowIO ioEither = do

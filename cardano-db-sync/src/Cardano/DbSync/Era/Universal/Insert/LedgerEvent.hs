@@ -89,9 +89,9 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards syncEnv ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
         LedgerRestrainedRewards e rwd creds ->
-          lift $ adjustEpochRewards tracer ntw cache e rwd creds
+          lift $ adjustEpochRewards syncEnv ntw e rwd creds
         LedgerTotalRewards _e rwd ->
-          lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+          lift $ validateEpochRewards syncEnv tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo en ex uncl -> do
@@ -99,19 +99,20 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
             liftIO $
               logInfo tracer $
                 "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
-          updateDropped cache (EpochNo curEpoch) (garGovActionId <$> (en <> ex))
+          updateDropped syncEnv (EpochNo curEpoch) (garGovActionId <$> (en <> ex))
           let en' = filter (\e -> Set.notMember (garGovActionId e) uncl) en
               ex' = filter (\e -> Set.notMember (garGovActionId e) uncl) ex
-          insertProposalRefunds tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
+          insertProposalRefunds syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo cache (en' <> ex') -- TODO: check if they are disjoint to avoid double entries.
           forM_ en $ \gar -> whenJust (garMTreasury gar) $ \treasuryMap -> do
-            gaId <- resolveGovActionProposal cache (garGovActionId gar)
-            lift $ void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
+            mGaId <- resolveGovActionProposal syncEnv (garGovActionId gar)
+            whenJust mGaId $ \gaId ->
+              lift $ void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
             let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
-            insertRewardRests tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache (Map.toList rewards)
+            insertRewardRests syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo cache (Map.toList rewards)
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
-            insertRewardRests tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
+            insertRewardRests syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
             liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
         LedgerPoolReap en drs ->
           unless (Map.null $ Generic.unRewards drs) $ do

@@ -15,7 +15,7 @@ module Cardano.DbSync.Api.Types (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (CacheStatus)
-import Cardano.DbSync.Config.Types (SyncNodeConfig)
+import Cardano.DbSync.Config.Types (MetadataConfig, MultiAssetConfig, PlutusConfig, ShelleyInsertConfig, SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
@@ -74,19 +74,18 @@ data SyncOptions = SyncOptions
   deriving (Show)
 
 data InsertOptions = InsertOptions
-  { ioTxCBOR :: !Bool
+  { ioGov :: !Bool
   , ioInOut :: !Bool
-  , ioUseLedger :: !Bool
-  , ioShelley :: !Bool
-  , ioRewards :: !Bool
-  , ioMultiAssets :: !Bool
-  , ioMetadata :: !Bool
-  , ioKeepMetadataNames :: Strict.Maybe [Word64]
-  , ioPlutusExtra :: !Bool
+  , ioMetadata :: !MetadataConfig
+  , ioMultiAssets :: !MultiAssetConfig
   , ioOffChainPoolData :: !Bool
+  , ioPlutus :: !PlutusConfig
   , ioPoolStats :: !Bool
-  , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
+  , ioRewards :: !Bool
+  , ioShelley :: !ShelleyInsertConfig
+  , ioTxCBOR :: !Bool
+  , ioUseLedger :: !Bool
   }
   deriving (Show)
 

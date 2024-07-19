@@ -416,7 +416,7 @@ registerStakeCreds = do
 
 registerStakeCredsNoShelley :: IOManager -> [(Text, Text)] -> Assertion
 registerStakeCredsNoShelley = do
-  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigAndDropDB args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- These should not be saved when shelley is disabled

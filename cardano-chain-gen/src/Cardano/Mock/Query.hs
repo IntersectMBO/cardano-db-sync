@@ -11,11 +11,21 @@ module Cardano.Mock.Query (
   queryGovActionCounts,
   queryConstitutionAnchor,
   queryRewardRests,
+  queryCollateralTxOutCount,
+  queryMultiAssetMetadataPolicy,
+  queryPoolUpdateCount,
+  queryStakeAddressCount,
+  queryStakeAddressHashRaw,
+  queryStakeDeRegCount,
+  queryStakeRegCount,
   queryTreasuryDonations,
+  countTxOutNonNullStakeAddrIds,
 ) where
 
 import qualified Cardano.Db as Db
-import Cardano.Prelude hiding (from, on)
+import Cardano.Prelude hiding (from, isNothing, on)
+import qualified Data.ByteString.Base16 as Base16
+import Data.ByteString.Short (ShortByteString, toShort)
 import Database.Esqueleto.Experimental
 import Prelude ()
 
@@ -162,3 +172,60 @@ queryTreasuryDonations = do
 
   let total = join (unValue <$> res)
   pure $ maybe 0 Db.unDbLovelace total
+
+queryMultiAssetMetadataPolicy :: MonadIO io => ReaderT SqlBackend io (Maybe ShortByteString)
+queryMultiAssetMetadataPolicy = do
+  res <- selectOne $ do
+    metadataPolicy <- from $ table @Db.MultiAsset
+    pure $ metadataPolicy ^. Db.MultiAssetPolicy
+  pure $ toShort . Base16.encode . unValue <$> res
+
+queryStakeAddressHashRaw :: MonadIO io => ReaderT SqlBackend io (Maybe ShortByteString)
+queryStakeAddressHashRaw = do
+  res <- selectOne $ do
+    stakeAddress <- from $ table @Db.StakeAddress
+    pure $ stakeAddress ^. Db.StakeAddressHashRaw
+  pure $ toShort . Base16.encode . unValue <$> res
+
+queryStakeAddressCount :: MonadIO io => ReaderT SqlBackend io Word
+queryStakeAddressCount = do
+  res <- selectOne $ do
+    _ <- from (table @Db.StakeAddress)
+    pure countRows
+  pure $ maybe 0 unValue res
+
+queryCollateralTxOutCount :: MonadIO io => ReaderT SqlBackend io Word
+queryCollateralTxOutCount = do
+  res <- selectOne $ do
+    _ <- from (table @Db.CollateralTxOut)
+    pure countRows
+  pure $ maybe 0 unValue res
+
+queryPoolUpdateCount :: MonadIO io => ReaderT SqlBackend io Word
+queryPoolUpdateCount = do
+  res <- selectOne $ do
+    _ <- from (table @Db.PoolUpdate)
+    pure countRows
+  pure $ maybe 0 unValue res
+
+queryStakeDeRegCount :: MonadIO io => ReaderT SqlBackend io Word
+queryStakeDeRegCount = do
+  res <- selectOne $ do
+    _ <- from (table @Db.StakeDeregistration)
+    pure countRows
+  pure $ maybe 0 unValue res
+
+queryStakeRegCount :: MonadIO io => ReaderT SqlBackend io Word
+queryStakeRegCount = do
+  res <- selectOne $ do
+    _ <- from (table @Db.StakeRegistration)
+    pure countRows
+  pure $ maybe 0 unValue res
+
+countTxOutNonNullStakeAddrIds :: (MonadIO m) => SqlPersistT m Word
+countTxOutNonNullStakeAddrIds = do
+  result <- selectOne $ do
+    txOut <- from $ table @Db.TxOut
+    where_ $ not_ (isNothing $ txOut ^. Db.TxOutStakeAddressId)
+    pure countRows
+  pure $ maybe 0 unValue result

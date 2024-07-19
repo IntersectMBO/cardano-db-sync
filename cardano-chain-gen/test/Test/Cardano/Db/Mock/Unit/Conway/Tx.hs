@@ -13,7 +13,6 @@ module Test.Cardano.Db.Mock.Unit.Conway.Tx (
   consumeSameBlock,
   addTxMetadata,
   addTxMetadataDisabled,
-  addTxMetadataWhitelist,
 ) where
 
 import Cardano.DbSync.Config (SyncNodeConfig (..))
@@ -157,31 +156,6 @@ addTxMetadata ioManager metadata = do
         initConfigFile
           { dncInsertOptions = dncInsertOptions' {sioMetadata = MetadataEnable}
           }
-
-addTxMetadataWhitelist :: IOManager -> [(Text, Text)] -> Assertion
-addTxMetadataWhitelist = do
-  withCustomConfigAndDropDB args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
-
-    -- Add blocks with transactions
-    void $ do
-      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
-        let txBody = Conway.mkDummyTxBody
-            auxData = Map.fromList [(1, I 1), (2, I 2)]
-         in Right (Conway.mkAuxDataTx True txBody auxData)
-
-    -- Wait for it to sync
-    assertBlockNoBackoff dbSync 1
-    -- Should have tx metadata
-    assertEqBackoff dbSync queryTxMetadataCount 1 [] "Expected tx metadata"
-  where
-    args =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-keep-metadata.json"
-        , claFullMode = False
-        }
-    testLabel = "conwayConfigMetadataKeep"
-    cfgDir = conwayConfigDir
 
 addTxMetadataDisabled :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadataDisabled ioManager metadata = do

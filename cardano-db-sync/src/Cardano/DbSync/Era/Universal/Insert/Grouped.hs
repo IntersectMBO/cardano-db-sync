@@ -63,6 +63,7 @@ data ExtendedTxOut = ExtendedTxOut
   { etoTxHash :: !ByteString
   , etoTxOut :: !DB.TxOut
   }
+  deriving (Show)
 
 data ExtendedTxIn = ExtendedTxIn
   { etiTxIn :: !DB.TxIn
@@ -146,7 +147,9 @@ insertReverseIndex blockId minIds =
 resolveTxInputs ::
   MonadIO m =>
   SyncEnv ->
+  -- | Has the output been consumed?
   Bool ->
+  -- | Does the output need a value?
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
