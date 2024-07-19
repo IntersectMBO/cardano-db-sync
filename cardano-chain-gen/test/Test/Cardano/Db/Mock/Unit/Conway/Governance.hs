@@ -11,6 +11,7 @@
 module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
+  paramChange,
   updateConstitution,
   treasuryWithdrawal,
 ) where
@@ -22,7 +23,8 @@ import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), hashAnchorData, 
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..), Voter (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
-import Cardano.Ledger.Core (txIdTx)
+import Cardano.Ledger.Conway.PParams (ppuGovActionDepositL)
+import Cardano.Ledger.Core (emptyPParamsUpdate, txIdTx)
 import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Ledger.SafeHash (SafeToHash (..))
@@ -35,6 +37,8 @@ import qualified Cardano.Mock.Query as Query
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Data.Maybe (fromJust)
+import Data.Maybe.Strict (StrictMaybe (..))
+import Lens.Micro
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
@@ -252,3 +256,67 @@ treasuryWithdrawal =
       "Unexpected constution voting anchor"
   where
     testLabel = "conwayTreasuryWithdrawal"
+
+paramChange :: IOManager -> [(Text, Text)] -> Assertion
+paramChange =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+
+    -- Register committee hot credentials
+    -- TODO[sgillespie]: Let's get this in UnifiedApi or something
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+        mapM (uncurry Conway.mkCommitteeAuthTx) Forging.bootstrapCommitteeCreds
+
+    -- Create and vote for a governance proposal
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+        let proposalTx = Conway.mkParamChangeTx newParams
+            newParams =
+              emptyPParamsUpdate & ppuGovActionDepositL .~ SJust (Coin 100)
+
+            addVoteTx =
+              Conway.mkGovVoteTx
+                govActionId
+                ( [ DRepVoter (Prelude.head Forging.unregisteredDRepIds)
+                  , StakePoolVoter (Forging.resolvePool (PoolIndex 0) ledger)
+                  , StakePoolVoter (Forging.resolvePool (PoolIndex 1) ledger)
+                  , StakePoolVoter (Forging.resolvePool (PoolIndex 2) ledger)
+                  ]
+                    ++ map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
+                )
+
+            govActionId =
+              GovActionId
+                { gaidTxId = txIdTx proposalTx
+                , gaidGovActionIx = GovActionIx 0
+                }
+
+        pure [proposalTx, addVoteTx]
+
+    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+    -- epoch and enacted on the following.
+    epoch1 <- Api.fillEpochs interpreter server 2
+
+    -- Wait for it to synch
+    assertBlockNoBackoff dbSync (length (epoch0 <> epoch1) + 4)
+
+    epochNo <- unEpochNo <$> getCurrentEpoch interpreter
+
+    -- Should have updated epoch param
+    assertEqQuery
+      dbSync
+      (join <$> Query.queryParamFromEpoch Db.EpochParamGovActionDeposit epochNo)
+      (Just $ Db.DbWord64 100)
+      "Unexpected constution voting anchor"
+  where
+    testLabel = "conwayParamChange"
