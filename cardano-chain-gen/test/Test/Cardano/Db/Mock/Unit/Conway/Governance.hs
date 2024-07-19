@@ -12,6 +12,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
   paramChange,
+  hardFork,
   updateConstitution,
   treasuryWithdrawal,
 ) where
@@ -19,7 +20,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash)
 import Cardano.Ledger.Address (RewardAccount (..))
-import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), hashAnchorData, textToUrl)
+import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), ProtVer (..), hashAnchorData, textToUrl)
+import Cardano.Ledger.Binary.Version (natVersion)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..), Voter (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
@@ -287,12 +289,12 @@ paramChange =
             addVoteTx =
               Conway.mkGovVoteTx
                 govActionId
-                ( [ DRepVoter (Prelude.head Forging.unregisteredDRepIds)
-                  , StakePoolVoter (Forging.resolvePool (PoolIndex 0) ledger)
-                  , StakePoolVoter (Forging.resolvePool (PoolIndex 1) ledger)
-                  , StakePoolVoter (Forging.resolvePool (PoolIndex 2) ledger)
-                  ]
-                    ++ map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
+                ( map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
+                    ++ [ DRepVoter (Prelude.head Forging.unregisteredDRepIds)
+                       , StakePoolVoter (Forging.resolvePool (PoolIndex 0) ledger)
+                       , StakePoolVoter (Forging.resolvePool (PoolIndex 1) ledger)
+                       , StakePoolVoter (Forging.resolvePool (PoolIndex 2) ledger)
+                       ]
                 )
 
             govActionId =
@@ -320,3 +322,67 @@ paramChange =
       "Unexpected constution voting anchor"
   where
     testLabel = "conwayParamChange"
+
+hardFork :: IOManager -> [(Text, Text)] -> Assertion
+hardFork =
+  withFullConfig configDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+
+    -- Register committee hot credentials
+    -- TODO[sgillespie]: Let's get this in UnifiedApi or something
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+        mapM (uncurry Conway.mkCommitteeAuthTx) Forging.bootstrapCommitteeCreds
+
+    -- Create and vote for a governance proposal
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+        let proposalTx = Conway.mkHardForkTx version
+            version = ProtVer (natVersion @10) 0
+
+            addVoteTx =
+              Conway.mkGovVoteTx
+                govActionId
+                ( map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
+                    ++ [ StakePoolVoter (Forging.resolvePool (PoolIndex 0) ledger)
+                       , StakePoolVoter (Forging.resolvePool (PoolIndex 1) ledger)
+                       , StakePoolVoter (Forging.resolvePool (PoolIndex 2) ledger)
+                       ]
+                )
+
+            govActionId =
+              GovActionId
+                { gaidTxId = txIdTx proposalTx
+                , gaidGovActionIx = GovActionIx 0
+                }
+
+        pure [proposalTx, addVoteTx]
+
+    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+    -- epoch and enacted on the following.
+    epoch1 <- Api.fillEpochs interpreter server 2
+
+    -- Wait for it to synch
+    assertBlockNoBackoff dbSync (length (epoch0 <> epoch1) + 4)
+
+    epochNo <- getCurrentEpoch interpreter
+
+    -- Protocol major version should now be 10
+    assertEqBackoff
+      dbSync
+      (Query.queryVersionMajorFromEpoch (unEpochNo epochNo))
+      (Just 10)
+      []
+      "Unexpected protocol major version"
+  where
+    configDir = "config-conway-bootstrap"
+    testLabel = "conwayHardFork"

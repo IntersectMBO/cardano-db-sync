@@ -179,6 +179,7 @@ test-suite cardano-chain-gen
                       , cardano-db-sync
                       , cardano-chain-gen
                       , cardano-ledger-alonzo
+                      , cardano-ledger-binary
                       , cardano-ledger-conway
                       , cardano-ledger-core
                       , cardano-ledger-mary

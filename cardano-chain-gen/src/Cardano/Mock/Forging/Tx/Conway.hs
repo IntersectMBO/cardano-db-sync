@@ -51,6 +51,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkAddCommitteeTx,
   mkTreasuryWithdrawalTx,
   mkParamChangeTx,
+  mkHardForkTx,
   mkGovActionProposalTx,
   mkGovVoteTx,
   Babbage.mkParamUpdateTx,
@@ -572,6 +573,12 @@ mkParamChangeTx paramsUpdate = mkGovActionProposalTx govAction
     govAction = Governance.ParameterChange prevGovAction paramsUpdate hashProtection
     prevGovAction = SNothing
     hashProtection = SNothing
+
+mkHardForkTx :: ProtVer -> AlonzoTx StandardConway
+mkHardForkTx version = mkGovActionProposalTx govAction
+  where
+    govAction = Governance.HardForkInitiation prevGovAction version
+    prevGovAction = SNothing
 
 mkGovActionProposalTx ::
   Governance.GovAction StandardConway ->
