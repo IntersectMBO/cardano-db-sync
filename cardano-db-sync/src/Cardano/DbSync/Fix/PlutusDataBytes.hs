@@ -197,7 +197,7 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
 
     checkValidBytes :: a -> m Bool
     checkValidBytes a = case hashBytes a of
-      Left Nothing -> pure True
+      Left Nothing -> pure False
       Left (Just msg) -> do
         liftIO $
           logWarning tracer $
