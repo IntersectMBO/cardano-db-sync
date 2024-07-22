@@ -48,7 +48,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 }
 ```
 
-## Properties
+# Properties
 
 `insert_options` may contain the following elements:
 
@@ -67,7 +67,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 
-### Preset
+## Preset
 
 Preset is an aggregate setting that overrides all other properties. For example, setting
 preset to `"full"` will enable all insert options except `"tx_cbor"`.
@@ -80,16 +80,16 @@ preset to `"full"` will enable all insert options except `"tx_cbor"`.
 
 | Value           | Explanation                                                  |
 | :-----------    | :----------------------------------------------------------- |
-| `"full"`        | Enable all options                                           |
-| `"only_utxo"`   | Only load `block`, `tx`, `tx_out` and `ma_tx_out`            |
-| `"only_gov"`    | Disable most data except governance data.                    |
-| `"disable_all"` | Only load `block`, `tx` and data related to the ledger state |
+| ["full"](#Full)             | Enable all options                                           |
+| ["only_utxo"](#only-utxo)   | Only load `block`, `tx`, `tx_out` and `ma_tx_out`.            |
+| ["only_gov"](#only-gov)     | Disable most data except governance data.                    |
+| ["disable_all"](#disable-all) | Only load `block`, `tx` and data related to the ledger state |
 
-**Full**
+### Full
 
 This is equivalent to enabling all other settings.
 
-**Only UTxO**
+### Only UTxO
 
 This is equivalent to setting:
 
@@ -121,7 +121,7 @@ doesn't use any of its data. When syncing is completed, it loads the whole UTxO 
 to the `tx_out` and `ma_tx_out` tables.  After that db-sync can be restarted with `ledger` set to
 `"disable"` to continue syncing without maintaining the ledger
 
-**Only Gov**
+### Only Gov
 
 This is equivalent to setting:
 
@@ -147,8 +147,9 @@ This is equivalent to setting:
 ```
 
 Disables most data except `block`, `tx`, and governance data.
+View [governance](#governance) for more indepth information into what is effected.
 
-**Disable All**
+### Disable All
 
 This is equivalent to setting:
 
@@ -174,7 +175,7 @@ This is equivalent to setting:
 
 Disables almost all data except `block` and `tx` tables.
 
-### Tx CBOR
+## Tx CBOR
 
 `tx_cbor`
 
@@ -187,7 +188,7 @@ Disables almost all data except `block` and `tx` tables.
 | `"enable"`  | Enable transaction CBOR collection     |
 | `"disable"` | Disable transaction CBOR collection    |
 
-### Tx Out
+## Tx Out
 
 `tx_out`
 
@@ -263,13 +264,13 @@ fields are left empty:
 Until the ledger state migration happens, any restart requires this setting. After completion, this
 can be changed.
 
-#### Force Tx In
+### Force Tx In
 
 `tx_out.force_tx_in`
 
  * Type: `boolean`
 
-### Ledger
+## Ledger
 
 One of the db-sync features that uses the most resources is that it maintains a ledger state and
 replays all the ledger rules. This is the only way to get historic reward details and other data
@@ -339,7 +340,7 @@ delete from epoch_param;
 Maintains the ledger state, but doesn't use any of its data, except to load UTxO. To be used with
 `tx_out` set to `"bootstrap"`
 
-### Shelley
+## Shelley
 
 `shelley`
 
@@ -360,7 +361,7 @@ proposals. Does not control `epoch_stake` and `rewards`, For this check `ledger`
 
  * Type: `boolean`
 
-### Multi Asset
+## Multi Asset
 
 `multi_asset`
 
@@ -380,7 +381,7 @@ Enables or disables multi assets tables and entries.
 
  * Type: `boolean`
 
-### Metadata
+## Metadata
 
 `metadata`
 
@@ -409,7 +410,7 @@ If set, only keep metadata with the specified keys.
 
  * Type: `integer[]`
 
-### Plutus
+## Plutus
 
 `plutus`
 
@@ -429,9 +430,11 @@ Enables or disables most tables and entries related to plutus and scripts.
 
  * Type: `boolean`
 
-### Governance
+## Governance
 
 `governance`
+
+This will effect all governance related data/functionality.
 
  * Type: `string`
 
@@ -442,7 +445,40 @@ Enables or disables most tables and entries related to plutus and scripts.
 | `"enable"` | Enable all data related to governance  |
 | `"disable"`| Disable all data related to governance |
 
-### Offchain Pool Data
+### Example
+
+```json
+"governance": "enable"
+```
+### Tables associated with governance
+
+| Table Name            | info        |
+| :--------------       | :------------ |
+| `committee_de_registration` | Every committee de-registration. |
+| `committee_member` | Members of the committee. A committee can have multiple members. |
+| `committee_registration` | Every committee hot key registration. |
+| `committee` | New committee proposed on a governance action proposal in table `gov_action_proposal` |
+| `constitution` | Constitution attached to a GovActionProposal  (`gov_action_proposal`). |
+| `constitution` | Constitutiona attached to a `gov_action_proposal` |
+| `delegation_vote` | Delegations from a stake address to a stake pool. |
+| `drep_distr` | Distribution of voting power per DRep per. Currently this has a single entry per DRep and doesn't show every delegator. This may change.  |
+| `drep_registration` | DRep registrations, deregistrations or updates. Registration have positive deposit values, deregistrations have negative and updates have null. Based on this distinction, for a specific DRep, getting the latest entry gives its registration state. |
+| `drep_registration` | DRep registrations, deregistrations or updates. Registration have positive deposit values, deregistrations have negative and updates have null. Based on this distinction, for a specific DRep, getting the latest entry gives its registration state. |
+| `epoch_stake` | Governance (and in the future other) stats per epoch. |
+| `gov_action_proposal` | Every Anchor that appears on Governance Actions. These are pointers to offchain metadata. The tuple of url and hash is unique. |
+| `gov_action_proposal` | Proposed Gov action proposals, aka ProposalProcedure, GovAction or GovProposal. This table may be referenced by treasury_withdrawal or new_committee. |
+| `off_chain_vote_data` | Offchain metadata related to Vote Anchors. It accepts metadata in a more lenient way than what's decribed in CIP-100. |
+| `off_chain_vote_drep_data` | Offchain metadata for Drep Registrations. Implementes CIP-119. |
+| `off_chain_vote_external_update`| Offchain metadata external updates, as decribed in CIP-100. New in 13.3-Conway. |
+| `off_chain_vote_fetch_error` | Errors while fetching or validating offchain Voting Anchor metadata. |
+| `off_chain_vote_gov_action_data` | Offchain metadata for Governance Actions. Implementes CIP-108. New in 13.3-Conway. |
+| `off_chain_vote_reference` | Offchain metadata references, as decribed in CIP-100. |
+| `treasury_withdrawal` | All treasury withdrawals proposed on a GovActionProposal (`gov_action_proposal`). |
+| `treasury_withdrawal` | All treasury withdrawals proposed on a GovActionProposal. |
+| `voting_anchor` | Every Anchor that appears on Governance Actions. These are pointers to offchain metadata The tuple of url and hash is unique |
+| `voting_procedure` | Voting procedures, aka GovVote. A Vote can be Yes No or Abstain |
+
+## Offchain Pool Data
 
 `offchain_pool_data`
 
@@ -455,7 +491,7 @@ Enables or disables most tables and entries related to plutus and scripts.
 | `"enable"` | Enables fetching offchain metadata.       |
 | `"disable"`| Disables fetching pool offchain metadata. |
 
-### Pool Stat
+## Pool Stat
 
 `pool_stat`
 
@@ -468,7 +504,7 @@ Enables or disables most tables and entries related to plutus and scripts.
 | `"enable"`  | Enable pool stats                      |
 | `"disable"` | Disable pool stats                     |
 
-### Remove Jsonb From Schema
+## Remove Jsonb From Schema
 
 `remove_jsonb_from_schema`
 
@@ -484,13 +520,13 @@ A warning will logw if `remove_jsonb_from_schema` was previously set to `enable`
 | `"enable"` | Enables removing [jsonb data types](#data-types-effected) from the schema. |
 | `"disable"`| keeps jsonb data types in the schema.                           |
 
-#### Example
+### Example
 
 ```json
 "remove_jsonb_from_schema": "enable"
 ```
 
-#### Data Types Effected
+### Data Types Effected
 When enabling this config, the following columns will no longer have the `jsonb` data type:
 
 | Table                 | Column        |
