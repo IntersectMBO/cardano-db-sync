@@ -1371,7 +1371,7 @@ schemaDocs =
       CommitteeMemberExpirationEpoch # "The epoch this member expires"
 
     Constitution --^ do
-      "A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway."
+      "A table for constitution attached to a GovActionProposal. New in 13.2-Conway."
       ConstitutionGovActionProposalId # "The GovActionProposal table index for this constitution."
       ConstitutionVotingAnchorId # "The ConstitutionVotingAnchor table index for this constitution."
       ConstitutionScriptHash # "The Script Hash. It's associated script may not be already inserted in the script table."
