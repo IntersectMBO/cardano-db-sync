@@ -107,10 +107,10 @@ syncNodeConfig loggingCfg =
 syncInsertConfig :: Gen SyncInsertConfig
 syncInsertConfig =
   Gen.choice
-    [ pure $ SyncInsertConfig (Just "full") fullInsertOptions
-    , pure $ SyncInsertConfig (Just "only_utxo") onlyUTxOInsertOptions
-    , pure $ SyncInsertConfig (Just "only_gov") onlyGovInsertOptions
-    , pure $ SyncInsertConfig (Just "disable_all") disableAllInsertOptions
+    [ pure $ SyncInsertConfig (Just FullInsertPreset) fullInsertOptions
+    , pure $ SyncInsertConfig (Just OnlyUTxOInsertPreset) onlyUTxOInsertOptions
+    , pure $ SyncInsertConfig (Just OnlyGovInsertPreset) onlyGovInsertOptions
+    , pure $ SyncInsertConfig (Just DisableAllInsertPreset) disableAllInsertOptions
     , SyncInsertConfig Nothing <$> syncInsertOptions
     ]
 

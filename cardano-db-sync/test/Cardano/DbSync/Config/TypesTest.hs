@@ -47,10 +47,10 @@ prop_syncInsertConfigRoundtrip = property $ do
         SyncInsertConfig Nothing _ -> True
         _other -> False
 
-  cover 5 "full" (isPreset "full")
-  cover 5 "only utxo" (isPreset "only_utxo")
-  cover 5 "only gov" (isPreset "only_gov")
-  cover 5 "disable all" (isPreset "disable_all")
+  cover 5 "full" (isPreset FullInsertPreset)
+  cover 5 "only utxo" (isPreset OnlyUTxOInsertPreset)
+  cover 5 "only gov" (isPreset OnlyGovInsertPreset)
+  cover 5 "disable all" (isPreset DisableAllInsertPreset)
   cover 5 "custom config" isCustomConfig
 
   tripping cfg Aeson.encode Aeson.decode

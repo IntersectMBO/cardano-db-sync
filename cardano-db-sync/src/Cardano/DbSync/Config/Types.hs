@@ -22,6 +22,7 @@ module Cardano.DbSync.Config.Types (
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
+  SyncInsertPreset (..),
   SyncInsertOptions (..),
   TxCBORConfig (..),
   PoolStatsConfig (..),
@@ -156,18 +157,17 @@ data SyncPreConfig = SyncPreConfig
   deriving (Show)
 
 data SyncInsertConfig = SyncInsertConfig
-  { sicPreset :: Maybe Text
+  { sicPreset :: Maybe SyncInsertPreset
   , sicOptions :: SyncInsertOptions
   }
   deriving (Eq, Show)
 
--- data SyncInsertConfig
---   = FullInsertOptions
---   | OnlyUTxOInsertOptions
---   | OnlyGovInsertOptions
---   | DisableAllInsertOptions
---   | SyncInsertConfig SyncInsertOptions
---   deriving (Eq, Show)
+data SyncInsertPreset
+  = FullInsertPreset
+  | OnlyUTxOInsertPreset
+  | OnlyGovInsertPreset
+  | DisableAllInsertPreset
+  deriving (Eq, Show)
 
 data SyncInsertOptions = SyncInsertOptions
   { sioTxCBOR :: TxCBORConfig
@@ -397,15 +397,28 @@ instance FromJSON SyncProtocol where
       String "Cardano" -> pure SyncProtocolCardano
       x -> typeMismatch "Protocol" x
 
+instance FromJSON SyncInsertPreset where
+  parseJSON = Aeson.withText "SyncInsertPreset" $ \case
+    "full" -> pure FullInsertPreset
+    "only_utxo" -> pure OnlyUTxOInsertPreset
+    "only_governance" -> pure OnlyGovInsertPreset
+    "disable_all" -> pure DisableAllInsertPreset
+    other -> fail $ "unexpected preset: " <> show other
+
+instance ToJSON SyncInsertPreset where
+  toJSON FullInsertPreset = "full"
+  toJSON OnlyUTxOInsertPreset = "only_utxo"
+  toJSON OnlyGovInsertPreset = "only_governance"
+  toJSON DisableAllInsertPreset = "disable_all"
+
 instance FromJSON SyncInsertConfig where
   parseJSON = Aeson.withObject "SyncInsertConfig" $ \obj -> do
     preset <- obj .:? "preset"
     baseOptions <- case preset of
-      Just "full" -> pure fullInsertOptions
-      Just "only_utxo" -> pure onlyUTxOInsertOptions
-      Just "only_gov" -> pure onlyGovInsertOptions
-      Just "disable_all" -> pure disableAllInsertOptions
-      Just other -> fail $ "unexpected preset: " <> show other
+      Just FullInsertPreset -> pure fullInsertOptions
+      Just OnlyUTxOInsertPreset -> pure onlyUTxOInsertOptions
+      Just OnlyGovInsertPreset -> pure onlyGovInsertOptions
+      Just DisableAllInsertPreset -> pure disableAllInsertOptions
       Nothing -> pure def -- Default options
     options <- parseOverrides obj baseOptions
     pure $ SyncInsertConfig preset options
@@ -738,6 +751,7 @@ onlyGovInsertOptions =
   disableAllInsertOptions
     { sioLedger = LedgerEnable
     , sioGovernance = GovernanceConfig True
+    , sioPoolStats = PoolStatsConfig True
     }
 
 disableAllInsertOptions :: SyncInsertOptions

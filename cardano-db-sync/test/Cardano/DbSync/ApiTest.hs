@@ -7,7 +7,6 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Gen as Gen
 import Cardano.Prelude
-import Control.Monad (MonadFail (..))
 import Hedgehog
 
 tests :: IO Bool
@@ -27,17 +26,16 @@ prop_extractInsertOptions = property $ do
   coverInsertCfg insertCfg
 
   case insertCfg of
-    SyncInsertConfig (Just "full") _ ->
+    SyncInsertConfig (Just FullInsertPreset) _ ->
       extractInsertOptions cfg === fullInsertOptions
-    SyncInsertConfig (Just "only_utxo") _ ->
+    SyncInsertConfig (Just OnlyUTxOInsertPreset) _ ->
       extractInsertOptions cfg === onlyUTxOInsertOptions
-    SyncInsertConfig (Just "only_gov") _ ->
+    SyncInsertConfig (Just OnlyGovInsertPreset) _ ->
       extractInsertOptions cfg === onlyGovInsertOptions
-    SyncInsertConfig (Just "disable_all") _ ->
+    SyncInsertConfig (Just DisableAllInsertPreset) _ ->
       extractInsertOptions cfg === disableAllInsertOptions
     SyncInsertConfig Nothing opts ->
       extractInsertOptions cfg === opts
-    _other -> fail "Unexpected SyncInsertConfig" -- This case should not happen if all presets are covered
 
 prop_extractInsertOptionsRewards :: Property
 prop_extractInsertOptionsRewards = property $ do
@@ -49,24 +47,22 @@ prop_extractInsertOptionsRewards = property $ do
   let areRewardsEnabled' = areRewardsEnabled $ sioRewards (extractInsertOptions cfg)
 
   case insertCfg of
-    SyncInsertConfig (Just "only_gov") _ ->
+    SyncInsertConfig (Just OnlyGovInsertPreset) _ ->
       assert $ not areRewardsEnabled'
-    SyncInsertConfig (Just "disable_all") _ ->
+    SyncInsertConfig (Just DisableAllInsertPreset) _ ->
       assert $ not areRewardsEnabled'
     _other -> assert areRewardsEnabled'
 
-coverInsertCfg :: SyncInsertConfig -> PropertyT IO ()
-coverInsertCfg cfg = do
-  cover 5 "full" $ isPreset "full" cfg
-  cover 5 "only utxo" $ isPreset "only_utxo" cfg
-  cover 5 "only gov" $ isPreset "only_gov" cfg
-  cover 5 "disable all" $ isPreset "disable_all" cfg
-  cover 5 "custom config" $ isCustomConfig cfg
+coverInsertCfg :: MonadTest m => SyncInsertConfig -> m ()
+coverInsertCfg insertOpts = do
+  let preset = sicPreset insertOpts
+  cover 5 "full" (preset == Just FullInsertPreset)
+  cover 5 "only utxo" (preset == Just OnlyUTxOInsertPreset)
+  cover 5 "only gov" (preset == Just OnlyGovInsertPreset)
+  cover 5 "disable all" (preset == Just DisableAllInsertPreset)
+  cover 5 "config" isSyncInsertConfig
   where
-    isPreset :: Text -> SyncInsertConfig -> Bool
-    isPreset preset (SyncInsertConfig (Just p) _) = p == preset
-    isPreset _ _ = False
-
-    isCustomConfig :: SyncInsertConfig -> Bool
-    isCustomConfig (SyncInsertConfig Nothing _) = True
-    isCustomConfig _ = False
+    isSyncInsertConfig =
+      case insertOpts of
+        (SyncInsertConfig Nothing _) -> True
+        _other -> False
