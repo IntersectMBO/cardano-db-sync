@@ -22,46 +22,47 @@ prop_extractInsertOptions :: Property
 prop_extractInsertOptions = property $ do
   cfg <- forAll Gen.syncPreConfig
 
-  let insertOpts = pcInsertConfig cfg
-  coverInsertCfg insertOpts
+  let insertCfg = pcInsertConfig cfg
+  coverInsertCfg insertCfg
 
-  case insertOpts of
-    FullInsertOptions ->
+  case insertCfg of
+    SyncInsertConfig (Just FullInsertPreset) _ ->
       extractInsertOptions cfg === fullInsertOptions
-    OnlyUTxOInsertOptions ->
+    SyncInsertConfig (Just OnlyUTxOInsertPreset) _ ->
       extractInsertOptions cfg === onlyUTxOInsertOptions
-    OnlyGovInsertOptions ->
+    SyncInsertConfig (Just OnlyGovInsertPreset) _ ->
       extractInsertOptions cfg === onlyGovInsertOptions
-    DisableAllInsertOptions ->
+    SyncInsertConfig (Just DisableAllInsertPreset) _ ->
       extractInsertOptions cfg === disableAllInsertOptions
-    SyncInsertConfig cfg' ->
-      extractInsertOptions cfg === cfg'
+    SyncInsertConfig Nothing opts ->
+      extractInsertOptions cfg === opts
 
 prop_extractInsertOptionsRewards :: Property
 prop_extractInsertOptionsRewards = property $ do
   cfg <- forAll Gen.syncPreConfig
 
-  let insertOpts = pcInsertConfig cfg
-  coverInsertCfg insertOpts
+  let insertCfg = pcInsertConfig cfg
+  coverInsertCfg insertCfg
 
   let areRewardsEnabled' = areRewardsEnabled $ sioRewards (extractInsertOptions cfg)
 
-  case insertOpts of
-    OnlyGovInsertOptions ->
+  case insertCfg of
+    SyncInsertConfig (Just OnlyGovInsertPreset) _ ->
       assert $ not areRewardsEnabled'
-    DisableAllInsertOptions ->
+    SyncInsertConfig (Just DisableAllInsertPreset) _ ->
       assert $ not areRewardsEnabled'
-    _ -> assert areRewardsEnabled'
+    _other -> assert areRewardsEnabled'
 
 coverInsertCfg :: MonadTest m => SyncInsertConfig -> m ()
 coverInsertCfg insertOpts = do
-  cover 5 "full" (insertOpts == FullInsertOptions)
-  cover 5 "only utxo" (insertOpts == OnlyUTxOInsertOptions)
-  cover 5 "only gov" (insertOpts == OnlyGovInsertOptions)
-  cover 5 "disable all" (insertOpts == DisableAllInsertOptions)
+  let preset = sicPreset insertOpts
+  cover 5 "full" (preset == Just FullInsertPreset)
+  cover 5 "only utxo" (preset == Just OnlyUTxOInsertPreset)
+  cover 5 "only gov" (preset == Just OnlyGovInsertPreset)
+  cover 5 "disable all" (preset == Just DisableAllInsertPreset)
   cover 5 "config" isSyncInsertConfig
   where
     isSyncInsertConfig =
       case insertOpts of
-        SyncInsertConfig _ -> True
-        _ -> False
+        (SyncInsertConfig Nothing _) -> True
+        _other -> False

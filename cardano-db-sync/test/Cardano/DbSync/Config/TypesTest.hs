@@ -39,16 +39,19 @@ prop_syncInsertConfigRoundtrip :: Property
 prop_syncInsertConfigRoundtrip = property $ do
   cfg <- forAll Gen.syncInsertConfig
 
-  let isSyncInsertConfig =
-        case cfg of
-          SyncInsertConfig _ -> True
-          _ -> False
+  let isPreset preset = case cfg of
+        SyncInsertConfig (Just p) _ -> p == preset
+        _other -> False
 
-  cover 5 "full" (cfg == FullInsertOptions)
-  cover 5 "only utxo" (cfg == OnlyUTxOInsertOptions)
-  cover 5 "only gov" (cfg == OnlyGovInsertOptions)
-  cover 5 "disable all" (cfg == DisableAllInsertOptions)
-  cover 5 "config" isSyncInsertConfig
+  let isCustomConfig = case cfg of
+        SyncInsertConfig Nothing _ -> True
+        _other -> False
+
+  cover 5 "full" (isPreset FullInsertPreset)
+  cover 5 "only utxo" (isPreset OnlyUTxOInsertPreset)
+  cover 5 "only gov" (isPreset OnlyGovInsertPreset)
+  cover 5 "disable all" (isPreset DisableAllInsertPreset)
+  cover 5 "custom config" isCustomConfig
 
   tripping cfg Aeson.encode Aeson.decode
 

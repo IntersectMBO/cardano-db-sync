@@ -9,10 +9,6 @@
 
 module Cardano.DbSync.Api (
   extractInsertOptions,
-  fullInsertOptions,
-  onlyUTxOInsertOptions,
-  onlyGovInsertOptions,
-  disableAllInsertOptions,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
@@ -211,74 +207,7 @@ getPrunes = do
   DB.pcmPruneTxOut . getPruneConsume
 
 extractInsertOptions :: SyncPreConfig -> SyncInsertOptions
-extractInsertOptions cfg =
-  case pcInsertConfig cfg of
-    FullInsertOptions -> fullInsertOptions
-    OnlyUTxOInsertOptions -> onlyUTxOInsertOptions
-    OnlyGovInsertOptions -> onlyGovInsertOptions
-    DisableAllInsertOptions -> disableAllInsertOptions
-    SyncInsertConfig opts -> opts
-
-fullInsertOptions :: SyncInsertOptions
-fullInsertOptions =
-  SyncInsertOptions
-    { sioTxCBOR = TxCBORConfig False
-    , sioTxOut = TxOutEnable
-    , sioLedger = LedgerEnable
-    , sioShelley = ShelleyEnable
-    , sioRewards = RewardsConfig True
-    , sioMultiAsset = MultiAssetEnable
-    , sioMetadata = MetadataEnable
-    , sioPlutus = PlutusEnable
-    , sioGovernance = GovernanceConfig True
-    , sioOffchainPoolData = OffchainPoolDataConfig True
-    , sioPoolStats = PoolStatsConfig True
-    , sioJsonType = JsonTypeText
-    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-    }
-
-onlyUTxOInsertOptions :: SyncInsertOptions
-onlyUTxOInsertOptions =
-  SyncInsertOptions
-    { sioTxCBOR = TxCBORConfig False
-    , sioTxOut = TxOutBootstrap (ForceTxIn False)
-    , sioLedger = LedgerIgnore
-    , sioShelley = ShelleyDisable
-    , sioRewards = RewardsConfig True
-    , sioMultiAsset = MultiAssetDisable
-    , sioMetadata = MetadataDisable
-    , sioPlutus = PlutusDisable
-    , sioGovernance = GovernanceConfig False
-    , sioOffchainPoolData = OffchainPoolDataConfig False
-    , sioPoolStats = PoolStatsConfig False
-    , sioJsonType = JsonTypeText
-    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-    }
-
-onlyGovInsertOptions :: SyncInsertOptions
-onlyGovInsertOptions =
-  disableAllInsertOptions
-    { sioLedger = LedgerEnable
-    , sioGovernance = GovernanceConfig True
-    }
-
-disableAllInsertOptions :: SyncInsertOptions
-disableAllInsertOptions =
-  SyncInsertOptions
-    { sioTxCBOR = TxCBORConfig False
-    , sioTxOut = TxOutDisable
-    , sioLedger = LedgerDisable
-    , sioShelley = ShelleyDisable
-    , sioRewards = RewardsConfig False
-    , sioMultiAsset = MultiAssetDisable
-    , sioMetadata = MetadataDisable
-    , sioPlutus = PlutusDisable
-    , sioOffchainPoolData = OffchainPoolDataConfig False
-    , sioPoolStats = PoolStatsConfig False
-    , sioGovernance = GovernanceConfig False
-    , sioJsonType = JsonTypeText
-    , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-    }
+extractInsertOptions = sicOptions . pcInsertConfig
 
 initCurrentEpochNo :: CurrentEpochNo
 initCurrentEpochNo =
