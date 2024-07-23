@@ -217,13 +217,23 @@ in {
               LEDGER_OPTS="--state-dir ${cfg.stateDir}"
             fi
 
-            exec ${exec} \
-                --config ${configFile} \
-                --socket-path "$CARDANO_NODE_SOCKET_PATH" \
-                --schema-dir ${self.schema} \
-                ${toString cfg.rtsArgs} \
-                ''${LEDGER_OPTS} \
-                ''${EXTRA_DB_SYNC_ARGS:-}
+            if [[ -z "''${CARDANO_DB_SYNC_CONFIG:-}" ]]; then
+              exec ${exec} \
+                  --config ${configFile} \
+                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                  --schema-dir ${self.schema} \
+                  ${toString cfg.rtsArgs} \
+                  ''${LEDGER_OPTS} \
+                  ''${EXTRA_DB_SYNC_ARGS:-}
+            else
+              exec ${exec} \
+                  --config "$CARDANO_DB_SYNC_CONFIG" \
+                  --socket-path "$CARDANO_NODE_SOCKET_PATH" \
+                  --schema-dir ${self.schema} \
+                  ${toString cfg.rtsArgs} \
+                  ''${LEDGER_OPTS} \
+                  ''${EXTRA_DB_SYNC_ARGS:-}
+            fi
           '';
     in {
       pgpass = builtins.toFile "pgpass" "${cfg.postgres.socketdir}:${
