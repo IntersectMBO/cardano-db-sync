@@ -58,9 +58,19 @@ getRationale = \case
 
 eitherDecodeOffChainVoteData :: LBS.ByteString -> DB.AnchorType -> Either String OffChainVoteData
 eitherDecodeOffChainVoteData lbs = \case
-  DB.GovActionAnchor -> OffChainVoteDataGa <$> eitherDecode' lbs
-  DB.DrepAnchor -> OffChainVoteDataDr <$> eitherDecode' lbs
+  DB.GovActionAnchor ->
+    eitherDecodeAlternative (OffChainVoteDataGa <$> eitherDecode' lbs) (OffChainVoteDataOther <$> eitherDecode' lbs)
+  DB.DrepAnchor ->
+    eitherDecodeAlternative (OffChainVoteDataDr <$> eitherDecode' lbs) (OffChainVoteDataOther <$> eitherDecode' lbs)
   DB.OtherAnchor -> OffChainVoteDataOther <$> eitherDecode' lbs
+
+eitherDecodeAlternative :: Either String OffChainVoteData -> Either String OffChainVoteData -> Either String OffChainVoteData
+eitherDecodeAlternative one two =
+  case one of
+    Right _ -> one
+    Left err1 -> case two of
+      Right _ -> two
+      Left err2 -> Left $ err1 <> ", CIP-100:" <> err2
 
 getAuthors :: OffChainVoteData -> [Author]
 getAuthors = \case
