@@ -46,7 +46,7 @@
 
                 (final: prev: with final; {
                   # Required in order to build postgresql for musl
-                  postgresql = (final.postgresql_14
+                  postgresql = (final.postgresql_11
                     .overrideAttrs (_: lib.optionalAttrs (stdenv.hostPlatform.isMusl) {
                       dontDisableStatic = true;
                       NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
