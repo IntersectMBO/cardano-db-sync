@@ -44,21 +44,6 @@
               builtins.attrValues inputs.iohkNix.overlays ++
               [ inputs.haskellNix.overlay
 
-                (final: prev: with final; {
-                  # Required in order to build postgresql for musl
-                  postgresql = (final.postgresql_11
-                    .overrideAttrs (_: lib.optionalAttrs (stdenv.hostPlatform.isMusl) {
-                      dontDisableStatic = true;
-                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
-                      # without this collate.icu.utf8, and foreign_data will fail.
-                      LC_CTYPE = "C";
-                    }))
-                    .override {
-                      enableSystemd = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
-                      gssSupport = stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isMusl;
-                    };
-                })
-
                 (final: prev: {
                   inherit (project.hsPkgs.cardano-node.components.exes) cardano-node;
                   inherit (project.hsPkgs.cardano-cli.components.exes) cardano-cli;
@@ -263,6 +248,21 @@
                   packages.cardano-chain-gen.components.tests.cardano-chain-gen =
                     postgresTest;
                 })
+
+              (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
+                (let
+                  ghcOptions = [
+                    "-L${pkgs.postgresql}/lib"
+                    "-optl-Wl,-lpgport"
+                    "-optl-Wl,-lpgcommon"
+                  ];
+                in {
+                  packages.cardano-chain-gen.ghcOptions = ghcOptions;
+                  packages.cardano-db-sync.ghcOptions = ghcOptions;
+                  packages.cardano-db.ghcOptions = ghcOptions;
+                  packages.cardano-db-tool.ghcOptions = ghcOptions;
+                  packages.cardano-smash-server.ghcOptions = ghcOptions;
+                }))
 
               ({
                 packages.double-conversion.ghcOptions = [
