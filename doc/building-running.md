@@ -7,7 +7,7 @@ that is unsupported.
 
 Running the db sync node will require Nix and either multiple terminals or a multi terminal
 emulator like GNU Screen or TMux.
-Setup [IOHK binary cache](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md#iohk-binary-cache)
+Setup [IOHK binary cache](https://github.com/input-output-hk/cardano-node-wiki/wiki/building-the-node-using-nix#iohk-binary-cache)
 to avoid several hours of build time.
 
 The db sync node is designed to work with a locally running Cardano Node. The two git repositories need to be checked out so that
