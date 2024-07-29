@@ -193,7 +193,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
     when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
       logInfo tracer $
         mconcat
-          [ "insertByronBlock: continuing epoch "
+          [ "Insert Byron Block: continuing epoch "
           , textShow epoch
           , " (slot "
           , textShow slotWithinEpoch
@@ -203,7 +203,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
           ]
     logger followingClosely tracer $
       mconcat
-        [ "insertByronBlock: epoch "
+        [ "Insert Byron Block: epoch "
         , textShow (unEpochNo $ sdEpochNo details)
         , ", slot "
         , textShow (Byron.slotNumber blk)
