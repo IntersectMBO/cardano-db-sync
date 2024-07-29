@@ -132,7 +132,6 @@ docker-compose up && docker-compose logs -f
 ### Set folder where to download snapshot
 
 The snapshot is downloaded in current working directory. Setting the working directory should allow to choose where the download is done.
-
 For `docker-compose`:
 
 ```yaml
@@ -221,34 +220,27 @@ docker-compose down -f docker-test.yml
 
 ## Building Docker images with Nix
 
-Assuming a base OSX machine with Nix installed. Building a Docker image for cardano-db-sync requires a
-Linux host to compile on. Nix provides a way to do [remote builds](https://nixos.org/manual/nix/unstable/advanced-topics/distributed-builds.html)
-
-Prerequisites:
- * shell account on NixOS Linux machine (ask on Slack)
-   eg. builder@x86_64-linux.example.com
+Building a Docker image for cardano-db-sync requires a Linux host to compile on.
 
 Assuming you want a Linux x86 image run:
 
 ``` shell
-nix build .#legacyPackages.x86_64-linux.dockerImage \
---builders 'ssh://builder@x86_64-linux.example.com x86_64-linux'
+nix build .#packages.x86_64-linux.cardano-db-sync-docker
 ```
 
-At the end it will generate a `tar.gz` file
-eg `/nix/store/arbrn0fs54whkn64m0wrcbl9hjd35byn-docker-image-cardano-db-sync.tar.gz`
+At the end it will generate a `tar.gz` file linked to `./result`
 
 that can be loaded into docker and run as a normal image.
 
 ``` shell
-$ docker load -i /nix/store/arbrn0fs54whkn64m0wrcbl9hjd35byn-docker-image-cardano-db-sync.tar.gz
+$ docker load < result
 
 $ docker image ls
-REPOSITORY                    TAG                                        IMAGE ID       CREATED        SIZE
-inputoutput/cardano-db-sync   066b747a8bfd3791b06ea46c2e793f83ed64967f   f34b029e9c5c   15 hours ago   911MB
+REPOSITORY                    TAG            IMAGE ID       CREATED         SIZE
+cardano-db-sync               latest         a5168d8c04b9   54 years ago    1.16GB
 
 # Run this as
-$ docker run inputoutput/cardano-db-sync:066b747a8bfd3791b06ea46c2e793f83ed64967f
+$ docker run cardano-db-sync
 ```
 
 ## Running SMASH with docker-compose
