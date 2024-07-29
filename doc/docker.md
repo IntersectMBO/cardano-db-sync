@@ -66,6 +66,30 @@ To connect to different network (preprod or preview) use `NETWORK` environment v
 NETWORK=preprod docker-compose up -d && docker-compose logs -f
 ```
 
+### Overriding Configuration
+
+Overriding the configuration file can be done by passing the `DB_SYNC_CONFIG` environment
+variable. First, add a bind mount to the `cardano-db-sync` service:
+
+```yaml
+cardano-db-sync:
+  image: cardano-db-sync
+  # <-- Snip -->
+  volumes:
+    - db-sync-data:/var/lib/cexplorer
+    - node-ipc:/node-ipc
+    # Add the bind mount here
+    - ./config/network/mainnet:/data
+  # <-- Snip -->
+```
+
+Set the configuration file with `DB_SYNC_CONFIG`:
+
+```sh
+export DB_SYNC_CONFIG=/data/db-sync-config.json
+docker-compose up -d && docker-compose logs -f
+```
+
 ### Take control
 
 Excluding the `NETWORK` ENV will simply just call the `cardano-db-sync` executable
