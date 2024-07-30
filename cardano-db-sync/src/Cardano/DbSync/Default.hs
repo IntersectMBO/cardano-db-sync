@@ -94,7 +94,7 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
         Right _
           | Just epochNo <- getNewEpoch applyRes ->
               liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
-        _ -> pure ()
+        _otherwise -> pure ()
   where
     mkApplyResult :: Bool -> IO (ApplyResult, Bool)
     mkApplyResult isCons = do

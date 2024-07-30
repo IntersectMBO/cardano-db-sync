@@ -198,15 +198,21 @@ insertStakeSlice ::
   SyncEnv ->
   Generic.StakeSliceRes ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStakeSlice _ Generic.NoSlices = pure ()
-insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
-  insertEpochStake syncEnv network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
-  when finalSlice $ do
-    lift $ DB.updateSetComplete $ unEpochNo $ Generic.sliceEpochNo slice
-    size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
-    liftIO
-      . logInfo tracer
-      $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
+insertStakeSlice syncEnv stakeSliceRes = do
+  case stakeSliceRes of
+    Generic.NoSlices -> pure ()
+    Generic.Slice slice isfinalSlice -> do
+      insertEpochStake
+        syncEnv
+        network
+        (Generic.sliceEpochNo slice)
+        (Map.toList $ Generic.sliceDistr slice)
+      when isfinalSlice $ do
+        lift $ DB.updateSetComplete $ unEpochNo $ Generic.sliceEpochNo slice
+        size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
+        liftIO
+          . logInfo tracer
+          $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
   where
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
@@ -368,8 +374,11 @@ splittRecordsEvery val = go
   where
     go [] = []
     go ys =
-      let (as, bs) = splitAt val ys
-       in as : go bs
+      if length ys > val
+        then
+          let (as, bs) = splitAt val ys
+           in as : go bs
+        else [ys]
 
 insertPoolDepositRefunds ::
   (MonadBaseControl IO m, MonadIO m) =>

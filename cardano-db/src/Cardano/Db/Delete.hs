@@ -19,6 +19,7 @@ module Cardano.Db.Delete (
   deletePoolStat,
   deleteAdaPots,
   deleteTxOut,
+  deleteEpochStake,
   -- for testing
   queryFirstAndDeleteAfter,
 ) where
@@ -255,3 +256,7 @@ deleteAdaPots blkId = do
 
 deleteTxOut :: MonadIO m => ReaderT SqlBackend m Int64
 deleteTxOut = deleteWhereCount ([] :: [Filter TxOut])
+
+deleteEpochStake :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+deleteEpochStake epochNum =
+  deleteWhere [EpochStakeEpochNo >=. epochNum]

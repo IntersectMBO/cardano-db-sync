@@ -55,6 +55,7 @@ rollbackFromBlockNo syncEnv blkNo = do
       DB.deleteDrepDistr epochNo
       DB.deleteRewardRest epochNo
       DB.deletePoolStat epochNo
+      DB.deleteEpochStake epochNo
       DB.setNullEnacted epochNo
       DB.setNullRatified epochNo
       DB.setNullDropped epochNo

@@ -3,7 +3,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
@@ -46,12 +45,13 @@ import Prelude (id)
 data StakeSliceRes
   = Slice !StakeSlice !Bool -- True if this is the final slice for this epoch. Can be used for logging.
   | NoSlices
+  deriving (Show)
 
 data StakeSlice = StakeSlice
   { sliceEpochNo :: !EpochNo
   , sliceDistr :: !(Map StakeCred (Coin, PoolKeyHash))
   }
-  deriving (Eq)
+  deriving (Show, Eq)
 
 emptySlice :: EpochNo -> StakeSlice
 emptySlice epoch = StakeSlice epoch Map.empty
@@ -95,11 +95,13 @@ genericStakeSlice ::
   LedgerState (ShelleyBlock p era) ->
   Bool ->
   StakeSliceRes
-genericStakeSlice pInfo epochBlockNo lstate isMigration
-  | index > delegationsLen = NoSlices
-  | index == delegationsLen = Slice (emptySlice epoch) True
-  | index + size > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
-  | otherwise = Slice (mkSlice size) False
+genericStakeSlice pInfo epochBlockNo lstate isMigration = do
+  case compare index delegationsLen of
+      GT -> NoSlices
+      EQ -> Slice (emptySlice epoch) True
+      LT -> case compare (index + size) delegationsLen of
+              GT -> Slice (mkSlice (delegationsLen - index)) True
+              _otherwise  -> Slice (mkSlice size) False
   where
     epoch :: EpochNo
     epoch = EpochNo $ 1 + unEpochNo (Shelley.nesEL (Consensus.shelleyLedgerState lstate))
@@ -149,10 +151,10 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
 
     -- The starting index of the data in the delegation vector.
     index :: Word64
-    index
-      | isMigration = 0
-      | epochBlockNo < k = delegationsLen + 1 -- so it creates the empty Slice.
-      | otherwise = (epochBlockNo - k) * epochSliceSize
+    index =
+      if isMigration
+        then 0
+        else (epochBlockNo - k) * epochSliceSize
 
     size :: Word64
     size
