@@ -1,20 +1,19 @@
-# Warning: This file is deprecated and will be removed!
-version: "3.9"
+# Not recommended for production use, and should only be used for local development!
+# This is only a template, feel free to tweak this to fit your needs.
+name: cardano-db-sync
 
 services:
   postgres:
     image: postgres:14.10-alpine
     environment:
       - POSTGRES_LOGGING=true
-      - POSTGRES_DB_FILE=/run/secrets/postgres_db
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
-      - POSTGRES_USER_FILE=/run/secrets/postgres_user
-    secrets:
-      - postgres_password
-      - postgres_user
-      - postgres_db
+      - POSTGRES_DB=cexplorer
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj
+    networks:
+      - postgres
     ports:
-      - ${POSTGRES_PORT:-5432}:5432
+      - 5432:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
@@ -25,7 +24,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: ${POSTGRES_ARGS:--c maintenance_work_mem=1GB -c max_parallel_maintenance_workers=4}
+    command:
+      - -c
+      - maintenance_work_mem=1GB
+      - -c
+      - max_parallel_maintenance_workers=4
     logging:
       driver: "json-file"
       options:
@@ -36,6 +39,8 @@ services:
     image: ghcr.io/intersectmbo/cardano-node:9.0.0
     environment:
       - NETWORK=${NETWORK:-mainnet}
+    networks:
+      - cardano-node
     volumes:
       - node-db:/data/db
       - node-ipc:/ipc
@@ -56,24 +61,21 @@ services:
   cardano-db-sync:
     image: ghcr.io/intersectmbo/cardano-db-sync:13.3.0.0
     environment:
-      - DB_SYNC_CONFIG=${DB_SYNC_CONFIG:-}
-      - DISABLE_LEDGER=${DISABLE_LEDGER}
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - RESTORE_SNAPSHOT=${RESTORE_SNAPSHOT:-}
-      - RESTORE_RECREATE_DB=N
-      - EXTRA_DB_SYNC_ARGS=${EXTRA_DB_SYNC_ARGS:-}
+      - POSTGRES_DB=cexplorer
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj
     depends_on:
       # Depend on both services to be healthy before starting.
       cardano-node:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    secrets:
-      - postgres_password
-      - postgres_user
-      - postgres_db
+    networks:
+      - cardano-node
+      - postgres
     volumes:
       - db-sync-data:/var/lib/cexplorer
       - node-ipc:/node-ipc
@@ -84,16 +86,13 @@ services:
         max-size: "200k"
         max-file: "10"
 
-secrets:
-  postgres_db:
-    file: ./config/secrets/postgres_db
-  postgres_password:
-    file: ./config/secrets/postgres_password
-  postgres_user:
-    file: ./config/secrets/postgres_user
-
 volumes:
+  volumes:
   db-sync-data:
   postgres:
   node-db:
   node-ipc:
+
+networks:
+  cardano-node: {}
+  postgres: {}
