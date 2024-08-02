@@ -106,7 +106,7 @@ This is equivalent to setting:
   "enable": "false"
 },
 "multi_asset": {
-  "enable": "false"
+  "enable": "true"
 },
 "plutus": {
   "enable": false
