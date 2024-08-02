@@ -62,6 +62,9 @@ eitherDecodeOffChainVoteData lbs = \case
     eitherDecodeAlternative (OffChainVoteDataGa <$> eitherDecode' lbs) (OffChainVoteDataOther <$> eitherDecode' lbs)
   DB.DrepAnchor ->
     eitherDecodeAlternative (OffChainVoteDataDr <$> eitherDecode' lbs) (OffChainVoteDataOther <$> eitherDecode' lbs)
+  DB.VoteAnchor -> OffChainVoteDataOther <$> eitherDecode' lbs
+  DB.CommitteeDeRegAnchor -> OffChainVoteDataOther <$> eitherDecode' lbs
+  DB.ConstitutionAnchor -> Left "Unsupported Constitution metadata"
   DB.OtherAnchor -> OffChainVoteDataOther <$> eitherDecode' lbs
 
 eitherDecodeAlternative :: Either String OffChainVoteData -> Either String OffChainVoteData -> Either String OffChainVoteData

@@ -272,6 +272,9 @@ data AnchorType
   = GovActionAnchor
   | DrepAnchor
   | OtherAnchor
+  | VoteAnchor
+  | CommitteeDeRegAnchor
+  | ConstitutionAnchor
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet AnchorType)
 
@@ -447,6 +450,9 @@ renderAnchorType gav =
     GovActionAnchor -> "gov_action"
     DrepAnchor -> "drep"
     OtherAnchor -> "other"
+    VoteAnchor -> "vote"
+    CommitteeDeRegAnchor -> "committee_dereg"
+    ConstitutionAnchor -> "constitution"
 
 readAnchorType :: String -> AnchorType
 readAnchorType str =
@@ -454,6 +460,9 @@ readAnchorType str =
     "gov_action" -> GovActionAnchor
     "drep" -> DrepAnchor
     "other" -> OtherAnchor
+    "vote" -> VoteAnchor
+    "committee_dereg" -> CommitteeDeRegAnchor
+    "constitution" -> ConstitutionAnchor
     _other -> error $ "readAnchorType: Unknown AnchorType " ++ str
 
 word64ToAda :: Word64 -> Ada
