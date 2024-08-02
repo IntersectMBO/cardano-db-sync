@@ -1328,6 +1328,7 @@ schemaDocs =
       VotingAnchorBlockId # "The Block table index of the tx that includes this anchor. This only exists to facilitate rollbacks"
       VotingAnchorDataHash # "A hash of the contents of the metadata URL"
       VotingAnchorUrl # "A URL to a JSON payload of metadata"
+      VotingAnchorType # "The type of the anchor. It can be gov_action, drep, other, vote, committee_dereg, constitution"
 
     GovActionProposal --^ do
       "A table for proposed GovActionProposal, aka ProposalProcedure, GovAction or GovProposal.\

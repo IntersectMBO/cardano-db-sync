@@ -303,7 +303,7 @@ insertCommitteeDeRegistration ::
   Maybe (Anchor StandardCrypto) ->
   ReaderT SqlBackend m ()
 insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
-  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blockId DB.OtherAnchor
+  votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blockId DB.CommitteeDeRegAnchor
   khColdId <- insertCommitteeHash khCold
   void
     . DB.insertCommitteeDeRegistration

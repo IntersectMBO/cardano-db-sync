@@ -251,7 +251,7 @@ insertParamProposal blkId txId pp = do
 
 insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m DB.ConstitutionId
 insertConstitution blockId mgapId constitution = do
-  votingAnchorId <- insertVotingAnchor blockId DB.OtherAnchor $ constitutionAnchor constitution
+  votingAnchorId <- insertVotingAnchor blockId DB.ConstitutionAnchor $ constitutionAnchor constitution
   DB.insertConstitution $
     DB.Constitution
       { DB.constitutionGovActionProposalId = mgapId
@@ -284,7 +284,7 @@ insertVotingProcedure ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal cache gaId
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.OtherAnchor
+  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.VoteAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred -> do
       khId <- lift $ insertCommitteeHash cred

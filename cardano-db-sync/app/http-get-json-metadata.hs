@@ -51,7 +51,10 @@ main = do
     getVoteType ls
       | "ga" `List.elem` ls = Just GovAction
       | "drep" `List.elem` ls = Just DrepReg
-      | "vote" `List.elem` ls = Just Other
+      | "other" `List.elem` ls = Just Other
+      | "vote" `List.elem` ls = Just Vote
+      | "committee_dereg" `List.elem` ls = Just CommitteeDeReg
+      | "const" `List.elem` ls = Just Constitution
       | otherwise = Nothing
     isItLink = List.elem "url"
 
@@ -64,13 +67,22 @@ main = do
       _ ->
         runHttpGetPool (PoolUrl url) (PoolMetaHash <$> mhsh)
 
-data OffChainVoteType = GovAction | DrepReg | Other
+data OffChainVoteType
+  = GovAction
+  | DrepReg
+  | Other
+  | Vote
+  | CommitteeDeReg
+  | Constitution
 
 toDBOffChainVoteType :: OffChainVoteType -> DB.AnchorType
 toDBOffChainVoteType = \case
   GovAction -> DB.GovActionAnchor
   DrepReg -> DB.DrepAnchor
   Other -> DB.OtherAnchor
+  Vote -> DB.VoteAnchor
+  CommitteeDeReg -> DB.CommitteeDeRegAnchor
+  Constitution -> DB.ConstitutionAnchor
 
 -- -------------------------------------------------------------------------------------------------
 

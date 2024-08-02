@@ -8,7 +8,7 @@ module Cardano.DbSync.OffChain.Query (
 ) where
 
 import Cardano.Db (
-  AnchorType,
+  AnchorType (..),
   EntityField (..),
   OffChainPoolData,
   OffChainPoolFetchError,
@@ -52,7 +52,9 @@ import Database.Esqueleto.Experimental (
   select,
   subList_select,
   table,
+  val,
   where_,
+  (!=.),
   (:&) ((:&)),
   (==.),
   (^.),
@@ -83,6 +85,7 @@ queryNewVoteWorkQueue now maxCount = do
           from (table @OffChainVoteData) >>= \ocvd ->
             where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. va ^. VotingAnchorId)
       )
+    where_ (va ^. VotingAnchorType !=. val ConstitutionAnchor)
     where_
       ( notExists $
           from (table @OffChainVoteFetchError) >>= \ocvfe ->
@@ -117,6 +120,7 @@ queryOffChainVoteWorkQueue _now maxCount = do
         `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
     orderBy [asc (ocpfe ^. OffChainVoteFetchErrorId)]
     where_ (just (ocpfe ^. OffChainVoteFetchErrorId) `in_` latestRefs)
+    where_ (va ^. VotingAnchorType !=. val ConstitutionAnchor)
     limit $ fromIntegral maxCount
     pure
       ( ocpfe ^. OffChainVoteFetchErrorFetchTime
