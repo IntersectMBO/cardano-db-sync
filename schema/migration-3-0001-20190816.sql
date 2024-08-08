@@ -8,7 +8,7 @@
 
 -- A utxo view which shows all unspent transaction outputs including the un-redeemed redeem
 -- addresses.
-create view utxo_byron_view as select
+create or replace view  utxo_byron_view as select
 	tx_out.*
   from tx_out left outer join tx_in
 	on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
@@ -19,7 +19,7 @@ create view utxo_byron_view as select
 -- addresses.
 -- This should produce the same query results as the above `utxo_byron_view` for Shelley addresses
 -- and non-redeem Byron addresses.
-create view utxo_view as select
+create or replace view utxo_view as select
 	tx_out.*
   from tx_out
 	left outer join tx_in on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
