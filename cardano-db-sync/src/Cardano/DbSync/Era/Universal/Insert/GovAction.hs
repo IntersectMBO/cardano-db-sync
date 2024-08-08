@@ -308,6 +308,7 @@ insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
       , DB.votingProcedureVoterRole = Generic.toVoterRole voter
       , DB.votingProcedureVote = Generic.toVote $ vProcVote vp
       , DB.votingProcedureVotingAnchorId = votingAnchorId
+      , DB.votingProcedureInvalid = Nothing
       }
 
 insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
