@@ -660,6 +660,7 @@ share
     poolVoter            PoolHashId Maybe     noreference
     vote                 Vote                 sqltype=vote
     votingAnchorId       VotingAnchorId Maybe noreference
+    invalid              EventInfoId Maybe noreference
 
   DrepDistr
     hashId                  DrepHashId          noreference
@@ -673,6 +674,12 @@ share
     noConfidenceId          GovActionProposalId Maybe noreference
     constitutionId          ConstitutionId Maybe noreference
     epochNo                 Word64              sqltype=word31type
+
+  EventInfo
+    txId                    TxId Maybe          noreference
+    epoch                   Word64              sqltype=word31type
+    type                    Text
+    explanation             Text Maybe
 
   -- -----------------------------------------------------------------------------------------------
   -- OffChain (ie not on the blockchain) data.
@@ -1388,6 +1395,7 @@ schemaDocs =
       VotingProcedurePoolVoter # "A reference to the pool hash entry that voted"
       VotingProcedureVote # "The Vote. Can be one of Yes, No, Abstain."
       VotingProcedureVotingAnchorId # "The VotingAnchor table index associated with this VotingProcedure."
+      VotingProcedureInvalid # "TODO: This is currently not implemented and always stays null. Not null if the vote is invalid."
 
     OffChainVoteData --^ do
       "The table with the offchain metadata related to Vote Anchors. It accepts metadata in a more lenient way than what's\
