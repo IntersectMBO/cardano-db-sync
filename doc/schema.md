@@ -897,7 +897,7 @@ A table for every Anchor that appears on Governance Actions. These are pointers 
 | `block_id` | integer (64) | The Block table index of the tx that includes this anchor. This only exists to facilitate rollbacks |
 | `data_hash` | blob | A hash of the contents of the metadata URL |
 | `url` | varchar | A URL to a JSON payload of metadata |
-| `type` | anchorType |  |
+| `type` | anchorType | The type of the anchor. It can be gov_action, drep, other, vote, committee_dereg, constitution |
 
 ### `gov_action_proposal`
 
@@ -964,7 +964,7 @@ A table for members of the committee. A committee can have multiple members. New
 
 ### `constitution`
 
-A table for constitutiona attached to a GovActionProposal. New in 13.2-Conway.
+A table for constitution attached to a GovActionProposal. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -993,6 +993,7 @@ A table for voting procedures, aka GovVote. A Vote can be Yes No or Abstain. New
 | `pool_voter` | integer (64) | A reference to the pool hash entry that voted |
 | `vote` | vote | The Vote. Can be one of Yes, No, Abstain. |
 | `voting_anchor_id` | integer (64) | The VotingAnchor table index associated with this VotingProcedure. |
+| `invalid` | integer (64) | TODO: This is currently not implemented and always stays null. Not null if the vote is invalid. |
 
 ### `drep_distr`
 
@@ -1021,6 +1022,18 @@ Table with governance (and in the future other) stats per epoch.
 | `no_confidence_id` | integer (64) | The reference to the current gov_action_proposal of no confidence. TODO: This remains NULL. |
 | `constitution_id` | integer (64) | The reference to the current constitution. Should never be null. |
 | `epoch_no` | word31type | The epoch in question. |
+
+### `event_info`
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) |  |
+| `epoch` | word31type |  |
+| `type` | string |  |
+| `explanation` | string |  |
 
 ### `off_chain_pool_data`
 

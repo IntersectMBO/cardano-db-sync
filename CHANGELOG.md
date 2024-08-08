@@ -2,7 +2,13 @@
 
 ## 13.4.0.0
 
-* Added `tx.treasury_donation`
+- Voting metadata parsing falls back to CIP-100 when CIP-108 or CIP-119 is not followed [#1779]
+- Extended the voting_anchor.type anchorType with vote, committee_dereg and constitution
+- Fixed `only-utxo` missing multi-assets [#1788]
+- Config can now override presets [pr #1775]
+- Fixed Script bytes mismatch false negative check [#1646]
+- Fixed an issue where some pool metadata were missing [#1805]
+- Fix: docker snapshot restoration [pr #1776]
 
 ## 13.3.0.0
 * Support for Conway (see schema docs)
@@ -12,6 +18,7 @@
 * Added an optional feature to store CBOR serialized transactions in `tx_cbor` table [#1723]
 * Added an optional feature to store pool stats per epoch transactions in `pool_stat` table
 * EnableFutureGenesis is now true by default
+* Added `tx.treasury_donation`
 
 ## 13.2.0.2
 * Support node 8.9.x
