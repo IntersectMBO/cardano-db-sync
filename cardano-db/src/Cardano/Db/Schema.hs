@@ -691,7 +691,7 @@ share
     json                Text                sqltype=jsonb
     bytes               ByteString          sqltype=bytea
     pmrId               PoolMetadataRefId   noreference
-    UniqueOffChainPoolData  poolId hash
+    UniqueOffChainPoolData  poolId pmrId
     deriving Show
 
   -- The pool metadata fetch error. We duplicate the poolId for easy access.
