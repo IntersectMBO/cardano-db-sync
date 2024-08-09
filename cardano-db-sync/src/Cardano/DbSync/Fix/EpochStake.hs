@@ -40,9 +40,9 @@ migrateStakeDistr env mcls =
                   lift $
                     DB.insertEpochStakeProgress (mkProgress True <$> [minEpoch .. (maxEpoch - 1)])
                 lift $ DB.insertEpochStakeProgress [mkProgress isFinal maxEpoch]
-              _ -> pure ()
+              _otherwise -> pure ()
         lift $ DB.insertExtraMigration DB.StakeDistrEnded
-    _ -> pure False
+    _otherwise -> pure False
   where
     trce = getTrace env
     mkProgress isCompleted e =

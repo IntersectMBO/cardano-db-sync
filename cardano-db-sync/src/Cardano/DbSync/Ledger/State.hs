@@ -314,7 +314,7 @@ getStakeSlice env cls isMigration =
         n
         (clsState cls)
         isMigration
-    _ -> Generic.NoSlices
+    _otherwise -> Generic.NoSlices
 
 getSliceMeta :: Generic.StakeSliceRes -> Maybe (Bool, EpochNo)
 getSliceMeta (Generic.Slice (Generic.StakeSlice epochNo _) isFinal) = Just (isFinal, epochNo)
