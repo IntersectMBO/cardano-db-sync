@@ -221,6 +221,8 @@ unitTests iom knownMigrations =
         , test "new committee member" Governance.newCommittee
         , test "update constitution" Governance.updateConstitution
         , test "treasury withdrawal" Governance.treasuryWithdrawal
+        , test "protocol parameter change" Governance.paramChange
+        , test "hardfork initiation" Governance.hardFork
         ]
     ]
   where

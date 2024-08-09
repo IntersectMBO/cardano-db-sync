@@ -26,6 +26,9 @@ module Cardano.Mock.Forging.Tx.Generic (
   registeredShelleyGenesisKeys,
   bootstrapCommitteeCreds,
   unregisteredDRepIds,
+  spoVoters,
+  committeeVoters,
+  drepVoters,
   consPoolParams,
   getPoolStakeCreds,
 ) where
@@ -36,6 +39,7 @@ import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Address
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Governance (Voter (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
 import Cardano.Ledger.Crypto (ADDRHASH)
@@ -51,7 +55,7 @@ import qualified Cardano.Ledger.UMap as UMap
 import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude hiding (length, (.))
+import Cardano.Prelude
 import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
@@ -64,6 +68,7 @@ import Ouroboros.Consensus.Cardano.Block (LedgerState)
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import Prelude ((!!))
 
 resolveAddress ::
   forall era p.
@@ -307,6 +312,22 @@ mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @(ADDRHASH StandardCrypto)
 
 mkDummyHash :: forall h a. HashAlgorithm h => Proxy h -> Int -> Hash.Hash h a
 mkDummyHash _ = coerce . hashWithSerialiser @h toCBOR
+
+spoVoters ::
+  EraCrypto era ~ StandardCrypto =>
+  LedgerState (ShelleyBlock proto era) ->
+  [Voter StandardCrypto]
+spoVoters ledger =
+  [ StakePoolVoter (resolvePool (PoolIndex 0) ledger)
+  , StakePoolVoter (resolvePool (PoolIndex 1) ledger)
+  , StakePoolVoter (resolvePool (PoolIndex 2) ledger)
+  ]
+
+committeeVoters :: [Voter StandardCrypto]
+committeeVoters = map (CommitteeVoter . snd) bootstrapCommitteeCreds
+
+drepVoters :: [Voter StandardCrypto]
+drepVoters = maybeToList (DRepVoter <$> head unregisteredDRepIds)
 
 consPoolParams ::
   KeyHash 'StakePool StandardCrypto ->
