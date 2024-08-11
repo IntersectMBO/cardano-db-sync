@@ -82,7 +82,7 @@ preset to `"full"` will enable all insert options except `"tx_cbor"`.
 | :-----------    | :----------------------------------------------------------- |
 | ["full"](#Full)             | Enable all options                                           |
 | ["only_utxo"](#only-utxo)   | Only load `block`, `tx`, `tx_out` and `ma_tx_out`.            |
-| ["only_gov"](#only-gov)     | Disable most data except governance data.                    |
+| ["only_governance"](#only-governance)     | Disable most data except governance data.                    |
 | ["disable_all"](#disable-all) | Only load `block`, `tx` and data related to the ledger state |
 
 ### Full
@@ -121,7 +121,7 @@ doesn't use any of its data. When syncing is completed, it loads the whole UTxO 
 to the `tx_out` and `ma_tx_out` tables.  After that db-sync can be restarted with `ledger` set to
 `"disable"` to continue syncing without maintaining the ledger
 
-### Only Gov
+### Only Governance
 
 This is equivalent to setting:
 
