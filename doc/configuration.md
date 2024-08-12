@@ -142,7 +142,7 @@ This is equivalent to setting:
 },
 "governance": "enable",
 "offchain_pool_data": "disable"
-"pool_stat": "disable"
+"pool_stat": "enable"
 
 ```
 
