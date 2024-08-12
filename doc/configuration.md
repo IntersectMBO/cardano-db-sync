@@ -103,17 +103,17 @@ This is equivalent to setting:
   "enable": false
 },
 "metadata": {
-  "enable": "false"
+  "enable": false
 },
 "multi_asset": {
-  "enable": "true"
+  "enable": true
 },
 "plutus": {
   "enable": false
 },
 "governance": "disable",
 "offchain_pool_data": "disable"
-"pool_stat": "disable"
+"pool_stats": "disable"
 ```
 
 Initially populates only a few tables, like `block` and `tx`. It maintains a ledger state but
@@ -142,7 +142,7 @@ This is equivalent to setting:
 },
 "governance": "enable",
 "offchain_pool_data": "disable"
-"pool_stat": "disable"
+"pool_stats": "disable"
 
 ```
 
@@ -170,7 +170,7 @@ This is equivalent to setting:
 },
 "governance": "disable",
 "offchain_pool_data": "disable"
-"pool_stat": "disable"
+"pool_stats": "disable"
 ```
 
 Disables almost all data except `block` and `tx` tables.
@@ -491,9 +491,9 @@ This will effect all governance related data/functionality.
 | `"enable"` | Enables fetching offchain metadata.       |
 | `"disable"`| Disables fetching pool offchain metadata. |
 
-## Pool Stat
+## Pool Stats
 
-`pool_stat`
+`pool_stats`
 
  * Type: `string`
 

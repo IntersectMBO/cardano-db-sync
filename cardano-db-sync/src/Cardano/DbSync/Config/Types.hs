@@ -478,7 +478,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "plutus" .!= sioPlutus def
       <*> obj .:? "governance" .!= sioGovernance def
       <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
-      <*> obj .:? "pool_stat" .!= sioPoolStats def
+      <*> obj .:? "pool_stats" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
 
@@ -515,10 +515,10 @@ instance FromJSON TxCBORConfig where
       Nothing -> fail $ "unexpected tx_cbor: " <> show v
 
 instance FromJSON PoolStatsConfig where
-  parseJSON = Aeson.withText "pool_stat" $ \v ->
+  parseJSON = Aeson.withText "pool_stats" $ \v ->
     case enableDisableToBool v of
       Just g -> pure (PoolStatsConfig g)
-      Nothing -> fail $ "unexpected pool_stat: " <> show v
+      Nothing -> fail $ "unexpected pool_stats: " <> show v
 
 instance ToJSON TxOutConfig where
   toJSON cfg =
