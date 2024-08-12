@@ -9,6 +9,8 @@
 - Fixed Script bytes mismatch false negative check [#1646]
 - Fixed an issue where some pool metadata were missing [#1805]
 - Fix: docker snapshot restoration [pr #1776]
+- only_gov config preset renamed to only_governance
+- only_governance now enables pool_stat
 
 ## 13.3.0.0
 * Support for Conway (see schema docs)
