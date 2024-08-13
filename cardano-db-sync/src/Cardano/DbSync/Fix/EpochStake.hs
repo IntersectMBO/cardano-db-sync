@@ -20,12 +20,12 @@ import Database.Persist.Sql (SqlBackend)
 
 migrateStakeDistr :: (MonadIO m, MonadBaseControl IO m) => SyncEnv -> Strict.Maybe CardanoLedgerState -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
 migrateStakeDistr env mcls =
-  case (envLedgerEnv env, mcls) of
-    (HasLedger lenv, Strict.Just cls) -> do
+  case mcls of
+    (Strict.Just cls) -> do
       ems <- lift DB.queryAllExtraMigrations
       runWhen (not $ DB.isStakeDistrComplete ems) $ do
         liftIO $ logInfo trce "Starting Stake Distribution migration on table epoch_stake"
-        let stakeSlice = getStakeSlice lenv cls True
+        let stakeSlice = getStakeSlice cls True
         case stakeSlice of
           NoSlices ->
             liftIO $ logInsert 0

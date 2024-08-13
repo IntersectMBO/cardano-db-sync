@@ -1,3 +1,5 @@
+{-# LANGUAGE NumericUnderscores #-}
+
 module Test.Cardano.Db.Mock.Unit.Babbage.Stake (
   -- stake address
   registrationTx,
@@ -25,7 +27,7 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Tx.Babbage.Scenarios (delegateAndSendBlocks)
 import Cardano.Mock.Forging.Types (StakeIndex (..), UTxOIndex (..))
 import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (..))
-import Control.Monad (forM_, replicateM_, void)
+import Control.Monad (forM_, void)
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockSlot)
 import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig, withFullConfigAndDropDB)
@@ -34,7 +36,6 @@ import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeAndSubmitBlocks,
   forgeNextFindLeaderAndSubmit,
-  forgeNextSkipSlotsFindLeaderAndSubmit,
   getBabbageLedgerState,
   withBabbageFindLeaderAndSubmit,
   withBabbageFindLeaderAndSubmitTx,
@@ -215,10 +216,11 @@ stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =
   withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    a <- fillUntilNextEpoch interpreter mockServer
-    assertBlockNoBackoff dbSync (fromIntegral $ length a)
-    -- There are 5 delegations in genesis
-    assertEpochStake dbSync 5
+    blks <- fillUntilNextEpoch interpreter mockServer
+    assertBlockNoBackoff dbSync (fromIntegral $ length blks)
+    -- There are 10 delegations in genesis
+    assertEpochStakeEpoch dbSync 1 5
+    assertEpochStakeEpoch dbSync 2 5
   where
     testLabel = "stakeDistGenesis"
 
@@ -226,17 +228,23 @@ delegations2000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2000 =
   withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    a <- delegateAndSendBlocks 1995 interpreter
-    forM_ a $ atomically . addBlock mockServer
-    b <- fillUntilNextEpoch interpreter mockServer
-    c <- forgeAndSubmitBlocks interpreter mockServer 10
-
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
-    -- There are exactly 2000 entries on the second epoch, 5 from genesis and 1995 manually added
+    blks <- delegateAndSendBlocks 1995 interpreter
+    forM_ blks (atomically . addBlock mockServer)
+    -- Fill the rest of the epoch
+    epoch <- fillUntilNextEpoch interpreter mockServer
+    -- Wait for them to sync
+    assertBlockNoBackoff dbSync (length blks + length epoch)
+    assertEpochStakeEpoch dbSync 1 5
+    -- Add some more blocks
+    blks' <- forgeAndSubmitBlocks interpreter mockServer 10
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length blks + length epoch + length blks')
     assertEpochStakeEpoch dbSync 2 2000
-
+    -- Forge another block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 1)
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length blks + length epoch + length blks' + 1)
+    -- There are still 2000 entries
     assertEpochStakeEpoch dbSync 2 2000
   where
     testLabel = "delegations2000"
@@ -245,19 +253,23 @@ delegations2001 :: IOManager -> [(Text, Text)] -> Assertion
 delegations2001 =
   withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    a <- delegateAndSendBlocks 1996 interpreter
-    forM_ a $ atomically . addBlock mockServer
-    b <- fillUntilNextEpoch interpreter mockServer
-    c <- forgeAndSubmitBlocks interpreter mockServer 9
-
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
-    assertEpochStakeEpoch dbSync 2 0
+    -- We want exactly 2001 delegations, 5 from genesis and 1996 manually added
+    blks <- delegateAndSendBlocks 1996 interpreter
+    forM_ blks (atomically . addBlock mockServer)
+    -- Fill the rest of the epoch
+    epoch <- fillUntilNextEpoch interpreter mockServer
+    -- Add some more blocks
+    blks' <- forgeAndSubmitBlocks interpreter mockServer 9
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length blks + length epoch + length blks')
+    assertEpochStakeEpoch dbSync 1 5
+    -- The next 2000 entries is inserted on the next block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 1)
-    assertEpochStakeEpoch dbSync 2 2000
-    -- The remaining entry is inserted on the next block.
+    assertBlockNoBackoff dbSync (length blks + length epoch + length blks' + 1)
+    assertEpochStakeEpoch dbSync 2 2001
+    -- The remaining entry is inserted on the next block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c + 2)
+    assertBlockNoBackoff dbSync (length blks + length epoch + length blks' + 2)
     assertEpochStakeEpoch dbSync 2 2001
   where
     testLabel = "delegations2001"
@@ -266,25 +278,17 @@ delegations8000 :: IOManager -> [(Text, Text)] -> Assertion
 delegations8000 =
   withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    a <- delegateAndSendBlocks 7995 interpreter
-    forM_ a $ atomically . addBlock mockServer
-    b <- fillEpochs interpreter mockServer 2
-    c <- forgeAndSubmitBlocks interpreter mockServer 10
-
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + length c)
-    assertEpochStakeEpoch dbSync 3 2000
-
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertEpochStakeEpoch dbSync 3 4000
-
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertEpochStakeEpoch dbSync 3 6000
-
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertEpochStakeEpoch dbSync 3 8000
-
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertEpochStakeEpoch dbSync 3 8000
+    -- We want exactly 8000 delegations, 5 from genesis and 7995 manually added
+    blks <- delegateAndSendBlocks 7995 interpreter
+    forM_ blks (atomically . addBlock mockServer)
+    -- Fill the rest of the epoch
+    epoch <- fillEpochs interpreter mockServer 2
+    -- Add some more blocks
+    blks' <- forgeAndSubmitBlocks interpreter mockServer 10
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length blks + length epoch + length blks')
+    assertEpochStakeEpoch dbSync 1 5
+    assertEpochStakeEpoch dbSync 2 8000
   where
     testLabel = "delegations8000"
 
@@ -292,23 +296,20 @@ delegationsMany :: IOManager -> [(Text, Text)] -> Assertion
 delegationsMany =
   withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    a <- delegateAndSendBlocks 40000 interpreter
-    forM_ a $ atomically . addBlock mockServer
-    b <- fillEpochs interpreter mockServer 4
-    c <- forgeAndSubmitBlocks interpreter mockServer 10
-
-    -- too long. We cannot use default delays
-    assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b + length c)
-    -- The slice size here is
-    -- 1 + div (delegationsLen * 5) expectedBlocks = 2001
-    -- instead of 2000, because there are many delegations
-    assertEpochStakeEpoch dbSync 7 2001
-
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertEpochStakeEpoch dbSync 7 4002
-
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    assertEpochStakeEpoch dbSync 7 6003
+    -- Forge many delegations
+    blks <- delegateAndSendBlocks 40_000 interpreter
+    forM_ blks (atomically . addBlock mockServer)
+    -- Fill some epochs
+    epochs <- fillEpochs interpreter mockServer 4
+    -- Add some more blocks
+    blks' <- forgeAndSubmitBlocks interpreter mockServer 10
+    -- We can't use default delays because this takes too long
+    assertBlockNoBackoffTimes
+      (repeat 10)
+      dbSync
+      (length blks + length epochs + length blks')
+    assertEpochStakeEpoch dbSync 6 40_005
+    assertEpochStakeEpoch dbSync 7 40_005
   where
     testLabel = "delegationsMany"
 
@@ -316,25 +317,27 @@ delegationsManyNotDense :: IOManager -> [(Text, Text)] -> Assertion
 delegationsManyNotDense =
   withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    a <- delegateAndSendBlocks 40000 interpreter
-    forM_ a $ atomically . addBlock mockServer
-    b <- fillEpochs interpreter mockServer 4
-    c <- forgeAndSubmitBlocks interpreter mockServer 10
-
-    -- too long. We cannot use default delays
-    assertBlockNoBackoffTimes (repeat 10) dbSync (fromIntegral $ length a + length b + length c)
-    -- The slice size here is
-    -- 1 + div (delegationsLen * 5) expectedBlocks = 2001
-    -- instead of 2000, because there are many delegations
-    assertEpochStakeEpoch dbSync 7 2001
-
-    -- Blocks come on average every 5 slots. If we skip 15 slots before each block,
-    -- we are expected to get only 1/4 of the expected blocks. The adjusted slices
-    -- should still be long enough to cover everything.
-    replicateM_ 40 $
-      forgeNextSkipSlotsFindLeaderAndSubmit interpreter mockServer 15 []
-
-    -- Even if the chain is sparse, all distributions are inserted.
-    assertEpochStakeEpoch dbSync 7 40005
+    -- Forge many delegations
+    blks <- delegateAndSendBlocks 40_000 interpreter
+    forM_ blks (atomically . addBlock mockServer)
+    -- Fill some epochs
+    epochs <- fillEpochs interpreter mockServer 4
+    -- Add some more blocks
+    blks' <- forgeAndSubmitBlocks interpreter mockServer 10
+    -- We can't use default delays because this takes too long
+    assertBlockNoBackoffTimes
+      (repeat 10)
+      dbSync
+      (length blks + length epochs + length blks')
+    -- check the stake distribution for each epoch
+    assertEpochStakeEpoch dbSync 1 5
+    assertEpochStakeEpoch dbSync 2 6005
+    assertEpochStakeEpoch dbSync 3 40_005
+    assertEpochStakeEpoch dbSync 4 40_005
+    assertEpochStakeEpoch dbSync 5 40_005
+    assertEpochStakeEpoch dbSync 6 40_005
+    assertEpochStakeEpoch dbSync 7 40_005
+    -- check the sum of stake distribution for all epochs
+    assertEpochStake dbSync 206_035
   where
     testLabel = "delegationsManyNotDense"

@@ -250,7 +250,7 @@ applyBlock env blk = do
                 , apOldLedger = Strict.Just oldState
                 , apDeposits = maybeToStrict $ Generic.getDeposits newLedgerState
                 , apSlotDetails = details
-                , apStakeSlice = getStakeSlice env newState False
+                , apStakeSlice = getStakeSlice newState False
                 , apEvents = ledgerEvents
                 , apGovActionState = getGovState newLedgerState
                 , apDepositsMap = DepositsMap deposits
@@ -305,12 +305,11 @@ getGovState ls = case ledgerState ls of
     Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
   _ -> Nothing
 
-getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes
-getStakeSlice env cls isMigration =
+getStakeSlice :: CardanoLedgerState -> Bool -> Generic.StakeSliceRes
+getStakeSlice cls isMigration =
   case clsEpochBlockNo cls of
     EpochBlockNo n ->
       Generic.getStakeSlice
-        (leProtocolInfo env)
         n
         (clsState cls)
         isMigration

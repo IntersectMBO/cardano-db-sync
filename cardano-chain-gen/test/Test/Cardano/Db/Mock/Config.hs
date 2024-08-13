@@ -36,6 +36,7 @@ module Test.Cardano.Db.Mock.Config (
   withDBSyncEnv,
   withFullConfig,
   withFullConfigAndDropDB,
+  withFullConfigLogsDropDB,
   withFullConfigAndLogs,
   withCustomConfigAndLogsAndDropDB,
   withCustomConfig,
@@ -348,6 +349,26 @@ withFullConfigAndDropDB =
     ( WithConfigArgs
         { hasFingerprint = True
         , shouldLog = False
+        , shouldDropDB = True
+        }
+    )
+    initCommandLineArgs
+    Nothing
+
+withFullConfigLogsDropDB ::
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigLogsDropDB =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = True
         , shouldDropDB = True
         }
     )
