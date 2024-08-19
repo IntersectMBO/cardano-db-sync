@@ -5,6 +5,7 @@ module Cardano.DbTool.Validate.TotalSupply (
 ) where
 
 import Cardano.Db
+import Cardano.DbTool.UtxoSet (utxoSetSum)
 import Cardano.DbTool.Validate.Util
 import Data.Word (Word64)
 import System.Random (randomRIO)

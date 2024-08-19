@@ -62,6 +62,7 @@ data MissingMaTxOut = MissingMaTxOut
 data ExtendedTxOut = ExtendedTxOut
   { etoTxHash :: !ByteString
   , etoTxOut :: !DB.TxOut
+  , etoPaymentCred :: !(Maybe ByteString)
   }
 
 data ExtendedTxIn = ExtendedTxIn

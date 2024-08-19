@@ -95,7 +95,7 @@ simpleScript =
     testLabel = "simpleScript-alonzo"
     getOutFields txOut = (DB.txOutAddress txOut, DB.txOutAddressHasScript txOut, DB.txOutValue txOut, DB.txOutDataHash txOut)
     expectedFields =
-      ( renderAddress alwaysSucceedsScriptAddr
+      ( Just $ renderAddress alwaysSucceedsScriptAddr
       , True
       , DB.DbLovelace 20000
       , Just $ Crypto.hashToBytes (extractHash $ hashData @StandardAlonzo plutusDataList)

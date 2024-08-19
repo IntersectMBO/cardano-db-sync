@@ -90,7 +90,7 @@ simpleScript =
       , DB.txOutDataHash txOut
       )
     expectedFields =
-      ( renderAddress Examples.alwaysSucceedsScriptAddr
+      ( Just $ renderAddress Examples.alwaysSucceedsScriptAddr
       , True
       , DB.DbLovelace 20_000
       , Just $

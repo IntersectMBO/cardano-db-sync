@@ -19,6 +19,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
   RemoveJsonbFromSchemaConfig (..),
+  AddressDetailConfig (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
@@ -183,6 +184,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioAddressDetail :: AddressDetailConfig
   }
   deriving (Eq, Show)
 
@@ -254,6 +256,11 @@ newtype OffchainPoolDataConfig = OffchainPoolDataConfig
 
 newtype RemoveJsonbFromSchemaConfig = RemoveJsonbFromSchemaConfig
   { isRemoveJsonbFromSchemaEnabled :: Bool
+  }
+  deriving (Eq, Show)
+
+newtype AddressDetailConfig = AddressDetailConfig
+  { useAddressDetailTable :: Bool
   }
   deriving (Eq, Show)
 
@@ -439,6 +446,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stats" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj .:? "use_address_table" .!= sioAddressDetail baseOptions
 
 instance ToJSON SyncInsertConfig where
   toJSON (SyncInsertConfig preset options) =
@@ -481,6 +489,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj .:? "use_address_table" .!= sioAddressDetail def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -671,6 +680,15 @@ instance FromJSON RemoveJsonbFromSchemaConfig where
 instance ToJSON RemoveJsonbFromSchemaConfig where
   toJSON = boolToEnableDisable . isRemoveJsonbFromSchemaEnabled
 
+instance FromJSON AddressDetailConfig where
+  parseJSON = Aeson.withText "use_address_table" $ \v ->
+    case enableDisableToBool v of
+      Just g -> pure (AddressDetailConfig g)
+      Nothing -> fail $ "unexpected use_address_table: " <> show v
+
+instance ToJSON AddressDetailConfig where
+  toJSON = boolToEnableDisable . useAddressDetailTable
+
 instance FromJSON OffchainPoolDataConfig where
   parseJSON = Aeson.withText "offchain_pool_data" $ \v ->
     case enableDisableToBool v of
@@ -708,6 +726,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioAddressDetail = AddressDetailConfig False
       }
 
 fullInsertOptions :: SyncInsertOptions
@@ -726,6 +745,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioAddressDetail = AddressDetailConfig False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -744,6 +764,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioAddressDetail = AddressDetailConfig False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -770,6 +791,7 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioAddressDetail = AddressDetailConfig False
     }
 
 boolToEnableDisable :: IsString s => Bool -> s

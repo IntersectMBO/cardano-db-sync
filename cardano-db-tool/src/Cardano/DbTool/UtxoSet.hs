@@ -2,6 +2,7 @@
 
 module Cardano.DbTool.UtxoSet (
   utxoSetAtSlot,
+  utxoSetSum,
 ) where
 
 import Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
@@ -59,12 +60,12 @@ utxoSetAtSlot slotNo = do
 
 -- -----------------------------------------------------------------------------
 
-aggregateUtxos :: [(TxOut, a)] -> [(Text, Word64)]
+aggregateUtxos :: [(TxOut, Text, a)] -> [(Text, Word64)]
 aggregateUtxos xs =
   List.sortOn (Text.length . fst)
     . Map.toList
     . Map.fromListWith (+)
-    $ map (\(x, _) -> (txOutAddress x, unDbLovelace (txOutValue x))) xs
+    $ map (\(x, addr, _) -> (addr, unDbLovelace (txOutValue x))) xs
 
 isRedeemTextAddress :: Text -> Bool
 isRedeemTextAddress addr =
@@ -82,7 +83,7 @@ partitionUtxos =
     accept (addr, _) =
       Text.length addr <= 180 && not (isRedeemTextAddress addr)
 
-queryAtSlot :: Word64 -> IO (Ada, [(TxOut, ByteString)], Ada, Either LookupFail UTCTime)
+queryAtSlot :: Word64 -> IO (Ada, [(TxOut, Text, ByteString)], Ada, Either LookupFail UTCTime)
 queryAtSlot slotNo =
   -- Run the following queries in a single transaction.
   runDbNoLoggingEnv $ do
@@ -112,9 +113,9 @@ showUtxo (addr, value) =
     , "    }"
     ]
 
-utxoSetSum :: [(TxOut, a)] -> Ada
+utxoSetSum :: [(TxOut, b, a)] -> Ada
 utxoSetSum xs =
-  word64ToAda . sum $ map (unDbLovelace . txOutValue . fst) xs
+  word64ToAda . sum $ map (\(txOut, _, _) -> unDbLovelace $ txOutValue txOut) xs
 
 writeUtxos :: FilePath -> [(Text, Word64)] -> IO ()
 writeUtxos fname xs = do

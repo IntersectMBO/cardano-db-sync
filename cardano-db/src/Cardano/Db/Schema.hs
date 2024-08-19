@@ -151,7 +151,7 @@ share
   TxOut
     txId                TxId                noreference
     index               Word64              sqltype=txindex
-    address             Text
+    address             Text Maybe
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
     stakeAddressId      StakeAddressId Maybe noreference
@@ -159,6 +159,7 @@ share
     dataHash            ByteString Maybe    sqltype=hash32type
     inlineDatumId       DatumId Maybe       noreference
     referenceScriptId   ScriptId Maybe      noreference
+    addressDetailId     AddressDetailId Maybe noreference
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut
@@ -173,6 +174,13 @@ share
     multiAssetsDescr    Text
     inlineDatumId       DatumId Maybe       noreference
     referenceScriptId   ScriptId Maybe      noreference
+
+  AddressDetail
+    address             Text
+    addressRaw          ByteString
+    hasScript           Bool
+    paymentCred         ByteString Maybe    sqltype=hash28type
+    stakeAddressId      StakeAddressId Maybe noreference
 
   TxIn
     txInId              TxId                noreference     -- The transaction where this is used as an input.
@@ -865,6 +873,7 @@ schemaDocs =
       TxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
       TxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
       TxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
+      TxOutAddressDetailId # "The human readable encoding of the output address. It is Base58 for Byron era addresses and Bech32 for Shelley era."
 
     CollateralTxOut --^ do
       "A table for transaction collateral outputs. New in v13."
@@ -879,6 +888,14 @@ schemaDocs =
       CollateralTxOutMultiAssetsDescr # "This is a description of the multiassets in collateral output. Since the output is not really created, we don't need to add them in separate tables."
       CollateralTxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
       CollateralTxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
+
+    AddressDetail --^ do
+      "A table for addresses that appear in outputs."
+      AddressDetailAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
+      AddressDetailAddressRaw # "The raw binary address."
+      AddressDetailHasScript # "Flag which shows if this address is locked by a script."
+      AddressDetailPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
+      AddressDetailStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
 
     TxIn --^ do
       "A table for transaction inputs."

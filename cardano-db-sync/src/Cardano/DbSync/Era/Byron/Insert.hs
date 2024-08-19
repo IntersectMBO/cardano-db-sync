@@ -312,7 +312,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
   disInOut <- liftIO $ getDisableInOutState syncEnv
-  lift $ zipWithM_ (insertTxOut tracer (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  lift $ zipWithM_ (insertTxOut syncEnv (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   unless (getSkipTxIn syncEnv) $
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
@@ -336,27 +336,67 @@ insertByronTx' syncEnv blkId tx blockIndex = do
 
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   Bool ->
   Bool ->
   DB.TxId ->
   Word32 ->
   Byron.TxOut ->
   ReaderT SqlBackend m ()
-insertTxOut _tracer hasConsumed bootStrap txId index txout =
-  DB.insertTxOutPlex hasConsumed bootStrap $
-    DB.TxOut
-      { DB.txOutTxId = txId
-      , DB.txOutIndex = fromIntegral index
-      , DB.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-      , DB.txOutAddressHasScript = False
-      , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
-      , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
-      , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
-      , DB.txOutDataHash = Nothing
-      , DB.txOutInlineDatumId = Nothing
-      , DB.txOutReferenceScriptId = Nothing
-      }
+insertTxOut syncEnv hasConsumed bootStrap txId index txout =
+  do
+    -- check if we should use AddressDetail or not
+    if ioAddressDetail . soptInsertOptions $ envOptions syncEnv
+      then do
+        addrDetailId <- insertAddressDetail
+        DB.insertTxOutPlex hasConsumed bootStrap $
+          DB.TxOut
+            { DB.txOutTxId = txId
+            , DB.txOutIndex = fromIntegral index
+            , DB.txOutAddress = Nothing
+            , DB.txOutAddressHasScript = False
+            , DB.txOutPaymentCred = Nothing
+            , DB.txOutStakeAddressId = Nothing
+            , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+            , DB.txOutDataHash = Nothing
+            , DB.txOutInlineDatumId = Nothing
+            , DB.txOutReferenceScriptId = Nothing
+            , DB.txOutAddressDetailId = Just addrDetailId
+            }
+      else
+        DB.insertTxOutPlex hasConsumed bootStrap $
+          DB.TxOut
+            { DB.txOutTxId = txId
+            , DB.txOutIndex = fromIntegral index
+            , DB.txOutAddress = Just $ Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+            , DB.txOutAddressHasScript = False
+            , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
+            , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
+            , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+            , DB.txOutDataHash = Nothing
+            , DB.txOutInlineDatumId = Nothing
+            , DB.txOutReferenceScriptId = Nothing
+            , DB.txOutAddressDetailId = Nothing
+            }
+  where
+    insertAddressDetail ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      ReaderT SqlBackend m DB.AddressDetailId
+    insertAddressDetail = do
+      let addrRaw = serialize' (Byron.txOutAddress txout)
+      mAddrId <- DB.queryAddressDetailId addrRaw
+      case mAddrId of
+        Nothing ->
+          DB.insertAddressDetail
+            DB.AddressDetail
+              { DB.addressDetailAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+              , DB.addressDetailAddressRaw = addrRaw
+              , DB.addressDetailHasScript = False
+              , DB.addressDetailPaymentCred = Nothing -- Byron does not have a payment credential.
+              , DB.addressDetailStakeAddressId = Nothing -- Byron does not have a stake address.
+              }
+        -- this address is already in the database, so we can just return the id to be linked to the txOut.
+        Just addrId -> pure addrId
 
 insertTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>

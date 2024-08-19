@@ -138,7 +138,7 @@ share
   TxOut
     txId                TxId                noreference
     index               Word64              sqltype=txindex
-    address             Text
+    address             Text Maybe
     addressHasScript    Bool
     paymentCred         ByteString Maybe    sqltype=hash28type
     stakeAddressId      StakeAddressId Maybe noreference

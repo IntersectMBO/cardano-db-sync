@@ -14,7 +14,7 @@ module Cardano.DbSync.Era.Shelley.Genesis (
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (tryUpdateCacheTx)
 import Cardano.DbSync.Cache.Types (CacheStatus (..), useNoCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
@@ -24,6 +24,7 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
+import Cardano.Ledger.Address (serialiseAddr)
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (KeyHashObj))
@@ -248,22 +249,61 @@ insertTxOuts syncEnv trce hasConsumed disInOut blkId (TxIn txInId _, txOut) = do
 
   tryUpdateCacheTx (envCache syncEnv) txInId txId
   _ <- insertStakeAddressRefIfMissing trce useNoCache (txOut ^. Core.addrTxOutL)
-  DB.insertTxOutPlex hasConsumed disInOut $
-    DB.TxOut
-      { DB.txOutTxId = txId
-      , DB.txOutIndex = 0
-      , DB.txOutAddress = Generic.renderAddress addr
-      , DB.txOutAddressHasScript = hasScript
-      , DB.txOutPaymentCred = Generic.maybePaymentCred addr
-      , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
-      , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
-      , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
-      , DB.txOutInlineDatumId = Nothing
-      , DB.txOutReferenceScriptId = Nothing
-      }
+  -- TODO: use the `ioAddressDetail` field to insert the extended address.
+  if ioAddressDetail . soptInsertOptions $ envOptions syncEnv
+    then do
+      addrDetailId <- insertAddressDetail
+      DB.insertTxOutPlex hasConsumed disInOut $
+        DB.TxOut
+          { DB.txOutTxId = txId
+          , DB.txOutIndex = 0
+          , DB.txOutAddress = Nothing
+          , DB.txOutAddressHasScript = hasScript
+          , DB.txOutPaymentCred = Generic.maybePaymentCred addr
+          , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+          , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+          , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+          , DB.txOutInlineDatumId = Nothing
+          , DB.txOutReferenceScriptId = Nothing
+          , DB.txOutAddressDetailId = Just addrDetailId
+          }
+    else
+      DB.insertTxOutPlex hasConsumed disInOut $
+        DB.TxOut
+          { DB.txOutAddress = Just $ Generic.renderAddress addr
+          , DB.txOutAddressDetailId = Nothing
+          , DB.txOutAddressHasScript = hasScript
+          , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+          , DB.txOutIndex = 0
+          , DB.txOutInlineDatumId = Nothing
+          , DB.txOutPaymentCred = Generic.maybePaymentCred addr
+          , DB.txOutReferenceScriptId = Nothing
+          , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+          , DB.txOutTxId = txId
+          , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+          }
   where
     addr = txOut ^. Core.addrTxOutL
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+
+    insertAddressDetail ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      ReaderT SqlBackend m DB.AddressDetailId
+    insertAddressDetail = do
+      let addrRaw = serialiseAddr addr
+      mAddrId <- DB.queryAddressDetailId addrRaw
+      case mAddrId of
+        Nothing ->
+          DB.insertAddressDetail
+            DB.AddressDetail
+              { DB.addressDetailAddress = Generic.renderAddress addr
+              , DB.addressDetailAddressRaw = addrRaw
+              , DB.addressDetailHasScript = hasScript
+              , DB.addressDetailPaymentCred = Generic.maybePaymentCred addr
+              , DB.addressDetailStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+              }
+        -- this address is already in the database, so we can just return the id to be linked to the txOut.
+        Just addrId -> pure addrId
 
 -- Insert pools and delegations coming from Genesis.
 insertStaking ::
