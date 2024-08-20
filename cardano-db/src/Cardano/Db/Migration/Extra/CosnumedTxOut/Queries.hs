@@ -145,7 +145,7 @@ queryWrongConsumedBy :: MonadIO m => ReaderT SqlBackend m Word64
 queryWrongConsumedBy = do
   res <- select $ do
     txOut <- from $ table @TxOut
-    where_ (just (txOut ^. TxOutTxId) E.==. txOut ^. TxOutConsumedByTxId)
+    where_ (just (txOut ^. TxOutTxId) ==. txOut ^. TxOutConsumedByTxId)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 

@@ -19,7 +19,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
   RemoveJsonbFromSchemaConfig (..),
-  AddressDetailConfig (..),
+  TxOutTableTypeConfig (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
@@ -28,6 +28,7 @@ module Cardano.DbSync.Config.Types (
   TxCBORConfig (..),
   PoolStatsConfig (..),
   TxOutConfig (..),
+  UseTxOutAddress (..),
   ForceTxIn (..),
   LedgerInsertConfig (..),
   ShelleyInsertConfig (..),
@@ -53,9 +54,9 @@ module Cardano.DbSync.Config.Types (
   isMultiAssetEnabled,
   isMetadataEnabled,
   isPlutusEnabled,
-  isTxOutBootstrap,
+  isTxOutConsumedBootstrap,
   isTxOutConsumed,
-  isTxOutPrune,
+  isTxOutConsumedPrune,
   forceTxIn,
   fullInsertOptions,
   onlyUTxOInsertOptions,
@@ -68,7 +69,7 @@ import qualified Cardano.BM.Data.Configuration as Logging
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (MigrationDir, PGPassSource (..))
+import Cardano.Db (MigrationDir, PGPassSource (..), TxOutTableType (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (fail)
@@ -184,7 +185,6 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
-  , sioAddressDetail :: AddressDetailConfig
   }
   deriving (Eq, Show)
 
@@ -199,14 +199,18 @@ newtype PoolStatsConfig = PoolStatsConfig
   deriving (Eq, Show)
 
 data TxOutConfig
-  = TxOutEnable
+  = TxOutEnable UseTxOutAddress
   | TxOutDisable
-  | TxOutConsumed ForceTxIn
-  | TxOutPrune ForceTxIn
-  | TxOutBootstrap ForceTxIn
+  | TxOutConsumed ForceTxIn UseTxOutAddress
+  | TxOutConsumedPrune ForceTxIn UseTxOutAddress
+  | TxOutConsumedBootstrap ForceTxIn UseTxOutAddress
   deriving (Eq, Show)
 
 newtype ForceTxIn = ForceTxIn {unForceTxIn :: Bool}
+  deriving (Eq, Show)
+  deriving newtype (ToJSON, FromJSON)
+
+newtype UseTxOutAddress = UseTxOutAddress {unUseTxOutAddress :: Bool}
   deriving (Eq, Show)
   deriving newtype (ToJSON, FromJSON)
 
@@ -259,8 +263,8 @@ newtype RemoveJsonbFromSchemaConfig = RemoveJsonbFromSchemaConfig
   }
   deriving (Eq, Show)
 
-newtype AddressDetailConfig = AddressDetailConfig
-  { useAddressDetailTable :: Bool
+newtype TxOutTableTypeConfig = TxOutTableTypeConfig
+  { unTxOutTableTypeConfig :: TxOutTableType
   }
   deriving (Eq, Show)
 
@@ -326,28 +330,28 @@ pcNodeConfigFilePath = unNodeConfigFile . pcNodeConfigFile
 
 isTxOutEnabled :: TxOutConfig -> Bool
 isTxOutEnabled TxOutDisable = False
-isTxOutEnabled TxOutEnable = True
-isTxOutEnabled (TxOutConsumed _) = True
-isTxOutEnabled (TxOutPrune _) = True
-isTxOutEnabled (TxOutBootstrap _) = True
+isTxOutEnabled (TxOutEnable _) = True
+isTxOutEnabled (TxOutConsumed _ _) = True
+isTxOutEnabled (TxOutConsumedPrune _ _) = True
+isTxOutEnabled (TxOutConsumedBootstrap _ _) = True
 
-isTxOutBootstrap :: TxOutConfig -> Bool
-isTxOutBootstrap (TxOutBootstrap _) = True
-isTxOutBootstrap _ = False
+isTxOutConsumedBootstrap :: TxOutConfig -> Bool
+isTxOutConsumedBootstrap (TxOutConsumedBootstrap _ _) = True
+isTxOutConsumedBootstrap _ = False
 
 isTxOutConsumed :: TxOutConfig -> Bool
-isTxOutConsumed (TxOutConsumed _) = True
+isTxOutConsumed (TxOutConsumed _ _) = True
 isTxOutConsumed _ = False
 
-isTxOutPrune :: TxOutConfig -> Bool
-isTxOutPrune (TxOutPrune _) = True
-isTxOutPrune _ = False
+isTxOutConsumedPrune :: TxOutConfig -> Bool
+isTxOutConsumedPrune (TxOutConsumedPrune _ _) = True
+isTxOutConsumedPrune _ = False
 
 forceTxIn :: TxOutConfig -> Bool
-forceTxIn (TxOutConsumed f) = unForceTxIn f
-forceTxIn (TxOutPrune f) = unForceTxIn f
-forceTxIn (TxOutBootstrap f) = unForceTxIn f
-forceTxIn TxOutEnable = False
+forceTxIn (TxOutConsumed f _) = unForceTxIn f
+forceTxIn (TxOutConsumedPrune f _) = unForceTxIn f
+forceTxIn (TxOutConsumedBootstrap f _) = unForceTxIn f
+forceTxIn (TxOutEnable _) = False
 forceTxIn TxOutDisable = False
 
 hasLedger :: LedgerInsertConfig -> Bool
@@ -446,7 +450,6 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stats" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
-    <*> obj .:? "use_address_table" .!= sioAddressDetail baseOptions
 
 instance ToJSON SyncInsertConfig where
   toJSON (SyncInsertConfig preset options) =
@@ -467,7 +470,6 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "offchain_pool_data" sioOffchainPoolData
     , toJsonIfSet "pool_stats" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
-    , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
     ]
 
 toJsonIfSet :: ToJSON a => Text -> a -> Maybe Pair
@@ -489,7 +491,6 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
-      <*> obj .:? "use_address_table" .!= sioAddressDetail def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -534,33 +535,42 @@ instance ToJSON TxOutConfig where
     Aeson.object
       [ "value" .= value cfg
       , "force_tx_in" .= forceTxIn' cfg
+      , "use_address_table" .= useTxOutAddress' cfg
       ]
     where
       value :: TxOutConfig -> Text
-      value TxOutEnable = "enable"
+      value (TxOutEnable _) = "enable"
       value TxOutDisable = "disable"
-      value (TxOutConsumed _) = "consumed"
-      value (TxOutPrune _) = "prune"
-      value (TxOutBootstrap _) = "bootstrap"
+      value (TxOutConsumed _ _) = "consumed"
+      value (TxOutConsumedPrune _ _) = "prune"
+      value (TxOutConsumedBootstrap _ _) = "bootstrap"
 
       forceTxIn' :: TxOutConfig -> Maybe Bool
-      forceTxIn' TxOutEnable = Nothing
+      forceTxIn' (TxOutEnable _) = Nothing
       forceTxIn' TxOutDisable = Nothing
-      forceTxIn' (TxOutConsumed f) = Just (unForceTxIn f)
-      forceTxIn' (TxOutPrune f) = Just (unForceTxIn f)
-      forceTxIn' (TxOutBootstrap f) = Just (unForceTxIn f)
+      forceTxIn' (TxOutConsumed f _) = Just (unForceTxIn f)
+      forceTxIn' (TxOutConsumedPrune f _) = Just (unForceTxIn f)
+      forceTxIn' (TxOutConsumedBootstrap f _) = Just (unForceTxIn f)
+
+      useTxOutAddress' :: TxOutConfig -> Maybe Bool
+      useTxOutAddress' (TxOutEnable u) = Just (unUseTxOutAddress u)
+      useTxOutAddress' TxOutDisable = Nothing
+      useTxOutAddress' (TxOutConsumed _ u) = Just (unUseTxOutAddress u)
+      useTxOutAddress' (TxOutConsumedPrune _ u) = Just (unUseTxOutAddress u)
+      useTxOutAddress' (TxOutConsumedBootstrap _ u) = Just (unUseTxOutAddress u)
 
 instance FromJSON TxOutConfig where
   parseJSON = Aeson.withObject "tx_out" $ \obj -> do
     val <- obj .: "value"
+    useAddress' <- obj .: "use_address_table" .!= UseTxOutAddress False
     forceTxIn' <- obj .:? "force_tx_in" .!= ForceTxIn False
 
     case val :: Text of
-      "enable" -> pure TxOutEnable
+      "enable" -> pure (TxOutEnable useAddress')
       "disable" -> pure TxOutDisable
-      "consumed" -> pure (TxOutConsumed forceTxIn')
-      "prune" -> pure (TxOutPrune forceTxIn')
-      "bootstrap" -> pure (TxOutBootstrap forceTxIn')
+      "consumed" -> pure (TxOutConsumed forceTxIn' useAddress')
+      "prune" -> pure (TxOutConsumedPrune forceTxIn' useAddress')
+      "bootstrap" -> pure (TxOutConsumedBootstrap forceTxIn' useAddress')
       other -> fail $ "unexpected tx_out: " <> show other
 
 instance ToJSON LedgerInsertConfig where
@@ -680,14 +690,14 @@ instance FromJSON RemoveJsonbFromSchemaConfig where
 instance ToJSON RemoveJsonbFromSchemaConfig where
   toJSON = boolToEnableDisable . isRemoveJsonbFromSchemaEnabled
 
-instance FromJSON AddressDetailConfig where
-  parseJSON = Aeson.withText "use_address_table" $ \v ->
-    case enableDisableToBool v of
-      Just g -> pure (AddressDetailConfig g)
-      Nothing -> fail $ "unexpected use_address_table: " <> show v
+instance FromJSON TxOutTableTypeConfig where
+  parseJSON = Aeson.withText "add_address_table_to_txout" $ \v ->
+    case enableDisableToTxOutTableType v of
+      Just g -> pure (TxOutTableTypeConfig g)
+      Nothing -> fail $ "unexpected add_address_table_to_txout: " <> show v
 
-instance ToJSON AddressDetailConfig where
-  toJSON = boolToEnableDisable . useAddressDetailTable
+instance ToJSON TxOutTableTypeConfig where
+  toJSON = addressTypeToEnableDisable . unTxOutTableTypeConfig
 
 instance FromJSON OffchainPoolDataConfig where
   parseJSON = Aeson.withText "offchain_pool_data" $ \v ->
@@ -714,7 +724,7 @@ instance Default SyncInsertOptions where
   def =
     SyncInsertOptions
       { sioTxCBOR = TxCBORConfig False
-      , sioTxOut = TxOutEnable
+      , sioTxOut = TxOutEnable (UseTxOutAddress False)
       , sioLedger = LedgerEnable
       , sioShelley = ShelleyEnable
       , sioRewards = RewardsConfig True
@@ -726,14 +736,13 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-      , sioAddressDetail = AddressDetailConfig False
       }
 
 fullInsertOptions :: SyncInsertOptions
 fullInsertOptions =
   SyncInsertOptions
     { sioTxCBOR = TxCBORConfig False
-    , sioTxOut = TxOutEnable
+    , sioTxOut = TxOutEnable (UseTxOutAddress False)
     , sioLedger = LedgerEnable
     , sioShelley = ShelleyEnable
     , sioRewards = RewardsConfig True
@@ -745,14 +754,13 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-    , sioAddressDetail = AddressDetailConfig False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
 onlyUTxOInsertOptions =
   SyncInsertOptions
     { sioTxCBOR = TxCBORConfig False
-    , sioTxOut = TxOutBootstrap (ForceTxIn False)
+    , sioTxOut = TxOutConsumedBootstrap (ForceTxIn False) (UseTxOutAddress False)
     , sioLedger = LedgerIgnore
     , sioShelley = ShelleyDisable
     , sioRewards = RewardsConfig True
@@ -764,7 +772,6 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-    , sioAddressDetail = AddressDetailConfig False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -791,8 +798,17 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
-    , sioAddressDetail = AddressDetailConfig False
     }
+
+addressTypeToEnableDisable :: IsString s => TxOutTableType -> s
+addressTypeToEnableDisable TxOutVariantAddress = "enable"
+addressTypeToEnableDisable TxOutCore = "disable"
+
+enableDisableToTxOutTableType :: (Eq s, IsString s) => s -> Maybe TxOutTableType
+enableDisableToTxOutTableType = \case
+  "enable" -> Just TxOutVariantAddress
+  "disable" -> Just TxOutCore
+  _ -> Nothing
 
 boolToEnableDisable :: IsString s => Bool -> s
 boolToEnableDisable True = "enable"

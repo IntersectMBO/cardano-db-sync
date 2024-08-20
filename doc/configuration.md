@@ -196,10 +196,11 @@ Disables almost all data except `block` and `tx` tables.
 
 Tx Out Properties:
 
-| Property                      | Type      | Required |
-| :---------------------------- | :-------- | :------- |
-| [value](#value)               | `string`  | Optional |
-| [force\_tx\_in](#force-tx-in) | `boolean` | Optional |
+| Property                         | Type      | Required |
+| :------------------------------- | :-------- | :------- |
+| [value](#value)                  | `string`  | Optional |
+| [force\_tx\_in](#force-tx-in)    | `boolean` | Optional |
+| [address\_table](#address-table) | `boolean` | Optional |
 
 #### Value
 
@@ -269,6 +270,28 @@ can be changed.
 `tx_out.force_tx_in`
 
  * Type: `boolean`
+
+
+### Address Table
+
+`tx_out.address_table`
+
+ * Type: `boolean`
+
+This new variant representation introduces an additional `Address` table to normalize the address-related data. This change allows for more efficient storage and querying of address information, especially in cases where multiple transaction outputs (TxOuts) reference the same address.
+
+Key changes in the variant representation:
+
+1. New `address` table:
+   - Contains fields: `address`, `raw`, `has_script`, `payment_cred`, and `stake_address_id`
+   - Centralizes address information that was previously duplicated across multiple TxOuts
+
+2. Modified `tx_out` table:
+   - Replaces `address`, `address_has_script`, and `payment_cred` fields with a single `address_id` field
+   - `addressId` references the new `Address` table
+ 
+
+
 
 ## Ledger
 

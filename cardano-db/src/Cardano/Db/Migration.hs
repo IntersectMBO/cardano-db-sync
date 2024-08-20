@@ -28,10 +28,10 @@ import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import Cardano.Db.Migration.Haskell
 import Cardano.Db.Migration.Version
+import Cardano.Db.Operations.Core.Query
 import Cardano.Db.PGConfig
-import Cardano.Db.Query
 import Cardano.Db.Run
-import Cardano.Db.Schema
+import Cardano.Db.Schema.BaseSchema
 import Cardano.Prelude (Typeable, textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
@@ -238,7 +238,7 @@ createMigration source (MigrationDir migdir) = do
     create :: ReaderT SqlBackend (NoLoggingT IO) (Maybe (MigrationVersion, Text))
     create = do
       ver <- getSchemaVersion
-      statements <- getMigration migrateCardanoDb
+      statements <- getMigration migrateBaseCardanoDb
       if null statements
         then pure Nothing
         else do

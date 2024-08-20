@@ -4,6 +4,8 @@
 
 #if __GLASGOW_HASKELL__ >= 908
 {-# OPTIONS_GHC -Wno-x-partial #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 #endif
 
 module Test.IO.Cardano.Db.Rollback (
@@ -18,9 +20,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.Word (Word64)
 import Database.Persist.Sql (SqlBackend)
-
--- import           Test.Tasty.HUnit (testCase)
-
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
 
@@ -45,20 +44,20 @@ _rollbackTest =
     assertBool ("Block count before rollback is " ++ show beforeBlocks ++ " but should be 10.") $ beforeBlocks == 10
     beforeTxCount <- queryTxCount
     assertBool ("Tx count before rollback is " ++ show beforeTxCount ++ " but should be 9.") $ beforeTxCount == 9
-    beforeTxOutCount <- queryTxOutCount
+    beforeTxOutCount <- queryTxOutCount TxOutCore
     assertBool ("TxOut count before rollback is " ++ show beforeTxOutCount ++ " but should be 2.") $ beforeTxOutCount == 2
     beforeTxInCount <- queryTxInCount
     assertBool ("TxIn count before rollback is " ++ show beforeTxInCount ++ " but should be 1.") $ beforeTxInCount == 1
     -- Rollback a set of blocks.
     latestSlotNo <- queryLatestSlotNo
     Just pSlotNo <- queryWalkChain 5 latestSlotNo
-    void $ deleteBlocksSlotNoNoTrace (SlotNo pSlotNo)
+    void $ deleteBlocksSlotNoNoTrace TxOutCore (SlotNo pSlotNo)
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
     assertBool ("Block count after rollback is " ++ show afterBlocks ++ " but should be 10") $ afterBlocks == 4
     afterTxCount <- queryTxCount
     assertBool ("Tx count after rollback is " ++ show afterTxCount ++ " but should be 10") $ afterTxCount == 1
-    afterTxOutCount <- queryTxOutCount
+    afterTxOutCount <- queryTxOutCount TxOutCore
     assertBool ("TxOut count after rollback is " ++ show afterTxOutCount ++ " but should be 1.") $ afterTxOutCount == 1
     afterTxInCount <- queryTxInCount
     assertBool ("TxIn count after rollback is " ++ show afterTxInCount ++ " but should be 0.") $ afterTxInCount == 0
@@ -133,7 +132,7 @@ createAndInsertBlocks blockCount =
                   0
                   (DbLovelace 0)
 
-            void $ insertTxOut (mkTxOut blkId txId)
+            void $ insertTxOut (mkTxOutCore blkId txId)
             pure $ Just txId
       case (indx, mTxOutId) of
         (8, Just txOutId) -> do
@@ -142,6 +141,6 @@ createAndInsertBlocks blockCount =
 
           txId <- head <$> mapM insertTx (mkTxs blkId 8)
           void $ insertTxIn (TxIn txId txOutId 0 Nothing)
-          void $ insertTxOut (mkTxOut blkId txId)
-        _ -> pure ()
+          void $ insertTxOut (mkTxOutCore blkId txId)
+        _otherwise -> pure ()
       pure (indx + 1, Just blkId, newMTxOutId)

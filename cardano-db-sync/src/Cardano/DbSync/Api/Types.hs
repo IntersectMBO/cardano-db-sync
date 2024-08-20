@@ -87,7 +87,7 @@ data InsertOptions = InsertOptions
   , ioPoolStats :: !Bool
   , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
-  , ioAddressDetail :: !Bool
+  , ioTxOutTableType :: !DB.TxOutTableType
   }
   deriving (Show)
 

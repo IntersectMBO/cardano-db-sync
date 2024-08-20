@@ -179,10 +179,11 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   whenPruneTxOut syncEnv $
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
       do
-        lift $ DB.deleteConsumedTxOut tracer (getSafeBlockNoDiff syncEnv)
+        lift $ DB.deleteConsumedTxOut tracer txOutTableType (getSafeBlockNoDiff syncEnv)
   commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
+    txOutTableType = getTxOutTableType syncEnv
     iopts = getInsertOptions syncEnv
 
     updateEpoch details isNewEpochEvent =

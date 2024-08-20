@@ -13,6 +13,8 @@ module Cardano.DbSync.Era.Shelley.Genesis (
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (tryUpdateCacheTx)
@@ -63,16 +65,15 @@ insertValidateGenesisDist ::
   Bool ->
   ExceptT SyncNodeError IO ()
 insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
-  let hasConsumed = getHasConsumedOrPruneTxOut syncEnv
-      prunes = getPrunes syncEnv
+  let prunes = getPrunes syncEnv
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
     liftIO $ logError tracer $ show SNErrIgnoreShelleyInitiation
     throwError SNErrIgnoreShelleyInitiation
   if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction hasConsumed prunes)
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction hasConsumed prunes)
+    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction prunes)
+    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction prunes)
   where
     tracer = getTrace syncEnv
 
@@ -85,11 +86,11 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
     expectedTxCount :: Word64
     expectedTxCount = fromIntegral $ genesisUTxOSize cfg + if hasStakes then 1 else 0
 
-    insertAction :: (MonadBaseControl IO m, MonadIO m) => Bool -> Bool -> ReaderT SqlBackend m (Either SyncNodeError ())
-    insertAction hasConsumed prunes = do
+    insertAction :: (MonadBaseControl IO m, MonadIO m) => Bool -> ReaderT SqlBackend m (Either SyncNodeError ())
+    insertAction prunes = do
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
-        Right bid -> validateGenesisDistribution prunes tracer networkName cfg bid expectedTxCount
+        Right bid -> validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount
         Left _ ->
           runExceptT $ do
             liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
@@ -151,27 +152,30 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
                     , DB.blockOpCertCounter = Nothing
                     }
               disInOut <- liftIO $ getDisableInOutState syncEnv
-              lift $ mapM_ (insertTxOuts syncEnv tracer hasConsumed disInOut bid) $ genesisUtxOs cfg
+              unless disInOut $ do
+                lift $ mapM_ (insertTxOuts syncEnv tracer bid) $ genesisUtxOs cfg
               liftIO . logInfo tracer $
                 "Initial genesis distribution populated. Hash "
                   <> renderByteArray (configGenesisHash cfg)
               when hasStakes $
                 insertStaking tracer useNoCache bid cfg
-              supply <- lift DB.queryTotalSupply
+              supply <- lift $ DB.queryTotalSupply (getTxOutTableType syncEnv)
               liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Bool ->
-  Trace IO Text ->
   Text ->
   ShelleyGenesis StandardCrypto ->
   DB.BlockId ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution prunes tracer networkName cfg bid expectedTxCount =
+validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   runExceptT $ do
+    let tracer = getTrace syncEnv
+        txOutTableType = getTxOutTableType syncEnv
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
@@ -202,7 +206,7 @@ validateGenesisDistribution prunes tracer networkName cfg bid expectedTxCount =
           , " but got "
           , textShow txCount
           ]
-    totalSupply <- lift DB.queryShelleyGenesisSupply
+    totalSupply <- lift $ DB.queryShelleyGenesisSupply txOutTableType
     let expectedSupply = configGenesisSupply cfg
     when (expectedSupply /= totalSupply && not prunes) $
       dbSyncNodeError $
@@ -222,12 +226,10 @@ insertTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Trace IO Text ->
-  Bool ->
-  Bool ->
   DB.BlockId ->
   (TxIn StandardCrypto, ShelleyTxOut StandardShelley) ->
   ReaderT SqlBackend m ()
-insertTxOuts syncEnv trce hasConsumed disInOut blkId (TxIn txInId _, txOut) = do
+insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <-
@@ -249,59 +251,61 @@ insertTxOuts syncEnv trce hasConsumed disInOut blkId (TxIn txInId _, txOut) = do
 
   tryUpdateCacheTx (envCache syncEnv) txInId txId
   _ <- insertStakeAddressRefIfMissing trce useNoCache (txOut ^. Core.addrTxOutL)
-  -- TODO: use the `ioAddressDetail` field to insert the extended address.
-  if ioAddressDetail . soptInsertOptions $ envOptions syncEnv
-    then do
-      addrDetailId <- insertAddressDetail
-      DB.insertTxOutPlex hasConsumed disInOut $
-        DB.TxOut
-          { DB.txOutTxId = txId
-          , DB.txOutIndex = 0
-          , DB.txOutAddress = Nothing
-          , DB.txOutAddressHasScript = hasScript
-          , DB.txOutPaymentCred = Generic.maybePaymentCred addr
-          , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
-          , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
-          , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
-          , DB.txOutInlineDatumId = Nothing
-          , DB.txOutReferenceScriptId = Nothing
-          , DB.txOutAddressDetailId = Just addrDetailId
-          }
-    else
-      DB.insertTxOutPlex hasConsumed disInOut $
-        DB.TxOut
-          { DB.txOutAddress = Just $ Generic.renderAddress addr
-          , DB.txOutAddressDetailId = Nothing
-          , DB.txOutAddressHasScript = hasScript
-          , DB.txOutDataHash = Nothing -- No output datum in Shelley Genesis
-          , DB.txOutIndex = 0
-          , DB.txOutInlineDatumId = Nothing
-          , DB.txOutPaymentCred = Generic.maybePaymentCred addr
-          , DB.txOutReferenceScriptId = Nothing
-          , DB.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
-          , DB.txOutTxId = txId
-          , DB.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
-          }
+  case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
+    DB.TxOutCore ->
+      void . DB.insertTxOut $
+        DB.CTxOutW
+          C.TxOut
+            { C.txOutAddress = Generic.renderAddress addr
+            , C.txOutAddressHasScript = hasScript
+            , C.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+            , C.txOutIndex = 0
+            , C.txOutInlineDatumId = Nothing
+            , C.txOutPaymentCred = Generic.maybePaymentCred addr
+            , C.txOutReferenceScriptId = Nothing
+            , C.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+            , C.txOutTxId = txId
+            , C.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+            , C.txOutConsumedByTxId = Nothing
+            }
+    DB.TxOutVariantAddress -> do
+      addrDetailId <- insertAddress
+      void . DB.insertTxOut $ DB.VTxOutW (makeVTxOut addrDetailId txId) Nothing
   where
     addr = txOut ^. Core.addrTxOutL
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
+    addrRaw = serialiseAddr addr
 
-    insertAddressDetail ::
+    makeVTxOut :: V.AddressId -> DB.TxId -> V.TxOut
+    makeVTxOut addrDetailId txId =
+      V.TxOut
+        { V.txOutAddressId = addrDetailId
+        , V.txOutConsumedByTxId = Nothing
+        , V.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+        , V.txOutIndex = 0
+        , V.txOutInlineDatumId = Nothing
+        , V.txOutReferenceScriptId = Nothing
+        , V.txOutTxId = txId
+        , V.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+        }
+
+    vAddress :: V.Address
+    vAddress =
+      V.Address
+        { V.addressAddress = Generic.renderAddress addr
+        , V.addressRaw = addrRaw
+        , V.addressHasScript = hasScript
+        , V.addressPaymentCred = Generic.maybePaymentCred addr
+        , V.addressStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+        }
+
+    insertAddress ::
       (MonadBaseControl IO m, MonadIO m) =>
-      ReaderT SqlBackend m DB.AddressDetailId
-    insertAddressDetail = do
-      let addrRaw = serialiseAddr addr
-      mAddrId <- DB.queryAddressDetailId addrRaw
+      ReaderT SqlBackend m V.AddressId
+    insertAddress = do
+      mAddrId <- DB.queryAddressId addrRaw
       case mAddrId of
-        Nothing ->
-          DB.insertAddressDetail
-            DB.AddressDetail
-              { DB.addressDetailAddress = Generic.renderAddress addr
-              , DB.addressDetailAddressRaw = addrRaw
-              , DB.addressDetailHasScript = hasScript
-              , DB.addressDetailPaymentCred = Generic.maybePaymentCred addr
-              , DB.addressDetailStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
-              }
+        Nothing -> DB.insertAddress vAddress
         -- this address is already in the database, so we can just return the id to be linked to the txOut.
         Just addrId -> pure addrId
 

@@ -29,6 +29,7 @@ module Cardano.DbSync.Api (
   getPruneInterval,
   whenConsumeOrPruneTxOut,
   whenPruneTxOut,
+  getTxOutTableType,
   getHasConsumedOrPruneTxOut,
   getSkipTxIn,
   getPrunes,
@@ -117,9 +118,10 @@ isConsistent env = do
 getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
 getIsConsumedFixed env =
   case (DB.pcmPruneTxOut pcm, DB.pcmConsumeOrPruneTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend Multiplex.queryWrongConsumedBy
+    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (Multiplex.queryWrongConsumedBy txOutTableType)
     _ -> pure Nothing
   where
+    txOutTableType = getTxOutTableType env
     pcm = soptPruneConsumeMigration $ envOptions env
     backend = envBackend env
 
@@ -176,10 +178,12 @@ getPruneConsume = soptPruneConsumeMigration . envOptions
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
+      txOutTableType = getTxOutTableType syncEnv
   logInfo (getTrace syncEnv) $ textShow pcm
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.runExtraMigrations
       (getTrace syncEnv)
+      txOutTableType
       (getSafeBlockNoDiff syncEnv)
       pcm
 
@@ -204,6 +208,9 @@ whenConsumeOrPruneTxOut env =
 whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
   when (DB.pcmPruneTxOut $ getPruneConsume env)
+
+getTxOutTableType :: SyncEnv -> DB.TxOutTableType
+getTxOutTableType syncEnv = ioTxOutTableType . soptInsertOptions $ envOptions syncEnv
 
 getHasConsumedOrPruneTxOut :: SyncEnv -> Bool
 getHasConsumedOrPruneTxOut =
@@ -355,7 +362,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutBootstrap' syncNodeConfigFromFile) backend
+  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -409,7 +416,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       }
   where
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
-    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions
+    isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->

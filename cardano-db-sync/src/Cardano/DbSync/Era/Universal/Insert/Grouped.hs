@@ -15,8 +15,10 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 ) where
 
 import Cardano.BM.Trace (Trace, logWarning)
-import Cardano.Db (DbLovelace (..), minIdsToText)
+import Cardano.Db (DbLovelace (..), MinIds (..), minIdsCoreToText, minIdsVariantToText)
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (queryTxIdWithCache)
@@ -61,13 +63,13 @@ data MissingMaTxOut = MissingMaTxOut
 -- reference outputs that are not inserted to the db yet.
 data ExtendedTxOut = ExtendedTxOut
   { etoTxHash :: !ByteString
-  , etoTxOut :: !DB.TxOut
+  , etoTxOut :: !DB.TxOutW
   , etoPaymentCred :: !(Maybe ByteString)
   }
 
 data ExtendedTxIn = ExtendedTxIn
   { etiTxIn :: !DB.TxIn
-  , etiTxOutId :: !(Either Generic.TxIn DB.TxOutId)
+  , etiTxOutId :: !(Either Generic.TxIn DB.TxOutIdW)
   }
   deriving (Show)
 
@@ -88,11 +90,11 @@ insertBlockGroupedData ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   BlockGroupedData ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIds
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIdsWrapper
 insertBlockGroupedData syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
-  txOutIds <- lift . DB.insertManyTxOutPlex (getHasConsumedOrPruneTxOut syncEnv) disInOut $ etoTxOut . fst <$> groupedTxOut grouped
-  let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> groupedTxOut grouped)
+  txOutIds <- lift . DB.insertManyTxOut disInOut $ etoTxOut . fst <$> groupedTxOut grouped
+  let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
   txInIds <-
     if getSkipTxIn syncEnv
@@ -104,26 +106,55 @@ insertBlockGroupedData syncEnv grouped = do
     lift $ DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
   void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
   void . lift . DB.insertManyTxMint $ groupedTxMint grouped
-  pure $ DB.MinIds (listToMaybe txInIds) (listToMaybe txOutIds) (listToMaybe maTxOutIds)
+  pure $ makeMinId txInIds txOutIds maTxOutIds
   where
     tracer = getTrace syncEnv
+    txOutTableType = getTxOutTableType syncEnv
 
-mkmaTxOuts :: (DB.TxOutId, [MissingMaTxOut]) -> [DB.MaTxOut]
-mkmaTxOuts (txOutId, mmtos) = mkmaTxOut <$> mmtos
+    makeMinId :: [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
+    makeMinId txInIds txOutIds maTxOutIds =
+      case txOutTableType of
+        DB.TxOutCore -> do
+          DB.CMinIdsWrapper $
+            DB.MinIds
+              { minTxInId = listToMaybe txInIds
+              , minTxOutId = listToMaybe $ DB.convertTxOutIdCore txOutIds
+              , minMaTxOutId = listToMaybe $ DB.convertMaTxOutIdCore maTxOutIds
+              }
+        DB.TxOutVariantAddress ->
+          DB.VMinIdsWrapper $
+            DB.MinIds
+              { minTxInId = listToMaybe txInIds
+              , minTxOutId = listToMaybe $ DB.convertTxOutIdVariant txOutIds
+              , minMaTxOutId = listToMaybe $ DB.convertMaTxOutIdVariant maTxOutIds
+              }
+
+mkmaTxOuts :: DB.TxOutTableType -> (DB.TxOutIdW, [MissingMaTxOut]) -> [DB.MaTxOutW]
+mkmaTxOuts _txOutTableType (txOutId, mmtos) = mkmaTxOut <$> mmtos
   where
-    mkmaTxOut :: MissingMaTxOut -> DB.MaTxOut
+    mkmaTxOut :: MissingMaTxOut -> DB.MaTxOutW
     mkmaTxOut missingMaTx =
-      DB.MaTxOut
-        { DB.maTxOutIdent = mmtoIdent missingMaTx
-        , DB.maTxOutQuantity = mmtoQuantity missingMaTx
-        , DB.maTxOutTxOutId = txOutId
-        }
+      case txOutId of
+        DB.CTxOutIdW txOutId' ->
+          DB.CMaTxOutW $
+            C.MaTxOut
+              { C.maTxOutIdent = mmtoIdent missingMaTx
+              , C.maTxOutQuantity = mmtoQuantity missingMaTx
+              , C.maTxOutTxOutId = txOutId'
+              }
+        DB.VTxOutIdW txOutId' ->
+          DB.VMaTxOutW
+            V.MaTxOut
+              { V.maTxOutIdent = mmtoIdent missingMaTx
+              , V.maTxOutQuantity = mmtoQuantity missingMaTx
+              , V.maTxOutTxOutId = txOutId'
+              }
 
 prepareUpdates ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   ExtendedTxIn ->
-  m (Maybe (DB.TxOutId, DB.TxId))
+  m (Maybe (DB.TxOutIdW, DB.TxId))
 prepareUpdates trce eti = case etiTxOutId eti of
   Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
   Left _ -> do
@@ -133,14 +164,22 @@ prepareUpdates trce eti = case etiTxOutId eti of
 insertReverseIndex ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.BlockId ->
-  DB.MinIds ->
+  DB.MinIdsWrapper ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertReverseIndex blockId minIds =
-  void . lift . DB.insertReverseIndex $
-    DB.ReverseIndex
-      { DB.reverseIndexBlockId = blockId
-      , DB.reverseIndexMinIds = minIdsToText minIds
-      }
+insertReverseIndex blockId minIdsWrapper =
+  case minIdsWrapper of
+    DB.CMinIdsWrapper minIds ->
+      void . lift . DB.insertReverseIndex $
+        DB.ReverseIndex
+          { DB.reverseIndexBlockId = blockId
+          , DB.reverseIndexMinIds = minIdsCoreToText minIds
+          }
+    DB.VMinIdsWrapper minIds ->
+      void . lift . DB.insertReverseIndex $
+        DB.ReverseIndex
+          { DB.reverseIndexBlockId = blockId
+          , DB.reverseIndexMinIds = minIdsVariantToText minIds
+          }
 
 -- | If we can't resolve from the db, we fall back to the provided outputs
 -- This happens the input consumes an output introduced in the same block.
@@ -151,38 +190,47 @@ resolveTxInputs ::
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
+  ExceptT SyncNodeError (ReaderT SqlBackend m) (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
 resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn =
   liftLookupFail ("resolveTxInputs " <> textShow txIn <> " ") $ do
     qres <-
       case (hasConsumed, needsValue) of
-        (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue txIn
-        (False, _) -> fmap convertnotFound <$> queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
-        (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId txIn
+        (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
+        (False, _) -> fmap convertnotFoundCache <$> queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
+        (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId syncEnv txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
         case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
           (Nothing, _, _) -> pure $ Left err
-          (Just eutxo, True, True) -> pure $ Right $ convertFoundValue (DB.txOutTxId (etoTxOut eutxo), DB.txOutValue (etoTxOut eutxo))
-          (Just eutxo, _, _) -> pure $ Right $ convertnotFound $ DB.txOutTxId (etoTxOut eutxo)
+          (Just eutxo, True, True) -> pure $ Right $ convertFoundValue (etoTxOut eutxo)
+          (Just eutxo, _, _) -> pure $ Right $ convertnotFound (etoTxOut eutxo)
   where
-    convertnotFound :: DB.TxId -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
-    convertnotFound txId = (txIn, txId, Left txIn, Nothing)
+    convertnotFoundCache :: DB.TxId -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
+    convertnotFoundCache txId = (txIn, txId, Left txIn, Nothing)
 
-    convertFoundTxOutId :: (DB.TxId, DB.TxOutId) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
+    convertnotFound :: DB.TxOutW -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
+    convertnotFound txOutWrapper = case txOutWrapper of
+      DB.CTxOutW cTxOut -> (txIn, C.txOutTxId cTxOut, Left txIn, Nothing)
+      DB.VTxOutW vTxOut _ -> (txIn, V.txOutTxId vTxOut, Left txIn, Nothing)
+
+    convertFoundTxOutId :: (DB.TxId, DB.TxOutIdW) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertFoundTxOutId (txId, txOutId) = (txIn, txId, Right txOutId, Nothing)
 
-    convertFoundValue :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
-    convertFoundValue (txId, lovelace) = (txIn, txId, Left txIn, Just lovelace)
+    -- convertFoundValue :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
+    convertFoundValue :: DB.TxOutW -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
+    convertFoundValue txOutWrapper = case txOutWrapper of
+      DB.CTxOutW cTxOut -> (txIn, C.txOutTxId cTxOut, Left txIn, Just $ C.txOutValue cTxOut)
+      DB.VTxOutW vTxOut _ -> (txIn, V.txOutTxId vTxOut, Left txIn, Just $ V.txOutValue vTxOut)
+    -- (txIn, txId, Left txIn, Just lovelace)
 
-    convertFoundAll :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId, Maybe DbLovelace)
+    convertFoundAll :: (DB.TxId, DB.TxOutIdW, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertFoundAll (txId, txOutId, lovelace) = (txIn, txId, Right txOutId, Just lovelace)
 
 resolveRemainingInputs ::
   MonadIO m =>
   [ExtendedTxIn] ->
-  [(DB.TxOutId, ExtendedTxOut)] ->
+  [(DB.TxOutIdW, ExtendedTxOut)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [ExtendedTxIn]
 resolveRemainingInputs etis mp =
   mapM f etis
@@ -196,18 +244,23 @@ resolveRemainingInputs etis mp =
 
 resolveScriptHash ::
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
-resolveScriptHash groupedOutputs txIn =
+resolveScriptHash syncEnv groupedOutputs txIn =
   liftLookupFail "resolveScriptHash" $ do
-    qres <- fmap fst <$> queryResolveInputCredentials txIn
+    qres <- fmap fst <$> queryResolveInputCredentials syncEnv txIn
     case qres of
       Right ret -> pure $ Right ret
       Left err ->
         case resolveInMemory txIn groupedOutputs of
           Nothing -> pure $ Left err
-          Just eutxo -> pure $ Right $ DB.txOutPaymentCred $ etoTxOut eutxo
+          Just eutxo -> case etoTxOut eutxo of
+            DB.CTxOutW cTxOut -> pure $ Right $ C.txOutPaymentCred cTxOut
+            DB.VTxOutW _ vAddress -> case vAddress of
+              Nothing -> pure $ Left $ DB.DBTxOutVariant "resolveScriptHash: VTxOutW with Nothing address"
+              Just vAddr -> pure $ Right $ V.addressPaymentCred vAddr
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
 resolveInMemory txIn =
@@ -216,4 +269,9 @@ resolveInMemory txIn =
 matches :: Generic.TxIn -> ExtendedTxOut -> Bool
 matches txIn eutxo =
   Generic.toTxHash txIn == etoTxHash eutxo
-    && Generic.txInIndex txIn == DB.txOutIndex (etoTxOut eutxo)
+    && Generic.txInIndex txIn == getTxOutIndex (etoTxOut eutxo)
+  where
+    getTxOutIndex :: DB.TxOutW -> Word64
+    getTxOutIndex txOutWrapper = case txOutWrapper of
+      DB.CTxOutW cTxOut -> C.txOutIndex cTxOut
+      DB.VTxOutW vTxOut _ -> V.txOutIndex vTxOut

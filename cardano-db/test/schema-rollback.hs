@@ -91,7 +91,7 @@ findTablesWithDelete =
     . mapMaybe getTableName
     . mapMaybe removeCommentsAndEmpty
     . getDeleteAfterBlockNo
-    <$> BS.readFile "cardano-db/src/Cardano/Db/Delete.hs"
+    <$> BS.readFile "cardano-db/src/Cardano/Db/Operations/Core/Delete.hs"
   where
     getDeleteAfterBlockNo :: ByteString -> [ByteString]
     getDeleteAfterBlockNo =

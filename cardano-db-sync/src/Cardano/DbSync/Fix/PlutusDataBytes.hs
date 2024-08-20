@@ -12,7 +12,7 @@
 module Cardano.DbSync.Fix.PlutusDataBytes where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
-import qualified Cardano.Db.Old.V13_0 as DB_V_13_0
+import qualified Cardano.Db.Version.V13_0 as DB_V_13_0
 import Cardano.DbSync.Api
 import Cardano.DbSync.Era.Shelley.Generic.Block
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo

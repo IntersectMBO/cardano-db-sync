@@ -16,25 +16,27 @@ import Cardano.Prelude hiding (length, (.))
 import Database.Persist.SqlBackend.Internal
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api (getTxOutTableType, getTrace)
 
-type FixEntry = (DB.TxOutId, DB.TxId)
+type FixEntry = (DB.TxOutIdW, DB.TxId)
 
 -- | Nothing when the syncing must stop.
-fixConsumedBy :: SqlBackend -> Trace IO Text -> CardanoBlock -> IO (Maybe [FixEntry])
-fixConsumedBy backend tracer cblk = case cblk of
-  BlockByron blk -> fixBlock backend tracer blk
+fixConsumedBy :: SqlBackend -> SyncEnv -> CardanoBlock -> IO (Maybe [FixEntry])
+fixConsumedBy backend syncEnv cblk = case cblk of
+  BlockByron blk -> fixBlock backend syncEnv blk
   _ -> pure Nothing
 
-fixBlock :: SqlBackend -> Trace IO Text -> ByronBlock -> IO (Maybe [FixEntry])
-fixBlock backend tracer bblk = case byronBlockRaw bblk of
+fixBlock :: SqlBackend -> SyncEnv -> ByronBlock -> IO (Maybe [FixEntry])
+fixBlock backend syncEnv bblk = case byronBlockRaw bblk of
   Byron.ABOBBoundary _ -> pure $ Just []
   Byron.ABOBBlock blk -> do
-    mEntries <- runReaderT (runExceptT $ mapM fixTx (blockPayload blk)) backend
+    mEntries <- runReaderT (runExceptT $ mapM (fixTx syncEnv) (blockPayload blk)) backend
     case mEntries of
       Right newEntries -> pure $ Just $ concat newEntries
       Left err -> do
         liftIO $
-          logWarning tracer $
+          logWarning (getTrace syncEnv) $
             mconcat
               [ "While fixing block "
               , textShow bblk
@@ -43,12 +45,13 @@ fixBlock backend tracer bblk = case byronBlockRaw bblk of
               ]
         pure Nothing
 
-fixTx :: MonadIO m => Byron.TxAux -> ExceptT SyncNodeError (ReaderT SqlBackend m) [FixEntry]
-fixTx tx = do
+fixTx :: MonadIO m => SyncEnv -> Byron.TxAux -> ExceptT SyncNodeError (ReaderT SqlBackend m) [FixEntry]
+fixTx syncEnv tx = do
   txId <- liftLookupFail "resolving tx" $ DB.queryTxId txHash
-  resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
+  resolvedInputs <- mapM (resolveTxInputs txOutTableType) (toList $ Byron.txInputs (Byron.taTx tx))
   pure (prepUpdate txId <$> resolvedInputs)
   where
+    txOutTableType = getTxOutTableType syncEnv
     txHash = unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
     prepUpdate txId (_, _, txOutId, _) = (txOutId, txId)
 

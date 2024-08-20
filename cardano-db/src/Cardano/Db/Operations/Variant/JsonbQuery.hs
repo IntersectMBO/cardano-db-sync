@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.Db.Migration.Extra.JsonbInSchemaQueries where
+module Cardano.Db.Operations.Variant.JsonbQuery where
 
 import Cardano.Db.Error (LookupFail (..))
 import Control.Exception.Lifted (handle, throwIO)

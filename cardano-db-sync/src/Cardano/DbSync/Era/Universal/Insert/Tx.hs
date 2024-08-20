@@ -20,6 +20,8 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (CacheStatus (..))
 
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Cache (queryTxIdWithCache, tryUpdateCacheTx)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
@@ -152,7 +154,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         Map.fromList
           <$> whenFalseMempty
             (ioPlutusExtra iopts)
-            (mapM (insertRedeemer tracer disInOut (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
+            (mapM (insertRedeemer syncEnv disInOut (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
@@ -224,40 +226,42 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
       whenMaybe mScript $
         lift . insertScript tracer txId
   !txOut <-
-    if ioAddressDetail iopts
-      then do
-        addrId <- lift $ insertAddress addr mSaId hasScript
-        pure
-          DB.TxOut
-            { DB.txOutAddress = Nothing
-            , DB.txOutAddressDetailId = Just addrId
-            , DB.txOutAddressHasScript = hasScript
-            , DB.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
-            , DB.txOutIndex = index
-            , DB.txOutInlineDatumId = mDatumId
-            , DB.txOutPaymentCred = Nothing
-            , DB.txOutReferenceScriptId = mScriptId
-            , DB.txOutStakeAddressId = mSaId
-            , DB.txOutTxId = txId
-            , DB.txOutValue = Generic.coinToDbLovelace value
-            }
-      else
-        pure
-          DB.TxOut
-            { DB.txOutAddress = Just addrText
-            , DB.txOutAddressDetailId = Nothing
-            , DB.txOutAddressHasScript = hasScript
-            , DB.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
-            , DB.txOutIndex = index
-            , DB.txOutInlineDatumId = mDatumId
-            , DB.txOutPaymentCred = Generic.maybePaymentCred addr
-            , DB.txOutReferenceScriptId = mScriptId
-            , DB.txOutStakeAddressId = mSaId
-            , DB.txOutTxId = txId
-            , DB.txOutValue = Generic.coinToDbLovelace value
-            }
+    case ioTxOutTableType iopts of
+      DB.TxOutCore ->
+        pure $
+          DB.CTxOutW $
+            C.TxOut
+              { C.txOutAddress = addrText
+              , C.txOutAddressHasScript = hasScript
+              , C.txOutConsumedByTxId = Nothing
+              , C.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
+              , C.txOutIndex = index
+              , C.txOutInlineDatumId = mDatumId
+              , C.txOutPaymentCred = Generic.maybePaymentCred addr
+              , C.txOutReferenceScriptId = mScriptId
+              , C.txOutStakeAddressId = mSaId
+              , C.txOutTxId = txId
+              , C.txOutValue = Generic.coinToDbLovelace value
+              }
+      DB.TxOutVariantAddress -> do
+        let vAddress =
+              V.Address
+                { V.addressAddress = Generic.renderAddress addr
+                , V.addressRaw = Ledger.serialiseAddr addr
+                , V.addressHasScript = hasScript
+                , V.addressPaymentCred = Generic.maybePaymentCred addr
+                , V.addressStakeAddressId = mSaId
+                }
+        addrId <- lift $ insertAddress addr vAddress
+        pure $
+          DB.VTxOutW
+            (mkTxOutVariant addrId mDatumId mScriptId)
+            Nothing
   -- TODO: Unsure about what we should return here for eutxo
-  let !eutxo = ExtendedTxOut txHash txOut (if ioAddressDetail iopts then Generic.maybePaymentCred addr else Nothing)
+  let !eutxo =
+        case ioTxOutTableType iopts of
+          DB.TxOutCore -> ExtendedTxOut txHash txOut Nothing
+          DB.TxOutVariantAddress -> ExtendedTxOut txHash txOut $ Generic.maybePaymentCred addr
   !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ insertMaTxOuts tracer cache maMap
   pure (eutxo, maTxOuts)
   where
@@ -267,24 +271,28 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
     addrText :: Text
     addrText = Generic.renderAddress addr
 
+    mkTxOutVariant :: V.AddressId -> Maybe DB.DatumId -> Maybe DB.ScriptId -> V.TxOut
+    mkTxOutVariant addrId mDatumId mScriptId =
+      V.TxOut
+        { V.txOutAddressId = addrId
+        , V.txOutConsumedByTxId = Nothing
+        , V.txOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
+        , V.txOutIndex = index
+        , V.txOutInlineDatumId = mDatumId
+        , V.txOutReferenceScriptId = mScriptId
+        , V.txOutTxId = txId
+        , V.txOutValue = Generic.coinToDbLovelace value
+        }
+
 insertAddress ::
   (MonadBaseControl IO m, MonadIO m) =>
   Ledger.Addr StandardCrypto ->
-  Maybe DB.StakeAddressId ->
-  Bool -> -- hasScript
-  ReaderT SqlBackend m DB.AddressDetailId
-insertAddress address mStakeAddr hasScript = do
-  mAddrId <- DB.queryAddressDetailId addrRaw
+  V.Address ->
+  ReaderT SqlBackend m V.AddressId
+insertAddress address vAddress = do
+  mAddrId <- DB.queryAddressId addrRaw
   case mAddrId of
-    Nothing ->
-      DB.insertAddressDetail
-        DB.AddressDetail
-          { DB.addressDetailAddress = Generic.renderAddress address
-          , DB.addressDetailAddressRaw = addrRaw
-          , DB.addressDetailHasScript = hasScript
-          , DB.addressDetailPaymentCred = Generic.maybePaymentCred address
-          , DB.addressDetailStakeAddressId = mStakeAddr
-          }
+    Nothing -> DB.insertAddress vAddress
     Just addrId -> pure addrId
   where
     addrRaw = Ledger.serialiseAddr address
@@ -483,7 +491,7 @@ insertReferenceTxIn syncEnv _tracer txInId txIn = do
 prepareTxIn ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
-  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutId) ->
+  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW) ->
   ExtendedTxIn
 prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
   ExtendedTxIn

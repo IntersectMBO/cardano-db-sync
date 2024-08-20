@@ -48,9 +48,9 @@ rollbackFromBlockNo syncEnv blkNo = do
         , textShow blkNo
         ]
     lift $ do
-      (mTxId, deletedBlockCount) <- DB.deleteBlocksBlockId trce blockId
+      (mTxId, deletedBlockCount) <- DB.deleteBlocksBlockId trce txOutTable blockId
       whenConsumeOrPruneTxOut syncEnv $
-        DB.setNullTxOut trce mTxId
+        DB.querySetNullTxOut trce txOutTable mTxId
       DB.deleteEpochRows epochNo
       DB.deleteDrepDistr epochNo
       DB.deleteRewardRest epochNo
@@ -71,6 +71,7 @@ rollbackFromBlockNo syncEnv blkNo = do
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv
+    txOutTable = getTxOutTableType syncEnv
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
 prepareRollback syncEnv point serverTip =
@@ -117,7 +118,7 @@ prepareRollback syncEnv point serverTip =
       pure False
 
 -- For testing and debugging.
-unsafeRollback :: Trace IO Text -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
-unsafeRollback trce config slotNo = do
+unsafeRollback :: Trace IO Text -> DB.TxOutTableType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
+unsafeRollback trce txOutTableType config slotNo = do
   logInfo trce $ "Forced rollback to slot " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce slotNo)
+  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutTableType slotNo)

@@ -16,7 +16,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Db.Old.V13_0.Schema where
+module Cardano.Db.Version.V13_0.Schema where
 
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Types (DbLovelace, DbWord64, ScriptType)

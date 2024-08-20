@@ -31,7 +31,7 @@ import qualified Cardano.Ledger.Core as Ledger
 -- import Cardano.Ledger.Plutus.Language
 
 import Cardano.Db (ScriptType (..), maybeToEither)
-import qualified Cardano.Db.Old.V13_0 as DB_V_13_0
+import qualified Cardano.Db.Version.V13_0 as DB_V_13_0
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 

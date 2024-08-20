@@ -26,6 +26,7 @@ module Cardano.DbSync (
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
+import qualified Cardano.Db as DB
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
@@ -118,7 +119,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
-    void $ unsafeRollback trce pgConfig slotNo
+    void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
   runSyncNode
     metricsSetters
     trce
@@ -144,6 +145,8 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         ]
 
     syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
+
+    txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
 
 runSyncNode ::
   MetricSetters ->
@@ -238,7 +241,7 @@ extractSyncOptions :: SyncNodeParams -> Bool -> SyncNodeConfig -> SyncOptions
 extractSyncOptions snp aop snc =
   SyncOptions
     { soptEpochAndCacheEnabled =
-        not isTxOutBootstrap'
+        not isTxOutConsumedBootstrap'
           && ioInOut iopts
           && not (enpEpochDisabled snp && enpHasCache snp)
     , soptAbortOnInvalid = aop
@@ -248,8 +251,8 @@ extractSyncOptions snp aop snc =
     , soptPruneConsumeMigration =
         initPruneConsumeMigration
           isTxOutConsumed'
-          isTxOutPrune'
-          isTxOutBootstrap'
+          isTxOutConsumedPrune'
+          isTxOutConsumedBootstrap'
           forceTxIn'
     , soptInsertOptions = iopts
     , snapshotEveryFollowing = enpSnEveryFollowing snp
@@ -278,7 +281,7 @@ extractSyncOptions snp aop snc =
         , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance
         , ioRemoveJsonbFromSchema = isRemoveJsonbFromSchemaEnabled (sioRemoveJsonbFromSchema (dncInsertOptions snc))
-        , ioAddressDetail = useAddressDetailTable (sioAddressDetail (dncInsertOptions snc))
+        , ioTxOutTableType = ioTxOutTableType'
         }
 
     useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable
@@ -288,10 +291,11 @@ extractSyncOptions snp aop snc =
       isGovernanceEnabled (sioGovernance (dncInsertOptions snc))
 
     isTxOutConsumed' = isTxOutConsumed . sioTxOut . dncInsertOptions $ snc
-    isTxOutPrune' = isTxOutPrune . sioTxOut . dncInsertOptions $ snc
-    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions $ snc
+    isTxOutConsumedPrune' = isTxOutConsumedPrune . sioTxOut . dncInsertOptions $ snc
+    isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions $ snc
     isTxOutEnabled' = isTxOutEnabled . sioTxOut . dncInsertOptions $ snc
     forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
+    ioTxOutTableType' = txOutConfigToTableType $ sioTxOut $ dncInsertOptions snc
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
@@ -299,3 +303,11 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Git hash: ", Db.gitRev]
   logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
   logInfo trce $ textShow params
+
+txOutConfigToTableType :: TxOutConfig -> DB.TxOutTableType
+txOutConfigToTableType config = case config of
+  TxOutEnable (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
+  TxOutDisable -> DB.TxOutCore
+  TxOutConsumed _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
+  TxOutConsumedPrune _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
+  TxOutConsumedBootstrap _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore

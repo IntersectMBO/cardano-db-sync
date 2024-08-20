@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Old.V13_0.Query (
+module Cardano.Db.Version.V13_0.Query (
   queryDatum,
   queryDatumPage,
   queryDatumCount,
@@ -22,8 +22,8 @@ module Cardano.Db.Old.V13_0.Query (
   updateScriptBytes,
 ) where
 
-import Cardano.Db.Old.V13_0.Schema
 import Cardano.Db.Types (ScriptType (..))
+import Cardano.Db.Version.V13_0.Schema
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)

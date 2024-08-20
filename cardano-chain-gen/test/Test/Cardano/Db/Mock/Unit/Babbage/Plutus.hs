@@ -32,6 +32,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
@@ -61,7 +63,7 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
 import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, withFullConfig, withFullConfigAndDropDB)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, txOutTableTypeFromConfig, withFullConfig, withFullConfigAndDropDB)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -88,6 +90,8 @@ simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
   withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
+
+    let txOutTableType = txOutTableTypeFromConfig dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
     a <- fillUntilNextEpoch interpreter mockServer
@@ -97,12 +101,28 @@ simpleScript =
         Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline True] 20000 20000
 
     assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
-    assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs) [expectedFields] "Unexpected script outputs"
+    assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs txOutTableType) [expectedFields] "Unexpected script outputs"
   where
     testLabel = "simpleScript"
-    getOutFields txOut = (DB.txOutAddress txOut, DB.txOutAddressHasScript txOut, DB.txOutValue txOut, DB.txOutDataHash txOut)
+    getOutFields txOutW =
+      case txOutW of
+        DB.CTxOutW txOut ->
+          ( C.txOutAddress txOut
+          , C.txOutAddressHasScript txOut
+          , C.txOutValue txOut
+          , C.txOutDataHash txOut
+          )
+        DB.VTxOutW txOut mAddress -> case mAddress of
+          Just address ->
+            ( V.addressAddress address
+            , V.addressHasScript address
+            , V.txOutValue txOut
+            , V.txOutDataHash txOut
+            )
+          Nothing -> error "BabbageSimpleScript: expected an address"
+
     expectedFields =
-      ( Just $ renderAddress alwaysSucceedsScriptAddr
+      ( renderAddress alwaysSucceedsScriptAddr
       , True
       , DB.DbLovelace 20000
       , Just $ Crypto.hashToBytes (extractHash $ hashData @StandardBabbage plutusDataList)

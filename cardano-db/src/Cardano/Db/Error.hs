@@ -10,7 +10,7 @@ module Cardano.Db.Error (
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
-import Cardano.Db.Schema
+import Cardano.Db.Schema.BaseSchema
 import Cardano.Prelude (throwIO)
 import Control.Exception (Exception)
 import qualified Data.ByteString.Base16 as Base16
@@ -35,6 +35,7 @@ data LookupFail
   | DBExtraMigration !String
   | DBPruneConsumed !String
   | DBRJsonbInSchema !String
+  | DBTxOutVariant !String
   deriving (Eq, Generic)
 
 instance Exception LookupFail
@@ -56,6 +57,7 @@ instance Show LookupFail where
       DBExtraMigration e -> "DBExtraMigration : " <> e
       DBPruneConsumed e -> "DBExtraMigration" <> e
       DBRJsonbInSchema e -> "DBRJsonbInSchema" <> e
+      DBTxOutVariant e -> "DbTxOutVariant" <> e
 
 base16encode :: ByteString -> Text
 base16encode = Text.decodeUtf8 . Base16.encode

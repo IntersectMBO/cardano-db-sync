@@ -20,6 +20,8 @@ import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
@@ -279,7 +281,7 @@ insertByronTx' ::
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
-  resolvedInputs <- mapM resolveTxInputs (toList $ Byron.txInputs (Byron.taTx tx))
+  resolvedInputs <- mapM (resolveTxInputs txOutTableType) (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
     lift . DB.insertTx $
@@ -312,7 +314,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- Insert outputs for a transaction before inputs in case the inputs for this transaction
   -- references the output (not sure this can even happen).
   disInOut <- liftIO $ getDisableInOutState syncEnv
-  lift $ zipWithM_ (insertTxOut syncEnv (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+  lift $ zipWithM_ (insertTxOutByron syncEnv (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
   unless (getSkipTxIn syncEnv) $
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
@@ -321,6 +323,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
+    txOutTableType = getTxOutTableType syncEnv
     iopts = getInsertOptions syncEnv
 
     tracer :: Trace IO Text
@@ -334,7 +337,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
 
     prepUpdate txId (_, _, txOutId, _) = (txOutId, txId)
 
-insertTxOut ::
+insertTxOutByron ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Bool ->
@@ -343,58 +346,62 @@ insertTxOut ::
   Word32 ->
   Byron.TxOut ->
   ReaderT SqlBackend m ()
-insertTxOut syncEnv hasConsumed bootStrap txId index txout =
-  do
-    -- check if we should use AddressDetail or not
-    if ioAddressDetail . soptInsertOptions $ envOptions syncEnv
-      then do
-        addrDetailId <- insertAddressDetail
-        DB.insertTxOutPlex hasConsumed bootStrap $
-          DB.TxOut
-            { DB.txOutTxId = txId
-            , DB.txOutIndex = fromIntegral index
-            , DB.txOutAddress = Nothing
-            , DB.txOutAddressHasScript = False
-            , DB.txOutPaymentCred = Nothing
-            , DB.txOutStakeAddressId = Nothing
-            , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
-            , DB.txOutDataHash = Nothing
-            , DB.txOutInlineDatumId = Nothing
-            , DB.txOutReferenceScriptId = Nothing
-            , DB.txOutAddressDetailId = Just addrDetailId
-            }
-      else
-        DB.insertTxOutPlex hasConsumed bootStrap $
-          DB.TxOut
-            { DB.txOutTxId = txId
-            , DB.txOutIndex = fromIntegral index
-            , DB.txOutAddress = Just $ Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-            , DB.txOutAddressHasScript = False
-            , DB.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
-            , DB.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
-            , DB.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
-            , DB.txOutDataHash = Nothing
-            , DB.txOutInlineDatumId = Nothing
-            , DB.txOutReferenceScriptId = Nothing
-            , DB.txOutAddressDetailId = Nothing
-            }
-  where
-    insertAddressDetail ::
-      (MonadBaseControl IO m, MonadIO m) =>
-      ReaderT SqlBackend m DB.AddressDetailId
-    insertAddressDetail = do
-      let addrRaw = serialize' (Byron.txOutAddress txout)
-      mAddrId <- DB.queryAddressDetailId addrRaw
-      case mAddrId of
-        Nothing ->
-          DB.insertAddressDetail
-            DB.AddressDetail
-              { DB.addressDetailAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-              , DB.addressDetailAddressRaw = addrRaw
-              , DB.addressDetailHasScript = False
-              , DB.addressDetailPaymentCred = Nothing -- Byron does not have a payment credential.
-              , DB.addressDetailStakeAddressId = Nothing -- Byron does not have a stake address.
+insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
+  unless bootStrap $
+    case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
+      DB.TxOutCore -> do
+        void . DB.insertTxOut $
+          DB.CTxOutW $
+            C.TxOut
+              { C.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+              , C.txOutAddressHasScript = False
+              , C.txOutDataHash = Nothing
+              , C.txOutConsumedByTxId = Nothing
+              , C.txOutIndex = fromIntegral index
+              , C.txOutInlineDatumId = Nothing
+              , C.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
+              , C.txOutReferenceScriptId = Nothing
+              , C.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
+              , C.txOutTxId = txId
+              , C.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               }
+      DB.TxOutVariantAddress -> do
+        addrDetailId <- insertAddress
+        void . DB.insertTxOut $ DB.VTxOutW (vTxOut addrDetailId) Nothing
+  where
+    addrRaw :: ByteString
+    addrRaw = serialize' (Byron.txOutAddress txout)
+
+    vTxOut :: V.AddressId -> V.TxOut
+    vTxOut addrDetailId =
+      V.TxOut
+        { V.txOutAddressId = addrDetailId
+        , V.txOutConsumedByTxId = Nothing
+        , V.txOutDataHash = Nothing
+        , V.txOutIndex = fromIntegral index
+        , V.txOutInlineDatumId = Nothing
+        , V.txOutReferenceScriptId = Nothing
+        , V.txOutTxId = txId
+        , V.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+        }
+
+    vAddress :: V.Address
+    vAddress =
+      V.Address
+        { V.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+        , V.addressRaw = addrRaw
+        , V.addressHasScript = False
+        , V.addressPaymentCred = Nothing -- Byron does not have a payment credential.
+        , V.addressStakeAddressId = Nothing -- Byron does not have a stake address.
+        }
+
+    insertAddress ::
+      (MonadBaseControl IO m, MonadIO m) =>
+      ReaderT SqlBackend m V.AddressId
+    insertAddress = do
+      mAddrId <- DB.queryAddressId addrRaw
+      case mAddrId of
+        Nothing -> DB.insertAddress vAddress
         -- this address is already in the database, so we can just return the id to be linked to the txOut.
         Just addrId -> pure addrId
 
@@ -402,7 +409,7 @@ insertTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   DB.TxId ->
-  (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace) ->
+  (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxInId
 insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
   lift . DB.insertTxIn $
@@ -415,15 +422,15 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = 
 
 -- -----------------------------------------------------------------------------
 
-resolveTxInputs :: MonadIO m => Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
-resolveTxInputs txIn@(Byron.TxInUtxo txHash index) = do
-  res <- liftLookupFail "resolveInput" $ DB.queryTxOutIdValue (Byron.unTxHash txHash, fromIntegral index)
+resolveTxInputs :: MonadIO m => DB.TxOutTableType -> Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
+resolveTxInputs txOutTableType txIn@(Byron.TxInUtxo txHash index) = do
+  res <- liftLookupFail "resolveInput" $ DB.queryTxOutIdValue txOutTableType (Byron.unTxHash txHash, fromIntegral index)
   pure $ convert res
   where
-    convert :: (DB.TxId, DB.TxOutId, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)
+    convert :: (DB.TxId, DB.TxOutIdW, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
     convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)
 
-calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DB.TxOutId, DbLovelace)] -> Either SyncNodeError ValueFee
+calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)] -> Either SyncNodeError ValueFee
 calculateTxFee tx resolvedInputs = do
   outval <- first (\e -> SNErrDefault $ "calculateTxFee: " <> textShow e) output
   when (null resolvedInputs) $

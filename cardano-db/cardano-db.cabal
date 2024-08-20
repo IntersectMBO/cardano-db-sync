@@ -30,31 +30,36 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
-                        Cardano.Db.Old.V13_0
+                        Cardano.Db.Schema.Core.TxOut
+                        Cardano.Db.Schema.Variant.TxOut
+                        Cardano.Db.Version.V13_0
 
-  other-modules:        Cardano.Db.Delete
-                        Cardano.Db.Error
-                        Cardano.Db.Migration.Extra.CosnumedTxOut.Queries
-                        Cardano.Db.Migration.Extra.CosnumedTxOut.Schema
-                        Cardano.Db.Migration.Extra.JsonbInSchemaQueries
-                        Cardano.Db.Insert
-                        Cardano.Db.AlterTable
-                        Cardano.Db.PGConfig
+  other-modules:        Cardano.Db.Error
+                        Cardano.Db.Git.RevFromGit
+                        Cardano.Db.Git.Version
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
-                        Cardano.Db.MinId
-                        Cardano.Db.Multiplex
-                        Cardano.Db.Old.V13_0.Schema
-                        Cardano.Db.Old.V13_0.Query
-                        Cardano.Db.Query
+                        Cardano.Db.Operations.Core.AlterTable
+                        Cardano.Db.Operations.Core.Delete
+                        Cardano.Db.Operations.Core.Insert
+                        Cardano.Db.Operations.Core.MinId
+                        Cardano.Db.Operations.Core.Query
+                        Cardano.Db.Operations.Core.QueryHelper
+                        Cardano.Db.Operations.Types
+                        Cardano.Db.Operations.Variant.ConsumedTxOut
+                        Cardano.Db.Operations.Variant.JsonbQuery
+                        Cardano.Db.Operations.Variant.TxOutDelete
+                        Cardano.Db.Operations.Variant.TxOutInsert
+                        Cardano.Db.Operations.Variant.TxOutQuery
+                        Cardano.Db.PGConfig
                         Cardano.Db.Run
-                        Cardano.Db.RevFromGit
-                        Cardano.Db.Schema
-                        Cardano.Db.Schema.Types
+                        Cardano.Db.Schema.BaseSchema
                         Cardano.Db.Schema.Orphans
+                        Cardano.Db.Schema.Types
                         Cardano.Db.Types
-                        Cardano.Db.Version
+                        Cardano.Db.Version.V13_0.Query
+                        Cardano.Db.Version.V13_0.Schema
 
   build-depends:        aeson
                       , base                            >= 4.14         && < 5
