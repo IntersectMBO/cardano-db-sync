@@ -316,7 +316,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
     lift $
-      DB.updateListTxOutConsumedByTxId (prepUpdate <$> resolvedInputs)
+      DB.updateListTxOutConsumedByTxId (prepUpdate txId <$> resolvedInputs)
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
@@ -331,7 +331,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         SNErrInvariant loc ei -> SNErrInvariant loc (annotateInvariantTx (Byron.taTx tx) ei)
         _other -> ee
 
-    prepUpdate (_, txId, txOutId, _) = (txOutId, txId)
+    prepUpdate txId (_, _, txOutId, _) = (txOutId, txId)
 
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
