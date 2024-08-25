@@ -10,6 +10,7 @@ module Cardano.Db.Multiplex (
   setNullTxOut,
   runExtraMigrations,
   ExtraCons.deleteConsumedTxOut,
+  ExtraCons.queryWrongConsumedBy,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
