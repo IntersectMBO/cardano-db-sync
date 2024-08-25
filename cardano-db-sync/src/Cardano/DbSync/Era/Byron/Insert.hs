@@ -8,6 +8,7 @@
 
 module Cardano.DbSync.Era.Byron.Insert (
   insertByronBlock,
+  resolveTxInputs,
 ) where
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)

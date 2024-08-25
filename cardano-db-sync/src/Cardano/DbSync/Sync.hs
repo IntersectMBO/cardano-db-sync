@@ -34,6 +34,7 @@ import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv 
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
+import Cardano.DbSync.Fix.ConsumedBy
 import Cardano.DbSync.Fix.PlutusDataBytes
 import Cardano.DbSync.Fix.PlutusScripts
 import Cardano.DbSync.LocalStateQuery
@@ -209,6 +210,28 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     backend = envBackend syncEnv
 
     initAction channel = do
+      consumedFixed <- getIsConsumedFixed syncEnv
+      case consumedFixed of
+        Nothing -> oldActionFixes channel
+        Just wrongEntriesSize | wrongEntriesSize == 0 -> do
+          logInfo tracer "Found no wrong entries"
+          oldActionFixes channel
+        Just wrongEntriesSize -> do
+          logInfo tracer $
+            mconcat ["Found ", textShow wrongEntriesSize, " consumed_by_tx_id wrong entries"]
+          fixedEntries <-
+            runPeer
+              localChainSyncTracer
+              (cChainSyncCodec codecs)
+              channel
+              ( Client.chainSyncClientPeer $
+                  chainSyncClientFixConsumed backend tracer wrongEntriesSize
+              )
+          logInfo tracer $
+            mconcat ["Fixed ", textShow fixedEntries, " consumed_by_tx_id wrong entries"]
+          pure False
+
+    oldActionFixes channel = do
       fr <- getIsSyncFixed syncEnv
       let skipFix = soptSkipFix $ envOptions syncEnv
       let onlyFix = soptOnlyFix $ envOptions syncEnv
@@ -438,6 +461,43 @@ drainThePipe n0 client = go n0
               { recvMsgRollForward = \_hdr _tip -> pure $ go n'
               , recvMsgRollBackward = \_pt _tip -> pure $ go n'
               }
+
+chainSyncClientFixConsumed ::
+  SqlBackend -> Trace IO Text -> Word64 -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
+chainSyncClientFixConsumed backend tracer wrongTotalSize = Client.ChainSyncClient $ do
+  liftIO $ logInfo tracer "Starting chainsync to fix consumed_by_tx_id Byron entries. See issue https://github.com/IntersectMBO/cardano-db-sync/issues/1821. This makes resyncing unnecessary."
+  pure $ Client.SendMsgFindIntersect [genesisPoint] clientStIntersect
+  where
+    clientStIntersect =
+      Client.ClientStIntersect
+        { Client.recvMsgIntersectFound = \_blk _tip ->
+            Client.ChainSyncClient $
+              pure $
+                Client.SendMsgRequestNext (pure ()) (clientStNext 0)
+        , Client.recvMsgIntersectNotFound = \_tip ->
+            panic "Failed to find intersection with genesis."
+        }
+
+    clientStNext :: Integer -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
+    clientStNext lastSize =
+      Client.ClientStNext
+        { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
+            (lastSize', ended) <- fixConsumedBy backend tracer lastSize blk
+            logSize lastSize lastSize'
+            if ended
+              then pure $ Client.SendMsgDone lastSize'
+              else pure $ Client.SendMsgRequestNext (pure ()) (clientStNext lastSize')
+        , Client.recvMsgRollBackward = \_point _tip ->
+            Client.ChainSyncClient $
+              pure $
+                Client.SendMsgRequestNext (pure ()) (clientStNext lastSize)
+        }
+
+    logSize :: Integer -> Integer -> IO ()
+    logSize lastSize newSize = do
+      when (newSize `div` 200_000 > lastSize `div` 200_000) $
+        logInfo tracer $
+          mconcat ["Fixed ", textShow newSize, "/", textShow wrongTotalSize, " entries"]
 
 chainSyncClientFixData ::
   SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
