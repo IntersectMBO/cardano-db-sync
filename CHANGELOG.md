@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 13.4.1.0
+- Fix consumed_by option for Byron inputs. A migration fixes old wrong values in place. [#1821]
+- Fix only-utxo preset populating the metadata instead of the multiassets
+
 ## 13.4.0.0
 
 - Voting metadata parsing falls back to CIP-100 when CIP-108 or CIP-119 is not followed [#1779]

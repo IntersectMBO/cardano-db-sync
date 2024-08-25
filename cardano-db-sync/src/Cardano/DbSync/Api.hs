@@ -12,6 +12,7 @@ module Cardano.DbSync.Api (
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
+  getIsConsumedFixed,
   noneFixed,
   isDataFixed,
   getIsSyncFixed,
@@ -52,6 +53,7 @@ import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
+import qualified Cardano.Db as Multiplex (queryWrongConsumedBy)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
@@ -111,6 +113,15 @@ isConsistent env = do
   case cst of
     Consistent -> pure True
     _ -> pure False
+
+getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
+getIsConsumedFixed env =
+  case (DB.pcmPruneTxOut pcm, DB.pcmConsumeOrPruneTxOut pcm) of
+    (False, True) -> Just <$> DB.runDbIohkNoLogging backend Multiplex.queryWrongConsumedBy
+    _ -> pure Nothing
+  where
+    pcm = soptPruneConsumeMigration $ envOptions env
+    backend = envBackend env
 
 noneFixed :: FixesRan -> Bool
 noneFixed NoneFixRan = True
