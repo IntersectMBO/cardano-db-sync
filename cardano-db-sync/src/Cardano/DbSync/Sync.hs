@@ -473,25 +473,39 @@ chainSyncClientFixConsumed backend tracer wrongTotalSize = Client.ChainSyncClien
         { Client.recvMsgIntersectFound = \_blk _tip ->
             Client.ChainSyncClient $
               pure $
-                Client.SendMsgRequestNext (pure ()) (clientStNext 0)
+                Client.SendMsgRequestNext (pure ()) (clientStNext (0, (0, [])))
         , Client.recvMsgIntersectNotFound = \_tip ->
             panic "Failed to find intersection with genesis."
         }
 
-    clientStNext :: Integer -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
-    clientStNext lastSize =
+    clientStNext :: (Integer, (Integer, [[FixEntry]])) -> Client.ClientStNext CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
+    clientStNext (sizeFixedTotal, (sizeFixEntries, fixEntries)) =
       Client.ClientStNext
         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
-            (lastSize', ended) <- fixConsumedBy backend tracer lastSize blk
-            logSize lastSize lastSize'
-            if ended
-              then pure $ Client.SendMsgDone lastSize'
-              else pure $ Client.SendMsgRequestNext (pure ()) (clientStNext lastSize')
+            mNewEntries <- fixConsumedBy backend tracer blk
+            case mNewEntries of
+              Nothing -> do
+                fixAccumulatedEntries fixEntries
+                pure $ Client.SendMsgDone (sizeFixedTotal + sizeFixEntries)
+              Just newEntries -> do
+                let sizeNewEntries = fromIntegral (length newEntries)
+                (sizeNewFixed, sizeUnfixed, unfixedEntries) <-
+                  fixAccumulatedEntriesMaybe (sizeFixEntries + sizeNewEntries, newEntries : fixEntries)
+                let sizeNewFixedTotal = sizeFixedTotal + sizeNewFixed
+                logSize sizeFixedTotal sizeNewFixedTotal
+                pure $ Client.SendMsgRequestNext (pure ()) (clientStNext (sizeNewFixedTotal, (sizeUnfixed, unfixedEntries)))
         , Client.recvMsgRollBackward = \_point _tip ->
             Client.ChainSyncClient $
               pure $
-                Client.SendMsgRequestNext (pure ()) (clientStNext lastSize)
+                Client.SendMsgRequestNext (pure ()) (clientStNext (sizeFixedTotal, (sizeFixEntries, fixEntries)))
         }
+
+    fixAccumulatedEntries = fixEntriesConsumed backend tracer . concat . reverse
+
+    fixAccumulatedEntriesMaybe :: (Integer, [[FixEntry]]) -> IO (Integer, Integer, [[FixEntry]])
+    fixAccumulatedEntriesMaybe (n, entries)
+      | n >= 10_000 = fixAccumulatedEntries entries >> pure (n, 0, [])
+      | otherwise = pure (0, n, entries)
 
     logSize :: Integer -> Integer -> IO ()
     logSize lastSize newSize = do
