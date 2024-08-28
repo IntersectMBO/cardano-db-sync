@@ -641,7 +641,7 @@ share
     quorumDenominator    Word64
 
   CommitteeMember
-    committeeId          CommitteeId   -- here intentionally we use foreign keys
+    committeeId          CommitteeId          OnDeleteCascade -- here intentionally we use foreign keys
     committeeHashId      CommitteeHashId      noreference
     expirationEpoch      Word64               sqltype=word31type
 
