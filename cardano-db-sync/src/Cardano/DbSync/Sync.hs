@@ -214,7 +214,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
       case consumedFixed of
         Nothing -> oldActionFixes channel
         Just wrongEntriesSize | wrongEntriesSize == 0 -> do
-          logInfo tracer "Found no wrong entries"
+          logInfo tracer "Found no wrong consumed_by_tx_id entries"
           oldActionFixes channel
         Just wrongEntriesSize -> do
           logInfo tracer $

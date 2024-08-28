@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.5.0.0
+- Fix a crtitical bug with committee foreign key, that could cause crashes
+
 ## 13.4.1.0
 - Fix consumed_by option for Byron inputs. A migration fixes old wrong values in place. [#1821]
 - Fix only-utxo preset populating the metadata instead of the multiassets
