@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 13.5.0.1
+- Fix an issue with restarts
+- Fix an issue with --disable-cache not working properly [#1838]
+
 ## 13.5.0.0
 - Fix a crtitical bug with committee foreign key, that could cause crashes
 
