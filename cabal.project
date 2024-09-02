@@ -84,12 +84,11 @@ constraints:
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: 176f99e51155cb3eaa0711db1c3c969d67438958
-  --sha256: sha256-F5wgRA820x16f+8c/LlEEBG0rMJIA1XWw6X0ZwX5UWs=
+  tag: efd560070aaf042d1eb4680ae37fc607c7742319
+  --sha256: sha256-VIwEjpaGk09+dAcKELjLSR2OP3qBCWTGHpd0SBjgbVc=
   subdir:
     cardano-node
     cardano-submit-api
     trace-dispatcher
     trace-forward
     trace-resources
-
