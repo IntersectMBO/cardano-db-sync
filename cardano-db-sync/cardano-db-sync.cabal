@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-db-sync
-version:                13.5.0.1
+version:                13.5.0.2
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -172,7 +172,7 @@ library
                       , cardano-ledger-conway
                       , cardano-ledger-binary
                       , cardano-ledger-mary
-                      , cardano-ledger-shelley
+                      , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-node
                       , cardano-prelude
                       , cardano-protocol-tpraos
@@ -209,7 +209,7 @@ library
                       , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
-                      , plutus-ledger-api
+                      , plutus-ledger-api ==1.30.0.0
                       , pretty-show
                       , prometheus
                       , psqueues
@@ -372,7 +372,7 @@ test-suite test
                       , cardano-ledger-allegra:{cardano-ledger-allegra,testlib}
                       , cardano-ledger-alonzo:{testlib}
                       , cardano-ledger-byron
-                      , cardano-ledger-shelley:{cardano-ledger-shelley,testlib}
+                      , cardano-ledger-shelley:{cardano-ledger-shelley,testlib} >= 1.12.3.0
                       , cardano-db
                       , cardano-db-sync
                       , cardano-ledger-core

@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## 13.5.0.1
+## 13.5.0.2
 - Fix an issue with restarts
 - Fix an issue with --disable-cache not working properly [#1838]
 
