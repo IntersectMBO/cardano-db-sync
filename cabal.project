@@ -63,7 +63,9 @@ test-show-details: direct
 write-ghc-environment-files: always
 
 package snap-server
-  flags: +openssl
+  -- This flag is only needed for a component of `cardano-node` and then
+  -- only if the `cardano-node` is compiled with `+rtview`.
+  flags: -openssl
 
 allow-newer:
   swagger2:aeson
