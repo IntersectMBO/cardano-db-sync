@@ -252,9 +252,25 @@
               (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
                 (let
                   ghcOptions = [
+                    # Postgresql static is pretty broken in nixpkgs. We can't rely on the
+                    # pkg-config, so we have to add the correct libraries ourselves
                     "-L${pkgs.postgresql}/lib"
                     "-optl-Wl,-lpgport"
                     "-optl-Wl,-lpgcommon"
+
+                    # Since we aren't using the postgresql pkg-config, it won't
+                    # automatically include OpenSSL
+                    "-L${pkgs.openssl.out}/lib"
+
+                    # The ordering of -lssl and -lcrypto below is important. Otherwise,
+                    # we'll get:
+                    #
+                    #     (.text+0x2c3d): undefined reference to `COMP_get_type'
+                    #     (.text+0x2de6): undefined reference to `COMP_get_name'
+                    #     (.text+0x4af4): undefined reference to `COMP_CTX_free'
+                    #     (.text+0x4bdd): undefined reference to `COMP_CTX_get_method'
+                    "-optl-Wl,-lssl"
+                    "-optl-Wl,-lcrypto"
                   ];
                 in {
                   packages.cardano-chain-gen.ghcOptions = ghcOptions;
