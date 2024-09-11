@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -23,14 +24,15 @@ module Cardano.Db.Types (
   CertNo (..),
   PoolCert (..),
   ExtraMigration (..),
+  MigrationValues (..),
   VoteUrl (..),
   VoteMetaHash (..),
   Vote (..),
   VoterRole (..),
   GovActionType (..),
   BootstrapState (..),
+  processMigrationValues,
   isStakeDistrComplete,
-  wasPruneTxOutPreviouslySet,
   bootstrapState,
   extraDescription,
   deltaCoinToDbInt65,
@@ -196,13 +198,31 @@ data ExtraMigration
   | PruneTxOutFlagPreviouslySet
   | BootstrapStarted
   | BootstrapFinished
+  | ConsumeTxOutPreviouslySet
+  | TxOutAddressPreviouslySet
   deriving (Eq, Show, Read)
+
+data MigrationValues = MigrationValues
+  { isStakeDistrEnded :: !Bool
+  , isPruneTxOutPreviouslySet :: !Bool
+  , isConsumeTxOutPreviouslySet :: !Bool
+  , isTxOutAddressPreviouslySet :: !Bool
+  , pruneConsumeMigration :: !PruneConsumeMigration
+  }
+  deriving (Eq, Show)
+
+processMigrationValues :: [ExtraMigration] -> PruneConsumeMigration -> MigrationValues
+processMigrationValues migrations pcm =
+  MigrationValues
+    { isStakeDistrEnded = StakeDistrEnded `elem` migrations
+    , isPruneTxOutPreviouslySet = PruneTxOutFlagPreviouslySet `elem` migrations
+    , isConsumeTxOutPreviouslySet = ConsumeTxOutPreviouslySet `elem` migrations
+    , isTxOutAddressPreviouslySet = TxOutAddressPreviouslySet `elem` migrations
+    , pruneConsumeMigration = pcm
+    }
 
 isStakeDistrComplete :: [ExtraMigration] -> Bool
 isStakeDistrComplete = elem StakeDistrEnded
-
-wasPruneTxOutPreviouslySet :: [ExtraMigration] -> Bool
-wasPruneTxOutPreviouslySet = elem PruneTxOutFlagPreviouslySet
 
 data BootstrapState
   = BootstrapNotStarted
@@ -221,6 +241,7 @@ data PruneConsumeMigration = PruneConsumeMigration
   , -- we make the assumption that if the user is using prune flag
     -- they will also want consume automatically set for them.
     pcmConsumeOrPruneTxOut :: Bool
+  , pcmConsumedTxOut :: Bool
   , pcmSkipTxIn :: Bool
   }
   deriving (Eq, Show)
@@ -236,6 +257,10 @@ extraDescription = \case
     "The bootstrap syncing is in progress"
   BootstrapFinished ->
     "The bootstrap is finalised"
+  ConsumeTxOutPreviouslySet ->
+    "The --consume-tx-out flag has previously been enabled"
+  TxOutAddressPreviouslySet ->
+    "The addition of a Address table for TxOuts was previously set"
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
 

@@ -32,7 +32,6 @@ tests =
 prop_syncInsertConfigFromJSON :: Property
 prop_syncInsertConfigFromJSON = property $ do
   json <- forAll genDefaultJson
-
   Aeson.fromJSON json === Aeson.Success (def :: SyncInsertConfig)
 
 prop_syncInsertConfigRoundtrip :: Property
@@ -118,7 +117,9 @@ genDefaultJson =
     [ [aesonQQ|
         {
           "tx_out": {
-            "value": "enable"
+            "value": "enable",
+            "use_address_table": false,
+            "force_tx_in": false
           },
           "ledger": "enable",
           "shelley": {
@@ -148,7 +149,8 @@ genDefaultJson =
     , [aesonQQ|
         {
           "tx_out": {
-            "value": "enable"
+            "value": "enable",
+            "use_address_table": false
           },
           "ledger": "enable",
           "shelley": {

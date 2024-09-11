@@ -40,18 +40,18 @@ library
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
-                        Cardano.Db.Operations.Core.AlterTable
-                        Cardano.Db.Operations.Core.Delete
-                        Cardano.Db.Operations.Core.Insert
-                        Cardano.Db.Operations.Core.MinId
-                        Cardano.Db.Operations.Core.Query
-                        Cardano.Db.Operations.Core.QueryHelper
+                        Cardano.Db.Operations.AlterTable
+                        Cardano.Db.Operations.Delete
+                        Cardano.Db.Operations.Insert
+                        Cardano.Db.Operations.Other.MinId
+                        Cardano.Db.Operations.Query
+                        Cardano.Db.Operations.QueryHelper
                         Cardano.Db.Operations.Types
-                        Cardano.Db.Operations.Variant.ConsumedTxOut
-                        Cardano.Db.Operations.Variant.JsonbQuery
-                        Cardano.Db.Operations.Variant.TxOutDelete
-                        Cardano.Db.Operations.Variant.TxOutInsert
-                        Cardano.Db.Operations.Variant.TxOutQuery
+                        Cardano.Db.Operations.Other.ConsumedTxOut
+                        Cardano.Db.Operations.Other.JsonbQuery
+                        Cardano.Db.Operations.TxOut.TxOutDelete
+                        Cardano.Db.Operations.TxOut.TxOutInsert
+                        Cardano.Db.Operations.TxOut.TxOutQuery
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
                         Cardano.Db.Schema.BaseSchema

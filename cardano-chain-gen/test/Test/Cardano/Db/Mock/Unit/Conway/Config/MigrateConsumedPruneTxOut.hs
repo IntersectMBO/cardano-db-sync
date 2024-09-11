@@ -112,7 +112,7 @@ basicPrune = do
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigAndLogs cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     let txOutTableType = txOutTableTypeFromConfig dbSync
     -- Forge some blocks
     blk0 <- forgeNext interpreter mockBlock0

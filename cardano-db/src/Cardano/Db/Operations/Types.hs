@@ -213,3 +213,11 @@ convertMaTxOutIdVariant = mapMaybe unwrapVariant
   where
     unwrapVariant (VMaTxOutIdW maTxOutId) = Just maTxOutId
     unwrapVariant _ = Nothing
+
+isTxOutCore :: TxOutTableType -> Bool
+isTxOutCore TxOutCore = True
+isTxOutCore TxOutVariantAddress = False
+
+isTxOutVariantAddress :: TxOutTableType -> Bool
+isTxOutVariantAddress TxOutVariantAddress = True
+isTxOutVariantAddress TxOutCore = False

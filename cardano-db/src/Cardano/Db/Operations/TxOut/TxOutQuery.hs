@@ -11,10 +11,10 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Db.Operations.Variant.TxOutQuery where
+module Cardano.Db.Operations.TxOut.TxOutQuery where
 
 import Cardano.Db.Error (LookupFail (..))
-import Cardano.Db.Operations.Core.QueryHelper (isJust, maybeToEither, txLessEqual, unValue2, unValue3, unValueSumAda)
+import Cardano.Db.Operations.QueryHelper (isJust, maybeToEither, txLessEqual, unValue2, unValue3, unValueSumAda)
 import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutTableType (..), TxOutW (..), UtxoQueryResult (..))
 import Cardano.Db.Schema.BaseSchema
 import qualified Cardano.Db.Schema.Core.TxOut as C

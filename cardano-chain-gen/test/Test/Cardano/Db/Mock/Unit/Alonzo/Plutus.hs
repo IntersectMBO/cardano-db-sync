@@ -110,7 +110,7 @@ simpleScript =
           , V.txOutValue txout
           , V.txOutDataHash txout
           )
-        Nothing -> error "AlonzosimpleScript: expected an address"
+        Nothing -> error "AlonzoSimpleScript: expected an address"
     expectedFields =
       ( renderAddress alwaysSucceedsScriptAddr
       , True

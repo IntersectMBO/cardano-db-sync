@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-unused-local-binds #-}
 
-module Cardano.Db.Operations.Core.AlterTable (
+module Cardano.Db.Operations.AlterTable (
   AlterTable (..),
   DbAlterTableException (..),
   ManualDbConstraints (..),

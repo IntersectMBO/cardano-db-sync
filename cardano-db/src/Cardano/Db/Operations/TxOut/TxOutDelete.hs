@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.Db.Operations.Variant.TxOutDelete where
+module Cardano.Db.Operations.TxOut.TxOutDelete where
 
 import Cardano.Db.Operations.Types (TxOutTableType (..))
 import qualified Cardano.Db.Schema.Core.TxOut as C
@@ -28,12 +28,10 @@ deleteCoreTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
   whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [C.MaTxOutId >=. maTxOutId]
   whenJust mtxOutId $ \txOutId -> deleteWhere [C.TxOutId >=. txOutId]
 
--- TODO: cmdv: probably won't need to remove the addressId here but have it just incase
-deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe V.TxOutId -> Maybe V.MaTxOutId -> Maybe V.AddressId -> ReaderT SqlBackend m ()
-deleteVariantTxOutTablesAfterTxId mtxOutId mmaTxOutId mAddrId = do
+deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe V.TxOutId -> Maybe V.MaTxOutId -> ReaderT SqlBackend m ()
+deleteVariantTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
   whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [V.MaTxOutId >=. maTxOutId]
   whenJust mtxOutId $ \txOutId -> deleteWhere [V.TxOutId >=. txOutId]
-  whenJust mAddrId $ \addrId -> deleteWhere [V.AddressId >=. addrId]
 
 deleteTxOut :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m Int64
 deleteTxOut = \case

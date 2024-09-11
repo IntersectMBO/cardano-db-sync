@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Operations.Core.Query (
+module Cardano.Db.Operations.Query (
   LookupFail (..),
   -- queries used by db-sync
   queryBlockCount,
@@ -103,7 +103,7 @@ module Cardano.Db.Operations.Core.Query (
 ) where
 
 import Cardano.Db.Error
-import Cardano.Db.Operations.Core.QueryHelper (defaultUTCTime, isJust, maybeToEither, unValue2, unValue3, unValue5, unValueSumAda)
+import Cardano.Db.Operations.QueryHelper (defaultUTCTime, isJust, maybeToEither, unValue2, unValue3, unValue5, unValueSumAda)
 import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))

@@ -5,9 +5,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
-module Cardano.Db.Operations.Variant.TxOutInsert where
+module Cardano.Db.Operations.TxOut.TxOutInsert where
 
-import Cardano.Db.Operations.Core.Insert (insertMany', insertUnchecked)
+import Cardano.Db.Operations.Insert (insertMany', insertUnchecked)
 import Cardano.Db.Operations.Types (MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutW (..))
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V

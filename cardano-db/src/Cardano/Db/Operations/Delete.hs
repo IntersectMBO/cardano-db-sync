@@ -8,7 +8,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Cardano.Db.Operations.Core.Delete (
+module Cardano.Db.Operations.Delete (
   deleteBlocksSlotNo,
   deleteBlocksSlotNoNoTrace,
   deleteDelistedPool,
@@ -25,8 +25,8 @@ module Cardano.Db.Operations.Core.Delete (
 ) where
 
 import Cardano.BM.Trace (Trace, logWarning, nullTracer)
-import Cardano.Db.Operations.Core.MinId (MinIds (..), MinIdsWrapper (..), completeMinId, textToMinIds)
-import Cardano.Db.Operations.Core.Query
+import Cardano.Db.Operations.Other.MinId (MinIds (..), MinIdsWrapper (..), completeMinId, textToMinIds)
+import Cardano.Db.Operations.Query
 import Cardano.Db.Operations.Types (TxOutTableType (..))
 import Cardano.Db.Schema.BaseSchema
 import qualified Cardano.Db.Schema.Core.TxOut as C

@@ -470,6 +470,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "offchain_pool_data" sioOffchainPoolData
     , toJsonIfSet "pool_stats" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
+    , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
     ]
 
 toJsonIfSet :: ToJSON a => Text -> a -> Maybe Pair
@@ -562,8 +563,8 @@ instance ToJSON TxOutConfig where
 instance FromJSON TxOutConfig where
   parseJSON = Aeson.withObject "tx_out" $ \obj -> do
     val <- obj .: "value"
-    useAddress' <- obj .: "use_address_table" .!= UseTxOutAddress False
     forceTxIn' <- obj .:? "force_tx_in" .!= ForceTxIn False
+    useAddress' <- obj .:? "use_address_table" .!= UseTxOutAddress False
 
     case val :: Text of
       "enable" -> pure (TxOutEnable useAddress')

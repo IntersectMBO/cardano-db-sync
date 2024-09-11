@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Cardano.Db.Operations.Core.Insert (
+module Cardano.Db.Operations.Insert (
   insertAdaPots,
   insertBlock,
   insertCollateralTxIn,
@@ -97,7 +97,7 @@ module Cardano.Db.Operations.Core.Insert (
   insertBlockChecked,
 ) where
 
-import Cardano.Db.Operations.Core.Query
+import Cardano.Db.Operations.Query
 import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types
 import Cardano.Prelude (textShow)
@@ -494,8 +494,9 @@ insertAlwaysNoConfidence = do
           , drepHashHasScript = False
           }
 
--- -----------------------------------------------------------------------------
-
+--------------------------------------------------------------------------------
+-- Custom insert functions
+--------------------------------------------------------------------------------
 data DbInsertException
   = DbInsertException String SqlError
   deriving (Show)

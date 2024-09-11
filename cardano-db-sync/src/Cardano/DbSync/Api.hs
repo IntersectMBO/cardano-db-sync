@@ -168,6 +168,7 @@ initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigr
 initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
   DB.PruneConsumeMigration
     { DB.pcmPruneTxOut = pruneTxOut || bootstrap
+    , DB.pcmConsumedTxOut = consumed
     , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut || bootstrap
     , DB.pcmSkipTxIn = not forceTxIn' && (consumed || pruneTxOut || bootstrap)
     }

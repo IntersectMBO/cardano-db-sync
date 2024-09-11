@@ -8,9 +8,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.Db.Operations.Core.MinId where
+module Cardano.Db.Operations.Other.MinId where
 
-import Cardano.Db.Operations.Core.Query (queryMinRefId)
+import Cardano.Db.Operations.Query (queryMinRefId)
 import Cardano.Db.Operations.Types (MaTxOutFields (..), TxOutFields (..), TxOutTableType (..))
 import Cardano.Db.Schema.BaseSchema
 import qualified Cardano.Db.Schema.Core.TxOut as C

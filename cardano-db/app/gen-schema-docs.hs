@@ -60,7 +60,7 @@ docHeader branchName =
             , "** which may not accurately reflect the version number)"
             ]
     , "\n"
-    , "**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs\
+    , "**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema/BaseSchema.hs\
       \ by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated\
       \ during the release process and updated on the release branch."
     , "\n"

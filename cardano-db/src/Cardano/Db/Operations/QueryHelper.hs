@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Operations.Core.QueryHelper where
+module Cardano.Db.Operations.QueryHelper where
 
 import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types

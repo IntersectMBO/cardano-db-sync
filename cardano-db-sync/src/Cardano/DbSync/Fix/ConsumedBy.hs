@@ -7,6 +7,8 @@ import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api (getTrace, getTxOutTableType)
+import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Era.Byron.Insert
 import Cardano.DbSync.Era.Byron.Util (blockPayload, unTxHash)
 import Cardano.DbSync.Era.Util
@@ -16,8 +18,6 @@ import Cardano.Prelude hiding (length, (.))
 import Database.Persist.SqlBackend.Internal
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import Cardano.DbSync.Api.Types (SyncEnv)
-import Cardano.DbSync.Api (getTxOutTableType, getTrace)
 
 type FixEntry = (DB.TxOutIdW, DB.TxId)
 
