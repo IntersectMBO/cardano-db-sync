@@ -19,6 +19,7 @@ module Test.Cardano.Db.Mock.Config (
   getPoolLayer,
   mkConfig,
   mkSyncNodeConfig,
+  mkCustomSyncNodeConfig,
   mkConfigDir,
   mkFingerPrint,
   mkMutableDir,
@@ -241,6 +242,11 @@ mkSyncNodeConfig configFilePath cmdLineArgs =
   where
     configFilename = claConfigFilename cmdLineArgs
     configDir = mkConfigDir configFilePath
+
+mkCustomSyncNodeConfig :: FilePath -> CommandLineArgs -> (SyncNodeConfig -> SyncNodeConfig) -> IO SyncNodeConfig
+mkCustomSyncNodeConfig cfgDir args updateFn = do
+  initConfigFile <- mkSyncNodeConfig cfgDir args
+  pure $ updateFn initConfigFile
 
 mkShelleyCredentials :: FilePath -> IO [ShelleyLeaderCredentials StandardCrypto]
 mkShelleyCredentials bulkFile = do
