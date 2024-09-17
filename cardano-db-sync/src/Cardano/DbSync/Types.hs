@@ -231,6 +231,8 @@ data OffChainFetchError
   | OCFErrIOException !Text
   | OCFErrTimeout !OffChainUrlType !Text
   | OCFErrConnectionFailure !OffChainUrlType
+  | OCFErrNoIpfsGateway !OffChainUrlType
+  | OCFErrIpfsGatewayFailures !OffChainUrlType [OffChainFetchError]
   deriving (Eq, Generic)
 
 instance Exception OffChainFetchError
@@ -271,6 +273,10 @@ instance Show OffChainFetchError where
         mconcat
           [fetchUrlToString url, "Connection failure error when fetching metadata from ", show url, "."]
       OCFErrIOException err -> "IO Exception: " <> show err
+      OCFErrNoIpfsGateway url ->
+        mconcat [fetchUrlToString url, "No ipfs_gateway provided in the db-sync config"]
+      OCFErrIpfsGatewayFailures url errs ->
+        mconcat $ [fetchUrlToString url, "List of errors for each ipfs gateway: "] <> fmap show errs
 
 showMUrl :: Maybe OffChainUrlType -> String
 showMUrl = \case

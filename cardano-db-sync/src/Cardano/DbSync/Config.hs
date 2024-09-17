@@ -32,6 +32,7 @@ import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPr
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.Prelude
+import qualified Data.Text as Text
 import System.FilePath (takeDirectory, (</>))
 
 configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO Text)
@@ -91,7 +92,11 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncBabbageHardFork = ncBabbageHardFork ncfg
       , dncConwayHardFork = ncConwayHardFork ncfg
       , dncInsertOptions = extractInsertOptions pcfg
+      , dncIpfsGateway = endsInSlash <$> pcIpfsGateway pcfg
       }
 
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
+
+endsInSlash :: Text -> Text
+endsInSlash txt = if Text.isSuffixOf "/" txt then txt else txt <> "/"

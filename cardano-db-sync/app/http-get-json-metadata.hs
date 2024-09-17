@@ -126,10 +126,7 @@ runHttpGetVote voteUrl mHash vtype =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-    httpGet = do
-      request <- parseOffChainUrl $ OffChainVoteUrl voteUrl
-      manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetOffChainVoteData manager request voteUrl mHash vtype
+    httpGet = httpGetOffChainVoteData [] voteUrl mHash vtype
 
     reportSuccess :: SimplifiedOffChainVoteData -> IO ()
     reportSuccess spod = do
