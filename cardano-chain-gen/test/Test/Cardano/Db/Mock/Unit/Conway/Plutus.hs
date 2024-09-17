@@ -53,12 +53,25 @@ import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config
+import Test.Cardano.Db.Mock.Config (
+  CommandLineArgs (..),
+  configMultiAssetsDisable,
+  configPlutusDisable,
+  conwayConfigDir,
+  initCommandLineArgs,
+  startDBSync,
+  withCustomConfig,
+  withFullConfig,
+  withFullConfigAndDropDB,
+ )
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion ())
 import Prelude (head, tail, (!!))
 
+------------------------------------------------------------------------------
+-- Tests
+------------------------------------------------------------------------------
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
   withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
@@ -133,7 +146,7 @@ unlockScriptSameBlock =
 
 unlockScriptNoPlutus :: IOManager -> [(Text, Text)] -> Assertion
 unlockScriptNoPlutus =
-  withCustomConfig args Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig args (Just configPlutusDisable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -163,8 +176,7 @@ unlockScriptNoPlutus =
   where
     args =
       initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-no-plutus.json"
-        , claFullMode = False
+        { claFullMode = False
         }
     testLabel = "conwayConfigPlutusDisbaled"
 
@@ -769,7 +781,7 @@ swapMultiAssets =
 
 swapMultiAssetsDisabled :: IOManager -> [(Text, Text)] -> Assertion
 swapMultiAssetsDisabled =
-  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig args (Just configMultiAssetsDisable) cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with multiple multi-asset scripts
@@ -800,8 +812,7 @@ swapMultiAssetsDisabled =
   where
     args =
       initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-no-multi-assets.json"
-        , claFullMode = False
+        { claFullMode = False
         }
 
     testLabel = "conwayConfigMultiAssetsDisabled"
