@@ -416,7 +416,7 @@ registerStakeCreds = do
 
 registerStakeCredsNoShelley :: IOManager -> [(Text, Text)] -> Assertion
 registerStakeCredsNoShelley = do
-  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig args (Just configShelleyDisable) cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- These should not be saved when shelley is disabled
@@ -431,8 +431,7 @@ registerStakeCredsNoShelley = do
   where
     args =
       initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-no-shelley.json"
-        , claFullMode = False
+        { claFullMode = False
         }
     testLabel = "conwayConfigShelleyDisabled"
     cfgDir = conwayConfigDir
