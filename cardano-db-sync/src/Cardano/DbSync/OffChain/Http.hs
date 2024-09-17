@@ -173,6 +173,8 @@ httpGetBytes manager request bytesToRead maxBytes url =
               unless
                 ( "application/json"
                     `BS.isInfixOf` ct
+                    || "application/ld+json"
+                    `BS.isInfixOf` ct
                     || "text/plain"
                     `BS.isInfixOf` ct
                     || "binary/octet-stream"
