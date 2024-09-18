@@ -17,9 +17,24 @@ module Test.Cardano.Db.Mock.Config (
   fingerprintRoot,
   getDBSyncPGPass,
   getPoolLayer,
+
+  -- * Configs
   mkConfig,
   mkSyncNodeConfig,
   mkConfigDir,
+  configPruneForceTxIn,
+  configPrune,
+  configConsume,
+  configBootstrap,
+  configPlutusDisable,
+  configMultiAssetsDisable,
+  configShelleyDisable,
+  configRemoveJsonFromSchema,
+  configRemoveJsonFromSchemaFalse,
+  configLedgerIgnore,
+  configMetadataEnable,
+  configMetadataDisable,
+  configMetadataKeys,
   mkFingerPrint,
   mkMutableDir,
   mkDBSyncEnv,
@@ -51,14 +66,14 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Types (SyncInsertOptions (..), TxOutConfig (..), UseTxOutAddress (..))
+import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error (runOrThrowIO)
 import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (ReaderT, panic, stderr, textShow)
+import Cardano.Prelude (NonEmpty ((:|)), ReaderT, panic, stderr, textShow)
 import Cardano.SMASH.Server.PoolDataLayer
 import Control.Concurrent.Async (Async, async, cancel, poll)
 import Control.Concurrent.STM (atomically)
@@ -118,7 +133,6 @@ data CommandLineArgs = CommandLineArgs
   , claFullMode :: Bool
   , claMigrateConsumed :: Bool
   , claPruneTxOut :: Bool
-  , claBootstrap :: Bool
   }
 
 data WithConfigArgs = WithConfigArgs
@@ -281,9 +295,64 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpMaybeRollback = Nothing
       }
 
+------------------------------------------------------------------------------
+-- Custom Configs
+------------------------------------------------------------------------------
 mkConfigFile :: FilePath -> FilePath -> ConfigFile
 mkConfigFile staticDir cliConfigFilename =
   ConfigFile $ staticDir </> cliConfigFilename
+
+configPruneForceTxIn :: SyncNodeConfig -> SyncNodeConfig
+configPruneForceTxIn cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutPrune (ForceTxIn True)}}
+
+configPrune :: SyncNodeConfig -> SyncNodeConfig
+configPrune cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutPrune (ForceTxIn False)}}
+
+configConsume :: SyncNodeConfig -> SyncNodeConfig
+configConsume cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumed (ForceTxIn False)}}
+
+configBootstrap :: SyncNodeConfig -> SyncNodeConfig
+configBootstrap cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutBootstrap (ForceTxIn False)}}
+
+configPlutusDisable :: SyncNodeConfig -> SyncNodeConfig
+configPlutusDisable cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioPlutus = PlutusDisable}}
+
+configMultiAssetsDisable :: SyncNodeConfig -> SyncNodeConfig
+configMultiAssetsDisable cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMultiAsset = MultiAssetDisable}}
+
+configShelleyDisable :: SyncNodeConfig -> SyncNodeConfig
+configShelleyDisable cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioShelley = ShelleyDisable}}
+
+configRemoveJsonFromSchema :: SyncNodeConfig -> SyncNodeConfig
+configRemoveJsonFromSchema cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig True}}
+
+configRemoveJsonFromSchemaFalse :: SyncNodeConfig -> SyncNodeConfig
+configRemoveJsonFromSchemaFalse cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False}}
+
+configLedgerIgnore :: SyncNodeConfig -> SyncNodeConfig
+configLedgerIgnore cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioLedger = LedgerIgnore}}
+
+configMetadataEnable :: SyncNodeConfig -> SyncNodeConfig
+configMetadataEnable cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMetadata = MetadataEnable}}
+
+configMetadataDisable :: SyncNodeConfig -> SyncNodeConfig
+configMetadataDisable cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMetadata = MetadataDisable}}
+
+configMetadataKeys :: SyncNodeConfig -> SyncNodeConfig
+configMetadataKeys cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMetadata = MetadataKeys $ 1 :| []}}
 
 initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =
@@ -303,7 +372,6 @@ initCommandLineArgs =
     , claFullMode = True
     , claMigrateConsumed = False
     , claPruneTxOut = False
-    , claBootstrap = False
     }
 
 emptyMetricsSetters :: MetricSetters
@@ -379,7 +447,7 @@ withFullConfigAndLogs =
 withCustomConfig ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
-  Maybe SyncNodeConfig ->
+  Maybe (SyncNodeConfig -> SyncNodeConfig) ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -400,7 +468,7 @@ withCustomConfig =
 withCustomConfigAndDropDB ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
-  Maybe SyncNodeConfig ->
+  Maybe (SyncNodeConfig -> SyncNodeConfig) ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -422,7 +490,7 @@ withCustomConfigAndDropDB =
 withCustomConfigAndLogs ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
-  Maybe SyncNodeConfig ->
+  Maybe (SyncNodeConfig -> SyncNodeConfig) ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -443,7 +511,7 @@ withCustomConfigAndLogs =
 withCustomConfigAndLogsAndDropDB ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
-  Maybe SyncNodeConfig ->
+  Maybe (SyncNodeConfig -> SyncNodeConfig) ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -465,7 +533,7 @@ withFullConfig' ::
   WithConfigArgs ->
   CommandLineArgs ->
   -- | custom SyncNodeConfig
-  Maybe SyncNodeConfig ->
+  Maybe (SyncNodeConfig -> SyncNodeConfig) ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -479,7 +547,9 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
   -- check if custom syncNodeConfigs have been passed or not
   syncNodeConfig <-
     case mSyncNodeConfig of
-      Just snc -> pure snc
+      Just updateFn -> do
+        initConfigFile <- mkSyncNodeConfig configFilePath cmdLineArgs
+        pure $ updateFn initConfigFile
       Nothing -> mkSyncNodeConfig configFilePath cmdLineArgs
 
   cfg <- mkConfig configFilePath mutableDir cmdLineArgs syncNodeConfig

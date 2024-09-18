@@ -22,7 +22,6 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut (
 
 import Cardano.Db (TxOutTableType (..))
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Config.Types
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
@@ -33,10 +32,12 @@ import Control.Monad (void)
 import Data.Text (Text)
 import Ouroboros.Consensus.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config (
-  CommandLineArgs (..),
   babbageConfigDir,
+  configBootstrap,
+  configConsume,
+  configPrune,
+  configPruneForceTxIn,
   initCommandLineArgs,
-  mkSyncNodeConfig,
   replaceConfigFile,
   startDBSync,
   stopDBSync,
@@ -56,9 +57,12 @@ import Test.Cardano.Db.Mock.UnifiedApi (
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount, assertTxInCount, assertTxOutCount, assertUnspentTx, checkStillRuns)
 import Test.Tasty.HUnit (Assertion)
 
+------------------------------------------------------------------------------
+-- Tests
+------------------------------------------------------------------------------
 txConsumedColumnCheck :: IOManager -> [(Text, Text)] -> Assertion
 txConsumedColumnCheck = do
-  withCustomConfigAndDropDB cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfigAndDropDB cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
         Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
@@ -67,15 +71,12 @@ txConsumedColumnCheck = do
     assertBlockNoBackoff dbSyncEnv 1
     assertEqQuery dbSyncEnv DB.queryTxConsumedColumnExists True "missing consumed_by_tx_id column when flag --consumed-tx-out active"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configTxConsumedColumnCheck"
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     startDBSync dbSyncEnv
     -- add 50 block
@@ -95,15 +96,12 @@ basicPrune = do
     -- check Unspent tx match after pruning
     assertUnspentTx dbSyncEnv
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPrune"
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -124,15 +122,12 @@ pruneWithSimpleRollback = do
     assertBlockNoBackoff dbSyncEnv $ fullBlockSize b1
   where
     fullBlockSize b = fromIntegral $ length b + 4
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneSimpleRollback"
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithFullTxRollback = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     startDBSync dbSyncEnv
     blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -155,19 +150,14 @@ pruneWithFullTxRollback = do
     assertEqQuery dbSyncEnv (DB.queryTxOutCount txOutTableType) 16 "new epoch didn't prune tx_out column that are null"
     assertUnspentTx dbSyncEnv
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneOnFullRollback"
 
 -- The tx in the last, 2 x securityParam worth of blocks should not be pruned.
 -- In these tests, 2 x securityParam = 20 blocks.
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
-pruningShouldKeepSomeTx ioManager names = do
-  syncNodeConfig <- mkSyncNodeConfig'
-
-  withConfig' syncNodeConfig $ \interpreter mockServer dbSyncEnv -> do
+pruningShouldKeepSomeTx = do
+  withCustomConfig cmdLineArgs (Just configPrune) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 80
@@ -185,30 +175,13 @@ pruningShouldKeepSomeTx ioManager names = do
     assertTxInCount dbSyncEnv 0
     assertEqQuery dbSyncEnv (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
-    withConfig' cfg f =
-      withCustomConfig cmdLineArgs (Just cfg) babbageConfigDir testLabel f ioManager names
-
-    mkSyncNodeConfig' :: IO SyncNodeConfig
-    mkSyncNodeConfig' = do
-      initCfg <- mkSyncNodeConfig babbageConfigDir cmdLineArgs
-      pure $
-        initCfg
-          { dncInsertOptions =
-              (dncInsertOptions initCfg)
-                { sioTxOut = TxOutConsumedPrune (ForceTxIn False) (UseTxOutAddress False)
-                }
-          }
-
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneCorrectAmount"
 
 -- prune with rollback
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneAndRollBackOneBlock = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 98
@@ -235,16 +208,13 @@ pruneAndRollBackOneBlock = do
     -- everything should be pruned
     assertEqQuery dbSyncEnv (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId count after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneAndRollBack"
 
 -- consume with rollback
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
 noPruneAndRollBack = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 98
@@ -271,15 +241,12 @@ noPruneAndRollBack = do
     -- everything should be pruned
     assertEqQuery dbSyncEnv (DB.queryTxOutConsumedCount txOutTableType) 1 "Unexpected TxOutConsumedByTxId count after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneAndRollBack"
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneSameBlock =
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 76
@@ -300,15 +267,12 @@ pruneSameBlock =
     assertTxInCount dbSyncEnv 0
     assertEqQuery dbSyncEnv (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneSameBlock"
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 noPruneSameBlock =
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 96
@@ -326,15 +290,12 @@ noPruneSameBlock =
     assertBlockNoBackoff dbSyncEnv 98
     assertEqQuery dbSyncEnv (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configNoPruneSameBlock"
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
@@ -348,15 +309,12 @@ migrateAndPruneRestart = do
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configMigrateAndPruneRestart"
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 pruneRestartMissingFlag = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
@@ -370,15 +328,12 @@ pruneRestartMissingFlag = do
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configPruneRestartMissingFlag"
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 bootstrapRestartMissingFlag = do
-  withCustomConfig cmdLineArgs Nothing babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+  withCustomConfig cmdLineArgs (Just configBootstrap) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
@@ -393,9 +348,5 @@ bootstrapRestartMissingFlag = do
     -- checkStillRuns uses `poll` due to this being inside Async and passes along our thrown exception
     checkStillRuns dbSyncEnv
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-bootstrap.json"
-        , claBootstrap = True
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "configBootstrapRestartMissingFlag"

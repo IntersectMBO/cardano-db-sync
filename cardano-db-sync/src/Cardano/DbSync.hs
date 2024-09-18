@@ -243,7 +243,7 @@ extractSyncOptions snp aop snc =
     { soptEpochAndCacheEnabled =
         not isTxOutConsumedBootstrap'
           && ioInOut iopts
-          && not (enpEpochDisabled snp && enpHasCache snp)
+          && not (enpEpochDisabled snp || not (enpHasCache snp))
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptSkipFix = enpSkipFix snp

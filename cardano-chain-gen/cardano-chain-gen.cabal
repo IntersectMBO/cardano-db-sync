@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-chain-gen
-version:                13.5.0.0
+version:                13.5.0.2
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/IntersectMBO/cardano-db-sync
@@ -72,7 +72,7 @@ library
                       , cardano-ledger-conway
                       , cardano-ledger-binary
                       , cardano-ledger-core
-                      , cardano-ledger-shelley
+                      , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-ledger-mary
                       , cardano-prelude
                       , cardano-slotting
@@ -95,7 +95,7 @@ library
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
                       , plutus-core
-                      , plutus-ledger-api:{plutus-ledger-api-testlib}
+                      , plutus-ledger-api:{plutus-ledger-api-testlib} ==1.30.0.0
                       , serialise
                       , strict-sop-core
                       , strict-stm
@@ -182,7 +182,7 @@ test-suite cardano-chain-gen
                       , cardano-ledger-conway
                       , cardano-ledger-core
                       , cardano-ledger-mary
-                      , cardano-ledger-shelley
+                      , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-node
                       , cardano-prelude
                       , cardano-slotting

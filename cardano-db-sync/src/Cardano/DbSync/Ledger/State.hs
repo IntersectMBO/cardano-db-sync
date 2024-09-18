@@ -332,10 +332,12 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
   case maybeFromStrict (apNewEpoch appResult) of
     Just newEpoch
       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
-      , newEpochNo > 0 -> do
-          -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-          liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
-          pure True
+      , newEpochNo > 0
+      , isCons || (newEpochNo `mod` 10 == 0) || newEpochNo >= 503 ->
+          do
+            -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+            liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
+            pure True
     _ ->
       if timeToSnapshot syncState blkNo && isCons
         then do

@@ -21,7 +21,6 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Config.Types
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -36,46 +35,33 @@ import Test.Tasty.HUnit (Assertion ())
 import Prelude ()
 import qualified Prelude
 
+------------------------------------------------------------------------------
+-- Tests
+-----------------------------------------------------------------------------
 txConsumedColumnCheck :: IOManager -> [(Text, Text)] -> Assertion
-txConsumedColumnCheck ioManager names = do
+txConsumedColumnCheck = do
   -- be mindful that you have to manually pass the ioManager + names
-  syncNodeConfig <- mkSynNodeConfig
-  withCustomConfigAndDropDB
-    cmdLineArgs
-    (Just syncNodeConfig)
-    conwayConfigDir
-    testLabel
-    ( \interpreter mockServer dbSync -> do
-        startDBSync dbSync
+  withCustomConfigAndDropDB cmdLineArgs (Just configConsume) conwayConfigDir testLabel $
+    \interpreter mockServer dbSync -> do
+      startDBSync dbSync
 
-        void $
-          withConwayFindLeaderAndSubmitTx interpreter mockServer $
-            Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+      void $
+        withConwayFindLeaderAndSubmitTx interpreter mockServer $
+          Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
-        assertBlockNoBackoff dbSync 1
-        assertEqQuery
-          dbSync
-          DB.queryTxConsumedColumnExists
-          True
-          "missing consumed_by_tx_id column when tx-out = consumed"
-    )
-    ioManager
-    names
+      assertBlockNoBackoff dbSync 1
+      assertEqQuery
+        dbSync
+        DB.queryTxConsumedColumnExists
+        True
+        "missing consumed_by_tx_id column when tx-out = consumed"
   where
-    -- an example of how we will pass our custom configs overwriting the init file
-    mkSynNodeConfig :: IO SyncNodeConfig
-    mkSynNodeConfig = do
-      initConfigFile <- mkSyncNodeConfig conwayConfigDir cmdLineArgs
-      pure $ initConfigFile {dncEnableLogging = True}
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayTxConsumedColumnCheck"
 
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune = do
-  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig args (Just configPruneForceTxIn) cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutTableType = txOutTableTypeFromConfig dbSync
 
@@ -102,17 +88,14 @@ basicPrune = do
     -- Check unspent tx
     assertUnspentTx dbSync
   where
-    args =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    args = initCommandLineArgs
     testLabel = "conwayConfigPrune"
     fullBlockSize b = fromIntegral $ length b + 2
     cfgDir = conwayConfigDir
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithSimpleRollback =
-  withCustomConfigAndLogs cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     let txOutTableType = txOutTableTypeFromConfig dbSync
     -- Forge some blocks
     blk0 <- forgeNext interpreter mockBlock0
@@ -143,16 +126,13 @@ pruneWithSimpleRollback =
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId count after rollback"
     assertBlockNoBackoff dbSync (fullBlockSize blks)
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneSimpleRollback"
     fullBlockSize b = fromIntegral $ length b + 4
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
 pruneWithFullTxRollback =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutTableType = txOutTableTypeFromConfig dbSync
     -- Forge a block
@@ -184,18 +164,13 @@ pruneWithFullTxRollback =
     assertEqQuery dbSync (DB.queryTxOutCount txOutTableType) 16 "new epoch didn't prune tx_out column that are null"
     assertUnspentTx dbSync
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneOnFullRollback"
 
 -- The transactions in the last `2 * securityParam` blocks should not be pruned
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
-pruningShouldKeepSomeTx ioManager names = do
-  syncNodeConfig <- mkSyncNodeConfig'
-
-  withConfig' syncNodeConfig $ \interpreter mockServer dbSync -> do
+pruningShouldKeepSomeTx = do
+  withCustomConfig cmdLineArgs (Just configPrune) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutTableType = txOutTableTypeFromConfig dbSync
     -- Forge some blocks
@@ -220,29 +195,12 @@ pruningShouldKeepSomeTx ioManager names = do
     assertTxInCount dbSync 0
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId count after prune"
   where
-    withConfig' cfg f =
-      withCustomConfig cmdLineArgs (Just cfg) conwayConfigDir testLabel f ioManager names
-
-    mkSyncNodeConfig' :: IO SyncNodeConfig
-    mkSyncNodeConfig' = do
-      initCfg <- mkSyncNodeConfig conwayConfigDir cmdLineArgs
-      pure $
-        initCfg
-          { dncInsertOptions =
-              (dncInsertOptions initCfg)
-                { sioTxOut = TxOutConsumedPrune (ForceTxIn False) (UseTxOutAddress False)
-                }
-          }
-
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneCorrectAmount"
 
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneAndRollBackOneBlock =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutTableType = txOutTableTypeFromConfig dbSync
@@ -277,15 +235,12 @@ pruneAndRollBackOneBlock =
     assertBlockNoBackoff dbSync 203
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId count after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneAndRollBack"
 
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
 noPruneAndRollBack =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configConsume) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutTableType = txOutTableTypeFromConfig dbSync
@@ -320,15 +275,12 @@ noPruneAndRollBack =
     assertBlockNoBackoff dbSync 203
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutTableType) 1 "Unexpected TxOutConsumedByTxId count after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigNoPruneAndRollBack"
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 pruneSameBlock =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutTableType = txOutTableTypeFromConfig dbSync
@@ -360,15 +312,12 @@ pruneSameBlock =
     assertTxInCount dbSync 0
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutTableType) 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneSameBlock"
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 noPruneSameBlock =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configConsume) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -395,15 +344,12 @@ noPruneSameBlock =
     assertBlockNoBackoff dbSync 98
     assertEqQuery dbSync (DB.queryTxOutConsumedCount $ txOutTableTypeFromConfig dbSync) 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigNoPruneSameBlock"
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
 migrateAndPruneRestart =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configConsume) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -421,15 +367,12 @@ migrateAndPruneRestart =
     -- Expected to fail
     checkStillRuns dbSync
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-consumed.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigMigrateAndPruneRestart"
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 pruneRestartMissingFlag =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -447,15 +390,12 @@ pruneRestartMissingFlag =
     -- Expected to fail
     checkStillRuns dbSync
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-prune.json"
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneRestartMissingFlag"
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
 bootstrapRestartMissingFlag =
-  withCustomConfig cmdLineArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig cmdLineArgs (Just configBootstrap) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -473,9 +413,5 @@ bootstrapRestartMissingFlag =
     -- Expected to fail
     checkStillRuns dbSync
   where
-    cmdLineArgs =
-      initCommandLineArgs
-        { claConfigFilename = "test-db-sync-config-bootstrap.json"
-        , claBootstrap = True
-        }
+    cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigBootstrapRestartMissingFlag"
