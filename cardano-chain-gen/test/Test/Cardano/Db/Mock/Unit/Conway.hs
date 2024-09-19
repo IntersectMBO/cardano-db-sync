@@ -44,8 +44,7 @@ unitTests iom knownMigrations =
             ]
         , testGroup
             "tx-out"
-            [ test "consumed_by_tx_id column check" MigrateConsumedPruneTxOut.txConsumedColumnCheck
-            , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
+            [ test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
             , test "pruning should keep some tx" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTx

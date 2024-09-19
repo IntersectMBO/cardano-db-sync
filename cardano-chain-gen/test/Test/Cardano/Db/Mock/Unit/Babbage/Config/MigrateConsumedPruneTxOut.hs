@@ -6,7 +6,6 @@
 #endif
 
 module Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut (
-  txConsumedColumnCheck,
   basicPrune,
   pruneWithSimpleRollback,
   pruneWithFullTxRollback,
@@ -43,7 +42,6 @@ import Test.Cardano.Db.Mock.Config (
   stopDBSync,
   txOutTableTypeFromConfig,
   withCustomConfig,
-  withCustomConfigAndDropDB,
  )
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1)
 import Test.Cardano.Db.Mock.UnifiedApi (
@@ -60,20 +58,6 @@ import Test.Tasty.HUnit (Assertion)
 ------------------------------------------------------------------------------
 -- Tests
 ------------------------------------------------------------------------------
-txConsumedColumnCheck :: IOManager -> [(Text, Text)] -> Assertion
-txConsumedColumnCheck = do
-  withCustomConfigAndDropDB cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
-    void $
-      withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 500
-
-    startDBSync dbSyncEnv
-    assertBlockNoBackoff dbSyncEnv 1
-    assertEqQuery dbSyncEnv DB.queryTxConsumedColumnExists True "missing consumed_by_tx_id column when flag --consumed-tx-out active"
-  where
-    cmdLineArgs = initCommandLineArgs
-    testLabel = "configTxConsumedColumnCheck"
-
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune = do
   withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do

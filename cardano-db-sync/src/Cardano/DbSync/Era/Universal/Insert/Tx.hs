@@ -260,8 +260,8 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
   -- TODO: Unsure about what we should return here for eutxo
   let !eutxo =
         case ioTxOutTableType iopts of
-          DB.TxOutCore -> ExtendedTxOut txHash txOut Nothing
-          DB.TxOutVariantAddress -> ExtendedTxOut txHash txOut $ Generic.maybePaymentCred addr
+          DB.TxOutCore -> ExtendedTxOut txHash txOut
+          DB.TxOutVariantAddress -> ExtendedTxOut txHash txOut
   !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ insertMaTxOuts tracer cache maMap
   pure (eutxo, maTxOuts)
   where

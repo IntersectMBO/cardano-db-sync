@@ -112,7 +112,7 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
               "Initial genesis distribution populated. Hash "
                 <> renderByteArray (configGenesisHash cfg)
 
-            supply <- lift $ DB.queryGenesisSupply $ getTxOutTableType syncEnv
+            supply <- lift $ DB.queryTotalSupply $ getTxOutTableType syncEnv
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.

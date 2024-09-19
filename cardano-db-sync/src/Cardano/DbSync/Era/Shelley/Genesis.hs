@@ -159,8 +159,6 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
                   <> renderByteArray (configGenesisHash cfg)
               when hasStakes $
                 insertStaking tracer useNoCache bid cfg
-              supply <- lift $ DB.queryTotalSupply (getTxOutTableType syncEnv)
-              liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::

@@ -6,7 +6,6 @@
 #endif
 
 module Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut (
-  txConsumedColumnCheck,
   basicPrune,
   pruneWithSimpleRollback,
   pruneWithFullTxRollback,
@@ -38,27 +37,6 @@ import qualified Prelude
 ------------------------------------------------------------------------------
 -- Tests
 -----------------------------------------------------------------------------
-txConsumedColumnCheck :: IOManager -> [(Text, Text)] -> Assertion
-txConsumedColumnCheck = do
-  -- be mindful that you have to manually pass the ioManager + names
-  withCustomConfigAndDropDB cmdLineArgs (Just configConsume) conwayConfigDir testLabel $
-    \interpreter mockServer dbSync -> do
-      startDBSync dbSync
-
-      void $
-        withConwayFindLeaderAndSubmitTx interpreter mockServer $
-          Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
-
-      assertBlockNoBackoff dbSync 1
-      assertEqQuery
-        dbSync
-        DB.queryTxConsumedColumnExists
-        True
-        "missing consumed_by_tx_id column when tx-out = consumed"
-  where
-    cmdLineArgs = initCommandLineArgs
-    testLabel = "conwayTxConsumedColumnCheck"
-
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
 basicPrune = do
   withCustomConfig args (Just configPruneForceTxIn) cfgDir testLabel $ \interpreter mockServer dbSync -> do

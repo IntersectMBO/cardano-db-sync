@@ -63,6 +63,7 @@ import Test.Cardano.Db.Mock.Config (
   conwayConfigDir,
   initCommandLineArgs,
   startDBSync,
+  txOutTableTypeFromConfig,
   withCustomConfig,
   withFullConfig,
   withFullConfigAndDropDB,

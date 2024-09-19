@@ -240,8 +240,7 @@ data PruneConsumeMigration = PruneConsumeMigration
   { pcmPruneTxOut :: Bool
   , -- we make the assumption that if the user is using prune flag
     -- they will also want consume automatically set for them.
-    pcmConsumeOrPruneTxOut :: Bool
-  , pcmConsumedTxOut :: Bool
+    pcmConsumedTxOut :: Bool
   , pcmSkipTxIn :: Bool
   }
   deriving (Eq, Show)

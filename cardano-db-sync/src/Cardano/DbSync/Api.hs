@@ -117,7 +117,7 @@ isConsistent env = do
 
 getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
 getIsConsumedFixed env =
-  case (DB.pcmPruneTxOut pcm, DB.pcmConsumeOrPruneTxOut pcm) of
+  case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
     (False, True) -> Just <$> DB.runDbIohkNoLogging backend (Multiplex.queryWrongConsumedBy txOutTableType)
     _ -> pure Nothing
   where
@@ -168,8 +168,7 @@ initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigr
 initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
   DB.PruneConsumeMigration
     { DB.pcmPruneTxOut = pruneTxOut || bootstrap
-    , DB.pcmConsumedTxOut = consumed
-    , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut || bootstrap
+    , DB.pcmConsumedTxOut = consumed || pruneTxOut || bootstrap
     , DB.pcmSkipTxIn = not forceTxIn' && (consumed || pruneTxOut || bootstrap)
     }
 
@@ -204,7 +203,7 @@ getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
 whenConsumeOrPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenConsumeOrPruneTxOut env =
-  when (DB.pcmConsumeOrPruneTxOut $ getPruneConsume env)
+  when (DB.pcmConsumedTxOut $ getPruneConsume env)
 
 whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
@@ -215,7 +214,7 @@ getTxOutTableType syncEnv = ioTxOutTableType . soptInsertOptions $ envOptions sy
 
 getHasConsumedOrPruneTxOut :: SyncEnv -> Bool
 getHasConsumedOrPruneTxOut =
-  DB.pcmConsumeOrPruneTxOut . getPruneConsume
+  DB.pcmConsumedTxOut . getPruneConsume
 
 getSkipTxIn :: SyncEnv -> Bool
 getSkipTxIn =

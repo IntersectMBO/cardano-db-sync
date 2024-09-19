@@ -398,14 +398,6 @@ queryAddressId addrRaw = do
     pure (addr ^. V.AddressId)
   pure $ unValue <$> listToMaybe res
 
-queryAddressById :: MonadIO m => V.AddressId -> ReaderT SqlBackend m (Maybe V.Address)
-queryAddressById addrId = do
-  res <- select $ do
-    addr <- from $ table @V.Address
-    where_ (addr ^. V.AddressId ==. val addrId)
-    pure addr
-  pure $ entityVal <$> listToMaybe res
-
 --------------------------------------------------------------------------------
 -- queryAddressOutputs
 --------------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 
 module Cardano.Db.Operations.Other.ConsumedTxOut where
 
-import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
+import Cardano.BM.Trace (Trace, logInfo)
 import Cardano.Db.Error (LookupFail (..), logAndThrowIO)
 import Cardano.Db.Operations.Insert (insertExtraMigration)
 import Cardano.Db.Operations.Query (listToMaybe, queryAllExtraMigrations, queryBlockHeight, queryBlockNo, queryMaxRefId)
@@ -52,22 +52,6 @@ data ConsumedTriplet = ConsumedTriplet
 --------------------------------------------------------------------------------------------------
 -- Queries
 --------------------------------------------------------------------------------------------------
-queryUpdateListTxOutConsumedByTxId :: MonadIO m => [(TxOutIdW, TxId)] -> ReaderT SqlBackend m ()
-queryUpdateListTxOutConsumedByTxId ls = do
-  mapM_ (uncurry updateTxOutConsumedByTxId) ls
-
-queryTxConsumedColumnExists :: MonadIO m => ReaderT SqlBackend m Bool
-queryTxConsumedColumnExists = do
-  columnExists :: [Text] <-
-    fmap unSingle
-      <$> rawSql
-        ( mconcat
-            [ "SELECT column_name FROM information_schema.columns "
-            , "WHERE table_name='tx_out' and column_name='consumed_by_tx_id'"
-            ]
-        )
-        []
-  pure (not $ null columnExists)
 
 -- | This is a count of the null consumed_by_tx_id
 queryTxOutConsumedNullCount :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
@@ -112,12 +96,14 @@ querySetNullTxOut trce txOutTableType mMinTxId = do
 
 updateListTxOutConsumedByTxId :: MonadIO m => [(TxOutIdW, TxId)] -> ReaderT SqlBackend m ()
 updateListTxOutConsumedByTxId ls = do
-  queryUpdateListTxOutConsumedByTxId ls
+  mapM_ (uncurry updateTxOutConsumedByTxId) ls
 
 runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> TxOutTableType -> Word64 -> PruneConsumeMigration -> ReaderT SqlBackend m ()
 runExtraMigrations trce txOutTableType blockNoDiff pcm = do
   ems <- queryAllExtraMigrations
   let migrationValues = processMigrationValues ems pcm
+  -- Make sure the config address_table is there if the migration wasn't previously set in teh db
+  when (not (isTxOutVariantAddress txOutTableType) && isTxOutAddressPreviouslySet migrationValues) $ throw $ DBExtraMigration "The configuration option 'tx_out.address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
   -- Has the user given txout address config && the migration wasn't previously set
   when (isTxOutVariantAddress txOutTableType && not (isTxOutAddressPreviouslySet migrationValues)) $ do
     updateTxOutAndCreateAddress
@@ -133,7 +119,7 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
     handleMigration :: (MonadBaseControl IO m, MonadIO m) => MigrationValues -> ReaderT SqlBackend m ()
     handleMigration migrationValues@MigrationValues {..} = do
       let PruneConsumeMigration {..} = pruneConsumeMigration
-      case (isConsumeTxOutPreviouslySet, pcmConsumeOrPruneTxOut, pcmPruneTxOut) of
+      case (isConsumeTxOutPreviouslySet, pcmConsumedTxOut, pcmPruneTxOut) of
         -- No Migration Needed
         (False, False, False) -> do
           liftIO $ logInfo trce "runExtraMigrations: No extra migration specified"
@@ -219,7 +205,7 @@ setNullTxOutConsumedAfter txOutTableType txOutId =
 
 migrateTxOutTests :: (MonadIO m, MonadBaseControl IO m) => TxOutTableType -> ReaderT SqlBackend m ()
 migrateTxOutTests txOutTableType = do
-  _ <- createConsumedTxOut
+  _ <- createConsumedIndexTxOut
   migrateNextPageTxOut Nothing txOutTableType 0
 
 migrateTxOut ::
@@ -232,7 +218,7 @@ migrateTxOut ::
   ReaderT SqlBackend m ()
 migrateTxOut trce txOutTableType _mMvs = do
   liftIO $ logInfo trce "migrateTxOut:"
-  _ <- createConsumedTxOut
+  _ <- createConsumedIndexTxOut
   migrateNextPageTxOut (Just trce) txOutTableType 0
 
 migrateNextPageTxOut :: MonadIO m => Maybe (Trace IO Text) -> TxOutTableType -> Word64 -> ReaderT SqlBackend m ()
@@ -315,7 +301,7 @@ shouldCreateConsumedTxOut ::
 shouldCreateConsumedTxOut trce rcc =
   unless rcc $ do
     liftIO $ logInfo trce "Created ConsumedTxOut when handling page entries."
-    createConsumedTxOut
+    createConsumedIndexTxOut
 
 -- | Update
 updatePageEntries ::
@@ -347,34 +333,46 @@ deleteTxOutConsumed txOutTableType txOutId index = case txOutTableType of
 --------------------------------------------------------------------------------------------------
 -- Raw Queries
 --------------------------------------------------------------------------------------------------
-createConsumedTxOut ::
+
+createConsumedIndexTxOut ::
   forall m.
   ( MonadBaseControl IO m
   , MonadIO m
   ) =>
   ReaderT SqlBackend m ()
-createConsumedTxOut = do
+createConsumedIndexTxOut = do
   handle exceptHandler $ rawExecute createIndex []
-  handle exceptHandler $ rawExecute addConstraint []
   where
     createIndex =
       "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_id ON tx_out (consumed_by_tx_id)"
 
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DBPruneConsumed $ show e)
+
+createConsumedConstraintTxOut ::
+  forall m.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  ) =>
+  ReaderT SqlBackend m ()
+createConsumedConstraintTxOut = do
+  handle exceptHandler $ rawExecute addConstraint []
+  where
     addConstraint =
-      ( Text.unlines
-          [ "do $$"
-          , "begin"
-          , "  if not exists ("
-          , "    select 1"
-          , "    from information_schema.table_constraints"
-          , "    where constraint_name = 'ma_tx_out_tx_out_id_fkey'"
-          , "      and table_name = 'ma_tx_out'"
-          , "  ) then"
-          , "    execute 'alter table ma_tx_out add constraint ma_tx_out_tx_out_id_fkey foreign key(tx_out_id) references tx_out(id) on delete cascade on update restrict';"
-          , "  end if;"
-          , "end $$;"
-          ]
-      )
+      Text.unlines
+        [ "do $$"
+        , "begin"
+        , "  if not exists ("
+        , "    select 1"
+        , "    from information_schema.table_constraints"
+        , "    where constraint_name = 'ma_tx_out_tx_out_id_fkey'"
+        , "      and table_name = 'ma_tx_out'"
+        , "  ) then"
+        , "    execute 'alter table ma_tx_out add constraint ma_tx_out_tx_out_id_fkey foreign key(tx_out_id) references tx_out(id) on delete cascade on update restrict';"
+        , "  end if;"
+        , "end $$;"
+        ]
 
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
@@ -505,37 +503,3 @@ countConsumed = \case
         where_ (isJust $ txOut ^. txOutConsumedByTxIdField @a)
         pure countRows
       pure $ maybe 0 unValue (listToMaybe res)
-
-_validateMigration :: MonadIO m => Trace IO Text -> TxOutTableType -> ReaderT SqlBackend m Bool
-_validateMigration trce txOutTableType = do
-  _migrated <- queryTxConsumedColumnExists
-  txInCount <- countTxIn
-  consumedTxOut <- countConsumed txOutTableType
-  if txInCount > consumedTxOut
-    then do
-      liftIO $
-        logWarning trce $
-          mconcat
-            [ "Found incomplete TxOut migration. There are"
-            , textShow txInCount
-            , " TxIn, but only"
-            , textShow consumedTxOut
-            , " consumed TxOut"
-            ]
-      pure False
-    else
-      if txInCount == consumedTxOut
-        then do
-          liftIO $ logInfo trce "Found complete TxOut migration"
-          pure True
-        else do
-          liftIO $
-            logError trce $
-              mconcat
-                [ "The impossible happened! There are"
-                , textShow txInCount
-                , " TxIn, but "
-                , textShow consumedTxOut
-                , " consumed TxOut"
-                ]
-          pure False
