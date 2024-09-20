@@ -62,6 +62,29 @@ unitTests iom knownMigrations =
                 "set bootstrap flag, restart missing bootstrap flag"
                 $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag iom knownMigrations
             ]
+        , testGroup
+            "tx-out with use_address_table config"
+            [ test "basic prune, with use_address_table config" MigrateConsumedPruneTxOut.basicPruneWithAddress
+            , test "prune with simple rollback, with use_address_table config" MigrateConsumedPruneTxOut.pruneWithSimpleRollbackWithAddress
+            , test "prune with full tx rollback, with use_address_table config" MigrateConsumedPruneTxOut.pruneWithFullTxRollbackWithAddress
+            , test "pruning should keep some tx, with use_address_table config" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTxWithAddress
+            , test "prune and rollback one block, with use_address_table config" MigrateConsumedPruneTxOut.pruneAndRollBackOneBlockWithAddress
+            , test "no pruning and rollback, with use_address_table config" MigrateConsumedPruneTxOut.noPruneAndRollBackWithAddress
+            , test "prune same block, with use_address_table config" MigrateConsumedPruneTxOut.pruneSameBlockWithAddress
+            , test "no pruning same block, with use_address_table config" MigrateConsumedPruneTxOut.noPruneSameBlockWithAddress
+            , expectFailSilent
+                "restart with new consumed set to false, with use_address_table config"
+                $ MigrateConsumedPruneTxOut.migrateAndPruneRestartWithAddress iom knownMigrations
+            , expectFailSilent
+                "set prune flag, restart missing prune flag, with use_address_table config"
+                $ MigrateConsumedPruneTxOut.pruneRestartMissingFlagWithAddress iom knownMigrations
+            , expectFailSilent
+                "set bootstrap flag, restart missing bootstrap flag, with use_address_table config"
+                $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlagWithAddress iom knownMigrations
+            , expectFailSilent
+                "populate db then reset with use_address_table config config active"
+                $ MigrateConsumedPruneTxOut.populateDbRestartWithAddressConfig iom knownMigrations
+            ]
         ]
     , testGroup
         "simple"

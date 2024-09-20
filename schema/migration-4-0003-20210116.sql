@@ -34,7 +34,6 @@ CREATE INDEX IF NOT EXISTS idx_reward_addr_id ON reward(addr_id) ;
 CREATE INDEX IF NOT EXISTS idx_stake_deregistration_addr_id ON stake_deregistration(addr_id) ;
 CREATE INDEX IF NOT EXISTS idx_stake_registration_addr_id ON stake_registration(addr_id) ;
 CREATE INDEX IF NOT EXISTS idx_treasury_addr_id ON treasury(addr_id) ;
-CREATE INDEX IF NOT EXISTS idx_tx_out_stake_address_id ON tx_out(stake_address_id) ;
 CREATE INDEX IF NOT EXISTS idx_withdrawal_addr_id ON withdrawal(addr_id) ;
 CREATE INDEX IF NOT EXISTS idx_ma_tx_out_tx_out_id ON ma_tx_out(tx_out_id) ;
 CREATE INDEX IF NOT EXISTS idx_pool_update_meta_id ON pool_update(meta_id) ;

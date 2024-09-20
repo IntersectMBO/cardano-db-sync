@@ -692,10 +692,10 @@ instance ToJSON RemoveJsonbFromSchemaConfig where
   toJSON = boolToEnableDisable . isRemoveJsonbFromSchemaEnabled
 
 instance FromJSON TxOutTableTypeConfig where
-  parseJSON = Aeson.withText "add_address_table_to_txout" $ \v ->
+  parseJSON = Aeson.withText "use_address_table" $ \v ->
     case enableDisableToTxOutTableType v of
       Just g -> pure (TxOutTableTypeConfig g)
-      Nothing -> fail $ "unexpected add_address_table_to_txout: " <> show v
+      Nothing -> fail $ "unexpected use_address_table: " <> show v
 
 instance ToJSON TxOutTableTypeConfig where
   toJSON = addressTypeToEnableDisable . unTxOutTableTypeConfig

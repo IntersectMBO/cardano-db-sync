@@ -54,7 +54,6 @@ import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
-import qualified Cardano.Db as Multiplex (queryWrongConsumedBy)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
@@ -118,7 +117,7 @@ isConsistent env = do
 getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
 getIsConsumedFixed env =
   case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (Multiplex.queryWrongConsumedBy txOutTableType)
+    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutTableType)
     _ -> pure Nothing
   where
     txOutTableType = getTxOutTableType env

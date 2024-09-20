@@ -194,20 +194,29 @@ Disables almost all data except `block` and `tx` tables.
 
  * Type: `object`
 
+ **Example**
+ ```
+ "tx_out": {
+   "value": "consumed",
+   "force_tx_in": false,
+   "use_address_table": true,
+ },
+ ```
+
 Tx Out Properties:
 
 | Property                         | Type      | Required |
 | :------------------------------- | :-------- | :------- |
 | [value](#value)                  | `string`  | Optional |
 | [force\_tx\_in](#force-tx-in)    | `boolean` | Optional |
-| [address\_table](#address-table) | `boolean` | Optional |
+| [use\_address\_table](#address-table) | `boolean` | Optional |
 
 #### Value
 
 `tx_out.value`
 
  * Type: `string`
-
+ 
 **enum**: the value of this property must be equal to one of the following values:
 
 | Value         | Explanation                                                             |
@@ -270,11 +279,14 @@ can be changed.
 `tx_out.force_tx_in`
 
  * Type: `boolean`
+ 
+This value defaults to false. 
+<!-- TODO: Need to add more of a description as to what it does -->
 
 
 ### Address Table
 
-`tx_out.address_table`
+`tx_out.use_address_table`
 
  * Type: `boolean`
 
@@ -290,8 +302,14 @@ Key changes in the variant representation:
    - Replaces `address`, `address_has_script`, and `payment_cred` fields with a single `address_id` field
    - `addressId` references the new `Address` table
  
+The address table can only be used on an empty database due to the schema restructuring which would cause data loss.
 
+The following indexes are added to the new `address` table:
 
+1. `idx_address_payment_cred ON address(payment_cred)`
+2. `idx_address_raw ON address(raw)`
+
+Then `address.id` having a unique constraint.
 
 ## Ledger
 

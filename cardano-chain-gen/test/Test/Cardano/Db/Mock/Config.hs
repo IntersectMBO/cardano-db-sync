@@ -302,21 +302,21 @@ mkConfigFile :: FilePath -> FilePath -> ConfigFile
 mkConfigFile staticDir cliConfigFilename =
   ConfigFile $ staticDir </> cliConfigFilename
 
-configPruneForceTxIn :: SyncNodeConfig -> SyncNodeConfig
-configPruneForceTxIn cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedPrune (ForceTxIn True) (UseTxOutAddress False)}}
+configPruneForceTxIn :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configPruneForceTxIn useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedPrune (ForceTxIn True) (UseTxOutAddress useTxOutAddress)}}
 
-configPrune :: SyncNodeConfig -> SyncNodeConfig
-configPrune cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedPrune (ForceTxIn False) (UseTxOutAddress False)}}
+configPrune :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configPrune useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedPrune (ForceTxIn False) (UseTxOutAddress useTxOutAddress)}}
 
-configConsume :: SyncNodeConfig -> SyncNodeConfig
-configConsume cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumed (ForceTxIn False) (UseTxOutAddress False)}}
+configConsume :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configConsume useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumed (ForceTxIn False) (UseTxOutAddress useTxOutAddress)}}
 
-configBootstrap :: SyncNodeConfig -> SyncNodeConfig
-configBootstrap cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedBootstrap (ForceTxIn False) (UseTxOutAddress False)}}
+configBootstrap :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configBootstrap useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedBootstrap (ForceTxIn False) (UseTxOutAddress useTxOutAddress)}}
 
 configPlutusDisable :: SyncNodeConfig -> SyncNodeConfig
 configPlutusDisable cfg = do

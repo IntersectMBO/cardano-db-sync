@@ -100,7 +100,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         logInfo trce $ "Running database migrations in mode " <> textShow mode
         logInfo trce msg
         when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
-        Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode
+        Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
   (ranMigrations, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
   unless (null unofficial) $
     logWarning trce $

@@ -7,16 +7,27 @@
 
 module Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut (
   basicPrune,
+  basicPruneWithAddress,
   pruneWithSimpleRollback,
+  pruneWithSimpleRollbackWithAddress,
   pruneWithFullTxRollback,
+  pruneWithFullTxRollbackWithAddress,
   pruningShouldKeepSomeTx,
+  pruningShouldKeepSomeTxWithAddress,
   pruneAndRollBackOneBlock,
+  pruneAndRollBackOneBlockWithAddress,
   noPruneAndRollBack,
+  noPruneAndRollBackWithAddress,
   pruneSameBlock,
+  pruneSameBlockWithAddress,
   noPruneSameBlock,
+  noPruneSameBlockWithAddress,
   migrateAndPruneRestart,
+  migrateAndPruneRestartWithAddress,
   pruneRestartMissingFlag,
+  pruneRestartMissingFlagWithAddress,
   bootstrapRestartMissingFlag,
+  bootstrapRestartMissingFlagWithAddress,
 ) where
 
 import Cardano.Db (TxOutTableType (..))
@@ -41,7 +52,7 @@ import Test.Cardano.Db.Mock.Config (
   startDBSync,
   stopDBSync,
   txOutTableTypeFromConfig,
-  withCustomConfig,
+  withCustomConfigAndDropDB,
  )
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1)
 import Test.Cardano.Db.Mock.UnifiedApi (
@@ -59,8 +70,14 @@ import Test.Tasty.HUnit (Assertion)
 -- Tests
 ------------------------------------------------------------------------------
 basicPrune :: IOManager -> [(Text, Text)] -> Assertion
-basicPrune = do
-  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+basicPrune = peformBasicPrune False
+
+basicPruneWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+basicPruneWithAddress = peformBasicPrune True
+
+peformBasicPrune :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+peformBasicPrune useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     startDBSync dbSyncEnv
     -- add 50 block
@@ -84,8 +101,14 @@ basicPrune = do
     testLabel = "configPrune"
 
 pruneWithSimpleRollback :: IOManager -> [(Text, Text)] -> Assertion
-pruneWithSimpleRollback = do
-  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruneWithSimpleRollback = peformPruneWithSimpleRollback False
+
+pruneWithSimpleRollbackWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+pruneWithSimpleRollbackWithAddress = peformPruneWithSimpleRollback True
+
+peformPruneWithSimpleRollback :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+peformPruneWithSimpleRollback useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -110,8 +133,14 @@ pruneWithSimpleRollback = do
     testLabel = "configPruneSimpleRollback"
 
 pruneWithFullTxRollback :: IOManager -> [(Text, Text)] -> Assertion
-pruneWithFullTxRollback = do
-  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruneWithFullTxRollback = performPruneWithFullTxRollback False
+
+pruneWithFullTxRollbackWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+pruneWithFullTxRollbackWithAddress = performPruneWithFullTxRollback True
+
+performPruneWithFullTxRollback :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performPruneWithFullTxRollback useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     startDBSync dbSyncEnv
     blk0 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -140,8 +169,14 @@ pruneWithFullTxRollback = do
 -- The tx in the last, 2 x securityParam worth of blocks should not be pruned.
 -- In these tests, 2 x securityParam = 20 blocks.
 pruningShouldKeepSomeTx :: IOManager -> [(Text, Text)] -> Assertion
-pruningShouldKeepSomeTx = do
-  withCustomConfig cmdLineArgs (Just configPrune) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruningShouldKeepSomeTx = performPruningShouldKeepSomeTx False
+
+pruningShouldKeepSomeTxWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+pruningShouldKeepSomeTxWithAddress = performPruningShouldKeepSomeTx True
+
+performPruningShouldKeepSomeTx :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performPruningShouldKeepSomeTx useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPrune useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     b1 <- forgeAndSubmitBlocks interpreter mockServer 80
@@ -164,8 +199,14 @@ pruningShouldKeepSomeTx = do
 
 -- prune with rollback
 pruneAndRollBackOneBlock :: IOManager -> [(Text, Text)] -> Assertion
-pruneAndRollBackOneBlock = do
-  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruneAndRollBackOneBlock = performPruneAndRollBackOneBlock False
+
+pruneAndRollBackOneBlockWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+pruneAndRollBackOneBlockWithAddress = performPruneAndRollBackOneBlock True
+
+performPruneAndRollBackOneBlock :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performPruneAndRollBackOneBlock useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 98
@@ -197,8 +238,14 @@ pruneAndRollBackOneBlock = do
 
 -- consume with rollback
 noPruneAndRollBack :: IOManager -> [(Text, Text)] -> Assertion
-noPruneAndRollBack = do
-  withCustomConfig cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+noPruneAndRollBack = performNoPruneAndRollBack False
+
+noPruneAndRollBackWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+noPruneAndRollBackWithAddress = performNoPruneAndRollBack True
+
+performNoPruneAndRollBack :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performNoPruneAndRollBack useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configConsume useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 98
@@ -229,8 +276,14 @@ noPruneAndRollBack = do
     testLabel = "configPruneAndRollBack"
 
 pruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-pruneSameBlock =
-  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruneSameBlock = performPruneSameBlock False
+
+pruneSameBlockWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+pruneSameBlockWithAddress = performPruneSameBlock True
+
+performPruneSameBlock :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performPruneSameBlock useTxOutAddress =
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 76
@@ -255,8 +308,14 @@ pruneSameBlock =
     testLabel = "configPruneSameBlock"
 
 noPruneSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-noPruneSameBlock =
-  withCustomConfig cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+noPruneSameBlock = performNoPruneSameBlock False
+
+noPruneSameBlockWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+noPruneSameBlockWithAddress = performNoPruneSameBlock True
+
+performNoPruneSameBlock :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performNoPruneSameBlock useTxOutAddress =
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configConsume useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 96
@@ -278,8 +337,14 @@ noPruneSameBlock =
     testLabel = "configNoPruneSameBlock"
 
 migrateAndPruneRestart :: IOManager -> [(Text, Text)] -> Assertion
-migrateAndPruneRestart = do
-  withCustomConfig cmdLineArgs (Just configConsume) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+migrateAndPruneRestart = performMigrateAndPruneRestart False
+
+migrateAndPruneRestartWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+migrateAndPruneRestartWithAddress = performMigrateAndPruneRestart True
+
+performMigrateAndPruneRestart :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performMigrateAndPruneRestart useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configConsume useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
@@ -297,8 +362,14 @@ migrateAndPruneRestart = do
     testLabel = "configMigrateAndPruneRestart"
 
 pruneRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
-pruneRestartMissingFlag = do
-  withCustomConfig cmdLineArgs (Just configPruneForceTxIn) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+pruneRestartMissingFlag = performPruneRestartMissingFlag False
+
+pruneRestartMissingFlagWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+pruneRestartMissingFlagWithAddress = performPruneRestartMissingFlag True
+
+performPruneRestartMissingFlag :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performPruneRestartMissingFlag useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50
@@ -316,8 +387,14 @@ pruneRestartMissingFlag = do
     testLabel = "configPruneRestartMissingFlag"
 
 bootstrapRestartMissingFlag :: IOManager -> [(Text, Text)] -> Assertion
-bootstrapRestartMissingFlag = do
-  withCustomConfig cmdLineArgs (Just configBootstrap) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+bootstrapRestartMissingFlag = performBootstrapRestartMissingFlag False
+
+bootstrapRestartMissingFlagWithAddress :: IOManager -> [(Text, Text)] -> Assertion
+bootstrapRestartMissingFlagWithAddress = performBootstrapRestartMissingFlag True
+
+performBootstrapRestartMissingFlag :: Bool -> IOManager -> [(Text, Text)] -> Assertion
+performBootstrapRestartMissingFlag useTxOutAddress = do
+  withCustomConfigAndDropDB cmdLineArgs (Just $ configBootstrap useTxOutAddress) babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     assertBlockNoBackoff dbSyncEnv 50

@@ -108,7 +108,6 @@ minJust (Just x) (Just y) = Just (min x y)
 --------------------------------------------------------------------------------
 -- CompleteMinId
 --------------------------------------------------------------------------------
--- example use case would be: `result <- completeMinId @'TxOutCore mTxId minIds`
 completeMinId ::
   (MonadIO m) =>
   Maybe TxId ->

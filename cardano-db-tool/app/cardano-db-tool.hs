@@ -34,10 +34,10 @@ main = do
 -- -----------------------------------------------------------------------------
 
 data Command
-  = CmdCreateMigration !MigrationDir
+  = CmdCreateMigration !MigrationDir !TxOutTableType
   | CmdReport !Report !TxOutTableType
   | CmdRollback !SlotNo !TxOutTableType
-  | CmdRunMigrations !MigrationDir !Bool !Bool !(Maybe LogFileDir)
+  | CmdRunMigrations !MigrationDir !Bool !Bool !(Maybe LogFileDir) !TxOutTableType
   | CmdTxOutMigration !TxOutTableType
   | CmdUtxoSetAtBlock !Word64 !TxOutTableType
   | CmdPrepareSnapshot !PrepareSnapshotArgs
@@ -48,32 +48,32 @@ data Command
 runCommand :: Command -> IO ()
 runCommand cmd =
   case cmd of
-    CmdCreateMigration mdir -> runCreateMigration mdir
+    CmdCreateMigration mdir txOutAddressType -> runCreateMigration mdir txOutAddressType
     CmdReport report txOutAddressType -> runReport report txOutAddressType
     CmdRollback slotNo txOutAddressType -> runRollback slotNo txOutAddressType
-    CmdRunMigrations mdir forceIndexes mockFix mldir -> do
+    CmdRunMigrations mdir forceIndexes mockFix mldir txOutTabletype -> do
       pgConfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
-      unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial
+      unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial txOutTabletype
       unless (null unofficial) $
         putStrLn $
           "Unofficial migration scripts found: " ++ show unofficial
       when forceIndexes $
         void $
-          runMigrations pgConfig False mdir mldir Indexes
+          runMigrations pgConfig False mdir mldir Indexes txOutTabletype
       when mockFix $
         void $
-          runMigrations pgConfig False mdir mldir Fix
+          runMigrations pgConfig False mdir mldir Fix txOutTabletype
     CmdTxOutMigration txOutTableType -> do
-      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutTests txOutTableType
+      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool txOutTableType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType
     CmdValidateAddressBalance params txOutAddressType -> runLedgerValidation params txOutAddressType
     CmdVersion -> runVersionCommand
 
-runCreateMigration :: MigrationDir -> IO ()
-runCreateMigration mdir = do
-  mfp <- createMigration PGPassDefaultEnv mdir
+runCreateMigration :: MigrationDir -> TxOutTableType -> IO ()
+runCreateMigration mdir txOutTableType = do
+  mfp <- createMigration PGPassDefaultEnv mdir txOutTableType
   case mfp of
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
@@ -163,7 +163,7 @@ pCommand =
   where
     pCreateMigration :: Parser Command
     pCreateMigration =
-      CmdCreateMigration <$> pMigrationDir
+      CmdCreateMigration <$> pMigrationDir <*> pTxOutTableType
 
     pRunMigrations :: Parser Command
     pRunMigrations =
@@ -172,6 +172,7 @@ pCommand =
         <*> pForceIndexes
         <*> pMockFix
         <*> optional pLogFileDir
+        <*> pTxOutTableType
 
     pRollback :: Parser Command
     pRollback =

@@ -29,10 +29,12 @@ import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, ha
 import Cardano.Db.Migration.Haskell
 import Cardano.Db.Migration.Version
 import Cardano.Db.Operations.Query
+import Cardano.Db.Operations.Types (TxOutTableType (..))
 import Cardano.Db.PGConfig
 import Cardano.Db.Run
 import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Schema.Core.TxOut (migrateCoreTxOutCardanoDb)
+import Cardano.Db.Schema.Variant.TxOut (migrateVariantAddressCardanoDb)
 import Cardano.Prelude (Typeable, textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
@@ -104,8 +106,8 @@ data MigrationToRun = Initial | Full | Fix | Indexes
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
-runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> IO (Bool, [FilePath])
-runMigrations pgconfig quiet migrationDir mLogfiledir mToRun = do
+runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutTableType -> IO (Bool, [FilePath])
+runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
   allScripts <- getMigrationScripts migrationDir
   ranAll <- case (mLogfiledir, allScripts) of
     (_, []) ->
@@ -140,23 +142,22 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun = do
 
     filterMigrations :: [(MigrationVersion, FilePath)] -> IO ([(MigrationVersion, FilePath)], Bool)
     filterMigrations scripts = case mToRun of
-      Full -> do
-        mVersion <- runWithConnectionNoLogging (PGPassCached pgconfig) querySchemaVersion
-        case mVersion of
-          Just (SchemaVersion _ v _) | v == hardCoded3_0 -> do
-            pure (filter (not . filterFix) scripts, False)
-          _ -> pure (scripts, True)
-      Initial -> do
-        mVersion <- runWithConnectionNoLogging (PGPassCached pgconfig) querySchemaVersion
-        case mVersion of
-          Just (SchemaVersion _ v _) | v == hardCoded3_0 -> do
-            pure (filter (\m -> not $ filterFix m || filterIndexes m) scripts, False)
-          _ -> pure (filter (not . filterIndexes) scripts, True)
+      Full -> pure (filter filterIndexesFull scripts, True)
+      Initial -> pure (filter filterInitial scripts, True)
       Fix -> pure (filter filterFix scripts, False)
-      Indexes -> pure (filter filterIndexes scripts, False)
+      Indexes -> do
+        pure (filter filterIndexes scripts, False)
 
     filterFix (mv, _) = mvStage mv == 2 && mvVersion mv > hardCoded3_0
-    filterIndexes (mv, _) = mvStage mv == 4
+    filterIndexesFull (mv, _) = do
+      case txOutTableType of
+        TxOutCore -> True
+        TxOutVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
+    filterInitial (mv, _) = mvStage mv < 4
+    filterIndexes (mv, _) = do
+      case txOutTableType of
+        TxOutCore -> mvStage mv == 4
+        TxOutVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
 
 hardCoded3_0 :: Int
 hardCoded3_0 = 19
@@ -226,8 +227,8 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
 
 -- | Create a database migration (using functionality built into Persistent). If no
 -- migration is needed return 'Nothing' otherwise return the migration as 'Text'.
-createMigration :: PGPassSource -> MigrationDir -> IO (Maybe FilePath)
-createMigration source (MigrationDir migdir) = do
+createMigration :: PGPassSource -> MigrationDir -> TxOutTableType -> IO (Maybe FilePath)
+createMigration source (MigrationDir migdir) txOutTableType = do
   mt <- runDbNoLogging source create
   case mt of
     Nothing -> pure Nothing
@@ -239,10 +240,16 @@ createMigration source (MigrationDir migdir) = do
     create :: ReaderT SqlBackend (NoLoggingT IO) (Maybe (MigrationVersion, Text))
     create = do
       ver <- getSchemaVersion
-      -- here is the place to combine any "core" schemas to the base schema
       statementsBase <- getMigration migrateBaseCardanoDb
-      statementsTxOut <- getMigration migrateCoreTxOutCardanoDb
-      let statements = statementsBase <> statementsTxOut
+      -- handle what type of migration to generate
+      statements <-
+        case txOutTableType of
+          TxOutCore -> do
+            statementsTxOut <- getMigration migrateCoreTxOutCardanoDb
+            pure $ statementsBase <> statementsTxOut
+          TxOutVariantAddress -> do
+            statementsTxOut <- getMigration migrateVariantAddressCardanoDb
+            pure $ statementsBase <> statementsTxOut
       if null statements
         then pure Nothing
         else do

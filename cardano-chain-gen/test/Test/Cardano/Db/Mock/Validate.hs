@@ -136,9 +136,10 @@ expectFailSilent name action = testCase name $ do
 
 -- checking that unspent count matches from tx_in to tx_out
 assertUnspentTx :: DBSyncEnv -> IO ()
-assertUnspentTx syncEnv = do
-  unspentTxCount <- queryDBSync syncEnv $ DB.queryTxOutConsumedNullCount TxOutCore
-  consumedNullCount <- queryDBSync syncEnv $ DB.queryTxOutUnspentCount TxOutCore
+assertUnspentTx dbSyncEnv = do
+  let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
+  unspentTxCount <- queryDBSync dbSyncEnv $ DB.queryTxOutConsumedNullCount txOutTableType
+  consumedNullCount <- queryDBSync dbSyncEnv $ DB.queryTxOutUnspentCount txOutTableType
   assertEqual "Unexpected tx unspent count between tx-in & tx-out" unspentTxCount consumedNullCount
 
 defaultDelays :: [Int]

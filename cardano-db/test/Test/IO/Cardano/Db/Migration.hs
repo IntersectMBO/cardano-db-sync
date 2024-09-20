@@ -12,6 +12,7 @@ import Cardano.Db (
   MigrationValidateError (..),
   MigrationVersion (..),
   SchemaVersion (..),
+  TxOutTableType (..),
   getMigrationScripts,
   querySchemaVersion,
   readPGPassDefault,
@@ -131,7 +132,7 @@ migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
   pgConfig <- runOrThrowIODb readPGPassDefault
-  _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial
+  _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial TxOutVariantAddress
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
   unless (expected == actual) $
