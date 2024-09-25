@@ -30,7 +30,7 @@ import Database.Persist.TH
 share
   [ mkPersist sqlSettings
   , mkMigrate "migrateVariantAddressCardanoDb"
-  , mkEntityDefList "entityDefs"
+  , mkEntityDefList "entityDefsTxOutVariant"
   , deriveShowFields
   ]
   [persistLowerCase|
@@ -65,12 +65,13 @@ share
     deriving Show
 |]
 
-schemaDocs :: [EntityDef]
-schemaDocs =
-  document entityDefs $ do
+schemaDocsTxOutVariant :: [EntityDef]
+schemaDocsTxOutVariant =
+  document entityDefsTxOutVariant $ do
     TxOut --^ do
       "A table for transaction outputs."
       TxOutAddressId # "The human readable encoding of the output address. It is Base58 for Byron era addresses and Bech32 for Shelley era."
+      TxOutConsumedByTxId # "The Tx table index of the transaction that consumes this transaction output. Not populated by default, can be activated via tx-out configs."
       TxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
       TxOutIndex # "The index of this transaction output with the transaction."
       TxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."

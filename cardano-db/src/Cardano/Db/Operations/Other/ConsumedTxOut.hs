@@ -101,17 +101,19 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
   ems <- queryAllExtraMigrations
   isTxOutNull <- queryTxOutIsNull txOutTableType
   let migrationValues = processMigrationValues ems pcm
+      isTxOutVariant = isTxOutVariantAddress txOutTableType
+      isTxOutAddressSet = isTxOutAddressPreviouslySet migrationValues
 
-  -- can only run "use_address_table" on a non populated database
-  when (isTxOutVariantAddress txOutTableType && not isTxOutNull) $
+  -- can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
+  when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
     throw $
-      DBExtraMigration "runExtraMigrations: The use the config 'tx_out.use_address_table' can only be caried out on a non populated database."
+      DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
   -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
-  when (not (isTxOutVariantAddress txOutTableType) && isTxOutAddressPreviouslySet migrationValues) $
+  when (not isTxOutVariant && isTxOutAddressSet) $
     throw $
       DBExtraMigration "runExtraMigrations: The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
   -- Has the user given txout address config && the migration wasn't previously set
-  when (isTxOutVariantAddress txOutTableType && not (isTxOutAddressPreviouslySet migrationValues)) $ do
+  when (isTxOutVariant && not isTxOutAddressSet) $ do
     updateTxOutAndCreateAddress
     insertExtraMigration TxOutAddressPreviouslySet
   -- first check if pruneTxOut flag is missing and it has previously been used
@@ -239,10 +241,8 @@ migrateTxOut ::
   ReaderT SqlBackend m ()
 migrateTxOut trce txOutTableType mMvs = do
   whenJust mMvs $ \mvs -> do
-    liftIO $ logInfo trce $ "migrateTxOut: previously set: " <> textShow (not (isTxOutAddressPreviouslySet mvs))
-    liftIO $ logInfo trce $ "migrateTxOut: pcmConsumedTxOut: " <> textShow (pcmConsumedTxOut (pruneConsumeMigration mvs))
     when (pcmConsumedTxOut (pruneConsumeMigration mvs) && not (isTxOutAddressPreviouslySet mvs)) $ do
-      liftIO $ logInfo trce "migrateTxOut: addeding consumed-by-id Index"
+      liftIO $ logInfo trce "migrateTxOut: adding consumed-by-id Index"
       void createConsumedIndexTxOut
     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
@@ -258,12 +258,6 @@ migrateNextPageTxOut mTrce txOutTableType offst = do
   when (fromIntegral (length page) == pageSize) $
     migrateNextPageTxOut mTrce txOutTableType $!
       (offst + pageSize)
-
--- TODO: cmdv put into tools or something
-migrateTxOutDbTool :: (MonadIO m, MonadBaseControl IO m) => TxOutTableType -> ReaderT SqlBackend m ()
-migrateTxOutDbTool txOutTableType = do
-  _ <- createConsumedIndexTxOut
-  migrateNextPageTxOut Nothing txOutTableType 0
 
 --------------------------------------------------------------------------------------------------
 -- Delete + Update
@@ -458,7 +452,7 @@ updateTxOutAndCreateAddress = do
       "CREATE INDEX IF NOT EXISTS idx_address_payment_cred ON address(payment_cred);"
 
     createIndexRawQuery =
-      "CREATE INDEX IF NOT EXISTS idx_address_raw ON address(raw);"
+      "CREATE INDEX IF NOT EXISTS idx_address_raw ON address USING HASH (raw);"
 
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
@@ -490,6 +484,11 @@ deleteConsumedBeforeTx trce txOutTableType txId = do
 --------------------------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------------------------
+migrateTxOutDbTool :: (MonadIO m, MonadBaseControl IO m) => TxOutTableType -> ReaderT SqlBackend m ()
+migrateTxOutDbTool txOutTableType = do
+  _ <- createConsumedIndexTxOut
+  migrateNextPageTxOut Nothing txOutTableType 0
+
 findMaxTxInId :: forall m. MonadIO m => Word64 -> ReaderT SqlBackend m (Either Text TxId)
 findMaxTxInId blockNoDiff = do
   mBlockHeight <- queryBlockHeight

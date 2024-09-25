@@ -280,9 +280,7 @@ can be changed.
 
  * Type: `boolean`
  
-This value defaults to false. 
-<!-- TODO: Need to add more of a description as to what it does -->
-
+When using `consumed` configuration `tx_in` will not be populated. That behaviour can be overridden by setting this value to `true`.
 
 ### Address Table
 

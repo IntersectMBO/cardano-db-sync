@@ -4,7 +4,7 @@
 --
 
 CREATE INDEX IF NOT EXISTS idx_tx_out_payment_cred ON tx_out(payment_cred);
-CREATE INDEX IF NOT EXISTS idx_tx_out_stake_address_id ON tx_out(stake_address_id) ;
+CREATE INDEX IF NOT EXISTS idx_tx_out_stake_address_id ON tx_out(stake_address_id);
 
 -- Left here for reference, it's removed to speed up restoring from a snapshot as this index is very slow to create.
 -- CREATE INDEX IF NOT EXISTS idx_tx_out_address ON tx_out USING hash (address);

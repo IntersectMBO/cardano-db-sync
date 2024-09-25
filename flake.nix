@@ -202,7 +202,7 @@
                 packages.cardano-db.package.extraSrcFiles =
                   ["../config/pgpass-testnet"];
                 packages.cardano-db.components.tests.schema-rollback.extraSrcFiles =
-                  [ "src/Cardano/Db/Schema.hs" "src/Cardano/Db/Operations/Delete.hs" ];
+                  [ "src/Cardano/Db/BaseSchema.hs" "src/Cardano/Db/Operations/Delete.hs" ];
                 packages.cardano-db.components.tests.test-db.extraSrcFiles =
                   [ "../config/pgpass-mainnet" ];
                 packages.cardano-chain-gen.package.extraSrcFiles =
