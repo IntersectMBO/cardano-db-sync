@@ -3,7 +3,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeOperators #-}
@@ -46,15 +45,13 @@ import Prelude (id)
 data StakeSliceRes
   = Slice !StakeSlice !Bool -- True if this is the final slice for this epoch. Can be used for logging.
   | NoSlices
+  deriving (Show)
 
 data StakeSlice = StakeSlice
   { sliceEpochNo :: !EpochNo
   , sliceDistr :: !(Map StakeCred (Coin, PoolKeyHash))
   }
-  deriving (Eq)
-
-emptySlice :: EpochNo -> StakeSlice
-emptySlice epoch = StakeSlice epoch Map.empty
+  deriving (Show, Eq)
 
 getSecurityParameter ::
   ConsensusProtocol (BlockProtocol blk) =>
@@ -62,44 +59,36 @@ getSecurityParameter ::
   Word64
 getSecurityParameter = maxRollbacks . configSecurityParam . pInfoConfig
 
--- 'sliceIndex' can match the epochBlockNo for every block.
---
--- 'minSliceSize' has to be constant or it could cause missing data.
--- If this value is too small it will be adjusted to a 'defaultEpochSliceSize'
--- which is big enough to cover all delegations.
--- On mainnet, for a value minSliceSize = 2000, it will be used as the actual size of slices
--- until the size of delegations grows up to 8.6M, in which case, the size of slices
--- will be adjusted.
+-- | Get the stake distribution for the given epoch.
 getStakeSlice ::
-  ConsensusProtocol (BlockProtocol blk) =>
-  ProtocolInfo blk ->
   Word64 ->
   ExtLedgerState CardanoBlock ->
   Bool ->
   StakeSliceRes
-getStakeSlice pInfo !epochBlockNo els isMigration =
+getStakeSlice !epochBlockNo els isMigration =
   case ledgerState els of
     LedgerStateByron _ -> NoSlices
-    LedgerStateShelley sls -> genericStakeSlice pInfo epochBlockNo sls isMigration
-    LedgerStateAllegra als -> genericStakeSlice pInfo epochBlockNo als isMigration
-    LedgerStateMary mls -> genericStakeSlice pInfo epochBlockNo mls isMigration
-    LedgerStateAlonzo als -> genericStakeSlice pInfo epochBlockNo als isMigration
-    LedgerStateBabbage bls -> genericStakeSlice pInfo epochBlockNo bls isMigration
-    LedgerStateConway cls -> genericStakeSlice pInfo epochBlockNo cls isMigration
+    LedgerStateShelley sls -> genericStakeSlice epochBlockNo sls isMigration
+    LedgerStateAllegra als -> genericStakeSlice epochBlockNo als isMigration
+    LedgerStateMary mls -> genericStakeSlice epochBlockNo mls isMigration
+    LedgerStateAlonzo als -> genericStakeSlice epochBlockNo als isMigration
+    LedgerStateBabbage bls -> genericStakeSlice epochBlockNo bls isMigration
+    LedgerStateConway cls -> genericStakeSlice epochBlockNo cls isMigration
 
 genericStakeSlice ::
-  forall era c blk p.
-  (c ~ StandardCrypto, EraCrypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
-  ProtocolInfo blk ->
-  Word64 ->
+  forall era c p.
+  (c ~ StandardCrypto, EraCrypto era ~ c) =>
+  Word64 -> -- epochBlockNo
   LedgerState (ShelleyBlock p era) ->
-  Bool ->
+  Bool -> -- isMigration
   StakeSliceRes
-genericStakeSlice pInfo epochBlockNo lstate isMigration
-  | index > delegationsLen = NoSlices
-  | index == delegationsLen = Slice (emptySlice epoch) True
-  | index + size > delegationsLen = Slice (mkSlice (delegationsLen - index)) True
-  | otherwise = Slice (mkSlice size) False
+genericStakeSlice epochBlockNo lstate isMigration =
+  case compare index delegationsLen of
+    GT -> NoSlices
+    EQ -> Slice (emptySlice epoch) True
+    LT -> case compare (index + sliceSize) delegationsLen of
+      GT -> Slice (mkSlice (delegationsLen - index)) True
+      _otherwise -> Slice (mkSlice sliceSize) False
   where
     epoch :: EpochNo
     epoch = EpochNo $ 1 + unEpochNo (Shelley.nesEL (Consensus.shelleyLedgerState lstate))
@@ -107,13 +96,9 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
     minSliceSize :: Word64
     minSliceSize = 2000
 
-    -- On mainnet this is 2160
-    k :: Word64
-    k = getSecurityParameter pInfo
+    maxSliceSize :: Word64
+    maxSliceSize = 10000
 
-    -- We use 'ssStakeMark' here. That means that when these values
-    -- are added to the database, the epoch number where they become active is the current
-    -- epoch plus one.
     stakeSnapshot :: Ledger.SnapShot c
     stakeSnapshot =
       Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
@@ -131,34 +116,11 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
     lookupStake :: Credential 'Staking c -> Maybe Coin
     lookupStake cred = Ledger.fromCompact <$> VMap.lookup cred stakes
 
-    -- This is deterministic for the whole epoch and is the constant size of slices
-    -- until the data are over. This means the last slice could be of smaller size and slices
-    -- after that will be empty.
-    epochSliceSize :: Word64
-    epochSliceSize =
-      max minSliceSize defaultEpochSliceSize
-      where
-        -- On mainnet this is 21600
-        expectedBlocks :: Word64
-        expectedBlocks = 10 * k
+    sliceSize :: Word64
+    sliceSize = max minSliceSize (min maxSliceSize (delegationsLen `div` 10))
 
-        -- This size of slices is enough to cover the whole list, even if only
-        -- the 20% of the expected blocks appear in an epoch.
-        defaultEpochSliceSize :: Word64
-        defaultEpochSliceSize = 1 + div (delegationsLen * 5) expectedBlocks
-
-    -- The starting index of the data in the delegation vector.
     index :: Word64
-    index
-      | isMigration = 0
-      | epochBlockNo < k = delegationsLen + 1 -- so it creates the empty Slice.
-      | otherwise = (epochBlockNo - k) * epochSliceSize
-
-    size :: Word64
-    size
-      | isMigration, epochBlockNo + 1 < k = 0
-      | isMigration = (epochBlockNo + 1 - k) * epochSliceSize
-      | otherwise = epochSliceSize
+    index = if isMigration then 0 else epochBlockNo * sliceSize
 
     mkSlice :: Word64 -> StakeSlice
     mkSlice actualSize =
@@ -167,14 +129,14 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
         , sliceDistr = distribution
         }
       where
-        delegationsSliced :: VMap VB VB (Credential 'Staking c) (KeyHash 'StakePool c)
         delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral actualSize) delegations
-
-        distribution :: Map StakeCred (Coin, PoolKeyHash)
         distribution =
           VMap.toMap $
             VMap.mapMaybe id $
               VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced
+
+    emptySlice :: EpochNo -> StakeSlice
+    emptySlice e = StakeSlice {sliceEpochNo = e, sliceDistr = Map.empty}
 
 getPoolDistr ::
   ExtLedgerState CardanoBlock ->
