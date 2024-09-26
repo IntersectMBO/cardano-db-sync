@@ -35,6 +35,7 @@ module Cardano.DbSync.Ledger.State (
   getStakeSlice,
   getSliceMeta,
   findProposedCommittee,
+  trimLedgerState,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -50,9 +51,15 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
+import Cardano.Ledger.Alonzo.TxOut (AlonzoTxOut (..))
+import Cardano.Ledger.Babbage.TxOut (BabbageTxOut (..))
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Crypto (Crypto)
+import Cardano.Ledger.Mary.Value (MaryValue (..))
 import Cardano.Ledger.Shelley.AdaPots (AdaPots)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import Cardano.Ledger.Shelley.TxOut (ShelleyTxOut (..))
+import Cardano.Ledger.UTxO (UTxO (..))
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
@@ -73,6 +80,7 @@ import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, write
 import qualified Control.Exception as Exception
 
 import qualified Data.ByteString.Base16 as Base16
+import Data.SOP.Strict (NP (..), fn)
 
 import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
@@ -104,6 +112,7 @@ import Ouroboros.Consensus.Block (
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardConway, StandardCrypto)
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import Ouroboros.Consensus.HardFork.Abstract
@@ -217,6 +226,7 @@ readStateUnsafe env = do
 applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
 applyBlockAndSnapshot ledgerEnv blk isCons = do
   (oldState, appResult) <- applyBlock ledgerEnv blk
+
   tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
   pure (appResult, tookSnapshot)
 
@@ -233,11 +243,13 @@ applyBlock env blk = do
     let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (lrEvents result)
     let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
     let !newLedgerState = finaliseDrepDistr (lrResult result)
+
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
     !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
     let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
     let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
-    let !ledgerDB' = pushLedgerDB ledgerDB newState
+    let !newState' = maybe newState (trimOnNewEpoch newState) newEpoch
+    let !ledgerDB' = pushLedgerDB ledgerDB newState'
     writeTVar (leStateVar env) (Strict.Just ledgerDB')
     let !appResult =
           if leUseLedger env
@@ -298,6 +310,9 @@ applyBlock env blk = do
     finaliseDrepDistr :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock
     finaliseDrepDistr ledger =
       ledger & newEpochStateT %~ forceDRepPulsingState @StandardConway
+
+    trimOnNewEpoch :: CardanoLedgerState -> Generic.NewEpoch -> CardanoLedgerState
+    trimOnNewEpoch ls !_ = trimLedgerState ls
 
 getGovState :: ExtLedgerState CardanoBlock -> Maybe (ConwayGovState StandardConway)
 getGovState ls = case ledgerState ls of
@@ -891,3 +906,56 @@ findProposedCommittee gaId cgs = do
       UpdateCommittee _ toRemove toAdd q -> Right $ Ledger.SJust $ updatedCommittee toRemove toAdd q scommittee
       _ -> Left "Unexpected gov action." -- Should never happen since the accumulator only includes UpdateCommittee
     fromNothing err = maybe (Left err) Right
+
+trimLedgerState :: CardanoLedgerState -> CardanoLedgerState
+trimLedgerState (CardanoLedgerState extLedger epochBlockNo) =
+  CardanoLedgerState extLedger' epochBlockNo
+  where
+    extLedger' = trimExtLedgerState extLedger
+
+trimExtLedgerState :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock
+trimExtLedgerState =
+  hApplyExtLedgerState $
+    fn id
+      :* fn id
+      :* fn (overUTxO trimMaryTxOut)
+      :* fn (overUTxO trimAlonzoTxOut)
+      :* fn (overUTxO trimBabbageTxOut)
+      :* fn (overUTxO trimBabbageTxOut)
+      :* Nil
+
+overUTxO ::
+  (TxOut era -> TxOut era) ->
+  LedgerState (ShelleyBlock proto era) ->
+  LedgerState (ShelleyBlock proto era)
+overUTxO f ledger = ledger {Consensus.shelleyLedgerState = newEpochState'}
+  where
+    newEpochState = Consensus.shelleyLedgerState ledger
+    newEpochState' = newEpochState & utxosL %~ mapUTxO
+    utxosL = Shelley.nesEpochStateL . Shelley.esLStateL . Shelley.lsUTxOStateL . Shelley.utxosUtxoL
+    mapUTxO (UTxO utxos) = UTxO (Map.map f utxos)
+
+trimMaryTxOut ::
+  ShelleyTxOut Consensus.StandardMary ->
+  ShelleyTxOut Consensus.StandardMary
+trimMaryTxOut (ShelleyTxOut addr val) = ShelleyTxOut addr val'
+  where
+    val' = trimMultiAsset val
+
+trimAlonzoTxOut ::
+  AlonzoTxOut Consensus.StandardAlonzo ->
+  AlonzoTxOut Consensus.StandardAlonzo
+trimAlonzoTxOut (AlonzoTxOut addr val hashes) = AlonzoTxOut addr val' hashes
+  where
+    val' = trimMultiAsset val
+
+trimBabbageTxOut ::
+  (Crypto c, Era era, Value era ~ MaryValue c) =>
+  BabbageTxOut era ->
+  BabbageTxOut era
+trimBabbageTxOut (BabbageTxOut addr val datums refs) = BabbageTxOut addr val' datums refs
+  where
+    val' = trimMultiAsset val
+
+trimMultiAsset :: MaryValue c -> MaryValue c
+trimMultiAsset (MaryValue coin _) = MaryValue coin mempty
