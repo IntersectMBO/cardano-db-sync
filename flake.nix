@@ -324,6 +324,21 @@
                   '')
                 ];
               })
+
+              ({ lib, pkgs, config, ... }: lib.mkIf pkgs.hostPlatform.isMacOS {
+                # PostgreSQL tests fail in Hydra on MacOS with:
+                #
+                #     FATAL:  could not create shared memory segment: No space left on device
+                #     DETAIL:  Failed system call was shmget(key=639754676, size=56, 03600).
+                #     HINT:  This error does *not* mean that you have run out of disk space.
+                #       It occurs either if all available shared memory IDs have been taken,
+                #       in which case you need to raise the SHMMNI parameter in your kernel,
+                #       or because the system's overall limit for shared memory has been reached.
+                #
+                # So disable them for now
+                packages.cardano-chain-gen.components.tests.cardano-chain-gen.doCheck = false;
+                packages.cardano-db.components.tests.test-db.doCheck = false;
+              })
             ];
           })).appendOverlays [
             # Collect local package `exe`s
