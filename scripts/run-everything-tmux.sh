@@ -2,7 +2,7 @@
 
 HOMEIOG=$HOME/Code/IOG
 
-dbsync="$(find $HOMEIOG/cardano-db-sync/ -name cardano-db-sync -type f)"
+dbsync="$(find "$HOMEIOG"/cardano-db-sync/ -name cardano-db-sync -type f)"
 
 session="IOHK"
 
