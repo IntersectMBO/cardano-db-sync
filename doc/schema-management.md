@@ -15,13 +15,11 @@ indexes during syncing slows down db-sync and so they are added later. Index
 creation is idempotent and the `schema_version.stage_tree` field is ignored.
 These files cannot be modified but they can be extended, in case users want to
 introduce their own indexes from the begining.
-- `stage 4`: introduces all the other indexes. By default these are the indexes
-that were created by previous db-sync versions. This stage is executed when
-db-sync has reached 30mins before the tip of the chain. It is advised to increase
-the `maintenance_work_mem` from Postgres config to 0.5GB - 1GB to speed this
-process (default is 64MB). Also use the default (2) or higher
-`max_parallel_maintenance_workers`. These files can be modified or extended
-by users.
+- `stage 4`: introduces all the other indexes. By default these are the indexes that were created by previous db-sync versions. This stage is executed when
+db-sync has reached 30mins before the tip of the chain. It is advised to increase the `maintenance_work_mem` from Postgres config to 0.5GB - 1GB to speed this
+process (default is 64MB). 
+Also use the default (2) or higher `max_parallel_maintenance_workers`. These files can be modified or extended
+by users. 
 
 All of the schema migrations in these three stages are written to be idempotent (so that they
 "know" if they have already been applied).
@@ -33,6 +31,11 @@ migration-1-0000-20190730.sql
 where the `1` denotes "stage 1" of the SQL migration, the `0000` is the migration version and the
 last number is the date. Listing the directory containing the schema and sorting the list will
 order them in the correct order for applying to the database.
+
+Since the introduction of `use_address_table` [config](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#tx-out). The file `migration-4-001-*` when indexing will not be ran when the this configuration is active.
+
+There is also a flag you can use in cardano-db-tool `--use-tx-out-address` which handles the alternate variation of the schema, one might be using.
+
 
 ## Creating a Migration
 
@@ -51,6 +54,12 @@ export PGPASSFILE=config/pgpass-mainnet
 cabal run cardano-db-tool -- create-migration --mdir schema/
 ```
 This will generate a migration if one is needed. 
+
+There is an alternate way to create/run a migration when using the `use_txout_address` configuration as previously mentioned, this uses a different variation of the schema.
+To do this, you simply add the flag `--use-tx-out-address` like so:
+```
+PGPASSFILE=config/pgpass-mainnet cabal run cardano-db-tool -- create-migration --use-tx-out-address --mdir schema/
+```
 
 Once this has completed it's good practice to rebuild `cardano-db-sync` due to how it caches schema files when built, this can be done using the following documentation [Build and Install](./installing.md#build-and-install)
 

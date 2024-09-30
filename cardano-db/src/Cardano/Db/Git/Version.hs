@@ -2,11 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Cardano.Db.Version (
+module Cardano.Db.Git.Version (
   gitRev,
 ) where
 
-import Cardano.Db.RevFromGit (gitRevFromGit)
+import Cardano.Db.Git.RevFromGit (gitRevFromGit)
 import Data.FileEmbed (dummySpaceWith)
 import Data.Text (Text)
 import qualified Data.Text as Text

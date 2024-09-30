@@ -116,8 +116,7 @@ syncInsertConfig =
 
 syncInsertOptions :: Gen SyncInsertOptions
 syncInsertOptions =
-  SyncInsertOptions
-    <$> (TxCBORConfig <$> Gen.bool)
+  (SyncInsertOptions . TxCBORConfig <$> Gen.bool)
     <*> txOutConfig
     <*> Gen.element [LedgerEnable, LedgerDisable, LedgerIgnore]
     <*> shelleyConfig
@@ -134,11 +133,11 @@ syncInsertOptions =
 txOutConfig :: Gen TxOutConfig
 txOutConfig =
   Gen.choice
-    [ pure TxOutEnable
+    [ TxOutEnable . UseTxOutAddress <$> Gen.bool
     , pure TxOutDisable
-    , TxOutConsumed <$> (ForceTxIn <$> Gen.bool)
-    , TxOutPrune <$> (ForceTxIn <$> Gen.bool)
-    , TxOutBootstrap <$> (ForceTxIn <$> Gen.bool)
+    , (TxOutConsumed . ForceTxIn <$> Gen.bool) <*> (UseTxOutAddress <$> Gen.bool)
+    , (TxOutConsumedPrune . ForceTxIn <$> Gen.bool) <*> (UseTxOutAddress <$> Gen.bool)
+    , (TxOutConsumedBootstrap . ForceTxIn <$> Gen.bool) <*> (UseTxOutAddress <$> Gen.bool)
     ]
 
 shelleyConfig :: Gen ShelleyInsertConfig

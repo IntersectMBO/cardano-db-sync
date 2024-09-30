@@ -2,12 +2,14 @@
 
 module Cardano.DbTool.UtxoSet (
   utxoSetAtSlot,
+  utxoSetSum,
 ) where
 
 import Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 import Cardano.Db
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.Prelude (textShow)
-import Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -18,9 +20,9 @@ import Data.Word (Word64)
 import System.Exit (exitSuccess)
 import System.IO (IOMode (..), withFile)
 
-utxoSetAtSlot :: Word64 -> IO ()
-utxoSetAtSlot slotNo = do
-  (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot slotNo
+utxoSetAtSlot :: TxOutTableType -> Word64 -> IO ()
+utxoSetAtSlot txOutTableType slotNo = do
+  (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot txOutTableType slotNo
 
   let supply = utxoSetSum utxoSet
   let aggregated = aggregateUtxos utxoSet
@@ -57,14 +59,12 @@ utxoSetAtSlot slotNo = do
       writeUtxos ("utxo-reject-" ++ show slotNo ++ ".json") reject
       putStrLn ""
 
--- -----------------------------------------------------------------------------
-
-aggregateUtxos :: [(TxOut, a)] -> [(Text, Word64)]
+aggregateUtxos :: [UtxoQueryResult] -> [(Text, Word64)]
 aggregateUtxos xs =
   List.sortOn (Text.length . fst)
     . Map.toList
     . Map.fromListWith (+)
-    $ map (\(x, _) -> (txOutAddress x, unDbLovelace (txOutValue x))) xs
+    $ map (\result -> (utxoAddress result, getTxOutValue $ utxoTxOutW result)) xs
 
 isRedeemTextAddress :: Text -> Bool
 isRedeemTextAddress addr =
@@ -82,13 +82,13 @@ partitionUtxos =
     accept (addr, _) =
       Text.length addr <= 180 && not (isRedeemTextAddress addr)
 
-queryAtSlot :: Word64 -> IO (Ada, [(TxOut, ByteString)], Ada, Either LookupFail UTCTime)
-queryAtSlot slotNo =
+queryAtSlot :: TxOutTableType -> Word64 -> IO (Ada, [UtxoQueryResult], Ada, Either LookupFail UTCTime)
+queryAtSlot txOutTableType slotNo =
   -- Run the following queries in a single transaction.
   runDbNoLoggingEnv $ do
     (,,,)
-      <$> queryGenesisSupply
-      <*> queryUtxoAtSlotNo slotNo
+      <$> queryGenesisSupply txOutTableType
+      <*> queryUtxoAtSlotNo txOutTableType slotNo
       <*> queryFeesUpToSlotNo slotNo
       <*> querySlotUtcTime slotNo
 
@@ -112,9 +112,14 @@ showUtxo (addr, value) =
     , "    }"
     ]
 
-utxoSetSum :: [(TxOut, a)] -> Ada
+utxoSetSum :: [UtxoQueryResult] -> Ada
 utxoSetSum xs =
-  word64ToAda . sum $ map (unDbLovelace . txOutValue . fst) xs
+  word64ToAda . sum $ map (getTxOutValue . utxoTxOutW) xs
+
+getTxOutValue :: TxOutW -> Word64
+getTxOutValue wrapper = case wrapper of
+  CTxOutW txOut -> unDbLovelace $ C.txOutValue txOut
+  VTxOutW txOut _ -> unDbLovelace $ V.txOutValue txOut
 
 writeUtxos :: FilePath -> [(Text, Word64)] -> IO ()
 writeUtxos fname xs = do

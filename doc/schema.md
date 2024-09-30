@@ -1,5 +1,8 @@
 # Schema Documentation for cardano-db-sync
 
+Schema version: 13.5.0.2 (from branch **1333-new-AddressDetail-table** which may not accurately reflect the version number)
+**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema/BaseSchema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
+
 ### `schema_version`
 
 The version of the database schema. Schema versioning is split into three stages as detailed below. This table should only ever have a single row.
@@ -121,26 +124,6 @@ A table of unique stake addresses. Can be an actual address or a script hash.  T
 | `hash_raw` | addr29type | The raw bytes of the stake address hash. |
 | `view` | string | The Bech32 encoded version of the stake address. |
 | `script_hash` | hash28type | The script hash, in case this address is locked by a script. |
-
-### `tx_out`
-
-A table for transaction outputs.
-
-* Primary Id: `id`
-
-| Column name | Type | Description |
-|-|-|-|
-| `id` | integer (64) |  |
-| `tx_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
-| `index` | txindex | The index of this transaction output with the transaction. |
-| `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
-| `address_has_script` | boolean | Flag which shows if this address is locked by a script. |
-| `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
-| `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
-| `value` | lovelace | The output value (in Lovelace) of the transaction output. |
-| `data_hash` | hash32type | The hash of the transaction output datum. (NULL for Txs without scripts). |
-| `inline_datum_id` | integer (64) | The inline datum of the output, if it has one. New in v13. |
-| `reference_script_id` | integer (64) | The reference script of the output, if it has one. New in v13. |
 
 ### `collateral_tx_out`
 
@@ -544,19 +527,6 @@ A table containing Multi-Asset mint events.
 | `ident` | integer (64) | The MultiAsset table index specifying the asset. |
 | `quantity` | int65type | The amount of the Multi Asset to mint (can be negative to "burn" assets). |
 | `tx_id` | integer (64) | The Tx table index for the transaction that contains this minting event. |
-
-### `ma_tx_out`
-
-A table containing Multi-Asset transaction outputs.
-
-* Primary Id: `id`
-
-| Column name | Type | Description |
-|-|-|-|
-| `id` | integer (64) |  |
-| `ident` | integer (64) | The MultiAsset table index specifying the asset. |
-| `quantity` | word64type | The Multi Asset transaction output amount (denominated in the Multi Asset). |
-| `tx_out_id` | integer (64) | The TxOut table index for the transaction that this Multi Asset transaction output. |
 
 ### `redeemer`
 
@@ -1195,5 +1165,90 @@ A table containing pools that have been delisted.
 |-|-|-|
 | `id` | integer (64) |  |
 | `hash_raw` | hash28type | The pool hash |
+
+### `tx_out`
+
+A table for transaction outputs.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
+| `address_has_script` | boolean | Flag which shows if this address is locked by a script. |
+| `data_hash` | hash32type | The hash of the transaction output datum. (NULL for Txs without scripts). |
+| `consumed_by_tx_id` | integer (64) | The Tx table index of the transaction that consumes this transaction output. Not populated by default, can be activated via tx-out configs. |
+| `index` | txindex | The index of this transaction output with the transaction. |
+| `inline_datum_id` | integer (64) | The inline datum of the output, if it has one. New in v13. |
+| `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
+| `reference_script_id` | integer (64) | The reference script of the output, if it has one. New in v13. |
+| `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
+| `tx_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
+| `value` | lovelace | The output value (in Lovelace) of the transaction output. |
+
+### `ma_tx_out`
+
+A table containing Multi-Asset transaction outputs.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `ident` | integer (64) | The MultiAsset table index specifying the asset. |
+| `quantity` | word64type | The Multi Asset transaction output amount (denominated in the Multi Asset). |
+| `tx_out_id` | integer (64) | The TxOut table index for the transaction that this Multi Asset transaction output. |
+
+# Variant Schema
+
+When using the `use_address_table` [configuration](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#tx-out), the `tx_out` table is split into two tables: `tx_out` and `address`.
+Bellow are the table documentation for this variaton. 
+
+### `tx_out`
+
+A table for transaction outputs.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `address_id` | integer (64) | The human readable encoding of the output address. It is Base58 for Byron era addresses and Bech32 for Shelley era. |
+| `consumed_by_tx_id` | integer (64) | The Tx table index of the transaction that consumes this transaction output. Not populated by default, can be activated via tx-out configs. |
+| `data_hash` | hash32type | The hash of the transaction output datum. (NULL for Txs without scripts). |
+| `index` | txindex | The index of this transaction output with the transaction. |
+| `inline_datum_id` | integer (64) | The inline datum of the output, if it has one. New in v13. |
+| `reference_script_id` | integer (64) | The reference script of the output, if it has one. New in v13. |
+| `tx_id` | integer (64) | The Tx table index of the transaction that contains this transaction output. |
+| `value` | lovelace | The output value (in Lovelace) of the transaction output. |
+
+### `address`
+
+A table for addresses that appear in outputs.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `address` | string | The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era. |
+| `raw` | blob | The raw binary address. |
+| `has_script` | boolean | Flag which shows if this address is locked by a script. |
+| `payment_cred` | hash28type | The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash. |
+| `stake_address_id` | integer (64) | The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses). |
+
+### `ma_tx_out`
+
+A table containing Multi-Asset transaction outputs.
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `ident` | integer (64) | The MultiAsset table index specifying the asset. |
+| `quantity` | word64type | The Multi Asset transaction output amount (denominated in the Multi Asset). |
+| `tx_out_id` | integer (64) | The TxOut table index for the transaction that this Multi Asset transaction output. |
 
 

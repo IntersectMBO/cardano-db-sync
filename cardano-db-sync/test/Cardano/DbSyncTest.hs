@@ -45,11 +45,11 @@ prop_extractSyncOptionsPruneConsumeMigration = property $ do
   let syncOptions = extractSyncOptions syncNodeParams abortOnPanic syncNodeConfig
       expectedPruneConsume =
         case sioTxOut (dncInsertOptions syncNodeConfig) of
-          TxOutEnable -> initPruneConsumeMigration False False False False
+          TxOutEnable _ -> initPruneConsumeMigration False False False False
           TxOutDisable -> initPruneConsumeMigration False False False False
-          TxOutBootstrap (ForceTxIn f) -> initPruneConsumeMigration False False True f
-          TxOutPrune (ForceTxIn f) -> initPruneConsumeMigration False True False f
-          TxOutConsumed (ForceTxIn f) -> initPruneConsumeMigration True False False f
+          TxOutConsumedBootstrap (ForceTxIn f) _ -> initPruneConsumeMigration False False True f
+          TxOutConsumedPrune (ForceTxIn f) _ -> initPruneConsumeMigration False True False f
+          TxOutConsumed (ForceTxIn f) _ -> initPruneConsumeMigration True False False f
 
   soptPruneConsumeMigration syncOptions === expectedPruneConsume
 
@@ -104,12 +104,12 @@ coverTxOut :: MonadTest m => SyncNodeConfig -> m ()
 coverTxOut syncNodeConfig = do
   let isTxOutEnabled' = isTxOutEnabled . sioTxOut . dncInsertOptions $ syncNodeConfig
       isTxOutDisabled' = isTxOutEnabled . sioTxOut . dncInsertOptions $ syncNodeConfig
-      isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions $ syncNodeConfig
-      isTxOutPrune' = isTxOutPrune . sioTxOut . dncInsertOptions $ syncNodeConfig
+      isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions $ syncNodeConfig
+      isTxOutConsumedPrune' = isTxOutConsumedPrune . sioTxOut . dncInsertOptions $ syncNodeConfig
       isTxOutConsumed' = isTxOutConsumed . sioTxOut . dncInsertOptions $ syncNodeConfig
 
   cover 5 "tx out enabled" isTxOutEnabled'
   cover 5 "tx out disabled" isTxOutDisabled'
-  cover 5 "tx out bootstrap" isTxOutBootstrap'
-  cover 5 "tx out prune" isTxOutPrune'
+  cover 5 "tx out bootstrap" isTxOutConsumedBootstrap'
+  cover 5 "tx out prune" isTxOutConsumedPrune'
   cover 5 "tx out consumed" isTxOutConsumed'

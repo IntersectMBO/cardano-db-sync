@@ -1,4 +1,7 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -8,6 +11,8 @@ module Cardano.DbTool.Validate.TxAccounting (
 ) where
 
 import Cardano.Db
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbTool.Validate.Util
 import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -40,8 +45,8 @@ import qualified System.Random as Random
 
 {- HLINT ignore "Fuse on/on" -}
 
-validateTxAccounting :: IO ()
-validateTxAccounting = do
+validateTxAccounting :: TxOutTableType -> IO ()
+validateTxAccounting getTxOutTableType = do
   txIdRange <- runDbNoLoggingEnv queryTestTxIds
   putStrF $
     "For "
@@ -50,7 +55,7 @@ validateTxAccounting = do
       ++ show (snd txIdRange)
       ++ " accounting is: "
   ids <- randomTxIds testCount txIdRange
-  res <- runExceptT $ traverse validateAccounting ids
+  res <- runExceptT $ traverse (validateAccounting getTxOutTableType) ids
   case res of
     Left err -> error $ redText (reportError err)
     Right _ -> putStrLn $ greenText "ok"
@@ -65,8 +70,8 @@ data ValidateError = ValidateError
   , veFee :: !Ada
   , veDeposit :: !Int64
   , veWithdrawal :: !Ada
-  , inputs :: ![TxOut]
-  , outputs :: ![TxOut]
+  , inputs :: ![TxOutW]
+  , outputs :: ![TxOutW]
   }
 
 randomTxIds :: Int -> (Word64, Word64) -> IO [Word64]
@@ -95,39 +100,48 @@ reportError ve =
     , "]"
     ]
   where
-    showTxOuts :: [TxOut] -> String
+    showTxOuts :: [TxOutW] -> String
     showTxOuts = List.intercalate "," . map showTxOut
 
-    showTxOut :: TxOut -> String
-    showTxOut txo =
-      mconcat
-        [ "TxId "
-        , show (unTxId $ txOutTxId txo)
-        , " Value "
-        , show (word64ToAda . unDbLovelace $ txOutValue txo)
-        ]
+showTxOut :: TxOutW -> String
+showTxOut txo =
+  mconcat
+    [ "TxId "
+    , show (unTxId txId)
+    , " Value "
+    , show (word64ToAda . unDbLovelace $ value)
+    ]
+  where
+    (txId, value) = case txo of
+      CTxOutW cTxOut -> (C.txOutTxId cTxOut, C.txOutValue cTxOut)
+      VTxOutW vTxOut _ -> (V.txOutTxId vTxOut, V.txOutValue vTxOut)
 
 -- For a given TxId, validate the input/output accounting.
-validateAccounting :: Word64 -> ExceptT ValidateError IO ()
-validateAccounting txId = do
+validateAccounting :: TxOutTableType -> Word64 -> ExceptT ValidateError IO ()
+validateAccounting txOutTableType txId = do
   (fee, deposit) <- liftIO $ runDbNoLoggingEnv (queryTxFeeDeposit txId)
   withdrawal <- liftIO $ runDbNoLoggingEnv (queryTxWithdrawal txId)
-  ins <- liftIO $ runDbNoLoggingEnv (queryTxInputs txId)
-  outs <- liftIO $ runDbNoLoggingEnv (queryTxOutputs txId)
+  ins <- liftIO $ runDbNoLoggingEnv (queryTxInputs txOutTableType txId)
+  outs <- liftIO $ runDbNoLoggingEnv (queryTxOutputs txOutTableType txId)
   -- A refund is a negative deposit.
   when (deposit >= 0 && sumValues ins + withdrawal /= fee + adaDeposit deposit + sumValues outs) $
     left (ValidateError txId fee deposit withdrawal ins outs)
   when (deposit < 0 && sumValues ins + adaRefund deposit + withdrawal /= fee + sumValues outs) $
     left (ValidateError txId fee deposit withdrawal ins outs)
   where
-    sumValues :: [TxOut] -> Ada
-    sumValues txs = word64ToAda $ sum (map (unDbLovelace . txOutValue) txs)
-
     adaDeposit :: Int64 -> Ada
     adaDeposit = word64ToAda . fromIntegral
 
     adaRefund :: Int64 -> Ada
     adaRefund = word64ToAda . fromIntegral . negate
+
+sumValues :: [TxOutW] -> Ada
+sumValues = word64ToAda . sum . map txOutValue
+  where
+    txOutValue =
+      unDbLovelace . \case
+        CTxOutW cTxOut -> C.txOutValue cTxOut
+        VTxOutW vTxOut _ -> V.txOutValue vTxOut
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -153,29 +167,39 @@ queryTxFeeDeposit txId = do
     convert :: (Value DbLovelace, Value (Maybe Int64)) -> (Ada, Int64)
     convert (Value (DbLovelace w64), d) = (word64ToAda w64, fromMaybe 0 (unValue d))
 
-queryTxInputs :: MonadIO m => Word64 -> ReaderT SqlBackend m [TxOut]
-queryTxInputs txId = do
+queryTxInputs :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [TxOutW]
+queryTxInputs txOutTableType txId = case txOutTableType of
+  TxOutCore -> map CTxOutW <$> queryInputsBody @'TxOutCore txId
+  TxOutVariantAddress -> map (`VTxOutW` Nothing) <$> queryInputsBody @'TxOutVariantAddress txId
+
+queryInputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT SqlBackend m [TxOutTable a]
+queryInputsBody txId = do
   res <- select $ do
     (tx :& txin :& txout) <-
       from
         $ table @Tx
           `innerJoin` table @TxIn
         `on` (\(tx :& txin) -> tx ^. TxId ==. txin ^. TxInTxInId)
-          `innerJoin` table @TxOut
-        `on` (\(_tx :& txin :& txout) -> txin ^. TxInTxOutId ==. txout ^. TxOutTxId)
+          `innerJoin` table @(TxOutTable a)
+        `on` (\(_tx :& txin :& txout) -> txin ^. TxInTxOutId ==. txout ^. txOutTxIdField @a)
     where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
-    where_ (txout ^. TxOutIndex ==. txin ^. TxInTxOutIndex)
+    where_ (txout ^. txOutIndexField @a ==. txin ^. TxInTxOutIndex)
     pure txout
   pure $ entityVal <$> res
 
-queryTxOutputs :: MonadIO m => Word64 -> ReaderT SqlBackend m [TxOut]
-queryTxOutputs txId = do
+queryTxOutputs :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [TxOutW]
+queryTxOutputs txOutTableType txId = case txOutTableType of
+  TxOutCore -> map CTxOutW <$> queryTxOutputsBody @'TxOutCore txId
+  TxOutVariantAddress -> map (`VTxOutW` Nothing) <$> queryTxOutputsBody @'TxOutVariantAddress txId
+
+queryTxOutputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT SqlBackend m [TxOutTable a]
+queryTxOutputsBody txId = do
   res <- select $ do
     (tx :& txout) <-
       from
         $ table @Tx
-          `innerJoin` table @TxOut
-        `on` (\(tx :& txout) -> tx ^. TxId ==. txout ^. TxOutTxId)
+          `innerJoin` table @(TxOutTable a)
+        `on` (\(tx :& txout) -> tx ^. TxId ==. txout ^. txOutTxIdField @a)
     where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
     pure txout
   pure $ entityVal <$> res

@@ -629,4 +629,4 @@ them.
 ---
 
 
-[Query.hs]: https://github.com/IntersectMBO/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Query.hs
+[Query.hs]: https://github.com/IntersectMBO/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Operations/Query.hs

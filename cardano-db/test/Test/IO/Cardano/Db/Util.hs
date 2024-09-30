@@ -10,13 +10,12 @@ module Test.IO.Cardano.Db.Util (
   mkBlockHash,
   mkTxHash,
   mkTxs,
-  mkTxOut,
+  mkTxOutCore,
   testSlotLeader,
-  unBlockId,
-  unTxId,
 ) where
 
 import Cardano.Db
+import qualified Cardano.Db.Schema.Core.TxOut as C
 import Control.Monad (unless)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -37,7 +36,7 @@ assertBool msg bool =
 deleteAllBlocks :: MonadIO m => ReaderT SqlBackend m ()
 deleteAllBlocks = do
   mblkId <- queryMinBlock
-  whenJust mblkId deleteBlocksBlockIdNotrace
+  whenJust mblkId $ deleteBlocksBlockIdNotrace TxOutCore
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
@@ -98,7 +97,20 @@ testSlotLeader :: SlotLeader
 testSlotLeader =
   SlotLeader (BS.pack . take 28 $ "test slot leader" ++ replicate 28 ' ') Nothing "Dummy test slot leader"
 
-mkTxOut :: BlockId -> TxId -> TxOut
-mkTxOut blkId txId =
+mkTxOutCore :: BlockId -> TxId -> TxOutW
+mkTxOutCore blkId txId =
   let addr = mkAddressHash blkId txId
-   in TxOut txId 0 (Text.pack addr) False Nothing Nothing (DbLovelace 1000000000) Nothing Nothing Nothing
+   in CTxOutW $
+        C.TxOut
+          { C.txOutAddress = Text.pack addr
+          , C.txOutAddressHasScript = False
+          , C.txOutConsumedByTxId = Nothing
+          , C.txOutDataHash = Nothing
+          , C.txOutIndex = 0
+          , C.txOutInlineDatumId = Nothing
+          , C.txOutPaymentCred = Nothing
+          , C.txOutReferenceScriptId = Nothing
+          , C.txOutStakeAddressId = Nothing
+          , C.txOutTxId = txId
+          , C.txOutValue = DbLovelace 1000000000
+          }

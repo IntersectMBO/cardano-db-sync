@@ -44,6 +44,7 @@ module Test.Cardano.Db.Mock.Validate (
 
 import Cardano.Db
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
@@ -105,7 +106,7 @@ assertTxCount env n = do
 
 assertTxOutCount :: DBSyncEnv -> Word -> IO ()
 assertTxOutCount env n = do
-  assertEqBackoff env queryTxOutCount n defaultDelays "Unexpected txOut count"
+  assertEqBackoff env (queryTxOutCount TxOutCore) n defaultDelays "Unexpected txOut count"
 
 assertTxInCount :: DBSyncEnv -> Word -> IO ()
 assertTxInCount env n = do
@@ -135,9 +136,10 @@ expectFailSilent name action = testCase name $ do
 
 -- checking that unspent count matches from tx_in to tx_out
 assertUnspentTx :: DBSyncEnv -> IO ()
-assertUnspentTx syncEnv = do
-  unspentTxCount <- queryDBSync syncEnv DB.queryTxOutConsumedNullCount
-  consumedNullCount <- queryDBSync syncEnv DB.queryTxOutUnspentCount
+assertUnspentTx dbSyncEnv = do
+  let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
+  unspentTxCount <- queryDBSync dbSyncEnv $ DB.queryTxOutConsumedNullCount txOutTableType
+  consumedNullCount <- queryDBSync dbSyncEnv $ DB.queryTxOutUnspentCount txOutTableType
   assertEqual "Unexpected tx unspent count between tx-in & tx-out" unspentTxCount consumedNullCount
 
 defaultDelays :: [Int]
@@ -213,7 +215,7 @@ assertAddrValues ::
 assertAddrValues env ix expected sta = do
   addr <- assertRight $ resolveAddress ix sta
   let address = Generic.renderAddress addr
-      q = queryAddressOutputs address
+      q = queryAddressOutputs TxOutCore address
   assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a
@@ -372,7 +374,7 @@ assertAlonzoCounts env expected =
       colInputs <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
-      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs
+      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs TxOutCore
       redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
       invalidTx <- fromIntegral . length <$> queryInvalidTx
       txIninvalidTx <- fromIntegral . length <$> queryTxInFailedTx
@@ -405,7 +407,7 @@ assertBabbageCounts env expected =
       colInputs <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
-      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs
+      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs TxOutCore
       redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
       invalidTx <- fromIntegral . length <$> queryInvalidTx
       txIninvalidTx <- fromIntegral . length <$> queryTxInFailedTx
@@ -420,10 +422,10 @@ assertBabbageCounts env expected =
           <$> (select . from $ \(_a :: SqlExpr (Entity CollateralTxOut)) -> pure countRows)
       inlineDatum <-
         maybe 0 unValue . listToMaybe
-          <$> (select . from $ \txOut -> where_ (isJust (txOut ^. TxOutInlineDatumId)) >> pure countRows)
+          <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutInlineDatumId)) >> pure countRows)
       referenceScript <-
         maybe 0 unValue . listToMaybe
-          <$> (select . from $ \txOut -> where_ (isJust (txOut ^. TxOutReferenceScriptId)) >> pure countRows)
+          <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutReferenceScriptId)) >> pure countRows)
       pure
         ( scripts
         , redeemers

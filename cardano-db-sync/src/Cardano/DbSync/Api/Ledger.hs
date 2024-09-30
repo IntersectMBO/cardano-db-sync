@@ -65,7 +65,7 @@ migrateBootstrapUTxO syncEnv = do
     HasLedger lenv -> do
       liftIO $ logInfo trce "Starting UTxO bootstrap migration"
       cls <- liftIO $ readCurrentStateUnsafe lenv
-      count <- lift DB.deleteTxOut
+      count <- lift $ DB.deleteTxOut (getTxOutTableType syncEnv)
       when (count > 0) $
         liftIO $
           logWarning trce $
@@ -83,7 +83,7 @@ storeUTxOFromLedger :: (MonadBaseControl IO m, MonadIO m) => SyncEnv -> ExtLedge
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
   LedgerStateConway stc -> storeUTxO env (getUTxO stc)
-  _ -> liftIO $ logError trce "storeUTxOFromLedger is only supported after Babbage"
+  _otherwise -> liftIO $ logError trce "storeUTxOFromLedger is only supported after Babbage"
   where
     trce = getTrace env
     getUTxO st' =
@@ -140,10 +140,12 @@ storePage ::
 storePage syncEnv percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
   txOuts <- mapM (prepareTxOut syncEnv) ls
-  txOutIds <- lift . DB.insertManyTxOutPlex True False $ etoTxOut . fst <$> txOuts
-  let maTxOuts = concatMap mkmaTxOuts $ zip txOutIds (snd <$> txOuts)
+  txOutIds <-
+    lift . DB.insertManyTxOut False $ etoTxOut . fst <$> txOuts
+  let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
   where
+    txOutTableType = getTxOutTableType syncEnv
     trce = getTrace syncEnv
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
 

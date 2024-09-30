@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Cardano.Db (schemaDocs)
+import Cardano.Db.Schema.Core.TxOut (schemaDocsTxOutCore)
+import Cardano.Db.Schema.Variant.TxOut (schemaDocsTxOutVariant)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -60,17 +62,25 @@ docHeader branchName =
             , "** which may not accurately reflect the version number)"
             ]
     , "\n"
-    , "**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema.hs\
+    , "**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema/BaseSchema.hs\
       \ by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated\
       \ during the release process and updated on the release branch."
     , "\n"
     ]
 
 docBody :: Text
-docBody =
-  Text.replace "ID:" "Id:"
-    . Text.replace "#" "###"
-    $ render markdownTableRenderer schemaDocs
+docBody = do
+  coreDocBody <> variantDivider <> variantDocBody
+  where
+    coreDocBody = cleanUp $ render markdownTableRenderer (schemaDocs <> schemaDocsTxOutCore)
+    variantDocBody = cleanUp $ render markdownTableRenderer schemaDocsTxOutVariant
+    cleanUp = Text.replace "ID:" "Id:" . Text.replace "#" "###"
+    variantDivider =
+      mconcat
+        [ "# Variant Schema\n\n"
+        , "When using the `use_address_table` [configuration](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#tx-out), the `tx_out` table is split into two tables: `tx_out` and `address`.\n"
+        , "Bellow are the table documentation for this variaton. \n\n"
+        ]
 
 readGitBranch :: IO Text
 readGitBranch = do

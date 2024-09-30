@@ -29,6 +29,7 @@ module Cardano.DbSync.Api (
   getPruneInterval,
   whenConsumeOrPruneTxOut,
   whenPruneTxOut,
+  getTxOutTableType,
   getHasConsumedOrPruneTxOut,
   getSkipTxIn,
   getPrunes,
@@ -53,7 +54,6 @@ import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
-import qualified Cardano.Db as Multiplex (queryWrongConsumedBy)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
@@ -116,10 +116,11 @@ isConsistent env = do
 
 getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
 getIsConsumedFixed env =
-  case (DB.pcmPruneTxOut pcm, DB.pcmConsumeOrPruneTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend Multiplex.queryWrongConsumedBy
+  case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
+    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutTableType)
     _ -> pure Nothing
   where
+    txOutTableType = getTxOutTableType env
     pcm = soptPruneConsumeMigration $ envOptions env
     backend = envBackend env
 
@@ -166,7 +167,7 @@ initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigr
 initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
   DB.PruneConsumeMigration
     { DB.pcmPruneTxOut = pruneTxOut || bootstrap
-    , DB.pcmConsumeOrPruneTxOut = consumed || pruneTxOut || bootstrap
+    , DB.pcmConsumedTxOut = consumed || pruneTxOut || bootstrap
     , DB.pcmSkipTxIn = not forceTxIn' && (consumed || pruneTxOut || bootstrap)
     }
 
@@ -176,10 +177,12 @@ getPruneConsume = soptPruneConsumeMigration . envOptions
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
+      txOutTableType = getTxOutTableType syncEnv
   logInfo (getTrace syncEnv) $ textShow pcm
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.runExtraMigrations
       (getTrace syncEnv)
+      txOutTableType
       (getSafeBlockNoDiff syncEnv)
       pcm
 
@@ -199,15 +202,18 @@ getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
 whenConsumeOrPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenConsumeOrPruneTxOut env =
-  when (DB.pcmConsumeOrPruneTxOut $ getPruneConsume env)
+  when (DB.pcmConsumedTxOut $ getPruneConsume env)
 
 whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
   when (DB.pcmPruneTxOut $ getPruneConsume env)
 
+getTxOutTableType :: SyncEnv -> DB.TxOutTableType
+getTxOutTableType syncEnv = ioTxOutTableType . soptInsertOptions $ envOptions syncEnv
+
 getHasConsumedOrPruneTxOut :: SyncEnv -> Bool
 getHasConsumedOrPruneTxOut =
-  DB.pcmConsumeOrPruneTxOut . getPruneConsume
+  DB.pcmConsumedTxOut . getPruneConsume
 
 getSkipTxIn :: SyncEnv -> Bool
 getSkipTxIn =
@@ -355,7 +361,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutBootstrap' syncNodeConfigFromFile) backend
+  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -409,7 +415,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       }
   where
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
-    isTxOutBootstrap' = isTxOutBootstrap . sioTxOut . dncInsertOptions
+    isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->

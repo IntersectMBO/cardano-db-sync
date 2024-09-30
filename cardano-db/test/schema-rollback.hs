@@ -41,7 +41,7 @@ main = do
 
 findTablesWithBlockNo :: IO [ByteString]
 findTablesWithBlockNo = do
-  xs <- mapMaybe removeCommentsAndEmpty . getSchema <$> BS.readFile "cardano-db/src/Cardano/Db/Schema.hs"
+  xs <- mapMaybe removeCommentsAndEmpty . getSchema <$> BS.readFile "cardano-db/src/Cardano/Db/Schema/BaseSchema.hs"
   when (length xs < 10) $
     error $
       "Expected at least 10 lines of schema definition, but got only " ++ show (length xs)
@@ -91,7 +91,7 @@ findTablesWithDelete =
     . mapMaybe getTableName
     . mapMaybe removeCommentsAndEmpty
     . getDeleteAfterBlockNo
-    <$> BS.readFile "cardano-db/src/Cardano/Db/Delete.hs"
+    <$> BS.readFile "cardano-db/src/Cardano/Db/Operations/Delete.hs"
   where
     getDeleteAfterBlockNo :: ByteString -> [ByteString]
     getDeleteAfterBlockNo =

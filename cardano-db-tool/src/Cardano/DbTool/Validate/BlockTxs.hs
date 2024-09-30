@@ -79,7 +79,7 @@ validateBlockCount (blockNo, txCountExpected) = do
       then Right ()
       else Left $ ValidateError blockNo txCountActual txCountExpected
 
--- This queries by BlockNo, the one in Cardano.Db.Query queries by BlockId.
+-- This queries by BlockNo, the one in Cardano.Db.Operations.Query queries by BlockId.
 queryBlockTxCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryBlockTxCount blockNo = do
   res <- select $ do

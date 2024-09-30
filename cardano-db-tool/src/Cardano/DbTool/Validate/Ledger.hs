@@ -29,17 +29,17 @@ data LedgerValidationParams = LedgerValidationParams
   , vpAddressUtxo :: !Text
   }
 
-validateLedger :: LedgerValidationParams -> IO ()
-validateLedger params =
+validateLedger :: LedgerValidationParams -> DB.TxOutTableType -> IO ()
+validateLedger params txOutTableType =
   withIOManager $ \_ -> do
     enc <- readSyncNodeConfig (vpConfigFile params)
     genCfg <- runOrThrowIO $ runExceptT $ readCardanoGenesisConfig enc
     ledgerFiles <- listLedgerStateFilesOrdered (vpLedgerStateDir params)
     slotNo <- SlotNo <$> DB.runDbNoLoggingEnv DB.queryLatestSlotNo
-    validate params genCfg slotNo ledgerFiles
+    validate params txOutTableType genCfg slotNo ledgerFiles
 
-validate :: LedgerValidationParams -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
-validate params genCfg slotNo ledgerFiles =
+validate :: LedgerValidationParams -> DB.TxOutTableType -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
+validate params txOutTableType genCfg slotNo ledgerFiles =
   go ledgerFiles True
   where
     go :: [LedgerStateFile] -> Bool -> IO ()
@@ -50,14 +50,14 @@ validate params genCfg slotNo ledgerFiles =
         then do
           -- TODO fix GenesisPoint. This is only used for logging
           Right state <- loadLedgerStateFromFile nullTracer (mkTopLevelConfig genCfg) False GenesisPoint ledgerFile
-          validateBalance ledgerSlot (vpAddressUtxo params) state
+          validateBalance txOutTableType ledgerSlot (vpAddressUtxo params) state
         else do
           when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."
           go rest False
 
-validateBalance :: SlotNo -> Text -> CardanoLedgerState -> IO ()
-validateBalance slotNo addr st = do
-  balanceDB <- DB.runDbNoLoggingEnv $ DB.queryAddressBalanceAtSlot addr (unSlotNo slotNo)
+validateBalance :: DB.TxOutTableType -> SlotNo -> Text -> CardanoLedgerState -> IO ()
+validateBalance txOutTableType slotNo addr st = do
+  balanceDB <- DB.runDbNoLoggingEnv $ DB.queryAddressBalanceAtSlot txOutTableType addr (unSlotNo slotNo)
   let eiBalanceLedger = DB.word64ToAda <$> ledgerAddrBalance addr (ledgerState $ clsState st)
   case eiBalanceLedger of
     Left str -> putStrLn $ redText $ show str

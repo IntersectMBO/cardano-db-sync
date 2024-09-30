@@ -34,9 +34,9 @@ unitTests iom knownMigrations =
         [ testCase "default insert config" Config.defaultInsertConfig
         , testCase "insert config" Config.insertConfig
         , testGroup
-            "consumed-tx-out and prune-tx-out"
-            [ test "flag check" MigrateConsumedPruneTxOut.txConsumedColumnCheck
-            , test "basic prune" MigrateConsumedPruneTxOut.basicPrune
+            "tx-out"
+            [ test "basic prune" MigrateConsumedPruneTxOut.basicPrune
+            , test "basic prune with address table" MigrateConsumedPruneTxOut.basicPruneWithAddress
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
             , test "pruning should keep some tx" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTx
@@ -47,6 +47,20 @@ unitTests iom knownMigrations =
             , expectFailSilent "restart with new consumed set to false" $ MigrateConsumedPruneTxOut.migrateAndPruneRestart iom knownMigrations
             , expectFailSilent "set prune flag, restart missing prune flag" $ MigrateConsumedPruneTxOut.pruneRestartMissingFlag iom knownMigrations
             , expectFailSilent "set bootstrap flag, restart missing bootstrap flag" $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag iom knownMigrations
+            ]
+        , testGroup
+            "tx-out using Address table"
+            [ test "basic prune with address table" MigrateConsumedPruneTxOut.basicPruneWithAddress
+            , test "prune with simple rollback with address table" MigrateConsumedPruneTxOut.pruneWithSimpleRollbackWithAddress
+            , test "prune with full tx rollback with address table" MigrateConsumedPruneTxOut.pruneWithFullTxRollbackWithAddress
+            , test "pruning should keep some tx with address table" MigrateConsumedPruneTxOut.pruningShouldKeepSomeTxWithAddress
+            , test "prune and rollback one block with address table" MigrateConsumedPruneTxOut.pruneAndRollBackOneBlockWithAddress
+            , test "no pruning and rollback with address table" MigrateConsumedPruneTxOut.noPruneAndRollBackWithAddress
+            , test "prune same block with address table" MigrateConsumedPruneTxOut.pruneSameBlockWithAddress
+            , test "no pruning same block with address table" MigrateConsumedPruneTxOut.noPruneSameBlockWithAddress
+            , expectFailSilent "restart with new consumed set to false, with address table" $ MigrateConsumedPruneTxOut.migrateAndPruneRestartWithAddress iom knownMigrations
+            , expectFailSilent "set prune flag, restart missing prune flag, with address table" $ MigrateConsumedPruneTxOut.pruneRestartMissingFlagWithAddress iom knownMigrations
+            , expectFailSilent "set bootstrap flag, restart missing bootstrap flag, with address table" $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlagWithAddress iom knownMigrations
             ]
         ]
     , testGroup

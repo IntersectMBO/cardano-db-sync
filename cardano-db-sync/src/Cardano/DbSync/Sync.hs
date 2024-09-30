@@ -225,7 +225,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
               (cChainSyncCodec codecs)
               channel
               ( Client.chainSyncClientPeer $
-                  chainSyncClientFixConsumed backend tracer wrongEntriesSize
+                  chainSyncClientFixConsumed backend syncEnv wrongEntriesSize
               )
           logInfo tracer $
             mconcat ["Fixed ", textShow fixedEntries, " consumed_by_tx_id wrong entries"]
@@ -463,11 +463,12 @@ drainThePipe n0 client = go n0
               }
 
 chainSyncClientFixConsumed ::
-  SqlBackend -> Trace IO Text -> Word64 -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
-chainSyncClientFixConsumed backend tracer wrongTotalSize = Client.ChainSyncClient $ do
+  SqlBackend -> SyncEnv -> Word64 -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
+chainSyncClientFixConsumed backend syncEnv wrongTotalSize = Client.ChainSyncClient $ do
   liftIO $ logInfo tracer "Starting chainsync to fix consumed_by_tx_id Byron entries. See issue https://github.com/IntersectMBO/cardano-db-sync/issues/1821. This makes resyncing unnecessary."
   pure $ Client.SendMsgFindIntersect [genesisPoint] clientStIntersect
   where
+    tracer = getTrace syncEnv
     clientStIntersect =
       Client.ClientStIntersect
         { Client.recvMsgIntersectFound = \_blk _tip ->
@@ -482,7 +483,7 @@ chainSyncClientFixConsumed backend tracer wrongTotalSize = Client.ChainSyncClien
     clientStNext (sizeFixedTotal, (sizeFixEntries, fixEntries)) =
       Client.ClientStNext
         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
-            mNewEntries <- fixConsumedBy backend tracer blk
+            mNewEntries <- fixConsumedBy backend syncEnv blk
             case mNewEntries of
               Nothing -> do
                 fixAccumulatedEntries fixEntries

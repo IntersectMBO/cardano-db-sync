@@ -194,19 +194,29 @@ Disables almost all data except `block` and `tx` tables.
 
  * Type: `object`
 
+ **Example**
+ ```
+ "tx_out": {
+   "value": "consumed",
+   "force_tx_in": false,
+   "use_address_table": true,
+ },
+ ```
+
 Tx Out Properties:
 
-| Property                      | Type      | Required |
-| :---------------------------- | :-------- | :------- |
-| [value](#value)               | `string`  | Optional |
-| [force\_tx\_in](#force-tx-in) | `boolean` | Optional |
+| Property                         | Type      | Required |
+| :------------------------------- | :-------- | :------- |
+| [value](#value)                  | `string`  | Optional |
+| [force\_tx\_in](#force-tx-in)    | `boolean` | Optional |
+| [use\_address\_table](#address-table) | `boolean` | Optional |
 
 #### Value
 
 `tx_out.value`
 
  * Type: `string`
-
+ 
 **enum**: the value of this property must be equal to one of the following values:
 
 | Value         | Explanation                                                             |
@@ -269,6 +279,35 @@ can be changed.
 `tx_out.force_tx_in`
 
  * Type: `boolean`
+ 
+When using `consumed` configuration `tx_in` will not be populated. That behaviour can be overridden by setting this value to `true`.
+
+### Address Table
+
+`tx_out.use_address_table`
+
+ * Type: `boolean`
+
+This new variant representation introduces an additional `Address` table to normalize the address-related data. This change allows for more efficient storage and querying of address information, especially in cases where multiple transaction outputs (TxOuts) reference the same address.
+
+Key changes in the variant representation:
+
+1. New `address` table:
+   - Contains fields: `address`, `raw`, `has_script`, `payment_cred`, and `stake_address_id`
+   - Centralizes address information that was previously duplicated across multiple TxOuts
+
+2. Modified `tx_out` table:
+   - Replaces `address`, `address_has_script`, and `payment_cred` fields with a single `address_id` field
+   - `addressId` references the new `Address` table
+ 
+The address table can only be used on an empty database due to the schema restructuring which would cause data loss.
+
+The following indexes are added to the new `address` table:
+
+1. `idx_address_payment_cred ON address(payment_cred)`
+2. `idx_address_raw ON address(raw)`
+
+Then `address.id` having a unique constraint.
 
 ## Ledger
 

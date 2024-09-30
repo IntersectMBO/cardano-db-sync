@@ -1,11 +1,10 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Query (
+module Cardano.Db.Operations.Query (
   LookupFail (..),
   -- queries used by db-sync
   queryBlockCount,
@@ -22,8 +21,6 @@ module Cardano.Db.Query (
   queryCurrentEpochNo,
   queryNormalEpochRewardCount,
   queryGenesis,
-  queryGenesisSupply,
-  queryShelleyGenesisSupply,
   queryLatestBlock,
   queryLatestPoints,
   queryLatestEpochNo,
@@ -37,13 +34,8 @@ module Cardano.Db.Query (
   queryRedeemerData,
   querySlotHash,
   queryMultiAssetId,
-  queryTotalSupply,
   queryTxCount,
   queryTxId,
-  queryTxOutId,
-  queryTxOutValue,
-  queryTxOutIdValue,
-  queryTxOutCredentials,
   queryEpochFromNum,
   queryEpochStakeCount,
   queryForEpochId,
@@ -84,24 +76,18 @@ module Cardano.Db.Query (
   queryFeesUpToBlockNo,
   queryFeesUpToSlotNo,
   queryLatestCachedEpochNo,
-  queryTxOutCount,
   queryLatestBlockNo,
   querySlotNosGreaterThan,
   querySlotNos,
   querySlotUtcTime,
-  queryUtxoAtBlockNo,
-  queryUtxoAtSlotNo,
   queryWithdrawalsUpToBlockNo,
   queryAdaPots,
-  queryAddressBalanceAtSlot,
   -- queries used only in tests
-  queryAddressOutputs,
   queryRewardCount,
   queryRewardRestCount,
   queryTxInCount,
   queryEpochCount,
   queryCostModel,
-  queryScriptOutputs,
   queryTxInRedeemer,
   queryTxInFailedTx,
   queryInvalidTx,
@@ -112,25 +98,13 @@ module Cardano.Db.Query (
   querySchemaVersion,
   queryPreviousSlotNo,
   queryMinBlock,
-  queryTxOutUnspentCount,
   -- utils
-  entityPair,
-  isJust,
   listToMaybe,
-  maybeToEither,
-  unBlockId,
-  unTxId,
-  unTxInId,
-  unTxOutId,
-  unValue2,
-  unValue3,
-  unValue4,
-  unValue5,
-  unValueSumAda,
 ) where
 
 import Cardano.Db.Error
-import Cardano.Db.Schema
+import Cardano.Db.Operations.QueryHelper (defaultUTCTime, isJust, maybeToEither, unValue2, unValue3, unValue5, unValueSumAda)
+import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
 import Cardano.Ledger.Credential (Ptr (..))
@@ -139,7 +113,6 @@ import Control.Monad.Extra (join, whenJust)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)
-import Data.Fixed (Micro)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Ratio (numerator)
 import Data.Text (Text, unpack)
@@ -151,10 +124,7 @@ import Database.Esqueleto.Experimental (
   PersistEntity,
   PersistField,
   SqlBackend,
-  SqlExpr,
-  SqlQuery,
   Value (Value, unValue),
-  ValueList,
   asc,
   count,
   countRows,
@@ -170,17 +140,13 @@ import Database.Esqueleto.Experimental (
   limit,
   max_,
   min_,
-  notExists,
-  not_,
   on,
   orderBy,
   persistIdField,
   select,
   selectOne,
-  subList_select,
   sum_,
   table,
-  unSqlBackendKey,
   val,
   valList,
   where_,
@@ -192,7 +158,6 @@ import Database.Esqueleto.Experimental (
   (>=.),
   (?.),
   (^.),
-  (||.),
   type (:&) ((:&)),
  )
 import Database.Persist.Class.PersistQuery (selectList)
@@ -310,8 +275,6 @@ queryBlockId hash = do
     pure $ blk ^. BlockId
   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
------------------------------------------------------------------------------------------------
-
 -- | Calculate the Epoch table entry for the specified epoch.
 -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
 -- calculate the Epoch entry for the last epoch.
@@ -415,11 +378,6 @@ emptyEpoch epochNum =
     , epochEndTime = defaultUTCTime
     }
 
-defaultUTCTime :: UTCTime
-defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
-
------------------------------------------------------------------------------------------------
-
 queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
 queryCurrentEpochNo = do
   res <- select $ do
@@ -448,38 +406,6 @@ queryGenesis = do
   case res of
     [blk] -> pure $ Right (unValue blk)
     _ -> pure $ Left DBMultipleGenesis
-
--- | Return the total Genesis coin supply.
-queryGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
-queryGenesisSupply = do
-  res <- select $ do
-    (_tx :& txOut :& blk) <-
-      from
-        $ table @Tx
-          `innerJoin` table @TxOut
-        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-          `innerJoin` table @Block
-        `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (isNothing $ blk ^. BlockPreviousId)
-    pure $ sum_ (txOut ^. TxOutValue)
-  pure $ unValueSumAda (listToMaybe res)
-
--- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
--- is the unique which has a non-null PreviousId, but has null Epoch.
-queryShelleyGenesisSupply :: MonadIO m => ReaderT SqlBackend m Ada
-queryShelleyGenesisSupply = do
-  res <- select $ do
-    (txOut :& _tx :& blk) <-
-      from
-        $ table @TxOut
-          `innerJoin` table @Tx
-        `on` (\(txOut :& tx) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-          `innerJoin` table @Block
-        `on` (\(_txOut :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (isJust $ blk ^. BlockPreviousId)
-    where_ (isNothing $ blk ^. BlockEpochNo)
-    pure $ sum_ (txOut ^. TxOutValue)
-  pure $ unValueSumAda (listToMaybe res)
 
 -- | Get the latest block.
 queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
@@ -601,17 +527,6 @@ queryCountSlotNo = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Get the current total supply of Lovelace. This only returns the on-chain supply which
--- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
--- rewards are part of the ledger state and hence not on chain.
-queryTotalSupply :: MonadIO m => ReaderT SqlBackend m Ada
-queryTotalSupply = do
-  res <- select $ do
-    txOut <- from $ table @TxOut
-    txOutUnspentP txOut
-    pure $ sum_ (txOut ^. TxOutValue)
-  pure $ unValueSumAda (listToMaybe res)
-
 -- | Count the number of transactions in the Tx table.
 queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
 queryTxCount = do
@@ -628,58 +543,6 @@ queryTxId hash = do
     where_ (tx ^. TxHash ==. val hash)
     pure (tx ^. TxId)
   pure $ maybeToEither (DbLookupTxHash hash) unValue (listToMaybe res)
-
--- | Like 'queryTxId' but also return the 'TxOutId'
-queryTxOutId :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId))
-queryTxOutId (hash, index) = do
-  res <- select $ do
-    (tx :& txOut) <-
-      from
-        $ table @Tx
-          `innerJoin` table @TxOut
-        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-    where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
-    pure (txOut ^. TxOutTxId, txOut ^. TxOutId)
-  pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
-
--- | Like 'queryTxId' but also return the 'TxOutIdValue'
-queryTxOutValue :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
-queryTxOutValue (hash, index) = do
-  res <- select $ do
-    (tx :& txOut) <-
-      from
-        $ table @Tx
-          `innerJoin` table @TxOut
-        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-    where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
-    pure (txOut ^. TxOutTxId, txOut ^. TxOutValue)
-  pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
-
--- | Like 'queryTxOutId' but also return the 'TxOutIdValue'
-queryTxOutIdValue :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutId, DbLovelace))
-queryTxOutIdValue (hash, index) = do
-  res <- select $ do
-    (tx :& txOut) <-
-      from
-        $ table @Tx
-          `innerJoin` table @TxOut
-        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-    where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
-    pure (txOut ^. TxOutTxId, txOut ^. TxOutId, txOut ^. TxOutValue)
-  pure $ maybeToEither (DbLookupTxHash hash) unValue3 (listToMaybe res)
-
--- | Give a (tx hash, index) pair, return the TxOut Credentials.
-queryTxOutCredentials :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
-queryTxOutCredentials (hash, index) = do
-  res <- select $ do
-    (tx :& txOut) <-
-      from
-        $ table @Tx
-          `innerJoin` table @TxOut
-        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. TxOutTxId)
-    where_ (txOut ^. TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
-    pure (txOut ^. TxOutPaymentCred, txOut ^. TxOutAddressHasScript)
-  pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
 queryEpochStakeCount epoch = do
@@ -1192,22 +1055,6 @@ querySlotUtcTime slotNo = do
     pure (blk ^. BlockTime)
   pure $ maybe (Left $ DbLookupSlotNo slotNo) (Right . unValue) (listToMaybe le)
 
-queryUtxoAtBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
-queryUtxoAtBlockNo blkNo = do
-  eblkId <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockBlockNo ==. just (val blkNo))
-    pure (blk ^. BlockId)
-  maybe (pure []) (queryUtxoAtBlockId . unValue) (listToMaybe eblkId)
-
-queryUtxoAtSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(TxOut, ByteString)]
-queryUtxoAtSlotNo slotNo = do
-  eblkId <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockSlotNo ==. just (val slotNo))
-    pure (blk ^. BlockId)
-  maybe (pure []) (queryUtxoAtBlockId . unValue) (listToMaybe eblkId)
-
 queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryWithdrawalsUpToBlockNo blkNo = do
   res <- select $ do
@@ -1230,84 +1077,9 @@ queryAdaPots blkId = do
     pure adaPots
   pure $ fmap entityVal (listToMaybe res)
 
--- | Get the UTxO set after the specified 'BlockId' has been applied to the chain.
--- Not exported because 'BlockId' to 'BlockHash' relationship may not be the same
--- across machines.
-queryUtxoAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [(TxOut, ByteString)]
-queryUtxoAtBlockId blkid = do
-  outputs <- select $ do
-    (txout :& _txin :& _tx1 :& blk :& tx2) <-
-      from
-        $ table @TxOut
-          `leftJoin` table @TxIn
-        `on` ( \(txout :& txin) ->
-                (just (txout ^. TxOutTxId) ==. txin ?. TxInTxOutId)
-                  &&. (just (txout ^. TxOutIndex) ==. txin ?. TxInTxOutIndex)
-             )
-          `leftJoin` table @Tx
-        `on` (\(_txout :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
-          `leftJoin` table @Block
-        `on` (\(_txout :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
-          `leftJoin` table @Tx
-        `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. TxOutTxId) ==. tx2 ?. TxId)
-
-    where_ $
-      (txout ^. TxOutTxId `in_` txLessEqual blkid)
-        &&. (isNothing (blk ?. BlockBlockNo) ||. (blk ?. BlockId >. just (val blkid)))
-    pure (txout, tx2 ?. TxHash)
-  pure $ mapMaybe convert outputs
-  where
-    convert :: (Entity TxOut, Value (Maybe ByteString)) -> Maybe (TxOut, ByteString)
-    convert = \case
-      (out, Value (Just hash')) -> Just (entityVal out, hash')
-      (_, Value Nothing) -> Nothing
-
-queryAddressBalanceAtSlot :: MonadIO m => Text -> Word64 -> ReaderT SqlBackend m Ada
-queryAddressBalanceAtSlot addr slotNo = do
-  eblkId <- select $ do
-    blk <- from (table @Block)
-    where_ (blk ^. BlockSlotNo ==. just (val slotNo))
-    pure (blk ^. BlockId)
-  maybe (pure 0) (queryAddressBalanceAtBlockId . unValue) (listToMaybe eblkId)
-  where
-    queryAddressBalanceAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
-    queryAddressBalanceAtBlockId blkid = do
-      -- tx1 refers to the tx of the input spending this output (if it is ever spent)
-      -- tx2 refers to the tx of the output
-      res <- select $ do
-        (txout :& _ :& _ :& blk :& _) <-
-          from
-            $ table @TxOut
-              `leftJoin` table @TxIn
-            `on` (\(txout :& txin) -> just (txout ^. TxOutTxId) ==. txin ?. TxInTxOutId)
-              `leftJoin` table @Tx
-            `on` (\(_ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
-              `leftJoin` table @Block
-            `on` (\(_ :& _ :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
-              `leftJoin` table @Tx
-            `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. TxOutTxId) ==. tx2 ?. TxId)
-        where_ $
-          (txout ^. TxOutTxId `in_` txLessEqual blkid)
-            &&. (isNothing (blk ?. BlockBlockNo) ||. (blk ?. BlockId >. just (val blkid)))
-        where_ (txout ^. TxOutAddress ==. val addr)
-        pure $ sum_ (txout ^. TxOutValue)
-      pure $ unValueSumAda (listToMaybe res)
-
 {-----------------------
   Queries use in tests
 ------------------------}
-
-queryAddressOutputs :: MonadIO m => Text -> ReaderT SqlBackend m DbLovelace
-queryAddressOutputs addr = do
-  res <- select $ do
-    txout <- from $ table @TxOut
-    where_ (txout ^. TxOutAddress ==. val addr)
-    pure $ sum_ (txout ^. TxOutValue)
-  pure $ convert (listToMaybe res)
-  where
-    convert v = case unValue <$> v of
-      Just (Just x) -> x
-      _ -> DbLovelace 0
 
 queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
 queryRewardCount = do
@@ -1329,23 +1101,9 @@ queryTxInCount = do
   res <- select $ from (table @TxIn) >> pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Count the number of transaction outputs in the TxOut table.
-queryTxOutCount :: MonadIO m => ReaderT SqlBackend m Word
-queryTxOutCount = do
-  res <- select $ from (table @TxOut) >> pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
 queryCostModel :: MonadIO m => ReaderT SqlBackend m [CostModelId]
 queryCostModel =
   fmap entityKey <$> selectList [] [Asc CostModelId]
-
-queryScriptOutputs :: MonadIO m => ReaderT SqlBackend m [TxOut]
-queryScriptOutputs = do
-  res <- select $ do
-    tx_out <- from $ table @TxOut
-    where_ (tx_out ^. TxOutAddressHasScript ==. val True)
-    pure tx_out
-  pure $ entityVal <$> res
 
 queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
 queryTxInRedeemer = do
@@ -1438,94 +1196,3 @@ queryMinBlock = do
     limit 1
     pure $ blk ^. BlockId
   pure $ unValue <$> listToMaybe res
-
-queryTxOutUnspentCount :: MonadIO m => ReaderT SqlBackend m Word64
-queryTxOutUnspentCount = do
-  res <- select $ do
-    txOut <- from $ table @TxOut
-    txOutUnspentP txOut
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
-
--- -----------------------------------------------------------------------------
--- SqlQuery predicates
-
--- Filter out 'Nothing' from a 'Maybe a'.
-isJust :: PersistField a => SqlExpr (Value (Maybe a)) -> SqlExpr (Value Bool)
-isJust = not_ . isNothing
-
--- A predicate that filters out spent 'TxOut' entries.
-{-# INLINEABLE txOutUnspentP #-}
-txOutUnspentP :: SqlExpr (Entity TxOut) -> SqlQuery ()
-txOutUnspentP txOut =
-  where_ . notExists $
-    from (table @TxIn) >>= \txIn ->
-      where_
-        ( txOut
-            ^. TxOutTxId
-            ==. txIn
-              ^. TxInTxOutId
-            &&. txOut
-              ^. TxOutIndex
-              ==. txIn
-                ^. TxInTxOutIndex
-        )
-
--- every tx made before or at the snapshot time
-txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
-txLessEqual blkid =
-  subList_select $
-    from (table @Tx) >>= \tx -> do
-      where_ $ tx ^. TxBlockId `in_` blockLessEqual
-      pure $ tx ^. TxId
-  where
-    -- every block made before or at the snapshot time
-    blockLessEqual :: SqlExpr (ValueList BlockId)
-    blockLessEqual =
-      subList_select $
-        from (table @Block) >>= \blk -> do
-          where_ $ blk ^. BlockId <=. val blkid
-          pure $ blk ^. BlockId
-
--- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
--- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
--- to un-wibble it.
-unValueSumAda :: Maybe (Value (Maybe Micro)) -> Ada
-unValueSumAda mvm =
-  case fmap unValue mvm of
-    Just (Just x) -> lovelaceToAda x
-    _ -> Ada 0
-
--- -----------------------------------------------------------------------------
-
-entityPair :: Entity a -> (Key a, a)
-entityPair e =
-  (entityKey e, entityVal e)
-
-maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
-maybeToEither e f =
-  maybe (Left e) (Right . f)
-
-unBlockId :: BlockId -> Word64
-unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
-
-unTxId :: TxId -> Word64
-unTxId = fromIntegral . unSqlBackendKey . unTxKey
-
-unTxInId :: TxInId -> Word64
-unTxInId = fromIntegral . unSqlBackendKey . unTxInKey
-
-unTxOutId :: TxOutId -> Word64
-unTxOutId = fromIntegral . unSqlBackendKey . unTxOutKey
-
-unValue2 :: (Value a, Value b) -> (a, b)
-unValue2 (a, b) = (unValue a, unValue b)
-
-unValue3 :: (Value a, Value b, Value c) -> (a, b, c)
-unValue3 (a, b, c) = (unValue a, unValue b, unValue c)
-
-unValue4 :: (Value a, Value b, Value c, Value d) -> (a, b, c, d)
-unValue4 (a, b, c, d) = (unValue a, unValue b, unValue c, unValue d)
-
-unValue5 :: (Value a, Value b, Value c, Value d, Value e) -> (a, b, c, d, e)
-unValue5 (a, b, c, d, e) = (unValue a, unValue b, unValue c, unValue d, unValue e)

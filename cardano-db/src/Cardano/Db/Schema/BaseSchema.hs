@@ -16,7 +16,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Cardano.Db.Schema where
+module Cardano.Db.Schema.BaseSchema where
 
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Types (
@@ -60,7 +60,7 @@ import Database.Persist.TH
 
 share
   [ mkPersist sqlSettings
-  , mkMigrate "migrateCardanoDb"
+  , mkMigrate "migrateBaseCardanoDb"
   , mkEntityDefList "entityDefs"
   , deriveShowFields
   ]
@@ -147,19 +147,6 @@ share
     view                Text
     scriptHash          ByteString Maybe    sqltype=hash28type
     UniqueStakeAddress  hashRaw
-
-  TxOut
-    txId                TxId                noreference
-    index               Word64              sqltype=txindex
-    address             Text
-    addressHasScript    Bool
-    paymentCred         ByteString Maybe    sqltype=hash28type
-    stakeAddressId      StakeAddressId Maybe noreference
-    value               DbLovelace          sqltype=lovelace
-    dataHash            ByteString Maybe    sqltype=hash32type
-    inlineDatumId       DatumId Maybe       noreference
-    referenceScriptId   ScriptId Maybe      noreference
-    UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut
     txId                TxId                noreference     -- This type is the primary key for the 'tx' table.
@@ -386,11 +373,6 @@ share
     ident               MultiAssetId        noreference
     quantity            DbInt65             sqltype=int65type
     txId                TxId                noreference
-
-  MaTxOut
-    ident               MultiAssetId        noreference
-    quantity            DbWord64            sqltype=word64type
-    txOutId             TxOutId             noreference
 
   -- Unit step is in picosends, and `maxBound :: Int64` picoseconds is over 100 days, so using
   -- Word64/word63type is safe here. Similarly, `maxBound :: Int64` if unit step would be an
@@ -853,19 +835,6 @@ schemaDocs =
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
 
-    TxOut --^ do
-      "A table for transaction outputs."
-      TxOutTxId # "The Tx table index of the transaction that contains this transaction output."
-      TxOutIndex # "The index of this transaction output with the transaction."
-      TxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
-      TxOutAddressHasScript # "Flag which shows if this address is locked by a script."
-      TxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
-      TxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
-      TxOutValue # "The output value (in Lovelace) of the transaction output."
-      TxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
-      TxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
-      TxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
-
     CollateralTxOut --^ do
       "A table for transaction collateral outputs. New in v13."
       CollateralTxOutTxId # "The Tx table index of the transaction that contains this transaction output."
@@ -1099,12 +1068,6 @@ schemaDocs =
       MaTxMintIdent # "The MultiAsset table index specifying the asset."
       MaTxMintQuantity # "The amount of the Multi Asset to mint (can be negative to \"burn\" assets)."
       MaTxMintTxId # "The Tx table index for the transaction that contains this minting event."
-
-    MaTxOut --^ do
-      "A table containing Multi-Asset transaction outputs."
-      MaTxOutIdent # "The MultiAsset table index specifying the asset."
-      MaTxOutQuantity # "The Multi Asset transaction output amount (denominated in the Multi Asset)."
-      MaTxOutTxOutId # "The TxOut table index for the transaction that this Multi Asset transaction output."
 
     Redeemer --^ do
       "A table containing redeemers. A redeemer is provided for all items that are validated by a script."

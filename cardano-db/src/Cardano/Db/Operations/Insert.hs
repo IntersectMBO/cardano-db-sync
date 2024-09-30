@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Cardano.Db.Insert (
+module Cardano.Db.Operations.Insert (
   insertAdaPots,
   insertBlock,
   insertCollateralTxIn,
@@ -22,7 +22,6 @@ module Cardano.Db.Insert (
   insertManyDrepDistr,
   insertManyTxIn,
   insertMaTxMint,
-  insertManyMaTxOut,
   insertMeta,
   insertMultiAssetUnchecked,
   insertParamProposal,
@@ -45,9 +44,7 @@ module Cardano.Db.Insert (
   insertTxIn,
   insertManyTxMint,
   insertManyTxMetadata,
-  insertTxOut,
   insertCollateralTxOut,
-  insertManyTxOut,
   insertWithdrawal,
   insertRedeemer,
   insertCostModel,
@@ -100,8 +97,8 @@ module Cardano.Db.Insert (
   insertBlockChecked,
 ) where
 
-import Cardano.Db.Query
-import Cardano.Db.Schema
+import Cardano.Db.Operations.Query
+import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types
 import Cardano.Prelude (textShow)
 import Control.Exception.Lifted (Exception, handle, throwIO)
@@ -235,9 +232,6 @@ insertManyTxIn = insertMany' "Many TxIn"
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertUnchecked "insertMaTxMint"
 
-insertManyMaTxOut :: (MonadBaseControl IO m, MonadIO m) => [MaTxOut] -> ReaderT SqlBackend m [MaTxOutId]
-insertManyMaTxOut = insertMany' "Many MaTxOut"
-
 insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
 insertMeta = insertCheckUnique "Meta"
 
@@ -304,14 +298,8 @@ insertManyTxMint = insertMany' "TxMint"
 insertTxCBOR :: (MonadBaseControl IO m, MonadIO m) => TxCbor -> ReaderT SqlBackend m TxCborId
 insertTxCBOR = insertUnchecked "TxCBOR"
 
-insertTxOut :: (MonadBaseControl IO m, MonadIO m) => TxOut -> ReaderT SqlBackend m TxOutId
-insertTxOut = insertUnchecked "TxOut"
-
 insertCollateralTxOut :: (MonadBaseControl IO m, MonadIO m) => CollateralTxOut -> ReaderT SqlBackend m CollateralTxOutId
 insertCollateralTxOut = insertUnchecked "CollateralTxOut"
-
-insertManyTxOut :: (MonadBaseControl IO m, MonadIO m) => [TxOut] -> ReaderT SqlBackend m [TxOutId]
-insertManyTxOut = insertMany' "TxOut"
 
 insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal -> ReaderT SqlBackend m WithdrawalId
 insertWithdrawal = insertUnchecked "Withdrawal"
@@ -506,8 +494,9 @@ insertAlwaysNoConfidence = do
           , drepHashHasScript = False
           }
 
--- -----------------------------------------------------------------------------
-
+--------------------------------------------------------------------------------
+-- Custom insert functions
+--------------------------------------------------------------------------------
 data DbInsertException
   = DbInsertException String SqlError
   deriving (Show)

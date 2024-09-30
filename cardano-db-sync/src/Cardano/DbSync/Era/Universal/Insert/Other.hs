@@ -20,6 +20,8 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
 
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -42,13 +44,13 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 --------------------------------------------------------------------------------------------
 insertRedeemer ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
+  SyncEnv ->
   Bool ->
   [ExtendedTxOut] ->
   DB.TxId ->
   (Word64, Generic.TxRedeemer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (Word64, DB.RedeemerId)
-insertRedeemer tracer disInOut groupedOutputs txId (rix, redeemer) = do
+insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
   tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
   scriptHash <- findScriptHash
   rid <-
@@ -66,6 +68,7 @@ insertRedeemer tracer disInOut groupedOutputs txId (rix, redeemer) = do
         }
   pure (rix, rid)
   where
+    tracer = getTrace syncEnv
     findScriptHash ::
       (MonadBaseControl IO m, MonadIO m) =>
       ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe ByteString)
@@ -74,7 +77,7 @@ insertRedeemer tracer disInOut groupedOutputs txId (rix, redeemer) = do
         (True, _) -> pure Nothing
         (_, Nothing) -> pure Nothing
         (_, Just (Right bs)) -> pure $ Just bs
-        (_, Just (Left txIn)) -> resolveScriptHash groupedOutputs txIn
+        (_, Just (Left txIn)) -> resolveScriptHash syncEnv groupedOutputs txIn
 
 insertRedeemerData ::
   (MonadBaseControl IO m, MonadIO m) =>

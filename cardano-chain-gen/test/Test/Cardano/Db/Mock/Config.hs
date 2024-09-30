@@ -58,10 +58,11 @@ module Test.Cardano.Db.Mock.Config (
   withCustomConfigAndLogs,
   withFullConfig',
   replaceConfigFile,
+  txOutTableTypeFromConfig,
 ) where
 
 import Cardano.Api (NetworkMagic (..))
-import qualified Cardano.Db as Db
+import qualified Cardano.Db as DB
 import Cardano.DbSync
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
@@ -224,16 +225,16 @@ pollDBSync env = do
 withDBSyncEnv :: IO DBSyncEnv -> (DBSyncEnv -> IO a) -> IO a
 withDBSyncEnv mkEnv = bracket mkEnv stopDBSyncIfRunning
 
-getDBSyncPGPass :: DBSyncEnv -> Db.PGPassSource
+getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
-queryDBSync env = Db.runWithConnectionNoLogging (getDBSyncPGPass env)
+queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
-  pgconfig <- runOrThrowIO $ Db.readPGPass (enpPGPassSource $ dbSyncParams env)
-  pool <- runNoLoggingT $ createPostgresqlPool (Db.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
+  pgconfig <- runOrThrowIO $ DB.readPGPass (enpPGPassSource $ dbSyncParams env)
+  pool <- runNoLoggingT $ createPostgresqlPool (DB.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
       nullTracer
@@ -274,7 +275,7 @@ mkShelleyCredentials bulkFile = do
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
 mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
 mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
-  pgconfig <- runOrThrowIO Db.readPGPassDefault
+  pgconfig <- runOrThrowIO DB.readPGPassDefault
 
   pure $
     SyncNodeParams
@@ -282,7 +283,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpSocketPath = SocketPath $ mutableDir </> ".socket"
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
-      , enpPGPassSource = Db.PGPassCached pgconfig
+      , enpPGPassSource = DB.PGPassCached pgconfig
       , enpEpochDisabled = claEpochDisabled
       , enpHasCache = claHasCache
       , enpSkipFix = claSkipFix
@@ -301,21 +302,21 @@ mkConfigFile :: FilePath -> FilePath -> ConfigFile
 mkConfigFile staticDir cliConfigFilename =
   ConfigFile $ staticDir </> cliConfigFilename
 
-configPruneForceTxIn :: SyncNodeConfig -> SyncNodeConfig
-configPruneForceTxIn cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutPrune (ForceTxIn True)}}
+configPruneForceTxIn :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configPruneForceTxIn useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedPrune (ForceTxIn True) (UseTxOutAddress useTxOutAddress)}}
 
-configPrune :: SyncNodeConfig -> SyncNodeConfig
-configPrune cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutPrune (ForceTxIn False)}}
+configPrune :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configPrune useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedPrune (ForceTxIn False) (UseTxOutAddress useTxOutAddress)}}
 
-configConsume :: SyncNodeConfig -> SyncNodeConfig
-configConsume cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumed (ForceTxIn False)}}
+configConsume :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configConsume useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumed (ForceTxIn False) (UseTxOutAddress useTxOutAddress)}}
 
-configBootstrap :: SyncNodeConfig -> SyncNodeConfig
-configBootstrap cfg = do
-  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutBootstrap (ForceTxIn False)}}
+configBootstrap :: Bool -> SyncNodeConfig -> SyncNodeConfig
+configBootstrap useTxOutAddress cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioTxOut = TxOutConsumedBootstrap (ForceTxIn False) (UseTxOutAddress useTxOutAddress)}}
 
 configPlutusDisable :: SyncNodeConfig -> SyncNodeConfig
 configPlutusDisable cfg = do
@@ -574,12 +575,12 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
         -- we dont fork dbsync here. Just prepare it as an action
         withDBSyncEnv (mkDBSyncEnv dbsyncParams syncNodeConfig partialDbSyncRun) $ \dbSyncEnv -> do
           let pgPass = getDBSyncPGPass dbSyncEnv
-          tableNames <- Db.getAllTablleNames pgPass
+          tableNames <- DB.getAllTablleNames pgPass
           -- We only want to create the table schema once for the tests so here we check
           -- if there are any table names.
           if null tableNames || shouldDropDB
-            then void . hSilence [stderr] $ Db.recreateDB pgPass
-            else void . hSilence [stderr] $ Db.truncateTables pgPass tableNames
+            then void . hSilence [stderr] $ DB.recreateDB pgPass
+            else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
           action interpreter mockServer dbSyncEnv
   where
     mutableDir = mkMutableDir testLabelFilePath
@@ -605,3 +606,15 @@ replaceConfigFile newFilename dbSync@DBSyncEnv {..} = do
     configDir = mkConfigDir . takeDirectory . unConfigFile . enpConfigFile $ dbSyncParams
     newParams =
       dbSyncParams {enpConfigFile = ConfigFile $ configDir </> newFilename}
+
+txOutTableTypeFromConfig :: DBSyncEnv -> DB.TxOutTableType
+txOutTableTypeFromConfig dbSyncEnv =
+  case sioTxOut $ dncInsertOptions $ dbSyncConfig dbSyncEnv of
+    TxOutDisable -> DB.TxOutCore
+    TxOutEnable useTxOutAddress -> getTxOutTT useTxOutAddress
+    TxOutConsumed _ useTxOutAddress -> getTxOutTT useTxOutAddress
+    TxOutConsumedPrune _ useTxOutAddress -> getTxOutTT useTxOutAddress
+    TxOutConsumedBootstrap _ useTxOutAddress -> getTxOutTT useTxOutAddress
+  where
+    getTxOutTT :: UseTxOutAddress -> DB.TxOutTableType
+    getTxOutTT value = if unUseTxOutAddress value then DB.TxOutVariantAddress else DB.TxOutCore

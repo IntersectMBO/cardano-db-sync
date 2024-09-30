@@ -37,6 +37,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
@@ -51,6 +53,7 @@ import Cardano.Mock.Query (queryMultiAssetCount)
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
+import GHC.Base (error)
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
 import Ouroboros.Network.Block (genesisPoint)
 import Test.Cardano.Db.Mock.Config (
@@ -60,6 +63,7 @@ import Test.Cardano.Db.Mock.Config (
   conwayConfigDir,
   initCommandLineArgs,
   startDBSync,
+  txOutTableTypeFromConfig,
   withCustomConfig,
   withFullConfig,
   withFullConfigAndDropDB,
@@ -76,6 +80,7 @@ simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
   withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
+    let txOutTableType = txOutTableTypeFromConfig dbSync
 
     -- Forge a block with stake credentials
     void $ Api.registerAllStakeCreds interpreter mockServer
@@ -91,17 +96,29 @@ simpleScript =
     assertBlockNoBackoff dbSync (length epoch + 2)
     assertEqQuery
       dbSync
-      (map getOutFields <$> DB.queryScriptOutputs)
+      (map getOutFields <$> DB.queryScriptOutputs txOutTableType)
       [expectedFields]
       "Unexpected script outputs"
   where
     testLabel = "conwaySimpleScript"
     getOutFields txOut =
-      ( DB.txOutAddress txOut
-      , DB.txOutAddressHasScript txOut
-      , DB.txOutValue txOut
-      , DB.txOutDataHash txOut
-      )
+      case txOut of
+        DB.CTxOutW txOut' ->
+          ( C.txOutAddress txOut'
+          , C.txOutAddressHasScript txOut'
+          , C.txOutValue txOut'
+          , C.txOutDataHash txOut'
+          )
+        DB.VTxOutW txOut' mAddress ->
+          case mAddress of
+            Just address ->
+              ( V.addressAddress address
+              , V.addressHasScript address
+              , V.txOutValue txOut'
+              , V.txOutDataHash txOut'
+              )
+            Nothing -> error "conwaySimpleScript: expected an address"
+
     expectedFields =
       ( renderAddress Examples.alwaysSucceedsScriptAddr
       , True
