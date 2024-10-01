@@ -137,6 +137,7 @@ runHttpGetVote voteUrl mHash vtype =
             then putStrLn $ greenText "Success"
             else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BSC.unpack ct)
       Text.putStrLn $ sovaJson spod
+      print $ sovaOffChainVoteData spod
 
 runGetVote :: Text.Text -> Maybe VoteMetaHash -> DB.AnchorType -> IO ()
 runGetVote file mExpectedHash vtype = do
