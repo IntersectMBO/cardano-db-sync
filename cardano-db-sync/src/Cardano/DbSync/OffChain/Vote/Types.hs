@@ -365,7 +365,7 @@ instance FromJSON Context where
   parseJSON =
     withObject "Context" $ \o ->
       Context
-        <$> o .: "@language"
+        <$> o .:? "@language" .!= "en-us"
 
 instance FromJSON TextValue where
   parseJSON v = case v of
