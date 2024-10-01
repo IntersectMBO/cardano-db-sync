@@ -146,7 +146,7 @@
               let
                 compilers =
                   if (system == "x86_64-linux") then
-                    ["ghc96" "ghc98"]
+                    ["ghc96" "ghc98" "ghc910"]
                   else
                     ["ghc98"];
               in
