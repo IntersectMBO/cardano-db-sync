@@ -68,11 +68,17 @@ package snap-server
   flags: -openssl
 
 allow-newer:
-  swagger2:aeson
+  , swagger2:aeson
+  -- The version of ouroboros-consensus specified by cardano-node uses an earlier version of
+  -- quickcheck-state-machine that does not compile with ghc-9.10 so we allow a never version
+  -- that builds with ghc-9.10 (and earlier).
+  , ouroboros-consensus:quickcheck-state-machine
 
 constraints:
   -- STM 2.5.2 is broken: https://github.com/haskell/stm/issues/76
   , stm >= 2.5.3.1
+  -- Earlier versions do not compile with ghc-9.10.
+  , quickcheck-state-machine ^>= 0.10
 
 -- ---------------------------------------------------------
 
