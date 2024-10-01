@@ -453,7 +453,7 @@
             checks = staticChecks;
 
             hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
-              ciJobs = flake.hydraJobs;
+              ciJobs = flake.hydraJobs // staticChecks;
               nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
             } // lib.optionalAttrs (system == "x86_64-linux") {
               inherit
