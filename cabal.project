@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2024-09-10T19:44:01Z
-  , cardano-haskell-packages 2024-09-06T13:43:41Z
+  , hackage.haskell.org 2024-09-11T05:54:39Z
+  , cardano-haskell-packages 2024-09-10T13:49:28Z
 
 packages:
   cardano-db
@@ -68,11 +68,18 @@ package snap-server
   flags: -openssl
 
 allow-newer:
-  swagger2:aeson
+  , swagger2:aeson
+  -- The version of ouroboros-consensus specified by cardano-node uses an earlier version of
+  -- quickcheck-state-machine that does not compile with ghc-9.10 so we allow a never version
+  -- that builds with ghc-9.10 (and earlier).
+  , ouroboros-consensus:quickcheck-state-machine
 
 constraints:
+  , cardano-node ^>= 9.1.1
   -- STM 2.5.2 is broken: https://github.com/haskell/stm/issues/76
   , stm >= 2.5.3.1
+  -- Earlier versions do not compile with ghc-9.10.
+  , quickcheck-state-machine ^>= 0.10
 
 -- ---------------------------------------------------------
 
@@ -80,15 +87,3 @@ constraints:
 -- when using the "cabal" wrapper script provided by nix-shell.
 -- --------------------------- 8< --------------------------
 -- Please do not put any `source-repository-package` clause above this line.
-
-source-repository-package
-  type: git
-  location: https://github.com/IntersectMBO/cardano-node
-  tag: efd560070aaf042d1eb4680ae37fc607c7742319
-  --sha256: sha256-VIwEjpaGk09+dAcKELjLSR2OP3qBCWTGHpd0SBjgbVc=
-  subdir:
-    cardano-node
-    cardano-submit-api
-    trace-dispatcher
-    trace-forward
-    trace-resources
