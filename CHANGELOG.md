@@ -40,6 +40,7 @@
 ## 13.2.0.1
 * Added a new table `epoch_stake_progress` which indicates when `epoch_stake` is completed
 * Uses the cache for the computation of `epoch` table when following
+* Renamed table `instant_reward` to `reward_rest`.
 * `epoch_stake` is now computed earlier, before the epoch is reached
 * Exception handling and concurrency improved.
 * When `--disable-ledger` is used, db-sync won't populate the `tx.deposit` field as it's too expensive
