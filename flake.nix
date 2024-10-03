@@ -86,7 +86,7 @@
                 (final: prev: {
                   postgresql = prev.postgresql.overrideAttrs (_:
                     final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
-                      doCheck = false;
+                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
                     });
                 })
               ];
@@ -163,8 +163,7 @@
             };
 
             shell.tools = {
-              cabal = { version = "3.10.3.0"; compiler-nix-name = "ghc982"; };
-              ghcid = "0.8.8";
+              cabal = "latest";
               haskell-language-server = {
                 src =
                   if config.compiler-nix-name == "ghc8107" then
