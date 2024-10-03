@@ -178,7 +178,7 @@ runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutTableType = getTxOutTableType syncEnv
-  logInfo (getTrace syncEnv) $ textShow pcm
+  logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.runExtraMigrations
       (getTrace syncEnv)

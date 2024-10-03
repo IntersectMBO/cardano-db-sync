@@ -285,6 +285,7 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
         , V.txOutReferenceScriptId = Nothing
         , V.txOutTxId = txId
         , V.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+        , V.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
         }
 
     vAddress :: V.Address

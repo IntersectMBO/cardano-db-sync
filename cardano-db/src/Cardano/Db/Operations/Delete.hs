@@ -79,7 +79,7 @@ deleteBlocksBlockId trce txOutTableType blockId = do
   (cminIds, completed) <- findMinIdsRec mMinIds mempty
   mTxId <- queryMinRefId TxBlockId blockId
   minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
-  blockCountInt <- deleteTablesAfterBlockId blockId mTxId minIds
+  blockCountInt <- deleteTablesAfterBlockId txOutTableType blockId mTxId minIds
   pure (mTxId, blockCountInt)
   where
     findMinIdsRec :: MonadIO m => [Maybe MinIdsWrapper] -> MinIdsWrapper -> ReaderT SqlBackend m (MinIdsWrapper, Bool)
@@ -102,10 +102,8 @@ deleteBlocksBlockId trce txOutTableType blockId = do
       CMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
       VMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
 
--- (MinIds m1 m2 m3) isJust m1 && isJust m2 && isJust m3
-
-deleteTablesAfterBlockId :: MonadIO m => BlockId -> Maybe TxId -> MinIdsWrapper -> ReaderT SqlBackend m Int64
-deleteTablesAfterBlockId blkId mtxId minIdsW = do
+deleteTablesAfterBlockId :: MonadIO m => TxOutTableType -> BlockId -> Maybe TxId -> MinIdsWrapper -> ReaderT SqlBackend m Int64
+deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
   deleteWhere [AdaPotsBlockId >=. blkId]
   deleteWhere [ReverseIndexBlockId >=. blkId]
   deleteWhere [EpochParamBlockId >=. blkId]
@@ -122,11 +120,11 @@ deleteTablesAfterBlockId blkId mtxId minIdsW = do
     queryFirstAndDeleteAfter OffChainVoteDataVotingAnchorId vaId
     queryFirstAndDeleteAfter OffChainVoteFetchErrorVotingAnchorId vaId
     deleteWhere [VotingAnchorId >=. vaId]
-  deleteTablesAfterTxId mtxId minIdsW
+  deleteTablesAfterTxId txOutTableType mtxId minIdsW
   deleteWhereCount [BlockId >=. blkId]
 
-deleteTablesAfterTxId :: (MonadIO m) => Maybe TxId -> MinIdsWrapper -> ReaderT SqlBackend m ()
-deleteTablesAfterTxId mtxId minIdsW = do
+deleteTablesAfterTxId :: (MonadIO m) => TxOutTableType -> Maybe TxId -> MinIdsWrapper -> ReaderT SqlBackend m ()
+deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
   case minIdsW of
     CMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) -> do
       whenJust mtxInId $ \txInId -> deleteWhere [TxInId >=. txInId]
@@ -138,7 +136,9 @@ deleteTablesAfterTxId mtxId minIdsW = do
       whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [V.MaTxOutId >=. maTxOutId]
 
   whenJust mtxId $ \txId -> do
-    queryFirstAndDeleteAfter CollateralTxOutTxId txId
+    case txOutTableType of
+      TxOutCore -> queryFirstAndDeleteAfter C.CollateralTxOutTxId txId
+      TxOutVariantAddress -> queryFirstAndDeleteAfter V.CollateralTxOutTxId txId
     queryFirstAndDeleteAfter CollateralTxInTxInId txId
     queryFirstAndDeleteAfter ReferenceTxInTxInId txId
     queryFirstAndDeleteAfter PoolRetireAnnouncedTxId txId
