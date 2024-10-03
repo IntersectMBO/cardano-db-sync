@@ -87,3 +87,15 @@ constraints:
 -- when using the "cabal" wrapper script provided by nix-shell.
 -- --------------------------- 8< --------------------------
 -- Please do not put any `source-repository-package` clause above this line.
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-node
+  tag: efd560070aaf042d1eb4680ae37fc607c7742319
+  --sha256: sha256-VIwEjpaGk09+dAcKELjLSR2OP3qBCWTGHpd0SBjgbVc=
+  subdir:
+    cardano-node
+    cardano-submit-api
+    trace-dispatcher
+    trace-forward
+    trace-resources

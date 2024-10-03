@@ -95,7 +95,7 @@ library
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
                       , plutus-core
-                      , plutus-ledger-api:{plutus-ledger-api-testlib} ==1.30.0.0
+                      , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
                       , strict-sop-core
                       , strict-stm
