@@ -156,7 +156,7 @@
             };
 
             shell.tools = {
-              cabal = "3.10.3.0";
+              cabal = "3.12.1.0";
               ghcid = "0.8.8";
               haskell-language-server = {
                 src =
