@@ -16,6 +16,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Whitelist as Whitelist
 import Test.Cardano.Db.Mock.Validate (expectFailSilent)
 import Test.Tasty (TestTree (), testGroup)
 import Test.Tasty.HUnit (Assertion (), testCase)
@@ -41,6 +42,12 @@ unitTests iom knownMigrations =
             , test
                 "remove jsonb from schema and add back"
                 Config.configJsonbInSchemaShouldRemoveThenAdd
+            ]
+        , testGroup
+            "invalid whitelist hashes"
+            [ testCase "Fail if Shelley stake address hash is invalid" Config.invalidShelleyStkAddrHash
+            , testCase "Fail if multi-asset policies hash is invalid" Config.invalidMultiAssetPoliciesHash
+            , testCase "Fail if Plutus script hash invalid" Config.invalidPlutusScriptHash
             ]
         , testGroup
             "tx-out"
@@ -135,7 +142,6 @@ unitTests iom knownMigrations =
         , test "consume utxo same block" Tx.consumeSameBlock
         , test "tx with metadata" Tx.addTxMetadata
         , test "tx with metadata disabled" Tx.addTxMetadataDisabled
-        , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
         ]
     , testGroup
         "stake addresses"
@@ -196,6 +202,14 @@ unitTests iom knownMigrations =
         , test "mint many multi assets" Plutus.mintMultiAssets
         , test "swap many multi assets" Plutus.swapMultiAssets
         , test "swap with multi assets disabled" Plutus.swapMultiAssetsDisabled
+        ]
+    , testGroup
+        "Whitelist"
+        [ test "add tx with whitelist" Whitelist.addTxMultiAssetsWhitelist
+        , test "tx with metadata whitelist" Whitelist.addTxMetadataWhitelist
+        , test "tx with metadata whitelist multiple" Whitelist.addTxMetadataWhitelistMultiple
+        , test "add simple tx, whitelist tx address" Whitelist.addSimpleTxStakeAddrsWhitelist
+        , test "add full tx, with stake address whitelist" Whitelist.fullTxStakeAddressWhitelist
         ]
     , testGroup
         "Pools and smash"

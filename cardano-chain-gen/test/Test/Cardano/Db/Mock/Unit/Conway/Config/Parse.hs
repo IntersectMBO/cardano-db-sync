@@ -8,7 +8,11 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
   wrongConwayGenesisHash,
   insertConfig,
   defaultInsertConfig,
-) where
+  invalidShelleyStkAddrHash,
+  invalidMultiAssetPoliciesHash,
+  invalidPlutusScriptHash,
+)
+where
 
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Types
@@ -16,6 +20,8 @@ import Cardano.DbSync.Error
 import Cardano.Prelude hiding (from, isNothing)
 import qualified Data.Aeson as Aeson
 import Data.Default.Class (Default (..))
+import Data.String (String)
+import Data.Text (pack)
 import Test.Cardano.Db.Mock.Config
 import Test.Tasty.HUnit (Assertion (), assertBool, (@?=))
 import Prelude ()
@@ -23,7 +29,8 @@ import Prelude ()
 conwayGenesis :: Assertion
 conwayGenesis =
   mkSyncNodeConfig configDir initCommandLineArgs
-    >>= void . mkConfig configDir mutableDir cmdLineArgs
+    >>= void
+      . mkConfig configDir mutableDir cmdLineArgs
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigSimple"
@@ -109,3 +116,27 @@ insertConfig = do
   dncInsertOptions cfg @?= expected
   where
     configDir = "config-conway-insert-options"
+
+invalidShelleyStkAddrHash :: Assertion
+invalidShelleyStkAddrHash =
+  let invalidJson = "{ \"enable\": true, \"stake_addresses\": " <> invalidHash <> " }"
+      decodedResult :: Either String ShelleyInsertConfig
+      decodedResult = Aeson.eitherDecodeStrict $ encodeUtf8 $ pack invalidJson
+   in assertBool "Decoding should fail for invalid Shelley stake address hash" (isLeft decodedResult)
+
+invalidMultiAssetPoliciesHash :: Assertion
+invalidMultiAssetPoliciesHash =
+  let invalidJson = "{ \"enable\": true, \"policies\": " <> invalidHash <> " }"
+      decodedResult :: Either String MultiAssetConfig
+      decodedResult = Aeson.eitherDecodeStrict $ encodeUtf8 $ pack invalidJson
+   in assertBool "Decoding should fail for invalid MultiAsset policies hash" (isLeft decodedResult)
+
+invalidPlutusScriptHash :: Assertion
+invalidPlutusScriptHash =
+  let invalidJson = "{ \"enable\": true, \"script_hashes\": " <> invalidHash <> " }"
+      decodedResult :: Either String PlutusConfig
+      decodedResult = Aeson.eitherDecodeStrict $ encodeUtf8 $ pack invalidJson
+   in assertBool "Decoding should fail for invalid Plutus script hash" (isLeft decodedResult)
+
+invalidHash :: String
+invalidHash = "[\"\\xe0758b08dea05dabd1cd3510689ebd9efb6a49316acb30eead750e2e9e\"]"

@@ -24,9 +24,9 @@ tests =
       , ("hasLedger", prop_hasLedger)
       , ("shouldUseLedger", prop_shouldUseLedger)
       , ("isShelleyEnabled", prop_isShelleyEnabled)
-      , ("isMultiAssetEnabled", prop_isMultiAssetEnabled)
-      , ("isMetadataEnabled", prop_isMetadataEnabled)
-      , ("isPlutusEnabled", prop_isPlutusEnabled)
+      , ("isMultiAssetModeActive", prop_isMultiAssetModeActive)
+      , ("isMetadataModeActive", prop_isMetadataModeActive)
+      , ("isPlutusModeActive", prop_isPlutusModeActive)
       ]
 
 prop_syncInsertConfigFromJSON :: Property
@@ -84,31 +84,31 @@ prop_isShelleyEnabled = property $ do
   let shelleyCfg = sioShelley cfg
 
   -- Shelley is enabled if it is not ShelleyDisable
-  isShelleyEnabled shelleyCfg === (shelleyCfg /= ShelleyDisable)
+  isShelleyModeActive shelleyCfg === (shelleyCfg /= ShelleyDisable)
 
-prop_isMultiAssetEnabled :: Property
-prop_isMultiAssetEnabled = property $ do
+prop_isMultiAssetModeActive :: Property
+prop_isMultiAssetModeActive = property $ do
   cfg <- forAll Gen.syncInsertOptions
   let multiAssetCfg = sioMultiAsset cfg
 
   -- MultiAsset is enabled if it is not MultiAssetDisable
-  isMultiAssetEnabled multiAssetCfg === (multiAssetCfg /= MultiAssetDisable)
+  isMultiAssetModeActive multiAssetCfg === (multiAssetCfg /= MultiAssetDisable)
 
-prop_isMetadataEnabled :: Property
-prop_isMetadataEnabled = property $ do
+prop_isMetadataModeActive :: Property
+prop_isMetadataModeActive = property $ do
   cfg <- forAll Gen.syncInsertOptions
   let metadataCfg = sioMetadata cfg
 
   -- Metadata is enabled if it is not MetadataDisable
-  isMetadataEnabled metadataCfg === (metadataCfg /= MetadataDisable)
+  isMetadataModeActive metadataCfg === (metadataCfg /= MetadataDisable)
 
-prop_isPlutusEnabled :: Property
-prop_isPlutusEnabled = property $ do
+prop_isPlutusModeActive :: Property
+prop_isPlutusModeActive = property $ do
   cfg <- forAll Gen.syncInsertOptions
   let plutusCfg = sioPlutus cfg
 
   -- Plutus is enabled if it is not PlutusDisable
-  isPlutusEnabled plutusCfg === (plutusCfg /= PlutusDisable)
+  isPlutusModeActive plutusCfg === (plutusCfg /= PlutusDisable)
 
 -- | Various JSON values that should generate the default config
 genDefaultJson :: Gen Aeson.Value

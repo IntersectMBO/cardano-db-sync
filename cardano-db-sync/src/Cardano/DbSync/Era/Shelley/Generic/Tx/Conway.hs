@@ -8,6 +8,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Conway (
   fromConwayTx,
 ) where
 
+import Cardano.DbSync.Config.Types (PlutusConfig)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
@@ -27,8 +28,8 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
-fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
-fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
+fromConwayTx :: PlutusConfig -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
+fromConwayTx plutusConfig mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txLedgerTxId = mkTxId tx
@@ -100,7 +101,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
       case Alonzo.isValid tx of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx Right
+    (finalMaps, redeemers) = resolveRedeemers plutusConfig mprices tx Right
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody

@@ -50,10 +50,11 @@ module Cardano.DbSync.Config.Types (
   isTxOutEnabled,
   hasLedger,
   shouldUseLedger,
-  isShelleyEnabled,
-  isMultiAssetEnabled,
-  isMetadataEnabled,
-  isPlutusEnabled,
+  isShelleyModeActive,
+  isShelleyWhitelistModeActive,
+  isMultiAssetModeActive,
+  isMetadataModeActive,
+  isPlutusModeActive,
   isTxOutConsumedBootstrap,
   isTxOutConsumed,
   isTxOutConsumedPrune,
@@ -79,6 +80,7 @@ import Data.Aeson.Key (fromText)
 import Data.Aeson.Types (Pair, Parser, typeMismatch)
 import Data.ByteString.Short (ShortByteString (), fromShort, toShort)
 import Data.Default.Class (Default (..))
+import qualified Data.Text as Text
 import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
 
 newtype LogFileDir = LogFileDir
@@ -225,7 +227,8 @@ data LedgerInsertConfig
 data ShelleyInsertConfig
   = ShelleyEnable
   | ShelleyDisable
-  | ShelleyStakeAddrs (NonEmpty ShortByteString)
+  | -- | Whitelist of Shelley stake addresses
+    ShelleyStakeAddrs (NonEmpty ShortByteString)
   deriving (Eq, Show)
 
 newtype RewardsConfig = RewardsConfig
@@ -235,19 +238,22 @@ newtype RewardsConfig = RewardsConfig
 data MultiAssetConfig
   = MultiAssetEnable
   | MultiAssetDisable
-  | MultiAssetPolicies (NonEmpty ShortByteString)
+  | -- | Whitelist of multiAsset policy IDs
+    MultiAssetPolicies (NonEmpty ShortByteString)
   deriving (Eq, Show)
 
 data MetadataConfig
   = MetadataEnable
   | MetadataDisable
-  | MetadataKeys (NonEmpty Word)
+  | -- | Whitelist of metadata keys
+    MetadataKeys (NonEmpty Word)
   deriving (Eq, Show)
 
 data PlutusConfig
   = PlutusEnable
   | PlutusDisable
-  | PlutusScripts (NonEmpty ShortByteString)
+  | -- | Whitelist of plutus script hashes
+    PlutusScripts (NonEmpty ShortByteString)
   deriving (Eq, Show)
 
 newtype GovernanceConfig = GovernanceConfig
@@ -366,25 +372,29 @@ shouldUseLedger LedgerDisable = False
 shouldUseLedger LedgerEnable = True
 shouldUseLedger LedgerIgnore = False
 
-isShelleyEnabled :: ShelleyInsertConfig -> Bool
-isShelleyEnabled ShelleyDisable = False
-isShelleyEnabled ShelleyEnable = True
-isShelleyEnabled (ShelleyStakeAddrs _) = True
+isShelleyModeActive :: ShelleyInsertConfig -> Bool
+isShelleyModeActive ShelleyDisable = False
+isShelleyModeActive ShelleyEnable = True
+isShelleyModeActive (ShelleyStakeAddrs _) = True
 
-isMultiAssetEnabled :: MultiAssetConfig -> Bool
-isMultiAssetEnabled MultiAssetDisable = False
-isMultiAssetEnabled MultiAssetEnable = True
-isMultiAssetEnabled (MultiAssetPolicies _) = True
+isShelleyWhitelistModeActive :: ShelleyInsertConfig -> Bool
+isShelleyWhitelistModeActive (ShelleyStakeAddrs _) = True
+isShelleyWhitelistModeActive _other = False
 
-isMetadataEnabled :: MetadataConfig -> Bool
-isMetadataEnabled MetadataDisable = False
-isMetadataEnabled MetadataEnable = True
-isMetadataEnabled (MetadataKeys _) = True
+isMultiAssetModeActive :: MultiAssetConfig -> Bool
+isMultiAssetModeActive MultiAssetDisable = False
+isMultiAssetModeActive MultiAssetEnable = True
+isMultiAssetModeActive (MultiAssetPolicies _) = True
 
-isPlutusEnabled :: PlutusConfig -> Bool
-isPlutusEnabled PlutusDisable = False
-isPlutusEnabled PlutusEnable = True
-isPlutusEnabled (PlutusScripts _) = True
+isMetadataModeActive :: MetadataConfig -> Bool
+isMetadataModeActive MetadataDisable = False
+isMetadataModeActive MetadataEnable = True
+isMetadataModeActive (MetadataKeys _) = True
+
+isPlutusModeActive :: PlutusConfig -> Bool
+isPlutusModeActive PlutusDisable = False
+isPlutusModeActive PlutusEnable = True
+isPlutusModeActive (PlutusScripts _) = True
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -592,7 +602,7 @@ instance FromJSON LedgerInsertConfig where
 instance ToJSON ShelleyInsertConfig where
   toJSON cfg =
     Aeson.object
-      [ "enable" .= isShelleyEnabled cfg
+      [ "enable" .= isShelleyModeActive cfg
       , "stake_addresses" .= stakeAddrs cfg
       ]
     where
@@ -604,16 +614,17 @@ instance FromJSON ShelleyInsertConfig where
     enable <- obj .: "enable"
     stakeAddrs <- obj .:? "stake_addresses"
 
-    pure $
-      case (enable, stakeAddrs) of
-        (False, _) -> ShelleyDisable
-        (True, Nothing) -> ShelleyEnable
-        (True, Just addrs) -> ShelleyStakeAddrs (map parseShortByteString addrs)
+    case (enable, stakeAddrs) of
+      (False, _) -> pure ShelleyDisable
+      (True, Nothing) -> pure ShelleyEnable
+      (True, Just addrs) -> do
+        addrsParsed <- traverse parseValidateHash addrs
+        pure $ ShelleyStakeAddrs addrsParsed
 
 instance ToJSON MultiAssetConfig where
   toJSON cfg =
     Aeson.object
-      [ "enable" .= isMultiAssetEnabled cfg
+      [ "enable" .= isMultiAssetModeActive cfg
       , "policies" .= policies cfg
       ]
     where
@@ -625,16 +636,17 @@ instance FromJSON MultiAssetConfig where
     enable <- obj .: "enable"
     policies <- obj .:? "policies"
 
-    pure $
-      case (enable, policies) of
-        (False, _) -> MultiAssetDisable
-        (True, Nothing) -> MultiAssetEnable
-        (True, Just ps) -> MultiAssetPolicies (map parseShortByteString ps)
+    case (enable, policies) of
+      (False, _) -> pure MultiAssetDisable
+      (True, Nothing) -> pure MultiAssetEnable
+      (True, Just ps) -> do
+        policiesParsed <- traverse parseValidateHash ps
+        pure $ MultiAssetPolicies policiesParsed
 
 instance ToJSON MetadataConfig where
   toJSON cfg =
     Aeson.object
-      [ "enable" .= isMetadataEnabled cfg
+      [ "enable" .= isMetadataModeActive cfg
       , "keys" .= keys cfg
       ]
     where
@@ -655,7 +667,7 @@ instance FromJSON MetadataConfig where
 instance ToJSON PlutusConfig where
   toJSON cfg =
     Aeson.object
-      [ "enable" .= isPlutusEnabled cfg
+      [ "enable" .= isPlutusModeActive cfg
       , "script_hashes" .= scriptHashes cfg
       ]
     where
@@ -667,11 +679,12 @@ instance FromJSON PlutusConfig where
     enable <- obj .: "enable"
     scriptHashes <- obj .:? "script_hashes"
 
-    pure $
-      case (enable, scriptHashes) of
-        (False, _) -> PlutusDisable
-        (True, Nothing) -> PlutusEnable
-        (True, Just hs) -> PlutusScripts (map parseShortByteString hs)
+    case (enable, scriptHashes) of
+      (False, _) -> pure PlutusDisable
+      (True, Nothing) -> pure PlutusEnable
+      (True, Just hs) -> do
+        hsParsed <- traverse parseValidateHash hs
+        pure $ PlutusScripts hsParsed
 
 instance ToJSON GovernanceConfig where
   toJSON = boolToEnableDisable . isGovernanceEnabled
@@ -824,8 +837,11 @@ enableDisableToBool = \case
   "disable" -> Just False
   _ -> Nothing
 
-parseShortByteString :: Text -> ShortByteString
-parseShortByteString = toShort . encodeUtf8
+parseValidateHash :: Text -> Parser ShortByteString
+parseValidateHash txt =
+  if "\\x" `Text.isPrefixOf` txt
+    then fail $ "Invalid Hash: starts with \\x please adjust it:  " <> show txt
+    else pure $ toShort $ encodeUtf8 txt
 
 shortByteStringToJSON :: ShortByteString -> Aeson.Value
 shortByteStringToJSON = toJSON . decodeUtf8 . fromShort

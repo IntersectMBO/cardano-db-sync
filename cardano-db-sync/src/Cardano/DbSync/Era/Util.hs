@@ -6,10 +6,13 @@ module Cardano.DbSync.Era.Util (
   containsUnicodeNul,
   safeDecodeUtf8,
   safeDecodeToJson,
-) where
+)
+where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (logWarning)
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Error
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
@@ -18,7 +21,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-liftLookupFail :: Monad m => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
+liftLookupFail :: (Monad m) => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
 liftLookupFail loc =
   firstExceptT (\lf -> SNErrDefault $ mconcat [loc, " ", show lf]) . newExceptT
 
@@ -33,13 +36,14 @@ safeDecodeUtf8 bs
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
 
-safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
-safeDecodeToJson tracer tracePrefix jsonBs = do
+safeDecodeToJson :: (MonadIO m) => SyncEnv -> Text -> ByteString -> m (Maybe Text)
+safeDecodeToJson syncEnv tracePrefix jsonBs = do
   ejson <- liftIO $ safeDecodeUtf8 jsonBs
   case ejson of
     Left err -> do
-      liftIO . logWarning tracer $
-        mconcat
+      liftIO
+        . logWarning tracer
+        $ mconcat
           [tracePrefix, ": Could not decode to UTF8: ", textShow err]
       -- We have to insert
       pure Nothing
@@ -50,3 +54,5 @@ safeDecodeToJson tracer tracePrefix jsonBs = do
           liftIO $ logWarning tracer $ tracePrefix <> "was recorded as null, due to a Unicode NUL character found when trying to parse the json."
           pure Nothing
         else pure $ Just json
+  where
+    tracer = getTrace syncEnv
