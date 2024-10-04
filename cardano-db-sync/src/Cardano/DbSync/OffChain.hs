@@ -22,6 +22,7 @@ import Cardano.Db (runIohkLogging)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
+import Cardano.DbSync.Config.Types
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
 import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
@@ -212,12 +213,12 @@ runFetchOffChainVoteThread syncEnv = do
             -- load the offChain vote work queue using the db
             _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
-            manager <- Http.newManager tlsManagerSettings
             now <- liftIO Time.getPOSIXTime
-            mapM_ (queueVoteInsert <=< fetchOffChainVoteData trce manager now) voteq
+            mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
+    gateways = dncIpfsGateway $ envSyncNodeConfig syncEnv
 
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
@@ -260,13 +261,12 @@ fetchOffChainPoolData _tracer manager time oPoolWorkQ =
               , DB.offChainPoolFetchErrorRetryCount = retryCount (oPoolWqRetry oPoolWorkQ)
               }
 
-fetchOffChainVoteData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> OffChainVoteWorkQueue -> IO OffChainVoteResult
-fetchOffChainVoteData _tracer manager time oVoteWorkQ =
+fetchOffChainVoteData :: [Text] -> Time.POSIXTime -> OffChainVoteWorkQueue -> IO OffChainVoteResult
+fetchOffChainVoteData gateways time oVoteWorkQ =
   convert <<$>> runExceptT $ do
     let url = oVoteWqUrl oVoteWorkQ
         metaHash = oVoteWqMetaHash oVoteWorkQ
-    request <- parseOffChainUrl $ OffChainVoteUrl url
-    httpGetOffChainVoteData manager request url (Just metaHash) (oVoteWqType oVoteWorkQ)
+    httpGetOffChainVoteData gateways url (Just metaHash) (oVoteWqType oVoteWorkQ)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainVoteData -> OffChainVoteResult
     convert eres =
@@ -323,8 +323,8 @@ fetchOffChainVoteData _tracer manager time oVoteWorkQ =
             , DB.offChainVoteDrepDataObjectives = Vote.textValue <$> Vote.objectives (Vote.body dt)
             , DB.offChainVoteDrepDataMotivations = Vote.textValue <$> Vote.motivations (Vote.body dt)
             , DB.offChainVoteDrepDataQualifications = Vote.textValue <$> Vote.qualifications (Vote.body dt)
-            , DB.offChainVoteDrepDataImageUrl = Vote.textValue . Vote.contentUrl <$> Vote.image (Vote.body dt)
-            , DB.offChainVoteDrepDataImageHash = Vote.textValue . Vote.sha256 <$> Vote.image (Vote.body dt)
+            , DB.offChainVoteDrepDataImageUrl = Vote.textValue . Vote.content <$> Vote.image (Vote.body dt)
+            , DB.offChainVoteDrepDataImageHash = Vote.textValue <$> (Vote.msha256 =<< Vote.image (Vote.body dt))
             }
       _ -> Nothing
 

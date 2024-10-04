@@ -171,10 +171,19 @@ data DrepBody = DrepBody
   deriving (Show, Generic)
 
 data Image = Image
+  { content :: TextValue
+  , msha256 :: Maybe TextValue
+  }
+  deriving (Show, Generic)
+
+data ImageUrl = ImageUrl
   { contentUrl :: TextValue
   , sha256 :: TextValue
   }
   deriving (Show, Generic, FromJSON)
+
+fromImageUrl :: ImageUrl -> Image
+fromImageUrl img = Image (contentUrl img) (Just (sha256 img))
 
 data Reference tp = Reference
   { rtype :: TextValue -- key is @type. It can be "GovernanceMetadata" or "Other" or ?? "other" ?? or ""
@@ -297,6 +306,20 @@ instance FromJSON DrepBody where
     where
       withObjectV v' s p = withObject s p v'
 
+instance FromJSON Image where
+  parseJSON v = withObjectV v "Image" $ \o -> do
+    curl <- o .: "contentUrl"
+    case Text.stripPrefix "data:" (textValue curl) of
+      Just ctb
+        | (_, tb) <- Text.break (== '/') ctb
+        , Text.isPrefixOf "/" tb
+        , (_, b) <- Text.break (== ';') tb
+        , Just imageData <- Text.stripPrefix ";base64," b ->
+            pure $ Image (TextValue imageData) Nothing
+      _ -> fromImageUrl <$> parseJSON v
+    where
+      withObjectV v' s p = withObject s p v'
+
 parseTextLimit :: Int -> Key -> Object -> Parser TextValue
 parseTextLimit maxSize str o = do
   txt <- o .: str
@@ -342,7 +365,7 @@ instance FromJSON Context where
   parseJSON =
     withObject "Context" $ \o ->
       Context
-        <$> o .: "@language"
+        <$> o .:? "@language" .!= "en-us"
 
 instance FromJSON TextValue where
   parseJSON v = case v of

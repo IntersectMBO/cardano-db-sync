@@ -144,6 +144,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncBabbageHardFork :: !TriggerHardFork
   , dncConwayHardFork :: !TriggerHardFork
   , dncInsertOptions :: !SyncInsertOptions
+  , dncIpfsGateway :: [Text]
   }
 
 data SyncPreConfig = SyncPreConfig
@@ -155,6 +156,7 @@ data SyncPreConfig = SyncPreConfig
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
+  , pcIpfsGateway :: ![Text]
   }
   deriving (Show)
 
@@ -401,6 +403,7 @@ parseGenSyncNodeConfig o =
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
     <*> o .:? "insert_options" .!= def
+    <*> o .:? "ipfs_gateway" .!= ["https://ipfs.io/ipfs"]
 
 instance FromJSON SyncProtocol where
   parseJSON o =

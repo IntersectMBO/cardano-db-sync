@@ -96,6 +96,7 @@ data TestFailure = TestFailure
   , tfIOException :: !Word
   , tfTimeout :: !Word
   , tfConnectionFailure :: !Word
+  , tfOtherError :: !Word
   }
 
 classifyFetchError :: TestFailure -> OffChainFetchError -> TestFailure
@@ -112,9 +113,10 @@ classifyFetchError tf fe =
     OCFErrIOException {} -> tf {tfIOException = tfIOException tf + 1}
     OCFErrTimeout {} -> tf {tfTimeout = tfTimeout tf + 1}
     OCFErrConnectionFailure {} -> tf {tfConnectionFailure = tfConnectionFailure tf + 1}
+    _otherwise -> tf {tfOtherError = tfOtherError tf + 1}
 
 emptyTestFailure :: TestFailure
-emptyTestFailure = TestFailure 0 0 0 0 0 0 0 0 0 0 0
+emptyTestFailure = TestFailure 0 0 0 0 0 0 0 0 0 0 0 0
 
 reportTestFailures :: TestFailure -> IO ()
 reportTestFailures tf = do

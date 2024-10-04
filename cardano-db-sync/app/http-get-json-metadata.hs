@@ -126,10 +126,7 @@ runHttpGetVote voteUrl mHash vtype =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-    httpGet = do
-      request <- parseOffChainUrl $ OffChainVoteUrl voteUrl
-      manager <- liftIO $ Http.newManager tlsManagerSettings
-      httpGetOffChainVoteData manager request voteUrl mHash vtype
+    httpGet = httpGetOffChainVoteData [] voteUrl mHash vtype
 
     reportSuccess :: SimplifiedOffChainVoteData -> IO ()
     reportSuccess spod = do
@@ -140,6 +137,7 @@ runHttpGetVote voteUrl mHash vtype =
             then putStrLn $ greenText "Success"
             else putStrLn $ orangeText ("Warning: This should be 'application/json'\nContent-type: " ++ BSC.unpack ct)
       Text.putStrLn $ sovaJson spod
+      print $ sovaOffChainVoteData spod
 
 runGetVote :: Text.Text -> Maybe VoteMetaHash -> DB.AnchorType -> IO ()
 runGetVote file mExpectedHash vtype = do

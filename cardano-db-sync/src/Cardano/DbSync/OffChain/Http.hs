@@ -38,6 +38,7 @@ import qualified Data.Text.Encoding as Text
 import GHC.Show (show)
 import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
+import Network.HTTP.Client.TLS (tlsManagerSettings)
 import qualified Network.HTTP.Types as Http
 
 -------------------------------------------------------------------------------------
@@ -78,13 +79,33 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
     url = OffChainPoolUrl purl
 
 httpGetOffChainVoteData ::
-  Http.Manager ->
-  Http.Request ->
+  [Text] ->
   VoteUrl ->
   Maybe VoteMetaHash ->
   DB.AnchorType ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-httpGetOffChainVoteData manager request vurl metaHash anchorType = do
+httpGetOffChainVoteData gateways vurl metaHash anchorType = do
+  case useIpfsGatewayMaybe vurl gateways of
+    Nothing -> httpGetOffChainVoteDataSingle vurl metaHash anchorType
+    Just [] -> left $ OCFErrNoIpfsGateway (OffChainVoteUrl vurl)
+    Just urls -> tryAllGatewaysRec urls []
+  where
+    tryAllGatewaysRec [] acc = left $ OCFErrIpfsGatewayFailures (OffChainVoteUrl vurl) (reverse acc)
+    tryAllGatewaysRec (url : rest) acc = do
+      msocd <- liftIO $ runExceptT $ httpGetOffChainVoteDataSingle url metaHash anchorType
+      case msocd of
+        Right socd -> pure socd
+        Left err -> tryAllGatewaysRec rest (err : acc)
+
+httpGetOffChainVoteDataSingle ::
+  VoteUrl ->
+  Maybe VoteMetaHash ->
+  DB.AnchorType ->
+  ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
+httpGetOffChainVoteDataSingle vurl metaHash anchorType = do
+  manager <- liftIO $ Http.newManager tlsManagerSettings
+  request <- parseOffChainUrl url
+  let req = httpGetBytes manager request 10000 30000 url
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
@@ -98,7 +119,6 @@ httpGetOffChainVoteData manager request vurl metaHash anchorType = do
       , sovaWarning = mWarning
       }
   where
-    req = httpGetBytes manager request 10000 30000 url
     url = OffChainVoteUrl vurl
 
 parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> DB.AnchorType -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
@@ -152,6 +172,8 @@ httpGetBytes manager request bytesToRead maxBytes url =
                   OCFErrBadContentTypeHtml url (Text.decodeLatin1 ct)
               unless
                 ( "application/json"
+                    `BS.isInfixOf` ct
+                    || "application/ld+json"
                     `BS.isInfixOf` ct
                     || "text/plain"
                     `BS.isInfixOf` ct
@@ -217,3 +239,9 @@ convertHttpException url he =
       case url of
         OffChainPoolUrl _ -> OCFErrUrlParseFail (OffChainPoolUrl $ PoolUrl $ Text.pack urlx) (Text.pack err)
         OffChainVoteUrl _ -> OCFErrUrlParseFail (OffChainVoteUrl $ VoteUrl $ Text.pack urlx) (Text.pack err)
+
+useIpfsGatewayMaybe :: VoteUrl -> [Text] -> Maybe [VoteUrl]
+useIpfsGatewayMaybe vu gateways =
+  case Text.stripPrefix "ipfs://" (unVoteUrl vu) of
+    Just sf -> Just $ VoteUrl . (<> sf) <$> gateways
+    Nothing -> Nothing
