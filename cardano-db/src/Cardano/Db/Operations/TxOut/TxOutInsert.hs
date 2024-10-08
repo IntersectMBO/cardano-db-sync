@@ -8,7 +8,7 @@
 module Cardano.Db.Operations.TxOut.TxOutInsert where
 
 import Cardano.Db.Operations.Insert (insertMany', insertUnchecked)
-import Cardano.Db.Operations.Types (MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutW (..))
+import Cardano.Db.Operations.Types (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutW (..))
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Control.Monad.IO.Class (MonadIO)
@@ -90,3 +90,13 @@ insertManyMaTxOut maTxOutWs = do
     extractVariantMaTxOut :: MaTxOutW -> V.MaTxOut
     extractVariantMaTxOut (VMaTxOutW maTxOut) = maTxOut
     extractVariantMaTxOut (CMaTxOutW _) = error "Unexpected CMaTxOutW in VariantMaTxOut list"
+
+insertCollateralTxOut :: (MonadBaseControl IO m, MonadIO m) => CollateralTxOutW -> ReaderT SqlBackend m CollateralTxOutIdW
+insertCollateralTxOut collateralTxOutW =
+  case collateralTxOutW of
+    CCollateralTxOutW txOut -> do
+      val <- insertUnchecked "CollateralTxOut" txOut
+      pure $ CCollateralTxOutIdW val
+    VCollateralTxOutW txOut -> do
+      val <- insertUnchecked "CollateralTxOut" txOut
+      pure $ VCollateralTxOutIdW val

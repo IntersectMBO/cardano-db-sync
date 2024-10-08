@@ -243,6 +243,7 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
         , V.txOutReferenceScriptId = Nothing
         , V.txOutAddressId = addrDetailId
         , V.txOutConsumedByTxId = Nothing
+        , V.txOutStakeAddressId = Nothing
         }
 
     mkVAddress :: ByteString -> V.Address

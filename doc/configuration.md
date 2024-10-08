@@ -297,8 +297,12 @@ Key changes in the variant representation:
    - Centralizes address information that was previously duplicated across multiple TxOuts
 
 2. Modified `tx_out` table:
-   - Replaces `address`, `address_has_script`, and `payment_cred` fields with a single `address_id` field
-   - `addressId` references the new `Address` table
+   - Remove `address`, `address_has_script`, and `payment_cred`.
+   - Add `address_id` references the new `Address` table
+
+3. Modified `collateral_tx_out` table
+   - Remove `address`, `address_has_script`, and `payment_cred`.
+   - Add `address_id` references the new `Address` table
  
 The address table can only be used on an empty database due to the schema restructuring which would cause data loss.
 

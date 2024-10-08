@@ -16,13 +16,12 @@ module Cardano.DbSync.Era.Universal.Insert.Tx (
 import Cardano.BM.Trace (Trace)
 import Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache.Types (CacheStatus (..))
-
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (queryTxIdWithCache, tryUpdateCacheTx)
+import Cardano.DbSync.Cache.Types (CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
@@ -255,7 +254,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         addrId <- lift $ insertAddress addr vAddress
         pure $
           DB.VTxOutW
-            (mkTxOutVariant addrId mDatumId mScriptId)
+            (mkTxOutVariant mSaId addrId mDatumId mScriptId)
             Nothing
   -- TODO: Unsure about what we should return here for eutxo
   let !eutxo =
@@ -271,8 +270,8 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
     addrText :: Text
     addrText = Generic.renderAddress addr
 
-    mkTxOutVariant :: V.AddressId -> Maybe DB.DatumId -> Maybe DB.ScriptId -> V.TxOut
-    mkTxOutVariant addrId mDatumId mScriptId =
+    mkTxOutVariant :: Maybe DB.StakeAddressId -> V.AddressId -> Maybe DB.DatumId -> Maybe DB.ScriptId -> V.TxOut
+    mkTxOutVariant mSaId addrId mDatumId mScriptId =
       V.TxOut
         { V.txOutAddressId = addrId
         , V.txOutConsumedByTxId = Nothing
@@ -282,6 +281,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         , V.txOutReferenceScriptId = mScriptId
         , V.txOutTxId = txId
         , V.txOutValue = Generic.coinToDbLovelace value
+        , V.txOutStakeAddressId = mSaId
         }
 
 insertAddress ::
@@ -425,25 +425,51 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
       whenMaybe mScript $
         lift . insertScript tracer txId
   _ <-
-    lift
-      . DB.insertCollateralTxOut
-      $ DB.CollateralTxOut
-        { DB.collateralTxOutTxId = txId
-        , DB.collateralTxOutIndex = index
-        , DB.collateralTxOutAddress = Generic.renderAddress addr
-        , DB.collateralTxOutAddressHasScript = hasScript
-        , DB.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
-        , DB.collateralTxOutStakeAddressId = mSaId
-        , DB.collateralTxOutValue = Generic.coinToDbLovelace value
-        , DB.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
-        , DB.collateralTxOutMultiAssetsDescr = textShow maMap
-        , DB.collateralTxOutInlineDatumId = mDatumId
-        , DB.collateralTxOutReferenceScriptId = mScriptId
-        }
+    case ioTxOutTableType iopts of
+      DB.TxOutCore -> do
+        lift
+          . DB.insertCollateralTxOut
+          $ DB.CCollateralTxOutW
+          $ C.CollateralTxOut
+            { C.collateralTxOutTxId = txId
+            , C.collateralTxOutIndex = index
+            , C.collateralTxOutAddress = Generic.renderAddress addr
+            , C.collateralTxOutAddressHasScript = hasScript
+            , C.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
+            , C.collateralTxOutStakeAddressId = mSaId
+            , C.collateralTxOutValue = Generic.coinToDbLovelace value
+            , C.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
+            , C.collateralTxOutMultiAssetsDescr = textShow maMap
+            , C.collateralTxOutInlineDatumId = mDatumId
+            , C.collateralTxOutReferenceScriptId = mScriptId
+            }
+      DB.TxOutVariantAddress -> do
+        let vAddress =
+              V.Address
+                { V.addressAddress = Generic.renderAddress addr
+                , V.addressRaw = Ledger.serialiseAddr addr
+                , V.addressHasScript = hasScript
+                , V.addressPaymentCred = Generic.maybePaymentCred addr
+                , V.addressStakeAddressId = mSaId
+                }
+        addrId <- lift $ insertAddress addr vAddress
+        lift
+          . DB.insertCollateralTxOut
+          $ DB.VCollateralTxOutW
+          $ V.CollateralTxOut
+            { V.collateralTxOutTxId = txId
+            , V.collateralTxOutIndex = index
+            , V.collateralTxOutAddressId = addrId
+            , V.collateralTxOutStakeAddressId = mSaId
+            , V.collateralTxOutValue = Generic.coinToDbLovelace value
+            , V.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
+            , V.collateralTxOutMultiAssetsDescr = textShow maMap
+            , V.collateralTxOutInlineDatumId = mDatumId
+            , V.collateralTxOutReferenceScriptId = mScriptId
+            }
   pure ()
   where
     -- TODO: Is there any reason to add new tables for collateral multi-assets/multi-asset-outputs
-
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 

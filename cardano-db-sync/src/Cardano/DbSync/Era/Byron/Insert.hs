@@ -383,6 +383,7 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
         , V.txOutReferenceScriptId = Nothing
         , V.txOutTxId = txId
         , V.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+        , V.txOutStakeAddressId = Nothing
         }
 
     vAddress :: V.Address

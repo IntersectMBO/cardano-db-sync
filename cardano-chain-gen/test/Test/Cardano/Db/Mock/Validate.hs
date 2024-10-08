@@ -45,6 +45,7 @@ module Test.Cardano.Db.Mock.Validate (
 import Cardano.Db
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
@@ -417,15 +418,29 @@ assertBabbageCounts env expected =
       referenceTxIn <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity ReferenceTxIn)) -> pure countRows)
-      collTxOut <-
-        maybe 0 unValue . listToMaybe
-          <$> (select . from $ \(_a :: SqlExpr (Entity CollateralTxOut)) -> pure countRows)
+      collTxOut <- case txOutTableTypeFromConfig env of
+        TxOutCore -> do
+          maybe 0 unValue . listToMaybe
+            <$> (select . from $ \(_a :: SqlExpr (Entity C.CollateralTxOut)) -> pure countRows)
+        TxOutVariantAddress -> do
+          maybe 0 unValue . listToMaybe
+            <$> (select . from $ \(_a :: SqlExpr (Entity V.CollateralTxOut)) -> pure countRows)
       inlineDatum <-
-        maybe 0 unValue . listToMaybe
-          <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutInlineDatumId)) >> pure countRows)
+        case txOutTableTypeFromConfig env of
+          TxOutCore -> do
+            maybe 0 unValue . listToMaybe
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutInlineDatumId)) >> pure countRows)
+          TxOutVariantAddress -> do
+            maybe 0 unValue . listToMaybe
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. V.TxOutInlineDatumId)) >> pure countRows)
       referenceScript <-
-        maybe 0 unValue . listToMaybe
-          <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutReferenceScriptId)) >> pure countRows)
+        case txOutTableTypeFromConfig env of
+          TxOutCore -> do
+            maybe 0 unValue . listToMaybe
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutReferenceScriptId)) >> pure countRows)
+          TxOutVariantAddress -> do
+            maybe 0 unValue . listToMaybe
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. V.TxOutReferenceScriptId)) >> pure countRows)
       pure
         ( scripts
         , redeemers

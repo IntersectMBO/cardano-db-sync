@@ -148,19 +148,6 @@ share
     scriptHash          ByteString Maybe    sqltype=hash28type
     UniqueStakeAddress  hashRaw
 
-  CollateralTxOut
-    txId                TxId                noreference     -- This type is the primary key for the 'tx' table.
-    index               Word64              sqltype=txindex
-    address             Text
-    addressHasScript    Bool
-    paymentCred         ByteString Maybe    sqltype=hash28type
-    stakeAddressId      StakeAddressId Maybe noreference
-    value               DbLovelace          sqltype=lovelace
-    dataHash            ByteString Maybe    sqltype=hash32type
-    multiAssetsDescr    Text
-    inlineDatumId       DatumId Maybe       noreference
-    referenceScriptId   ScriptId Maybe      noreference
-
   TxIn
     txInId              TxId                noreference     -- The transaction where this is used as an input.
     txOutId             TxId                noreference         -- The transaction where this was created as an output.
@@ -834,20 +821,6 @@ schemaDocs =
       StakeAddressHashRaw # "The raw bytes of the stake address hash."
       StakeAddressView # "The Bech32 encoded version of the stake address."
       StakeAddressScriptHash # "The script hash, in case this address is locked by a script."
-
-    CollateralTxOut --^ do
-      "A table for transaction collateral outputs. New in v13."
-      CollateralTxOutTxId # "The Tx table index of the transaction that contains this transaction output."
-      CollateralTxOutIndex # "The index of this transaction output with the transaction."
-      CollateralTxOutAddress # "The human readable encoding of the output address. Will be Base58 for Byron era addresses and Bech32 for Shelley era."
-      CollateralTxOutAddressHasScript # "Flag which shows if this address is locked by a script."
-      CollateralTxOutPaymentCred # "The payment credential part of the Shelley address. (NULL for Byron addresses). For a script-locked address, this is the script hash."
-      CollateralTxOutStakeAddressId # "The StakeAddress table index for the stake address part of the Shelley address. (NULL for Byron addresses)."
-      CollateralTxOutValue # "The output value (in Lovelace) of the transaction output."
-      CollateralTxOutDataHash # "The hash of the transaction output datum. (NULL for Txs without scripts)."
-      CollateralTxOutMultiAssetsDescr # "This is a description of the multiassets in collateral output. Since the output is not really created, we don't need to add them in separate tables."
-      CollateralTxOutInlineDatumId # "The inline datum of the output, if it has one. New in v13."
-      CollateralTxOutReferenceScriptId # "The reference script of the output, if it has one. New in v13."
 
     TxIn --^ do
       "A table for transaction inputs."
