@@ -217,4 +217,4 @@ countStakePerPool delegs (Ledger.Stake stake) = VMap.foldlWithKey accum Map.empt
         Nothing -> acc
         Just kh -> Map.insertWith addDel kh (Ledger.fromCompact compactCoin, 1) acc
 
-    addDel (c, n) (c', _) = (c <+> c', n + 1)
+    addDel (c, n) (c', n') = (c <+> c', n + n')
