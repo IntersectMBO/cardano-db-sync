@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -40,19 +41,44 @@ module Cardano.DbSync.Ledger.State (
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import Cardano.Binary (Decoder, DecoderError)
 import qualified Cardano.Binary as Serialize
+import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.Ledger.Allegra.TxBody.Internal (AllegraTxBodyRaw (..))
 import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..), bodyAlonzoTxL)
+import Cardano.Ledger.Alonzo.TxBody (AlonzoTxBody, AlonzoTxBodyRaw, AlonzoTxOut (..))
+import qualified Cardano.Ledger.Alonzo.TxBody.Internal as Alonzo
+import Cardano.Ledger.Alonzo.TxSeq.Internal (AlonzoTxSeq (..))
+import Cardano.Ledger.Babbage.TxBody (BabbageTxBody, BabbageTxBodyRaw, BabbageTxOut (..))
+import qualified Cardano.Ledger.Babbage.TxBody.Internal as Babbage
+import Cardano.Ledger.BaseTypes (StrictMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Binary (Sized (..), mkSized)
+import Cardano.Ledger.Block (Block (..))
+import Cardano.Ledger.Conway.Core as Shelley
+import Cardano.Ledger.Conway.Governance
+import qualified Cardano.Ledger.Conway.Governance as Shelley
+import Cardano.Ledger.Conway.TxBody (ConwayTxBody, ConwayTxBodyRaw)
+import qualified Cardano.Ledger.Conway.TxBody.Internal as Conway
+import Cardano.Ledger.Crypto (Crypto)
+import Cardano.Ledger.Mary.TxBody (MaryTxBody, MaryTxBodyRaw)
+import qualified Cardano.Ledger.Mary.TxBody.Internal as Mary
+import Cardano.Ledger.Mary.Value (MaryValue (..))
+import Cardano.Ledger.MemoBytes.Internal (MemoBytes (..))
 import Cardano.Ledger.Shelley.AdaPots (AdaPots)
+import Cardano.Ledger.Shelley.BlockChain (ShelleyTxSeq (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import Cardano.Ledger.Shelley.Tx.Internal (ShelleyTx (..), ShelleyTxRaw (..))
+import Cardano.Ledger.Shelley.TxOut (ShelleyTxOut (..))
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
@@ -71,20 +97,13 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
 import qualified Control.Exception as Exception
-
 import qualified Data.ByteString.Base16 as Base16
-
-import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
-import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
-import Cardano.Ledger.BaseTypes (StrictMaybe)
-import Cardano.Ledger.Conway.Core as Shelley
-import Cardano.Ledger.Conway.Governance
-import qualified Cardano.Ledger.Conway.Governance as Shelley
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
+import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
@@ -103,7 +122,7 @@ import Ouroboros.Consensus.Block (
  )
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardConway, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..), LedgerState (..), StandardConway, StandardCrypto)
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import Ouroboros.Consensus.HardFork.Abstract
@@ -122,6 +141,7 @@ import Ouroboros.Consensus.Ledger.Abstract (
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import qualified Ouroboros.Consensus.Shelley.Eras as Eras
 import Ouroboros.Consensus.Shelley.Ledger.Block
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
@@ -229,7 +249,8 @@ applyBlock env blk = do
   atomically $ do
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
-    !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
+    let blk' = trimBlock blk
+    !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk' (clsState oldState)
     let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (lrEvents result)
     let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
     let !newLedgerState = finaliseDrepDistr (lrResult result)
@@ -406,7 +427,8 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
-  lsfFilePath . dbPointToFileName dir mEpochNo
+  lsfFilePath
+    . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
@@ -891,3 +913,103 @@ findProposedCommittee gaId cgs = do
       UpdateCommittee _ toRemove toAdd q -> Right $ Ledger.SJust $ updatedCommittee toRemove toAdd q scommittee
       _ -> Left "Unexpected gov action." -- Should never happen since the accumulator only includes UpdateCommittee
     fromNothing err = maybe (Left err) Right
+
+trimBlock :: CardanoBlock -> CardanoBlock
+trimBlock = \case
+  block@(BlockByron _) -> block
+  block@(BlockShelley _) -> block
+  block@(BlockAllegra _) -> block
+  BlockMary block -> BlockMary (trimMaryBlock block)
+  BlockAlonzo block -> BlockAlonzo (trimAlonzoBlock block)
+  BlockBabbage block -> BlockBabbage (trimBabbageBlock block)
+  BlockConway block -> BlockConway (trimConwayBlock block)
+  where
+    trimMaryBlock = unsafeMapShelleyBlock trimMaryTxs
+    trimAlonzoBlock = unsafeMapShelleyBlock (unsafeMapAlonzoTxs trimAlonzoTxBody)
+    trimBabbageBlock = unsafeMapShelleyBlock (unsafeMapAlonzoTxs trimBabbageTxBody)
+    trimConwayBlock = unsafeMapShelleyBlock (unsafeMapAlonzoTxs trimConwayTxBody)
+
+unsafeMapShelleyBlock ::
+  (TxSeq era -> TxSeq era) ->
+  ShelleyBlock proto era ->
+  ShelleyBlock proto era
+unsafeMapShelleyBlock f block@ShelleyBlock {shelleyBlockRaw} =
+  block {shelleyBlockRaw = mapBlockRaw shelleyBlockRaw}
+  where
+    mapBlockRaw (Block' header txs bytes) = Block' header (f txs) bytes
+
+unsafeMapAlonzoTxs ::
+  (Tx era ~ AlonzoTx era) =>
+  (TxBody era -> TxBody era) ->
+  AlonzoTxSeq era ->
+  AlonzoTxSeq era
+unsafeMapAlonzoTxs f txs@AlonzoTxSeqRaw {txSeqTxns} =
+  txs {txSeqTxns = fmap (bodyAlonzoTxL %~ f) txSeqTxns}
+
+trimMaryTxs :: TxSeq Eras.StandardMary -> TxSeq Eras.StandardMary
+trimMaryTxs (TxSeq' txs body' wits' meta) = TxSeq' (fmap trimTx txs) body' wits' meta
+  where
+    trimTx :: ShelleyTx Eras.StandardMary -> ShelleyTx Eras.StandardMary
+    trimTx (TxConstr memo@Memo' {mbRawType}) = TxConstr (memo {mbRawType = trimTxRaw mbRawType})
+
+    trimTxRaw :: ShelleyTxRaw Eras.StandardMary -> ShelleyTxRaw Eras.StandardMary
+    trimTxRaw tx@ShelleyTxRaw {strBody} = tx {strBody = trimTxBody strBody}
+
+    trimTxBody :: MaryTxBody Eras.StandardMary -> MaryTxBody Eras.StandardMary
+    trimTxBody (Mary.TxBodyConstr memo@Memo' {mbRawType}) =
+      Mary.TxBodyConstr (memo {mbRawType = trimRawTxBody mbRawType})
+
+    trimRawTxBody :: MaryTxBodyRaw Eras.StandardMary -> MaryTxBodyRaw Eras.StandardMary
+    trimRawTxBody (Mary.MaryTxBodyRaw bodyRaw@AllegraTxBodyRaw {atbrOutputs}) =
+      Mary.MaryTxBodyRaw (bodyRaw {atbrOutputs = fmap trimOutputs atbrOutputs})
+
+    trimOutputs :: ShelleyTxOut Eras.StandardMary -> ShelleyTxOut Eras.StandardMary
+    trimOutputs (ShelleyTxOut addr val) = ShelleyTxOut addr (trimMultiAssets val)
+
+trimMultiAssets :: MaryValue crypto -> MaryValue crypto
+trimMultiAssets (MaryValue c _) = MaryValue c mempty
+
+trimAlonzoTxBody :: AlonzoTxBody Eras.StandardAlonzo -> AlonzoTxBody Eras.StandardAlonzo
+trimAlonzoTxBody (Alonzo.TxBodyConstr memo@Memo' {mbRawType}) =
+  Alonzo.TxBodyConstr (memo {mbRawType = trimRawTxBody mbRawType})
+  where
+    trimRawTxBody :: AlonzoTxBodyRaw Eras.StandardAlonzo -> AlonzoTxBodyRaw Eras.StandardAlonzo
+    trimRawTxBody bodyRaw@Alonzo.AlonzoTxBodyRaw {Alonzo.atbrOutputs} =
+      bodyRaw {Alonzo.atbrOutputs = fmap trimAlonzoTxOut atbrOutputs}
+
+    trimAlonzoTxOut :: AlonzoTxOut Eras.StandardAlonzo -> AlonzoTxOut Eras.StandardAlonzo
+    trimAlonzoTxOut (AlonzoTxOut addr val datum) =
+      AlonzoTxOut addr (trimMultiAssets val) datum
+
+trimBabbageTxBody :: BabbageTxBody Eras.StandardBabbage -> BabbageTxBody Eras.StandardBabbage
+trimBabbageTxBody (Babbage.TxBodyConstr memo@Memo' {mbRawType}) =
+  Babbage.TxBodyConstr (memo {mbRawType = trimRawTxBody mbRawType})
+  where
+    trimRawTxBody ::
+      BabbageTxBodyRaw Eras.StandardBabbage ->
+      BabbageTxBodyRaw Eras.StandardBabbage
+    trimRawTxBody bodyRaw@Babbage.BabbageTxBodyRaw {Babbage.btbrOutputs} =
+      bodyRaw {Babbage.btbrOutputs = trimBabbageTxOuts btbrOutputs}
+
+trimBabbageTxOuts ::
+  forall crypto era.
+  (Crypto crypto, EraScript era, Value era ~ MaryValue crypto) =>
+  StrictSeq (Sized (BabbageTxOut era)) ->
+  StrictSeq (Sized (BabbageTxOut era))
+trimBabbageTxOuts =
+  map $ \(Sized out _) ->
+    mkSized (eraProtVerLow @era) (trimOutput out)
+  where
+    trimOutput :: BabbageTxOut era -> BabbageTxOut era
+    trimOutput (BabbageTxOut addr val datum script) =
+      BabbageTxOut addr (trimMultiAssets val) datum script
+
+trimConwayTxBody :: ConwayTxBody Eras.StandardConway -> ConwayTxBody Eras.StandardConway
+trimConwayTxBody (Conway.TxBodyConstr memo@Memo' {mbRawType}) =
+  Conway.TxBodyConstr (memo {mbRawType = trimRawTxBody mbRawType})
+  where
+    trimRawTxBody ::
+      ConwayTxBodyRaw Eras.StandardConway ->
+      ConwayTxBodyRaw Eras.StandardConway
+    trimRawTxBody bodyRaw@Conway.ConwayTxBodyRaw {Conway.ctbrOutputs} =
+      bodyRaw {Conway.ctbrOutputs = trimBabbageTxOuts ctbrOutputs}
