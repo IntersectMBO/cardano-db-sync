@@ -58,7 +58,7 @@ querySetNullTxOut trce txOutTableType mMinTxId = do
     txOutIds <- getTxOutConsumedAfter txId
     mapM_ setNullTxOutConsumedAfter txOutIds
     let updatedEntries = length txOutIds
-    liftIO $ logInfo trce $ "Set to null " <> textShow updatedEntries <> " tx_out.consumed_by_tx_id"
+    liftIO $ logInfo trce $ "querySetNullTxOut: Set to null " <> textShow updatedEntries <> " tx_out.consumed_by_tx_id"
   where
     -- \| This requires an index at TxOutConsumedByTxId.
     getTxOutConsumedAfter :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOutIdW]

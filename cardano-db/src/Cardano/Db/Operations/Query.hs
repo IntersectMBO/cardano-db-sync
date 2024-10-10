@@ -13,6 +13,7 @@ module Cardano.Db.Operations.Query (
   queryBlockNo,
   queryBlockNoAndEpoch,
   queryBlockSlotNo,
+  queryBlockHash,
   queryReverseIndexBlockId,
   queryMinIdsAfterReverseIndex,
   queryBlockTxCount,
@@ -218,22 +219,39 @@ queryBlockNoAndEpoch blkNo = do
     blk <- from $ table @Block
     where_ (blk ^. BlockBlockNo ==. just (val blkNo))
     pure (blk ^. BlockId, blk ^. BlockEpochNo)
-  pure $ convert (listToMaybe res)
-  where
-    convert :: Maybe (Value (Key Block), Value (Maybe Word64)) -> Maybe (BlockId, Word64)
-    convert mr =
-      case mr of
-        Nothing -> Nothing
-        Just (_, Value Nothing) -> Nothing -- Should not ever happen.
-        Just (Value blkid, Value (Just epoch)) -> Just (blkid, epoch)
+  pure $ convertBlockQuery (listToMaybe res)
 
-queryBlockSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
+queryBlockSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (BlockId, Word64))
 queryBlockSlotNo slotNo = do
   res <- select $ do
     blk <- from $ table @Block
     where_ (blk ^. BlockSlotNo ==. just (val slotNo))
-    pure (blk ^. BlockId)
-  pure $ fmap unValue (listToMaybe res)
+    pure (blk ^. BlockId, blk ^. BlockBlockNo)
+  pure $ convertBlockQuery (listToMaybe res)
+
+queryBlockHash :: MonadIO m => Block -> ReaderT SqlBackend m (Maybe (BlockId, Word64))
+queryBlockHash hash = do
+  res <- select $ do
+    blk <- from $ table @Block
+    where_ (blk ^. BlockHash ==. val (blockHash hash))
+    pure (blk ^. BlockId, blk ^. BlockEpochNo)
+  pure $ convertBlockQuery (listToMaybe res)
+
+queryMinBlock :: MonadIO m => ReaderT SqlBackend m (Maybe (BlockId, Word64))
+queryMinBlock = do
+  res <- select $ do
+    blk <- from $ table @Block
+    orderBy [asc (blk ^. BlockId)]
+    limit 1
+    pure (blk ^. BlockId, blk ^. BlockBlockNo)
+  pure $ convertBlockQuery (listToMaybe res)
+
+convertBlockQuery :: Maybe (Value (Key Block), Value (Maybe Word64)) -> Maybe (BlockId, Word64)
+convertBlockQuery mr =
+  case mr of
+    Nothing -> Nothing
+    Just (_, Value Nothing) -> Nothing -- Should never happen.
+    Just (Value blkid, Value (Just epoch)) -> Just (blkid, epoch)
 
 queryReverseIndexBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [Maybe Text]
 queryReverseIndexBlockId blockId = do
@@ -1187,12 +1205,3 @@ queryPreviousSlotNo slotNo = do
     where_ (blk ^. BlockSlotNo ==. just (val slotNo))
     pure $ pblk ^. BlockSlotNo
   pure $ unValue =<< listToMaybe res
-
-queryMinBlock :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
-queryMinBlock = do
-  res <- select $ do
-    blk <- from $ table @Block
-    orderBy [asc (blk ^. BlockId)]
-    limit 1
-    pure $ blk ^. BlockId
-  pure $ unValue <$> listToMaybe res

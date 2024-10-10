@@ -110,7 +110,7 @@ pRunDbSyncNode = do
     <*> pHasInOut
     <*> pure 500
     <*> pure 10000
-    <*> optional pSlotNo
+    <*> optional pRollbackSlotNo
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -210,8 +210,8 @@ pSocketPath =
           <> Opt.metavar "FILEPATH"
       )
 
-pSlotNo :: Parser SlotNo
-pSlotNo =
+pRollbackSlotNo :: Parser SlotNo
+pRollbackSlotNo =
   SlotNo
     <$> Opt.option
       Opt.auto

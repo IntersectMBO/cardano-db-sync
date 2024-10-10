@@ -30,6 +30,7 @@ module Cardano.DbSync.Api (
   whenConsumeOrPruneTxOut,
   whenPruneTxOut,
   getTxOutTableType,
+  getPruneConsume,
   getHasConsumedOrPruneTxOut,
   getSkipTxIn,
   getPrunes,
