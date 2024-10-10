@@ -391,21 +391,21 @@ updateGovActionExpired :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT 
 updateGovActionExpired gaid eNo =
   updateWhere [GovActionProposalId ==. gaid, GovActionProposalExpiredEpoch ==. Nothing] [GovActionProposalExpiredEpoch =. Just eNo]
 
-setNullEnacted :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullEnacted :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
 setNullEnacted eNo =
-  updateWhere [GovActionProposalEnactedEpoch !=. Nothing, GovActionProposalEnactedEpoch >. Just eNo] [GovActionProposalEnactedEpoch =. Nothing]
+  updateWhereCount [GovActionProposalEnactedEpoch !=. Nothing, GovActionProposalEnactedEpoch >. Just eNo] [GovActionProposalEnactedEpoch =. Nothing]
 
-setNullRatified :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullRatified :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
 setNullRatified eNo =
-  updateWhere [GovActionProposalRatifiedEpoch !=. Nothing, GovActionProposalRatifiedEpoch >. Just eNo] [GovActionProposalRatifiedEpoch =. Nothing]
+  updateWhereCount [GovActionProposalRatifiedEpoch !=. Nothing, GovActionProposalRatifiedEpoch >. Just eNo] [GovActionProposalRatifiedEpoch =. Nothing]
 
-setNullExpired :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullExpired :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
 setNullExpired eNo =
-  updateWhere [GovActionProposalExpiredEpoch !=. Nothing, GovActionProposalExpiredEpoch >. Just eNo] [GovActionProposalExpiredEpoch =. Nothing]
+  updateWhereCount [GovActionProposalExpiredEpoch !=. Nothing, GovActionProposalExpiredEpoch >. Just eNo] [GovActionProposalExpiredEpoch =. Nothing]
 
-setNullDropped :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+setNullDropped :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
 setNullDropped eNo =
-  updateWhere [GovActionProposalDroppedEpoch !=. Nothing, GovActionProposalDroppedEpoch >. Just eNo] [GovActionProposalDroppedEpoch =. Nothing]
+  updateWhereCount [GovActionProposalDroppedEpoch !=. Nothing, GovActionProposalDroppedEpoch >. Just eNo] [GovActionProposalDroppedEpoch =. Nothing]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do

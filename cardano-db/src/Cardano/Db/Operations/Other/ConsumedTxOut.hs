@@ -30,6 +30,7 @@ import Control.Monad.Extra (unless, when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word64)
@@ -52,13 +53,20 @@ data ConsumedTriplet = ConsumedTriplet
 --------------------------------------------------------------------------------------------------
 -- Queries
 --------------------------------------------------------------------------------------------------
-querySetNullTxOut :: MonadIO m => Trace IO Text -> TxOutTableType -> Maybe TxId -> ReaderT SqlBackend m ()
-querySetNullTxOut trce txOutTableType mMinTxId = do
-  whenJust mMinTxId $ \txId -> do
-    txOutIds <- getTxOutConsumedAfter txId
-    mapM_ setNullTxOutConsumedAfter txOutIds
-    let updatedEntries = length txOutIds
-    liftIO $ logInfo trce $ "Set to null " <> textShow updatedEntries <> " tx_out.consumed_by_tx_id"
+querySetNullTxOut ::
+  MonadIO m =>
+  TxOutTableType ->
+  Maybe TxId ->
+  ReaderT SqlBackend m (Text, Int64)
+querySetNullTxOut txOutTableType mMinTxId = do
+  case mMinTxId of
+    Nothing -> do
+      pure ("No tx_out to set to null", 0)
+    Just txId -> do
+      txOutIds <- getTxOutConsumedAfter txId
+      mapM_ setNullTxOutConsumedAfter txOutIds
+      let updatedEntriesCount = length txOutIds
+      pure ("tx_out.consumed_by_tx_id", fromIntegral updatedEntriesCount)
   where
     -- \| This requires an index at TxOutConsumedByTxId.
     getTxOutConsumedAfter :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOutIdW]
@@ -114,7 +122,7 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
       DBExtraMigration "runExtraMigrations: The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
   -- Has the user given txout address config && the migration wasn't previously set
   when (isTxOutVariant && not isTxOutAddressSet) $ do
-    updateTxOutAndCreateAddress trce
+    updateTxOutAndCreateAddress
     insertExtraMigration TxOutAddressPreviouslySet
   -- first check if pruneTxOut flag is missing and it has previously been used
   when (isPruneTxOutPreviouslySet migrationValues && not (pcmPruneTxOut pcm)) $
@@ -407,29 +415,18 @@ createPruneConstraintTxOut = do
     exceptHandler e =
       liftIO $ throwIO (DBPruneConsumed $ show e)
 
--- Be very mindfull that these queries can fail silently and make tests fail making it hard to know why.
--- To help mitigate this, logs are printed after each query is ran, so one can know where it stopped.
 updateTxOutAndCreateAddress ::
   forall m.
   ( MonadBaseControl IO m
   , MonadIO m
   ) =>
-  Trace IO Text ->
   ReaderT SqlBackend m ()
-updateTxOutAndCreateAddress trc = do
+updateTxOutAndCreateAddress = do
   handle exceptHandler $ rawExecute dropViewsQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Dropped views"
   handle exceptHandler $ rawExecute alterTxOutQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Altered tx_out"
-  handle exceptHandler $ rawExecute alterCollateralTxOutQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Altered collateral_tx_out"
   handle exceptHandler $ rawExecute createAddressTableQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Created address table"
   handle exceptHandler $ rawExecute createIndexPaymentCredQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Created index payment_cred"
   handle exceptHandler $ rawExecute createIndexRawQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Created index raw"
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Completed"
   where
     dropViewsQuery =
       Text.unlines
@@ -443,16 +440,8 @@ updateTxOutAndCreateAddress trc = do
         , "  ADD COLUMN \"address_id\" INT8 NOT NULL,"
         , "  DROP COLUMN \"address\","
         , "  DROP COLUMN \"address_has_script\","
-        , "  DROP COLUMN \"payment_cred\""
-        ]
-
-    alterCollateralTxOutQuery =
-      Text.unlines
-        [ "ALTER TABLE \"collateral_tx_out\""
-        , "  ADD COLUMN \"address_id\" INT8 NOT NULL,"
-        , "  DROP COLUMN \"address\","
-        , "  DROP COLUMN \"address_has_script\","
-        , "  DROP COLUMN \"payment_cred\""
+        , "  DROP COLUMN \"payment_cred\","
+        , "  DROP COLUMN \"stake_address_id\""
         ]
 
     createAddressTableQuery =
