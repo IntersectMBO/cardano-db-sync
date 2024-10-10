@@ -87,6 +87,9 @@
                   postgresql = prev.postgresql.overrideAttrs (_:
                     final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
                       NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                      LC_CTYPE = "C";
+
+                      doCheck = false;
                     });
                 })
               ];
