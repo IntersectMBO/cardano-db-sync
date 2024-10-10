@@ -286,7 +286,7 @@ sm interpreter mockServer dbSync =
 prop_empty_blocks :: IOManager -> [(Text, Text)] -> Property
 prop_empty_blocks iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
   (hist, res) <- run $ runAction $ \interpreter mockServer dbSync -> do
-    (hist, _model, res) <- runCommands' (pure $ sm interpreter mockServer dbSync) cmds
+    (hist, _model, res) <- runCommands' (sm interpreter mockServer dbSync) cmds
     pure (hist, res)
   prettyCommands smSymbolic hist (checkCommandNames cmds (res === Ok))
   where

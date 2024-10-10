@@ -209,7 +209,7 @@ library
                       , ouroboros-network-protocols
                       , persistent
                       , persistent-postgresql
-                      , plutus-ledger-api ==1.30.0.0
+                      , plutus-ledger-api
                       , pretty-show
                       , prometheus
                       , psqueues
