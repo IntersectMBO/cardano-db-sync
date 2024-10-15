@@ -5,7 +5,7 @@
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
     haskellNix = {
-      url = "github:input-output-hk/haskell.nix";
+      url = "github:input-output-hk/haskell.nix?rev=d3b4fe3f64493a98de755e3af6dd08cae0e2961a";
       inputs.hackage.follows = "hackageNix";
     };
     hackageNix = {
@@ -82,6 +82,16 @@
                     version = "2.2.0";
                   };
                 })
+
+                (final: prev: {
+                  postgresql = prev.postgresql.overrideAttrs (_:
+                    final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
+                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                      LC_CTYPE = "C";
+
+                      doCheck = false;
+                    });
+                })
               ];
           };
 
@@ -139,7 +149,7 @@
               let
                 compilers =
                   if (system == "x86_64-linux") then
-                    ["ghc96" "ghc98"]
+                    ["ghc96" "ghc98" "ghc910"]
                   else
                     ["ghc98"];
               in
@@ -156,7 +166,7 @@
             };
 
             shell.tools = {
-              cabal = "3.10.3.0";
+              cabal = "3.12.1.0";
               ghcid = "0.8.8";
               haskell-language-server = {
                 src =

@@ -38,7 +38,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Witness
 import Cardano.DbSync.Types (DataHash)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Allegra.Scripts (Timelock)
-import Cardano.Ledger.Alonzo.Scripts (AsIx (..), ExUnits (..), PlutusPurpose (..), txscriptfee, unPlutusBinary)
+import Cardano.Ledger.Alonzo.Scripts (AsIx (..), ExUnits (..), PlutusPurpose, txscriptfee, unPlutusBinary)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Alonzo.TxAuxData (AlonzoTxAuxData (..), getAlonzoTxAuxDataScripts)
@@ -265,7 +265,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
 
         mkPurpose = \case
           Strict.SNothing -> Nothing
-          Strict.SJust a -> toAlonzoPurpose txBody $ hoistPlutusPurpose Alonzo.toAsItem a
+          Strict.SJust a -> toAlonzoPurpose txBody $ Alonzo.hoistPlutusPurpose Alonzo.toAsItem a
 
 handleTxInPtr :: Word64 -> Ledger.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
@@ -331,7 +331,7 @@ getPlutusSizes ::
   ( Core.EraTx era
   , Core.TxWits era ~ Alonzo.AlonzoTxWits era
   , Core.Script era ~ Alonzo.AlonzoScript era
-  , AlonzoEraScript era
+  , Alonzo.AlonzoEraScript era
   ) =>
   Core.Tx era ->
   [Word64]
@@ -341,7 +341,7 @@ getPlutusSizes tx =
       tx ^. (Core.witsTxL . Alonzo.scriptAlonzoTxWitsL)
 
 -- | Returns Nothing for non-plutus scripts.
-getPlutusScriptSize :: AlonzoEraScript era => Alonzo.AlonzoScript era -> Maybe Word64
+getPlutusScriptSize :: Alonzo.AlonzoEraScript era => Alonzo.AlonzoScript era -> Maybe Word64
 getPlutusScriptSize script =
   case script of
     Alonzo.TimelockScript {} -> Nothing
