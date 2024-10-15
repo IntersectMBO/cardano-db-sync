@@ -82,6 +82,16 @@
                     version = "2.2.0";
                   };
                 })
+
+                (final: prev: {
+                  postgresql = prev.postgresql.overrideAttrs (_:
+                    final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
+                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                      LC_CTYPE = "C";
+
+                      doCheck = false;
+                    });
+                })
               ];
           };
 
@@ -139,7 +149,7 @@
               let
                 compilers =
                   if (system == "x86_64-linux") then
-                    ["ghc96" "ghc98"]
+                    ["ghc96" "ghc98" "ghc910"]
                   else
                     ["ghc98"];
               in
@@ -156,8 +166,7 @@
             };
 
             shell.tools = {
-              cabal = "3.10.3.0";
-              ghcid = "0.8.8";
+              cabal = "latest";
               haskell-language-server = {
                 src =
                   if config.compiler-nix-name == "ghc8107" then
