@@ -253,14 +253,14 @@ toLedgerEventConway evt hasRewards =
     ShelleyLedgerEventTICK
       ( TickNewEpochEvent
           ( Conway.EpochEvent
-              (Conway.GovInfoEvent en ex uncl)
+              (Conway.GovInfoEvent _ en ex uncl)
             )
         ) ->
         Just $
           LedgerGovInfo
             (toGovActionRefunded True <$> toList en)
             (toGovActionRefunded False <$> toList ex)
-            uncl
+            (Map.keysSet uncl)
     _ -> Nothing
   where
     toGovActionRefunded :: EraCrypto era ~ StandardCrypto => Bool -> GovActionState era -> GovActionRefunded
