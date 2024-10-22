@@ -1,0 +1,36 @@
+### Command Line Options
+
+- **General Options:**
+  - `--config FILEPATH`: Path to the db-sync node config file
+  - `--socket-path FILEPATH`: Path to a cardano-node socket
+  - `--state-dir FILEPATH`: The directory for persisting ledger state.
+  - `--schema-dir FILEPATH`: The directory containing the migrations.
+  - `--pg-pass-env ENV`: Alternative env variable to use, defaults to `PGPASSFILE` env variable.
+  - `--disable-epoch`: Makes epoch table remain empty.
+  - `--skip-fix`: Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes.
+  - `--force-indexes`: Forces the Index creation at the start of db-sync. Normally they're created later.
+  - `--fix-only`: Runs only the db-sync fix procedure for the wrong datum, redeemer_data, and plutus script bytes and exits.
+  - `--disable-cache`: Disables the db-sync caches. Reduces memory usage but it takes longer to sync.
+  - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot.
+  - `--disable-in-out`: Disables the `tx_in` and `tx_out` table.
+
+- **Deprecated Options (for historical reference only):**
+  - For more details, refer to [Configuration Documentation](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md)
+  - `--disable-offline-data`
+  - `--disable-ledger`
+  - `--dont-use-ledger`
+  - `--keep-tx-metadata`
+  - `--disable-shelley`
+  - `--disable-multiassets`
+  - `--disable-metadata`
+  - `--disable-plutus-extra`
+  - `--disable-gov`
+  - `--disable-offchain-pool-data`
+  - `--force-tx-in`
+  - `--disable-all`
+  - `--full`
+  - `--only-utxo`
+  - `--only-gov`
+  - `--consumed-tx-out`
+  - `--prune-tx-out`
+  - `--bootstrap-tx-out`

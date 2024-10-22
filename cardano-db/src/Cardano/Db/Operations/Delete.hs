@@ -145,43 +145,6 @@ deleteUsingEpochNo epochN = do
     pure [("GovActionProposal Nulled", a + b + c + e)]
   pure $ countLogs <> nullLogs
 
-queryDelete ::
-  forall m record field.
-  (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
-  EntityField record field ->
-  field ->
-  ReaderT SqlBackend m ()
-queryDelete fieldIdField fieldId = do
-  mRecordId <- queryMinRefId fieldIdField fieldId
-  case mRecordId of
-    Nothing -> pure ()
-    Just recordId -> deleteWhere [persistIdField @record >=. recordId]
-
-queryDeleteAndLog ::
-  forall m record field.
-  (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
-  Text ->
-  EntityField record field ->
-  field ->
-  ReaderT SqlBackend m [(Text, Int64)]
-queryDeleteAndLog tableName txIdField fieldId = do
-  mRecordId <- queryMinRefId txIdField fieldId
-  case mRecordId of
-    Nothing -> pure [(tableName, 0)]
-    Just recordId -> do
-      count <- deleteWhereCount [persistIdField @record >=. recordId]
-      pure [(tableName, count)]
-
-onlyDelete ::
-  forall m record.
-  (MonadIO m, PersistEntity record, PersistEntityBackend record ~ SqlBackend) =>
-  Text ->
-  [Filter record] ->
-  ReaderT SqlBackend m [(Text, Int64)]
-onlyDelete tableName filters = do
-  count <- deleteWhereCount filters
-  pure [(tableName, count)]
-
 deleteTablesAfterBlockId ::
   MonadIO m =>
   TxOutTableType ->
@@ -333,6 +296,43 @@ deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
       pure $ result <> gaLogs <> pmrLogs <> poolUpdateLogs <> txLogs
   -- Return the combined logs of all operations
   pure $ minIdsLogs <> txIdLogs
+
+queryDelete ::
+  forall m record field.
+  (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
+  EntityField record field ->
+  field ->
+  ReaderT SqlBackend m ()
+queryDelete fieldIdField fieldId = do
+  mRecordId <- queryMinRefId fieldIdField fieldId
+  case mRecordId of
+    Nothing -> pure ()
+    Just recordId -> deleteWhere [persistIdField @record >=. recordId]
+
+queryDeleteAndLog ::
+  forall m record field.
+  (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
+  Text ->
+  EntityField record field ->
+  field ->
+  ReaderT SqlBackend m [(Text, Int64)]
+queryDeleteAndLog tableName txIdField fieldId = do
+  mRecordId <- queryMinRefId txIdField fieldId
+  case mRecordId of
+    Nothing -> pure [(tableName, 0)]
+    Just recordId -> do
+      count <- deleteWhereCount [persistIdField @record >=. recordId]
+      pure [(tableName, count)]
+
+onlyDelete ::
+  forall m record.
+  (MonadIO m, PersistEntity record, PersistEntityBackend record ~ SqlBackend) =>
+  Text ->
+  [Filter record] ->
+  ReaderT SqlBackend m [(Text, Int64)]
+onlyDelete tableName filters = do
+  count <- deleteWhereCount filters
+  pure [(tableName, count)]
 
 queryThenNull ::
   forall m record field.

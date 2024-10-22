@@ -36,7 +36,7 @@ assertBool msg bool =
 deleteAllBlocks :: MonadIO m => ReaderT SqlBackend m ()
 deleteAllBlocks = do
   mblkId <- queryMinBlock
-  whenJust mblkId $ \(blkId, epochN) -> deleteBlocksForTests TxOutCore blkId epochN
+  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutCore)
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
