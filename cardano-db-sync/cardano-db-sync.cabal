@@ -169,7 +169,7 @@ library
                       , cardano-ledger-binary
                       , cardano-ledger-byron
                       , cardano-ledger-core
-                      , cardano-ledger-conway
+                      , cardano-ledger-conway ^>= 1.17.1
                       , cardano-ledger-binary
                       , cardano-ledger-mary
                       , cardano-ledger-shelley >= 1.12.3.0
