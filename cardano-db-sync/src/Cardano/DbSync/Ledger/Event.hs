@@ -74,7 +74,7 @@ data LedgerEvent
   | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set StakeCred)
   | LedgerTotalRewards !EpochNo !(Map StakeCred (Set (Ledger.Reward StandardCrypto)))
   | LedgerAdaPots !AdaPots
-  | LedgerGovInfo [GovActionRefunded] [GovActionRefunded] (Set (GovActionId StandardCrypto))
+  | LedgerGovInfo [GovActionRefunded] [GovActionRefunded] [GovActionRefunded] (Set (GovActionId StandardCrypto))
   | LedgerDeposits (SafeHash StandardCrypto Ledger.EraIndependentTxBody) Coin
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
@@ -85,7 +85,6 @@ data GovActionRefunded = GovActionRefunded
   , garDeposit :: Coin
   , garReturnAddr :: RewardAccount StandardCrypto
   , garMTreasury :: Maybe (Map (RewardAccount StandardCrypto) Coin)
-  , garIsEnacted :: Bool -- True for enacted, False for retired, possibly redundant
   }
   deriving (Eq)
 
@@ -253,24 +252,24 @@ toLedgerEventConway evt hasRewards =
     ShelleyLedgerEventTICK
       ( TickNewEpochEvent
           ( Conway.EpochEvent
-              (Conway.GovInfoEvent _ en ex uncl)
+              (Conway.GovInfoEvent en droppedEnacted expired uncl)
             )
         ) ->
         Just $
           LedgerGovInfo
-            (toGovActionRefunded True <$> toList en)
-            (toGovActionRefunded False <$> toList ex)
+            (toGovActionRefunded <$> toList en)
+            (toGovActionRefunded <$> toList droppedEnacted)
+            (toGovActionRefunded <$> toList expired)
             (Map.keysSet uncl)
     _ -> Nothing
   where
-    toGovActionRefunded :: EraCrypto era ~ StandardCrypto => Bool -> GovActionState era -> GovActionRefunded
-    toGovActionRefunded isEnacted gas =
+    toGovActionRefunded :: EraCrypto era ~ StandardCrypto => GovActionState era -> GovActionRefunded
+    toGovActionRefunded gas =
       GovActionRefunded
         { garGovActionId = gasId gas
         , garDeposit = pProcDeposit $ gasProposalProcedure gas
         , garReturnAddr = pProcReturnAddr $ gasProposalProcedure gas
         , garMTreasury = mWithrawal
-        , garIsEnacted = isEnacted
         }
       where
         mWithrawal = case pProcGovAction (gasProposalProcedure gas) of
