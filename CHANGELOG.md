@@ -6,6 +6,7 @@
 - Support fetching from ipfs, using a new config `ipfs_gateway` [#1792]
 - Fix an issue with drep metadata images [#1857]
 - Fix an issue with pool_stat [#1833]
+- Expect pool_stat instead of pool_stats in config [#1880]
 
 
 ## 13.5.0.2

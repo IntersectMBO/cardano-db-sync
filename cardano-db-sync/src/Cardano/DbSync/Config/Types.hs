@@ -450,7 +450,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "plutus" .!= sioPlutus baseOptions
     <*> obj .:? "governance" .!= sioGovernance baseOptions
     <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData baseOptions
-    <*> obj .:? "pool_stats" .!= sioPoolStats baseOptions
+    <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
 
@@ -471,7 +471,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "plutus" sioPlutus
     , toJsonIfSet "governance" sioGovernance
     , toJsonIfSet "offchain_pool_data" sioOffchainPoolData
-    , toJsonIfSet "pool_stats" sioPoolStats
+    , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
     ]
@@ -508,7 +508,7 @@ instance ToJSON SyncInsertOptions where
       , "plutus" .= sioPlutus
       , "governance" .= sioGovernance
       , "offchain_pool_data" .= sioOffchainPoolData
-      , "pool_stats" .= sioPoolStats
+      , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
       ]
