@@ -1,5 +1,14 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.0
+- A new config `use_address_table` addition makes it possible to use a separate table for addresses [#1697]
+- Support application/ld+json http mime type for vote metadata [#1842]
+- Support fetching from ipfs, using a new config `ipfs_gateway` [#1792]
+- Fix an issue with drep metadata images [#1857]
+- Fix an issue with pool_stat [#1833]
+- Expect pool_stat instead of pool_stats in config [#1880]
+
+
 ## 13.5.0.2
 - Fix an issue with restarts
 - Fix an issue with --disable-cache not working properly [#1838]

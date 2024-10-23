@@ -82,6 +82,13 @@
                     version = "2.2.0";
                   };
                 })
+
+                (final: prev: {
+                  postgresql = prev.postgresql.overrideAttrs (_:
+                    final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
+                      doCheck = false;
+                    });
+                })
               ];
           };
 
@@ -220,10 +227,12 @@
                   packages.cardano-ledger-conway.doHaddock = false;
                   packages.cardano-ledger-shelley.doHaddock = false;
                   packages.cardano-protocol-tpraos.doHaddock = false;
+                  packages.fs-api.doHaddock = false;
                   packages.ouroboros-network-framework.doHaddock = false;
                   packages.ouroboros-consensus-cardano.doHaddock = false;
                   packages.ouroboros-consensus.doHaddock = false;
                   packages.cardano-ledger-core.doHaddock = false;
+                  packages.plutus-ledger-api.doHaddock = false;
                   packages.wai-extra.doHaddock = false;
                 })
 

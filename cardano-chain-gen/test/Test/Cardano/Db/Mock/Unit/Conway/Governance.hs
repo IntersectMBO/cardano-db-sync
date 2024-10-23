@@ -71,7 +71,7 @@ drepDistr =
 
 newCommittee :: IOManager -> [(Text, Text)] -> Assertion
 newCommittee =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfigAndLogs conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Add stake
@@ -118,7 +118,7 @@ newCommittee =
     assertEqQuery
       dbSync
       Query.queryGovActionCounts
-      (1, 1, 1, 0)
+      (1, 1, 0, 0)
       "Unexpected committee hashes"
   where
     testLabel = "conwayNewCommittee"
@@ -187,7 +187,7 @@ updateConstitution =
 
 treasuryWithdrawal :: IOManager -> [(Text, Text)] -> Assertion
 treasuryWithdrawal =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfigAndLogs conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Add stake

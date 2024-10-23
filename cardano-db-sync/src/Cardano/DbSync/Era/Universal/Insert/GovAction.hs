@@ -429,18 +429,8 @@ insertUpdateEnacted ::
   ConwayGovState StandardConway ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertUpdateEnacted trce cache blkId epochNo enactedState = do
-  whenJust (strictMaybeToMaybe (grPParamUpdate govIds)) $ \prevId -> do
-    gaId <- resolveGovActionProposal cache $ unGovPurposeId prevId
-    void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
-
-  whenJust (strictMaybeToMaybe (grHardFork govIds)) $ \prevId -> do
-    gaId <- resolveGovActionProposal cache $ unGovPurposeId prevId
-    void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
-
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
-
   constitutionId <- handleConstitution
-
   void $
     lift $
       DB.insertEpochState
@@ -456,10 +446,8 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
     handleCommittee = do
       mCommitteeGaId <- case strictMaybeToMaybe (grCommittee govIds) of
         Nothing -> pure Nothing
-        Just prevId -> do
-          gaId <- resolveGovActionProposal cache $ unGovPurposeId prevId
-          _nCommittee <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
-          pure $ Just gaId
+        Just prevId ->
+          fmap Just <$> resolveGovActionProposal cache $ unGovPurposeId prevId
 
       case (mCommitteeGaId, strictMaybeToMaybe (cgsCommittee enactedState)) of
         (Nothing, Nothing) -> pure (Nothing, Nothing)
@@ -496,10 +484,8 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
     handleConstitution = do
       mConstitutionGaId <- case strictMaybeToMaybe (grConstitution govIds) of
         Nothing -> pure Nothing
-        Just prevId -> do
-          gaId <- resolveGovActionProposal cache $ unGovPurposeId prevId
-          _nConstitution <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
-          pure $ Just gaId
+        Just prevId ->
+          fmap Just <$> resolveGovActionProposal cache $ unGovPurposeId prevId
 
       constitutionIds <- lift $ DB.queryProposalConstitution mConstitutionGaId
       case constitutionIds of

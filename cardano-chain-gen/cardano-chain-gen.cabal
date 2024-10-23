@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-chain-gen
-version:                13.5.0.2
+version:                13.6.0.0
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/IntersectMBO/cardano-db-sync
@@ -95,7 +95,7 @@ library
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
                       , plutus-core
-                      , plutus-ledger-api:{plutus-ledger-api-testlib} ==1.30.0.0
+                      , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
                       , strict-sop-core
                       , strict-stm
