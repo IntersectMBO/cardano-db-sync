@@ -7,6 +7,7 @@
 - Fix an issue with drep metadata images [#1857]
 - Fix an issue with pool_stat [#1833]
 - Expect pool_stat instead of pool_stats in config [#1880]
+- Enacted gov_action_proposal are no longer marked as dropped
 
 
 ## 13.5.0.2
