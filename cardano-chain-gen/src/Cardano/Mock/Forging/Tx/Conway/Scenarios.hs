@@ -10,6 +10,7 @@
 module Cardano.Mock.Forging.Tx.Conway.Scenarios (
   delegateAndSendBlocks,
   registerDRepsAndDelegateVotes,
+  registerCommitteeCreds,
 ) where
 
 import Cardano.Ledger.Address (Addr (..), Withdrawals (..))
@@ -120,3 +121,10 @@ registerDRepAndDelegateVotes' drepId stakeIx ledger = do
   delegTx <- Conway.mkDCertTx [regDelegCert] (Withdrawals mempty) Nothing
 
   pure [paymentTx, regTx, delegTx]
+
+registerCommitteeCreds :: Interpreter -> IO CardanoBlock
+registerCommitteeCreds interpreter = do
+  let txs' = mapM (uncurry Conway.mkCommitteeAuthTx) bootstrapCommitteeCreds
+  blockTxs <- withConwayLedgerState interpreter $ const txs'
+
+  forgeNextFindLeader interpreter (map TxConway blockTxs)

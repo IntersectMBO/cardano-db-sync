@@ -20,8 +20,10 @@ module Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochs,
   fillEpochPercentage,
   rollbackTo,
+  initGovernance,
   registerAllStakeCreds,
   registerDRepsAndDelegateVotes,
+  registerCommitteeCreds,
 ) where
 
 import Cardano.Ledger.Alonzo (AlonzoEra)
@@ -203,6 +205,22 @@ rollbackTo interpreter mockServer point = do
   rollbackInterpreter interpreter point
   atomically $ rollback mockServer point
 
+initGovernance :: Interpreter -> ServerHandle IO CardanoBlock -> IO [CardanoBlock]
+initGovernance interpreter mockServer = do
+  -- Add stake
+  blk0 <- registerAllStakeCreds interpreter mockServer
+
+  -- Register a DRep and delegate votes to it
+  blk1 <- registerDRepsAndDelegateVotes interpreter mockServer
+
+  -- DRep distribution is calculated a-*t end of the current epoch
+  epoch <- fillUntilNextEpoch interpreter mockServer
+
+  -- Register committee hot credentials
+  blk2 <- registerCommitteeCreds interpreter mockServer
+
+  pure ([blk0, blk1] ++ epoch ++ [blk2])
+
 registerAllStakeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 registerAllStakeCreds interpreter mockServer = do
   blk <- forgeWithStakeCreds interpreter
@@ -212,6 +230,12 @@ registerAllStakeCreds interpreter mockServer = do
 registerDRepsAndDelegateVotes :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 registerDRepsAndDelegateVotes interpreter mockServer = do
   blk <- Conway.registerDRepsAndDelegateVotes interpreter
+  atomically (addBlock mockServer blk)
+  pure blk
+
+registerCommitteeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
+registerCommitteeCreds interpreter mockServer = do
+  blk <- Conway.registerCommitteeCreds interpreter
   atomically (addBlock mockServer blk)
   pure blk
 
