@@ -19,7 +19,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        compiler-nix-name: [ghc810, ghc96, ghc98, ghc910]
+        # TODO: Add ghc910 when input-output-hk/devx is fixed
+        compiler-nix-name: [ghc810, ghc96, ghc98]
         include:
           # We want a single job, because macOS runners are scarce.
           - os: macos-latest
