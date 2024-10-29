@@ -30,6 +30,7 @@ import Control.Monad.Extra (unless, when, whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
+import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Word (Word64)
@@ -52,13 +53,20 @@ data ConsumedTriplet = ConsumedTriplet
 --------------------------------------------------------------------------------------------------
 -- Queries
 --------------------------------------------------------------------------------------------------
-querySetNullTxOut :: MonadIO m => Trace IO Text -> TxOutTableType -> Maybe TxId -> ReaderT SqlBackend m ()
-querySetNullTxOut trce txOutTableType mMinTxId = do
-  whenJust mMinTxId $ \txId -> do
-    txOutIds <- getTxOutConsumedAfter txId
-    mapM_ setNullTxOutConsumedAfter txOutIds
-    let updatedEntries = length txOutIds
-    liftIO $ logInfo trce $ "Set to null " <> textShow updatedEntries <> " tx_out.consumed_by_tx_id"
+querySetNullTxOut ::
+  MonadIO m =>
+  TxOutTableType ->
+  Maybe TxId ->
+  ReaderT SqlBackend m (Text, Int64)
+querySetNullTxOut txOutTableType mMinTxId = do
+  case mMinTxId of
+    Nothing -> do
+      pure ("No tx_out to set to null", 0)
+    Just txId -> do
+      txOutIds <- getTxOutConsumedAfter txId
+      mapM_ setNullTxOutConsumedAfter txOutIds
+      let updatedEntriesCount = length txOutIds
+      pure ("tx_out.consumed_by_tx_id", fromIntegral updatedEntriesCount)
   where
     -- \| This requires an index at TxOutConsumedByTxId.
     getTxOutConsumedAfter :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOutIdW]
