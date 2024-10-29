@@ -17,6 +17,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
+  optimiseCaches,
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
  )
@@ -64,16 +65,18 @@ insertBlockUniversal ::
   ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
+  -- if we're syncing within 30 mins of the tip, we optomise the caches.
+  newCache <- if isSyncedWithinHalfHour details then optimiseCaches cache else pure cache
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
-      Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
-    mPhid <- lift $ queryPoolKeyWithCache cache UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
+      Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) newCache pHash
+    mPhid <- lift $ queryPoolKeyWithCache newCache UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
-      lift . insertBlockAndCache cache $
+      lift . insertBlockAndCache newCache $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo
@@ -104,7 +107,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     when (soptEpochAndCacheEnabled $ envOptions syncEnv)
       . newExceptT
       $ writeEpochBlockDiffToCache
-        cache
+        newCache
         EpochBlockDiff
           { ebdBlockId = blkId
           , ebdTime = sdSlotTime details

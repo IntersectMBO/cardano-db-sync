@@ -64,7 +64,9 @@ data StakeCache = StakeCache
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
 data CacheStatus
   = NoCache
-  | ActiveCache !CacheInternal
+  | -- | The Bool represents if we have surpassed being close to the tip of the chain.
+    -- this is used to optimise the caches from that point onwards.
+    ActiveCache !Bool !CacheInternal
 
 data CacheAction
   = UpdateCache
@@ -128,7 +130,7 @@ data CacheEpoch = CacheEpoch
 
 textShowStats :: CacheStatus -> IO Text
 textShowStats NoCache = pure "NoCache"
-textShowStats (ActiveCache ic) = do
+textShowStats (ActiveCache isCacheOptomised ic) = do
   stats <- readTVarIO $ cStats ic
   stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
@@ -138,6 +140,7 @@ textShowStats (ActiveCache ic) = do
   pure $
     mconcat
       [ "\nCache Statistics:"
+      , "\n  Caches Optomised: " <> textShow isCacheOptomised
       , "\n  Stake Addresses: "
       , "cache sizes: "
       , textShow (Map.size $ scStableCache stakeHashRaws)
@@ -220,7 +223,7 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
-  pure . ActiveCache $
+  pure . ActiveCache False $
     CacheInternal
       { cStake = cStake
       , cPools = cPools
