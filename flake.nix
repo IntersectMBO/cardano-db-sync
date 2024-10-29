@@ -355,15 +355,6 @@
             # Collect local package `exe`s
             nixpkgs.haskell-nix.haskellLib.projectOverlays.projectComponents
 
-            # Add git revision to `exe`s
-            (final: prev: {
-              hsPkgs = final.pkgs.setGitRevForPaths (self.rev or "dirty") [
-                "cardano-db-sync.components.exes.cardano-db-sync"
-                "cardano-smash-server.components.exes.cardano-smash-server"
-                "cardano-db-tool.components.exes.cardano-db-tool"
-              ] prev.hsPkgs;
-            })
-
             (final: prev: {
               profiled = final.appendModule {
                 modules = [{
@@ -393,7 +384,10 @@
           let
             mkDist = platform: project:
               let
-                exes = lib.collect lib.isDerivation project.exes;
+                exes = with lib; pipe project.exes [
+                  (collect isDerivation)
+                  (map setGitRev)
+                ];
                 name = "cardano-db-sync-${version}-${platform}";
                 version = project.exes.cardano-db-sync.identifier.version;
                 env = {
@@ -460,6 +454,14 @@
                 nonRequiredMacOSPaths
               else [];
 
+            exeSetGitRev = drvKey: drv:
+              if nixpkgs.lib.hasInfix ":exe:" drvKey then
+                setGitRev drv
+              else
+                drv;
+
+            setGitRev = nixpkgs.setGitRev (self.rev or "dirty");
+
           in rec {
             checks = staticChecks;
 
@@ -494,7 +496,8 @@
               inherit cardano-db-sync-macos;
             } // {
               inherit cardano-smash-server-no-basic-auth profiled;
-            };
+            # Run setGitRev on all packages that have ":exe:" in their key
+            } // builtins.mapAttrs exeSetGitRev flake.packages;
           })) // {
             nixosModules = {
               cardano-db-sync = { pkgs, lib, ... }: {
