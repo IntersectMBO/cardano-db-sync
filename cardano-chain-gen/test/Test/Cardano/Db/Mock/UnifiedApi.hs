@@ -22,6 +22,7 @@ module Test.Cardano.Db.Mock.UnifiedApi (
   rollbackTo,
   registerAllStakeCreds,
   registerDRepsAndDelegateVotes,
+  registerCommitteeCreds,
 ) where
 
 import Cardano.Ledger.Alonzo (AlonzoEra)
@@ -212,6 +213,12 @@ registerAllStakeCreds interpreter mockServer = do
 registerDRepsAndDelegateVotes :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 registerDRepsAndDelegateVotes interpreter mockServer = do
   blk <- Conway.registerDRepsAndDelegateVotes interpreter
+  atomically (addBlock mockServer blk)
+  pure blk
+
+registerCommitteeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
+registerCommitteeCreds interpreter mockServer = do
+  blk <- Conway.registerCommitteeCreds interpreter
   atomically (addBlock mockServer blk)
   pure blk
 

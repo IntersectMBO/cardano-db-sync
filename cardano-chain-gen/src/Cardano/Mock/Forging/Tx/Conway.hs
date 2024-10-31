@@ -50,8 +50,12 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkRegDelegTxCert,
   mkAddCommitteeTx,
   mkTreasuryWithdrawalTx,
+  mkParamChangeTx,
+  mkHardForkInitTx,
+  mkInfoTx,
   mkGovActionProposalTx,
   mkGovVoteTx,
+  mkGovVoteYesTx,
   Babbage.mkParamUpdateTx,
   mkFullTx,
   mkScriptMint',
@@ -107,6 +111,7 @@ import qualified Data.OSet.Strict as OSet
 import Data.Sequence.Strict (StrictSeq ())
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
+import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (EraCrypto, LedgerState ())
 import Ouroboros.Consensus.Shelley.Eras (StandardConway (), StandardCrypto ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
@@ -563,6 +568,24 @@ mkTreasuryWithdrawalTx rewardAccount amount = mkGovActionProposalTx govAction
     withdrawals = Map.singleton rewardAccount amount
     hashProtection = SNothing
 
+mkParamChangeTx :: AlonzoTx StandardConway
+mkParamChangeTx = mkGovActionProposalTx govAction
+  where
+    govAction = Governance.ParameterChange SNothing paramUpdate hasProtection
+    paramUpdate = Core.emptyPParamsUpdate & Core.ppuMaxTxSizeL .~ SJust 32_000
+    hasProtection = SNothing
+
+mkHardForkInitTx :: AlonzoTx StandardConway
+mkHardForkInitTx = mkGovActionProposalTx govAction
+  where
+    govAction = Governance.HardForkInitiation SNothing protoVersion
+    protoVersion = ProtVer (natVersion @11) 0
+
+mkInfoTx :: AlonzoTx StandardConway
+mkInfoTx = mkGovActionProposalTx govAction
+  where
+    govAction = Governance.InfoAction
+
 mkGovActionProposalTx ::
   Governance.GovAction StandardConway ->
   AlonzoTx StandardConway
@@ -585,18 +608,25 @@ mkGovActionProposalTx govAction = mkSimpleTx True txBody
         , Governance.anchorDataHash = hashAnchorData (Governance.AnchorData mempty)
         }
 
-mkGovVoteTx ::
+mkGovVoteYesTx ::
   Governance.GovActionId StandardCrypto ->
   [Governance.Voter StandardCrypto] ->
   AlonzoTx StandardConway
-mkGovVoteTx govAction voters = mkSimpleTx True txBody
+mkGovVoteYesTx govAction =
+  mkGovVoteTx govAction . Map.fromList . map (,Governance.VoteYes)
+
+mkGovVoteTx ::
+  Governance.GovActionId StandardCrypto ->
+  Map (Governance.Voter StandardCrypto) Governance.Vote ->
+  AlonzoTx StandardConway
+mkGovVoteTx govAction votes = mkSimpleTx True txBody
   where
-    txBody = mkDummyTxBody {ctbVotingProcedures = Governance.VotingProcedures votes}
-    votes = Map.fromList . map (,govActionVote) $ voters
-    govActionVote = Map.singleton govAction vote
-    vote =
+    txBody = mkDummyTxBody {ctbVotingProcedures = Governance.VotingProcedures votes'}
+    votes' = fmap mkGovActionVote votes
+    mkGovActionVote = Map.singleton govAction . mkVote
+    mkVote v =
       Governance.VotingProcedure
-        { Governance.vProcVote = Governance.VoteYes
+        { Governance.vProcVote = v
         , Governance.vProcAnchor = SNothing
         }
 

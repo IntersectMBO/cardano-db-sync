@@ -514,10 +514,10 @@ share
 
     committeeMinSize         DbWord64 Maybe sqltype=word64type
     committeeMaxTermLength   DbWord64 Maybe sqltype=word64type
-    govActionLifetime        Word64 Maybe   sqltype=word64type
+    govActionLifetime        DbWord64 Maybe   sqltype=word64type
     govActionDeposit         DbWord64 Maybe sqltype=word64type
     drepDeposit              DbWord64 Maybe sqltype=word64type
-    drepActivity             Word64 Maybe sqltype=word64type
+    drepActivity             DbWord64 Maybe sqltype=word64type
     minFeeRefScriptCostPerByte Double Maybe  -- sqltype=rational
 
     blockId             BlockId             noreference      -- The first block where these parameters are valid.
