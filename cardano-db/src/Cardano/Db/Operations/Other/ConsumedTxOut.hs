@@ -113,9 +113,9 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
       isTxOutAddressSet = isTxOutAddressPreviouslySet migrationValues
 
   -- can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
-  when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
-    throw $
-      DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
+  -- when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
+  --   throw $
+  --     DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
   -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
   when (not isTxOutVariant && isTxOutAddressSet) $
     throw $
@@ -123,7 +123,8 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
   -- Has the user given txout address config && the migration wasn't previously set
   when (isTxOutVariant && not isTxOutAddressSet) $ do
     updateTxOutAndCreateAddress trce
-    performAddressMigration trce
+    -- only run the address migration if the tx_out table is not null
+    unless isTxOutNull $ performAddressMigration trce
     insertExtraMigration TxOutAddressPreviouslySet
   -- first check if pruneTxOut flag is missing and it has previously been used
   when (isPruneTxOutPreviouslySet migrationValues && not (pcmPruneTxOut pcm)) $
@@ -445,19 +446,13 @@ updateTxOutAndCreateAddress trc = do
     alterTxOutQuery =
       Text.unlines
         [ "ALTER TABLE \"tx_out\""
-        , "  ADD COLUMN \"address_id\" INT8 NOT NULL,"
-        , "  DROP COLUMN \"address\","
-        , "  DROP COLUMN \"address_has_script\","
-        , "  DROP COLUMN \"payment_cred\""
+        , "  ADD COLUMN \"address_id\" INT8"
         ]
 
     alterCollateralTxOutQuery =
       Text.unlines
         [ "ALTER TABLE \"collateral_tx_out\""
-        , "  ADD COLUMN \"address_id\" INT8 NOT NULL,"
-        , "  DROP COLUMN \"address\","
-        , "  DROP COLUMN \"address_has_script\","
-        , "  DROP COLUMN \"payment_cred\""
+        , "  ADD COLUMN \"address_id\" INT8"
         ]
 
     createAddressTableQuery =
@@ -465,7 +460,7 @@ updateTxOutAndCreateAddress trc = do
         [ "CREATE TABLE \"address\" ("
         , "  \"id\" SERIAL8 PRIMARY KEY UNIQUE,"
         , "  \"address\" VARCHAR NOT NULL,"
-        , "  \"raw\" BYTEA NOT NULL,"
+        , "  \"raw\" BYTEA NULL,"
         , "  \"has_script\" BOOLEAN NOT NULL,"
         , "  \"payment_cred\" hash28type NULL,"
         , "  \"stake_address_id\" INT8 NULL"
@@ -492,6 +487,10 @@ performAddressMigration trc = do
   liftIO $ logInfo trc "migrateTxOutAddress: Updated address_id in tx_out"
   handle exceptHandler $ rawExecute updateCollateralTxOutAddressIdQuery []
   liftIO $ logInfo trc "migrateTxOutAddress: Updated address_id in collateral_tx_out"
+  handle exceptHandler $ rawExecute alterTxOutQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Altered tx_out"
+  handle exceptHandler $ rawExecute alterCollateralTxOutQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Altered collateral_tx_out"
   handle exceptHandler $ rawExecute createIndexPaymentCredQuery []
   liftIO $ logInfo trc "migrateTxOutAddress: Created index payment_cred"
   handle exceptHandler $ rawExecute createIndexRawQuery []
@@ -539,6 +538,24 @@ performAddressMigration trc = do
         , "  AND collateral_tx_out.address_has_script = a.has_script"
         , "  AND COALESCE(collateral_tx_out.payment_cred, '') = COALESCE(a.payment_cred, '')"
         , "  AND COALESCE(collateral_tx_out.stake_address_id, -1) = COALESCE(a.stake_address_id, -1)"
+        ]
+
+    alterTxOutQuery =
+      Text.unlines
+        [ "ALTER TABLE \"tx_out\""
+        , "  ALTER COLUMN \"address_id\" SET NOT NULL,"
+        , "  DROP COLUMN \"address\","
+        , "  DROP COLUMN \"address_has_script\","
+        , "  DROP COLUMN \"payment_cred\""
+        ]
+
+    alterCollateralTxOutQuery =
+      Text.unlines
+        [ "ALTER TABLE \"collateral_tx_out\""
+        , "  ALTER COLUMN \"address_id\" SET NOT NULL,"
+        , "  DROP COLUMN \"address\","
+        , "  DROP COLUMN \"address_has_script\","
+        , "  DROP COLUMN \"payment_cred\""
         ]
 
     createIndexPaymentCredQuery =
