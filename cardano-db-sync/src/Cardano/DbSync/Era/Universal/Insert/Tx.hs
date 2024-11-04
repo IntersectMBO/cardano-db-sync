@@ -255,7 +255,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         pure $
           DB.VTxOutW
             (mkTxOutVariant mSaId addrId mDatumId mScriptId)
-            Nothing
+            (Just vAddress)
   -- TODO: Unsure about what we should return here for eutxo
   let !eutxo =
         case ioTxOutTableType iopts of

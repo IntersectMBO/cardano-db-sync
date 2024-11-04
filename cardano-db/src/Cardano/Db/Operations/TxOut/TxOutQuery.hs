@@ -199,6 +199,126 @@ queryTxOutCredentialsVariant (hash, index) = do
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
 --------------------------------------------------------------------------------
+-- ADDRESS QUERIES
+--------------------------------------------------------------------------------
+queryAddressId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe V.AddressId)
+queryAddressId addrRaw = do
+  res <- select $ do
+    addr <- from $ table @V.Address
+    where_ (addr ^. V.AddressRaw ==. val addrRaw)
+    pure (addr ^. V.AddressId)
+  pure $ unValue <$> listToMaybe res
+
+--------------------------------------------------------------------------------
+-- queryTotalSupply
+--------------------------------------------------------------------------------
+
+-- | Get the current total supply of Lovelace. This only returns the on-chain supply which
+-- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
+-- rewards are part of the ledger state and hence not on chain.
+queryTotalSupply ::
+  (MonadIO m) =>
+  TxOutTableType ->
+  ReaderT SqlBackend m Ada
+queryTotalSupply txOutTableType =
+  case txOutTableType of
+    TxOutCore -> query @'TxOutCore
+    TxOutVariantAddress -> query @'TxOutVariantAddress
+  where
+    query ::
+      forall (a :: TxOutTableType) m.
+      (MonadIO m, TxOutFields a) =>
+      ReaderT SqlBackend m Ada
+    query = do
+      res <- select $ do
+        txOut <- from $ table @(TxOutTable a)
+        txOutUnspentP @a txOut
+        pure $ sum_ (txOut ^. txOutValueField @a)
+      pure $ unValueSumAda (listToMaybe res)
+
+--------------------------------------------------------------------------------
+-- queryGenesisSupply
+--------------------------------------------------------------------------------
+
+-- | Return the total Genesis coin supply.
+queryGenesisSupply ::
+  (MonadIO m) =>
+  TxOutTableType ->
+  ReaderT SqlBackend m Ada
+queryGenesisSupply txOutTableType =
+  case txOutTableType of
+    TxOutCore -> query @'TxOutCore
+    TxOutVariantAddress -> query @'TxOutVariantAddress
+  where
+    query ::
+      forall (a :: TxOutTableType) m.
+      (MonadIO m, TxOutFields a) =>
+      ReaderT SqlBackend m Ada
+    query = do
+      res <- select $ do
+        (_tx :& txOut :& blk) <-
+          from
+            $ table @Tx
+              `innerJoin` table @(TxOutTable a)
+            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+              `innerJoin` table @Block
+            `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+        where_ (isNothing $ blk ^. BlockPreviousId)
+        pure $ sum_ (txOut ^. txOutValueField @a)
+      pure $ unValueSumAda (listToMaybe res)
+
+-- A predicate that filters out spent 'TxOut' entries.
+{-# INLINEABLE txOutUnspentP #-}
+txOutUnspentP :: forall a. TxOutFields a => SqlExpr (Entity (TxOutTable a)) -> SqlQuery ()
+txOutUnspentP txOut =
+  where_ . notExists $
+    from (table @TxIn) >>= \txIn ->
+      where_
+        ( txOut
+            ^. txOutTxIdField @a
+            ==. txIn
+              ^. TxInTxOutId
+            &&. txOut
+              ^. txOutIndexField @a
+              ==. txIn
+                ^. TxInTxOutIndex
+        )
+
+--------------------------------------------------------------------------------
+-- queryShelleyGenesisSupply
+--------------------------------------------------------------------------------
+
+-- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
+-- is the unique which has a non-null PreviousId, but has null Epoch.
+queryShelleyGenesisSupply :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m Ada
+queryShelleyGenesisSupply txOutTableType =
+  case txOutTableType of
+    TxOutCore -> query @'TxOutCore
+    TxOutVariantAddress -> query @'TxOutVariantAddress
+  where
+    query ::
+      forall (a :: TxOutTableType) m.
+      (MonadIO m, TxOutFields a) =>
+      ReaderT SqlBackend m Ada
+    query = do
+      res <- select $ do
+        (txOut :& _tx :& blk) <-
+          from
+            $ table @(TxOutTable a)
+              `innerJoin` table @Tx
+            `on` (\(txOut :& tx) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+              `innerJoin` table @Block
+            `on` (\(_txOut :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+        where_ (isJust $ blk ^. BlockPreviousId)
+        where_ (isNothing $ blk ^. BlockEpochNo)
+        pure $ sum_ (txOut ^. txOutValueField @a)
+      pure $ unValueSumAda (listToMaybe res)
+
+--------------------------------------------------------------------------------
+-- Testing or validating. Queries below are not used in production
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- queryUtxoAtBlockNo
 --------------------------------------------------------------------------------
 queryUtxoAtBlockNo :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [UtxoQueryResult]
@@ -388,17 +508,6 @@ queryScriptOutputsVariant = do
       VTxOutW (entityVal txOut) (Just (entityVal address))
 
 --------------------------------------------------------------------------------
--- ADDRESS QUERIES
---------------------------------------------------------------------------------
-queryAddressId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe V.AddressId)
-queryAddressId addrRaw = do
-  res <- select $ do
-    addr <- from $ table @V.Address
-    where_ (addr ^. V.AddressRaw ==. val addrRaw)
-    pure (addr ^. V.AddressId)
-  pure $ unValue <$> listToMaybe res
-
---------------------------------------------------------------------------------
 -- queryAddressOutputs
 --------------------------------------------------------------------------------
 queryAddressOutputs :: MonadIO m => TxOutTableType -> Text -> ReaderT SqlBackend m DbLovelace
@@ -419,94 +528,6 @@ queryAddressOutputs txOutTableType addr = do
     convert v = case unValue <$> v of
       Just (Just x) -> x
       _otherwise -> DbLovelace 0
-
---------------------------------------------------------------------------------
--- queryTotalSupply
---------------------------------------------------------------------------------
-
--- | Get the current total supply of Lovelace. This only returns the on-chain supply which
--- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
--- rewards are part of the ledger state and hence not on chain.
-queryTotalSupply ::
-  (MonadIO m) =>
-  TxOutTableType ->
-  ReaderT SqlBackend m Ada
-queryTotalSupply txOutTableType =
-  case txOutTableType of
-    TxOutCore -> query @'TxOutCore
-    TxOutVariantAddress -> query @'TxOutVariantAddress
-  where
-    query ::
-      forall (a :: TxOutTableType) m.
-      (MonadIO m, TxOutFields a) =>
-      ReaderT SqlBackend m Ada
-    query = do
-      res <- select $ do
-        txOut <- from $ table @(TxOutTable a)
-        txOutUnspentP @a txOut
-        pure $ sum_ (txOut ^. txOutValueField @a)
-      pure $ unValueSumAda (listToMaybe res)
-
---------------------------------------------------------------------------------
--- queryGenesisSupply
---------------------------------------------------------------------------------
-
--- | Return the total Genesis coin supply.
-queryGenesisSupply ::
-  (MonadIO m) =>
-  TxOutTableType ->
-  ReaderT SqlBackend m Ada
-queryGenesisSupply txOutTableType =
-  case txOutTableType of
-    TxOutCore -> query @'TxOutCore
-    TxOutVariantAddress -> query @'TxOutVariantAddress
-  where
-    query ::
-      forall (a :: TxOutTableType) m.
-      (MonadIO m, TxOutFields a) =>
-      ReaderT SqlBackend m Ada
-    query = do
-      res <- select $ do
-        (_tx :& txOut :& blk) <-
-          from
-            $ table @Tx
-              `innerJoin` table @(TxOutTable a)
-            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
-              `innerJoin` table @Block
-            `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-        where_ (isNothing $ blk ^. BlockPreviousId)
-        pure $ sum_ (txOut ^. txOutValueField @a)
-      pure $ unValueSumAda (listToMaybe res)
-
---------------------------------------------------------------------------------
--- queryShelleyGenesisSupply
---------------------------------------------------------------------------------
-
--- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
--- is the unique which has a non-null PreviousId, but has null Epoch.
-queryShelleyGenesisSupply :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m Ada
-queryShelleyGenesisSupply txOutTableType =
-  case txOutTableType of
-    TxOutCore -> query @'TxOutCore
-    TxOutVariantAddress -> query @'TxOutVariantAddress
-  where
-    query ::
-      forall (a :: TxOutTableType) m.
-      (MonadIO m, TxOutFields a) =>
-      ReaderT SqlBackend m Ada
-    query = do
-      res <- select $ do
-        (txOut :& _tx :& blk) <-
-          from
-            $ table @(TxOutTable a)
-              `innerJoin` table @Tx
-            `on` (\(txOut :& tx) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
-              `innerJoin` table @Block
-            `on` (\(_txOut :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-        where_ (isJust $ blk ^. BlockPreviousId)
-        where_ (isNothing $ blk ^. BlockEpochNo)
-        pure $ sum_ (txOut ^. txOutValueField @a)
-      pure $ unValueSumAda (listToMaybe res)
 
 --------------------------------------------------------------------------------
 -- Helper Functions
@@ -549,20 +570,3 @@ queryTxOutUnspentCount txOutTableType =
         txOutUnspentP @a txOut
         pure countRows
       pure $ maybe 0 unValue (listToMaybe res)
-
--- A predicate that filters out spent 'TxOut' entries.
-{-# INLINEABLE txOutUnspentP #-}
-txOutUnspentP :: forall a. TxOutFields a => SqlExpr (Entity (TxOutTable a)) -> SqlQuery ()
-txOutUnspentP txOut =
-  where_ . notExists $
-    from (table @TxIn) >>= \txIn ->
-      where_
-        ( txOut
-            ^. txOutTxIdField @a
-            ==. txIn
-              ^. TxInTxOutId
-            &&. txOut
-              ^. txOutIndexField @a
-              ==. txIn
-                ^. TxInTxOutIndex
-        )

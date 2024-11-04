@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
@@ -29,16 +28,6 @@ data TxOutTableType = TxOutCore | TxOutVariantAddress
 data TxOutW
   = CTxOutW !C.TxOut
   | VTxOutW !V.TxOut !(Maybe V.Address)
-
--- Pattern synonyms for easier construction
-pattern CoreTxOut :: C.TxOut -> TxOutW
-pattern CoreTxOut txOut = CTxOutW txOut
-
-pattern VariantTxOutWithAddr :: V.TxOut -> V.Address -> TxOutW
-pattern VariantTxOutWithAddr txOut address = VTxOutW txOut (Just address)
-
-pattern VariantTxOutNoAddr :: V.TxOut -> Maybe V.Address -> TxOutW
-pattern VariantTxOutNoAddr txOut maybeAddress = VTxOutW txOut maybeAddress
 
 -- | A wrapper for TxOutId
 data TxOutIdW
@@ -192,11 +181,6 @@ extractVariantTxOut :: TxOutW -> V.TxOut
 extractVariantTxOut (VTxOutW txOut _) = txOut
 -- this will never error as we can only have either CoreTxOut or VariantTxOut
 extractVariantTxOut (CTxOutW _) = error "Unexpected CTxOut in VariantTxOut list"
-
-extractVariantAddress :: TxOutW -> Maybe V.Address
-extractVariantAddress (VTxOutW _ address) = address
--- this will never error as we can only have either CoreTxOut or VariantTxOut
-extractVariantAddress (CTxOutW _) = error "Unexpected CTxOut in VariantTxOut list"
 
 convertTxOutIdCore :: [TxOutIdW] -> [C.TxOutId]
 convertTxOutIdCore = mapMaybe unwrapCore
