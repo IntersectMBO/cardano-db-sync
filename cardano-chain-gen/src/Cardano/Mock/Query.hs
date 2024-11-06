@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Mock.Query (
+  queryParamFromEpoch,
   queryVersionMajorFromEpoch,
   queryParamProposalFromEpoch,
   queryNullTxDepositExists,
@@ -19,6 +20,18 @@ import Cardano.Prelude hiding (from, on)
 import Database.Esqueleto.Experimental
 import Prelude ()
 
+queryParamFromEpoch ::
+  (MonadIO io, PersistField field) =>
+  EntityField Db.EpochParam field ->
+  Word64 ->
+  ReaderT SqlBackend io (Maybe field)
+queryParamFromEpoch field epochNo = do
+  res <- selectOne $ do
+    prop <- from $ table @Db.EpochParam
+    where_ (prop ^. Db.EpochParamEpochNo ==. val epochNo)
+    pure (prop ^. field)
+  pure $ unValue <$> res
+
 -- | Query protocol parameters from @EpochParam@ by epoch number. Note that epoch
 --   parameters are inserted at the beginning of the next epoch.
 --
@@ -32,12 +45,7 @@ queryVersionMajorFromEpoch ::
   MonadIO io =>
   Word64 ->
   ReaderT SqlBackend io (Maybe Word16)
-queryVersionMajorFromEpoch epochNo = do
-  res <- selectOne $ do
-    prop <- from $ table @Db.EpochParam
-    where_ (prop ^. Db.EpochParamEpochNo ==. val epochNo)
-    pure (prop ^. Db.EpochParamProtocolMajor)
-  pure $ unValue <$> res
+queryVersionMajorFromEpoch = queryParamFromEpoch Db.EpochParamProtocolMajor
 
 -- | Query protocol parameter proposals from @ParamProposal@ by epoch number.
 queryParamProposalFromEpoch ::
