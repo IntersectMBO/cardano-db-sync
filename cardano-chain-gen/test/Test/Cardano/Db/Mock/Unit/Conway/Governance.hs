@@ -13,14 +13,17 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   newCommittee,
   updateConstitution,
   treasuryWithdrawal,
+  parameterChange,
+  hardFork,
+  infoAction,
 ) where
 
 import qualified Cardano.Db as Db
-import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash)
+import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash, unTxHash)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), hashAnchorData, textToUrl)
 import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..), Voter (..))
+import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
 import Cardano.Ledger.Core (txIdTx)
 import Cardano.Ledger.Credential (Credential (..))
@@ -34,6 +37,7 @@ import Cardano.Mock.Forging.Types
 import qualified Cardano.Mock.Query as Query
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
+import qualified Data.Map as Map
 import Data.Maybe (fromJust)
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Test.Cardano.Db.Mock.Config
@@ -71,7 +75,7 @@ drepDistr =
 
 newCommittee :: IOManager -> [(Text, Text)] -> Assertion
 newCommittee =
-  withFullConfigAndLogs conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Add stake
@@ -92,13 +96,9 @@ newCommittee =
           -- Create votes for all stake pools. We start in the Conway bootstrap phase, so
           -- DRep votes are not yet required.
           addVoteTx =
-            Conway.mkGovVoteTx
+            Conway.mkGovVoteYesTx
               govActionId
-              [ DRepVoter (Prelude.head Forging.unregisteredDRepIds)
-              , StakePoolVoter (Forging.resolvePool (PoolIndex 0) ledger)
-              , StakePoolVoter (Forging.resolvePool (PoolIndex 1) ledger)
-              , StakePoolVoter (Forging.resolvePool (PoolIndex 2) ledger)
-              ]
+              (Forging.drepVoters ++ Forging.resolveStakePoolVoters ledger)
           govActionId =
             GovActionId
               { gaidTxId = txIdTx addCcTx
@@ -119,7 +119,7 @@ newCommittee =
       dbSync
       Query.queryGovActionCounts
       (1, 1, 0, 0)
-      "Unexpected committee hashes"
+      "Unexpected governance action counts"
   where
     testLabel = "conwayNewCommittee"
 
@@ -138,9 +138,7 @@ updateConstitution =
     epoch0 <- Api.fillUntilNextEpoch interpreter server
 
     -- Register committee hot credentials
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
-        mapM (uncurry Conway.mkCommitteeAuthTx) Forging.bootstrapCommitteeCreds
+    void (Api.registerCommitteeCreds interpreter server)
 
     let newUrl = fromJust (textToUrl 64 "constitution.new")
         dataHash = hashAnchorData @Consensus.StandardCrypto (AnchorData "constitution content")
@@ -155,11 +153,9 @@ updateConstitution =
 
           -- Create votes
           addVoteTx =
-            Conway.mkGovVoteTx
+            Conway.mkGovVoteYesTx
               govActionId
-              ( DRepVoter (Prelude.head Forging.unregisteredDRepIds)
-                  : map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
-              )
+              (Forging.drepVoters ++ Forging.committeeVoters)
           govActionId =
             GovActionId
               { gaidTxId = txIdTx proposalTx
@@ -187,7 +183,7 @@ updateConstitution =
 
 treasuryWithdrawal :: IOManager -> [(Text, Text)] -> Assertion
 treasuryWithdrawal =
-  withFullConfigAndLogs conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Add stake
@@ -200,10 +196,7 @@ treasuryWithdrawal =
     epoch0 <- Api.fillUntilNextEpoch interpreter server
 
     -- Register committee hot credentials
-    -- TODO[sgillespie]: Let's get this in UnifiedApi or something
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
-        mapM (uncurry Conway.mkCommitteeAuthTx) Forging.bootstrapCommitteeCreds
+    void (Api.registerCommitteeCreds interpreter server)
 
     -- Make sure we have treasury to spend
     void $
@@ -223,11 +216,9 @@ treasuryWithdrawal =
               (Coin 10_000)
 
           addVoteTx =
-            Conway.mkGovVoteTx
+            Conway.mkGovVoteYesTx
               govActionId
-              ( DRepVoter (Prelude.head Forging.unregisteredDRepIds)
-                  : map (CommitteeVoter . snd) Forging.bootstrapCommitteeCreds
-              )
+              (Forging.drepVoters ++ Forging.committeeVoters)
 
           govActionId =
             GovActionId
@@ -252,3 +243,195 @@ treasuryWithdrawal =
       "Unexpected constution voting anchor"
   where
     testLabel = "conwayTreasuryWithdrawal"
+
+parameterChange :: IOManager -> [(Text, Text)] -> Assertion
+parameterChange =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+    -- Register committee hot credentials
+    void (Api.registerCommitteeCreds interpreter server)
+
+    -- Create and vote for gov action
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+        let
+          -- Create gov action tx
+          govActionTx = Conway.mkParamChangeTx
+          -- Create votes for all stake pools. We start in the Conway bootstrap phase, so
+          -- DRep votes are not yet required.
+          addVoteTx =
+            Conway.mkGovVoteYesTx
+              govActionId
+              ( Forging.drepVoters
+                  ++ Forging.committeeVoters
+                  ++ Forging.resolveStakePoolVoters ledger
+              )
+          govActionId =
+            GovActionId
+              { gaidTxId = txIdTx govActionTx
+              , gaidGovActionIx = GovActionIx 0
+              }
+
+        -- Create votes
+        pure [govActionTx, addVoteTx]
+
+    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+    -- epoch and enacted on the following.
+    epochs <- Api.fillEpochs interpreter server 2
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length (epoch0 <> epochs) + 4)
+    -- Should now have a ratified/enacted governance action
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (1, 1, 0, 0)
+      "Unexpected governance action counts"
+    -- Should have updated param
+    assertEqQuery
+      dbSync
+      (queryMaxTxSize interpreter)
+      (Just 32_000)
+      "Unexpected protocol parameter (max tx size)"
+  where
+    testLabel = "conwayGovParameterChange"
+    queryMaxTxSize interpreter = do
+      epochNo <- getEpochNo interpreter
+      param <- Query.queryParamFromEpoch epochNo
+      pure (Db.epochParamMaxTxSize <$> param)
+    getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
+
+hardFork :: IOManager -> [(Text, Text)] -> Assertion
+hardFork =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+    -- Register committee hot credentials
+    void (Api.registerCommitteeCreds interpreter server)
+
+    -- Create and vote for gov action
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+        let
+          -- Create gov action tx
+          govActionTx = Conway.mkHardForkInitTx
+          -- Crate vote tx
+          addVoteTx =
+            Conway.mkGovVoteYesTx
+              govActionId
+              ( Forging.drepVoters
+                  ++ Forging.committeeVoters
+                  ++ Forging.resolveStakePoolVoters ledger
+              )
+          govActionId =
+            GovActionId
+              { gaidTxId = txIdTx govActionTx
+              , gaidGovActionIx = GovActionIx 0
+              }
+
+        -- Create votes
+        pure [govActionTx, addVoteTx]
+
+    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+    -- epoch and enacted on the following.
+    epochs <- Api.fillEpochs interpreter server 2
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length (epoch0 <> epochs) + 4)
+    -- Should now have a ratified/enacted governance action
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (1, 1, 0, 0)
+      "Unexpected governance action counts"
+    -- Should have a new major protocol version
+    assertEqQuery
+      dbSync
+      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      (Just 11)
+      "Unexpected governance action counts"
+  where
+    testLabel = "conwayGovernanceHardFork"
+    getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
+
+infoAction :: IOManager -> [(Text, Text)] -> Assertion
+infoAction =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+    -- DRep distribution is calculated at end of the current epoch
+    epoch0 <- Api.fillUntilNextEpoch interpreter server
+    -- Register committee hot credentials
+    void (Api.registerCommitteeCreds interpreter server)
+
+    let
+      -- Create gov action tx
+      govActionTx = Conway.mkInfoTx
+
+      -- Create vote tx
+      addVoteTx =
+        Conway.mkGovVoteTx
+          govActionId
+          ( Map.fromList
+              [
+                ( Governance.DRepVoter (Prelude.head Forging.unregisteredDRepIds)
+                , Governance.VoteYes
+                )
+              ,
+                ( Governance.CommitteeVoter (snd $ Prelude.head Forging.bootstrapCommitteeCreds)
+                , Governance.VoteNo
+                )
+              ,
+                ( Governance.CommitteeVoter (snd $ Forging.bootstrapCommitteeCreds Prelude.!! 1)
+                , Governance.Abstain
+                )
+              ]
+          )
+
+      govActionId =
+        GovActionId
+          { gaidTxId = txIdTx govActionTx
+          , gaidGovActionIx = GovActionIx 0
+          }
+
+    -- Submit them
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+        pure [govActionTx, addVoteTx]
+
+    -- There is no ratification/enactment for info actions, so let it expire
+    epochs <- Api.fillEpochs interpreter server 10
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length (epoch0 <> epochs) + 4)
+    -- Should now be expired and dropped
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (0, 0, 1, 1)
+      "Unexpected governance action counts"
+    -- Should have votes
+    assertEqQuery
+      dbSync
+      (Query.queryVoteCounts (unTxHash $ txIdTx addVoteTx) 0)
+      (1, 1, 1)
+      "Unexpected governance action counts"
+  where
+    testLabel = "conwayGovernanceInfo"

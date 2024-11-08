@@ -28,6 +28,9 @@ module Cardano.Mock.Forging.Tx.Generic (
   unregisteredDRepIds,
   consPoolParams,
   getPoolStakeCreds,
+  resolveStakePoolVoters,
+  drepVoters,
+  committeeVoters,
 ) where
 
 import Cardano.Binary (ToCBOR (..))
@@ -36,6 +39,7 @@ import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Address
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Conway.Governance (Voter (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
 import Cardano.Ledger.Crypto (ADDRHASH)
@@ -51,7 +55,7 @@ import qualified Cardano.Ledger.UMap as UMap
 import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude hiding (length, (.))
+import Cardano.Prelude hiding (length, map, (.))
 import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
@@ -325,3 +329,19 @@ consPoolParams poolId rwCred owners =
     , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
     , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") "89237365492387654983275634298756"
     }
+
+resolveStakePoolVoters ::
+  EraCrypto era ~ StandardCrypto =>
+  LedgerState (ShelleyBlock proto era) ->
+  [Voter StandardCrypto]
+resolveStakePoolVoters ledger =
+  [ StakePoolVoter (resolvePool (PoolIndex 0) ledger)
+  , StakePoolVoter (resolvePool (PoolIndex 1) ledger)
+  , StakePoolVoter (resolvePool (PoolIndex 2) ledger)
+  ]
+
+drepVoters :: [Voter StandardCrypto]
+drepVoters = map DRepVoter unregisteredDRepIds
+
+committeeVoters :: [Voter StandardCrypto]
+committeeVoters = map (CommitteeVoter . snd) bootstrapCommitteeCreds

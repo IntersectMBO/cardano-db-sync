@@ -136,7 +136,7 @@ newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
 newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
-  deriving (Eq, Generic)
+  deriving (Eq, Generic, Num)
   deriving (Read, Show) via (Quiet DbWord64)
 
 -- The following must be in alphabetic order.

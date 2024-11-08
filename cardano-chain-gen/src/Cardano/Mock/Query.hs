@@ -4,6 +4,7 @@
 module Cardano.Mock.Query (
   queryVersionMajorFromEpoch,
   queryParamProposalFromEpoch,
+  queryParamFromEpoch,
   queryNullTxDepositExists,
   queryMultiAssetCount,
   queryTxMetadataCount,
@@ -12,6 +13,7 @@ module Cardano.Mock.Query (
   queryConstitutionAnchor,
   queryRewardRests,
   queryTreasuryDonations,
+  queryVoteCounts,
 ) where
 
 import qualified Cardano.Db as Db
@@ -50,6 +52,17 @@ queryParamProposalFromEpoch epochNo = do
     where_ $ prop ^. Db.ParamProposalEpochNo ==. val (Just epochNo)
     pure prop
   pure $ entityVal <$> res
+
+queryParamFromEpoch ::
+  MonadIO io =>
+  Word64 ->
+  ReaderT SqlBackend io (Maybe Db.EpochParam)
+queryParamFromEpoch epochNo = do
+  res <- selectOne $ do
+    param <- from $ table @Db.EpochParam
+    where_ $ param ^. Db.EpochParamEpochNo ==. val epochNo
+    pure param
+  pure (entityVal <$> res)
 
 -- | Query whether there any null tx deposits?
 queryNullTxDepositExists :: MonadIO io => ReaderT SqlBackend io Bool
@@ -162,3 +175,29 @@ queryTreasuryDonations = do
 
   let total = join (unValue <$> res)
   pure $ maybe 0 Db.unDbLovelace total
+
+queryVoteCounts ::
+  MonadIO io =>
+  ByteString ->
+  Word16 ->
+  ReaderT SqlBackend io (Word64, Word64, Word64)
+queryVoteCounts txHash idx = do
+  yes <- countVotes Db.VoteYes
+  no <- countVotes Db.VoteNo
+  abstain <- countVotes Db.VoteAbstain
+
+  pure (yes, no, abstain)
+  where
+    countVotes v = do
+      res <- selectOne $ do
+        (vote :& tx) <-
+          from
+            $ table @Db.VotingProcedure
+              `innerJoin` table @Db.Tx
+            `on` (\(vote :& tx) -> vote ^. Db.VotingProcedureTxId ==. tx ^. Db.TxId)
+        where_ $
+          vote ^. Db.VotingProcedureVote ==. val v
+            &&. tx ^. Db.TxHash ==. val txHash
+            &&. vote ^. Db.VotingProcedureIndex ==. val idx
+        pure countRows
+      pure (maybe 0 unValue res)
