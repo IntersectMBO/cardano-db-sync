@@ -404,15 +404,15 @@ share
   ParamProposal
     epochNo             Word64 Maybe        sqltype=word31type
     key                 ByteString Maybe    sqltype=hash28type
-    minFeeA             Word64 Maybe        sqltype=word64type
-    minFeeB             Word64 Maybe        sqltype=word64type
-    maxBlockSize        Word64 Maybe        sqltype=word64type
-    maxTxSize           Word64 Maybe        sqltype=word64type
-    maxBhSize           Word64 Maybe        sqltype=word64type
+    minFeeA             DbWord64 Maybe      sqltype=word64type
+    minFeeB             DbWord64 Maybe      sqltype=word64type
+    maxBlockSize        DbWord64 Maybe      sqltype=word64type
+    maxTxSize           DbWord64 Maybe      sqltype=word64type
+    maxBhSize           DbWord64 Maybe      sqltype=word64type
     keyDeposit          DbLovelace Maybe    sqltype=lovelace
     poolDeposit         DbLovelace Maybe    sqltype=lovelace
-    maxEpoch            Word64 Maybe        sqltype=word64type
-    optimalPoolCount    Word64 Maybe        sqltype=word64type
+    maxEpoch            DbWord64 Maybe      sqltype=word64type
+    optimalPoolCount    DbWord64 Maybe      sqltype=word64type
     influence           Double Maybe        -- sqltype=rational
     monetaryExpandRate  Double Maybe        -- sqltype=interval
     treasuryGrowthRate  Double Maybe        -- sqltype=interval
@@ -453,10 +453,10 @@ share
 
     committeeMinSize         DbWord64 Maybe sqltype=word64type
     committeeMaxTermLength   DbWord64 Maybe sqltype=word64type
-    govActionLifetime        Word64 Maybe   sqltype=word64type
+    govActionLifetime        DbWord64 Maybe sqltype=word64type
     govActionDeposit         DbWord64 Maybe sqltype=word64type
     drepDeposit              DbWord64 Maybe sqltype=word64type
-    drepActivity             Word64 Maybe sqltype=word64type
+    drepActivity             DbWord64 Maybe sqltype=word64type
     minFeeRefScriptCostPerByte Double Maybe  -- sqltype=rational
 
     registeredTxId      TxId                noreference
@@ -514,7 +514,7 @@ share
 
     committeeMinSize         DbWord64 Maybe sqltype=word64type
     committeeMaxTermLength   DbWord64 Maybe sqltype=word64type
-    govActionLifetime        DbWord64 Maybe   sqltype=word64type
+    govActionLifetime        DbWord64 Maybe sqltype=word64type
     govActionDeposit         DbWord64 Maybe sqltype=word64type
     drepDeposit              DbWord64 Maybe sqltype=word64type
     drepActivity             DbWord64 Maybe sqltype=word64type
@@ -530,10 +530,10 @@ share
   PoolStat
     poolHashId          PoolHashId          noreference
     epochNo             Word64              sqltype=word31type
-    numberOfBlocks      Word64              sqltype=word64type
-    numberOfDelegators  Word64              sqltype=word64type
-    stake               Word64              sqltype=word64type
-    votingPower         Word64 Maybe        sqltype=word64type
+    numberOfBlocks      DbWord64            sqltype=word64type
+    numberOfDelegators  DbWord64            sqltype=word64type
+    stake               DbWord64            sqltype=word64type
+    votingPower         DbWord64 Maybe      sqltype=word64type
 
   ExtraMigrations
     token               Text
