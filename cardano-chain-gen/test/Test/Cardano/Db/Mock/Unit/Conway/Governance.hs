@@ -16,6 +16,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   parameterChange,
   hardFork,
   infoAction,
+  rollbackNewCommittee,
 ) where
 
 import qualified Cardano.Db as Db
@@ -29,8 +30,8 @@ import Cardano.Ledger.Core (txIdTx)
 import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Ledger.SafeHash (SafeToHash (..))
-import Cardano.Mock.ChainSync.Server (IOManager)
-import Cardano.Mock.Forging.Interpreter (getCurrentEpoch)
+import Cardano.Mock.ChainSync.Server (IOManager, ServerHandle)
+import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types
@@ -39,11 +40,13 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
+import Data.Maybe.Strict (StrictMaybe (..))
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
+import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
-import Test.Tasty.HUnit (Assertion)
+import Test.Tasty.HUnit (Assertion, assertFailure)
 import qualified Prelude
 
 drepDistr :: IOManager -> [(Text, Text)] -> Assertion
@@ -80,40 +83,14 @@ newCommittee =
 
     -- Add stake
     void (Api.registerAllStakeCreds interpreter server)
-
     -- Register a DRep and delegate votes to it
     void (Api.registerDRepsAndDelegateVotes interpreter server)
 
-    -- Create and vote for gov action
-    let committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
-        committeeCred = KeyHashObj (KeyHash committeeHash)
-
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
-        let
-          -- Create gov action tx
-          addCcTx = Conway.mkAddCommitteeTx committeeCred
-          -- Create votes for all stake pools. We start in the Conway bootstrap phase, so
-          -- DRep votes are not yet required.
-          addVoteTx =
-            Conway.mkGovVoteYesTx
-              govActionId
-              (Forging.drepVoters ++ Forging.resolveStakePoolVoters ledger)
-          govActionId =
-            GovActionId
-              { gaidTxId = txIdTx addCcTx
-              , gaidGovActionIx = GovActionIx 0
-              }
-
-        -- Create votes
-        pure [addCcTx, addVoteTx]
-
-    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
-    -- epoch and enacted on the following.
-    epochs <- Api.fillEpochs interpreter server 2
+    -- Propose, ratify, and enact a new committee member
+    epochs <- enactNewCommittee interpreter server
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length epochs + 3)
+    assertBlockNoBackoff dbSync (length epochs + 2)
     -- Should now have a committee member
     assertEqQuery
       dbSync
@@ -122,6 +99,92 @@ newCommittee =
       "Unexpected governance action counts"
   where
     testLabel = "conwayNewCommittee"
+
+rollbackNewCommittee :: IOManager -> [(Text, Text)] -> Assertion
+rollbackNewCommittee =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Add stake
+    void (Api.registerAllStakeCreds interpreter server)
+    -- Register a DRep and delegate votes to it
+    void (Api.registerDRepsAndDelegateVotes interpreter server)
+
+    -- Propose, ratify, and enact a new committee member
+    epoch2 <- enactNewCommittee interpreter server
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length epoch2 + 2)
+    -- Should now have a committee member
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (1, 1, 0, 0)
+      "Unexpected governance action counts"
+
+    -- Rollback the last 2 blocks
+    epoch1' <- rollbackBlocks interpreter server 2 epoch2
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length epoch1' + 4)
+    -- Should not have a new committee member
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (1, 0, 0, 0)
+      "Unexpected governance action counts"
+  where
+    testLabel = "conwayRollbackNewCommittee"
+
+enactNewCommittee :: Interpreter -> ServerHandle IO CardanoBlock -> IO [CardanoBlock]
+enactNewCommittee interpreter server = do
+  -- Create and vote for gov action
+  let committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
+      committeeCred = KeyHashObj (KeyHash committeeHash)
+
+  blk <-
+    Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+      let
+        -- Create gov action tx
+        addCcTx = Conway.mkAddCommitteeTx committeeCred
+        -- Create votes for all stake pools. We start in the Conway bootstrap phase, so
+        -- DRep votes are not yet required.
+        addVoteTx =
+          Conway.mkGovVoteYesTx
+            govActionId
+            (Forging.drepVoters ++ Forging.resolveStakePoolVoters ledger)
+        govActionId =
+          GovActionId
+            { gaidTxId = txIdTx addCcTx
+            , gaidGovActionIx = GovActionIx 0
+            }
+
+      -- Create votes
+      pure [addCcTx, addVoteTx]
+
+  -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+  -- epoch and enacted on the following.
+  epochs <- Api.fillEpochs interpreter server 2
+  pure (blk : epochs)
+
+rollbackBlocks ::
+  Interpreter ->
+  ServerHandle IO CardanoBlock ->
+  Int ->
+  [CardanoBlock] ->
+  IO [CardanoBlock]
+rollbackBlocks interpreter server n blocks = do
+  (rollbackPoint, blocks') <-
+    case drop n (reverse blocks) of
+      (blk : blks) -> pure (blockPoint blk, blks)
+      [] -> assertFailure "Expected at least 3 blocks"
+
+  -- Rollback to the previous epoch
+  Api.rollbackTo interpreter server rollbackPoint
+  -- Create a fork
+  newBlock <-
+    Api.withConwayFindLeaderAndSubmitTx interpreter server $
+      Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+
+  pure (blocks' ++ [newBlock])
 
 updateConstitution :: IOManager -> [(Text, Text)] -> Assertion
 updateConstitution =
