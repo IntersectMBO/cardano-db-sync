@@ -246,6 +246,7 @@ unitTests iom knownMigrations =
         , test "parameter change" Governance.parameterChange
         , test "hard fork" Governance.hardFork
         , test "info action" Governance.infoAction
+        , test "rollback new committee member" Governance.rollbackNewCommittee
         ]
     ]
   where
