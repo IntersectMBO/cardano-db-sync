@@ -637,9 +637,10 @@ them.
 ## Community Queries
 
 ### Koios
-- **Description:** Queries used by Koios
 - **Link:** [https://github.com/cardano-community/koios-artifacts/tree/main/files/grest/rpc](https://github.com/cardano-community/koios-artifacts/tree/main/files/grest/rpc)
 
 ### Blockfrost
-- **Description:** Queries used by Blockfrost
 - **Link:** [https://github.com/blockfrost/blockfrost-backend-ryo/tree/master/src/sql](https://github.com/blockfrost/blockfrost-backend-ryo/tree/master/src/sql)
+
+### Govtool
+- **Link:** [https://github.com/IntersectMBO/govtool/tree/develop/govtool/backend/sql](https://github.com/IntersectMBO/govtool/tree/develop/govtool/backend/sql)
