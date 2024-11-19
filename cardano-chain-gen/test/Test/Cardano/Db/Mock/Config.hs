@@ -575,7 +575,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
         -- we dont fork dbsync here. Just prepare it as an action
         withDBSyncEnv (mkDBSyncEnv dbsyncParams syncNodeConfig partialDbSyncRun) $ \dbSyncEnv -> do
           let pgPass = getDBSyncPGPass dbSyncEnv
-          tableNames <- DB.getAllTablleNames pgPass
+          tableNames <- DB.getAllTableNames pgPass
           -- We only want to create the table schema once for the tests so here we check
           -- if there are any table names.
           if null tableNames || shouldDropDB
