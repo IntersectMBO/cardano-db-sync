@@ -14,6 +14,7 @@ module Cardano.Mock.Query (
   queryRewardRests,
   queryTreasuryDonations,
   queryVoteCounts,
+  queryEpochStateCount,
 ) where
 
 import qualified Cardano.Db as Db
@@ -201,3 +202,15 @@ queryVoteCounts txHash idx = do
             &&. vote ^. Db.VotingProcedureIndex ==. val idx
         pure countRows
       pure (maybe 0 unValue res)
+
+queryEpochStateCount ::
+  MonadIO io =>
+  Word64 ->
+  ReaderT SqlBackend io Word64
+queryEpochStateCount epochNo = do
+  res <- selectOne $ do
+    epochState <- from (table @Db.EpochState)
+    where_ (epochState ^. Db.EpochStateEpochNo ==. val epochNo)
+    pure countRows
+
+  pure (maybe 0 unValue res)

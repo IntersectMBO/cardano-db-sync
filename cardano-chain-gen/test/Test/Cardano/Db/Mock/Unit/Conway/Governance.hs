@@ -56,10 +56,8 @@ drepDistr =
 
     -- Add stake
     void (Api.registerAllStakeCreds interpreter server)
-
     -- Register DRep and delegate votes to it
     void (Api.registerDRepsAndDelegateVotes interpreter server)
-
     -- DRep distribution is calculated at end of the current epoch
     epoch1 <- Api.fillUntilNextEpoch interpreter server
 
@@ -124,13 +122,23 @@ rollbackNewCommittee =
     -- Rollback the last 2 blocks
     epoch1' <- rollbackBlocks interpreter server 2 epoch2
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length epoch1' + 4)
+    assertBlockNoBackoff dbSync (length epoch1' + 3)
     -- Should not have a new committee member
     assertEqQuery
       dbSync
       Query.queryGovActionCounts
       (1, 0, 0, 0)
       "Unexpected governance action counts"
+
+    -- Fast forward to next epoch
+    epoch2' <- Api.fillUntilNextEpoch interpreter server
+    assertBlockNoBackoff dbSync (length (epoch1' <> epoch2') + 3)
+    -- Should now have 2 identical committees
+    assertEqQuery
+      dbSync
+      (Query.queryEpochStateCount 2)
+      2
+      "Unexpected epoch state count for epoch 2"
   where
     testLabel = "conwayRollbackNewCommittee"
 
