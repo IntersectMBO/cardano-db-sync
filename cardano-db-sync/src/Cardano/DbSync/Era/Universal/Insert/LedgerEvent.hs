@@ -10,7 +10,6 @@ module Cardano.DbSync.Era.Universal.Insert.LedgerEvent (
   insertNewEpochLedgerEvents,
 ) where
 
-import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
@@ -25,6 +24,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -47,6 +47,7 @@ insertNewEpochLedgerEvents ::
 insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
+    logCtx = initLogCtx "insertNewEpochLedgerEvents" "Cardano.DbSync.Era.Universal.Insert.LedgerEvent"
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     ntw = getNetwork syncEnv
@@ -72,19 +73,19 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
             insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
-          liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
+          liftIO . logInfoCtx tracer $ logCtx {lcMessage = "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize}
           stats <- liftIO $ textShowStats cache
-          liftIO . logInfo tracer $ stats
-          liftIO . logInfo tracer $ "Starting epoch " <> textShow (unEpochNo en)
+          liftIO . logInfoCtx tracer $ logCtx {lcMessage = stats}
+          liftIO . logInfoCtx tracer $ logCtx {lcMessage = "Starting epoch " <> textShow (unEpochNo en)}
         LedgerStartAtEpoch en ->
           -- This is different from the previous case in that the db-sync started
           -- in this epoch, for example after a restart, instead of after an epoch boundary.
-          liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
+          liftIO . logInfoCtx tracer $ logCtx {lcMessage = "Starting at epoch " <> textShow (unEpochNo en)}
         LedgerDeltaRewards _e rwd -> do
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards syncEnv ntw (subFromCurrentEpoch 2) currentEpochNo cache (Map.toList $ Generic.unRewards rwd)
           -- This event is only created when it's not empty, so we don't need to check for null here.
-          liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Delta rewards"
+          liftIO . logInfoCtx tracer $ logCtx {lcMessage = "Inserted " <> show (length rewards) <> " Delta rewards"}
         LedgerIncrementalRewards _ rwd -> do
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards syncEnv ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
@@ -97,8 +98,8 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerGovInfo enacted dropped expired uncl -> do
           unless (Set.null uncl) $
             liftIO $
-              logInfo tracer $
-                "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
+              logInfoCtx tracer $
+                logCtx {lcMessage = "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"}
           updateDropped cache (EpochNo curEpoch) (garGovActionId <$> (dropped <> expired))
           let refunded = filter (\e -> Set.notMember (garGovActionId e) uncl) (enacted <> dropped <> expired)
           insertProposalRefunds tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache refunded -- TODO: check if they are disjoint to avoid double entries.
@@ -112,7 +113,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
             insertRewardRests tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache rewards
-            liftIO . logInfo tracer $ "Inserted " <> show (length rewards) <> " Mir rewards"
+            liftIO . logInfoCtx tracer $ logCtx {lcMessage = "Inserted " <> show (length rewards) <> " Mir rewards"}
         LedgerPoolReap en drs ->
           unless (Map.null $ Generic.unRewards drs) $ do
             insertPoolDepositRefunds syncEnv en drs

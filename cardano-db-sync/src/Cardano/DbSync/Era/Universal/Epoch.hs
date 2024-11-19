@@ -22,7 +22,7 @@ module Cardano.DbSync.Era.Universal.Epoch (
   sumRewardTotal,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
@@ -37,6 +37,7 @@ import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (whenDefault, whenStrictJust, whenStrictJustDefault)
 import Cardano.DbSync.Util.Constraint (constraintNameEpochStake, constraintNameReward)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -205,11 +206,13 @@ insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
     lift $ DB.updateSetComplete $ unEpochNo $ Generic.sliceEpochNo slice
     size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
     liftIO
-      . logInfo tracer
-      $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
+      . logInfoCtx tracer
+      $ logCtx {lcMessage = mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]}
   where
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
+
+    logCtx = initLogCtx "insertStakeSlice" "Cardano.DbSync.Era.Universal.Epoch"
 
     network :: Network
     network = getNetwork syncEnv
@@ -379,8 +382,9 @@ insertPoolDepositRefunds ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolDepositRefunds syncEnv epochNo refunds = do
   insertRewards syncEnv nw epochNo epochNo (envCache syncEnv) (Map.toList rwds)
-  liftIO . logInfo tracer $ "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"
+  liftIO . logInfoCtx tracer $ logCtx {lcMessage = "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"}
   where
+    logCtx = initLogCtx "insertPoolDepositRefunds" "Cardano.DbSync.Era.Universal.Epoch"
     tracer = getTrace syncEnv
     rwds = Generic.unRewards refunds
     nw = getNetwork syncEnv

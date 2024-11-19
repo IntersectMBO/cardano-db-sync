@@ -11,7 +11,7 @@ module Cardano.DbSync.Era.Shelley.Genesis (
   insertValidateGenesisDist,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo)
+import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
@@ -26,6 +26,7 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Ledger.Address (serialiseAddr)
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
@@ -88,12 +89,13 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
 
     insertAction :: (MonadBaseControl IO m, MonadIO m) => Bool -> ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction prunes = do
+      let logCtx = initLogCtx "insertValidateGenesisDist" "Shelley"
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
         Right bid -> validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount
         Left _ ->
           runExceptT $ do
-            liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
+            liftIO $ logInfoCtx tracer logCtx {lcMessage = "Inserting Shelley Genesis distribution"}
             emeta <- lift DB.queryMeta
             case emeta of
               Right _ -> pure () -- Metadata from Shelley era already exists. TODO Validate metadata.
@@ -129,7 +131,7 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               -- This means the previous block will have two blocks after it, resulting in a
               -- tree format, which is unavoidable.
               pid <- lift DB.queryLatestBlockId
-              liftIO $ logInfo tracer $ textShow pid
+              liftIO $ logInfoCtx tracer $ logCtx {lcMessage = textShow pid}
               bid <-
                 lift . DB.insertBlock $
                   DB.Block
@@ -154,9 +156,8 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               disInOut <- liftIO $ getDisableInOutState syncEnv
               unless disInOut $ do
                 lift $ mapM_ (insertTxOuts syncEnv tracer bid) $ genesisUtxOs cfg
-              liftIO . logInfo tracer $
-                "Initial genesis distribution populated. Hash "
-                  <> renderByteArray (configGenesisHash cfg)
+              liftIO . logInfoCtx tracer $
+                logCtx {lcMessage = "Initial genesis distribution populated. Hash " <> renderByteArray (configGenesisHash cfg)}
               when hasStakes $
                 insertStaking tracer useNoCache bid cfg
 
@@ -170,11 +171,12 @@ validateGenesisDistribution ::
   DB.BlockId ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
+validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount = do
+  let logCtx = initLogCtx "validateGenesisDistribution" "Shelley"
   runExceptT $ do
     let tracer = getTrace syncEnv
         txOutTableType = getTxOutTableType syncEnv
-    liftIO $ logInfo tracer "Validating Genesis distribution"
+    liftIO $ logInfoCtx tracer logCtx {lcMessage = "Validating Genesis distribution"}
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= configStartTime cfg) $
@@ -215,10 +217,8 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
           , textShow totalSupply
           ]
     liftIO $ do
-      logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
-
--- -----------------------------------------------------------------------------
+      logInfoCtx tracer $ logCtx {lcMessage = "Initial genesis distribution present and correct"}
+      logInfoCtx tracer $ logCtx {lcMessage = "Total genesis supply of Ada: " <> DB.renderAda totalSupply}
 
 insertTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>

@@ -6,7 +6,6 @@
 
 module Cardano.DbSync.Api.Ledger where
 
-import Cardano.BM.Trace (logError, logInfo, logWarning)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
@@ -20,6 +19,7 @@ import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logErrorCtx, logInfoCtx, logWarningCtx)
 import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Babbage.Core
@@ -63,28 +63,30 @@ migrateBootstrapUTxO ::
 migrateBootstrapUTxO syncEnv = do
   case envLedgerEnv syncEnv of
     HasLedger lenv -> do
-      liftIO $ logInfo trce "Starting UTxO bootstrap migration"
+      liftIO $ logInfoCtx trce logCtx {lcMessage = "Starting UTxO bootstrap migration"}
       cls <- liftIO $ readCurrentStateUnsafe lenv
       count <- lift $ DB.deleteTxOut (getTxOutTableType syncEnv)
       when (count > 0) $
         liftIO $
-          logWarning trce $
-            "Found and deleted " <> textShow count <> " tx_out."
+          logWarningCtx trce $
+            logCtx {lcMessage = "Found and deleted " <> textShow count <> " tx_out."}
       storeUTxOFromLedger syncEnv cls
       lift $ DB.insertExtraMigration DB.BootstrapFinished
-      liftIO $ logInfo trce "UTxO bootstrap migration done"
+      liftIO $ logInfoCtx trce $ logCtx {lcMessage = "UTxO bootstrap migration done"}
       liftIO $ atomically $ writeTVar (envBootstrap syncEnv) False
     NoLedger _ ->
-      liftIO $ logWarning trce "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart without --disable-ledger-state"
+      liftIO $ logWarningCtx trce $ logCtx {lcMessage = "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart without --disable-ledger-state"}
   where
+    logCtx = initLogCtx "migrateBootstrapUTxO" "Cardano.DbSync.Api.Ledger"
     trce = getTrace syncEnv
 
 storeUTxOFromLedger :: (MonadBaseControl IO m, MonadIO m) => SyncEnv -> ExtLedgerState CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
   LedgerStateConway stc -> storeUTxO env (getUTxO stc)
-  _otherwise -> liftIO $ logError trce "storeUTxOFromLedger is only supported after Babbage"
+  _otherwise -> liftIO $ logErrorCtx trce logCtx {lcMessage = "storeUTxOFromLedger is only supported after Babbage"}
   where
+    logCtx = initLogCtx "storeUTxOFromLedger" "Cardano.DbSync.Api.Ledger"
     trce = getTrace env
     getUTxO st' =
       unUTxO $ Consensus.shelleyLedgerState st' ^. (nesEsL . esLStateL . lsUTxOStateL . utxosUtxoL)
@@ -108,15 +110,19 @@ storeUTxO ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxO env mp = do
   liftIO $
-    logInfo trce $
-      mconcat
-        [ "Inserting "
-        , textShow size
-        , " tx_out as pages of "
-        , textShow pageSize
-        ]
+    logInfoCtx trce $
+      logCtx
+        { lcMessage =
+            mconcat
+              [ "Inserting "
+              , textShow size
+              , " tx_out as pages of "
+              , textShow pageSize
+              ]
+        }
   mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf pageSize . Map.toList $ mp
   where
+    logCtx = initLogCtx "storeUTxO" "Cardano.DbSync.Api.Ledger"
     trce = getTrace env
     npages = size `div` pageSize
     pagePerc :: Float = if npages == 0 then 100.0 else 100.0 / fromIntegral npages
@@ -138,13 +144,14 @@ storePage ::
   (Int, [(TxIn StandardCrypto, BabbageTxOut era)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv percQuantum (n, ls) = do
-  when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
+  when (n `mod` 10 == 0) $ liftIO $ logInfoCtx trce $ logCtx {lcMessage = "Bootstrap in progress " <> prc <> "%"}
   txOuts <- mapM (prepareTxOut syncEnv) ls
   txOutIds <-
     lift . DB.insertManyTxOut False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
   where
+    logCtx = initLogCtx "storePage" "Cardano.DbSync.Api.Ledger"
     txOutTableType = getTxOutTableType syncEnv
     trce = getTrace syncEnv
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""

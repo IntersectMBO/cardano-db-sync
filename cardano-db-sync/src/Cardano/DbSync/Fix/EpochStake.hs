@@ -3,7 +3,6 @@
 
 module Cardano.DbSync.Fix.EpochStake where
 
-import Cardano.BM.Trace (logInfo, logWarning)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
@@ -12,6 +11,7 @@ import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Ledger.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import Cardano.Prelude
 import Control.Monad.Trans.Control
 import qualified Data.Map.Strict as Map
@@ -24,7 +24,7 @@ migrateStakeDistr env mcls =
     (HasLedger lenv, Strict.Just cls) -> do
       ems <- lift DB.queryAllExtraMigrations
       runWhen (not $ DB.isStakeDistrComplete ems) $ do
-        liftIO $ logInfo trce "Starting Stake Distribution migration on table epoch_stake"
+        liftIO $ logInfoCtx trce $ logCtx {lcMessage = "Starting Stake Distribution migration on table epoch_stake"}
         let stakeSlice = getStakeSlice lenv cls True
         case stakeSlice of
           NoSlices ->
@@ -44,6 +44,7 @@ migrateStakeDistr env mcls =
         lift $ DB.insertExtraMigration DB.StakeDistrEnded
     _ -> pure False
   where
+    logCtx = initLogCtx "migrateStakeDistr" "Cardano.DbSync.Fix.EpochStake"
     trce = getTrace env
     mkProgress isCompleted e =
       DB.EpochStakeProgress
@@ -53,18 +54,21 @@ migrateStakeDistr env mcls =
 
     logInsert :: Int -> IO ()
     logInsert n
-      | n == 0 = logInfo trce "No missing epoch_stake found"
-      | n > 100000 = logWarning trce $ "Found " <> textShow n <> " epoch_stake. This may take a while"
-      | otherwise = logInfo trce $ "Found " <> textShow n <> " epoch_stake"
+      | n == 0 = logInfoCtx trce $ logCtx {lcMessage = "No missing epoch_stake found"}
+      | n > 100000 = logWarningCtx trce $ logCtx {lcMessage = "Found " <> textShow n <> " epoch_stake. This may take a while"}
+      | otherwise = logInfoCtx trce $ logCtx {lcMessage = "Found " <> textShow n <> " epoch_stake"}
 
     logMinMax mmin mmax =
-      logInfo trce $
-        mconcat
-          [ "Min epoch_stake at "
-          , textShow mmin
-          , " and max at "
-          , textShow mmax
-          ]
+      logInfoCtx trce $
+        logCtx
+          { lcMessage =
+              mconcat
+                [ "Min epoch_stake at "
+                , textShow mmin
+                , " and max at "
+                , textShow mmax
+                ]
+          }
 
     runWhen :: Monad m => Bool -> m () -> m Bool
     runWhen a action = do

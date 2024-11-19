@@ -10,10 +10,11 @@ module Cardano.DbSync.LocalStateQuery (
   newStateQueryTMVar,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (Trace)
 import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logErrorCtx, logInfoCtx)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Prelude hiding (atomically, (.))
@@ -30,6 +31,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   writeTVar,
  )
 import qualified Data.Strict.Maybe as Strict
+import Data.Text (pack)
 import Data.Time.Clock (getCurrentTime)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
@@ -118,14 +120,16 @@ getHistoryInterpreter ::
   NoLedgerEnv ->
   IO CardanoInterpreter
 getHistoryInterpreter nlEnv = do
+  let logCtx = initLogCtx "getHistoryInterpreter" "DbSync.LocalStateQuery"
   respVar <- newEmptyTMVarIO
   atomically $ putTMVar reqVar (BlockQuery $ QueryHardFork GetInterpreter, respVar)
   res <- atomically $ takeTMVar respVar
   case res of
-    Left err ->
-      throwIO $ SNErrLocalStateQuery $ "getHistoryInterpreter: " <> Prelude.show err
+    Left err -> do
+      logErrorCtx tracer $ logCtx {lcMessage = pack $ Prelude.show err}
+      throwIO $ SNErrLocalStateQuery $ Prelude.show err
     Right interp -> do
-      logInfo tracer "getHistoryInterpreter: acquired"
+      logInfoCtx tracer $ logCtx {lcMessage = "Acquired"}
       atomically $ writeTVar interVar $ Strict.Just interp
       pure interp
   where

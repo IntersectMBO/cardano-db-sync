@@ -350,7 +350,7 @@ insertMaTxMint ::
   DB.TxId ->
   MultiAsset StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
-insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
+insertMaTxMint trce cache txId (MultiAsset mintMap) =
   concatMapM (lift . prepareOuter) $ Map.toList mintMap
   where
     prepareOuter ::
@@ -366,7 +366,7 @@ insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
       (AssetName, Integer) ->
       ReaderT SqlBackend m DB.MaTxMint
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- insertMultiAsset trce cache policy aname
       pure $
         DB.MaTxMint
           { DB.maTxMintIdent = maId
@@ -380,7 +380,7 @@ insertMaTxOuts ::
   CacheStatus ->
   Map (PolicyID StandardCrypto) (Map AssetName Integer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [MissingMaTxOut]
-insertMaTxOuts _tracer cache maMap =
+insertMaTxOuts trce cache maMap =
   concatMapM (lift . prepareOuter) $ Map.toList maMap
   where
     prepareOuter ::
@@ -396,7 +396,7 @@ insertMaTxOuts _tracer cache maMap =
       (AssetName, Integer) ->
       ReaderT SqlBackend m MissingMaTxOut
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- insertMultiAsset trce cache policy aname
       pure $
         MissingMaTxOut
           { mmtoIdent = maId

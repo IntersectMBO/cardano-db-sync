@@ -33,7 +33,7 @@ import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Db (ScriptType (..), maybeToEither)
 import qualified Cardano.Db.Version.V13_0 as DB_V_13_0
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Cardano.BM.Trace (Trace)
 
 import Cardano.DbSync.Api
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -50,6 +50,7 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlon
 import Ouroboros.Consensus.Shelley.Eras
 
 import Cardano.DbSync.Fix.PlutusDataBytes
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import Cardano.Ledger.Babbage.TxOut
 import Cardano.Ledger.Plutus.Language (Plutus (..))
 
@@ -77,14 +78,18 @@ getWrongPlutusScripts ::
   Trace IO Text ->
   ReaderT SqlBackend m FixPlutusScripts
 getWrongPlutusScripts tracer = do
+  let logCtx = initLogCtx "getWrongPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
   liftIO $
-    logInfo tracer $
-      mconcat
-        [ "Starting the fixing Plutus Script procedure. This may take a couple minutes on mainnet if there are wrong values."
-        , " You can skip it using --skip-plutus-script-fix."
-        , " It will fix Script with wrong bytes. See more in Issue #1214 and #1348."
-        , " This procedure makes resyncing unnecessary."
-        ]
+    logInfoCtx tracer $
+      logCtx
+        { lcMessage =
+            mconcat
+              [ "Starting the fixing Plutus Script procedure. This may take a couple minutes on mainnet if there are wrong values."
+              , " You can skip it using --skip-plutus-script-fix."
+              , " It will fix Script with wrong bytes. See more in Issue #1214 and #1348."
+              , " This procedure makes resyncing unnecessary."
+              ]
+        }
   FixPlutusScripts <$> findWrongPlutusScripts tracer
 
 findWrongPlutusScripts ::
@@ -137,11 +142,15 @@ fixPlutusScripts tracer cblk fpss = do
               DB_V_13_0.updateScriptBytes scriptId correctBytes
             Nothing ->
               liftIO $
-                logWarning tracer $
-                  mconcat
-                    ["Script", " not found in block"]
+                logWarningCtx tracer $
+                  logCtx
+                    { lcMessage =
+                        mconcat
+                          ["Script", " not found in block"]
+                    }
 
     correctBytesMap = scrapScriptBlock cblk
+    logCtx = initLogCtx "fixPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
 
 scrapScriptBlock :: CardanoBlock -> Map ByteString ByteString
 scrapScriptBlock cblk = case cblk of

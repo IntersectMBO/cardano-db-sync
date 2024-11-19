@@ -22,7 +22,7 @@ module Cardano.DbSync.Era.Universal.Insert.Certificate (
   mkAdaPots,
 ) where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
@@ -38,6 +38,7 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logWarningCtx)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.CertState
@@ -80,7 +81,8 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
     Left (ShelleyTxCertGenesisDeleg _gen) ->
       when (ioShelley iopts) $
         liftIO $
-          logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
+          logWarningCtx tracer $
+            logCtx {lcMessage = "insertCertificate: Unhandled DCertGenesis certificate"}
     Right (ConwayTxCertDeleg deleg) ->
       insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo deleg
     Right (ConwayTxCertPool pool) ->
@@ -98,6 +100,7 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
         ConwayUpdateDRep cred anchor ->
           lift $ insertDrepRegistration blkId txId idx cred Nothing (strictMaybeToMaybe anchor)
   where
+    logCtx = initLogCtx "insertCertificate" "Cardano.DbSync.Era.Universal.Insert.Certificate"
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv

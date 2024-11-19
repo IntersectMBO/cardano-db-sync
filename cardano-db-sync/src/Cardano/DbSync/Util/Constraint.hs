@@ -16,10 +16,10 @@ module Cardano.DbSync.Util.Constraint (
 ) where
 
 import Cardano.BM.Data.Trace (Trace)
-import Cardano.BM.Trace (logInfo)
 import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Prelude (MonadIO (..), Proxy (..), ReaderT (runReaderT), atomically)
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad (unless)
@@ -100,6 +100,7 @@ addRewardTableConstraint ::
   ReaderT SqlBackend m ()
 addRewardTableConstraint trce = do
   let entityD = entityDef $ Proxy @DB.Reward
+      logCtx = initLogCtx "addRewardTableConstraint" "Cardano.DbSync.Util"
   DB.alterTable
     entityD
     ( DB.AddUniqueConstraint
@@ -110,7 +111,7 @@ addRewardTableConstraint trce = do
         , FieldNameDB "pool_id"
         ]
     )
-  liftIO $ logNewConstraint trce entityD (unConstraintNameDB constraintNameReward)
+  liftIO $ logNewConstraint trce logCtx entityD (unConstraintNameDB constraintNameReward)
 
 addEpochStakeTableConstraint ::
   forall m.
@@ -119,6 +120,7 @@ addEpochStakeTableConstraint ::
   ReaderT SqlBackend m ()
 addEpochStakeTableConstraint trce = do
   let entityD = entityDef $ Proxy @DB.EpochStake
+      logCtx = initLogCtx "addEpochStakeTableConstraint" "Cardano.DbSync.Util"
   DB.alterTable
     entityD
     ( DB.AddUniqueConstraint
@@ -128,16 +130,20 @@ addEpochStakeTableConstraint trce = do
         , FieldNameDB "pool_id"
         ]
     )
-  liftIO $ logNewConstraint trce entityD (unConstraintNameDB constraintNameEpochStake)
+  liftIO $ logNewConstraint trce logCtx entityD (unConstraintNameDB constraintNameEpochStake)
 
 logNewConstraint ::
   Trace IO Text ->
+  LogContext ->
   EntityDef ->
   Text ->
   IO ()
-logNewConstraint trce table constraintName =
-  logInfo trce $
-    "The table "
-      <> unEntityNameDB (entityDB table)
-      <> " was given a new unique constraint called "
-      <> constraintName
+logNewConstraint trce logCtx table constraintName =
+  logInfoCtx trce $
+    logCtx
+      { lcMessage =
+          "The table "
+            <> unEntityNameDB (entityDB table)
+            <> " was given a new unique constraint called "
+            <> constraintName
+      }

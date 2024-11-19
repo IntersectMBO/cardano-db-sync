@@ -11,7 +11,6 @@ module Cardano.DbSync.Default (
   insertListBlocks,
 ) where
 
-import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
@@ -32,6 +31,7 @@ import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Node.Configuration.Logging (Trace)
@@ -76,12 +76,15 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
       case eiBlockInDbAlreadyId of
         Left _ -> do
           liftIO
-            . logInfo tracer
-            $ mconcat
-              [ "Received block which is not in the db with "
-              , textShow (getHeaderFields cblk)
-              , ". Time to restore consistency."
-              ]
+            . logInfoCtx tracer
+            $ logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Received block which is not in the db with "
+                    , textShow (getHeaderFields cblk)
+                    , ". Time to restore consistency."
+                    ]
+              }
           rollbackFromBlockNo syncEnv (blockNo cblk)
           void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
           insertBlock syncEnv cblk applyRes True tookSnapshot
@@ -89,13 +92,14 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
-            then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
-            else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+            then liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Fixed AdaPots for " <> textShow epochNo}
+            else liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Reached " <> textShow epochNo}
         Right _
           | Just epochNo <- getNewEpoch applyRes ->
-              liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
+              liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Reached " <> textShow epochNo}
         _ -> pure ()
   where
+    logCtx = initLogCtx "applyAndInsertBlockMaybe" "Cardano.DbSync.Default"
     mkApplyResult :: Bool -> IO (ApplyResult, Bool)
     mkApplyResult isCons = do
       case envLedgerEnv syncEnv of

@@ -37,7 +37,7 @@ module Cardano.DbSync.Ledger.State (
   findProposedCommittee,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Cardano.BM.Trace (Trace)
 import Cardano.Binary (Decoder, DecoderError)
 import qualified Cardano.Binary as Serialize
 import Cardano.DbSync.Config.Types
@@ -76,6 +76,7 @@ import qualified Data.ByteString.Base16 as Base16
 
 import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import Cardano.Ledger.BaseTypes (StrictMaybe)
 import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
@@ -353,15 +354,19 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env lState mEpochNo = do
+  let logCtx = initLogCtx "saveCurrentLedgerState" "Cardano.DbSync.Ledger.State"
   case mkLedgerStateFilename (leDir env) (clsState lState) mEpochNo of
     Origin -> pure () -- we don't store genesis
     At file -> do
       exists <- doesFileExist file
       if exists
         then
-          logInfo (leTrace env) $
-            mconcat
-              ["File ", Text.pack file, " exists"]
+          logInfoCtx (leTrace env) $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    ["File ", Text.pack file, " exists"]
+              }
         else atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
 
 runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
@@ -374,6 +379,8 @@ ledgerStateWriteLoop :: Trace IO Text -> TBQueue (FilePath, CardanoLedgerState) 
 ledgerStateWriteLoop tracer swQueue codecConfig =
   loop
   where
+    logCtx = initLogCtx "ledgerStateWriteLoop" "Cardano.DbSync.Ledger.State"
+
     loop :: IO ()
     loop = do
       (file, ledger) <- atomically $ readTBQueue swQueue -- Blocks until the queue has elements.
@@ -395,14 +402,8 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
             )
             ledger
       endTime <- getCurrentTime
-      logInfo tracer $
-        mconcat
-          [ "Asynchronously wrote a ledger snapshot to "
-          , Text.pack file
-          , " in "
-          , textShow (diffUTCTime endTime startTime)
-          , "."
-          ]
+      logInfoCtx tracer $
+        logCtx {lcMessage = mconcat ["Asynchronously wrote a ledger snapshot to ", Text.pack file, " in ", textShow (diffUTCTime endTime startTime), "."]}
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
@@ -499,6 +500,7 @@ cleanupLedgerStateFiles env slotNo = do
 
 loadLedgerAtPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [LedgerStateFile] CardanoLedgerState)
 loadLedgerAtPoint hasLedgerEnv point = do
+  let logCtx = initLogCtx "loadLedgerAtPoint" "Cardano.DbSync.Ledger.State"
   mLedgerDB <- atomically $ readTVar $ leStateVar hasLedgerEnv
   -- First try to find the ledger in memory
   let mAnchoredSeq = rollbackLedger mLedgerDB
@@ -513,11 +515,13 @@ loadLedgerAtPoint hasLedgerEnv point = do
       case mst of
         Right st -> do
           writeLedgerState hasLedgerEnv (Strict.Just . LedgerDB $ AS.Empty st)
-          logInfo (leTrace hasLedgerEnv) $ mconcat ["Found snapshot file for ", renderPoint point]
+          logInfoCtx (leTrace hasLedgerEnv) $
+            logCtx {lcMessage = mconcat ["Found snapshot file for ", renderPoint point]}
           pure $ Right st
         Left lsfs -> pure $ Left lsfs
     Just anchoredSeq' -> do
-      logInfo (leTrace hasLedgerEnv) $ mconcat ["Found in memory ledger snapshot at ", renderPoint point]
+      logInfoCtx (leTrace hasLedgerEnv) $
+        logCtx {lcMessage = mconcat ["Found in memory ledger snapshot at ", renderPoint point]}
       let ledgerDB' = LedgerDB anchoredSeq'
       let st = ledgerDbCurrent ledgerDB'
       deleteNewerFiles hasLedgerEnv point
@@ -546,14 +550,15 @@ deleteNewerFiles env point = do
       deleteAndLogStateFile env "newer" newerFiles
 
 deleteAndLogFiles :: HasLedgerEnv -> Text -> [FilePath] -> IO ()
-deleteAndLogFiles env descr files =
+deleteAndLogFiles env descr files = do
+  let logCtx = initLogCtx "deleteAndLogFiles" "Cardano.DbSync.Ledger.State"
   case files of
     [] -> pure ()
     [fl] -> do
-      logInfo (leTrace env) $ mconcat ["Removing ", descr, " file ", Text.pack fl]
+      logInfoCtx (leTrace env) $ logCtx {lcMessage = mconcat ["Removing ", descr, " file ", Text.pack fl]}
       safeRemoveFile fl
-    _ -> do
-      logInfo (leTrace env) $ mconcat ["Removing ", descr, " files ", textShow files]
+    _otherwise -> do
+      logInfoCtx (leTrace env) $ logCtx {lcMessage = mconcat ["Removing ", descr, " files ", textShow files]}
       mapM_ safeRemoveFile files
 
 deleteAndLogStateFile :: HasLedgerEnv -> Text -> [LedgerStateFile] -> IO ()
@@ -585,24 +590,32 @@ findStateFromPoint env point = do
           logNewerFiles olderFiles
           pure $ Left olderFiles
   where
+    logCtx = initLogCtx "findStateFromPoint" "Cardano.DbSync.Ledger.State"
+
     deleteLedgerFile :: Text -> LedgerStateFile -> IO ()
     deleteLedgerFile err lsf = do
-      logWarning (leTrace env) $
-        mconcat
-          [ "Failed to parse ledger state file "
-          , Text.pack (lsfFilePath lsf)
-          , " with error '"
-          , err
-          , "'. Deleting it."
-          ]
+      logWarningCtx (leTrace env) $
+        logCtx
+          { lcMessage =
+              mconcat
+                [ "Failed to parse ledger state file "
+                , Text.pack (lsfFilePath lsf)
+                , " with error '"
+                , err
+                , "'. Deleting it."
+                ]
+          }
       safeRemoveFile $ lsfFilePath lsf
 
     logNewerFiles :: [LedgerStateFile] -> IO ()
     logNewerFiles lsfs =
-      logWarning (leTrace env) $
-        case lsfs of
-          [] -> "Rollback failed. No more ledger state files."
-          (x : _) -> mconcat ["Needs to Rollback further to slot ", textShow (unSlotNo $ lsfSlotNo x)]
+      logWarningCtx (leTrace env) $
+        logCtx
+          { lcMessage =
+              case lsfs of
+                [] -> "Rollback failed. No more ledger state files."
+                (x : _) -> mconcat ["Needs to Rollback further to slot ", textShow (unSlotNo $ lsfSlotNo x)]
+          }
 
 -- Splits the files based on the comparison with the given point. It will return
 -- a list of newer files, a file at the given point if found and a list of older
@@ -643,6 +656,8 @@ loadLedgerStateFromFile tracer config delete point lsf = do
     Left err -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure (Left err)
     Right st -> pure $ Right st
   where
+    logCtx = initLogCtx "loadLedgerStateFromFile" "Cardano.DbSync.Ledger.State"
+
     safeReadFile :: FilePath -> IO (Either Text CardanoLedgerState)
     safeReadFile fp = do
       startTime <- getCurrentTime
@@ -655,16 +670,19 @@ loadLedgerStateFromFile tracer config delete point lsf = do
             Left err -> pure $ Left $ textShow err
             Right ls -> do
               endTime <- getCurrentTime
-              logInfo tracer $
-                mconcat
-                  [ "Found snapshot file for "
-                  , renderPoint point
-                  , ". It took "
-                  , textShow (diffUTCTime mediumTime startTime)
-                  , " to read from disk and "
-                  , textShow (diffUTCTime endTime mediumTime)
-                  , " to parse."
-                  ]
+              logInfoCtx tracer $
+                logCtx
+                  { lcMessage =
+                      mconcat
+                        [ "Found snapshot file for "
+                        , renderPoint point
+                        , ". It took "
+                        , textShow (diffUTCTime mediumTime startTime)
+                        , " to read from disk and "
+                        , textShow (diffUTCTime endTime mediumTime)
+                        , " to parse."
+                        ]
+                  }
               pure $ Right ls
 
     codecConfig :: CodecConfig CardanoBlock

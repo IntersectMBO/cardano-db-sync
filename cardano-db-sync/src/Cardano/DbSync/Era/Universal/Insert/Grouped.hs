@@ -14,7 +14,7 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   mkmaTxOuts,
 ) where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (Trace)
 import Cardano.Db (DbLovelace (..), MinIds (..), minIdsCoreToText, minIdsVariantToText)
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
@@ -26,6 +26,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logErrorCtx)
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.List as List
@@ -157,7 +158,10 @@ prepareUpdates ::
 prepareUpdates trce eti = case etiTxOutId eti of
   Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
   Left _ -> do
-    liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
+    let logCtx = initLogCtx "prepareUpdates" "Cardano.DbSync.Era.Universal.Insert.Grouped"
+    liftIO $
+      logErrorCtx trce $
+        logCtx {lcMessage = "Failed to find output for " <> Text.pack (show eti)}
     pure Nothing
 
 insertReverseIndex ::

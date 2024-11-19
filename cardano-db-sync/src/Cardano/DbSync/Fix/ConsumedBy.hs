@@ -2,7 +2,7 @@
 
 module Cardano.DbSync.Fix.ConsumedBy (FixEntry, fixConsumedBy, fixEntriesConsumed) where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
@@ -14,6 +14,7 @@ import Cardano.DbSync.Era.Byron.Util (blockPayload, unTxHash)
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logWarningCtx)
 import Cardano.Prelude hiding (length, (.))
 import Database.Persist.SqlBackend.Internal
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
@@ -35,14 +36,18 @@ fixBlock backend syncEnv bblk = case byronBlockRaw bblk of
     case mEntries of
       Right newEntries -> pure $ Just $ concat newEntries
       Left err -> do
+        let logCtx = initLogCtx "fixBlock" "Cardano.DbSync.Fix.ConsumedBy"
         liftIO $
-          logWarning (getTrace syncEnv) $
-            mconcat
-              [ "While fixing block "
-              , textShow bblk
-              , ", encountered error "
-              , textShow err
-              ]
+          logWarningCtx (getTrace syncEnv) $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    [ "While fixing block "
+                    , textShow bblk
+                    , ", encountered error "
+                    , textShow err
+                    ]
+              }
         pure Nothing
 
 fixTx :: MonadIO m => SyncEnv -> Byron.TxAux -> ExceptT SyncNodeError (ReaderT SqlBackend m) [FixEntry]

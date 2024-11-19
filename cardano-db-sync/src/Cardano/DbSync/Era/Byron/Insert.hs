@@ -11,7 +11,7 @@ module Cardano.DbSync.Era.Byron.Insert (
   resolveTxInputs,
 ) where
 
-import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.BM.Trace (Trace)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
@@ -35,6 +35,7 @@ import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logDebugCtx, logInfoCtx)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -78,6 +79,7 @@ insertABOBBoundary ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary syncEnv blk details = do
   let tracer = getTrace syncEnv
+      logCtx = initLogCtx "insertABOBBoundary" "Cardano.DbSync.Era.Byron.Insert"
       cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
@@ -128,13 +130,17 @@ insertABOBBoundary syncEnv blk details = do
         , ebdTime = sdSlotTime details
         }
 
-  liftIO . logInfo tracer $
-    Text.concat
-      [ "insertABOBBoundary: epoch "
-      , textShow (Byron.boundaryEpoch $ Byron.boundaryHeader blk)
-      , ", hash "
-      , Byron.renderAbstractHash (Byron.boundaryHashAnnotated blk)
-      ]
+  liftIO . logInfoCtx tracer $
+    logCtx
+      { lcEpochNo = Just epochNo
+      , lcMessage =
+          Text.concat
+            [ "insertABOBBoundary: epoch "
+            , textShow (Byron.boundaryEpoch $ Byron.boundaryHeader blk)
+            , ", hash "
+            , Byron.renderAbstractHash (Byron.boundaryHashAnnotated blk)
+            ]
+      }
 
 insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -144,6 +150,7 @@ insertABlock ::
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABlock syncEnv firstBlockOfEpoch blk details = do
+  let logCtx = initLogCtx "insertABlock" "Cardano.DbSync.Era.Byron.Insert"
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
@@ -189,32 +196,44 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         }
 
   liftIO $ do
-    let epoch = unEpochNo (sdEpochNo details)
+    let epochNumber = unEpochNo (sdEpochNo details)
         slotWithinEpoch = unEpochSlot (sdEpochSlot details)
         followingClosely = getSyncStatus details == SyncFollowing
 
     when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
-      logInfo tracer $
-        mconcat
-          [ "Insert Byron Block: continuing epoch "
-          , textShow epoch
-          , " (slot "
-          , textShow slotWithinEpoch
-          , "/"
-          , textShow (unEpochSize $ sdEpochSize details)
-          , ")"
-          ]
+      logInfoCtx tracer $
+        logCtx
+          { lcEpochNo = Just epochNumber
+          , lcBlockNo = Just $ Byron.blockNumber blk
+          , lcSlotNo = Just slotWithinEpoch
+          , lcMessage =
+              mconcat
+                [ "Insert Byron Block: continuing epoch "
+                , textShow epochNumber
+                , " (slot "
+                , textShow slotWithinEpoch
+                , "/"
+                , textShow (unEpochSize $ sdEpochSize details)
+                , ")"
+                ]
+          }
     logger followingClosely tracer $
-      mconcat
-        [ "Insert Byron Block: epoch "
-        , textShow (unEpochNo $ sdEpochNo details)
-        , ", slot "
-        , textShow (Byron.slotNumber blk)
-        , ", block "
-        , textShow (Byron.blockNumber blk)
-        , ", hash "
-        , renderByteArray (Byron.blockHash blk)
-        ]
+      logCtx
+        { lcEpochNo = Just epochNumber
+        , lcBlockNo = Just $ Byron.blockNumber blk
+        , lcSlotNo = Just slotWithinEpoch
+        , lcMessage =
+            mconcat
+              [ "Insert Byron Block: epoch "
+              , textShow (unEpochNo $ sdEpochNo details)
+              , ", slot "
+              , textShow (Byron.slotNumber blk)
+              , ", block "
+              , textShow (Byron.blockNumber blk)
+              , ", hash "
+              , renderByteArray (Byron.blockHash blk)
+              ]
+        }
   where
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
@@ -222,12 +241,12 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
     cache :: CacheStatus
     cache = envCache syncEnv
 
-    logger :: Bool -> Trace IO a -> a -> IO ()
+    logger :: Bool -> Trace IO Text -> LogContext -> IO ()
     logger followingClosely
-      | firstBlockOfEpoch = logInfo
-      | followingClosely = logInfo
-      | Byron.blockNumber blk `mod` 1000 == 0 = logInfo
-      | otherwise = logDebug
+      | firstBlockOfEpoch = logInfoCtx
+      | followingClosely = logInfoCtx
+      | Byron.blockNumber blk `mod` 1000 == 0 = logInfoCtx
+      | otherwise = logDebugCtx
 
 insertByronTx ::
   (MonadBaseControl IO m, MonadIO m) =>

@@ -7,7 +7,7 @@ module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
@@ -16,6 +16,7 @@ import Cardano.DbSync.Cache (
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Types (StakeCred)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Prelude hiding (from, groupBy, on)
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -57,13 +58,18 @@ adjustEpochRewards ::
   ReaderT SqlBackend m ()
 adjustEpochRewards trce nw cache epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
-  liftIO . logInfo trce $
-    mconcat
-      [ "Removing "
-      , if null eraIgnored then "" else textShow (length eraIgnored) <> " rewards and "
-      , show (length creds)
-      , " orphaned rewards"
-      ]
+      logCtx = initLogCtx "adjustEpochRewards" "Cardano.DbSync.Era.Universal.Adjust"
+  liftIO . logInfoCtx trce $
+    logCtx
+      { lcEpochNo = Just (unEpochNo epochNo)
+      , lcMessage =
+          mconcat
+            [ "Removing "
+            , if null eraIgnored then "" else textShow (length eraIgnored) <> " rewards and "
+            , show (length creds)
+            , " orphaned rewards"
+            ]
+      }
   forM_ eraIgnored $ \(cred, rewards) ->
     forM_ (Set.toList rewards) $ \rwd ->
       deleteReward trce nw cache epochNo (cred, rwd)

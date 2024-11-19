@@ -28,7 +28,7 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
 )
 where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
@@ -42,6 +42,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logWarningCtx)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.CertState (DRep (..))
@@ -114,6 +115,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
     NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
     _ -> pure ()
   where
+    logCtx = initLogCtx "insertGovActionProposal" "Cardano.DbSync.Era.Universal.Insert.GovAction"
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
       ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       HardForkInitiation prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
@@ -140,7 +142,9 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
         case findProposedCommittee govId cgs of
           Right (Just committee) -> void $ insertCommittee (Just govActionProposalId) committee
           other ->
-            liftIO $ logWarning trce $ textShow other <> ": Failed to find committee for " <> textShow pp
+            liftIO $
+              logWarningCtx trce $
+                logCtx {lcMessage = textShow other <> ": Failed to find committee for " <> textShow pp}
 
 insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.CommitteeId
 insertCommittee mgapId committee = do
@@ -441,6 +445,7 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
           , DB.epochStateEpochNo = unEpochNo epochNo
           }
   where
+    logCtx = initLogCtx "insertUpdateEnacted" "Cardano.DbSync.Era.Universal.Insert.GovAction"
     govIds = govStatePrevGovActionIds enactedState
 
     handleCommittee = do
@@ -470,13 +475,16 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
               -- This should never happen. Having a committee and an enacted action, means
               -- the committee came from a proposal which should be returned from the query.
               liftIO $
-                logWarning trce $
-                  mconcat
-                    [ "The impossible happened! Couldn't find the committee "
-                    , textShow committee
-                    , " which was enacted by a proposal "
-                    , textShow committeeGaId
-                    ]
+                logWarningCtx trce $
+                  logCtx
+                    { lcMessage =
+                        mconcat
+                          [ "The impossible happened! Couldn't find the committee "
+                          , textShow committee
+                          , " which was enacted by a proposal "
+                          , textShow committeeGaId
+                          ]
+                    }
               pure (Nothing, Nothing)
             (committeeId : _rest) ->
               pure (Just committeeId, Nothing)
@@ -495,11 +503,14 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
         constitutionId : rest -> do
           unless (null rest) $
             liftIO $
-              logWarning trce $
-                mconcat
-                  [ "Found multiple constitutions for proposal "
-                  , textShow mConstitutionGaId
-                  , ": "
-                  , textShow constitutionIds
-                  ]
+              logWarningCtx trce $
+                logCtx
+                  { lcMessage =
+                      mconcat
+                        [ "Found multiple constitutions for proposal "
+                        , textShow mConstitutionGaId
+                        , ": "
+                        , textShow constitutionIds
+                        ]
+                  }
           pure constitutionId

@@ -10,7 +10,7 @@ module Cardano.DbSync.Era.Byron.Genesis (
   insertValidateGenesisDist,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (Trace)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
@@ -26,6 +26,7 @@ import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logErrorCtx, logInfoCtx)
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
@@ -50,6 +51,8 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
     then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer insertAction
     else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) insertAction
   where
+    logCtx = initLogCtx "insertValidateGenesisDist" "Cardano.DbSync.Era.Byron.Genesis"
+
     tracer = getTrace syncEnv
 
     insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
@@ -62,9 +65,10 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
         Right bid -> validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid
         Left _ ->
           runExceptT $ do
-            liftIO $ logInfo tracer "Inserting Byron Genesis distribution"
+            liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Inserting Byron Genesis distribution"}
             count <- lift DB.queryBlockCount
-            when (not disInOut && count > 0) $
+            when (not disInOut && count > 0) $ do
+              liftIO $ logErrorCtx tracer $ logCtx {lcMessage = "Genesis data mismatch"}
               dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
             void . lift $
               DB.insertMeta $
@@ -108,12 +112,16 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
                   , DB.blockOpCertCounter = Nothing
                   }
             mapM_ (insertTxOutsByron syncEnv disInOut bid) $ genesisTxos cfg
-            liftIO . logInfo tracer $
-              "Initial genesis distribution populated. Hash "
-                <> renderByteArray (configGenesisHash cfg)
-
+            liftIO . logInfoCtx tracer $
+              logCtx
+                { lcMessage =
+                    "Initial genesis distribution populated. Hash "
+                      <> renderByteArray (configGenesisHash cfg)
+                }
             supply <- lift $ DB.queryTotalSupply $ getTxOutTableType syncEnv
-            liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
+            liftIO $
+              logInfoCtx tracer $
+                logCtx {lcMessage = "Total genesis supply of Ada: " <> DB.renderAda supply}
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
@@ -128,6 +136,7 @@ validateGenesisDistribution ::
   ReaderT SqlBackend m (Either SyncNodeError ())
 validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
   runExceptT $ do
+    let logCtx = initLogCtx "validateGenesisDistribution" "Cardano.DbSync.Era.Byron.Genesis"
     meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
@@ -172,8 +181,8 @@ validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
                 , DB.renderAda totalSupply
                 ]
       liftIO $ do
-        logInfo tracer "Initial genesis distribution present and correct"
-        logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
+        logInfoCtx tracer $ logCtx {lcMessage = "Initial genesis distribution present and correct"}
+        logInfoCtx tracer $ logCtx {lcMessage = "Total genesis supply of Ada: " <> DB.renderAda totalSupply}
 
 -------------------------------------------------------------------------------
 

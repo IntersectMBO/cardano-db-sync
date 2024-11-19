@@ -11,7 +11,7 @@ module Cardano.DbSync.Era.Universal.Block (
   insertBlockUniversal,
 ) where
 
-import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
@@ -40,6 +40,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude
 
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logDebugCtx, logInfoCtx)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import Data.Either.Extra (eitherToMaybe)
@@ -52,7 +53,7 @@ import Database.Persist.Sql (SqlBackend)
 insertBlockUniversal ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  -- | Should log
+  -- | Is start event or rollback
   Bool ->
   -- | Within two minutes
   Bool ->
@@ -63,7 +64,8 @@ insertBlockUniversal ::
   IsPoolMember ->
   ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
+insertBlockUniversal syncEnv isStartEventOrRollback withinTwoMins withinHalfHour blk details isMember applyResult = do
+  let logCtx = initLogCtx "insertBlockUniversal" "Cardano.DbSync.Era.Universal.Block"
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -118,33 +120,43 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
       insertReverseIndex blkId minIds
 
     liftIO $ do
-      let epoch = unEpochNo epochNo
-          slotWithinEpoch = unEpochSlot (sdEpochSlot details)
-
+      let slotWithinEpoch = unEpochSlot (sdEpochSlot details)
       when (withinTwoMins && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
-        logInfo tracer $
-          mconcat
-            [ renderInsertName (Generic.blkEra blk)
-            , ": continuing epoch "
-            , textShow epoch
-            , " (slot "
-            , textShow slotWithinEpoch
-            , "/"
-            , textShow (unEpochSize $ sdEpochSize details)
-            , ")"
-            ]
+        logInfoCtx tracer $
+          logCtx
+            { lcBlockNo = Just (unBlockNo (Generic.blkBlockNo blk))
+            , lcSlotNo = Just (unSlotNo (Generic.blkSlotNo blk))
+            , lcEpochNo = Just (unEpochNo epochNo)
+            , lcMessage =
+                mconcat
+                  [ renderInsertName (Generic.blkEra blk)
+                  , ": continuing epoch "
+                  , textShow $ unEpochNo epochNo
+                  , " (slot "
+                  , textShow slotWithinEpoch
+                  , "/"
+                  , textShow (unEpochSize $ sdEpochSize details)
+                  , ")"
+                  ]
+            }
       logger tracer $
-        mconcat
-          [ renderInsertName (Generic.blkEra blk)
-          , ": epoch "
-          , textShow (unEpochNo epochNo)
-          , ", slot "
-          , textShow (unSlotNo $ Generic.blkSlotNo blk)
-          , ", block "
-          , textShow (unBlockNo $ Generic.blkBlockNo blk)
-          , ", hash "
-          , renderByteArray (Generic.blkHash blk)
-          ]
+        logCtx
+          { lcBlockNo = Just (unBlockNo (Generic.blkBlockNo blk))
+          , lcSlotNo = Just (unSlotNo (Generic.blkSlotNo blk))
+          , lcEpochNo = Just (unEpochNo epochNo)
+          , lcMessage =
+              mconcat
+                [ renderInsertName (Generic.blkEra blk)
+                , ": epoch "
+                , textShow (unEpochNo epochNo)
+                , ", slot "
+                , textShow (unSlotNo $ Generic.blkSlotNo blk)
+                , ", block "
+                , textShow (unBlockNo $ Generic.blkBlockNo blk)
+                , ", hash "
+                , renderByteArray (Generic.blkHash blk)
+                ]
+          }
 
     whenStrictJust (apNewEpoch applyResult) $ \newEpoch -> do
       insertOnNewEpoch syncEnv blkId (Generic.blkSlotNo blk) epochNo newEpoch
@@ -161,12 +173,12 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
   where
     iopts = getInsertOptions syncEnv
 
-    logger :: Trace IO a -> a -> IO ()
+    logger :: Trace IO Text -> LogContext -> IO ()
     logger
-      | shouldLog = logInfo
-      | withinTwoMins = logInfo
-      | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfo
-      | otherwise = logDebug
+      | isStartEventOrRollback = logInfoCtx
+      | withinTwoMins = logInfoCtx
+      | unBlockNo (Generic.blkBlockNo blk) `mod` 5000 == 0 = logInfoCtx
+      | otherwise = logDebugCtx
 
     renderInsertName :: Generic.BlockEra -> Text
     renderInsertName eraText =

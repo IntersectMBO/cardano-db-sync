@@ -39,6 +39,7 @@ import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Ledger.Mary.Value
@@ -280,35 +281,42 @@ queryPoolKeyOrInsert ::
   PoolKeyHash ->
   ReaderT SqlBackend m DB.PoolHashId
 queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
+  let logCtx = initLogCtx "queryPoolKeyOrInsert" "Cardano.DbSync.Cache"
   pk <- queryPoolKeyWithCache cache cacheUA hsh
   case pk of
     Right poolHashId -> pure poolHashId
     Left err -> do
       when logsWarning $
         liftIO $
-          logWarning trce $
-            mconcat
-              [ "Failed with "
-              , textShow err
-              , " while trying to find pool "
-              , textShow hsh
-              , " for "
-              , txt
-              , ". We will assume that the pool exists and move on."
-              ]
+          logWarningCtx trce $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Failed with "
+                    , textShow err
+                    , " while trying to find pool "
+                    , textShow hsh
+                    , " for "
+                    , txt
+                    , ". We will assume that the pool exists and move on."
+                    ]
+              }
       insertPoolKeyWithCache cache cacheUA hsh
 
 queryMAWithCache ::
   MonadIO m =>
+  Trace IO Text ->
   CacheStatus ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
-queryMAWithCache cache policyId asset =
+queryMAWithCache trce cache policyId asset = do
+  let logCtx = initLogCtx "queryMAWithCache" "Cardano.DbSync.Cache"
   case cache of
     NoCache -> do
       let !policyBs = Generic.unScriptHash $ policyID policyId
-      let !assetNameBs = Generic.unAssetName asset
+          !assetNameBs = Generic.unAssetName asset
+      liftIO $ logInfoCtx trce $ logCtx {lcMessage = mconcat ["Querying MultiAssetId for ", textShow policyId, " ", textShow asset]}
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cMultiAssets ci)

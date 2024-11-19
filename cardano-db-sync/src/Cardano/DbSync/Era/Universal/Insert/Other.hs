@@ -165,12 +165,13 @@ insertStakeAddressRefIfMissing trce cache addr =
 
 insertMultiAsset ::
   (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
   CacheStatus ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m DB.MultiAssetId
-insertMultiAsset cache policy aName = do
-  mId <- queryMAWithCache cache policy aName
+insertMultiAsset trce cache policy aName = do
+  mId <- queryMAWithCache trce cache policy aName
   case mId of
     Right maId -> pure maId
     Left (policyBs, assetNameBs) ->
