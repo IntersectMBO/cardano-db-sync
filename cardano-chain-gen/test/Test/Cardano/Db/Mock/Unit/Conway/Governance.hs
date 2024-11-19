@@ -17,11 +17,13 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   hardFork,
   infoAction,
   rollbackNewCommittee,
+  rollbackNewCommitteeProposal,
 ) where
 
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash, unTxHash)
 import Cardano.Ledger.Address (RewardAccount (..))
+import Cardano.Ledger.Alonzo.Tx (AlonzoTx)
 import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), hashAnchorData, textToUrl)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..))
@@ -142,17 +144,56 @@ rollbackNewCommittee =
   where
     testLabel = "conwayRollbackNewCommittee"
 
+rollbackNewCommitteeProposal :: IOManager -> [(Text, Text)] -> Assertion
+rollbackNewCommitteeProposal =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    blks <-
+      sequence
+        [ -- Add stake
+          Api.registerAllStakeCreds interpreter server
+        , -- Register a DRep and delegate votes to it
+          Api.registerDRepsAndDelegateVotes interpreter server
+        ]
+
+    -- Propose a new committee member
+    let proposal = proposeNewCommittee
+        proposalTxHash = unTxHash (txIdTx proposal)
+    void $ Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+      Right [proposal]
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length blks + 1)
+    -- Should have a new committee
+    assertBackoff
+      dbSync
+      (Query.queryCommitteeByTxHash proposalTxHash)
+      defaultDelays
+      isJust
+      (const "Expected at least one new committee")
+
+    -- Rollback one block
+    blks' <- rollbackBlocks interpreter server 1 blks
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length blks' + 1)
+    -- Should NOT have a new committee
+    assertBackoff
+      dbSync
+      (Query.queryCommitteeByTxHash proposalTxHash)
+      defaultDelays
+      isNothing
+      (const "Unexpected new committee")
+  where
+    testLabel = "conwayRollbackNewCommitteeProposal"
+
 enactNewCommittee :: Interpreter -> ServerHandle IO CardanoBlock -> IO [CardanoBlock]
 enactNewCommittee interpreter server = do
-  -- Create and vote for gov action
-  let committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
-      committeeCred = KeyHashObj (KeyHash committeeHash)
-
   blk <-
     Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
       let
         -- Create gov action tx
-        addCcTx = Conway.mkAddCommitteeTx committeeCred
+        addCcTx = proposeNewCommittee
         -- Create votes for all stake pools. We start in the Conway bootstrap phase, so
         -- DRep votes are not yet required.
         addVoteTx =
@@ -173,6 +214,13 @@ enactNewCommittee interpreter server = do
   epochs <- Api.fillEpochs interpreter server 2
   pure (blk : epochs)
 
+proposeNewCommittee :: AlonzoTx Consensus.StandardConway
+proposeNewCommittee =
+  Conway.mkAddCommitteeTx committeeCred
+  where
+    committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
+    committeeCred = KeyHashObj (KeyHash committeeHash)
+
 rollbackBlocks ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
@@ -183,7 +231,7 @@ rollbackBlocks interpreter server n blocks = do
   (rollbackPoint, blocks') <-
     case drop n (reverse blocks) of
       (blk : blks) -> pure (blockPoint blk, blks)
-      [] -> assertFailure "Expected at least 3 blocks"
+      [] -> assertFailure $ "Expected at least " <> show n <> " blocks"
 
   -- Rollback to the previous epoch
   Api.rollbackTo interpreter server rollbackPoint

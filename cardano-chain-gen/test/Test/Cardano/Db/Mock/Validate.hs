@@ -40,6 +40,7 @@ module Test.Cardano.Db.Mock.Validate (
   assertPoolCounters,
   poolCountersQuery,
   checkStillRuns,
+  defaultDelays,
 ) where
 
 import Cardano.Db

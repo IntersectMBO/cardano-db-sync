@@ -15,6 +15,7 @@ module Cardano.Mock.Query (
   queryTreasuryDonations,
   queryVoteCounts,
   queryEpochStateCount,
+  queryCommitteeByTxHash,
 ) where
 
 import qualified Cardano.Db as Db
@@ -214,3 +215,25 @@ queryEpochStateCount epochNo = do
     pure countRows
 
   pure (maybe 0 unValue res)
+
+queryCommitteeByTxHash ::
+  MonadIO io =>
+  ByteString ->
+  ReaderT SqlBackend io (Maybe Db.Committee)
+queryCommitteeByTxHash txHash = do
+  res <- selectOne $ do
+    (committee :& _ :& tx) <-
+      from
+        $ table @Db.Committee
+          `innerJoin` table @Db.GovActionProposal
+        `on` ( \(committee :& govAction) ->
+                committee ^. Db.CommitteeGovActionProposalId ==. just (govAction ^. Db.GovActionProposalId)
+             )
+          `innerJoin` table @Db.Tx
+        `on` ( \(_ :& govAction :& tx) ->
+                govAction ^. Db.GovActionProposalTxId ==. tx ^. Db.TxId
+             )
+    where_ (tx ^. Db.TxHash ==. val txHash)
+    pure committee
+
+  pure (entityVal <$> res)
