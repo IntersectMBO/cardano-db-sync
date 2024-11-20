@@ -9,13 +9,13 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Operations.Delete (
-  deleteBlocksSlotNo,
-  deleteBlocksSlotNoNoTrace,
   deleteDelistedPool,
   deleteBlocksBlockId,
+  queryDelete,
+  deleteBlocksSlotNo,
+  deleteBlocksSlotNoNoTrace,
   deleteBlocksForTests,
   deleteBlock,
-  queryDelete,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning, nullTracer)
@@ -54,9 +54,6 @@ import Database.Persist (
  )
 import Database.Persist.Sql (Filter, SqlBackend, delete, deleteWhere, deleteWhereCount, selectKeysList)
 
-deleteBlocksSlotNoNoTrace :: MonadIO m => TxOutTableType -> SlotNo -> ReaderT SqlBackend m Bool
-deleteBlocksSlotNoNoTrace txOutTableType slotNo = deleteBlocksSlotNo nullTracer txOutTableType slotNo Nothing
-
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
 deleteBlocksSlotNo ::
@@ -64,21 +61,17 @@ deleteBlocksSlotNo ::
   Trace IO Text ->
   TxOutTableType ->
   SlotNo ->
-  Maybe Bool ->
+  Bool ->
   ReaderT SqlBackend m Bool
-deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) mIsConsumedTxOut = do
+deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
   mBlockId <- queryNearestBlockSlotNo slotNo
   case mBlockId of
     Nothing -> do
       liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> pack (show slotNo)
       pure False
     Just (blockId, epochN) -> do
-      void $ deleteBlocksBlockId trce txOutTableType blockId epochN mIsConsumedTxOut
+      void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
       pure True
-
-deleteBlocksForTests :: MonadIO m => TxOutTableType -> BlockId -> Word64 -> ReaderT SqlBackend m ()
-deleteBlocksForTests txOutTableType blockId epochN = do
-  void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN Nothing
 
 -- | Delete starting from a 'BlockId'.
 deleteBlocksBlockId ::
@@ -89,9 +82,9 @@ deleteBlocksBlockId ::
   -- | The 'EpochNo' of the block to delete.
   Word64 ->
   -- | Is ConsumeTxout
-  Maybe Bool ->
+  Bool ->
   ReaderT SqlBackend m Int64
-deleteBlocksBlockId trce txOutTableType blockId epochN mIsConsumedTxOut = do
+deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut = do
   mMinIds <- fmap (textToMinIds txOutTableType =<<) <$> queryReverseIndexBlockId blockId
   (cminIds, completed) <- findMinIdsRec mMinIds mempty
   mTxId <- queryMinRefId TxBlockId blockId
@@ -99,10 +92,9 @@ deleteBlocksBlockId trce txOutTableType blockId epochN mIsConsumedTxOut = do
   deleteEpochLogs <- deleteUsingEpochNo epochN
   (deleteBlockCount, blockDeleteLogs) <- deleteTablesAfterBlockId txOutTableType blockId mTxId minIds
   setNullLogs <-
-    maybe
-      (pure ("ConsumedTxOut is not active so no Nulls set", 0))
-      (\_ -> querySetNullTxOut txOutTableType mTxId)
-      mIsConsumedTxOut
+    if isConsumedTxOut
+      then querySetNullTxOut txOutTableType mTxId
+      else pure ("ConsumedTxOut is not active so no Nulls set", 0)
   -- log all the deleted rows in the rollback
   liftIO $ logInfo trce $ mkRollbackSummary (deleteEpochLogs <> blockDeleteLogs) setNullLogs
   pure deleteBlockCount
@@ -357,17 +349,6 @@ deleteDelistedPool poolHash = do
   mapM_ delete keys
   pure $ not (null keys)
 
--- | Delete a block if it exists. Returns 'True' if it did exist and has been
--- deleted and 'False' if it did not exist.
-deleteBlock :: MonadIO m => TxOutTableType -> Block -> ReaderT SqlBackend m Bool
-deleteBlock txOutTableType block = do
-  mBlockId <- queryBlockHash block
-  case mBlockId of
-    Nothing -> pure False
-    Just (blockId, epochN) -> do
-      void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN Nothing
-      pure True
-
 mkRollbackSummary :: [(Text, Int64)] -> (Text, Int64) -> Text
 mkRollbackSummary logs setNullLogs =
   "\n----------------------- Rollback Summary: ----------------------- \n"
@@ -392,3 +373,25 @@ mkRollbackSummary logs setNullLogs =
         <> if nullCount == 0
           then nullMessage
           else "\n\nSet Null: " <> nullMessage <> " - Count: " <> pack (show nullCount)
+
+-- Tools
+
+deleteBlocksSlotNoNoTrace :: MonadIO m => TxOutTableType -> SlotNo -> ReaderT SqlBackend m Bool
+deleteBlocksSlotNoNoTrace txOutTableType slotNo = deleteBlocksSlotNo nullTracer txOutTableType slotNo True
+
+-- Tests
+
+deleteBlocksForTests :: MonadIO m => TxOutTableType -> BlockId -> Word64 -> ReaderT SqlBackend m ()
+deleteBlocksForTests txOutTableType blockId epochN = do
+  void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN False
+
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteBlock :: MonadIO m => TxOutTableType -> Block -> ReaderT SqlBackend m Bool
+deleteBlock txOutTableType block = do
+  mBlockId <- queryBlockHash block
+  case mBlockId of
+    Nothing -> pure False
+    Just (blockId, epochN) -> do
+      void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN False
+      pure True
