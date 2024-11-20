@@ -18,6 +18,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   infoAction,
   rollbackNewCommittee,
   rollbackNewCommitteeProposal,
+  rollbackHardFork,
 ) where
 
 import qualified Cardano.Db as Db
@@ -56,15 +57,11 @@ drepDistr =
   withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-    -- Register DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-    -- DRep distribution is calculated at end of the current epoch
-    epoch1 <- Api.fillUntilNextEpoch interpreter server
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length epoch1 + 2)
+    assertBlockNoBackoff dbSync (length epoch1)
 
     -- Should now have a DRep distribution
     let drepId = Prelude.head Forging.unregisteredDRepIds
@@ -76,21 +73,31 @@ drepDistr =
   where
     testLabel = "conwayDrepDistr"
 
+initGovernance :: Interpreter -> ServerHandle IO CardanoBlock -> IO [CardanoBlock]
+initGovernance interpreter server = do
+  -- Add stake
+  blk1 <- Api.registerAllStakeCreds interpreter server
+  -- Register a DRep and delegate votes to it
+  blk2 <- Api.registerDRepsAndDelegateVotes interpreter server
+  -- DRep distribution is calculated at end of the current epoch
+  epoch0 <- Api.fillUntilNextEpoch interpreter server
+  -- Register committee hot credentials
+  blk3 <- Api.registerCommitteeCreds interpreter server
+
+  pure $ (blk1 : blk2 : epoch0) ++ [blk3]
+
 newCommittee :: IOManager -> [(Text, Text)] -> Assertion
 newCommittee =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
     -- Propose, ratify, and enact a new committee member
-    epochs <- enactNewCommittee interpreter server
+    epoch3 <- enactNewCommittee interpreter server
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length epochs + 2)
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
     -- Should now have a committee member
     assertEqQuery
       dbSync
@@ -105,15 +112,12 @@ rollbackNewCommittee =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
     -- Propose, ratify, and enact a new committee member
-    epoch2 <- enactNewCommittee interpreter server
+    epoch3 <- enactNewCommittee interpreter server
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length epoch2 + 2)
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
     -- Should now have a committee member
     assertEqQuery
       dbSync
@@ -122,9 +126,9 @@ rollbackNewCommittee =
       "Unexpected governance action counts"
 
     -- Rollback the last 2 blocks
-    epoch1' <- rollbackBlocks interpreter server 2 epoch2
+    epoch1' <- rollbackBlocks interpreter server 2 epoch3
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length epoch1' + 3)
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch1')
     -- Should not have a new committee member
     assertEqQuery
       dbSync
@@ -134,13 +138,13 @@ rollbackNewCommittee =
 
     -- Fast forward to next epoch
     epoch2' <- Api.fillUntilNextEpoch interpreter server
-    assertBlockNoBackoff dbSync (length (epoch1' <> epoch2') + 3)
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch1' <> epoch2')
     -- Should now have 2 identical committees
     assertEqQuery
       dbSync
-      (Query.queryEpochStateCount 2)
+      (Query.queryEpochStateCount 3)
       2
-      "Unexpected epoch state count for epoch 2"
+      "Unexpected epoch state count for epoch 3"
   where
     testLabel = "conwayRollbackNewCommittee"
 
@@ -149,13 +153,8 @@ rollbackNewCommitteeProposal =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    blks <-
-      sequence
-        [ -- Add stake
-          Api.registerAllStakeCreds interpreter server
-        , -- Register a DRep and delegate votes to it
-          Api.registerDRepsAndDelegateVotes interpreter server
-        ]
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
 
     -- Propose a new committee member
     let proposal = proposeNewCommittee
@@ -164,7 +163,7 @@ rollbackNewCommitteeProposal =
       Right [proposal]
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length blks + 1)
+    assertBlockNoBackoff dbSync (length epoch1 + 1)
     -- Should have a new committee
     assertBackoff
       dbSync
@@ -174,9 +173,9 @@ rollbackNewCommitteeProposal =
       (const "Expected at least one new committee")
 
     -- Rollback one block
-    blks' <- rollbackBlocks interpreter server 1 blks
+    epoch1' <- rollbackBlocks interpreter server 1 epoch1
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length blks' + 1)
+    assertBlockNoBackoff dbSync (length epoch1')
     -- Should NOT have a new committee
     assertBackoff
       dbSync
@@ -230,7 +229,7 @@ rollbackBlocks ::
 rollbackBlocks interpreter server n blocks = do
   (rollbackPoint, blocks') <-
     case drop n (reverse blocks) of
-      (blk : blks) -> pure (blockPoint blk, blks)
+      (blk : blks) -> pure (blockPoint blk, blk : blks)
       [] -> assertFailure $ "Expected at least " <> show n <> " blocks"
 
   -- Rollback to the previous epoch
@@ -240,24 +239,15 @@ rollbackBlocks interpreter server n blocks = do
     Api.withConwayFindLeaderAndSubmitTx interpreter server $
       Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
 
-  pure (blocks' ++ [newBlock])
+  pure $ reverse (newBlock : blocks')
 
 updateConstitution :: IOManager -> [(Text, Text)] -> Assertion
 updateConstitution =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-
-    -- DRep distribution is calculated at end of the current epoch
-    epoch0 <- Api.fillUntilNextEpoch interpreter server
-
-    -- Register committee hot credentials
-    void (Api.registerCommitteeCreds interpreter server)
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
 
     let newUrl = fromJust (textToUrl 64 "constitution.new")
         dataHash = hashAnchorData @Consensus.StandardCrypto (AnchorData "constitution content")
@@ -285,10 +275,10 @@ updateConstitution =
 
     -- It takes 2 epochs to enact a proposal--ratification will happen on the next
     -- epoch and enacted on the following.
-    epoch1 <- Api.fillEpochs interpreter server 2
+    epoch3 <- Api.fillEpochs interpreter server 2
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length (epoch0 <> epoch1) + 4)
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 1)
 
     -- Constitution should now be updated
     (EpochNo epochNo) <- getCurrentEpoch interpreter
@@ -305,17 +295,8 @@ treasuryWithdrawal =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-
-    -- DRep distribution is calculated at end of the current epoch
-    epoch0 <- Api.fillUntilNextEpoch interpreter server
-
-    -- Register committee hot credentials
-    void (Api.registerCommitteeCreds interpreter server)
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
 
     -- Make sure we have treasury to spend
     void $
@@ -349,10 +330,10 @@ treasuryWithdrawal =
 
     -- It takes 2 epochs to enact a proposal--ratification will happen on the next
     -- epoch and enacted on the following.
-    epoch1 <- Api.fillEpochs interpreter server 2
+    epoch3 <- Api.fillEpochs interpreter server 2
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length (epoch0 <> epoch1) + 5)
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 2)
 
     -- Should now have a treasury reward
     assertEqQuery
@@ -368,14 +349,8 @@ parameterChange =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-    -- DRep distribution is calculated at end of the current epoch
-    epoch0 <- Api.fillUntilNextEpoch interpreter server
-    -- Register committee hot credentials
-    void (Api.registerCommitteeCreds interpreter server)
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
 
     -- Create and vote for gov action
     void $
@@ -403,10 +378,10 @@ parameterChange =
 
     -- It takes 2 epochs to enact a proposal--ratification will happen on the next
     -- epoch and enacted on the following.
-    epochs <- Api.fillEpochs interpreter server 2
+    epoch3 <- Api.fillEpochs interpreter server 2
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length (epoch0 <> epochs) + 4)
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 1)
     -- Should now have a ratified/enacted governance action
     assertEqQuery
       dbSync
@@ -432,44 +407,13 @@ hardFork =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-    -- DRep distribution is calculated at end of the current epoch
-    epoch0 <- Api.fillUntilNextEpoch interpreter server
-    -- Register committee hot credentials
-    void (Api.registerCommitteeCreds interpreter server)
-
-    -- Create and vote for gov action
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
-        let
-          -- Create gov action tx
-          govActionTx = Conway.mkHardForkInitTx
-          -- Crate vote tx
-          addVoteTx =
-            Conway.mkGovVoteYesTx
-              govActionId
-              ( Forging.drepVoters
-                  ++ Forging.committeeVoters
-                  ++ Forging.resolveStakePoolVoters ledger
-              )
-          govActionId =
-            GovActionId
-              { gaidTxId = txIdTx govActionTx
-              , gaidGovActionIx = GovActionIx 0
-              }
-
-        -- Create votes
-        pure [govActionTx, addVoteTx]
-
-    -- It takes 2 epochs to enact a proposal--ratification will happen on the next
-    -- epoch and enacted on the following.
-    epochs <- Api.fillEpochs interpreter server 2
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
+    -- Propose, ratify, and enact a hard fork
+    epoch3 <- enactHardFork interpreter server
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length (epoch0 <> epochs) + 4)
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
     -- Should now have a ratified/enacted governance action
     assertEqQuery
       dbSync
@@ -486,19 +430,98 @@ hardFork =
     testLabel = "conwayGovernanceHardFork"
     getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
 
+rollbackHardFork :: IOManager -> [(Text, Text)] -> Assertion
+rollbackHardFork =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
+    -- Propose, ratify, and enact a hard fork
+    epoch3 <- enactHardFork interpreter server
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
+    -- Should now have a ratified/enacted governance action
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (1, 1, 0, 0)
+      "Unexpected governance action counts"
+    -- Should have a new major protocol version
+    assertEqQuery
+      dbSync
+      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      (Just 11)
+      "Unexpected governance action counts"
+
+    -- Rollback the last 2 blocks
+    epoch2 <- rollbackBlocks interpreter server 2 epoch3
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch2)
+    -- Should not have a new committee member
+    assertEqQuery
+      dbSync
+      Query.queryGovActionCounts
+      (1, 0, 0, 0)
+      "Unexpected governance action counts"
+    -- Should have the old major protocol version
+    assertEqQuery
+      dbSync
+      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      (Just 10)
+      "Unexpected governance action counts"
+
+    -- Fast forward to next epoch
+    epoch3' <- Api.fillUntilNextEpoch interpreter server
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch2 <> epoch3')
+    -- Should once again have a new major protocol version
+    assertEqQuery
+      dbSync
+      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      (Just 11)
+      "Unexpected governance action counts"
+  where
+    testLabel = "conwayRollbackHardFork"
+    getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
+
+enactHardFork :: Interpreter -> ServerHandle IO CardanoBlock -> IO [CardanoBlock]
+enactHardFork interpreter server = do
+  blk <-
+    Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+      let
+        -- Create gov action tx
+        govActionTx = Conway.mkHardForkInitTx
+        -- Crate vote tx
+        addVoteTx =
+          Conway.mkGovVoteYesTx
+            govActionId
+            ( Forging.drepVoters
+                ++ Forging.committeeVoters
+                ++ Forging.resolveStakePoolVoters ledger
+            )
+        govActionId =
+          GovActionId
+            { gaidTxId = txIdTx govActionTx
+            , gaidGovActionIx = GovActionIx 0
+            }
+
+      -- Create votes
+      pure [govActionTx, addVoteTx]
+
+  -- It takes 2 epochs to enact a proposal--ratification will happen on the next
+  -- epoch and enacted on the following.
+  epoch2 <- Api.fillEpochs interpreter server 2
+
+  pure (blk : epoch2)
+
 infoAction :: IOManager -> [(Text, Text)] -> Assertion
 infoAction =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
-    -- Add stake
-    void (Api.registerAllStakeCreds interpreter server)
-    -- Register a DRep and delegate votes to it
-    void (Api.registerDRepsAndDelegateVotes interpreter server)
-    -- DRep distribution is calculated at end of the current epoch
-    epoch0 <- Api.fillUntilNextEpoch interpreter server
-    -- Register committee hot credentials
-    void (Api.registerCommitteeCreds interpreter server)
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
 
     let
       -- Create gov action tx
@@ -536,10 +559,10 @@ infoAction =
         pure [govActionTx, addVoteTx]
 
     -- There is no ratification/enactment for info actions, so let it expire
-    epochs <- Api.fillEpochs interpreter server 10
+    epoch11 <- Api.fillEpochs interpreter server 10
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync (length (epoch0 <> epochs) + 4)
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch11) + 1)
     -- Should now be expired and dropped
     assertEqQuery
       dbSync
