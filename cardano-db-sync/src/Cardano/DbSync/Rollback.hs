@@ -48,7 +48,7 @@ rollbackFromBlockNo syncEnv blkNo = do
         , textShow blkNo
         ]
     lift $ do
-      deletedBlockCount <- DB.deleteBlocksBlockId trce txOutTableType blockId epochNo (Just (DB.pcmConsumedTxOut $ getPruneConsume syncEnv))
+      deletedBlockCount <- DB.deleteBlocksBlockId trce txOutTableType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
       when (deletedBlockCount > 0) $ do
         -- We use custom constraints to improve input speeds when syncing.
         -- If they don't already exists we add them here as once a rollback has happened
@@ -111,4 +111,4 @@ prepareRollback syncEnv point serverTip =
 unsafeRollback :: Trace IO Text -> DB.TxOutTableType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce txOutTableType config slotNo = do
   logWarning trce $ "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutTableType slotNo Nothing)
+  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutTableType slotNo True)

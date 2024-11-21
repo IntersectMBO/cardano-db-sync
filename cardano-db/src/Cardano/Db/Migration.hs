@@ -11,7 +11,7 @@ module Cardano.Db.Migration (
   getMigrationScripts,
   runMigrations,
   recreateDB,
-  getAllTablleNames,
+  getAllTableNames,
   truncateTables,
   dropTables,
   getMaintenancePsqlConf,
@@ -298,8 +298,8 @@ recreateDB pgpass = do
     rawExecute "drop schema if exists public cascade" []
     rawExecute "create schema public" []
 
-getAllTablleNames :: PGPassSource -> IO [Text]
-getAllTablleNames pgpass = do
+getAllTableNames :: PGPassSource -> IO [Text]
+getAllTableNames pgpass = do
   runWithConnectionNoLogging pgpass $ do
     fmap unSingle <$> rawSql "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()" []
 
