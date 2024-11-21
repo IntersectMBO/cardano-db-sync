@@ -11,14 +11,15 @@
 module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
+  rollbackNewCommittee,
+  rollbackNewCommitteeProposal,
   updateConstitution,
   treasuryWithdrawal,
   parameterChange,
+  chainedNewCommittee,
   hardFork,
-  infoAction,
-  rollbackNewCommittee,
-  rollbackNewCommitteeProposal,
   rollbackHardFork,
+  infoAction,
 ) where
 
 import qualified Cardano.Db as Db
@@ -148,6 +149,56 @@ rollbackNewCommittee =
   where
     testLabel = "conwayRollbackNewCommittee"
 
+chainedNewCommittee :: IOManager -> [(Text, Text)] -> Assertion
+chainedNewCommittee =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length epoch1)
+    -- Should start with 4 committee members
+    assertEqQuery
+      dbSync
+      (Query.queryCommitteeMemberCountByTxHash Nothing)
+      4
+      "Unexpected committee member count"
+
+    let
+      -- Propose a new committee member
+      committee1Hash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
+      committee1Cred = KeyHashObj (KeyHash committee1Hash)
+      proposal1 = Conway.mkAddCommitteeTx Nothing committee1Cred
+
+      -- Propose another, using proposal1 as the prev governance action
+      committee2Hash = "f15d3cfda3ac52c86d2d98925419795588e74f4e270a3c17beabeaff"
+      committee2Cred = KeyHashObj (KeyHash committee2Hash)
+      proposal2 = Conway.mkAddCommitteeTx (Just prevGovActionId) committee2Cred
+      proposal2TxHash = unTxHash (txIdTx proposal2)
+
+      prevGovActionId =
+        Governance.GovPurposeId $
+          Governance.GovActionId
+            { gaidTxId = txIdTx proposal1
+            , gaidGovActionIx = GovActionIx 0
+            }
+
+    void $ Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+      Right [proposal1, proposal2]
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length epoch1 + 1)
+    -- Should now have 6 members
+    assertEqQuery
+      dbSync
+      (Query.queryCommitteeMemberCountByTxHash $ Just proposal2TxHash)
+      6
+      "Unexpected committee member count"
+  where
+    testLabel = "conwayChainedNewCommittee"
+
 rollbackNewCommitteeProposal :: IOManager -> [(Text, Text)] -> Assertion
 rollbackNewCommitteeProposal =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
@@ -215,7 +266,7 @@ enactNewCommittee interpreter server = do
 
 proposeNewCommittee :: AlonzoTx Consensus.StandardConway
 proposeNewCommittee =
-  Conway.mkAddCommitteeTx committeeCred
+  Conway.mkAddCommitteeTx Nothing committeeCred
   where
     committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
     committeeCred = KeyHashObj (KeyHash committeeHash)
