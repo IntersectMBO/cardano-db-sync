@@ -16,10 +16,11 @@ module Cardano.Mock.Query (
   queryVoteCounts,
   queryEpochStateCount,
   queryCommitteeByTxHash,
+  queryCommitteeMemberCountByTxHash,
 ) where
 
 import qualified Cardano.Db as Db
-import Cardano.Prelude hiding (from, on)
+import Cardano.Prelude hiding (from, isNothing, on)
 import Database.Esqueleto.Experimental
 import Prelude ()
 
@@ -237,3 +238,35 @@ queryCommitteeByTxHash txHash = do
     pure committee
 
   pure (entityVal <$> res)
+
+queryCommitteeMemberCountByTxHash ::
+  MonadIO io =>
+  Maybe ByteString ->
+  ReaderT SqlBackend io Word64
+queryCommitteeMemberCountByTxHash txHash = do
+  res <- selectOne $ do
+    (_ :& committee :& _ :& tx) <-
+      from
+        $ table @Db.CommitteeMember
+          `innerJoin` table @Db.Committee
+        `on` ( \(member :& committee) ->
+                member ^. Db.CommitteeMemberCommitteeId ==. committee ^. Db.CommitteeId
+             )
+          `leftJoin` table @Db.GovActionProposal
+        `on` ( \(_ :& committee :& govAction) ->
+                committee ^. Db.CommitteeGovActionProposalId ==. govAction ?. Db.GovActionProposalId
+             )
+          `leftJoin` table @Db.Tx
+        `on` ( \(_ :& _ :& govAction :& tx) ->
+                govAction ?. Db.GovActionProposalTxId ==. tx ?. Db.TxId
+             )
+
+    where_ $
+      case txHash of
+        -- Search by Tx hash, if specified
+        Just _ -> tx ?. Db.TxHash ==. val txHash
+        -- Otherwise, get the initial committee
+        Nothing -> isNothing (committee ^. Db.CommitteeGovActionProposalId)
+    pure countRows
+
+  pure (maybe 0 unValue res)

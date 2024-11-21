@@ -542,11 +542,13 @@ mkTxDelegCert ::
 mkTxDelegCert f = ConwayTxCertDeleg . f
 
 mkAddCommitteeTx ::
+  Maybe (Governance.GovPurposeId 'Governance.CommitteePurpose StandardConway) ->
   Credential 'ColdCommitteeRole StandardCrypto ->
   AlonzoTx StandardConway
-mkAddCommitteeTx cred = mkGovActionProposalTx govAction
+mkAddCommitteeTx prevGovAction cred = mkGovActionProposalTx govAction
   where
-    govAction = Governance.UpdateCommittee SNothing mempty newMembers threshold
+    govAction = Governance.UpdateCommittee prevGovAction' mempty newMembers threshold
+    prevGovAction' = maybeToStrictMaybe prevGovAction
     newMembers = Map.singleton cred (EpochNo 20)
     threshold = fromJust $ boundRational (1 % 1)
 
