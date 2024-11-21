@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.2
+- Fix rollbacks speed
+
 ## 13.6.0.1
 - A new config `use_address_table` addition makes it possible to use a separate table for addresses [#1697]
 - Support application/ld+json http mime type for vote metadata [#1842]
