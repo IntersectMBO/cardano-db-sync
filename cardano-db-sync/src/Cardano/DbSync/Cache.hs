@@ -28,6 +28,7 @@ module Cardano.DbSync.Cache (
   getCacheStatistics,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
@@ -275,13 +276,14 @@ queryPoolKeyOrInsert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Text ->
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   CacheAction ->
   Bool ->
   PoolKeyHash ->
   ReaderT SqlBackend m DB.PoolHashId
-queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
-  let logCtx = initLogCtx "queryPoolKeyOrInsert" "Cardano.DbSync.Cache"
+queryPoolKeyOrInsert txt trce severity cache cacheUA logsWarning hsh = do
+  let logCtx = initLogCtx severity "queryPoolKeyOrInsert" "Cardano.DbSync.Cache"
   pk <- queryPoolKeyWithCache cache cacheUA hsh
   case pk of
     Right poolHashId -> pure poolHashId
@@ -306,12 +308,13 @@ queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
 queryMAWithCache ::
   MonadIO m =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
-queryMAWithCache trce cache policyId asset = do
-  let logCtx = initLogCtx "queryMAWithCache" "Cardano.DbSync.Cache"
+queryMAWithCache trce severity cache policyId asset = do
+  let logCtx = initLogCtx severity "queryMAWithCache" "Cardano.DbSync.Cache"
   case cache of
     NoCache -> do
       let !policyBs = Generic.unScriptHash $ policyID policyId

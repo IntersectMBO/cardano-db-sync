@@ -16,8 +16,10 @@ module Cardano.DbSync.Util.Constraint (
 ) where
 
 import Cardano.BM.Data.Trace (Trace)
+import qualified Cardano.BM.Tracing as BM
 import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Prelude (MonadIO (..), Proxy (..), ReaderT (runReaderT), atomically)
@@ -75,7 +77,7 @@ addStakeConstraintsIfNotExist ::
   ReaderT SqlBackend m ()
 addStakeConstraintsIfNotExist syncEnv trce = do
   mdbc <- liftIO . readTVarIO $ envDbConstraints syncEnv
-  unless (dbConstraintEpochStake mdbc) (addEpochStakeTableConstraint trce)
+  unless (dbConstraintEpochStake mdbc) (addEpochStakeTableConstraint syncEnv trce)
   liftIO
     . atomically
     $ writeTVar (envDbConstraints syncEnv) (mdbc {dbConstraintEpochStake = True})
@@ -88,7 +90,8 @@ addRewardConstraintsIfNotExist ::
   ReaderT SqlBackend m ()
 addRewardConstraintsIfNotExist syncEnv trce = do
   mdbc <- liftIO . readTVarIO $ envDbConstraints syncEnv
-  unless (dbConstraintRewards mdbc) (addRewardTableConstraint trce)
+  severity <- liftIO $ getSeverity syncEnv
+  unless (dbConstraintRewards mdbc) (addRewardTableConstraint trce severity)
   liftIO
     . atomically
     $ writeTVar (envDbConstraints syncEnv) (mdbc {dbConstraintRewards = True})
@@ -97,10 +100,11 @@ addRewardTableConstraint ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m ()
-addRewardTableConstraint trce = do
+addRewardTableConstraint trce severity = do
   let entityD = entityDef $ Proxy @DB.Reward
-      logCtx = initLogCtx "addRewardTableConstraint" "Cardano.DbSync.Util"
+      logCtx = initLogCtx severity "addRewardTableConstraint" "Cardano.DbSync.Util"
   DB.alterTable
     entityD
     ( DB.AddUniqueConstraint
@@ -116,11 +120,13 @@ addRewardTableConstraint trce = do
 addEpochStakeTableConstraint ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Trace IO Text ->
   ReaderT SqlBackend m ()
-addEpochStakeTableConstraint trce = do
+addEpochStakeTableConstraint syncEnv trce = do
+  severity <- liftIO $ getSeverity syncEnv
   let entityD = entityDef $ Proxy @DB.EpochStake
-      logCtx = initLogCtx "addEpochStakeTableConstraint" "Cardano.DbSync.Util"
+      logCtx = initLogCtx severity "addEpochStakeTableConstraint" "Cardano.DbSync.Util"
   DB.alterTable
     entityD
     ( DB.AddUniqueConstraint

@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Universal.Insert.LedgerEvent (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache.Types (textShowStats)
 import Cardano.DbSync.Era.Cardano.Insert (insertEpochSyncTime)
@@ -44,10 +45,9 @@ insertNewEpochLedgerEvents ::
   EpochNo ->
   [LedgerEvent] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
+insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) = do
   mapM_ handler
   where
-    logCtx = initLogCtx "insertNewEpochLedgerEvents" "Cardano.DbSync.Era.Universal.Insert.LedgerEvent"
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     ntw = getNetwork syncEnv
@@ -66,7 +66,9 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
       (MonadBaseControl IO m, MonadIO m) =>
       LedgerEvent ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-    handler ev =
+    handler ev = do
+      severity <- liftIO $ getSeverity syncEnv
+      let logCtx = initLogCtx severity "insertNewEpochLedgerEvents" "Cardano.DbSync.Era.Universal.Insert.LedgerEvent"
       case ev of
         LedgerNewEpoch en ss -> do
           lift $
@@ -90,9 +92,9 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards syncEnv ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
         LedgerRestrainedRewards e rwd creds ->
-          lift $ adjustEpochRewards tracer ntw cache e rwd creds
+          lift $ adjustEpochRewards tracer severity ntw cache e rwd creds
         LedgerTotalRewards _e rwd ->
-          lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+          lift $ validateEpochRewards tracer severity ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo enacted dropped expired uncl -> do

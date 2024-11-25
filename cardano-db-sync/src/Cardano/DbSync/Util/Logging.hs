@@ -13,6 +13,7 @@ module Cardano.DbSync.Util.Logging (
   logExceptionCtx,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace, logDebug, logError, logInfo, logWarning)
 import Cardano.Prelude hiding (catch)
 import Control.Exception.Lifted (catch)
@@ -22,7 +23,8 @@ import qualified Data.Time.Clock as Time
 import Prelude hiding (show, unwords, (.))
 
 data LogContext = LogContext
-  { lcFunction :: Text
+  { lcSeverity :: BM.Severity
+  , lcFunction :: Text
   , lcComponent :: Text
   , lcBlockNo :: Maybe Word64
   , lcSlotNo :: Maybe Word64
@@ -30,23 +32,27 @@ data LogContext = LogContext
   , lcMessage :: Text
   }
 
--- TODO: We could select what to show here with a debug flag!
 formatLogMessage :: LogContext -> Text
 formatLogMessage ctx =
-  unwords
-    [ lcMessage ctx
-    , "[Function:"
-    , lcFunction ctx
-    , "| Component:"
-    , lcComponent ctx
-    , "| Block No:"
-    , maybe "None" (pack . show) (lcBlockNo ctx)
-    , "| Slot No:"
-    , maybe "None" (pack . show) (lcSlotNo ctx)
-    , "| Epoch No:"
-    , maybe "None" (pack . show) (lcEpochNo ctx)
-    , "]"
-    ]
+  unwords $
+    lcMessage ctx : debugLogs
+  where
+    debugLogs =
+      case lcSeverity ctx of
+        BM.Debug ->
+          [ "[Function:"
+          , lcFunction ctx
+          , "| Component:"
+          , lcComponent ctx
+          , "| Block No:"
+          , maybe "None" (pack . show) (lcBlockNo ctx)
+          , "| Slot No:"
+          , maybe "None" (pack . show) (lcSlotNo ctx)
+          , "| Epoch No:"
+          , maybe "None" (pack . show) (lcEpochNo ctx)
+          , "]"
+          ]
+        _otherwise -> []
 
 -- Wrapper functions using LogContext
 logInfoCtx :: Trace IO Text -> LogContext -> IO ()
@@ -61,10 +67,11 @@ logErrorCtx trce ctx = logError trce (formatLogMessage ctx)
 logDebugCtx :: Trace IO Text -> LogContext -> IO ()
 logDebugCtx trce ctx = logDebug trce (formatLogMessage ctx)
 
-initLogCtx :: Text -> Text -> LogContext
-initLogCtx functionName componentName =
+initLogCtx :: BM.Severity -> Text -> Text -> LogContext
+initLogCtx severity functionName componentName =
   LogContext
-    { lcFunction = functionName
+    { lcSeverity = severity
+    , lcFunction = functionName
     , lcComponent = componentName
     , lcBlockNo = Nothing
     , lcSlotNo = Nothing
@@ -73,11 +80,17 @@ initLogCtx functionName componentName =
     }
 
 -- | Needed when debugging disappearing exceptions.
-liftedLogExceptionCtx :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
-liftedLogExceptionCtx tracer txt action =
+liftedLogExceptionCtx ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  BM.Severity ->
+  Text ->
+  m a ->
+  m a
+liftedLogExceptionCtx tracer severity txt action =
   action `catch` logger
   where
-    logCtx = LogContext txt "Cardano.DbSync.Util" Nothing Nothing Nothing
+    logCtx = LogContext severity txt "Cardano.DbSync.Util" Nothing Nothing Nothing
 
     logger :: MonadIO m => SomeException -> m a
     logger e =
@@ -86,7 +99,12 @@ liftedLogExceptionCtx tracer txt action =
         throwIO e
 
 -- | Log the runtime duration of an action. Mainly for debugging.
-logActionDurationCtx :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> LogContext -> m a -> m a
+logActionDurationCtx ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  Trace IO Text ->
+  LogContext ->
+  m a ->
+  m a
 logActionDurationCtx tracer logCtx action = do
   before <- liftIO Time.getCurrentTime
   a <- action
@@ -98,7 +116,11 @@ logActionDurationCtx tracer logCtx action = do
 -- code, the caught exception will not be logged. Therefore wrap all cardano-db-sync code that
 -- is called from network with an exception logger so at least the exception will be
 -- logged (instead of silently swallowed) and then rethrown.
-logExceptionCtx :: Trace IO Text -> LogContext -> IO a -> IO a
+logExceptionCtx ::
+  Trace IO Text ->
+  LogContext ->
+  IO a ->
+  IO a
 logExceptionCtx tracer logCtx action =
   action `catch` logger
   where

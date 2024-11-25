@@ -9,9 +9,11 @@ module Cardano.DbSync.Rollback (
   unsafeRollback,
 ) where
 
+import qualified Cardano.BM.Data.Severity as DM
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Era.Util
@@ -37,7 +39,8 @@ rollbackFromBlockNo ::
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 rollbackFromBlockNo syncEnv blkNo = do
-  let logCtx = initLogCtx "rollbackFromBlockNo" "Cardano.DbSync.Rollback"
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "rollbackFromBlockNo" "Cardano.DbSync.Rollback"
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
@@ -76,14 +79,20 @@ rollbackFromBlockNo syncEnv blkNo = do
     txOutTableType = getTxOutTableType syncEnv
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback syncEnv point serverTip =
-  DB.runDbIohkNoLogging (envBackend syncEnv) $ runExceptT action
+prepareRollback syncEnv point serverTip = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "prepareRollback" "Cardano.DbSync.Rollback"
+  when (severity == DM.Debug) $ do
+    logWarningCtx trce $
+      logCtx
+        { lcMessage = "Rollback requested"
+        }
+  DB.runDbIohkNoLogging (envBackend syncEnv) $ runExceptT $ action logCtx
   where
-    logCtx = initLogCtx "prepareRollback" "Cardano.DbSync.Rollback"
     trce = getTrace syncEnv
 
-    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
-    action = do
+    action :: MonadIO m => LogContext -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    action logCtx = do
       case getPoint point of
         Origin -> do
           nBlocks <- lift DB.queryCountSlotNo
@@ -127,9 +136,9 @@ prepareRollback syncEnv point serverTip =
       pure False
 
 -- For testing and debugging.
-unsafeRollback :: Trace IO Text -> DB.TxOutTableType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
-unsafeRollback trce txOutTableType config slotNo = do
-  let logCtx = initLogCtx "unsafeRollback" "Cardano.DbSync.Rollback"
+unsafeRollback :: Trace IO Text -> DM.Severity -> DB.TxOutTableType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
+unsafeRollback trce severity txOutTableType config slotNo = do
+  let logCtx = initLogCtx severity "unsafeRollback" "Cardano.DbSync.Rollback"
   logWarningCtx trce $
     logCtx
       { lcSlotNo = Just $ unSlotNo slotNo

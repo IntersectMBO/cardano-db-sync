@@ -17,10 +17,12 @@ module Cardano.DbSync.OffChain (
   fetchOffChainVoteData,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import Cardano.Db (runIohkLogging)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.OffChain.Http
@@ -105,9 +107,10 @@ loadOffChainWorkQueue _trce offChainWorkQueue = do
 insertOffChainPoolResults ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   StrictTBQueue IO OffChainPoolResult ->
   ReaderT SqlBackend m ()
-insertOffChainPoolResults trce resultQueue = do
+insertOffChainPoolResults trce severity resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
   unless (null res) $ do
     let resLength = length res
@@ -115,7 +118,7 @@ insertOffChainPoolResults trce resultQueue = do
     liftIO . logInfoCtx trce $ logCtx {lcMessage = logInsertOffChainResults "Pool" resLength resErrorsLength}
   mapM_ insert res
   where
-    logCtx = initLogCtx "insertOffChainPoolResults" "Cardano.DbSync.OffChain"
+    logCtx = initLogCtx severity "insertOffChainPoolResults" "Cardano.DbSync.OffChain"
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
     insert = \case
       OffChainPoolResultMetadata md -> void $ DB.insertCheckOffChainPoolData md
@@ -129,9 +132,10 @@ insertOffChainPoolResults trce resultQueue = do
 insertOffChainVoteResults ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   StrictTBQueue IO OffChainVoteResult ->
   ReaderT SqlBackend m ()
-insertOffChainVoteResults trce resultQueue = do
+insertOffChainVoteResults trce severity resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
   unless (null res) $ do
     let resLength = length res
@@ -139,7 +143,7 @@ insertOffChainVoteResults trce resultQueue = do
     liftIO . logInfoCtx trce $ logCtx {lcMessage = logInsertOffChainResults "Voting Anchor" resLength resErrorsLength}
   mapM_ insert res
   where
-    logCtx = initLogCtx "insertOffChainVoteResults" "Cardano.DbSync.OffChain"
+    logCtx = initLogCtx severity "insertOffChainVoteResults" "Cardano.DbSync.OffChain"
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
     insert = \case
       OffChainVoteResultMetadata md accessors -> do
@@ -180,6 +184,8 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 runFetchOffChainPoolThread :: SyncEnv -> IO ()
 runFetchOffChainPoolThread syncEnv = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runFetchOffChainPoolThread" "Cardano.DbSync.OffChain"
   -- if dissable gov is active then don't run voting anchor thread
   when (ioOffChainPoolData iopts) $ do
     logInfoCtx trce $ logCtx {lcMessage = "Running Offchain Pool fetch thread"}
@@ -195,7 +201,6 @@ runFetchOffChainPoolThread syncEnv = do
             now <- liftIO Time.getPOSIXTime
             mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
   where
-    logCtx = initLogCtx "runFetchOffChainPoolThread" "Cardano.DbSync.OffChain"
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
@@ -204,6 +209,8 @@ runFetchOffChainPoolThread syncEnv = do
 
 runFetchOffChainVoteThread :: SyncEnv -> IO ()
 runFetchOffChainVoteThread syncEnv = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runFetchOffChainVoteThread" "Cardano.DbSync.OffChain"
   -- if dissable gov is active then don't run voting anchor thread
   when (ioGov iopts) $ do
     logInfoCtx trce $ logCtx {lcMessage = "Running Offchain Vote Anchor fetch thread"}
@@ -218,7 +225,6 @@ runFetchOffChainVoteThread syncEnv = do
             now <- liftIO Time.getPOSIXTime
             mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
   where
-    logCtx = initLogCtx "runFetchOffChainVoteThread" "Cardano.DbSync.OffChain"
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
     gateways = dncIpfsGateway $ envSyncNodeConfig syncEnv

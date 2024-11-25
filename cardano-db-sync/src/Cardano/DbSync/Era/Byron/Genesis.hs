@@ -11,6 +11,7 @@ module Cardano.DbSync.Era.Byron.Genesis (
 ) where
 
 import Cardano.BM.Trace (Trace)
+import qualified Cardano.BM.Tracing as BM
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
@@ -20,6 +21,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
@@ -47,81 +49,81 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer insertAction
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) insertAction
-  where
-    logCtx = initLogCtx "insertValidateGenesisDist" "Cardano.DbSync.Era.Byron.Genesis"
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "insertValidateGenesisDist" "Cardano.DbSync.Era.Byron.Genesis"
+      tracer = getTrace syncEnv
+      insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
+      insertAction = do
+        disInOut <- liftIO $ getDisableInOutState syncEnv
+        let prunes = getPrunes syncEnv
 
-    tracer = getTrace syncEnv
+        ebid <- DB.queryBlockId (configGenesisHash cfg)
+        case ebid of
+          Right bid -> validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid
+          Left _ ->
+            runExceptT $ do
+              liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Inserting Byron Genesis distribution"}
+              count <- lift DB.queryBlockCount
+              when (not disInOut && count > 0) $ do
+                liftIO $ logErrorCtx tracer $ logCtx {lcMessage = "Genesis data mismatch"}
+                dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
+              void . lift $
+                DB.insertMeta $
+                  DB.Meta
+                    { DB.metaStartTime = Byron.configStartTime cfg
+                    , DB.metaNetworkName = networkName
+                    , DB.metaVersion = textShow version
+                    }
 
-    insertAction :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m (Either SyncNodeError ())
-    insertAction = do
-      disInOut <- liftIO $ getDisableInOutState syncEnv
-      let prunes = getPrunes syncEnv
-
-      ebid <- DB.queryBlockId (configGenesisHash cfg)
-      case ebid of
-        Right bid -> validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid
-        Left _ ->
-          runExceptT $ do
-            liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Inserting Byron Genesis distribution"}
-            count <- lift DB.queryBlockCount
-            when (not disInOut && count > 0) $ do
-              liftIO $ logErrorCtx tracer $ logCtx {lcMessage = "Genesis data mismatch"}
-              dbSyncNodeError "insertValidateGenesisDist: Genesis data mismatch."
-            void . lift $
-              DB.insertMeta $
-                DB.Meta
-                  { DB.metaStartTime = Byron.configStartTime cfg
-                  , DB.metaNetworkName = networkName
-                  , DB.metaVersion = textShow version
+              -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
+              -- need this block to attach the genesis distribution transactions to.
+              -- It would be nice to not need this artificial block, but that would
+              -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
+              -- which would be a pain in the neck.
+              slid <-
+                lift . DB.insertSlotLeader $
+                  DB.SlotLeader
+                    { DB.slotLeaderHash = BS.take 28 $ configGenesisHash cfg
+                    , DB.slotLeaderPoolHashId = Nothing
+                    , DB.slotLeaderDescription = "Genesis slot leader"
+                    }
+              bid <-
+                lift . DB.insertBlock $
+                  DB.Block
+                    { DB.blockHash = configGenesisHash cfg
+                    , DB.blockEpochNo = Nothing
+                    , DB.blockSlotNo = Nothing
+                    , DB.blockEpochSlotNo = Nothing
+                    , DB.blockBlockNo = Nothing
+                    , DB.blockPreviousId = Nothing
+                    , DB.blockSlotLeaderId = slid
+                    , DB.blockSize = 0
+                    , DB.blockTime = Byron.configStartTime cfg
+                    , DB.blockTxCount = fromIntegral (length $ genesisTxos cfg)
+                    , -- Genesis block does not have a protocol version, so set this to '0'.
+                      DB.blockProtoMajor = 0
+                    , DB.blockProtoMinor = 0
+                    , -- Shelley specific
+                      DB.blockVrfKey = Nothing
+                    , DB.blockOpCert = Nothing
+                    , DB.blockOpCertCounter = Nothing
+                    }
+              mapM_ (insertTxOutsByron syncEnv disInOut bid) $ genesisTxos cfg
+              liftIO . logInfoCtx tracer $
+                logCtx
+                  { lcMessage =
+                      "Initial genesis distribution populated. Hash "
+                        <> renderByteArray (configGenesisHash cfg)
                   }
-
-            -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
-            -- need this block to attach the genesis distribution transactions to.
-            -- It would be nice to not need this artificial block, but that would
-            -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
-            -- which would be a pain in the neck.
-            slid <-
-              lift . DB.insertSlotLeader $
-                DB.SlotLeader
-                  { DB.slotLeaderHash = BS.take 28 $ configGenesisHash cfg
-                  , DB.slotLeaderPoolHashId = Nothing
-                  , DB.slotLeaderDescription = "Genesis slot leader"
-                  }
-            bid <-
-              lift . DB.insertBlock $
-                DB.Block
-                  { DB.blockHash = configGenesisHash cfg
-                  , DB.blockEpochNo = Nothing
-                  , DB.blockSlotNo = Nothing
-                  , DB.blockEpochSlotNo = Nothing
-                  , DB.blockBlockNo = Nothing
-                  , DB.blockPreviousId = Nothing
-                  , DB.blockSlotLeaderId = slid
-                  , DB.blockSize = 0
-                  , DB.blockTime = Byron.configStartTime cfg
-                  , DB.blockTxCount = fromIntegral (length $ genesisTxos cfg)
-                  , -- Genesis block does not have a protocol version, so set this to '0'.
-                    DB.blockProtoMajor = 0
-                  , DB.blockProtoMinor = 0
-                  , -- Shelley specific
-                    DB.blockVrfKey = Nothing
-                  , DB.blockOpCert = Nothing
-                  , DB.blockOpCertCounter = Nothing
-                  }
-            mapM_ (insertTxOutsByron syncEnv disInOut bid) $ genesisTxos cfg
-            liftIO . logInfoCtx tracer $
-              logCtx
-                { lcMessage =
-                    "Initial genesis distribution populated. Hash "
-                      <> renderByteArray (configGenesisHash cfg)
-                }
-            supply <- lift $ DB.queryTotalSupply $ getTxOutTableType syncEnv
-            liftIO $
-              logInfoCtx tracer $
-                logCtx {lcMessage = "Total genesis supply of Ada: " <> DB.renderAda supply}
+              supply <- lift $ DB.queryTotalSupply $ getTxOutTableType syncEnv
+              liftIO $
+                logInfoCtx tracer $
+                  logCtx {lcMessage = "Total genesis supply of Ada: " <> DB.renderAda supply}
+  case severity of
+    BM.Debug -> do
+      newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer insertAction
+    _otherwise ->
+      newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) insertAction
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
@@ -134,9 +136,10 @@ validateGenesisDistribution ::
   Byron.Config ->
   DB.BlockId ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
+validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid = do
+  severity <- liftIO $ getSeverity syncEnv
   runExceptT $ do
-    let logCtx = initLogCtx "validateGenesisDistribution" "Cardano.DbSync.Era.Byron.Genesis"
+    let logCtx = initLogCtx severity "validateGenesisDistribution" "Cardano.DbSync.Era.Byron.Genesis"
     meta <- liftLookupFail "validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= Byron.configStartTime cfg) $

@@ -74,6 +74,7 @@ import qualified Control.Exception as Exception
 
 import qualified Data.ByteString.Base16 as Base16
 
+import qualified Cardano.BM.Tracing as BM
 import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
 import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
 import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
@@ -215,10 +216,10 @@ readStateUnsafe env = do
     Strict.Nothing -> throwSTM $ userError "LedgerState.readStateUnsafe: Ledger state is not found"
     Strict.Just st -> pure st
 
-applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
-applyBlockAndSnapshot ledgerEnv blk isCons = do
+applyBlockAndSnapshot :: HasLedgerEnv -> BM.Severity -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
+applyBlockAndSnapshot ledgerEnv severity blk isCons = do
   (oldState, appResult) <- applyBlock ledgerEnv blk
-  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv severity oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
   pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
@@ -323,13 +324,14 @@ getSliceMeta _ = Nothing
 
 storeSnapshotAndCleanupMaybe ::
   HasLedgerEnv ->
+  BM.Severity ->
   CardanoLedgerState ->
   ApplyResult ->
   BlockNo ->
   Bool ->
   SyncState ->
   IO Bool
-storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
+storeSnapshotAndCleanupMaybe env severity oldState appResult blkNo isCons syncState =
   case maybeFromStrict (apNewEpoch appResult) of
     Just newEpoch
       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
@@ -337,12 +339,12 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
       , isCons || (newEpochNo `mod` 10 == 0) || newEpochNo >= 503 ->
           do
             -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-            liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
+            liftIO $ saveCleanupState env severity oldState (Just $ EpochNo $ newEpochNo - 1)
             pure True
-    _ ->
+    _otherwise ->
       if timeToSnapshot syncState blkNo && isCons
         then do
-          liftIO $ saveCleanupState env oldState Nothing
+          liftIO $ saveCleanupState env severity oldState Nothing
           pure True
         else pure False
   where
@@ -352,9 +354,9 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
         (SyncFollowing, bno) -> bno `mod` leSnapshotEveryFollowing env == 0
         (SyncLagging, _) -> False
 
-saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
-saveCurrentLedgerState env lState mEpochNo = do
-  let logCtx = initLogCtx "saveCurrentLedgerState" "Cardano.DbSync.Ledger.State"
+saveCurrentLedgerState :: HasLedgerEnv -> BM.Severity -> CardanoLedgerState -> Maybe EpochNo -> IO ()
+saveCurrentLedgerState env severity lState mEpochNo = do
+  let logCtx = initLogCtx severity "saveCurrentLedgerState" "Cardano.DbSync.Ledger.State"
   case mkLedgerStateFilename (leDir env) (clsState lState) mEpochNo of
     Origin -> pure () -- we don't store genesis
     At file -> do
@@ -369,17 +371,17 @@ saveCurrentLedgerState env lState mEpochNo = do
               }
         else atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
 
-runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
-runLedgerStateWriteThread tracer lenv =
+runLedgerStateWriteThread :: Trace IO Text -> BM.Severity -> LedgerEnv -> IO ()
+runLedgerStateWriteThread tracer severity lenv =
   case lenv of
-    HasLedger le -> ledgerStateWriteLoop tracer (leStateWriteQueue le) (configCodec $ getTopLevelconfigHasLedger le)
+    HasLedger le -> ledgerStateWriteLoop tracer severity (leStateWriteQueue le) (configCodec $ getTopLevelconfigHasLedger le)
     NoLedger _ -> forever $ threadDelay 600000000 -- 10 minutes
 
-ledgerStateWriteLoop :: Trace IO Text -> TBQueue (FilePath, CardanoLedgerState) -> CodecConfig CardanoBlock -> IO ()
-ledgerStateWriteLoop tracer swQueue codecConfig =
+ledgerStateWriteLoop :: Trace IO Text -> BM.Severity -> TBQueue (FilePath, CardanoLedgerState) -> CodecConfig CardanoBlock -> IO ()
+ledgerStateWriteLoop tracer sevirity swQueue codecConfig =
   loop
   where
-    logCtx = initLogCtx "ledgerStateWriteLoop" "Cardano.DbSync.Ledger.State"
+    logCtx = initLogCtx sevirity "ledgerStateWriteLoop" "Cardano.DbSync.Ledger.State"
 
     loop :: IO ()
     loop = do
@@ -410,11 +412,11 @@ mkLedgerStateFilename dir ledger mEpochNo =
   lsfFilePath . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
-saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
-saveCleanupState env ledger mEpochNo = do
+saveCleanupState :: HasLedgerEnv -> BM.Severity -> CardanoLedgerState -> Maybe EpochNo -> IO ()
+saveCleanupState env severity ledger mEpochNo = do
   let st = clsState ledger
-  saveCurrentLedgerState env ledger mEpochNo
-  cleanupLedgerStateFiles env $
+  saveCurrentLedgerState env severity ledger mEpochNo
+  cleanupLedgerStateFiles env severity $
     fromWithOrigin (SlotNo 0) (ledgerTipSlot $ ledgerState st)
 
 hashToAnnotation :: ByteString -> ByteString
@@ -475,16 +477,16 @@ parseLedgerStateFileName (LedgerStateDir stateDir) fp =
 
 -- -------------------------------------------------------------------------------------------------
 
-cleanupLedgerStateFiles :: HasLedgerEnv -> SlotNo -> IO ()
-cleanupLedgerStateFiles env slotNo = do
+cleanupLedgerStateFiles :: HasLedgerEnv -> BM.Severity -> SlotNo -> IO ()
+cleanupLedgerStateFiles env severity slotNo = do
   files <- listLedgerStateFilesOrdered (leDir env)
   let (epochBoundary, valid, invalid) = foldr groupFiles ([], [], []) files
   -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
-  deleteAndLogFiles env "invalid" invalid
+  deleteAndLogFiles env severity "invalid" invalid
   -- Remove all but 6 most recent state files.
-  deleteAndLogStateFile env "old" (List.drop 3 valid)
+  deleteAndLogStateFile env severity "old" (List.drop 3 valid)
   -- Remove all but 6 most recent epoch boundary state files.
-  deleteAndLogStateFile env "old epoch boundary" (List.drop 6 epochBoundary)
+  deleteAndLogStateFile env severity "old epoch boundary" (List.drop 6 epochBoundary)
   where
     groupFiles ::
       LedgerStateFile ->
@@ -498,9 +500,9 @@ cleanupLedgerStateFiles env slotNo = do
       | otherwise =
           (epochBoundary, lFile : regularFile, invalid)
 
-loadLedgerAtPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [LedgerStateFile] CardanoLedgerState)
-loadLedgerAtPoint hasLedgerEnv point = do
-  let logCtx = initLogCtx "loadLedgerAtPoint" "Cardano.DbSync.Ledger.State"
+loadLedgerAtPoint :: HasLedgerEnv -> BM.Severity -> CardanoPoint -> IO (Either [LedgerStateFile] CardanoLedgerState)
+loadLedgerAtPoint hasLedgerEnv severity point = do
+  let logCtx = initLogCtx severity "loadLedgerAtPoint" "Cardano.DbSync.Ledger.State"
   mLedgerDB <- atomically $ readTVar $ leStateVar hasLedgerEnv
   -- First try to find the ledger in memory
   let mAnchoredSeq = rollbackLedger mLedgerDB
@@ -511,7 +513,7 @@ loadLedgerAtPoint hasLedgerEnv point = do
       -- are or can be garbage collected.
       writeLedgerState hasLedgerEnv Strict.Nothing
       performMajorGC
-      mst <- findStateFromPoint hasLedgerEnv point
+      mst <- findStateFromPoint hasLedgerEnv severity point
       case mst of
         Right st -> do
           writeLedgerState hasLedgerEnv (Strict.Just . LedgerDB $ AS.Empty st)
@@ -524,7 +526,7 @@ loadLedgerAtPoint hasLedgerEnv point = do
         logCtx {lcMessage = mconcat ["Found in memory ledger snapshot at ", renderPoint point]}
       let ledgerDB' = LedgerDB anchoredSeq'
       let st = ledgerDbCurrent ledgerDB'
-      deleteNewerFiles hasLedgerEnv point
+      deleteNewerFiles hasLedgerEnv severity point
       writeLedgerState hasLedgerEnv $ Strict.Just ledgerDB'
       pure $ Right st
   where
@@ -536,22 +538,22 @@ loadLedgerAtPoint hasLedgerEnv point = do
       Strict.Just ledgerDB ->
         AS.rollback (pointSlot point) (const True) (ledgerDbCheckpoints ledgerDB)
 
-deleteNewerFiles :: HasLedgerEnv -> CardanoPoint -> IO ()
-deleteNewerFiles env point = do
+deleteNewerFiles :: HasLedgerEnv -> BM.Severity -> CardanoPoint -> IO ()
+deleteNewerFiles env severity point = do
   files <- listLedgerStateFilesOrdered (leDir env)
   -- Genesis can be reproduced from configuration.
   -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
   case getPoint point of
     Origin -> do
-      deleteAndLogStateFile env "newer" files
+      deleteAndLogStateFile env severity "newer" files
     At blk -> do
       let (newerFiles, _found, _olderFiles) =
             findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
-      deleteAndLogStateFile env "newer" newerFiles
+      deleteAndLogStateFile env severity "newer" newerFiles
 
-deleteAndLogFiles :: HasLedgerEnv -> Text -> [FilePath] -> IO ()
-deleteAndLogFiles env descr files = do
-  let logCtx = initLogCtx "deleteAndLogFiles" "Cardano.DbSync.Ledger.State"
+deleteAndLogFiles :: HasLedgerEnv -> BM.Severity -> Text -> [FilePath] -> IO ()
+deleteAndLogFiles env severity descr files = do
+  let logCtx = initLogCtx severity "deleteAndLogFiles" "Cardano.DbSync.Ledger.State"
   case files of
     [] -> pure ()
     [fl] -> do
@@ -561,25 +563,25 @@ deleteAndLogFiles env descr files = do
       logInfoCtx (leTrace env) $ logCtx {lcMessage = mconcat ["Removing ", descr, " files ", textShow files]}
       mapM_ safeRemoveFile files
 
-deleteAndLogStateFile :: HasLedgerEnv -> Text -> [LedgerStateFile] -> IO ()
-deleteAndLogStateFile env descr lsfs = deleteAndLogFiles env descr (lsfFilePath <$> lsfs)
+deleteAndLogStateFile :: HasLedgerEnv -> BM.Severity -> Text -> [LedgerStateFile] -> IO ()
+deleteAndLogStateFile env severity descr lsfs = deleteAndLogFiles env severity descr (lsfFilePath <$> lsfs)
 
-findStateFromPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [LedgerStateFile] CardanoLedgerState)
-findStateFromPoint env point = do
+findStateFromPoint :: HasLedgerEnv -> BM.Severity -> CardanoPoint -> IO (Either [LedgerStateFile] CardanoLedgerState)
+findStateFromPoint env severity point = do
   files <- listLedgerStateFilesOrdered (leDir env)
   -- Genesis can be reproduced from configuration.
   -- TODO: We can make this a monadic action (reread config from disk) to save some memory.
   case getPoint point of
     Origin -> do
-      deleteAndLogStateFile env "newer" files
+      deleteAndLogStateFile env severity "newer" files
       pure . Right $ initCardanoLedgerState (leProtocolInfo env)
     At blk -> do
       let (newerFiles, found, olderFiles) =
             findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
-      deleteAndLogStateFile env "newer" newerFiles
+      deleteAndLogStateFile env severity "newer" newerFiles
       case found of
         Just lsf -> do
-          mState <- loadLedgerStateFromFile (leTrace env) (getTopLevelconfigHasLedger env) False point lsf
+          mState <- loadLedgerStateFromFile (leTrace env) severity (getTopLevelconfigHasLedger env) False point lsf
           case mState of
             Left err -> do
               deleteLedgerFile err lsf
@@ -590,7 +592,7 @@ findStateFromPoint env point = do
           logNewerFiles olderFiles
           pure $ Left olderFiles
   where
-    logCtx = initLogCtx "findStateFromPoint" "Cardano.DbSync.Ledger.State"
+    logCtx = initLogCtx severity "findStateFromPoint" "Cardano.DbSync.Ledger.State"
 
     deleteLedgerFile :: Text -> LedgerStateFile -> IO ()
     deleteLedgerFile err lsf = do
@@ -649,14 +651,14 @@ comparePointToFile lsf (blSlotNo, blHash) =
         else GT
     x -> x
 
-loadLedgerStateFromFile :: Trace IO Text -> TopLevelConfig CardanoBlock -> Bool -> CardanoPoint -> LedgerStateFile -> IO (Either Text CardanoLedgerState)
-loadLedgerStateFromFile tracer config delete point lsf = do
+loadLedgerStateFromFile :: Trace IO Text -> BM.Severity -> TopLevelConfig CardanoBlock -> Bool -> CardanoPoint -> LedgerStateFile -> IO (Either Text CardanoLedgerState)
+loadLedgerStateFromFile tracer severity config delete point lsf = do
   mst <- safeReadFile (lsfFilePath lsf)
   case mst of
     Left err -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure (Left err)
     Right st -> pure $ Right st
   where
-    logCtx = initLogCtx "loadLedgerStateFromFile" "Cardano.DbSync.Ledger.State"
+    logCtx = initLogCtx severity "loadLedgerStateFromFile" "Cardano.DbSync.Ledger.State"
 
     safeReadFile :: FilePath -> IO (Either Text CardanoLedgerState)
     safeReadFile fp = do

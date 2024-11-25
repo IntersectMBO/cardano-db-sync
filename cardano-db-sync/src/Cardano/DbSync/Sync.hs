@@ -24,12 +24,14 @@ module Cardano.DbSync.Sync (
   runSyncNodeClient,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
 import Cardano.BM.Trace (Trace, appendName)
 import qualified Cardano.BM.Trace as Logging
 import Cardano.Client.Subscription (subscribe)
 import Cardano.Db (runDbIohkLogging)
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), FixesRan (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.Database
@@ -130,6 +132,8 @@ runSyncNodeClient ::
   SocketPath ->
   IO ()
 runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runSyncNodeClient" "Cardano.DbSync.Sync"
   logInfoCtx trce $ logCtx {lcMessage = "Connecting to node via " <> textShow socketPath}
   void $
     subscribe
@@ -138,9 +142,8 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
       (supportedNodeToClientVersions (Proxy @CardanoBlock))
       networkSubscriptionTracers
       clientSubscriptionParams
-      (dbSyncProtocols syncEnv metricsSetters tc codecConfig)
+      (dbSyncProtocols syncEnv severity metricsSetters tc codecConfig)
   where
-    logCtx = initLogCtx "runSyncNodeClient" "Cardano.DbSync.Sync"
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
 
@@ -182,13 +185,14 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
 
 dbSyncProtocols ::
   SyncEnv ->
+  BM.Severity ->
   MetricSetters ->
   ThreadChannels ->
   CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
   NodeToClientProtocols 'InitiatorMode LocalAddress BSL.ByteString IO () Void
-dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
+dbSyncProtocols syncEnv severity metricsSetters tc codecConfig version bversion =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -200,7 +204,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
               (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
     }
   where
-    logCtx = initLogCtx "dbSyncProtocols" "Cardano.DbSync.Sync"
+    logCtx = initLogCtx severity "dbSyncProtocols" "Cardano.DbSync.Sync"
     codecs = clientCodecs codecConfig bversion version
 
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
@@ -227,7 +231,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
               (cChainSyncCodec codecs)
               channel
               ( Client.chainSyncClientPeer $
-                  chainSyncClientFixConsumed backend syncEnv wrongEntriesSize
+                  chainSyncClientFixConsumed backend syncEnv severity wrongEntriesSize
               )
           logInfoCtx tracer $
             logCtx {lcMessage = mconcat ["Fixed ", textShow fixedEntries, " consumed_by_tx_id wrong entries"]}
@@ -239,7 +243,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
       let onlyFix = soptOnlyFix $ envOptions syncEnv
       if noneFixed fr && (onlyFix || not skipFix)
         then do
-          fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
+          fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer severity
           unless (nullData fd) $
             void $
               runPeer
@@ -247,7 +251,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                 (cChainSyncCodec codecs)
                 channel
                 ( Client.chainSyncClientPeer $
-                    chainSyncClientFixData backend tracer fd
+                    chainSyncClientFixData backend tracer severity fd
                 )
           if onlyFix
             then do
@@ -257,7 +261,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
         else
           if isDataFixed fr && (onlyFix || not skipFix)
             then do
-              ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
+              ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer severity
               unless (nullPlutusScripts ls) $
                 void $
                   runPeer
@@ -265,7 +269,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                     (cChainSyncCodec codecs)
                     channel
                     ( Client.chainSyncClientPeer $
-                        chainSyncClientFixScripts backend tracer ls
+                        chainSyncClientFixScripts backend tracer severity ls
                     )
               when onlyFix $ panic "All Good! This error is only thrown to exit db-sync"
               setIsFixed syncEnv AllFixRan
@@ -277,7 +281,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $
       MiniProtocolCb $ \_ctx channel -> do
-        let logCtx' = initLogCtx "localChainSyncPtcl" "Cardano.DbSync.Sync"
+        let logCtx' = initLogCtx severity "localChainSyncPtcl" "Cardano.DbSync.Sync"
         liftIO . logExceptionCtx tracer logCtx' {lcMessage = "ChainSyncWithBlocksPtcl "} $ do
           isInitComplete <- runAndSetDone tc $ initAction channel
           when isInitComplete $ do
@@ -302,7 +306,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
                 (cChainSyncCodec codecs)
                 channel
                 ( chainSyncClientPeerPipelined $
-                    chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
+                    chainSyncClient metricsSetters tracer severity (fst <$> latestPoints) currentTip tc
                 )
             atomically $ writeDbActionQueue tc DbFinish
             -- We should return leftover bytes returned by 'runPipelinedPeer', but
@@ -357,11 +361,12 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
 chainSyncClient ::
   MetricSetters ->
   Trace IO Text ->
+  BM.Severity ->
   [Point CardanoBlock] ->
   WithOrigin BlockNo ->
   ThreadChannels ->
   ChainSyncClientPipelined CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClient metricsSetters trce latestPoints currentTip tc = do
+chainSyncClient metricsSetters trce severity latestPoints currentTip tc = do
   ChainSyncClientPipelined $ pure $ clientPipelinedStIdle currentTip latestPoints
   where
     clientPipelinedStIdle ::
@@ -448,7 +453,7 @@ chainSyncClient metricsSetters trce latestPoints currentTip tc = do
               pure $ finish newTip tip mPoints
         }
       where
-        logCtx = initLogCtx "mkClientStNext" "Cardano.DbSync.Sync"
+        logCtx = initLogCtx severity "mkClientStNext" "Cardano.DbSync.Sync"
 
 drainThePipe ::
   Nat n ->
@@ -471,13 +476,13 @@ drainThePipe n0 client = go n0
               }
 
 chainSyncClientFixConsumed ::
-  SqlBackend -> SyncEnv -> Word64 -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
-chainSyncClientFixConsumed backend syncEnv wrongTotalSize = Client.ChainSyncClient $ do
+  SqlBackend -> SyncEnv -> BM.Severity -> Word64 -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO Integer
+chainSyncClientFixConsumed backend syncEnv severity wrongTotalSize = Client.ChainSyncClient $ do
   liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Starting chainsync to fix consumed_by_tx_id Byron entries. See issue https://github.com/IntersectMBO/cardano-db-sync/issues/1821. This makes resyncing unnecessary."}
   pure $ Client.SendMsgFindIntersect [genesisPoint] clientStIntersect
   where
     tracer = getTrace syncEnv
-    logCtx = initLogCtx "chainSyncClientFixConsumed" "Cardano.DbSync.Sync"
+    logCtx = initLogCtx severity "chainSyncClientFixConsumed" "Cardano.DbSync.Sync"
     clientStIntersect =
       Client.ClientStIntersect
         { Client.recvMsgIntersectFound = \_blk _tip ->
@@ -524,12 +529,12 @@ chainSyncClientFixConsumed backend syncEnv wrongTotalSize = Client.ChainSyncClie
           logCtx {lcMessage = mconcat ["Fixed ", textShow newSize, "/", textShow wrongTotalSize, " entries"]}
 
 chainSyncClientFixData ::
-  SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
+  SqlBackend -> Trace IO Text -> BM.Severity -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+chainSyncClientFixData backend tracer severity fixData = Client.ChainSyncClient $ do
   liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Starting chainsync to fix Plutus Data. This will update database values in tables datum and redeemer_data."}
   clientStIdle True (sizeFixData fixData) fixData
   where
-    logCtx = initLogCtx "chainSyncClientFixData" "Cardano.DbSync.Sync"
+    logCtx = initLogCtx severity "chainSyncClientFixData" "Cardano.DbSync.Sync"
     updateSizeAndLog :: Int -> Int -> IO Int
     updateSizeAndLog lastSize currentSize = do
       let diffSize = lastSize - currentSize
@@ -579,7 +584,7 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
     clientStNext lastSize fdOnPoint fdRest =
       Client.ClientStNext
         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
-            runDbIohkLogging backend tracer $ fixPlutusData tracer blk fdOnPoint
+            runDbIohkLogging backend tracer $ fixPlutusData tracer severity blk fdOnPoint
             clientStIdle False lastSize fdRest
         , Client.recvMsgRollBackward = \_point _tip ->
             Client.ChainSyncClient $
@@ -588,12 +593,12 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
         }
 
 chainSyncClientFixScripts ::
-  SqlBackend -> Trace IO Text -> FixPlutusScripts -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
-chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
+  SqlBackend -> Trace IO Text -> BM.Severity -> FixPlutusScripts -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
+chainSyncClientFixScripts backend tracer severity fps = Client.ChainSyncClient $ do
   liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Starting chainsync to fix Plutus Scripts. This will update database values in tables script."}
   clientStIdle True (sizeFixPlutusScripts fps) fps
   where
-    logCtx = initLogCtx "chainSyncClientFixScripts" "Cardano.DbSync.Sync"
+    logCtx = initLogCtx severity "chainSyncClientFixScripts" "Cardano.DbSync.Sync"
     updateSizeAndLog :: Int -> Int -> IO Int
     updateSizeAndLog lastSize currentSize = do
       let diffSize = lastSize - currentSize
@@ -643,7 +648,7 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
     clientStNext lastSize fpsOnPoint fpsRest =
       Client.ClientStNext
         { Client.recvMsgRollForward = \blk _tip -> Client.ChainSyncClient $ do
-            runDbIohkLogging backend tracer $ fixPlutusScripts tracer blk fpsOnPoint
+            runDbIohkLogging backend tracer $ fixPlutusScripts tracer severity blk fpsOnPoint
             clientStIdle False lastSize fpsRest
         , Client.recvMsgRollBackward = \_point _tip ->
             Client.ChainSyncClient $

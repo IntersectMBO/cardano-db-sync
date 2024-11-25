@@ -195,6 +195,7 @@ test-suite cardano-chain-gen
                       , esqueleto
                       , extra
                       , filepath
+                      , iohk-monitoring
                       , silently
                       , stm
                       , strict-stm

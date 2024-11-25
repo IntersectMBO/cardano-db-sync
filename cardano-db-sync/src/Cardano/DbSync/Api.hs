@@ -51,10 +51,13 @@ module Cardano.DbSync.Api (
   convertToPoint,
 ) where
 
+import qualified Cardano.BM.Configuration.Model as BM
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
@@ -101,10 +104,11 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
-setConsistentLevel env cst = do
-  let logCtx = initLogCtx "setConsistentLevel" "Cardano.DbSync.Api"
-  logInfoCtx (getTrace env) $ logCtx {lcMessage = "Setting ConsistencyLevel to " <> textShow cst}
-  atomically $ writeTVar (envConsistentLevel env) cst
+setConsistentLevel syncEnv cst = do
+  severity <- getSeverity syncEnv
+  let logCtx = initLogCtx severity "setConsistentLevel" "Cardano.DbSync.Api"
+  logInfoCtx (getTrace syncEnv) $ logCtx {lcMessage = "Setting ConsistencyLevel to " <> textShow cst}
+  atomically $ writeTVar (envConsistentLevel syncEnv) cst
 
 getConsistentLevel :: SyncEnv -> IO ConsistentLevel
 getConsistentLevel env =
@@ -159,13 +163,14 @@ getRanIndexes env = do
   readTVarIO $ envIndexes env
 
 runIndexMigrations :: SyncEnv -> IO ()
-runIndexMigrations env = do
-  let logCtx = initLogCtx "runIndexMigrations" "Cardano.DbSync.Api"
-  haveRan <- readTVarIO $ envIndexes env
+runIndexMigrations syncEnv = do
+  severity <- getSeverity syncEnv
+  let logCtx = initLogCtx severity "runIndexMigrations" "Cardano.DbSync.Api"
+  haveRan <- readTVarIO $ envIndexes syncEnv
   unless haveRan $ do
-    envRunDelayedMigration env DB.Indexes
-    logInfoCtx (getTrace env) $ logCtx {lcMessage = "Indexes were created"}
-    atomically $ writeTVar (envIndexes env) True
+    envRunDelayedMigration syncEnv DB.Indexes
+    logInfoCtx (getTrace syncEnv) $ logCtx {lcMessage = "Indexes were created"}
+    atomically $ writeTVar (envIndexes syncEnv) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
 initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
@@ -180,8 +185,9 @@ getPruneConsume = soptPruneConsumeMigration . envOptions
 
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
+  severity <- getSeverity syncEnv
   let pcm = getPruneConsume syncEnv
-      logCtx = initLogCtx "runExtraMigrationsMaybe" "Cardano.DbSync.Api"
+      logCtx = initLogCtx severity "runExtraMigrationsMaybe" "Cardano.DbSync.Api"
       txOutTableType = getTxOutTableType syncEnv
   logInfoCtx (getTrace syncEnv) $ logCtx {lcMessage = "runExtraMigrationsMaybe: " <> textShow pcm}
   DB.runDbIohkNoLogging (envBackend syncEnv) $
@@ -355,7 +361,8 @@ mkSyncEnv ::
   RunMigration ->
   IO SyncEnv
 mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
-  let logCtx = initLogCtx "mkSyncEnv" "Cardano.DbSync.Api"
+  severity <- BM.minSeverity . dncLoggingConfig $ syncNodeConfigFromFile
+  let logCtx = initLogCtx severity "mkSyncEnv" "Cardano.DbSync.Api"
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -371,7 +378,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
+  bts <- getBootstrapInProgress trce severity (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -543,11 +550,12 @@ getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig
 
 getBootstrapInProgress ::
   Trace IO Text ->
+  BM.Severity ->
   Bool ->
   SqlBackend ->
   IO Bool
-getBootstrapInProgress trce bootstrapFlag sqlBackend = do
-  let logCtx = initLogCtx "getBootstrapInProgress" "Cardano.DbSync.Api"
+getBootstrapInProgress trce severity bootstrapFlag sqlBackend = do
+  let logCtx = initLogCtx severity "getBootstrapInProgress" "Cardano.DbSync.Api"
   DB.runDbIohkNoLogging sqlBackend $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems

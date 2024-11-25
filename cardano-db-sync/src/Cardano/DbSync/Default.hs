@@ -13,6 +13,7 @@ module Cardano.DbSync.Default (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Epoch (epochHandler)
@@ -64,6 +65,8 @@ applyAndInsertBlockMaybe ::
   CardanoBlock ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "applyAndInsertBlockMaybe" "Cardano.DbSync.Default"
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
@@ -99,13 +102,13 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
               liftIO $ logInfoCtx tracer $ logCtx {lcMessage = "Reached " <> textShow epochNo}
         _ -> pure ()
   where
-    logCtx = initLogCtx "applyAndInsertBlockMaybe" "Cardano.DbSync.Default"
     mkApplyResult :: Bool -> IO (ApplyResult, Bool)
     mkApplyResult isCons = do
+      severity <- getSeverity syncEnv
       case envLedgerEnv syncEnv of
-        HasLedger hle -> applyBlockAndSnapshot hle cblk isCons
+        HasLedger hle -> applyBlockAndSnapshot hle severity cblk isCons
         NoLedger nle -> do
-          slotDetails <- getSlotDetailsNode nle (cardanoBlockSlotNo cblk)
+          slotDetails <- getSlotDetailsNode severity nle (cardanoBlockSlotNo cblk)
           pure (defaultApplyResult slotDetails, False)
 
     getAdaPots :: ApplyResult -> Maybe (Shelley.AdaPots, SlotNo, EpochNo)

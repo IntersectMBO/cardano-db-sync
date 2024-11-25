@@ -11,6 +11,7 @@ module Cardano.DbSync.LocalStateQuery (
 ) where
 
 import Cardano.BM.Trace (Trace)
+import qualified Cardano.BM.Tracing as BM
 import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
@@ -88,15 +89,16 @@ newStateQueryTMVar = StateQueryTMVar <$> newEmptyTMVarIO
 -- If the history interpreter does not exist, get one.
 -- If the existing history interpreter returns an error, get a new one and try again.
 getSlotDetailsNode ::
+  BM.Severity ->
   NoLedgerEnv ->
   SlotNo ->
   IO SlotDetails
-getSlotDetailsNode nlEnv slot = do
-  einterp1 <- maybe (getHistoryInterpreter nlEnv) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
+getSlotDetailsNode sevirity nlEnv slot = do
+  einterp1 <- maybe (getHistoryInterpreter sevirity nlEnv) pure =<< atomically (fromStrictMaybe <$> readTVar interVar)
   case evalSlotDetails einterp1 of
     Right sd -> insertCurrentTime sd
     Left _ -> do
-      einterp2 <- getHistoryInterpreter nlEnv
+      einterp2 <- getHistoryInterpreter sevirity nlEnv
       case evalSlotDetails einterp2 of
         Left err -> throwIO $ SNErrLocalStateQuery $ "getSlotDetailsNode: " <> Prelude.show err
         Right sd -> insertCurrentTime sd
@@ -117,10 +119,11 @@ getSlotDetailsNode nlEnv slot = do
     fromStrictMaybe Strict.Nothing = Nothing
 
 getHistoryInterpreter ::
+  BM.Severity ->
   NoLedgerEnv ->
   IO CardanoInterpreter
-getHistoryInterpreter nlEnv = do
-  let logCtx = initLogCtx "getHistoryInterpreter" "DbSync.LocalStateQuery"
+getHistoryInterpreter severity nlEnv = do
+  let logCtx = initLogCtx severity "getHistoryInterpreter" "DbSync.LocalStateQuery"
   respVar <- newEmptyTMVarIO
   atomically $ putTMVar reqVar (BlockQuery $ QueryHardFork GetInterpreter, respVar)
   res <- atomically $ takeTMVar respVar

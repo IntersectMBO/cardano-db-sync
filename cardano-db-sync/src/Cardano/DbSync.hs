@@ -24,6 +24,8 @@ module Cardano.DbSync (
   extractSyncOptions,
 ) where
 
+import qualified Cardano.BM.Configuration as BM
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as DB
@@ -62,25 +64,27 @@ import Prelude (id)
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
   withIOManager $ \iomgr -> do
+    severity <- BM.minSeverity . dncLoggingConfig $ syncNodeConfigFromFile
     trce <- configureLogging syncNodeConfigFromFile "db-sync-node"
 
     abortOnPanic <- hasAbortOnPanicEnv
-    startupReport trce abortOnPanic params
+    startupReport trce severity abortOnPanic params
 
-    runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic
+    runDbSync metricsSetters knownMigrations iomgr trce severity params syncNodeConfigFromFile abortOnPanic
 
 runDbSync ::
   MetricSetters ->
   [(Text, Text)] ->
   IOManager ->
   Trace IO Text ->
+  BM.Severity ->
   SyncNodeParams ->
   SyncNodeConfig ->
   -- Should abort on panic
   Bool ->
   IO ()
-runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic = do
-  let logCtx = initLogCtx "runDbSync" "Cardano.DbSync"
+runDbSync metricsSetters knownMigrations iomgr trce severity params syncNodeConfigFromFile abortOnPanic = do
+  let logCtx = initLogCtx severity "runDbSync" "Cardano.DbSync"
   logInfoCtx trce $ logCtx {lcMessage = "Current sync options: " <> textShow syncOpts}
 
   -- Read the PG connection info
@@ -128,10 +132,11 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
-    void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
+    void $ unsafeRollback trce severity (txOutConfigToTableType txOutConfig) pgConfig slotNo
   runSyncNode
     metricsSetters
     trce
+    severity
     iomgr
     connectionString
     ranMigrations
@@ -160,6 +165,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
 runSyncNode ::
   MetricSetters ->
   Trace IO Text ->
+  BM.Severity ->
   IOManager ->
   ConnectionString ->
   -- | migrations were ran on startup
@@ -170,8 +176,8 @@ runSyncNode ::
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
-  let logCtx = initLogCtx "runSyncNode" "Cardano.DbSync"
+runSyncNode metricsSetters trce severity iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+  let logCtx = initLogCtx severity "runSyncNode" "Cardano.DbSync"
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -190,7 +196,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- queryIsJsonbInSchema backend
-          logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+          logProtocolMagicId trce severity $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
@@ -228,7 +234,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
               , runFetchOffChainPoolThread syncEnv
               , runFetchOffChainVoteThread syncEnv
-              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+              , runLedgerStateWriteThread (getTrace syncEnv) severity (envLedgerEnv syncEnv)
               ]
   where
     useShelleyInit :: SyncNodeConfig -> Bool
@@ -239,9 +245,9 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
     removeJsonbFromSchemaConfig = ioRemoveJsonbFromSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 
-logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
-logProtocolMagicId tracer pm = do
-  let logCtx = initLogCtx "logProtocolMagicId" "Cardano.DbSync"
+logProtocolMagicId :: Trace IO Text -> BM.Severity -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
+logProtocolMagicId tracer severity pm = do
+  let logCtx = initLogCtx severity "logProtocolMagicId" "Cardano.DbSync"
   liftIO
     . logInfoCtx tracer
     $ logCtx
@@ -314,9 +320,9 @@ extractSyncOptions snp aop snc =
     forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
     ioTxOutTableType' = txOutConfigToTableType $ sioTxOut $ dncInsertOptions snc
 
-startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
-startupReport trce aop params = do
-  let logCtx = initLogCtx "runSyncNode" "Cardano.DbSync"
+startupReport :: Trace IO Text -> BM.Severity -> Bool -> SyncNodeParams -> IO ()
+startupReport trce severity aop params = do
+  let logCtx = initLogCtx severity "runSyncNode" "Cardano.DbSync"
   logInfoCtx trce $ logCtx {lcMessage = mconcat ["Version number: ", Text.pack (showVersion version)]}
   logInfoCtx trce $ logCtx {lcMessage = mconcat ["Git hash: ", Db.gitRev]}
   logInfoCtx trce $ logCtx {lcMessage = mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]}

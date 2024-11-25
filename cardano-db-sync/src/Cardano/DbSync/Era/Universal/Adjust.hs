@@ -7,6 +7,7 @@ module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
 ) where
 
+import qualified Cardano.BM.Data.Severity as DB
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Cache (
@@ -50,15 +51,16 @@ import Database.Esqueleto.Experimental (
 adjustEpochRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  DB.Severity ->
   Network ->
   CacheStatus ->
   EpochNo ->
   Generic.Rewards ->
   Set StakeCred ->
   ReaderT SqlBackend m ()
-adjustEpochRewards trce nw cache epochNo rwds creds = do
+adjustEpochRewards trce severity nw cache epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
-      logCtx = initLogCtx "adjustEpochRewards" "Cardano.DbSync.Era.Universal.Adjust"
+      logCtx = initLogCtx severity "adjustEpochRewards" "Cardano.DbSync.Era.Universal.Adjust"
   liftIO . logInfoCtx trce $
     logCtx
       { lcEpochNo = Just (unEpochNo epochNo)

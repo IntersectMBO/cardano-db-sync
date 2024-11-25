@@ -8,6 +8,7 @@ module Cardano.DbSync.Era.Util (
   safeDecodeToJson,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Error
@@ -34,9 +35,9 @@ safeDecodeUtf8 bs
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
 
-safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
-safeDecodeToJson tracer tracePrefix jsonBs = do
-  let logCtx = initLogCtx "safeDecodeToJson" "Cardano.DbSync.Era.Util"
+safeDecodeToJson :: MonadIO m => Trace IO Text -> BM.Severity -> Text -> ByteString -> m (Maybe Text)
+safeDecodeToJson tracer severity tracePrefix jsonBs = do
+  let logCtx = initLogCtx severity "safeDecodeToJson" "Cardano.DbSync.Era.Util"
   ejson <- liftIO $ safeDecodeUtf8 jsonBs
   case ejson of
     Left err -> do

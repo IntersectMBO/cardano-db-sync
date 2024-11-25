@@ -28,6 +28,7 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
 )
 where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
@@ -71,6 +72,7 @@ insertGovActionProposal ::
   forall m.
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
@@ -78,7 +80,7 @@ insertGovActionProposal ::
   Maybe (ConwayGovState StandardConway) ->
   (Word64, (GovActionId StandardCrypto, ProposalProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, pp)) = do
+insertGovActionProposal trce severity cache blkId txId govExpiresAt mcgs (index, (govId, pp)) = do
   addrId <-
     lift $ queryOrInsertRewardAccount trce cache UpdateCache $ pProcReturnAddr pp
   votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
@@ -115,7 +117,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
     NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
     _ -> pure ()
   where
-    logCtx = initLogCtx "insertGovActionProposal" "Cardano.DbSync.Era.Universal.Insert.GovAction"
+    logCtx = initLogCtx severity "insertGovActionProposal" "Cardano.DbSync.Era.Universal.Insert.GovAction"
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
       ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       HardForkInitiation prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
@@ -269,24 +271,26 @@ insertConstitution blockId mgapId constitution = do
 insertVotingProcedures ::
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedures trce cache blkId txId (voter, actions) =
-  mapM_ (insertVotingProcedure trce cache blkId txId voter) (zip [0 ..] actions)
+insertVotingProcedures trce severity cache blkId txId (voter, actions) =
+  mapM_ (insertVotingProcedure trce severity cache blkId txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
+insertVotingProcedure trce severity cache blkId txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal cache gaId
   votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.VoteAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
@@ -297,7 +301,7 @@ insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
       drep <- lift $ insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
     StakePoolVoter poolkh -> do
-      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cache UpdateCache False poolkh
+      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce severity cache UpdateCache False poolkh
       pure (Nothing, Nothing, Just poolHashId)
   void
     . lift
@@ -427,12 +431,13 @@ insertUpdateEnacted ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   DB.BlockId ->
   EpochNo ->
   ConwayGovState StandardConway ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertUpdateEnacted trce cache blkId epochNo enactedState = do
+insertUpdateEnacted trce severity cache blkId epochNo enactedState = do
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
   constitutionId <- handleConstitution
   void $
@@ -445,7 +450,7 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
           , DB.epochStateEpochNo = unEpochNo epochNo
           }
   where
-    logCtx = initLogCtx "insertUpdateEnacted" "Cardano.DbSync.Era.Universal.Insert.GovAction"
+    logCtx = initLogCtx severity "insertUpdateEnacted" "Cardano.DbSync.Era.Universal.Insert.GovAction"
     govIds = govStatePrevGovActionIds enactedState
 
     handleCommittee = do

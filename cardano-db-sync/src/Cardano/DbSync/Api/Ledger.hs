@@ -8,6 +8,7 @@ module Cardano.DbSync.Api.Ledger where
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache (queryTxIdWithCache)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
@@ -61,6 +62,8 @@ migrateBootstrapUTxO ::
   SyncEnv ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 migrateBootstrapUTxO syncEnv = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "migrateBootstrapUTxO" "Cardano.DbSync.Api.Ledger"
   case envLedgerEnv syncEnv of
     HasLedger lenv -> do
       liftIO $ logInfoCtx trce logCtx {lcMessage = "Starting UTxO bootstrap migration"}
@@ -77,16 +80,17 @@ migrateBootstrapUTxO syncEnv = do
     NoLedger _ ->
       liftIO $ logWarningCtx trce $ logCtx {lcMessage = "Tried to bootstrap, but ledger state is not enabled. Please stop db-sync and restart without --disable-ledger-state"}
   where
-    logCtx = initLogCtx "migrateBootstrapUTxO" "Cardano.DbSync.Api.Ledger"
     trce = getTrace syncEnv
 
 storeUTxOFromLedger :: (MonadBaseControl IO m, MonadIO m) => SyncEnv -> ExtLedgerState CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-storeUTxOFromLedger env st = case ledgerState st of
-  LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
-  LedgerStateConway stc -> storeUTxO env (getUTxO stc)
-  _otherwise -> liftIO $ logErrorCtx trce logCtx {lcMessage = "storeUTxOFromLedger is only supported after Babbage"}
+storeUTxOFromLedger env st = do
+  severity <- liftIO $ getSeverity env
+  let logCtx = initLogCtx severity "storeUTxOFromLedger" "Cardano.DbSync.Api.Ledger"
+  case ledgerState st of
+    LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
+    LedgerStateConway stc -> storeUTxO env (getUTxO stc)
+    _otherwise -> liftIO $ logErrorCtx trce logCtx {lcMessage = "storeUTxOFromLedger is only supported after Babbage"}
   where
-    logCtx = initLogCtx "storeUTxOFromLedger" "Cardano.DbSync.Api.Ledger"
     trce = getTrace env
     getUTxO st' =
       unUTxO $ Consensus.shelleyLedgerState st' ^. (nesEsL . esLStateL . lsUTxOStateL . utxosUtxoL)
@@ -109,6 +113,8 @@ storeUTxO ::
   Map (TxIn StandardCrypto) (BabbageTxOut era) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxO env mp = do
+  severity <- liftIO $ getSeverity env
+  let logCtx = initLogCtx severity "storeUTxO" "Cardano.DbSync.Api.Ledger"
   liftIO $
     logInfoCtx trce $
       logCtx
@@ -122,7 +128,6 @@ storeUTxO env mp = do
         }
   mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf pageSize . Map.toList $ mp
   where
-    logCtx = initLogCtx "storeUTxO" "Cardano.DbSync.Api.Ledger"
     trce = getTrace env
     npages = size `div` pageSize
     pagePerc :: Float = if npages == 0 then 100.0 else 100.0 / fromIntegral npages
@@ -144,6 +149,8 @@ storePage ::
   (Int, [(TxIn StandardCrypto, BabbageTxOut era)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv percQuantum (n, ls) = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "storePage" "Cardano.DbSync.Api.Ledger"
   when (n `mod` 10 == 0) $ liftIO $ logInfoCtx trce $ logCtx {lcMessage = "Bootstrap in progress " <> prc <> "%"}
   txOuts <- mapM (prepareTxOut syncEnv) ls
   txOutIds <-
@@ -151,7 +158,6 @@ storePage syncEnv percQuantum (n, ls) = do
   let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
   where
-    logCtx = initLogCtx "storePage" "Cardano.DbSync.Api.Ledger"
     txOutTableType = getTxOutTableType syncEnv
     trce = getTrace syncEnv
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
@@ -171,10 +177,11 @@ prepareTxOut ::
   (TxIn StandardCrypto, BabbageTxOut era) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
+  severity <- liftIO $ getSeverity syncEnv
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut index txOut
   txId <- liftLookupFail "prepareTxOut" $ queryTxIdWithCache cache txIntxId
-  insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
+  insertTxOut trce severity cache iopts (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv

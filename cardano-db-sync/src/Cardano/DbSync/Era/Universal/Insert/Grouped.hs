@@ -14,12 +14,14 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   mkmaTxOuts,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import Cardano.Db (DbLovelace (..), MinIds (..), minIdsCoreToText, minIdsVariantToText)
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -93,6 +95,7 @@ insertBlockGroupedData ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.MinIdsWrapper
 insertBlockGroupedData syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
+  severity <- liftIO $ getSeverity syncEnv
   txOutIds <- lift . DB.insertManyTxOut disInOut $ etoTxOut . fst <$> groupedTxOut grouped
   let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> groupedTxOut grouped)
   maTxOutIds <- lift $ DB.insertManyMaTxOut maTxOuts
@@ -102,7 +105,7 @@ insertBlockGroupedData syncEnv grouped = do
       else lift . DB.insertManyTxIn $ etiTxIn <$> groupedTxIn grouped
   whenConsumeOrPruneTxOut syncEnv $ do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
-    updateTuples <- lift $ mapM (prepareUpdates tracer) etis
+    updateTuples <- lift $ mapM (prepareUpdates severity tracer) etis
     lift $ DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
   void . lift . DB.insertManyTxMetadata $ groupedTxMetadata grouped
   void . lift . DB.insertManyTxMint $ groupedTxMint grouped
@@ -152,13 +155,14 @@ mkmaTxOuts _txOutTableType (txOutId, mmtos) = mkmaTxOut <$> mmtos
 
 prepareUpdates ::
   (MonadBaseControl IO m, MonadIO m) =>
+  BM.Severity ->
   Trace IO Text ->
   ExtendedTxIn ->
   m (Maybe (DB.TxOutIdW, DB.TxId))
-prepareUpdates trce eti = case etiTxOutId eti of
+prepareUpdates severity trce eti = case etiTxOutId eti of
   Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
   Left _ -> do
-    let logCtx = initLogCtx "prepareUpdates" "Cardano.DbSync.Era.Universal.Insert.Grouped"
+    let logCtx = initLogCtx severity "prepareUpdates" "Cardano.DbSync.Era.Universal.Insert.Grouped"
     liftIO $
       logErrorCtx trce $
         logCtx {lcMessage = "Failed to find output for " <> Text.pack (show eti)}

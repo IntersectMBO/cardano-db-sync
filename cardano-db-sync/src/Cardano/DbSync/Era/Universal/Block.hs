@@ -40,6 +40,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude
 
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logDebugCtx, logInfoCtx)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except.Extra (newExceptT)
@@ -65,7 +66,8 @@ insertBlockUniversal ::
   ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertBlockUniversal syncEnv isStartEventOrRollback withinTwoMins withinHalfHour blk details isMember applyResult = do
-  let logCtx = initLogCtx "insertBlockUniversal" "Cardano.DbSync.Era.Universal.Block"
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "insertBlockUniversal" "Cardano.DbSync.Era.Universal.Block"
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
@@ -165,11 +167,11 @@ insertBlockUniversal syncEnv isStartEventOrRollback withinTwoMins withinHalfHour
 
     when (ioGov iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
       . lift
-      $ insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
+      $ insertOffChainVoteResults tracer severity (envOffChainVoteResultQueue syncEnv)
 
     when (ioOffChainPoolData iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
       . lift
-      $ insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
+      $ insertOffChainPoolResults tracer severity (envOffChainPoolResultQueue syncEnv)
   where
     iopts = getInsertOptions syncEnv
 

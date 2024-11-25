@@ -5,6 +5,7 @@ module Cardano.DbSync.Fix.EpochStake where
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Era.Shelley.Generic.StakeDist hiding (getStakeSlice)
 import Cardano.DbSync.Era.Universal.Epoch
@@ -22,18 +23,20 @@ migrateStakeDistr :: (MonadIO m, MonadBaseControl IO m) => SyncEnv -> Strict.May
 migrateStakeDistr env mcls =
   case (envLedgerEnv env, mcls) of
     (HasLedger lenv, Strict.Just cls) -> do
+      severity <- liftIO $ getSeverity env
+      let logCtx = initLogCtx severity "migrateStakeDistr" "Cardano.DbSync.Fix.EpochStake"
       ems <- lift DB.queryAllExtraMigrations
       runWhen (not $ DB.isStakeDistrComplete ems) $ do
         liftIO $ logInfoCtx trce $ logCtx {lcMessage = "Starting Stake Distribution migration on table epoch_stake"}
         let stakeSlice = getStakeSlice lenv cls True
         case stakeSlice of
           NoSlices ->
-            liftIO $ logInsert 0
+            liftIO $ logInsert logCtx 0
           Slice (StakeSlice _epochNo distr) isFinal -> do
-            liftIO $ logInsert (Map.size distr)
+            liftIO $ logInsert logCtx (Map.size distr)
             insertStakeSlice env stakeSlice
             (mminEpoch, mmaxEpoch) <- lift DB.queryMinMaxEpochStake
-            liftIO $ logMinMax mminEpoch mmaxEpoch
+            liftIO $ logMinMax logCtx mminEpoch mmaxEpoch
             case (mminEpoch, mmaxEpoch) of
               (Just minEpoch, Just maxEpoch) -> do
                 when (maxEpoch > 0) $
@@ -44,7 +47,6 @@ migrateStakeDistr env mcls =
         lift $ DB.insertExtraMigration DB.StakeDistrEnded
     _ -> pure False
   where
-    logCtx = initLogCtx "migrateStakeDistr" "Cardano.DbSync.Fix.EpochStake"
     trce = getTrace env
     mkProgress isCompleted e =
       DB.EpochStakeProgress
@@ -52,13 +54,13 @@ migrateStakeDistr env mcls =
         , DB.epochStakeProgressCompleted = isCompleted
         }
 
-    logInsert :: Int -> IO ()
-    logInsert n
+    logInsert :: LogContext -> Int -> IO ()
+    logInsert logCtx n
       | n == 0 = logInfoCtx trce $ logCtx {lcMessage = "No missing epoch_stake found"}
       | n > 100000 = logWarningCtx trce $ logCtx {lcMessage = "Found " <> textShow n <> " epoch_stake. This may take a while"}
       | otherwise = logInfoCtx trce $ logCtx {lcMessage = "Found " <> textShow n <> " epoch_stake"}
 
-    logMinMax mmin mmax =
+    logMinMax logCtx mmin mmax =
       logInfoCtx trce $
         logCtx
           { lcMessage =

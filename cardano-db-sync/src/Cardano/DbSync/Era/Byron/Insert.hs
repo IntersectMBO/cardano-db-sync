@@ -23,6 +23,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
@@ -78,8 +79,9 @@ insertABOBBoundary ::
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABOBBoundary syncEnv blk details = do
+  severity <- liftIO $ getSeverity syncEnv
   let tracer = getTrace syncEnv
-      logCtx = initLogCtx "insertABOBBoundary" "Cardano.DbSync.Era.Byron.Insert"
+      logCtx = initLogCtx severity "insertABOBBoundary" "Cardano.DbSync.Era.Byron.Insert"
       cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
@@ -150,7 +152,8 @@ insertABlock ::
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABlock syncEnv firstBlockOfEpoch blk details = do
-  let logCtx = initLogCtx "insertABlock" "Cardano.DbSync.Era.Byron.Insert"
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "insertABlock" "Cardano.DbSync.Era.Byron.Insert"
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk

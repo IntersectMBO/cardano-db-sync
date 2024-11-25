@@ -11,6 +11,7 @@ import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache.Epoch (readEpochBlockDiffFromCache, readLastMapEpochFromCache, writeToMapEpochCache)
 import Cardano.DbSync.Cache.Types (CacheStatus (..), EpochBlockDiff (..))
@@ -176,8 +177,9 @@ updateEpochWhenSyncing ::
   Bool ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo isBoundaryBlock = do
+  severity <- liftIO $ getSeverity syncEnv
   let trce = getTrace syncEnv
-      logCtx = initLogCtx "updateEpochWhenSyncing" "Cardano.DbSync.Era.Universal.Epoch"
+      logCtx = initLogCtx severity "updateEpochWhenSyncing" "Cardano.DbSync.Era.Universal.Epoch"
       isFirstEpoch = epochNo == 0
       -- count boundary block in the first epoch
       additionalBlockCount = if isBoundaryBlock && isFirstEpoch then 1 else 0
@@ -255,8 +257,9 @@ makeEpochWithDBQuery ::
   Text ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 makeEpochWithDBQuery syncEnv cache mInitEpoch epochNo callSiteMsg = do
+  severity <- liftIO $ getSeverity syncEnv
   let trce = getTrace syncEnv
-      logCtx = initLogCtx "makeEpochWithDBQuery" "Cardano.DbSync.Era.Universal.Epoch"
+      logCtx = initLogCtx severity "makeEpochWithDBQuery" "Cardano.DbSync.Era.Universal.Epoch"
   calcEpoch <- DB.queryCalcEpochEntry epochNo
   mEpochID <- DB.queryForEpochId epochNo
   let epochInitOrCalc = fromMaybe calcEpoch mInitEpoch

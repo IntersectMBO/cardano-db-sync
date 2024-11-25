@@ -12,6 +12,7 @@ module Cardano.DbSync.Database (
 ) where
 
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Default
@@ -44,14 +45,16 @@ runDbThread ::
   ThreadChannels ->
   IO ()
 runDbThread syncEnv metricsSetters queue = do
-  let logCtx = initLogCtx "runDbThread" "DbSync.Database"
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runDbThread" "DbSync.Database"
   logInfoCtx trce $ logCtx {lcMessage = "Running DB thread"}
   logExceptionCtx trce logCtx loop
   logInfoCtx trce $ logCtx {lcMessage = "Shutting down DB thread"}
   where
     trce = getTrace syncEnv
     loop = do
-      let logCtx = initLogCtx "runDbThread Loop" "DbSync.Database"
+      severity <- liftIO $ getSeverity syncEnv
+      let logCtx = initLogCtx severity "runDbThread Loop" "DbSync.Database"
       xs <- blockingFlushDbActionQueue queue
 
       when (length xs > 1) $ do
@@ -126,7 +129,8 @@ rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger syncEnv point =
   case envLedgerEnv syncEnv of
     HasLedger hle -> do
-      mst <- loadLedgerAtPoint hle point
+      severity <- liftIO $ getSeverity syncEnv
+      mst <- loadLedgerAtPoint hle severity point
       case mst of
         Right st -> do
           let statePoint = headerStatePoint $ headerState $ clsState st

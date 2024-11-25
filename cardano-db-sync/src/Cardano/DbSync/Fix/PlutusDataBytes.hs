@@ -11,6 +11,7 @@
 
 module Cardano.DbSync.Fix.PlutusDataBytes where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db.Version.V13_0 as DB_V_13_0
 import Cardano.DbSync.Api
@@ -90,8 +91,9 @@ getNextPointList fds = case fds of
 getWrongPlutusData ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m FixData
-getWrongPlutusData tracer = do
+getWrongPlutusData tracer severity = do
   liftIO $
     logInfoCtx tracer $
       logCtx
@@ -106,6 +108,7 @@ getWrongPlutusData tracer = do
   datumList <-
     findWrongPlutusData
       tracer
+      severity
       "Datum"
       DB_V_13_0.queryDatumCount
       DB_V_13_0.queryDatumPage
@@ -116,6 +119,7 @@ getWrongPlutusData tracer = do
   redeemerDataList <-
     findWrongPlutusData
       tracer
+      severity
       "RedeemerData"
       DB_V_13_0.queryRedeemerDataCount
       DB_V_13_0.queryRedeemerDataPage
@@ -125,7 +129,8 @@ getWrongPlutusData tracer = do
       (mapLeft Just . hashPlutusData . getRedeemerDataBytes)
   pure $ FixData datumList redeemerDataList
   where
-    logCtx = initLogCtx "getWrongPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
+    logCtx = initLogCtx severity "getWrongPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
+
     f queryRes = do
       (prevBlockHsh, mPrevSlotNo) <- queryRes
       prevSlotNo <- mPrevSlotNo
@@ -143,6 +148,7 @@ findWrongPlutusData ::
   forall a m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   Text ->
   m Word64 -> -- query count
   (Int64 -> Int64 -> m [a]) -> -- query a page
@@ -151,7 +157,7 @@ findWrongPlutusData ::
   (a -> Maybe ByteString) -> -- get the stored bytes
   (a -> Either (Maybe String) ByteString) -> -- hash the stored bytes
   m [FixPlutusInfo]
-findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
+findWrongPlutusData tracer severity tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
   liftIO $
     logInfoCtx tracer $
       logCtx
@@ -182,7 +188,7 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
         }
   pure datums
   where
-    logCtx = initLogCtx "findWrongPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
+    logCtx = initLogCtx severity "findWrongPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
     showBytes = maybe "<Failed to show bytes>" bsBase16Encode
 
     findRec :: Bool -> Int64 -> [[FixPlutusInfo]] -> m [FixPlutusInfo]
@@ -240,12 +246,12 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
 
     limit = 100_000
 
-fixPlutusData :: MonadIO m => Trace IO Text -> CardanoBlock -> FixData -> ReaderT SqlBackend m ()
-fixPlutusData tracer cblk fds = do
+fixPlutusData :: MonadIO m => Trace IO Text -> BM.Severity -> CardanoBlock -> FixData -> ReaderT SqlBackend m ()
+fixPlutusData tracer severity cblk fds = do
   mapM_ (fixData True) $ fdDatum fds
   mapM_ (fixData False) $ fdRedeemerData fds
   where
-    logCtx = initLogCtx "fixPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
+    logCtx = initLogCtx severity "fixPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
 
     fixData :: MonadIO m => Bool -> FixPlutusInfo -> ReaderT SqlBackend m ()
     fixData isDatum fd = do

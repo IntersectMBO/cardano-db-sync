@@ -49,6 +49,7 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlonzo, BlockBabbage, BlockByron, BlockMary, BlockShelley))
 import Ouroboros.Consensus.Shelley.Eras
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.DbSync.Fix.PlutusDataBytes
 import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import Cardano.Ledger.Babbage.TxOut
@@ -76,9 +77,10 @@ spanFPSOnPoint fps point =
 getWrongPlutusScripts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m FixPlutusScripts
-getWrongPlutusScripts tracer = do
-  let logCtx = initLogCtx "getWrongPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
+getWrongPlutusScripts tracer severity = do
+  let logCtx = initLogCtx severity "getWrongPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
   liftIO $
     logInfoCtx tracer $
       logCtx
@@ -90,16 +92,18 @@ getWrongPlutusScripts tracer = do
               , " This procedure makes resyncing unnecessary."
               ]
         }
-  FixPlutusScripts <$> findWrongPlutusScripts tracer
+  FixPlutusScripts <$> findWrongPlutusScripts tracer severity
 
 findWrongPlutusScripts ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m [FixPlutusInfo]
-findWrongPlutusScripts tracer =
+findWrongPlutusScripts tracer severity =
   findWrongPlutusData
     tracer
+    severity
     "Script"
     DB_V_13_0.queryScriptCount
     DB_V_13_0.queryScriptPage
@@ -127,8 +131,8 @@ findWrongPlutusScripts tracer =
         PlutusV3 -> Left Nothing
         _ -> Left $ Just "Non plutus script found where it shouldn't."
 
-fixPlutusScripts :: MonadIO m => Trace IO Text -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
-fixPlutusScripts tracer cblk fpss = do
+fixPlutusScripts :: MonadIO m => Trace IO Text -> BM.Severity -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
+fixPlutusScripts tracer severity cblk fpss = do
   mapM_ fixData $ scriptsInfo fpss
   where
     fixData :: MonadIO m => FixPlutusInfo -> ReaderT SqlBackend m ()
@@ -150,7 +154,7 @@ fixPlutusScripts tracer cblk fpss = do
                     }
 
     correctBytesMap = scrapScriptBlock cblk
-    logCtx = initLogCtx "fixPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
+    logCtx = initLogCtx severity "fixPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
 
 scrapScriptBlock :: CardanoBlock -> Map ByteString ByteString
 scrapScriptBlock cblk = case cblk of
