@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.3
+- Fix migration for consumed tx_out
+
 ## 13.6.0.2
 - Fix rollbacks speed
 
