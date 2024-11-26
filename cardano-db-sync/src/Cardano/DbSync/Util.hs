@@ -14,7 +14,7 @@ module Cardano.DbSync.Util (
   fmap3,
   getSyncStatus,
   isSyncedWithinSeconds,
-  isSyncedWithinHalfHour,
+  isSyncedWithintwoMinutes,
   liftedLogException,
   logActionDuration,
   logException,
@@ -87,8 +87,8 @@ isSyncedWithinSeconds sd target =
 getSyncStatus :: SlotDetails -> SyncState
 getSyncStatus sd = isSyncedWithinSeconds sd 120
 
-isSyncedWithinHalfHour :: SlotDetails -> Bool
-isSyncedWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing
+isSyncedWithintwoMinutes :: SlotDetails -> Bool
+isSyncedWithintwoMinutes sd = isSyncedWithinSeconds sd 120 == SyncFollowing
 
 textPrettyShow :: Show a => a -> Text
 textPrettyShow = Text.pack . ppShow

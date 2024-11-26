@@ -65,8 +65,8 @@ insertBlockUniversal ::
   ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
-  -- if we're syncing within 30 mins of the tip, we optomise the caches.
-  newCache <- if isSyncedWithinHalfHour details then optimiseCaches cache else pure cache
+  -- if we're syncing within 2 mins of the tip, we optimise the caches.
+  newCache <- if isSyncedWithintwoMinutes details then optimiseCaches cache else pure cache
   runExceptT $ do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
