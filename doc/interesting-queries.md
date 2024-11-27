@@ -1,6 +1,10 @@
 # Interesting SQL queries
 
+
 The following is a set of example SQL queries that can be run against the `db-sync` database.
+
+Also our community-driven tools offer a variety of insightful queries that can provide valuable assistance. [Jump to Community Queries](#community-queries)
+
 
 These queries are run using the `psql` executable distributed with PostgreSQL. Connecting to the
 database can be done from the `cardano-db-sync` git checkout using:
@@ -628,5 +632,15 @@ them.
 
 ---
 
-
 [Query.hs]: https://github.com/IntersectMBO/cardano-db-sync/blob/master/cardano-db/src/Cardano/Db/Operations/Query.hs
+
+## Community Queries
+
+### Koios
+- **Link:** [https://github.com/cardano-community/koios-artifacts/tree/main/files/grest/rpc](https://github.com/cardano-community/koios-artifacts/tree/main/files/grest/rpc)
+
+### Blockfrost
+- **Link:** [https://github.com/blockfrost/blockfrost-backend-ryo/tree/master/src/sql](https://github.com/blockfrost/blockfrost-backend-ryo/tree/master/src/sql)
+
+### Govtool
+- **Link:** [https://github.com/IntersectMBO/govtool/tree/develop/govtool/backend/sql](https://github.com/IntersectMBO/govtool/tree/develop/govtool/backend/sql)
