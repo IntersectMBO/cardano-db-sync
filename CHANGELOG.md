@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.4
+- Fixes an issue from ledger where DRep delegations could be removed under some conditions
+- Fix an issue with migration from 13.5.x when consumed_tx_out config is enabled
+
 ## 13.6.0.2
 - Fix rollbacks speed
 
