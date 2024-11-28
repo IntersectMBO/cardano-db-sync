@@ -64,10 +64,7 @@ data StakeCache = StakeCache
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
 data CacheStatus
   = NoCache
-  | ActiveCache
-      !Bool
-      -- ^ The Bool represents if we have surpassed being close to the tip of the chain.
-      !CacheInternal
+  | ActiveCache !CacheInternal
 
 data CacheAction
   = UpdateCache
@@ -77,7 +74,8 @@ data CacheAction
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cStake :: !(StrictTVar IO StakeCache)
+  { cIsCacheOptimised :: !(StrictTVar IO Bool)
+  , cStake :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
@@ -131,7 +129,8 @@ data CacheEpoch = CacheEpoch
 
 textShowStats :: CacheStatus -> IO Text
 textShowStats NoCache = pure "NoCache"
-textShowStats (ActiveCache isCacheOptimised ic) = do
+textShowStats (ActiveCache ic) = do
+  isCacheOptimised <- readTVarIO $ cIsCacheOptimised ic
   stats <- readTVarIO $ cStats ic
   stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
@@ -215,6 +214,7 @@ useNoCache = NoCache
 
 newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
 newEmptyCache CacheCapacity {..} = liftIO $ do
+  cIsCacheOptimised <- newTVarIO False
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
   cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
@@ -224,9 +224,10 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
-  pure . ActiveCache False $
+  pure . ActiveCache $
     CacheInternal
-      { cStake = cStake
+      { cIsCacheOptimised = cIsCacheOptimised
+      , cStake = cStake
       , cPools = cPools
       , cDatum = cDatum
       , cMultiAssets = cMultiAssets

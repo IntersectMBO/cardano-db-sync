@@ -29,7 +29,7 @@ readCacheEpoch :: MonadIO m => CacheStatus -> m (Maybe CacheEpoch)
 readCacheEpoch cache =
   case cache of
     NoCache -> pure Nothing
-    ActiveCache _ ci -> do
+    ActiveCache ci -> do
       cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
       pure $ Just cacheEpoch
 
@@ -37,7 +37,7 @@ readEpochBlockDiffFromCache :: MonadIO m => CacheStatus -> m (Maybe EpochBlockDi
 readEpochBlockDiffFromCache cache =
   case cache of
     NoCache -> pure Nothing
-    ActiveCache _ ci -> do
+    ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
         (_, epochInternal) -> pure epochInternal
@@ -46,7 +46,7 @@ readLastMapEpochFromCache :: CacheStatus -> IO (Maybe DB.Epoch)
 readLastMapEpochFromCache cache =
   case cache of
     NoCache -> pure Nothing
-    ActiveCache _ ci -> do
+    ActiveCache ci -> do
       cE <- readTVarIO (cEpoch ci)
       let mapEpoch = ceMapEpoch cE
       -- making sure db sync wasn't restarted on the last block in epoch
@@ -72,7 +72,7 @@ writeEpochBlockDiffToCache ::
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
     NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is NoCache"
-    ActiveCache _ ci -> do
+    ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
         (epochLatest, _) -> writeToCache ci (CacheEpoch epochLatest (Just epCurrent))
@@ -94,7 +94,7 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
     NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is NoCache"
-    ActiveCache _ ci -> do
+    ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
