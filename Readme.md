@@ -20,7 +20,9 @@ instance fully synced to a specific network is:
 * Look up the balance of any stake address for any Shelley or later epoch.
 * Look up the amount of ADA delegated to each pool for any Shelley or later epoch.
 
-Example SQL queries are available at [Example Queries][ExampleQueries]. You can also find some [DB Sync best practices here](https://docs.cardano.org/cardano-components/cardano-db-sync/best-practices).
+## Documentation
+
+The [doc/](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/Readme.md) directory,  offers essential resources for users, including guides for installation with and without Nix, configuration. Key files cover, Docker usage, PostgreSQL example queries, command-line options and database migrations. There's also a troubleshooting guide for common issues. These documents provide users with the necessary steps to effectively set up and maintain the Cardano DB Sync.
 
 ## Architecture
 
