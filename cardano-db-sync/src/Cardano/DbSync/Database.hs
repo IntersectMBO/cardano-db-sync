@@ -11,8 +11,8 @@ module Cardano.DbSync.Database (
   runDbThread,
 ) where
 
-import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Default
@@ -23,6 +23,7 @@ import Cardano.DbSync.Metrics
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logDebugCtx, logErrorCtx, logExceptionCtx, logInfoCtx)
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
@@ -44,16 +45,20 @@ runDbThread ::
   ThreadChannels ->
   IO ()
 runDbThread syncEnv metricsSetters queue = do
-  logInfo trce "Running DB thread"
-  logException trce "runDBThread: " loop
-  logInfo trce "Shutting down DB thread"
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runDbThread" "DbSync.Database"
+  logInfoCtx trce $ logCtx {lcMessage = "Running DB thread"}
+  logExceptionCtx trce logCtx loop
+  logInfoCtx trce $ logCtx {lcMessage = "Shutting down DB thread"}
   where
     trce = getTrace syncEnv
     loop = do
+      severity <- liftIO $ getSeverity syncEnv
+      let logCtx = initLogCtx severity "runDbThread Loop" "DbSync.Database"
       xs <- blockingFlushDbActionQueue queue
 
       when (length xs > 1) $ do
-        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+        logDebugCtx trce $ logCtx {lcMessage = "runDbThread: " <> textShow (length xs) <> " blocks"}
 
       case hasRestart xs of
         Nothing -> do
@@ -65,16 +70,16 @@ runDbThread syncEnv metricsSetters queue = do
             setDbSlotHeight metricsSetters $ bSlotNo block
 
           case eNextState of
-            Left err -> logError trce $ show err
+            Left err -> logErrorCtx trce $ logCtx {lcMessage = show err}
             Right Continue -> loop
             Right Done -> pure ()
         Just resultVar -> do
           -- In this case the syncing thread has restarted, so ignore all blocks that are not
           -- inserted yet.
-          logInfo trce "Chain Sync client thread has restarted"
+          logInfoCtx trce $ logCtx {lcMessage = "Chain Sync client thread has restarted"}
           latestPoints <- getLatestPoints syncEnv
           currentTip <- getCurrentTipBlockNo syncEnv
-          logDbState syncEnv
+          logDbState syncEnv logCtx
           atomically $ putTMVar resultVar (latestPoints, currentTip)
           loop
 
@@ -124,7 +129,8 @@ rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger syncEnv point =
   case envLedgerEnv syncEnv of
     HasLedger hle -> do
-      mst <- loadLedgerAtPoint hle point
+      severity <- liftIO $ getSeverity syncEnv
+      mst <- loadLedgerAtPoint hle severity point
       case mst of
         Right st -> do
           let statePoint = headerStatePoint $ headerState $ clsState st

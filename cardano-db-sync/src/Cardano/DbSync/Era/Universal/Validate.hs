@@ -9,12 +9,14 @@ module Cardano.DbSync.Era.Universal.Validate (
   validateEpochRewards,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
+import Cardano.BM.Trace (Trace)
+import qualified Cardano.BM.Tracing as BM
 import Cardano.Db (DbLovelace, RewardSource)
 import qualified Cardano.Db as Db
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logErrorCtx, logInfoCtx, logWarningCtx)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Shelley.API (Network)
@@ -51,33 +53,41 @@ import GHC.Err (error)
 validateEpochRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   Network ->
   EpochNo ->
   EpochNo ->
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   ReaderT SqlBackend m ()
-validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
+validateEpochRewards tracer severity network _earnedEpochNo spendableEpochNo rmap = do
+  let logCtx = initLogCtx severity "validateEpochRewards" "Cardano.DbSync.Era.Universal.Validate"
   actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
   if actualCount /= expectedCount
     then do
-      liftIO . logWarning tracer $
-        mconcat
-          [ "validateEpochRewards: rewards spendable in epoch "
-          , textShow (unEpochNo spendableEpochNo)
-          , " expected total of "
-          , textShow expectedCount
-          , " but got "
-          , textShow actualCount
-          ]
-      logFullRewardMap tracer spendableEpochNo network (convertPoolRewards rmap)
+      liftIO . logWarningCtx tracer $
+        logCtx
+          { lcMessage =
+              mconcat
+                [ "validateEpochRewards: rewards spendable in epoch "
+                , textShow (unEpochNo spendableEpochNo)
+                , " expected total of "
+                , textShow expectedCount
+                , " but got "
+                , textShow actualCount
+                ]
+          }
+      logFullRewardMap tracer severity spendableEpochNo network (convertPoolRewards rmap)
     else do
-      liftIO . logInfo tracer $
-        mconcat
-          [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
-          , textShow (unEpochNo spendableEpochNo)
-          , " are "
-          , textShow actualCount
-          ]
+      liftIO . logInfoCtx tracer $
+        logCtx
+          { lcMessage =
+              mconcat
+                [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
+                , textShow (unEpochNo spendableEpochNo)
+                , " are "
+                , textShow actualCount
+                ]
+          }
   where
     expectedCount :: Word64
     expectedCount = fromIntegral . sum $ map Set.size (Map.elems rmap)
@@ -85,15 +95,16 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
 logFullRewardMap ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   EpochNo ->
   Network ->
   Generic.Rewards ->
   ReaderT SqlBackend m ()
-logFullRewardMap tracer epochNo network ledgerMap = do
+logFullRewardMap tracer severity epochNo network ledgerMap = do
   dbMap <- queryRewardMap epochNo
   when (Map.size dbMap > 0 && Map.size (Generic.unRewards ledgerMap) > 0) $
     liftIO $
-      diffRewardMap tracer network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
+      diffRewardMap tracer severity network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
   where
     convert :: Set Generic.Reward -> [(RewardSource, Coin)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
@@ -131,14 +142,15 @@ queryRewardMap (EpochNo epochNo) = do
 
 diffRewardMap ::
   Trace IO Text ->
+  BM.Severity ->
   Network ->
   Map ByteString [(RewardSource, DbLovelace)] ->
   Map ByteString [(RewardSource, Coin)] ->
   IO ()
-diffRewardMap tracer _nw dbMap ledgerMap = do
+diffRewardMap tracer severity _nw dbMap ledgerMap = do
   when (Map.size diffMap > 0) $ do
-    logError tracer "diffRewardMap:"
-    mapM_ (logError tracer . render) $ Map.toList diffMap
+    let logCtx = initLogCtx severity "diffRewardMap" "Cardano.DbSync.Era.Universal.Validate"
+    logErrorCtx tracer logCtx {lcMessage = mconcat $ map render (Map.toList diffMap)}
   where
     keys :: [ByteString]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)

@@ -17,16 +17,19 @@ module Cardano.DbSync.OffChain (
   fetchOffChainVoteData,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import qualified Cardano.BM.Data.Severity as BM
+import Cardano.BM.Trace (Trace)
 import Cardano.Db (runIohkLogging)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
 import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTBQueue (..),
@@ -104,17 +107,18 @@ loadOffChainWorkQueue _trce offChainWorkQueue = do
 insertOffChainPoolResults ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   StrictTBQueue IO OffChainPoolResult ->
   ReaderT SqlBackend m ()
-insertOffChainPoolResults trce resultQueue = do
+insertOffChainPoolResults trce severity resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
   unless (null res) $ do
     let resLength = length res
         resErrorsLength = length $ filter isFetchError res
-    liftIO . logInfo trce $
-      logInsertOffChainResults "Pool" resLength resErrorsLength
+    liftIO . logInfoCtx trce $ logCtx {lcMessage = logInsertOffChainResults "Pool" resLength resErrorsLength}
   mapM_ insert res
   where
+    logCtx = initLogCtx severity "insertOffChainPoolResults" "Cardano.DbSync.OffChain"
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
     insert = \case
       OffChainPoolResultMetadata md -> void $ DB.insertCheckOffChainPoolData md
@@ -128,17 +132,18 @@ insertOffChainPoolResults trce resultQueue = do
 insertOffChainVoteResults ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   StrictTBQueue IO OffChainVoteResult ->
   ReaderT SqlBackend m ()
-insertOffChainVoteResults trce resultQueue = do
+insertOffChainVoteResults trce severity resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
   unless (null res) $ do
     let resLength = length res
         resErrorsLength = length $ filter isFetchError res
-    liftIO . logInfo trce $
-      logInsertOffChainResults "Voting Anchor" resLength resErrorsLength
+    liftIO . logInfoCtx trce $ logCtx {lcMessage = logInsertOffChainResults "Voting Anchor" resLength resErrorsLength}
   mapM_ insert res
   where
+    logCtx = initLogCtx severity "insertOffChainVoteResults" "Cardano.DbSync.OffChain"
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
     insert = \case
       OffChainVoteResultMetadata md accessors -> do
@@ -179,9 +184,11 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 runFetchOffChainPoolThread :: SyncEnv -> IO ()
 runFetchOffChainPoolThread syncEnv = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runFetchOffChainPoolThread" "Cardano.DbSync.OffChain"
   -- if dissable gov is active then don't run voting anchor thread
   when (ioOffChainPoolData iopts) $ do
-    logInfo trce "Running Offchain Pool fetch thread"
+    logInfoCtx trce $ logCtx {lcMessage = "Running Offchain Pool fetch thread"}
     runIohkLogging trce $
       withPostgresqlConn (envConnectionString syncEnv) $
         \backendPool -> liftIO $
@@ -202,9 +209,11 @@ runFetchOffChainPoolThread syncEnv = do
 
 runFetchOffChainVoteThread :: SyncEnv -> IO ()
 runFetchOffChainVoteThread syncEnv = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "runFetchOffChainVoteThread" "Cardano.DbSync.OffChain"
   -- if dissable gov is active then don't run voting anchor thread
   when (ioGov iopts) $ do
-    logInfo trce "Running Offchain Vote Anchor fetch thread"
+    logInfoCtx trce $ logCtx {lcMessage = "Running Offchain Vote Anchor fetch thread"}
     runIohkLogging trce $
       withPostgresqlConn (envConnectionString syncEnv) $
         \backendVote -> liftIO $

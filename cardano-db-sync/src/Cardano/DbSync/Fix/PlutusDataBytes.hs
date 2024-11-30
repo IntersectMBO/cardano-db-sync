@@ -11,7 +11,8 @@
 
 module Cardano.DbSync.Fix.PlutusDataBytes where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import qualified Cardano.BM.Data.Severity as BM
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db.Version.V13_0 as DB_V_13_0
 import Cardano.DbSync.Api
 import Cardano.DbSync.Era.Shelley.Generic.Block
@@ -19,6 +20,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Error (bsBase16Encode)
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import qualified Cardano.Ledger.Alonzo.TxWits as Alonzo
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
@@ -89,19 +91,24 @@ getNextPointList fds = case fds of
 getWrongPlutusData ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m FixData
-getWrongPlutusData tracer = do
+getWrongPlutusData tracer severity = do
   liftIO $
-    logInfo tracer $
-      mconcat
-        [ "Starting the fixing Plutus Data bytes procedure. This may take a couple hours on mainnet if there are wrong values."
-        , " You can skip it using --skip-plutus-data-fix."
-        , " It will fix Datum and RedeemerData with wrong bytes. See more in Issue #1214 and #1278."
-        , " This procedure makes resyncing unnecessary."
-        ]
+    logInfoCtx tracer $
+      logCtx
+        { lcMessage =
+            mconcat
+              [ "Starting the fixing Plutus Data bytes procedure. This may take a couple hours on mainnet if there are wrong values."
+              , " You can skip it using --skip-plutus-data-fix."
+              , " It will fix Datum and RedeemerData with wrong bytes. See more in Issue #1214 and #1278."
+              , " This procedure makes resyncing unnecessary."
+              ]
+        }
   datumList <-
     findWrongPlutusData
       tracer
+      severity
       "Datum"
       DB_V_13_0.queryDatumCount
       DB_V_13_0.queryDatumPage
@@ -112,6 +119,7 @@ getWrongPlutusData tracer = do
   redeemerDataList <-
     findWrongPlutusData
       tracer
+      severity
       "RedeemerData"
       DB_V_13_0.queryRedeemerDataCount
       DB_V_13_0.queryRedeemerDataPage
@@ -121,6 +129,8 @@ getWrongPlutusData tracer = do
       (mapLeft Just . hashPlutusData . getRedeemerDataBytes)
   pure $ FixData datumList redeemerDataList
   where
+    logCtx = initLogCtx severity "getWrongPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
+
     f queryRes = do
       (prevBlockHsh, mPrevSlotNo) <- queryRes
       prevSlotNo <- mPrevSlotNo
@@ -138,6 +148,7 @@ findWrongPlutusData ::
   forall a m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   Text ->
   m Word64 -> -- query count
   (Int64 -> Int64 -> m [a]) -> -- query a page
@@ -146,36 +157,46 @@ findWrongPlutusData ::
   (a -> Maybe ByteString) -> -- get the stored bytes
   (a -> Either (Maybe String) ByteString) -> -- hash the stored bytes
   m [FixPlutusInfo]
-findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
+findWrongPlutusData tracer severity tableName qCount qPage qGetInfo getHash getBytes hashBytes = do
   liftIO $
-    logInfo tracer $
-      mconcat
-        ["Trying to find ", tableName, " with wrong bytes"]
+    logInfoCtx tracer $
+      logCtx
+        { lcMessage =
+            mconcat
+              ["Trying to find ", tableName, " with wrong bytes"]
+        }
   count <- qCount
   liftIO $
-    logInfo tracer $
-      mconcat
-        ["There are ", textShow count, " ", tableName, ". Need to scan them all."]
+    logInfoCtx tracer $
+      logCtx
+        { lcMessage =
+            mconcat
+              ["There are ", textShow count, " ", tableName, ". Need to scan them all."]
+        }
   datums <- findRec False 0 []
   liftIO $
-    logInfo tracer $
-      Text.concat
-        [ "Found "
-        , textShow (length datums)
-        , " "
-        , tableName
-        , " with mismatch between bytes and hash."
-        ]
+    logInfoCtx tracer $
+      logCtx
+        { lcMessage =
+            Text.concat
+              [ "Found "
+              , textShow (length datums)
+              , " "
+              , tableName
+              , " with mismatch between bytes and hash."
+              ]
+        }
   pure datums
   where
+    logCtx = initLogCtx severity "findWrongPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
     showBytes = maybe "<Failed to show bytes>" bsBase16Encode
 
     findRec :: Bool -> Int64 -> [[FixPlutusInfo]] -> m [FixPlutusInfo]
     findRec printedSome offset acc = do
       when (mod offset (10 * limit) == 0 && offset > 0) $
         liftIO $
-          logInfo tracer $
-            mconcat ["Checked ", textShow offset, " ", tableName]
+          logInfoCtx tracer $
+            logCtx {lcMessage = mconcat ["Checked ", textShow offset, " ", tableName]}
       ls <- qPage offset limit
       ls' <- filterM checkValidBytes ls
       ls'' <- mapMaybeM convertToFixPlutusInfo ls'
@@ -184,11 +205,14 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
           then pure printedSome
           else do
             liftIO $
-              logInfo tracer $
-                Text.concat
-                  [ "Found some wrong values already. The oldest ones are (hash, bytes): "
-                  , textShow $ (\a -> (bsBase16Encode $ getHash a, showBytes $ getBytes a)) <$> take 5 ls'
-                  ]
+              logInfoCtx tracer $
+                logCtx
+                  { lcMessage =
+                      Text.concat
+                        [ "Found some wrong values already. The oldest ones are (hash, bytes): "
+                        , textShow $ (\a -> (bsBase16Encode $ getHash a, showBytes $ getBytes a)) <$> take 5 ls'
+                        ]
+                  }
             pure True
       let !newAcc = ls'' : acc
       if fromIntegral (length ls) < limit
@@ -200,8 +224,8 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
       Left Nothing -> pure False
       Left (Just msg) -> do
         liftIO $
-          logWarning tracer $
-            Text.concat ["Invalid Binary Data for hash ", textShow actualHash, ": ", Text.pack msg]
+          logWarningCtx tracer $
+            logCtx {lcMessage = Text.concat ["Invalid Binary Data for hash ", textShow actualHash, ": ", Text.pack msg]}
         pure False
       Right hashedBytes -> pure $ hashedBytes /= actualHash
       where
@@ -222,11 +246,13 @@ findWrongPlutusData tracer tableName qCount qPage qGetInfo getHash getBytes hash
 
     limit = 100_000
 
-fixPlutusData :: MonadIO m => Trace IO Text -> CardanoBlock -> FixData -> ReaderT SqlBackend m ()
-fixPlutusData tracer cblk fds = do
+fixPlutusData :: MonadIO m => Trace IO Text -> BM.Severity -> CardanoBlock -> FixData -> ReaderT SqlBackend m ()
+fixPlutusData tracer severity cblk fds = do
   mapM_ (fixData True) $ fdDatum fds
   mapM_ (fixData False) $ fdRedeemerData fds
   where
+    logCtx = initLogCtx severity "fixPlutusData" "Cardano.DbSync.Fix.PlutusDataBytes"
+
     fixData :: MonadIO m => Bool -> FixPlutusInfo -> ReaderT SqlBackend m ()
     fixData isDatum fd = do
       case Map.lookup (fpHash fd) correctBytesMap of
@@ -238,9 +264,12 @@ fixPlutusData tracer cblk fds = do
               DB_V_13_0.upateDatumBytes datumId correctBytes
             Nothing ->
               liftIO $
-                logWarning tracer $
-                  mconcat
-                    ["Datum", " not found in block"]
+                logWarningCtx tracer $
+                  logCtx
+                    { lcMessage =
+                        mconcat
+                          ["Datum", " not found in block"]
+                    }
         Just correctBytes -> do
           mRedeemerDataId <- DB_V_13_0.queryRedeemerData $ fpHash fd
           case mRedeemerDataId of
@@ -248,9 +277,8 @@ fixPlutusData tracer cblk fds = do
               DB_V_13_0.upateRedeemerDataBytes redeemerDataId correctBytes
             Nothing ->
               liftIO $
-                logWarning tracer $
-                  mconcat
-                    ["RedeemerData", " not found in block"]
+                logWarningCtx tracer $
+                  logCtx {lcMessage = "RedeemerData not found in block"}
 
     correctBytesMap = Map.union (scrapDatumsBlock cblk) (scrapRedeemerDataBlock cblk)
 

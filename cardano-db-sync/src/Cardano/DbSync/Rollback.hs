@@ -9,9 +9,11 @@ module Cardano.DbSync.Rollback (
   unsafeRollback,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import qualified Cardano.BM.Data.Severity as DM
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Era.Util
@@ -19,6 +21,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -36,17 +39,24 @@ rollbackFromBlockNo ::
   BlockNo ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 rollbackFromBlockNo syncEnv blkNo = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "rollbackFromBlockNo" "Cardano.DbSync.Rollback"
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
     liftIO
-      . logInfo trce
-      $ mconcat
-        [ "Deleting "
-        , textShow nBlocks
-        , " numbered equal to or greater than "
-        , textShow blkNo
-        ]
+      . logInfoCtx trce
+      $ logCtx
+        { lcBlockNo = Just $ unBlockNo blkNo
+        , lcEpochNo = Just epochNo
+        , lcMessage =
+            mconcat
+              [ "Deleting "
+              , textShow nBlocks
+              , " numbered equal to or greater than "
+              , textShow blkNo
+              ]
+        }
     lift $ do
       deletedBlockCount <- DB.deleteBlocksBlockId trce txOutTableType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
       when (deletedBlockCount > 0) $ do
@@ -57,58 +67,81 @@ rollbackFromBlockNo syncEnv blkNo = do
 
     lift $ rollbackCache cache blockId
 
-    liftIO . logInfo trce $ "Blocks deleted"
+    liftIO . logInfoCtx trce $
+      logCtx
+        { lcEpochNo = Just epochNo
+        , lcBlockNo = Just $ unBlockNo blkNo
+        , lcMessage = "Blocks deleted"
+        }
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv
     txOutTableType = getTxOutTableType syncEnv
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback syncEnv point serverTip =
-  DB.runDbIohkNoLogging (envBackend syncEnv) $ runExceptT action
+prepareRollback syncEnv point serverTip = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "prepareRollback" "Cardano.DbSync.Rollback"
+  when (severity == DM.Debug) $ do
+    logWarningCtx trce $
+      logCtx
+        { lcMessage = "Rollback requested"
+        }
+  DB.runDbIohkNoLogging (envBackend syncEnv) $ runExceptT $ action logCtx
   where
     trce = getTrace syncEnv
 
-    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
-    action = do
+    action :: MonadIO m => LogContext -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    action logCtx = do
       case getPoint point of
         Origin -> do
           nBlocks <- lift DB.queryCountSlotNo
           if nBlocks == 0
             then do
-              liftIO . logInfo trce $ "Starting from Genesis"
+              liftIO . logInfoCtx trce $ logCtx {lcMessage = "Starting from Genesis"}
             else do
               liftIO
-                . logInfo trce
-                $ mconcat
-                  [ "Delaying delete of "
-                  , textShow nBlocks
-                  , " while rolling back to genesis."
-                  , " Applying blocks until a new block is found."
-                  , " The node is currently at "
-                  , textShow serverTip
-                  ]
+                . logInfoCtx trce
+                $ logCtx
+                  { lcMessage =
+                      mconcat
+                        [ "Delaying delete of "
+                        , textShow nBlocks
+                        , " while rolling back to genesis."
+                        , " Applying blocks until a new block is found."
+                        , " The node is currently at "
+                        , textShow serverTip
+                        ]
+                  }
         At blk -> do
           nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
           mBlockNo <-
             liftLookupFail "Rollback.prepareRollback" $
               DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
           liftIO
-            . logInfo trce
-            $ mconcat
-              [ "Delaying delete of "
-              , textShow nBlocks
-              , " blocks after "
-              , textShow mBlockNo
-              , " while rolling back to ("
-              , renderPoint point
-              , "). Applying blocks until a new block is found. The node is currently at "
-              , textShow serverTip
-              ]
+            . logInfoCtx trce
+            $ logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Delaying delete of "
+                    , textShow nBlocks
+                    , " blocks after "
+                    , textShow mBlockNo
+                    , " while rolling back to ("
+                    , renderPoint point
+                    , "). Applying blocks until a new block is found. The node is currently at "
+                    , textShow serverTip
+                    ]
+              }
       pure False
 
 -- For testing and debugging.
-unsafeRollback :: Trace IO Text -> DB.TxOutTableType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
-unsafeRollback trce txOutTableType config slotNo = do
-  logWarning trce $ "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
+unsafeRollback :: Trace IO Text -> DM.Severity -> DB.TxOutTableType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
+unsafeRollback trce severity txOutTableType config slotNo = do
+  let logCtx = initLogCtx severity "unsafeRollback" "Cardano.DbSync.Rollback"
+  logWarningCtx trce $
+    logCtx
+      { lcSlotNo = Just $ unSlotNo slotNo
+      , lcMessage = "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
+      }
   Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutTableType slotNo True)

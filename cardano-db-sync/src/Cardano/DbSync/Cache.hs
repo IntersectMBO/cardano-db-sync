@@ -28,6 +28,7 @@ module Cardano.DbSync.Cache (
   getCacheStatistics,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
@@ -39,6 +40,7 @@ import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Ledger.Mary.Value
@@ -274,41 +276,50 @@ queryPoolKeyOrInsert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Text ->
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   CacheAction ->
   Bool ->
   PoolKeyHash ->
   ReaderT SqlBackend m DB.PoolHashId
-queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
+queryPoolKeyOrInsert txt trce severity cache cacheUA logsWarning hsh = do
+  let logCtx = initLogCtx severity "queryPoolKeyOrInsert" "Cardano.DbSync.Cache"
   pk <- queryPoolKeyWithCache cache cacheUA hsh
   case pk of
     Right poolHashId -> pure poolHashId
     Left err -> do
       when logsWarning $
         liftIO $
-          logWarning trce $
-            mconcat
-              [ "Failed with "
-              , textShow err
-              , " while trying to find pool "
-              , textShow hsh
-              , " for "
-              , txt
-              , ". We will assume that the pool exists and move on."
-              ]
+          logWarningCtx trce $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Failed with "
+                    , textShow err
+                    , " while trying to find pool "
+                    , textShow hsh
+                    , " for "
+                    , txt
+                    , ". We will assume that the pool exists and move on."
+                    ]
+              }
       insertPoolKeyWithCache cache cacheUA hsh
 
 queryMAWithCache ::
   MonadIO m =>
+  Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   PolicyID StandardCrypto ->
   AssetName ->
   ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
-queryMAWithCache cache policyId asset =
+queryMAWithCache trce severity cache policyId asset = do
+  let logCtx = initLogCtx severity "queryMAWithCache" "Cardano.DbSync.Cache"
   case cache of
     NoCache -> do
       let !policyBs = Generic.unScriptHash $ policyID policyId
-      let !assetNameBs = Generic.unAssetName asset
+          !assetNameBs = Generic.unAssetName asset
+      liftIO $ logInfoCtx trce $ logCtx {lcMessage = mconcat ["Querying MultiAssetId for ", textShow policyId, " ", textShow asset]}
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cMultiAssets ci)

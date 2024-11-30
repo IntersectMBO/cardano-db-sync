@@ -7,10 +7,11 @@ module Cardano.DbSync.Epoch (
   epochHandler,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo)
+import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Chain.Block as Byron
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache.Epoch (readEpochBlockDiffFromCache, readLastMapEpochFromCache, writeToMapEpochCache)
 import Cardano.DbSync.Cache.Types (CacheStatus (..), EpochBlockDiff (..))
@@ -21,6 +22,7 @@ import Cardano.DbSync.Types (
   SyncState (SyncFollowing),
  )
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx)
 import Cardano.Prelude hiding (from, on, replace)
 import Cardano.Slotting.Slot (unEpochNo)
 import Control.Monad.Logger (LoggingT)
@@ -175,7 +177,9 @@ updateEpochWhenSyncing ::
   Bool ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epochNo isBoundaryBlock = do
+  severity <- liftIO $ getSeverity syncEnv
   let trce = getTrace syncEnv
+      logCtx = initLogCtx severity "updateEpochWhenSyncing" "Cardano.DbSync.Era.Universal.Epoch"
       isFirstEpoch = epochNo == 0
       -- count boundary block in the first epoch
       additionalBlockCount = if isBoundaryBlock && isFirstEpoch then 1 else 0
@@ -202,11 +206,19 @@ updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epoc
           mEpochID <- DB.queryForEpochId epochNo
           case mEpochID of
             Nothing -> do
-              liftIO . logInfo trce $ epochSucessMsg "Inserted" "updateEpochWhenSyncing" "Cache" lastMapEpochFromCache
+              liftIO . logInfoCtx trce $
+                logCtx
+                  { lcMessage = epochSucessMsg "Inserted" "updateEpochWhenSyncing" "Cache" lastMapEpochFromCache
+                  , lcEpochNo = Just $ DB.epochNo lastMapEpochFromCache
+                  }
               _ <- DB.insertEpoch lastMapEpochFromCache
               pure $ Right ()
             Just epochId -> do
-              liftIO . logInfo trce $ epochSucessMsg "Replaced" "updateEpochWhenSyncing" "Cache" calculatedEpoch
+              liftIO . logInfoCtx trce $
+                logCtx
+                  { lcMessage = epochSucessMsg "Replaced" "updateEpochWhenSyncing" "Cache" calculatedEpoch
+                  , lcEpochNo = Just $ DB.epochNo calculatedEpoch
+                  }
               Right <$> replace epochId calculatedEpoch
 
 -- When syncing, on every block we update the Map epoch in cache. Making sure to handle restarts
@@ -245,7 +257,9 @@ makeEpochWithDBQuery ::
   Text ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 makeEpochWithDBQuery syncEnv cache mInitEpoch epochNo callSiteMsg = do
+  severity <- liftIO $ getSeverity syncEnv
   let trce = getTrace syncEnv
+      logCtx = initLogCtx severity "makeEpochWithDBQuery" "Cardano.DbSync.Era.Universal.Epoch"
   calcEpoch <- DB.queryCalcEpochEntry epochNo
   mEpochID <- DB.queryForEpochId epochNo
   let epochInitOrCalc = fromMaybe calcEpoch mInitEpoch
@@ -253,12 +267,14 @@ makeEpochWithDBQuery syncEnv cache mInitEpoch epochNo callSiteMsg = do
     Nothing -> do
       _ <- writeToMapEpochCache syncEnv cache epochInitOrCalc
       _ <- DB.insertEpoch calcEpoch
-      liftIO . logInfo trce $ epochSucessMsg "Inserted " callSiteMsg "DB query" calcEpoch
+      liftIO . logInfoCtx trce $
+        logCtx {lcMessage = epochSucessMsg "Inserted " callSiteMsg "DB query" calcEpoch}
       pure $ Right ()
     Just epochId -> do
       -- write the newly calculated epoch to cache.
       _ <- writeToMapEpochCache syncEnv cache epochInitOrCalc
-      liftIO . logInfo trce $ epochSucessMsg "Replaced " callSiteMsg "DB query" calcEpoch
+      liftIO . logInfoCtx trce $
+        logCtx {lcMessage = epochSucessMsg "Replaced " callSiteMsg "DB query" calcEpoch}
       Right <$> replace epochId calcEpoch
 
 -- Because we store a Map of epochs, at every iteration we take the newest epoch and it's values

@@ -11,11 +11,13 @@ module Cardano.DbSync.Era.Shelley.Genesis (
   insertValidateGenesisDist,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo)
+import qualified Cardano.BM.Data.Severity as BM
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (tryUpdateCacheTx)
 import Cardano.DbSync.Cache.Types (CacheStatus (..), useNoCache)
@@ -26,6 +28,7 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logErrorCtx, logInfoCtx)
 import Cardano.Ledger.Address (serialiseAddr)
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
@@ -65,15 +68,18 @@ insertValidateGenesisDist ::
   Bool ->
   ExceptT SyncNodeError IO ()
 insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
+  severity <- liftIO $ getSeverity syncEnv
   let prunes = getPrunes syncEnv
+      logCtx = initLogCtx severity "insertValidateGenesisDist" "Cardano.DbSync.Era.Shelley.Genesis"
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
-    liftIO $ logError tracer $ show SNErrIgnoreShelleyInitiation
+    liftIO $ logErrorCtx tracer $ logCtx {lcMessage = show SNErrIgnoreShelleyInitiation}
     throwError SNErrIgnoreShelleyInitiation
-  if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction prunes)
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction prunes)
+  -- TODO cmdv
+  case severity of
+    BM.Debug -> newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer (insertAction prunes)
+    _otherwise -> newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) (insertAction prunes)
   where
     tracer = getTrace syncEnv
 
@@ -88,12 +94,14 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
 
     insertAction :: (MonadBaseControl IO m, MonadIO m) => Bool -> ReaderT SqlBackend m (Either SyncNodeError ())
     insertAction prunes = do
+      severity <- liftIO $ getSeverity syncEnv
+      let logCtx = initLogCtx severity "insertValidateGenesisDist" "Cardano.DbSync.Era.Shelley.Genesis"
       ebid <- DB.queryBlockId (configGenesisHash cfg)
       case ebid of
         Right bid -> validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount
         Left _ ->
           runExceptT $ do
-            liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
+            liftIO $ logInfoCtx tracer logCtx {lcMessage = "Inserting Shelley Genesis distribution"}
             emeta <- lift DB.queryMeta
             case emeta of
               Right _ -> pure () -- Metadata from Shelley era already exists. TODO Validate metadata.
@@ -129,7 +137,7 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               -- This means the previous block will have two blocks after it, resulting in a
               -- tree format, which is unavoidable.
               pid <- lift DB.queryLatestBlockId
-              liftIO $ logInfo tracer $ textShow pid
+              liftIO $ logInfoCtx tracer $ logCtx {lcMessage = textShow pid}
               bid <-
                 lift . DB.insertBlock $
                   DB.Block
@@ -154,11 +162,10 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               disInOut <- liftIO $ getDisableInOutState syncEnv
               unless disInOut $ do
                 lift $ mapM_ (insertTxOuts syncEnv tracer bid) $ genesisUtxOs cfg
-              liftIO . logInfo tracer $
-                "Initial genesis distribution populated. Hash "
-                  <> renderByteArray (configGenesisHash cfg)
+              liftIO . logInfoCtx tracer $
+                logCtx {lcMessage = "Initial genesis distribution populated. Hash " <> renderByteArray (configGenesisHash cfg)}
               when hasStakes $
-                insertStaking tracer useNoCache bid cfg
+                insertStaking tracer severity useNoCache bid cfg
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
@@ -170,11 +177,13 @@ validateGenesisDistribution ::
   DB.BlockId ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
+validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount = do
+  severity <- liftIO $ getSeverity syncEnv
+  let logCtx = initLogCtx severity "validateGenesisDistribution" "Cardano.DbSync.Era.Shelley.Genesis"
   runExceptT $ do
     let tracer = getTrace syncEnv
         txOutTableType = getTxOutTableType syncEnv
-    liftIO $ logInfo tracer "Validating Genesis distribution"
+    liftIO $ logInfoCtx tracer logCtx {lcMessage = "Validating Genesis distribution"}
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
     when (DB.metaStartTime meta /= configStartTime cfg) $
@@ -215,10 +224,8 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
           , textShow totalSupply
           ]
     liftIO $ do
-      logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
-
--- -----------------------------------------------------------------------------
+      logInfoCtx tracer $ logCtx {lcMessage = "Initial genesis distribution present and correct"}
+      logInfoCtx tracer $ logCtx {lcMessage = "Total genesis supply of Ada: " <> DB.renderAda totalSupply}
 
 insertTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -312,11 +319,12 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
 insertStaking ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   DB.BlockId ->
   ShelleyGenesis StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertStaking tracer cache blkId genesis = do
+insertStaking tracer severity cache blkId genesis = do
   -- All Genesis staking comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <-
@@ -344,7 +352,7 @@ insertStaking tracer cache blkId genesis = do
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     -- TODO: add initial deposits for genesis stake keys.
     insertStakeRegistration tracer cache (EpochNo 0) Nothing txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
-    insertDelegation tracer cache network (EpochNo 0) 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
+    insertDelegation tracer severity cache network (EpochNo 0) 0 txId (2 * n + 1) Nothing (KeyHashObj keyStaking) keyPool
 
 -- -----------------------------------------------------------------------------
 

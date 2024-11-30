@@ -16,6 +16,7 @@ module Cardano.DbSync.Era.Universal.Insert.Pool (
   insertPoolCert,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (hashToBytes)
 import Cardano.Db (PoolUrl (..))
@@ -109,14 +110,15 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
 insertPoolRetire ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   DB.TxId ->
   CacheStatus ->
   EpochNo ->
   Word16 ->
   Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolRetire trce txId cache epochNum idx keyHash = do
-  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache UpdateCache True keyHash
+insertPoolRetire trce severity txId cache epochNum idx keyHash = do
+  poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce severity cache UpdateCache True keyHash
   void . lift . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -198,6 +200,7 @@ insertPoolRelay updateId relay =
 insertPoolCert ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   CacheStatus ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
@@ -208,7 +211,7 @@ insertPoolCert ::
   Word16 ->
   PoolCert StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertPoolCert tracer cache isMember mdeposits network epoch blkId txId idx pCert =
+insertPoolCert tracer severity cache isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of
     RegPool pParams -> insertPoolRegister tracer cache isMember mdeposits network epoch blkId txId idx pParams
-    RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash
+    RetirePool keyHash epochNum -> insertPoolRetire tracer severity txId cache epochNum idx keyHash

@@ -62,6 +62,7 @@ module Test.Cardano.Db.Mock.Config (
 ) where
 
 import Cardano.Api (NetworkMagic (..))
+import qualified Cardano.BM.Data.Severity as BM
 import qualified Cardano.Db as DB
 import Cardano.DbSync
 import Cardano.DbSync.Config
@@ -555,12 +556,14 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
   cfg <- mkConfig configFilePath mutableDir cmdLineArgs syncNodeConfig
   fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
   let dbsyncParams = syncNodeParams cfg
+      -- if shouldLog is True, we will log at Debug level
+      debugLogs = if shouldLog then BM.Debug else BM.Info
   trce <-
     if shouldLog
       then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce params cfg' True
+  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce debugLogs params cfg' True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do

@@ -3,6 +3,7 @@ module Cardano.DbTool.Validate.Ledger (
   validateLedger,
 ) where
 
+import qualified Cardano.BM.Data.Severity as BM
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
@@ -49,7 +50,7 @@ validate params txOutTableType genCfg slotNo ledgerFiles =
       if ledgerSlot <= slotNo
         then do
           -- TODO fix GenesisPoint. This is only used for logging
-          Right state <- loadLedgerStateFromFile nullTracer (mkTopLevelConfig genCfg) False GenesisPoint ledgerFile
+          Right state <- loadLedgerStateFromFile nullTracer BM.Info (mkTopLevelConfig genCfg) False GenesisPoint ledgerFile
           validateBalance txOutTableType ledgerSlot (vpAddressUtxo params) state
         else do
           when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."

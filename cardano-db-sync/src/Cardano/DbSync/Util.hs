@@ -14,9 +14,6 @@ module Cardano.DbSync.Util (
   fmap3,
   getSyncStatus,
   isSyncedWithinSeconds,
-  liftedLogException,
-  logActionDuration,
-  logException,
   maybeFromStrict,
   maybeToStrict,
   nullMetricSetters,
@@ -42,7 +39,6 @@ module Cardano.DbSync.Util (
   whenFalseMempty,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo)
 import Cardano.Db (RewardSource (..))
 import Cardano.DbSync.Config.Types ()
 import Cardano.DbSync.Types
@@ -50,8 +46,6 @@ import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Shelley.Rewards as Shelley
 import Cardano.Prelude hiding (catch)
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
-import Control.Exception.Lifted (catch)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
@@ -98,40 +92,6 @@ traverseMEither action xs = do
     [] -> pure $ Right ()
     (y : ys) ->
       action y >>= either (pure . Left) (const $ traverseMEither action ys)
-
--- | Needed when debugging disappearing exceptions.
-liftedLogException :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
-liftedLogException tracer txt action =
-  action `catch` logger
-  where
-    logger :: MonadIO m => SomeException -> m a
-    logger e =
-      liftIO $ do
-        putStrLn $ "Caught exception: txt " ++ show e
-        logError tracer $ txt <> textShow e
-        throwIO e
-
--- | Log the runtime duration of an action. Mainly for debugging.
-logActionDuration :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
-logActionDuration tracer label action = do
-  before <- liftIO Time.getCurrentTime
-  a <- action
-  after <- liftIO Time.getCurrentTime
-  liftIO . logInfo tracer $ mconcat [label, ": duration ", textShow (Time.diffUTCTime after before)]
-  pure a
-
--- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
--- code, the caught exception will not be logged. Therefore wrap all cardano-db-sync code that
--- is called from network with an exception logger so at least the exception will be
--- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> Text -> IO a -> IO a
-logException tracer txt action =
-  action `catch` logger
-  where
-    logger :: SomeException -> IO a
-    logger e = do
-      logError tracer $ txt <> textShow e
-      throwIO e
 
 -- | Eequired for testing or when disabling the metrics.
 nullMetricSetters :: MetricSetters

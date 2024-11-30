@@ -51,10 +51,13 @@ module Cardano.DbSync.Api (
   convertToPoint,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import qualified Cardano.BM.Configuration.Model as BM
+import qualified Cardano.BM.Data.Severity as BM
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api.Functions (getSeverity)
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
@@ -73,6 +76,7 @@ import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (dbConstraintNamesExists)
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Prelude
@@ -100,9 +104,11 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
-setConsistentLevel env cst = do
-  logInfo (getTrace env) $ "Setting ConsistencyLevel to " <> textShow cst
-  atomically $ writeTVar (envConsistentLevel env) cst
+setConsistentLevel syncEnv cst = do
+  severity <- getSeverity syncEnv
+  let logCtx = initLogCtx severity "setConsistentLevel" "Cardano.DbSync.Api"
+  logInfoCtx (getTrace syncEnv) $ logCtx {lcMessage = "Setting ConsistencyLevel to " <> textShow cst}
+  atomically $ writeTVar (envConsistentLevel syncEnv) cst
 
 getConsistentLevel :: SyncEnv -> IO ConsistentLevel
 getConsistentLevel env =
@@ -157,12 +163,14 @@ getRanIndexes env = do
   readTVarIO $ envIndexes env
 
 runIndexMigrations :: SyncEnv -> IO ()
-runIndexMigrations env = do
-  haveRan <- readTVarIO $ envIndexes env
+runIndexMigrations syncEnv = do
+  severity <- getSeverity syncEnv
+  let logCtx = initLogCtx severity "runIndexMigrations" "Cardano.DbSync.Api"
+  haveRan <- readTVarIO $ envIndexes syncEnv
   unless haveRan $ do
-    envRunDelayedMigration env DB.Indexes
-    logInfo (getTrace env) "Indexes were created"
-    atomically $ writeTVar (envIndexes env) True
+    envRunDelayedMigration syncEnv DB.Indexes
+    logInfoCtx (getTrace syncEnv) $ logCtx {lcMessage = "Indexes were created"}
+    atomically $ writeTVar (envIndexes syncEnv) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
 initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
@@ -177,9 +185,11 @@ getPruneConsume = soptPruneConsumeMigration . envOptions
 
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
+  severity <- getSeverity syncEnv
   let pcm = getPruneConsume syncEnv
+      logCtx = initLogCtx severity "runExtraMigrationsMaybe" "Cardano.DbSync.Api"
       txOutTableType = getTxOutTableType syncEnv
-  logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
+  logInfoCtx (getTrace syncEnv) $ logCtx {lcMessage = "runExtraMigrationsMaybe: " <> textShow pcm}
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.runExtraMigrations
       (getTrace syncEnv)
@@ -306,12 +316,23 @@ getDbTipBlockNo env = do
   mblk <- getDbLatestBlockInfo (envBackend env)
   pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
 
-logDbState :: SyncEnv -> IO ()
-logDbState env = do
+getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
+getCurrentTipBlockNo env = do
+  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  case maybeTip of
+    Just tip -> pure $ At (bBlockNo tip)
+    Nothing -> pure Origin
+
+logDbState :: SyncEnv -> LogContext -> IO ()
+logDbState env logCtx = do
   mblk <- getDbLatestBlockInfo (envBackend env)
   case mblk of
-    Nothing -> logInfo tracer "Database is empty"
-    Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
+    Nothing ->
+      logInfoCtx tracer $
+        logCtx {lcMessage = "Database is empty"}
+    Just tip ->
+      logInfoCtx tracer $
+        logCtx {lcMessage = mconcat ["Database tip is at ", showTip tip]}
   where
     showTip :: TipInfo -> Text
     showTip tipInfo =
@@ -324,13 +345,6 @@ logDbState env = do
 
     tracer :: Trace IO Text
     tracer = getTrace env
-
-getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
-getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
-  case maybeTip of
-    Just tip -> pure $ At (bBlockNo tip)
-    Nothing -> pure Origin
 
 mkSyncEnv ::
   Trace IO Text ->
@@ -347,6 +361,8 @@ mkSyncEnv ::
   RunMigration ->
   IO SyncEnv
 mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
+  severity <- BM.minSeverity . dncLoggingConfig $ syncNodeConfigFromFile
+  let logCtx = initLogCtx severity "mkSyncEnv" "Cardano.DbSync.Api"
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -362,7 +378,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   consistentLevelVar <- newTVarIO Unchecked
   fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
+  bts <- getBootstrapInProgress trce severity (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -384,9 +400,13 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
             syncOptions
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       (Just _, False) -> do
-        logWarning trce $
-          "Disabling the ledger doesn't require having a --state-dir."
-            <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
+        logWarningCtx trce $
+          logCtx
+            { lcMessage =
+                "Disabling the ledger doesn't require having a --state-dir."
+                  <> " For more details view "
+                  <> " https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
+            }
         NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       -- This won't ever call because we error out this combination at parse time
       (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
@@ -530,10 +550,12 @@ getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig
 
 getBootstrapInProgress ::
   Trace IO Text ->
+  BM.Severity ->
   Bool ->
   SqlBackend ->
   IO Bool
-getBootstrapInProgress trce bootstrapFlag sqlBackend = do
+getBootstrapInProgress trce severity bootstrapFlag sqlBackend = do
+  let logCtx = initLogCtx severity "getBootstrapInProgress" "Cardano.DbSync.Api"
   DB.runDbIohkNoLogging sqlBackend $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems
@@ -547,26 +569,35 @@ getBootstrapInProgress trce bootstrapFlag sqlBackend = do
         liftIO $ DB.logAndThrowIO trce "Bootstrap flag not set, but still in progress"
       (True, DB.BootstrapNotStarted) -> do
         liftIO $
-          logInfo trce $
-            mconcat
-              [ "Syncing with bootstrap. "
-              , "This won't populate tx_out until the tip of the chain."
-              ]
+          logInfoCtx trce $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Syncing with bootstrap. "
+                    , "This won't populate tx_out until the tip of the chain."
+                    ]
+              }
         DB.insertExtraMigration DB.BootstrapStarted
         pure True
       (True, DB.BootstrapInProgress) -> do
         liftIO $
-          logInfo trce $
-            mconcat
-              [ "Syncing with bootstrap is in progress. "
-              , "This won't populate tx_out until the tip of the chain."
-              ]
+          logInfoCtx trce $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Syncing with bootstrap is in progress. "
+                    , "This won't populate tx_out until the tip of the chain."
+                    ]
+              }
         pure True
       (True, DB.BootstrapDone) -> do
         liftIO $
-          logWarning trce $
-            mconcat
-              [ "Bootstrap flag is set, but it will be ignored, "
-              , "since bootstrap is already done."
-              ]
+          logWarningCtx trce $
+            logCtx
+              { lcMessage =
+                  mconcat
+                    [ "Bootstrap flag is set, but it will be ignored, "
+                    , "since bootstrap is already done."
+                    ]
+              }
         pure False

@@ -43,6 +43,7 @@ library
   exposed-modules:      Cardano.DbSync
 
                         Cardano.DbSync.Api
+                        Cardano.DbSync.Api.Functions
                         Cardano.DbSync.Api.Ledger
                         Cardano.DbSync.Api.Types
                         Cardano.DbSync.Config
@@ -143,6 +144,7 @@ library
                         Cardano.DbSync.Util.Bech32
                         Cardano.DbSync.Util.Cbor
                         Cardano.DbSync.Util.Constraint
+                        Cardano.DbSync.Util.Logging
 
                         Paths_cardano_db_sync
 

@@ -8,9 +8,11 @@ module Cardano.DbSync.Era.Util (
   safeDecodeToJson,
 ) where
 
-import Cardano.BM.Trace (Trace, logWarning)
+import qualified Cardano.BM.Data.Severity as BM
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Error
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logWarningCtx)
 import Cardano.Prelude
 import Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import qualified Data.ByteString.Char8 as BS
@@ -33,20 +35,19 @@ safeDecodeUtf8 bs
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
 
-safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
-safeDecodeToJson tracer tracePrefix jsonBs = do
+safeDecodeToJson :: MonadIO m => Trace IO Text -> BM.Severity -> Text -> ByteString -> m (Maybe Text)
+safeDecodeToJson tracer severity tracePrefix jsonBs = do
+  let logCtx = initLogCtx severity "safeDecodeToJson" "Cardano.DbSync.Era.Util"
   ejson <- liftIO $ safeDecodeUtf8 jsonBs
   case ejson of
     Left err -> do
-      liftIO . logWarning tracer $
-        mconcat
-          [tracePrefix, ": Could not decode to UTF8: ", textShow err]
+      liftIO . logWarningCtx tracer $ logCtx {lcMessage = mconcat [tracePrefix, ": Could not decode to UTF8: ", textShow err]}
       -- We have to insert
       pure Nothing
     Right json ->
       -- See https://github.com/IntersectMBO/cardano-db-sync/issues/297
       if containsUnicodeNul json
         then do
-          liftIO $ logWarning tracer $ tracePrefix <> "was recorded as null, due to a Unicode NUL character found when trying to parse the json."
+          liftIO $ logWarningCtx tracer $ logCtx {lcMessage = tracePrefix <> "was recorded as null, due to a Unicode NUL character found when trying to parse the json."}
           pure Nothing
         else pure $ Just json

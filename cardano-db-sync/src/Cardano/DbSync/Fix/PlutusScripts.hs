@@ -33,7 +33,7 @@ import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Db (ScriptType (..), maybeToEither)
 import qualified Cardano.Db.Version.V13_0 as DB_V_13_0
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Cardano.BM.Trace (Trace)
 
 import Cardano.DbSync.Api
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -49,7 +49,9 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (BlockAllegra, BlockAlonzo, BlockBabbage, BlockByron, BlockMary, BlockShelley))
 import Ouroboros.Consensus.Shelley.Eras
 
+import qualified Cardano.BM.Data.Severity as BM
 import Cardano.DbSync.Fix.PlutusDataBytes
+import Cardano.DbSync.Util.Logging (LogContext (..), initLogCtx, logInfoCtx, logWarningCtx)
 import Cardano.Ledger.Babbage.TxOut
 import Cardano.Ledger.Plutus.Language (Plutus (..))
 
@@ -75,26 +77,33 @@ spanFPSOnPoint fps point =
 getWrongPlutusScripts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m FixPlutusScripts
-getWrongPlutusScripts tracer = do
+getWrongPlutusScripts tracer severity = do
+  let logCtx = initLogCtx severity "getWrongPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
   liftIO $
-    logInfo tracer $
-      mconcat
-        [ "Starting the fixing Plutus Script procedure. This may take a couple minutes on mainnet if there are wrong values."
-        , " You can skip it using --skip-plutus-script-fix."
-        , " It will fix Script with wrong bytes. See more in Issue #1214 and #1348."
-        , " This procedure makes resyncing unnecessary."
-        ]
-  FixPlutusScripts <$> findWrongPlutusScripts tracer
+    logInfoCtx tracer $
+      logCtx
+        { lcMessage =
+            mconcat
+              [ "Starting the fixing Plutus Script procedure. This may take a couple minutes on mainnet if there are wrong values."
+              , " You can skip it using --skip-plutus-script-fix."
+              , " It will fix Script with wrong bytes. See more in Issue #1214 and #1348."
+              , " This procedure makes resyncing unnecessary."
+              ]
+        }
+  FixPlutusScripts <$> findWrongPlutusScripts tracer severity
 
 findWrongPlutusScripts ::
   forall m.
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
+  BM.Severity ->
   ReaderT SqlBackend m [FixPlutusInfo]
-findWrongPlutusScripts tracer =
+findWrongPlutusScripts tracer severity =
   findWrongPlutusData
     tracer
+    severity
     "Script"
     DB_V_13_0.queryScriptCount
     DB_V_13_0.queryScriptPage
@@ -122,8 +131,8 @@ findWrongPlutusScripts tracer =
         PlutusV3 -> Left Nothing
         _ -> Left $ Just "Non plutus script found where it shouldn't."
 
-fixPlutusScripts :: MonadIO m => Trace IO Text -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
-fixPlutusScripts tracer cblk fpss = do
+fixPlutusScripts :: MonadIO m => Trace IO Text -> BM.Severity -> CardanoBlock -> FixPlutusScripts -> ReaderT SqlBackend m ()
+fixPlutusScripts tracer severity cblk fpss = do
   mapM_ fixData $ scriptsInfo fpss
   where
     fixData :: MonadIO m => FixPlutusInfo -> ReaderT SqlBackend m ()
@@ -137,11 +146,15 @@ fixPlutusScripts tracer cblk fpss = do
               DB_V_13_0.updateScriptBytes scriptId correctBytes
             Nothing ->
               liftIO $
-                logWarning tracer $
-                  mconcat
-                    ["Script", " not found in block"]
+                logWarningCtx tracer $
+                  logCtx
+                    { lcMessage =
+                        mconcat
+                          ["Script", " not found in block"]
+                    }
 
     correctBytesMap = scrapScriptBlock cblk
+    logCtx = initLogCtx severity "fixPlutusScripts" "Cardano.DbSync.Fix.PlutusScripts"
 
 scrapScriptBlock :: CardanoBlock -> Map ByteString ByteString
 scrapScriptBlock cblk = case cblk of
