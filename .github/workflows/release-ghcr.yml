@@ -61,10 +61,12 @@ jobs:
             docker-archive:./result \
             docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:$IMAGE_TAG
 
-          # Also tag it as latest
-          skopeo copy \
-            docker-archive:./result \
-            docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
+          # If it's a tag build, also tag it as latest
+          if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
+            skopeo copy \
+              docker-archive:./result \
+              docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
+          fi
 
       - name: Upload ${{ github.actor }}/cardano-smash-server
         run: |
@@ -76,7 +78,9 @@ jobs:
             docker-archive:./result \
             docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:$IMAGE_TAG
 
-          # Also tag it as latest
-          skopeo copy \
-            docker-archive:./result \
-            docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:latest
+          # If it's a tag build, also tag it as latest
+          if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
+            skopeo copy \
+              docker-archive:./result \
+              docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:latest
+          fi
