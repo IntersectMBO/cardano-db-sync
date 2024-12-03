@@ -17,8 +17,8 @@ import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.Cache (tryUpdateCacheTx)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), useNoCache)
+import Cardano.DbSync.Cache (insertAddressUsingCache, tryUpdateCacheTx)
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), useNoCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insertStakeRegistration)
 import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
@@ -267,10 +267,11 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
             , C.txOutConsumedByTxId = Nothing
             }
     DB.TxOutVariantAddress -> do
-      addrDetailId <- insertAddress
+      addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
       void . DB.insertTxOut $ DB.VTxOutW (makeVTxOut addrDetailId txId) Nothing
   where
     addr = txOut ^. Core.addrTxOutL
+    cache = envCache syncEnv
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
     addrRaw = serialiseAddr addr
 
@@ -297,16 +298,6 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
         , V.addressPaymentCred = Generic.maybePaymentCred addr
         , V.addressStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
         }
-
-    insertAddress ::
-      (MonadBaseControl IO m, MonadIO m) =>
-      ReaderT SqlBackend m V.AddressId
-    insertAddress = do
-      mAddrId <- DB.queryAddressId addrRaw
-      case mAddrId of
-        Nothing -> DB.insertAddress vAddress
-        -- this address is already in the database, so we can just return the id to be linked to the txOut.
-        Just addrId -> pure addrId
 
 -- Insert pools and delegations coming from Genesis.
 insertStaking ::

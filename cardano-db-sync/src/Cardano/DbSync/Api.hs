@@ -353,7 +353,8 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       then
         newEmptyCache
           CacheCapacity
-            { cacheCapacityStake = 100000
+            { cacheCapacityAddress = 100000
+            , cacheCapacityStake = 100000
             , cacheCapacityDatum = 250000
             , cacheCapacityMultiAsset = 250000
             , cacheCapacityTx = 100000

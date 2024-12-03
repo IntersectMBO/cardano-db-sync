@@ -20,8 +20,8 @@ import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache (queryTxIdWithCache, tryUpdateCacheTx)
-import Cardano.DbSync.Cache.Types (CacheStatus (..))
+import Cardano.DbSync.Cache (insertAddressUsingCache, queryTxIdWithCache, tryUpdateCacheTx)
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
@@ -251,7 +251,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
                 , V.addressPaymentCred = Generic.maybePaymentCred addr
                 , V.addressStakeAddressId = mSaId
                 }
-        addrId <- lift $ insertAddress addr vAddress
+        addrId <- lift $ insertAddressUsingCache cache UpdateCache (Ledger.serialiseAddr addr) vAddress
         pure $
           DB.VTxOutW
             (mkTxOutVariant mSaId addrId mDatumId mScriptId)
@@ -283,19 +283,6 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         , V.txOutValue = Generic.coinToDbLovelace value
         , V.txOutStakeAddressId = mSaId
         }
-
-insertAddress ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Ledger.Addr StandardCrypto ->
-  V.Address ->
-  ReaderT SqlBackend m V.AddressId
-insertAddress address vAddress = do
-  mAddrId <- DB.queryAddressId addrRaw
-  case mAddrId of
-    Nothing -> DB.insertAddress vAddress
-    Just addrId -> pure addrId
-  where
-    addrRaw = Ledger.serialiseAddr address
 
 insertTxMetadata ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -452,7 +439,7 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
                 , V.addressPaymentCred = Generic.maybePaymentCred addr
                 , V.addressStakeAddressId = mSaId
                 }
-        addrId <- lift $ insertAddress addr vAddress
+        addrId <- lift $ insertAddressUsingCache cache UpdateCache (Ledger.serialiseAddr addr) vAddress
         lift
           . DB.insertCollateralTxOut
           $ DB.VCollateralTxOutW
