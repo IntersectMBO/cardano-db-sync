@@ -137,6 +137,7 @@ for the raw sql migrations.
 * Reduction in sync-time.
 * Added `--disable-cache` flag, which slightly reduces memory usage. Read more at `doc/configuration.md`.
 * Renamed `--no-epoch-table` flag to `disable-epoch`. Read more at `doc/configuration.md`.
+* Renamed table `instant_reward` to `reward_rest`.
 * Handle `PlutusV1` and `PlutusV2` scripts as seperate script types, removing old `Plutus` type
 * Store CBOR serialized `Datum` and `Redeemer` via `bytes` field
 * HF integration. Schema changes for new Babbage fields. (#1081).
