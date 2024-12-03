@@ -5,6 +5,7 @@ module Cardano.DbSync.Cache.LRU (
   LRUCache (..),
   empty,
   cleanup,
+  optimise,
   trim,
   insert,
   fromList,
@@ -43,6 +44,14 @@ cleanup :: LRUCache k v -> LRUCache k v
 cleanup cache =
   cache
     { cTick = 0
+    , cQueue = OrdPSQ.empty
+    }
+
+optimise :: Word64 -> LRUCache k v -> LRUCache k v
+optimise capacity cache =
+  cache
+    { cCapacity = capacity
+    , cTick = 0
     , cQueue = OrdPSQ.empty
     }
 

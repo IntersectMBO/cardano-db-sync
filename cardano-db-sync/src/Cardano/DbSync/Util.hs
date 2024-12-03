@@ -14,6 +14,7 @@ module Cardano.DbSync.Util (
   fmap3,
   getSyncStatus,
   isSyncedWithinSeconds,
+  isSyncedWithintwoMinutes,
   liftedLogException,
   logActionDuration,
   logException,
@@ -75,9 +76,6 @@ cardanoBlockSlotNo = blockSlot
 fmap3 :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))
 fmap3 = fmap . fmap . fmap
 
-getSyncStatus :: SlotDetails -> SyncState
-getSyncStatus sd = isSyncedWithinSeconds sd 120
-
 isSyncedWithinSeconds :: SlotDetails -> Word -> SyncState
 isSyncedWithinSeconds sd target =
   -- diffUTCTime returns seconds.
@@ -85,6 +83,12 @@ isSyncedWithinSeconds sd target =
    in if fromIntegral (abs secDiff) <= target
         then SyncFollowing
         else SyncLagging
+
+getSyncStatus :: SlotDetails -> SyncState
+getSyncStatus sd = isSyncedWithinSeconds sd 120
+
+isSyncedWithintwoMinutes :: SlotDetails -> Bool
+isSyncedWithintwoMinutes sd = isSyncedWithinSeconds sd 120 == SyncFollowing
 
 textPrettyShow :: Show a => a -> Text
 textPrettyShow = Text.pack . ppShow

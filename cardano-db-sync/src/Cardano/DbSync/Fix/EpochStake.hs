@@ -18,7 +18,11 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 import Database.Persist.Sql (SqlBackend)
 
-migrateStakeDistr :: (MonadIO m, MonadBaseControl IO m) => SyncEnv -> Strict.Maybe CardanoLedgerState -> ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+migrateStakeDistr ::
+  (MonadIO m, MonadBaseControl IO m) =>
+  SyncEnv ->
+  Strict.Maybe CardanoLedgerState ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
 migrateStakeDistr env mcls =
   case (envLedgerEnv env, mcls) of
     (HasLedger lenv, Strict.Just cls) -> do

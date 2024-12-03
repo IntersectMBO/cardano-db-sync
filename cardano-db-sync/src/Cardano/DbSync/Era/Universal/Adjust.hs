@@ -89,7 +89,7 @@ deleteReward trce nw cache epochNo (cred, rwd) = do
         where_ (rwdDb ^. Db.RewardType ==. val (Generic.rewardSource rwd))
         where_ (rwdDb ^. Db.RewardSpendableEpoch ==. val (unEpochNo epochNo))
         where_ (rwdDb ^. Db.RewardPoolId ==. val poolId)
-    _ -> pure ()
+    _otherwise -> pure ()
 
 deleteOrphanedRewards :: MonadIO m => EpochNo -> [Db.StakeAddressId] -> ReaderT SqlBackend m ()
 deleteOrphanedRewards (EpochNo epochNo) xs =

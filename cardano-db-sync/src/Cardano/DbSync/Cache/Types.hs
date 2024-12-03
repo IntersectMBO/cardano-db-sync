@@ -60,7 +60,7 @@ data StakeCache = StakeCache
   , scLruCache :: !(LRUCache StakeCred DB.StakeAddressId)
   }
 
--- 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
+-- | 'CacheStatus' enables functions in this module to be called even if the cache has not been initialized.
 -- This is used during genesis insertions, where the cache is not yet initiated, and when the user has disabled the cache functionality.
 data CacheStatus
   = NoCache
@@ -74,7 +74,8 @@ data CacheAction
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cStake :: !(StrictTVar IO StakeCache)
+  { cIsCacheOptimised :: !(StrictTVar IO Bool)
+  , cStake :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
@@ -129,6 +130,7 @@ data CacheEpoch = CacheEpoch
 textShowStats :: CacheStatus -> IO Text
 textShowStats NoCache = pure "NoCache"
 textShowStats (ActiveCache ic) = do
+  isCacheOptimised <- readTVarIO $ cIsCacheOptimised ic
   stats <- readTVarIO $ cStats ic
   stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
@@ -138,6 +140,7 @@ textShowStats (ActiveCache ic) = do
   pure $
     mconcat
       [ "\nCache Statistics:"
+      , "\n  Caches Optimised: " <> textShow isCacheOptimised
       , "\n  Stake Addresses: "
       , "cache sizes: "
       , textShow (Map.size $ scStableCache stakeHashRaws)
@@ -211,6 +214,7 @@ useNoCache = NoCache
 
 newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
 newEmptyCache CacheCapacity {..} = liftIO $ do
+  cIsCacheOptimised <- newTVarIO False
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
   cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
@@ -222,7 +226,8 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
 
   pure . ActiveCache $
     CacheInternal
-      { cStake = cStake
+      { cIsCacheOptimised = cIsCacheOptimised
+      , cStake = cStake
       , cPools = cPools
       , cDatum = cDatum
       , cMultiAssets = cMultiAssets

@@ -22,6 +22,7 @@ module Cardano.DbSync.Cache (
   queryStakeAddrWithCache,
   queryTxIdWithCache,
   rollbackCache,
+  optimiseCaches,
   tryUpdateCacheTx,
 
   -- * CacheStatistics
@@ -79,6 +80,26 @@ rollbackCache (ActiveCache cache) blockId = do
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
     atomically $ modifyTVar (cTxIds cache) FIFO.cleanupCache
     void $ rollbackMapEpochInCache cache blockId
+
+-- | When syncing and we get within 2 minutes of the tip, we can optimise the caches
+-- and set the flag to True on ActiveCache.leaving the following caches as they are:
+-- cPools, cPrevBlock, Cstats, cEpoch
+optimiseCaches :: MonadIO m => CacheStatus -> ReaderT SqlBackend m ()
+optimiseCaches cache =
+  case cache of
+    NoCache -> pure ()
+    ActiveCache c ->
+      withCacheOptimisationCheck c (pure ()) $
+        liftIO $ do
+          -- empty caches not to be used anymore
+          atomically $ modifyTVar (cTxIds c) FIFO.cleanupCache
+          atomically $ writeTVar (cStake c) (StakeCache Map.empty (LRU.empty 0))
+          atomically $ modifyTVar (cDatum c) (LRU.optimise 0)
+          -- empty then limit the capacity of the cache
+          atomically $ writeTVar (cMultiAssets c) (LRU.empty 50000)
+          -- set the flag to True
+          atomically $ writeTVar (cIsCacheOptimised c) True
+          pure ()
 
 getCacheStatistics :: CacheStatus -> IO CacheStatistics
 getCacheStatistics cs =
@@ -150,34 +171,36 @@ queryStakeAddrWithCacheRetBs ::
 queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred) = do
   let bs = Ledger.serialiseRewardAccount ra
   case cache of
-    NoCache -> do
-      mapLeft (,bs) <$> resolveStakeAddress bs
+    NoCache -> rsStkAdrrs bs
     ActiveCache ci -> do
-      stakeCache <- liftIO $ readTVarIO (cStake ci)
-      case queryStakeCache cred stakeCache of
-        Just (addrId, stakeCache') -> do
-          liftIO $ hitCreds (cStats ci)
-          case cacheUA of
-            EvictAndUpdateCache -> do
-              liftIO $ atomically $ writeTVar (cStake ci) $ deleteStakeCache cred stakeCache'
-              pure $ Right addrId
-            _other -> do
-              liftIO $ atomically $ writeTVar (cStake ci) stakeCache'
-              pure $ Right addrId
-        Nothing -> do
-          queryRes <- mapLeft (,bs) <$> resolveStakeAddress bs
-          liftIO $ missCreds (cStats ci)
-          case queryRes of
-            Left _ -> pure queryRes
-            Right stakeAddrsId -> do
-              let !stakeCache' = case cacheUA of
-                    UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
-                    UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
-                    _ -> stakeCache
-              liftIO $
-                atomically $
-                  writeTVar (cStake ci) stakeCache'
-              pure $ Right stakeAddrsId
+      withCacheOptimisationCheck ci (rsStkAdrrs bs) $ do
+        stakeCache <- liftIO $ readTVarIO (cStake ci)
+        case queryStakeCache cred stakeCache of
+          Just (addrId, stakeCache') -> do
+            liftIO $ hitCreds (cStats ci)
+            case cacheUA of
+              EvictAndUpdateCache -> do
+                liftIO $ atomically $ writeTVar (cStake ci) $ deleteStakeCache cred stakeCache'
+                pure $ Right addrId
+              _other -> do
+                liftIO $ atomically $ writeTVar (cStake ci) stakeCache'
+                pure $ Right addrId
+          Nothing -> do
+            queryRes <- mapLeft (,bs) <$> resolveStakeAddress bs
+            liftIO $ missCreds (cStats ci)
+            case queryRes of
+              Left _ -> pure queryRes
+              Right stakeAddrsId -> do
+                let !stakeCache' = case cacheUA of
+                      UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
+                      UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
+                      _otherwise -> stakeCache
+                liftIO $
+                  atomically $
+                    writeTVar (cStake ci) stakeCache'
+                pure $ Right stakeAddrsId
+  where
+    rsStkAdrrs bs = mapLeft (,bs) <$> resolveStakeAddress bs
 
 -- | True if it was found in LRU
 queryStakeCache :: StakeCred -> StakeCache -> Maybe (DB.StakeAddressId, StakeCache)
@@ -306,26 +329,29 @@ queryMAWithCache ::
   ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
 queryMAWithCache cache policyId asset =
   case cache of
-    NoCache -> do
+    NoCache -> queryDb
+    ActiveCache ci -> do
+      withCacheOptimisationCheck ci queryDb $ do
+        mp <- liftIO $ readTVarIO (cMultiAssets ci)
+        case LRU.lookup (policyId, asset) mp of
+          Just (maId, mp') -> do
+            liftIO $ hitMAssets (cStats ci)
+            liftIO $ atomically $ writeTVar (cMultiAssets ci) mp'
+            pure $ Right maId
+          Nothing -> do
+            liftIO $ missMAssets (cStats ci)
+            -- miss. The lookup doesn't change the cache on a miss.
+            let !policyBs = Generic.unScriptHash $ policyID policyId
+            let !assetNameBs = Generic.unAssetName asset
+            maId <- maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
+            whenRight maId $
+              liftIO . atomically . modifyTVar (cMultiAssets ci) . LRU.insert (policyId, asset)
+            pure maId
+  where
+    queryDb = do
       let !policyBs = Generic.unScriptHash $ policyID policyId
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
-    ActiveCache ci -> do
-      mp <- liftIO $ readTVarIO (cMultiAssets ci)
-      case LRU.lookup (policyId, asset) mp of
-        Just (maId, mp') -> do
-          liftIO $ hitMAssets (cStats ci)
-          liftIO $ atomically $ writeTVar (cMultiAssets ci) mp'
-          pure $ Right maId
-        Nothing -> do
-          liftIO $ missMAssets (cStats ci)
-          -- miss. The lookup doesn't change the cache on a miss.
-          let !policyBs = Generic.unScriptHash $ policyID policyId
-          let !assetNameBs = Generic.unAssetName asset
-          maId <- maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
-          whenRight maId $
-            liftIO . atomically . modifyTVar (cMultiAssets ci) . LRU.insert (policyId, asset)
-          pure maId
 
 queryPrevBlockWithCache ::
   MonadIO m =>
@@ -364,30 +390,32 @@ queryTxIdWithCache ::
 queryTxIdWithCache cache txIdLedger = do
   case cache of
     -- Direct database query if no cache.
-    NoCache -> DB.queryTxId txHash
-    ActiveCache cacheInternal -> do
-      -- Read current cache state.
-      cacheTx <- liftIO $ readTVarIO (cTxIds cacheInternal)
+    NoCache -> qTxHash
+    ActiveCache ci ->
+      withCacheOptimisationCheck ci qTxHash $ do
+        -- Read current cache state.
+        cacheTx <- liftIO $ readTVarIO (cTxIds ci)
 
-      case FIFO.lookup txIdLedger cacheTx of
-        -- Cache hit, return the transaction ID.
-        Just txId -> do
-          liftIO $ hitTxIds (cStats cacheInternal)
-          pure $ Right txId
-        -- Cache miss.
-        Nothing -> do
-          eTxId <- DB.queryTxId txHash
-          liftIO $ missTxIds (cStats cacheInternal)
-          case eTxId of
-            Right txId -> do
-              -- Update cache.
-              liftIO $ atomically $ modifyTVar (cTxIds cacheInternal) $ FIFO.insert txIdLedger txId
-              -- Return ID after updating cache.
-              pure $ Right txId
-            -- Return lookup failure.
-            Left _ -> pure $ Left $ DB.DbLookupTxHash txHash
+        case FIFO.lookup txIdLedger cacheTx of
+          -- Cache hit, return the transaction ID.
+          Just txId -> do
+            liftIO $ hitTxIds (cStats ci)
+            pure $ Right txId
+          -- Cache miss.
+          Nothing -> do
+            eTxId <- qTxHash
+            liftIO $ missTxIds (cStats ci)
+            case eTxId of
+              Right txId -> do
+                -- Update cache.
+                liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
+                -- Return ID after updating cache.
+                pure $ Right txId
+              -- Return lookup failure.
+              Left _ -> pure $ Left $ DB.DbLookupTxHash txHash
   where
     txHash = Generic.unTxHash txIdLedger
+    qTxHash = DB.queryTxId txHash
 
 tryUpdateCacheTx ::
   MonadIO m =>
@@ -395,11 +423,9 @@ tryUpdateCacheTx ::
   Ledger.TxId StandardCrypto ->
   DB.TxId ->
   m ()
-tryUpdateCacheTx cache ledgerTxId txId = do
-  case cache of
-    NoCache -> pure ()
-    ActiveCache ci -> do
-      liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId txId
+tryUpdateCacheTx (ActiveCache ci) ledgerTxId txId =
+  liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert ledgerTxId txId
+tryUpdateCacheTx _ _ _ = pure ()
 
 insertBlockAndCache ::
   (MonadIO m, MonadBaseControl IO m) =>
@@ -408,13 +434,16 @@ insertBlockAndCache ::
   ReaderT SqlBackend m DB.BlockId
 insertBlockAndCache cache block =
   case cache of
-    NoCache -> DB.insertBlock block
-    ActiveCache ci -> do
-      bid <- DB.insertBlock block
-      liftIO $ do
-        missPrevBlock (cStats ci)
-        atomically $ writeTVar (cPrevBlock ci) $ Just (bid, DB.blockHash block)
-      pure bid
+    NoCache -> insBlck
+    ActiveCache ci ->
+      withCacheOptimisationCheck ci insBlck $ do
+        bid <- insBlck
+        liftIO $ do
+          missPrevBlock (cStats ci)
+          atomically $ writeTVar (cPrevBlock ci) $ Just (bid, DB.blockHash block)
+        pure bid
+  where
+    insBlck = DB.insertBlock block
 
 queryDatum ::
   MonadIO m =>
@@ -423,18 +452,21 @@ queryDatum ::
   ReaderT SqlBackend m (Maybe DB.DatumId)
 queryDatum cache hsh = do
   case cache of
-    NoCache -> DB.queryDatum $ Generic.dataHashToBytes hsh
+    NoCache -> queryDtm
     ActiveCache ci -> do
-      mp <- liftIO $ readTVarIO (cDatum ci)
-      case LRU.lookup hsh mp of
-        Just (datumId, mp') -> do
-          liftIO $ hitDatum (cStats ci)
-          liftIO $ atomically $ writeTVar (cDatum ci) mp'
-          pure $ Just datumId
-        Nothing -> do
-          liftIO $ missDatum (cStats ci)
-          -- miss. The lookup doesn't change the cache on a miss.
-          DB.queryDatum $ Generic.dataHashToBytes hsh
+      withCacheOptimisationCheck ci queryDtm $ do
+        mp <- liftIO $ readTVarIO (cDatum ci)
+        case LRU.lookup hsh mp of
+          Just (datumId, mp') -> do
+            liftIO $ hitDatum (cStats ci)
+            liftIO $ atomically $ writeTVar (cDatum ci) mp'
+            pure $ Just datumId
+          Nothing -> do
+            liftIO $ missDatum (cStats ci)
+            -- miss. The lookup doesn't change the cache on a miss.
+            queryDtm
+  where
+    queryDtm = DB.queryDatum $ Generic.dataHashToBytes hsh
 
 -- This assumes the entry is not cached.
 insertDatumAndCache ::
@@ -447,12 +479,25 @@ insertDatumAndCache cache hsh dt = do
   datumId <- DB.insertDatum dt
   case cache of
     NoCache -> pure datumId
-    ActiveCache ci -> do
-      liftIO $
-        atomically $
-          modifyTVar (cDatum ci) $
-            LRU.insert hsh datumId
-      pure datumId
+    ActiveCache ci ->
+      withCacheOptimisationCheck ci (pure datumId) $ do
+        liftIO $
+          atomically $
+            modifyTVar (cDatum ci) $
+              LRU.insert hsh datumId
+        pure datumId
+
+withCacheOptimisationCheck ::
+  MonadIO m =>
+  CacheInternal ->
+  m a -> -- Action to perform if cache is optimised
+  m a -> -- Action to perform if cache is not optimised
+  m a
+withCacheOptimisationCheck ci ifOptimised ifNotOptimised = do
+  isCachedOptimised <- liftIO $ readTVarIO (cIsCacheOptimised ci)
+  if isCachedOptimised
+    then ifOptimised
+    else ifNotOptimised
 
 -- Stakes
 hitCreds :: StrictTVar IO CacheStatistics -> IO ()
