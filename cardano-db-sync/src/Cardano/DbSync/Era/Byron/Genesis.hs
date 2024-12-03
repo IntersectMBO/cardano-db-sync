@@ -21,6 +21,8 @@ import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Cache (insertAddressUsingCache)
+import Cardano.DbSync.Cache.Types (CacheAction (..))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
@@ -228,10 +230,12 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
           DB.TxOutVariantAddress -> do
             let addrRaw = serialize' address
                 vAddress = mkVAddress addrRaw
-            addrDetailId <- insertAddress addrRaw vAddress
+            addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
             void . DB.insertTxOut $
               DB.VTxOutW (mkVTxOut txId addrDetailId) Nothing
   where
+    cache = envCache syncEnv
+
     mkVTxOut :: DB.TxId -> V.AddressId -> V.TxOut
     mkVTxOut txId addrDetailId =
       V.TxOut
@@ -256,19 +260,7 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
         , V.addressStakeAddressId = Nothing -- Byron does not have a stake address.
         }
 
-    insertAddress ::
-      (MonadBaseControl IO m, MonadIO m) =>
-      ByteString ->
-      V.Address ->
-      ReaderT SqlBackend m V.AddressId
-    insertAddress addrRaw vAdrs = do
-      mAddrId <- DB.queryAddressId addrRaw
-      case mAddrId of
-        Nothing -> DB.insertAddress vAdrs
-        -- this address is already in the database, so we can just return the id to be linked to the txOut.
-        Just addrId -> pure addrId
-
--- -----------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 configGenesisHash :: Byron.Config -> ByteString
 configGenesisHash =
