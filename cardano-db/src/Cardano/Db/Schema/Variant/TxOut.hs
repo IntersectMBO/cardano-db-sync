@@ -47,6 +47,7 @@ share
     stakeAddressId      StakeAddressId Maybe noreference
     txId                TxId                noreference
     value               DbLovelace          sqltype=lovelace
+    maTxOut             Text Maybe          sqltype=jsonb
     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
 
   CollateralTxOut

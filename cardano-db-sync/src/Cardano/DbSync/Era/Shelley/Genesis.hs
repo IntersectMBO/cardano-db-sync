@@ -264,6 +264,7 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
             , C.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
             , C.txOutTxId = txId
             , C.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+            , C.txOutMaTxOut = Nothing
             , C.txOutConsumedByTxId = Nothing
             }
     DB.TxOutVariantAddress -> do
@@ -284,6 +285,7 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
         , V.txOutInlineDatumId = Nothing
         , V.txOutReferenceScriptId = Nothing
         , V.txOutTxId = txId
+        , V.txOutMaTxOut = Nothing
         , V.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
         , V.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
         }
