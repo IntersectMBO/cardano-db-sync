@@ -31,6 +31,7 @@ module Cardano.DbSync.Cache.Types (
 ) where
 
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
@@ -82,6 +83,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
+  , cAddress :: !(StrictTVar IO (LRUCache ByteString V.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache (Ledger.TxId StandardCrypto) DB.TxId))
   }
 
@@ -96,13 +98,16 @@ data CacheStatistics = CacheStatistics
   , multiAssetsQueries :: !Word64
   , prevBlockHits :: !Word64
   , prevBlockQueries :: !Word64
+  , addressHits :: !Word64
+  , addressQueries :: !Word64
   , txIdsHits :: !Word64
   , txIdsQueries :: !Word64
   }
 
 -- CacheCapacity is used to define capacities for different types of cache entries.
 data CacheCapacity = CacheCapacity
-  { cacheCapacityStake :: !Word64
+  { cacheCapacityAddress :: !Word64
+  , cacheCapacityStake :: !Word64
   , cacheCapacityDatum :: !Word64
   , cacheCapacityMultiAsset :: !Word64
   , cacheCapacityTx :: !Word64
@@ -128,7 +133,7 @@ data CacheEpoch = CacheEpoch
   deriving (Show)
 
 textShowStats :: CacheStatus -> IO Text
-textShowStats NoCache = pure "NoCache"
+textShowStats NoCache = pure "No Caches"
 textShowStats (ActiveCache ic) = do
   isCacheOptimised <- readTVarIO $ cIsCacheOptimised ic
   stats <- readTVarIO $ cStats ic
@@ -137,77 +142,77 @@ textShowStats (ActiveCache ic) = do
   datums <- readTVarIO (cDatum ic)
   mAssets <- readTVarIO (cMultiAssets ic)
   txIds <- readTVarIO (cTxIds ic)
+  address <- readTVarIO (cAddress ic)
   pure $
     mconcat
       [ "\nCache Statistics:"
       , "\n  Caches Optimised: " <> textShow isCacheOptimised
-      , "\n  Stake Addresses: "
-      , "cache sizes: "
-      , textShow (Map.size $ scStableCache stakeHashRaws)
-      , " and "
-      , textShow (LRU.getSize $ scLruCache stakeHashRaws)
-      , if credsQueries stats == 0
-          then ""
-          else ", hit rate: " <> textShow (100 * credsHits stats `div` credsQueries stats) <> "%"
-      , ", hits: "
-      , textShow (credsHits stats)
-      , ", misses: "
-      , textShow (credsQueries stats - credsHits stats)
-      , "\n  Pools: "
-      , "cache size: "
-      , textShow (Map.size pools)
-      , if poolsQueries stats == 0
-          then ""
-          else ", hit rate: " <> textShow (100 * poolsHits stats `div` poolsQueries stats) <> "%"
-      , ", hits: "
-      , textShow (poolsHits stats)
-      , ", misses: "
-      , textShow (poolsQueries stats - poolsHits stats)
-      , "\n  Datums: "
-      , "cache capacity: "
-      , textShow (LRU.getCapacity datums)
-      , ", cache size: "
-      , textShow (LRU.getSize datums)
-      , if datumQueries stats == 0
-          then ""
-          else ", hit rate: " <> textShow (100 * datumHits stats `div` datumQueries stats) <> "%"
-      , ", hits: "
-      , textShow (datumHits stats)
-      , ", misses: "
-      , textShow (datumQueries stats - datumHits stats)
-      , "\n  Multi Assets: "
-      , "cache capacity: "
-      , textShow (LRU.getCapacity mAssets)
-      , ", cache size: "
-      , textShow (LRU.getSize mAssets)
-      , if multiAssetsQueries stats == 0
-          then ""
-          else ", hit rate: " <> textShow (100 * multiAssetsHits stats `div` multiAssetsQueries stats) <> "%"
-      , ", hits: "
-      , textShow (multiAssetsHits stats)
-      , ", misses: "
-      , textShow (multiAssetsQueries stats - multiAssetsHits stats)
-      , "\n  Previous Block: "
-      , if prevBlockQueries stats == 0
-          then ""
-          else "hit rate: " <> textShow (100 * prevBlockHits stats `div` prevBlockQueries stats) <> "%"
-      , ", hits: "
-      , textShow (prevBlockHits stats)
-      , ", misses: "
-      , textShow (prevBlockQueries stats - prevBlockHits stats)
-      , "\n  TxId: "
-      , "cache size: "
-      , textShow (FIFO.getSize txIds)
-      , ", cache capacity: "
-      , textShow (FIFO.getCapacity txIds)
-      , if txIdsQueries stats == 0
-          then ""
-          else ", hit rate: " <> textShow (100 * txIdsHits stats `div` txIdsQueries stats) <> "%"
-      , ", hits: "
-      , textShow (txIdsHits stats)
-      , ", misses: "
-      , textShow (txIdsQueries stats - txIdsHits stats)
+      , textCacheSection "Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
+      , textMapSection "Pools" pools (poolsHits stats) (poolsQueries stats)
+      , textLruSection "Datums" datums (datumHits stats) (datumQueries stats)
+      , textLruSection "Addresses" address (addressHits stats) (addressQueries stats)
+      , textLruSection "Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
+      , textPrevBlockSection stats
+      , textFifoSection "TxId" txIds (txIdsHits stats) (txIdsQueries stats)
       ]
+  where
+    textCacheSection title cacheLru cacheStable hits queries =
+      mconcat
+        [ "\n  " <> title <> ": "
+        , "cache sizes: "
+        , textShow (Map.size cacheStable)
+        , " and "
+        , textShow (LRU.getSize cacheLru)
+        , hitMissStats hits queries
+        ]
+
+    textMapSection title cache hits queries =
+      mconcat
+        [ "\n  " <> title <> ": "
+        , "cache size: "
+        , textShow (Map.size cache)
+        , hitMissStats hits queries
+        ]
+
+    textLruSection title cache hits queries =
+      mconcat
+        [ "\n  " <> title <> ": "
+        , "cache capacity: "
+        , textShow (LRU.getCapacity cache)
+        , ", cache size: "
+        , textShow (LRU.getSize cache)
+        , hitMissStats hits queries
+        ]
+
+    textFifoSection title cache hits queries =
+      mconcat
+        [ "\n  " <> title <> ": "
+        , "cache size: "
+        , textShow (FIFO.getSize cache)
+        , ", cache capacity: "
+        , textShow (FIFO.getCapacity cache)
+        , hitMissStats hits queries
+        ]
+
+    textPrevBlockSection stats =
+      mconcat
+        [ "\n  Previous Block: "
+        , hitMissStats (prevBlockHits stats) (prevBlockQueries stats)
+        ]
+
+    hitMissStats hits queries =
+      mconcat
+        [ hitRate hits queries
+        , ", hits: "
+        , textShow hits
+        , ", misses: "
+        , textShow (queries - hits)
+        ]
+
+    hitRate hits queries =
+      if queries == 0
+        then ""
+        else ", hit rate: " <> textShow (100 * hits `div` queries) <> "%"
 
 useNoCache :: CacheStatus
 useNoCache = NoCache
@@ -218,6 +223,7 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
   cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
+  cAddress <- newTVarIO (LRU.empty cacheCapacityAddress)
   cMultiAssets <- newTVarIO (LRU.empty cacheCapacityMultiAsset)
   cPrevBlock <- newTVarIO Nothing
   cStats <- newTVarIO initCacheStatistics
@@ -234,11 +240,12 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
       , cPrevBlock = cPrevBlock
       , cStats = cStats
       , cEpoch = cEpoch
+      , cAddress = cAddress
       , cTxIds = cTxIds
       }
 
 initCacheStatistics :: CacheStatistics
-initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0
+initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 
 initCacheEpoch :: CacheEpoch
 initCacheEpoch = CacheEpoch mempty Nothing
