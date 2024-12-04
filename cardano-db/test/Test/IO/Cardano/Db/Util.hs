@@ -113,4 +113,5 @@ mkTxOutCore blkId txId =
           , C.txOutStakeAddressId = Nothing
           , C.txOutTxId = txId
           , C.txOutValue = DbLovelace 1000000000
+          , C.txOutMaTxOut = Nothing
           }
