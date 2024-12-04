@@ -54,7 +54,8 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import Data.Aeson.Types (object, withObject)
-import Data.ByteString.Short (toShort)
+import qualified Data.ByteString.Base16 as Base16
+import Data.ByteString.Short (fromShort, toShort)
 import qualified Data.Map as Map
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
 
@@ -182,7 +183,8 @@ instance FromJSON TxOutMultiAsset where
       <*> o .: "amount"
     where
       parseAssetName :: Text -> AssetName
-      parseAssetName t = AssetName $ toShort (encodeUtf8 t)
+      parseAssetName =
+        AssetName . toShort . Base16.decodeLenient . encodeUtf8
 
 toTxCert :: Word16 -> Cert -> TxCertificate
 toTxCert idx dcert =
