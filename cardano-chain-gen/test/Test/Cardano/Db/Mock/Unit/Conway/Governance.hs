@@ -31,8 +31,6 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
 import Cardano.Ledger.Core (txIdTx)
-import Cardano.Ledger.Credential (Credential (..))
-import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Ledger.SafeHash (SafeToHash (..))
 import Cardano.Mock.ChainSync.Server (IOManager, ServerHandle)
 import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
@@ -168,13 +166,11 @@ chainedNewCommittee =
 
     let
       -- Propose a new committee member
-      committee1Hash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
-      committee1Cred = KeyHashObj (KeyHash committee1Hash)
+      committee1Cred = Prelude.head Forging.unregisteredCommitteeCreds
       proposal1 = Conway.mkAddCommitteeTx Nothing committee1Cred
 
       -- Propose another, using proposal1 as the prev governance action
-      committee2Hash = "f15d3cfda3ac52c86d2d98925419795588e74f4e270a3c17beabeaff"
-      committee2Cred = KeyHashObj (KeyHash committee2Hash)
+      committee2Cred = Forging.unregisteredCommitteeCreds Prelude.!! 1
       proposal2 = Conway.mkAddCommitteeTx (Just prevGovActionId) committee2Cred
       proposal2TxHash = unTxHash (txIdTx proposal2)
 
@@ -268,8 +264,7 @@ proposeNewCommittee :: AlonzoTx Consensus.StandardConway
 proposeNewCommittee =
   Conway.mkAddCommitteeTx Nothing committeeCred
   where
-    committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
-    committeeCred = KeyHashObj (KeyHash committeeHash)
+    committeeCred = Prelude.head Forging.unregisteredCommitteeCreds
 
 rollbackBlocks ::
   Interpreter ->
