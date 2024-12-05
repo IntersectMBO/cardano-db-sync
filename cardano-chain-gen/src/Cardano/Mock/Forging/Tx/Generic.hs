@@ -25,6 +25,7 @@ module Cardano.Mock.Forging.Tx.Generic (
   registeredByronGenesisKeys,
   registeredShelleyGenesisKeys,
   bootstrapCommitteeCreds,
+  unregisteredCommitteeCreds,
   unregisteredDRepIds,
   consPoolParams,
   getPoolStakeCreds,
@@ -290,6 +291,12 @@ bootstrapCommitteeCreds =
     ( ScriptHashObj $ ScriptHash "d5d09d9380cf9dcde1f3c6cd88b08ca9e00a3d550022ca7ee4026342"
     , KeyHashObj $ KeyHash "ca283340187f1b87e871d903c0178ddfbf4aa896a398787ceba20f98"
     )
+  ]
+
+unregisteredCommitteeCreds :: [Credential 'ColdCommitteeRole StandardCrypto]
+unregisteredCommitteeCreds =
+  [ KeyHashObj $ KeyHash "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
+  , KeyHashObj $ KeyHash "f15d3cfda3ac52c86d2d98925419795588e74f4e270a3c17beabeaff"
   ]
 
 unregisteredDRepIds :: [Credential 'DRepRole StandardCrypto]
