@@ -7,7 +7,6 @@ import qualified Cardano.DbSync.Gen as Gen
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
 
 tests :: IO Bool
 tests =
