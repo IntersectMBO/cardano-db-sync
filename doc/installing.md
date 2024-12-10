@@ -7,6 +7,7 @@ This guide assumes you have the following tools:
  * [Git](https://git-scm.com/download)
  * [Cardano Node](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/install.md)
  * [Postgres Development Libraries (libpq)](https://www.postgresql.org/download/)
+ * [ICU Development Libraries (libicu-dev)](https://unicode-org.github.io/icu/download/)
  * [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/)
 
 In addition, Cardano DB Sync requires the following software (instructions below):
