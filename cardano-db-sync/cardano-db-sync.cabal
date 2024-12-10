@@ -373,7 +373,7 @@ test-suite test
                       , cardano-ledger-allegra:{cardano-ledger-allegra,testlib}
                       , cardano-ledger-alonzo:{testlib}
                       , cardano-ledger-byron
-                      , cardano-ledger-mary:{testlib}
+                      , cardano-ledger-mary:{cardano-ledger-mary,testlib}
                       , cardano-ledger-shelley:{cardano-ledger-shelley,testlib} >= 1.12.3.0
                       , cardano-db
                       , cardano-db-sync

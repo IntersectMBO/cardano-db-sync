@@ -22,6 +22,7 @@ module Cardano.DbSync.Gen (
 
   -- * Tx Type generators
   txOutMultiAsset,
+  multiAsset,
 
   -- * Utility generators
   hashBlake2b_256,
@@ -41,6 +42,8 @@ import Cardano.Db (PGPassSource (..))
 import Cardano.DbSync
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Era.Shelley.Generic (TxOutMultiAsset (..))
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Mary.Value (MultiAsset)
 import Cardano.Ledger.Slot (EpochNo (..))
 import Cardano.Prelude
 import Data.ByteString.Short (ShortByteString (), toShort)
@@ -202,6 +205,9 @@ txOutMultiAsset =
     <$> arbitrary
     <*> arbitrary
     <*> Gen.integral (Range.linear 0 999_999_999_999)
+
+multiAsset :: Gen (MultiAsset StandardCrypto)
+multiAsset = arbitrary
 
 hashBlake2b_256 :: MonadGen m => m (Maybe (Hash Blake2b_256 ByteString))
 hashBlake2b_256 = serialiseHash <$> Gen.bytes (Range.linear 0 100)
