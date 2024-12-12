@@ -217,13 +217,13 @@ class HasBody tp where
 
 instance HasBody OtherOffChainData where
   type Body OtherOffChainData = MinimalBody OtherOffChainData
-  parseAuthors o = o .: "authors"
+  parseAuthors o = o .:? "authors"
   refrenceTypes = ["Other", "GovernanceMetadata"]
   toMinimal = id
 
 instance HasBody GovernanceOffChainData where
   type Body GovernanceOffChainData = GABody
-  parseAuthors o = o .: "authors"
+  parseAuthors o = o .:? "authors"
   refrenceTypes = ["Other", "GovernanceMetadata"]
   toMinimal = minimalBodyGA
 
