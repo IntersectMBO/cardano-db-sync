@@ -86,14 +86,14 @@ querydatumInfo :: MonadIO m => DatumId -> ReaderT SqlBackend m (Maybe (ByteStrin
 querydatumInfo datumId = do
   res <- select $ do
     (_blk :& _tx :& datum :& prevBlock) <-
-      from
-        $ table @Block
+      from $
+        table @Block
           `innerJoin` table @Tx
-        `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+            `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
           `innerJoin` table @Datum
-        `on` (\(_blk :& tx :& datum) -> datum ^. DatumTxId ==. tx ^. TxId)
+            `on` (\(_blk :& tx :& datum) -> datum ^. DatumTxId ==. tx ^. TxId)
           `innerJoin` table @Block
-        `on` (\(blk :& _tx :& _datum :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+            `on` (\(blk :& _tx :& _datum :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
     where_ (datum ^. DatumId ==. val datumId)
     pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
   pure $ unValue2 <$> listToMaybe res
@@ -126,14 +126,14 @@ queryRedeemerDataInfo :: MonadIO m => RedeemerDataId -> ReaderT SqlBackend m (Ma
 queryRedeemerDataInfo rdmDataId = do
   res <- select $ do
     (_blk :& _tx :& rdmData :& prevBlock) <-
-      from
-        $ table @Block
+      from $
+        table @Block
           `innerJoin` table @Tx
-        `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+            `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
           `innerJoin` table @RedeemerData
-        `on` (\(_blk :& tx :& rdmData) -> rdmData ^. RedeemerDataTxId ==. tx ^. TxId)
+            `on` (\(_blk :& tx :& rdmData) -> rdmData ^. RedeemerDataTxId ==. tx ^. TxId)
           `innerJoin` table @Block
-        `on` (\(blk :& _tx :& _rdmData :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+            `on` (\(blk :& _tx :& _rdmData :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
     where_ (rdmData ^. RedeemerDataId ==. val rdmDataId)
     pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)
   pure $ unValue2 <$> listToMaybe res
@@ -169,14 +169,14 @@ queryScriptInfo :: MonadIO m => ScriptId -> ReaderT SqlBackend m (Maybe (ByteStr
 queryScriptInfo scriptId = do
   res <- select $ do
     (_blk :& _tx :& scr :& prevBlock) <-
-      from
-        $ table @Block
+      from $
+        table @Block
           `innerJoin` table @Tx
-        `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
+            `on` (\(blk :& tx) -> tx ^. TxBlockId ==. blk ^. BlockId)
           `innerJoin` table @Script
-        `on` (\(_blk :& tx :& scr) -> scr ^. ScriptTxId ==. tx ^. TxId)
+            `on` (\(_blk :& tx :& scr) -> scr ^. ScriptTxId ==. tx ^. TxId)
           `innerJoin` table @Block
-        `on` (\(blk :& _tx :& _scr :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
+            `on` (\(blk :& _tx :& _scr :& prevBlk) -> blk ^. BlockPreviousId ==. just (prevBlk ^. BlockId))
     where_ (scr ^. ScriptType ==. val PlutusV1 ||. scr ^. ScriptType ==. val PlutusV2)
     where_ (scr ^. ScriptId ==. val scriptId)
     pure (prevBlock ^. BlockHash, prevBlock ^. BlockSlotNo)

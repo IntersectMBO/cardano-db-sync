@@ -57,8 +57,9 @@ adjustEpochRewards ::
   ReaderT SqlBackend m ()
 adjustEpochRewards trce nw cache epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
-  liftIO . logInfo trce $
-    mconcat
+  liftIO
+    . logInfo trce
+    $ mconcat
       [ "Removing "
       , if null eraIgnored then "" else textShow (length eraIgnored) <> " rewards and "
       , show (length creds)

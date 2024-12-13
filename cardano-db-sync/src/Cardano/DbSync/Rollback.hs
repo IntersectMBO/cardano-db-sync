@@ -91,8 +91,8 @@ prepareRollback syncEnv point serverTip =
         At blk -> do
           nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
           mBlockNo <-
-            liftLookupFail "Rollback.prepareRollback" $
-              DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+            liftLookupFail "Rollback.prepareRollback"
+              $ DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
           liftIO
             . logInfo trce
             $ mconcat

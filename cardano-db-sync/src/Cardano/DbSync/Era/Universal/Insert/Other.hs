@@ -116,14 +116,14 @@ insertDatum tracer cache txId txd = do
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
-      lift $
-        insertDatumAndCache cache (Generic.txDataHash txd) $
-          DB.Datum
-            { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
-            , DB.datumTxId = txId
-            , DB.datumValue = value
-            , DB.datumBytes = Generic.txDataBytes txd
-            }
+      lift
+        $ insertDatumAndCache cache (Generic.txDataHash txd)
+        $ DB.Datum
+          { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
+          , DB.datumTxId = txId
+          , DB.datumValue = value
+          , DB.datumBytes = Generic.txDataBytes txd
+          }
 
 insertWithdrawals ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -136,8 +136,10 @@ insertWithdrawals ::
 insertWithdrawals tracer cache txId redeemers txWdrl = do
   addrId <-
     lift $ queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
-  void . lift . DB.insertWithdrawal $
-    DB.Withdrawal
+  void
+    . lift
+    . DB.insertWithdrawal
+    $ DB.Withdrawal
       { DB.withdrawalAddrId = addrId
       , DB.withdrawalTxId = txId
       , DB.withdrawalAmount = Generic.coinToDbLovelace $ Generic.txwAmount txWdrl
@@ -174,8 +176,8 @@ insertMultiAsset cache policy aName = do
   case mId of
     Right maId -> pure maId
     Left (policyBs, assetNameBs) ->
-      DB.insertMultiAssetUnchecked $
-        DB.MultiAsset
+      DB.insertMultiAssetUnchecked
+        $ DB.MultiAsset
           { DB.multiAssetPolicy = policyBs
           , DB.multiAssetName = assetNameBs
           , DB.multiAssetFingerprint = DB.unAssetFingerprint (DB.mkAssetFingerprint policyBs assetNameBs)
@@ -193,8 +195,8 @@ insertScript tracer txId script = do
     Just scriptId -> pure scriptId
     Nothing -> do
       json <- scriptConvert script
-      DB.insertScript $
-        DB.Script
+      DB.insertScript
+        $ DB.Script
           { DB.scriptTxId = txId
           , DB.scriptHash = Generic.txScriptHash script
           , DB.scriptType = Generic.txScriptType script

@@ -399,11 +399,17 @@ parseGenSyncNodeConfig o =
     <*> parseJSON (Object o)
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> fmap (fromMaybe True) (o .:? "EnableFutureGenesis")
-    <*> o .: "EnableLogging"
-    <*> o .: "EnableLogMetrics"
+    <*> o
+    .: "EnableLogging"
+    <*> o
+    .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
-    <*> o .:? "insert_options" .!= def
-    <*> o .:? "ipfs_gateway" .!= ["https://ipfs.io/ipfs"]
+    <*> o
+    .:? "insert_options"
+    .!= def
+    <*> o
+    .:? "ipfs_gateway"
+    .!= ["https://ipfs.io/ipfs"]
 
 instance FromJSON SyncProtocol where
   parseJSON o =
@@ -440,19 +446,43 @@ instance FromJSON SyncInsertConfig where
 parseOverrides :: Aeson.Object -> SyncInsertOptions -> Parser SyncInsertOptions
 parseOverrides obj baseOptions = do
   SyncInsertOptions
-    <$> obj .:? "tx_cbor" .!= sioTxCBOR baseOptions
-    <*> obj .:? "tx_out" .!= sioTxOut baseOptions
-    <*> obj .:? "ledger" .!= sioLedger baseOptions
-    <*> obj .:? "shelley" .!= sioShelley baseOptions
+    <$> obj
+    .:? "tx_cbor"
+    .!= sioTxCBOR baseOptions
+    <*> obj
+    .:? "tx_out"
+    .!= sioTxOut baseOptions
+    <*> obj
+    .:? "ledger"
+    .!= sioLedger baseOptions
+    <*> obj
+    .:? "shelley"
+    .!= sioShelley baseOptions
     <*> pure (sioRewards baseOptions)
-    <*> obj .:? "multi_asset" .!= sioMultiAsset baseOptions
-    <*> obj .:? "metadata" .!= sioMetadata baseOptions
-    <*> obj .:? "plutus" .!= sioPlutus baseOptions
-    <*> obj .:? "governance" .!= sioGovernance baseOptions
-    <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData baseOptions
-    <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
-    <*> obj .:? "json_type" .!= sioJsonType baseOptions
-    <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj
+    .:? "multi_asset"
+    .!= sioMultiAsset baseOptions
+    <*> obj
+    .:? "metadata"
+    .!= sioMetadata baseOptions
+    <*> obj
+    .:? "plutus"
+    .!= sioPlutus baseOptions
+    <*> obj
+    .:? "governance"
+    .!= sioGovernance baseOptions
+    <*> obj
+    .:? "offchain_pool_data"
+    .!= sioOffchainPoolData baseOptions
+    <*> obj
+    .:? "pool_stat"
+    .!= sioPoolStats baseOptions
+    <*> obj
+    .:? "json_type"
+    .!= sioJsonType baseOptions
+    <*> obj
+    .:? "remove_jsonb_from_schema"
+    .!= sioRemoveJsonbFromSchema baseOptions
 
 instance ToJSON SyncInsertConfig where
   toJSON (SyncInsertConfig preset options) =
@@ -482,19 +512,43 @@ toJsonIfSet key value = Just $ fromText key .= value
 instance FromJSON SyncInsertOptions where
   parseJSON = Aeson.withObject "SyncInsertOptions" $ \obj ->
     SyncInsertOptions
-      <$> obj .:? "tx_cbor" .!= sioTxCBOR def
-      <*> obj .:? "tx_out" .!= sioTxOut def
-      <*> obj .:? "ledger" .!= sioLedger def
-      <*> obj .:? "shelley" .!= sioShelley def
+      <$> obj
+      .:? "tx_cbor"
+      .!= sioTxCBOR def
+      <*> obj
+      .:? "tx_out"
+      .!= sioTxOut def
+      <*> obj
+      .:? "ledger"
+      .!= sioLedger def
+      <*> obj
+      .:? "shelley"
+      .!= sioShelley def
       <*> pure (sioRewards def)
-      <*> obj .:? "multi_asset" .!= sioMultiAsset def
-      <*> obj .:? "metadata" .!= sioMetadata def
-      <*> obj .:? "plutus" .!= sioPlutus def
-      <*> obj .:? "governance" .!= sioGovernance def
-      <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
-      <*> obj .:? "pool_stat" .!= sioPoolStats def
-      <*> obj .:? "json_type" .!= sioJsonType def
-      <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj
+      .:? "multi_asset"
+      .!= sioMultiAsset def
+      <*> obj
+      .:? "metadata"
+      .!= sioMetadata def
+      <*> obj
+      .:? "plutus"
+      .!= sioPlutus def
+      <*> obj
+      .:? "governance"
+      .!= sioGovernance def
+      <*> obj
+      .:? "offchain_pool_data"
+      .!= sioOffchainPoolData def
+      <*> obj
+      .:? "pool_stat"
+      .!= sioPoolStats def
+      <*> obj
+      .:? "json_type"
+      .!= sioJsonType def
+      <*> obj
+      .:? "remove_jsonb_from_schema"
+      .!= sioRemoveJsonbFromSchema def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -604,8 +658,8 @@ instance FromJSON ShelleyInsertConfig where
     enable <- obj .: "enable"
     stakeAddrs <- obj .:? "stake_addresses"
 
-    pure $
-      case (enable, stakeAddrs) of
+    pure
+      $ case (enable, stakeAddrs) of
         (False, _) -> ShelleyDisable
         (True, Nothing) -> ShelleyEnable
         (True, Just addrs) -> ShelleyStakeAddrs (map parseShortByteString addrs)
@@ -625,8 +679,8 @@ instance FromJSON MultiAssetConfig where
     enable <- obj .: "enable"
     policies <- obj .:? "policies"
 
-    pure $
-      case (enable, policies) of
+    pure
+      $ case (enable, policies) of
         (False, _) -> MultiAssetDisable
         (True, Nothing) -> MultiAssetEnable
         (True, Just ps) -> MultiAssetPolicies (map parseShortByteString ps)
@@ -646,8 +700,8 @@ instance FromJSON MetadataConfig where
     enable <- obj .: "enable"
     keys <- obj .:? "keys"
 
-    pure $
-      case (enable, keys) of
+    pure
+      $ case (enable, keys) of
         (False, _) -> MetadataDisable
         (True, Nothing) -> MetadataEnable
         (True, Just ks) -> MetadataKeys ks
@@ -667,8 +721,8 @@ instance FromJSON PlutusConfig where
     enable <- obj .: "enable"
     scriptHashes <- obj .:? "script_hashes"
 
-    pure $
-      case (enable, scriptHashes) of
+    pure
+      $ case (enable, scriptHashes) of
         (False, _) -> PlutusDisable
         (True, Nothing) -> PlutusEnable
         (True, Just hs) -> PlutusScripts (map parseShortByteString hs)

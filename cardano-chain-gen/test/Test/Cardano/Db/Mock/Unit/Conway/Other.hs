@@ -124,15 +124,15 @@ poolReg =
     assertEqual "Unexpected init pool counter" (3, 0, 3, 2, 0, 0) initCounter
 
     -- Forge a pool registration
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkDCertPoolTx
-          [
-            ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
-            , PoolIndexNew 0
-            , Conway.consTxCertPool
-            )
-          ]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkDCertPoolTx
+        [
+          ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+          , PoolIndexNew 0
+          , Conway.consTxCertPool
+          )
+        ]
 
     -- Verify pool counts
     assertBlockNoBackoff dbSync 2
@@ -181,18 +181,18 @@ poolDeReg =
     assertEqual "Unexpected init pool counter" (3, 0, 3, 2, 0, 0) initCounter
 
     -- Forge a registration/deregistration
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkDCertPoolTx
-          [ -- Register a pool
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkDCertPoolTx
+        [ -- Register a pool
 
-            ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
-            , PoolIndexNew 0
-            , Conway.consTxCertPool
-            )
-          , -- Retire it
-            ([], PoolIndexNew 0, \_ poolId -> ConwayTxCertPool $ RetirePool poolId (EpochNo 1))
-          ]
+          ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+          , PoolIndexNew 0
+          , Conway.consTxCertPool
+          )
+        , -- Retire it
+          ([], PoolIndexNew 0, \_ poolId -> ConwayTxCertPool $ RetirePool poolId (EpochNo 1))
+        ]
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
     -- Should have added two pool owners
@@ -236,31 +236,31 @@ poolDeRegMany =
     assertEqual "Unexpected init pool counter" (3, 0, 3, 2, 0, 0) initCounter
 
     -- Forge pool registrations and deregistrations
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkDCertPoolTx
-          [ -- Register
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkDCertPoolTx
+        [ -- Register
 
-            ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
-            , PoolIndexNew 0
-            , Conway.consTxCertPool
-            )
-          , -- Deregister
-            ([], PoolIndexNew 0, mkPoolDereg (EpochNo 4))
-          , -- Register--this will be deduplicated by the ledger, so counts
-            -- below will not include this cert
+          ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+          , PoolIndexNew 0
+          , Conway.consTxCertPool
+          )
+        , -- Deregister
+          ([], PoolIndexNew 0, mkPoolDereg (EpochNo 4))
+        , -- Register--this will be deduplicated by the ledger, so counts
+          -- below will not include this cert
 
-            ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
-            , PoolIndexNew 0
-            , Conway.consTxCertPool
-            )
-          , -- Register with different owner and reward address
+          ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+          , PoolIndexNew 0
+          , Conway.consTxCertPool
+          )
+        , -- Register with different owner and reward address
 
-            ( [StakeIndexNew 2, StakeIndexNew 1, StakeIndexNew 0]
-            , PoolIndexNew 0
-            , Conway.consTxCertPool
-            )
-          ]
+          ( [StakeIndexNew 2, StakeIndexNew 1, StakeIndexNew 0]
+          , PoolIndexNew 0
+          , Conway.consTxCertPool
+          )
+        ]
 
     -- Forge another block with more reg/dereg
     void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
@@ -334,16 +334,16 @@ poolDelist =
     assertEqual "Unexpected init pool counter" (3, 0, 3, 2, 0, 0) initCounter
 
     -- Register a new pool
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkDCertPoolTx
-          [ -- Register
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkDCertPoolTx
+        [ -- Register
 
-            ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
-            , PoolIndexNew 0
-            , Conway.consTxCertPool
-            )
-          ]
+          ( [StakeIndexNew 0, StakeIndexNew 1, StakeIndexNew 2]
+          , PoolIndexNew 0
+          , Conway.consTxCertPool
+          )
+        ]
 
     -- Forge another block
     void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
@@ -371,9 +371,9 @@ poolDelist =
       [(PoolIndexNew 0, (Right False, True, True))]
       state'
 
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkDCertPoolTx [([], PoolIndexNew 0, mkPoolDereg (EpochNo 1))]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkDCertPoolTx [([], PoolIndexNew 0, mkPoolDereg (EpochNo 1))]
 
     void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
   where
@@ -392,16 +392,16 @@ forkFixedEpoch =
     startDBSync dbSync
 
     -- Add a Babbage tx
-    void $
-      Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+    void
+      $ Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer
+      $ Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
 
     -- Initiate a hard fork
     epochs0 <- Api.fillEpochs interpreter mockServer 2
     -- Add a simple Conway tx
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
     -- Fill the rest of the epoch
     epochs1 <- Api.fillUntilNextEpoch interpreter mockServer
 
@@ -417,9 +417,9 @@ rollbackFork =
     startDBSync dbSync
 
     -- Forge a Babbage tx
-    void $
-      Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+    void
+      $ Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer
+      $ Babbage.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
     -- Fill the rest of the epoch
     epoch0 <- Api.fillUntilNextEpoch interpreter mockServer
     -- Create a point to rollback to
@@ -428,8 +428,8 @@ rollbackFork =
     epoch1' <- Api.fillUntilNextEpoch interpreter mockServer
     -- Forge a Conway tx
     blk <-
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+        $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1 <> epoch1')
@@ -462,9 +462,9 @@ forkParam =
       "Unexpected protocol major version"
 
     -- Propose a parameter update
-    void $
-      Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer $
-        const Babbage.mkParamUpdateTx
+    void
+      $ Api.withBabbageFindLeaderAndSubmitTx interpreter mockServer
+      $ const Babbage.mkParamUpdateTx
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (1 + length epoch0)
     -- Query protocol param proposals
@@ -488,9 +488,9 @@ forkParam =
       "Unexpected protocol major version"
 
     -- Add a simple Conway tx
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
     -- Wait for it to sync
     assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1)
   where

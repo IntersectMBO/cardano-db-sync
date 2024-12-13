@@ -30,9 +30,9 @@ simpleRewards =
     void $ Api.registerAllStakeCreds interpreter mockServer
     -- Pools are not registered yet, this takes 2 epochs, so fees of this tx should not
     -- create any rewards
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 1000 1000 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 1000 1000 0
     -- Fill up epochs
     epochs <- Api.fillEpochs interpreter mockServer 3
 
@@ -54,9 +54,9 @@ simpleRewards =
 
     -- Now that pools are registered, add a tx to fill the fees pot so rewards will be
     -- distributed
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Fill more epochs
     epochs' <- Api.fillEpochs interpreter mockServer 2
     -- Wait for it to sync
@@ -95,9 +95,9 @@ rewardsShelley =
     void $ Api.registerAllStakeCreds interpreter mockServer
     -- Pools are not registered yet, this takes 2 epochs, so fees of this tx should not
     -- create any rewards
-    void $
-      Api.withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+    void
+      $ Api.withShelleyFindLeaderAndSubmitTx interpreter mockServer
+      $ Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
     -- Fill up epochs
     epochs <- Api.fillEpochs interpreter mockServer 3
     -- Wait for it to sync
@@ -105,9 +105,9 @@ rewardsShelley =
 
     -- Now that pools are registered, add a tx to fill the fees pot so rewards will be
     -- distributed
-    void $
-      Api.withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
+    void
+      $ Api.withShelleyFindLeaderAndSubmitTx interpreter mockServer
+      $ Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000
     -- Fill more epochs
     epochs' <- Api.fillEpochs interpreter mockServer 2
 
@@ -151,9 +151,9 @@ rollbackBoundary =
     -- It takes 2 epochs to create rewards
     epochs <- Api.fillEpochs interpreter mockServer 2
     -- Forge a transaction to distribute rewards
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Create a point to rollback to
     blks <- Api.forgeAndSubmitBlocks interpreter mockServer 50
     -- Fill up the rest of the epoch

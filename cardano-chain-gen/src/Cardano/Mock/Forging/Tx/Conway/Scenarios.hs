@@ -97,8 +97,8 @@ forgeBlocksChunked interpreter vs f = forM (chunksOf 500 vs) $ \blockCreds -> do
 registerDRepsAndDelegateVotes :: Interpreter -> IO CardanoBlock
 registerDRepsAndDelegateVotes interpreter = do
   blockTxs <-
-    withConwayLedgerState interpreter $
-      registerDRepAndDelegateVotes'
+    withConwayLedgerState interpreter
+      $ registerDRepAndDelegateVotes'
         (Prelude.head unregisteredDRepIds)
         (StakeIndex 4)
 

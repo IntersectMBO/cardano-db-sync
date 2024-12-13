@@ -20,8 +20,8 @@ serialiseTxMetadataToCbor = serialize' shelleyProtVer . map toShelleyMetadatum
     toShelleyMetadatum (TxMetaText s) = S s
     toShelleyMetadatum (TxMetaList xs) = List $ map toShelleyMetadatum xs
     toShelleyMetadatum (TxMetaMap ms) =
-      Map $
-        map (bimapBoth toShelleyMetadatum) ms
+      Map
+        $ map (bimapBoth toShelleyMetadatum) ms
 
 deserialiseTxMetadataFromCbor :: ByteString -> Either DecoderError (Map Word64 TxMetadataValue)
 deserialiseTxMetadataFromCbor =
@@ -33,8 +33,8 @@ deserialiseTxMetadataFromCbor =
     fromShelleyMetadatum (S s) = TxMetaText s
     fromShelleyMetadatum (List xs) = TxMetaList $ map fromShelleyMetadatum xs
     fromShelleyMetadatum (Map ms) =
-      TxMetaMap $
-        map (bimapBoth fromShelleyMetadatum) ms
+      TxMetaMap
+        $ map (bimapBoth fromShelleyMetadatum) ms
 
 bimapBoth :: Bifunctor f => (a -> b) -> f a a -> f b b
 bimapBoth f = bimap f f

@@ -59,8 +59,8 @@ insertByronBlock ::
   SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertByronBlock syncEnv firstBlockOfEpoch blk details = do
-  res <- runExceptT $
-    case byronBlockRaw blk of
+  res <- runExceptT
+    $ case byronBlockRaw blk of
       Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
       Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
   -- Serializing things during syncing can drastically slow down full sync
@@ -83,15 +83,17 @@ insertABOBBoundary syncEnv blk details = do
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
   let epochNo = unEpochNo $ sdEpochNo details
   slid <-
-    lift . DB.insertSlotLeader $
-      DB.SlotLeader
+    lift
+      . DB.insertSlotLeader
+      $ DB.SlotLeader
         { DB.slotLeaderHash = BS.replicate 28 '\0'
         , DB.slotLeaderPoolHashId = Nothing
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
   blkId <-
-    lift . insertBlockAndCache cache $
-      DB.Block
+    lift
+      . insertBlockAndCache cache
+      $ DB.Block
         { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
         , DB.blockEpochNo = Just epochNo
         , -- No slotNo for a boundary block
@@ -128,8 +130,9 @@ insertABOBBoundary syncEnv blk details = do
         , ebdTime = sdSlotTime details
         }
 
-  liftIO . logInfo tracer $
-    Text.concat
+  liftIO
+    . logInfo tracer
+    $ Text.concat
       [ "insertABOBBoundary: epoch "
       , textShow (Byron.boundaryEpoch $ Byron.boundaryHeader blk)
       , ", hash "
@@ -148,8 +151,9 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
   blkId <-
-    lift . insertBlockAndCache cache $
-      DB.Block
+    lift
+      . insertBlockAndCache cache
+      $ DB.Block
         { DB.blockHash = Byron.blockHash blk
         , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
         , DB.blockSlotNo = Just $ Byron.slotNumber blk
@@ -194,8 +198,8 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         followingClosely = getSyncStatus details == SyncFollowing
 
     when (followingClosely && slotWithinEpoch /= 0 && Byron.blockNumber blk `mod` 20 == 0) $ do
-      logInfo tracer $
-        mconcat
+      logInfo tracer
+        $ mconcat
           [ "Insert Byron Block: continuing epoch "
           , textShow epoch
           , " (slot "
@@ -204,8 +208,8 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
           , textShow (unEpochSize $ sdEpochSize details)
           , ")"
           ]
-    logger followingClosely tracer $
-      mconcat
+    logger followingClosely tracer
+      $ mconcat
         [ "Insert Byron Block: epoch "
         , textShow (unEpochNo $ sdEpochNo details)
         , ", slot "
@@ -241,8 +245,9 @@ insertByronTx syncEnv blkId tx blockIndex = do
   if disInOut
     then do
       txId <-
-        lift . DB.insertTx $
-          DB.Tx
+        lift
+          . DB.insertTx
+          $ DB.Tx
             { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
             , DB.txBlockId = blkId
             , DB.txBlockIndex = blockIndex
@@ -284,8 +289,9 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM (resolveTxInputs txOutTableType) (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   txId <-
-    lift . DB.insertTx $
-      DB.Tx
+    lift
+      . DB.insertTx
+      $ DB.Tx
         { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
         , DB.txBlockId = blkId
         , DB.txBlockIndex = blockIndex
@@ -315,11 +321,11 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- references the output (not sure this can even happen).
   disInOut <- liftIO $ getDisableInOutState syncEnv
   lift $ zipWithM_ (insertTxOutByron syncEnv (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
-  unless (getSkipTxIn syncEnv) $
-    mapM_ (insertTxIn tracer txId) resolvedInputs
-  whenConsumeOrPruneTxOut syncEnv $
-    lift $
-      DB.updateListTxOutConsumedByTxId (prepUpdate txId <$> resolvedInputs)
+  unless (getSkipTxIn syncEnv)
+    $ mapM_ (insertTxIn tracer txId) resolvedInputs
+  whenConsumeOrPruneTxOut syncEnv
+    $ lift
+    $ DB.updateListTxOutConsumedByTxId (prepUpdate txId <$> resolvedInputs)
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
@@ -347,24 +353,25 @@ insertTxOutByron ::
   Byron.TxOut ->
   ReaderT SqlBackend m ()
 insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
-  unless bootStrap $
-    case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
+  unless bootStrap
+    $ case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
       DB.TxOutCore -> do
-        void . DB.insertTxOut $
-          DB.CTxOutW $
-            C.TxOut
-              { C.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-              , C.txOutAddressHasScript = False
-              , C.txOutDataHash = Nothing
-              , C.txOutConsumedByTxId = Nothing
-              , C.txOutIndex = fromIntegral index
-              , C.txOutInlineDatumId = Nothing
-              , C.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
-              , C.txOutReferenceScriptId = Nothing
-              , C.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
-              , C.txOutTxId = txId
-              , C.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
-              }
+        void
+          . DB.insertTxOut
+          $ DB.CTxOutW
+          $ C.TxOut
+            { C.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+            , C.txOutAddressHasScript = False
+            , C.txOutDataHash = Nothing
+            , C.txOutConsumedByTxId = Nothing
+            , C.txOutIndex = fromIntegral index
+            , C.txOutInlineDatumId = Nothing
+            , C.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
+            , C.txOutReferenceScriptId = Nothing
+            , C.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
+            , C.txOutTxId = txId
+            , C.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+            }
       DB.TxOutVariantAddress -> do
         addrDetailId <- insertAddress
         void . DB.insertTxOut $ DB.VTxOutW (vTxOut addrDetailId) Nothing
@@ -413,8 +420,9 @@ insertTxIn ::
   (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxInId
 insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = do
-  lift . DB.insertTxIn $
-    DB.TxIn
+  lift
+    . DB.insertTxIn
+    $ DB.TxIn
       { DB.txInTxInId = txInTxId
       , DB.txInTxOutId = txOutTxId
       , DB.txInTxOutIndex = fromIntegral inIndex
@@ -434,9 +442,9 @@ resolveTxInputs txOutTableType txIn@(Byron.TxInUtxo txHash index) = do
 calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)] -> Either SyncNodeError ValueFee
 calculateTxFee tx resolvedInputs = do
   outval <- first (\e -> SNErrDefault $ "calculateTxFee: " <> textShow e) output
-  when (null resolvedInputs) $
-    Left $
-      SNErrDefault "calculateTxFee: List of transaction inputs is zero."
+  when (null resolvedInputs)
+    $ Left
+    $ SNErrDefault "calculateTxFee: List of transaction inputs is zero."
   let inval = sum $ map (unDbLovelace . forth4) resolvedInputs
   if inval < outval
     then Left $ SNErrInvariant "calculateTxFee" $ EInvInOut inval outval

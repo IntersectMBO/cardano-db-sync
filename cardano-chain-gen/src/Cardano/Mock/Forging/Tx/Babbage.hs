@@ -462,7 +462,7 @@ mkUTxOBabbage :: AlonzoTx StandardBabbage -> [(TxIn StandardCrypto, BabbageTxOut
 mkUTxOBabbage = mkUTxOAlonzo
 
 mkUTxOCollBabbage ::
-  (BabbageEraTxBody era) =>
+  BabbageEraTxBody era =>
   AlonzoTx era ->
   [(TxIn (EraCrypto era), TxOut era)]
 mkUTxOCollBabbage tx = Map.toList $ unUTxO $ collOuts $ getField @"body" tx

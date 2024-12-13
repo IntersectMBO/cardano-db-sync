@@ -60,8 +60,9 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
   actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
   if actualCount /= expectedCount
     then do
-      liftIO . logWarning tracer $
-        mconcat
+      liftIO
+        . logWarning tracer
+        $ mconcat
           [ "validateEpochRewards: rewards spendable in epoch "
           , textShow (unEpochNo spendableEpochNo)
           , " expected total of "
@@ -71,8 +72,9 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
           ]
       logFullRewardMap tracer spendableEpochNo network (convertPoolRewards rmap)
     else do
-      liftIO . logInfo tracer $
-        mconcat
+      liftIO
+        . logInfo tracer
+        $ mconcat
           [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
           , textShow (unEpochNo spendableEpochNo)
           , " are "
@@ -91,9 +93,9 @@ logFullRewardMap ::
   ReaderT SqlBackend m ()
 logFullRewardMap tracer epochNo network ledgerMap = do
   dbMap <- queryRewardMap epochNo
-  when (Map.size dbMap > 0 && Map.size (Generic.unRewards ledgerMap) > 0) $
-    liftIO $
-      diffRewardMap tracer network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
+  when (Map.size dbMap > 0 && Map.size (Generic.unRewards ledgerMap) > 0)
+    $ liftIO
+    $ diffRewardMap tracer network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
   where
     convert :: Set Generic.Reward -> [(RewardSource, Coin)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
@@ -107,10 +109,10 @@ queryRewardMap (EpochNo epochNo) = do
     (rwd :& saddr) <-
       from
         $ table @Db.Reward
-          `InnerJoin` table @Db.StakeAddress
-        `on` ( \(rwd :& saddr) ->
-                rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId
-             )
+        `InnerJoin` table @Db.StakeAddress
+          `on` ( \(rwd :& saddr) ->
+                  rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId
+               )
     where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
     where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
     where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdTreasury)

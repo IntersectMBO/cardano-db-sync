@@ -102,10 +102,10 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
         Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
   (ranMigrations, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
-  unless (null unofficial) $
-    logWarning trce $
-      "Unofficial migration scripts found: "
-        <> textShow unofficial
+  unless (null unofficial)
+    $ logWarning trce
+    $ "Unofficial migration scripts found: "
+    <> textShow unofficial
 
   if ranMigrations
     then logInfo trce "All migrations were executed"
@@ -162,8 +162,8 @@ runSyncNode ::
   SyncOptions ->
   IO ()
 runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
-  whenJust maybeLedgerDir $
-    \enpLedgerStateDir -> do
+  whenJust maybeLedgerDir
+    $ \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
   logInfo trce $ "Using byron genesis file from: " <> (show . unGenesisFile $ dncByronGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
@@ -171,52 +171,52 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
 
-  Db.runIohkLogging trce $
-    withPostgresqlConn dbConnString $
-      \backend -> liftIO $ do
-        runOrThrowIO $ runExceptT $ do
-          genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- queryIsJsonbInSchema backend
-          logProtocolMagicId trce $ genesisProtocolMagicId genCfg
-          syncEnv <-
-            ExceptT $
-              mkSyncEnvFromConfig
-                trce
-                backend
-                dbConnString
-                syncOptions
-                genCfg
-                syncNodeConfigFromFile
-                syncNodeParams
-                ranMigrations
-                runMigrationFnc
+  Db.runIohkLogging trce
+    $ withPostgresqlConn dbConnString
+    $ \backend -> liftIO $ do
+      runOrThrowIO $ runExceptT $ do
+        genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
+        isJsonbInSchema <- queryIsJsonbInSchema backend
+        logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+        syncEnv <-
+          ExceptT
+            $ mkSyncEnvFromConfig
+              trce
+              backend
+              dbConnString
+              syncOptions
+              genCfg
+              syncNodeConfigFromFile
+              syncNodeParams
+              ranMigrations
+              runMigrationFnc
 
-          -- Warn the user that jsonb datatypes are being removed from the database schema.
-          when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do
-            liftIO $ logWarning trce "Removing jsonb datatypes from the database. This can take time."
-            liftIO $ runRemoveJsonbFromSchema syncEnv
+        -- Warn the user that jsonb datatypes are being removed from the database schema.
+        when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do
+          liftIO $ logWarning trce "Removing jsonb datatypes from the database. This can take time."
+          liftIO $ runRemoveJsonbFromSchema syncEnv
 
-          -- Warn the user that jsonb datatypes are being added to the database schema.
-          when (not isJsonbInSchema && not removeJsonbFromSchemaConfig) $ do
-            liftIO $ logWarning trce "Adding jsonb datatypes back to the database. This can take time."
-            liftIO $ runAddJsonbToSchema syncEnv
-          liftIO $ runExtraMigrationsMaybe syncEnv
-          unless useLedger $ liftIO $ do
-            logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations backend trce
-          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
+        -- Warn the user that jsonb datatypes are being added to the database schema.
+        when (not isJsonbInSchema && not removeJsonbFromSchemaConfig) $ do
+          liftIO $ logWarning trce "Adding jsonb datatypes back to the database. This can take time."
+          liftIO $ runAddJsonbToSchema syncEnv
+        liftIO $ runExtraMigrationsMaybe syncEnv
+        unless useLedger $ liftIO $ do
+          logInfo trce "Migrating to a no ledger schema"
+          Db.noLedgerMigrations backend trce
+        insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
-          -- communication channel between datalayer thread and chainsync-client thread
-          threadChannels <- liftIO newThreadChannels
-          liftIO $
-            mapConcurrently_
-              id
-              [ runDbThread syncEnv metricsSetters threadChannels
-              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv
-              , runFetchOffChainVoteThread syncEnv
-              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-              ]
+        -- communication channel between datalayer thread and chainsync-client thread
+        threadChannels <- liftIO newThreadChannels
+        liftIO
+          $ mapConcurrently_
+            id
+            [ runDbThread syncEnv metricsSetters threadChannels
+            , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+            , runFetchOffChainPoolThread syncEnv
+            , runFetchOffChainVoteThread syncEnv
+            , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+            ]
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =

@@ -124,8 +124,10 @@ mkTxScript (hsh, script) =
     , txScriptType = Timelock
     , txScriptPlutusSize = Nothing
     , txScriptJson =
-        Just . LBS.toStrict . Aeson.encode $
-          fromTimelock script
+        Just
+          . LBS.toStrict
+          . Aeson.encode
+          $ fromTimelock script
     , txScriptCBOR = Nothing
     }
 

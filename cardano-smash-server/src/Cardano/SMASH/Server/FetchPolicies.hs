@@ -92,8 +92,8 @@ httpApiCall request = do
 
   let httpStatusCode = getResponseStatusCode httpResult
 
-  when (httpStatusCode /= 200) $
-    left HttpClientStatusNotOk
+  when (httpStatusCode /= 200)
+    $ left HttpClientStatusNotOk
 
   case parseEither parseJSON httpResponse of
     Left reason -> left $ HttpClientCannotParseJSON (toS reason)

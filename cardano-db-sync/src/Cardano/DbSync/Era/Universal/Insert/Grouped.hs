@@ -114,15 +114,15 @@ insertBlockGroupedData syncEnv grouped = do
     makeMinId txInIds txOutIds maTxOutIds =
       case txOutTableType of
         DB.TxOutCore -> do
-          DB.CMinIdsWrapper $
-            DB.MinIds
+          DB.CMinIdsWrapper
+            $ DB.MinIds
               { minTxInId = listToMaybe txInIds
               , minTxOutId = listToMaybe $ DB.convertTxOutIdCore txOutIds
               , minMaTxOutId = listToMaybe $ DB.convertMaTxOutIdCore maTxOutIds
               }
         DB.TxOutVariantAddress ->
-          DB.VMinIdsWrapper $
-            DB.MinIds
+          DB.VMinIdsWrapper
+            $ DB.MinIds
               { minTxInId = listToMaybe txInIds
               , minTxOutId = listToMaybe $ DB.convertTxOutIdVariant txOutIds
               , minMaTxOutId = listToMaybe $ DB.convertMaTxOutIdVariant maTxOutIds
@@ -135,8 +135,8 @@ mkmaTxOuts _txOutTableType (txOutId, mmtos) = mkmaTxOut <$> mmtos
     mkmaTxOut missingMaTx =
       case txOutId of
         DB.CTxOutIdW txOutId' ->
-          DB.CMaTxOutW $
-            C.MaTxOut
+          DB.CMaTxOutW
+            $ C.MaTxOut
               { C.maTxOutIdent = mmtoIdent missingMaTx
               , C.maTxOutQuantity = mmtoQuantity missingMaTx
               , C.maTxOutTxOutId = txOutId'
@@ -168,14 +168,18 @@ insertReverseIndex ::
 insertReverseIndex blockId minIdsWrapper =
   case minIdsWrapper of
     DB.CMinIdsWrapper minIds ->
-      void . lift . DB.insertReverseIndex $
-        DB.ReverseIndex
+      void
+        . lift
+        . DB.insertReverseIndex
+        $ DB.ReverseIndex
           { DB.reverseIndexBlockId = blockId
           , DB.reverseIndexMinIds = minIdsCoreToText minIds
           }
     DB.VMinIdsWrapper minIds ->
-      void . lift . DB.insertReverseIndex $
-        DB.ReverseIndex
+      void
+        . lift
+        . DB.insertReverseIndex
+        $ DB.ReverseIndex
           { DB.reverseIndexBlockId = blockId
           , DB.reverseIndexMinIds = minIdsVariantToText minIds
           }
@@ -267,8 +271,10 @@ resolveInMemory txIn =
 
 matches :: Generic.TxIn -> ExtendedTxOut -> Bool
 matches txIn eutxo =
-  Generic.toTxHash txIn == etoTxHash eutxo
-    && Generic.txInIndex txIn == getTxOutIndex (etoTxOut eutxo)
+  Generic.toTxHash txIn
+    == etoTxHash eutxo
+    && Generic.txInIndex txIn
+    == getTxOutIndex (etoTxOut eutxo)
   where
     getTxOutIndex :: DB.TxOutW -> Word64
     getTxOutIndex txOutWrapper = case txOutWrapper of

@@ -44,8 +44,8 @@ readConwayGenesisConfig SyncNodeConfig {..} =
     Nothing -> pure (ConwayGenesis defaultUpgradeConwayPParams def def mempty mempty)
   where
     readConwayGenesisConfig' file hash =
-      firstExceptT (SNErrConwayConfig (unGenesisFile file) . renderConwayGenesisError) $
-        readGenesis file hash
+      firstExceptT (SNErrConwayConfig (unGenesisFile file) . renderConwayGenesisError)
+        $ readGenesis file hash
     defaultUpgradeConwayPParams :: UpgradeConwayPParams Identity
     defaultUpgradeConwayPParams =
       UpgradeConwayPParams

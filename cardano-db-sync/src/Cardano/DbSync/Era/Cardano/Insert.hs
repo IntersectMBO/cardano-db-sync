@@ -35,8 +35,9 @@ insertEpochSyncTime ::
 insertEpochSyncTime epochNo syncState estvar = do
   now <- liftIO Time.getCurrentTime
   mlast <- liftIO . atomically $ swapTVar estvar now
-  void . Db.insertEpochSyncTime $
-    Db.EpochSyncTime
+  void
+    . Db.insertEpochSyncTime
+    $ Db.EpochSyncTime
       { Db.epochSyncTimeNo = unEpochNo epochNo - 1
       , Db.epochSyncTimeSeconds = ceiling (realToFrac (Time.diffUTCTime now mlast) :: Double)
       , Db.epochSyncTimeState = syncState

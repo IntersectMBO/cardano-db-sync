@@ -33,16 +33,17 @@ import Ouroboros.Consensus.HardFork.History.Qry (
 -- https://github.com/IntersectMBO/cardano-db-sync/issues/276
 querySlotDetails :: SystemStart -> SlotNo -> Qry SlotDetails
 querySlotDetails start absSlot = do
-  absTime <- qryFromExpr $
-    ELet (EAbsToRelSlot (ELit absSlot)) $ \relSlot ->
+  absTime <- qryFromExpr
+    $ ELet (EAbsToRelSlot (ELit absSlot))
+    $ \relSlot ->
       ELet (ERelSlotToTime (EVar relSlot)) $ \relTime ->
         ELet (ERelToAbsTime (EVar relTime)) $ \absTime ->
           EVar absTime
   (absEpoch, slotInEpoch) <- slotToEpoch' absSlot
   epochSize <- qryFromExpr $ EEpochSize (ELit absEpoch)
   let time = relToUTCTime start absTime
-  pure $
-    SlotDetails
+  pure
+    $ SlotDetails
       { sdSlotTime = time
       , sdCurrentTime = time -- Corrected above in insertCurrentTime
       , sdEpochNo = absEpoch

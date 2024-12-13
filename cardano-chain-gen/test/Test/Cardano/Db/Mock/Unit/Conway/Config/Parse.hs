@@ -23,7 +23,8 @@ import Prelude ()
 conwayGenesis :: Assertion
 conwayGenesis =
   mkSyncNodeConfig configDir initCommandLineArgs
-    >>= void . mkConfig configDir mutableDir cmdLineArgs
+    >>= void
+    . mkConfig configDir mutableDir cmdLineArgs
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigSimple"
@@ -44,8 +45,8 @@ noConwayGenesis :: Assertion
 noConwayGenesis = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisFile = Nothing}
-  void $
-    mkConfig configDir mutableDir cmdLineArgs cfg'
+  void
+    $ mkConfig configDir mutableDir cmdLineArgs cfg'
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
@@ -55,8 +56,8 @@ noConwayGenesisHash :: Assertion
 noConwayGenesisHash = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisHash = Nothing}
-  void $
-    mkConfig configDir mutableDir initCommandLineArgs cfg'
+  void
+    $ mkConfig configDir mutableDir initCommandLineArgs cfg'
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"

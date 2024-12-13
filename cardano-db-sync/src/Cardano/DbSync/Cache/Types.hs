@@ -137,8 +137,8 @@ textShowStats (ActiveCache ic) = do
   datums <- readTVarIO (cDatum ic)
   mAssets <- readTVarIO (cMultiAssets ic)
   txIds <- readTVarIO (cTxIds ic)
-  pure $
-    mconcat
+  pure
+    $ mconcat
       [ "\nCache Statistics:"
       , "\n  Caches Optimised: " <> textShow isCacheOptimised
       , "\n  Stake Addresses: "
@@ -224,8 +224,9 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
-  pure . ActiveCache $
-    CacheInternal
+  pure
+    . ActiveCache
+    $ CacheInternal
       { cIsCacheOptimised = cIsCacheOptimised
       , cStake = cStake
       , cPools = cPools

@@ -27,8 +27,9 @@ forgeBlocks = do
     block <- forgeNext interpreter mockBlock2
 
     let blkNo = blockNo block
-    assertBool (show blkNo <> " /= " <> "3") $
-      blkNo == BlockNo 3
+    assertBool (show blkNo <> " /= " <> "3")
+      $ blkNo
+      == BlockNo 3
   where
     testLabel = "conwayForgeBlocks"
 

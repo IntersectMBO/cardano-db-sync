@@ -38,8 +38,9 @@ safeDecodeToJson tracer tracePrefix jsonBs = do
   ejson <- liftIO $ safeDecodeUtf8 jsonBs
   case ejson of
     Left err -> do
-      liftIO . logWarning tracer $
-        mconcat
+      liftIO
+        . logWarning tracer
+        $ mconcat
           [tracePrefix, ": Could not decode to UTF8: ", textShow err]
       -- We have to insert
       pure Nothing

@@ -17,8 +17,8 @@ import Prelude ()
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync.Util.CborTest"
       [ ("serialiseTxMetadataToCbor simple", prop_serialiseTxMetadataToCbor)
       , ("serialiseTxMetadataToCbor roundtrip", prop_serialiseTxMetadataToCbor_roundtrip)
@@ -65,8 +65,10 @@ knownTxMetadata =
   ,
     ( Map.singleton
         1000
-        ( TxMetaBytes . Base16.decodeLenient . encodeUtf8 $
-            "01da32e76ec731be1a80444acae242f9122971a077f01aa691d1ec89c8da042223c75772ad8f7a48b3068833af202a6500ab22f763dd4ef83d"
+        ( TxMetaBytes
+            . Base16.decodeLenient
+            . encodeUtf8
+            $ "01da32e76ec731be1a80444acae242f9122971a077f01aa691d1ec89c8da042223c75772ad8f7a48b3068833af202a6500ab22f763dd4ef83d"
         )
     , "a11903e8583901da32e76ec731be1a80444acae242f9122971a077f01aa691d1ec89c8da042223c75772ad8f7a48b3068833af202a6500ab22f763dd4ef83d"
     )
@@ -131,8 +133,10 @@ genTxMetadataValue = Gen.sized $ \(Size size) -> do
 
     genTxMetaMap :: Gen [(TxMetadataValue, TxMetadataValue)]
     genTxMetaMap = Gen.sized $ \(Size size) ->
-      Gen.list (Range.linear 0 size) $
-        (,) <$> genTxMetadataValue <*> genTxMetadataValue
+      Gen.list (Range.linear 0 size)
+        $ (,)
+        <$> genTxMetadataValue
+        <*> genTxMetadataValue
 
 isMetaNumber :: TxMetadataValue -> Bool
 isMetaNumber (TxMetaNumber _) = True

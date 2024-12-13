@@ -67,19 +67,15 @@
                   })
 
                 (final: prev: {
-                  # HLint 3.2.x requires GHC >= 8.10 && < 9.0
-                  hlint = final.haskell-nix.tool "ghc8107" "hlint" {
-                    version = "3.2.7";
+                  hlint = final.haskell-nix.tool "ghc96" "hlint" {
+                    version = "3.8";
                   };
 
-                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
-                  fourmolu = final.haskell-nix.tool "ghc928" "fourmolu" {
-                    version = "0.10.1.0";
+                  fourmolu = final.haskell-nix.tool "ghc96" "fourmolu" {
+                    version = "0.16.2.0";
                   };
-
-                  # Weeder 2.2.0 requires GHC >= 8.10 && < 9.0
-                  weeder = final.haskell-nix.tool "ghc8107" "weeder" {
-                    version = "2.2.0";
+                  weeder = final.haskell-nix.tool "ghc96" "weeder" {
+                    version = "2.9.0";
                   };
                 })
 
@@ -141,10 +137,7 @@
           project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
-            compiler-nix-name =
-              if system == "x86_64-linux"
-                then lib.mkDefault "ghc810"
-                else lib.mkDefault "ghc96";
+            compiler-nix-name = lib.mkDefault "ghc96";
             flake.variants =
               let
                 compilers =
@@ -168,11 +161,7 @@
             shell.tools = {
               cabal = "latest";
               haskell-language-server = {
-                src =
-                  if config.compiler-nix-name == "ghc8107" then
-                    nixpkgs.haskell-nix.sources."hls-1.10"
-                  else
-                    nixpkgs.haskell-nix.sources."hls-2.9";
+                src = nixpkgs.haskell-nix.sources."hls-2.9";
               };
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
@@ -181,7 +170,7 @@
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
               hlint
-            ] ++ lib.optionals (config.compiler-nix-name == "ghc8107") [
+            ] ++ lib.optionals (config.compiler-nix-name == "ghc96") [
               # Weeder requires the GHC version to match HIE files
               weeder
             ] ++ lib.optionals (system != "aarch64-darwin") [

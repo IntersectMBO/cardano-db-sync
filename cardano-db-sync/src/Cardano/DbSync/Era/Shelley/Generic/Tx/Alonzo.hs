@@ -172,9 +172,9 @@ getScripts tx =
       case strictMaybeToMaybe maux of
         Nothing -> []
         Just auxData ->
-          map (\scr -> (Core.hashScript @era scr, scr)) $
-            toList $
-              getAlonzoTxAuxDataScripts auxData
+          map (\scr -> (Core.hashScript @era scr, scr))
+            $ toList
+            $ getAlonzoTxAuxDataScripts auxData
 
 resolveRedeemers ::
   forall era.
@@ -192,24 +192,26 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
   if not ioExtraPlutus
     then (initRedeemersMaps, [])
     else
-      mkRdmrAndUpdateRec (initRedeemersMaps, []) $
-        zip [0 ..] $
-          Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsTxWitsL)))
+      mkRdmrAndUpdateRec (initRedeemersMaps, [])
+        $ zip [0 ..]
+        $ Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsTxWitsL)))
   where
     txBody :: Core.TxBody era
     txBody = tx ^. Core.bodyTxL
 
     withdrawalsNoRedeemers :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
     withdrawalsNoRedeemers =
-      Map.mapWithKey (curry mkTxWithdrawal) $
-        Shelley.unWithdrawals $
-          txBody ^. Core.withdrawalsTxBodyL
+      Map.mapWithKey (curry mkTxWithdrawal)
+        $ Shelley.unWithdrawals
+        $ txBody
+        ^. Core.withdrawalsTxBodyL
 
     txCertsNoRedeemers :: [(Cert, TxCertificate)]
     txCertsNoRedeemers =
-      zipWith (\n dcert -> (dcert, toTxCert n dcert)) [0 ..] $
-        toList $
-          toCert <$> (txBody ^. Core.certsTxBodyL)
+      zipWith (\n dcert -> (dcert, toTxCert n dcert)) [0 ..]
+        $ toList
+        $ toCert
+        <$> (txBody ^. Core.certsTxBodyL)
 
     txInsMissingRedeemer :: Map (Ledger.TxIn StandardCrypto) TxIn
     txInsMissingRedeemer = Map.fromList $ fmap (\inp -> (inp, fromTxIn inp)) $ toList $ txBody ^. Core.inputsTxBodyL
@@ -336,9 +338,10 @@ getPlutusSizes ::
   Core.Tx era ->
   [Word64]
 getPlutusSizes tx =
-  mapMaybe getPlutusScriptSize $
-    Map.elems $
-      tx ^. (Core.witsTxL . Alonzo.scriptAlonzoTxWitsL)
+  mapMaybe getPlutusScriptSize
+    $ Map.elems
+    $ tx
+    ^. (Core.witsTxL . Alonzo.scriptAlonzoTxWitsL)
 
 -- | Returns Nothing for non-plutus scripts.
 getPlutusScriptSize :: Alonzo.AlonzoEraScript era => Alonzo.AlonzoScript era -> Maybe Word64
@@ -369,9 +372,10 @@ extraKeyWits ::
   Core.TxBody era ->
   [ByteString]
 extraKeyWits txBody =
-  Set.toList $
-    Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
-      txBody ^. Alonzo.reqSignerHashesTxBodyL
+  Set.toList
+    $ Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h)
+    $ txBody
+    ^. Alonzo.reqSignerHashesTxBodyL
 
 scriptHashAcnt :: Shelley.RewardAccount StandardCrypto -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.raCredential rewardAddr

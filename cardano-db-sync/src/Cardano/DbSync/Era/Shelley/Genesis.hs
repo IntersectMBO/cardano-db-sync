@@ -99,16 +99,18 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               Right _ -> pure () -- Metadata from Shelley era already exists. TODO Validate metadata.
               Left _ -> do
                 count <- lift DB.queryBlockCount
-                when (count > 0) $
-                  dbSyncNodeError $
-                    "Shelley.insertValidateGenesisDist: Genesis data mismatch. count " <> textShow count
-                void . lift $
-                  DB.insertMeta $
-                    DB.Meta
-                      { DB.metaStartTime = configStartTime cfg
-                      , DB.metaNetworkName = networkName
-                      , DB.metaVersion = textShow version
-                      }
+                when (count > 0)
+                  $ dbSyncNodeError
+                  $ "Shelley.insertValidateGenesisDist: Genesis data mismatch. count "
+                  <> textShow count
+                void
+                  . lift
+                  $ DB.insertMeta
+                  $ DB.Meta
+                    { DB.metaStartTime = configStartTime cfg
+                    , DB.metaNetworkName = networkName
+                    , DB.metaVersion = textShow version
+                    }
             -- No reason to insert the artificial block if there are no funds or stakes definitions.
             when (hasInitialFunds || hasStakes) $ do
               -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
@@ -117,8 +119,9 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
               -- which would be a pain in the neck.
               slid <-
-                lift . DB.insertSlotLeader $
-                  DB.SlotLeader
+                lift
+                  . DB.insertSlotLeader
+                  $ DB.SlotLeader
                     { DB.slotLeaderHash = genesisHashSlotLeader cfg
                     , DB.slotLeaderPoolHashId = Nothing
                     , DB.slotLeaderDescription = "Shelley Genesis slot leader"
@@ -131,8 +134,9 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               pid <- lift DB.queryLatestBlockId
               liftIO $ logInfo tracer $ textShow pid
               bid <-
-                lift . DB.insertBlock $
-                  DB.Block
+                lift
+                  . DB.insertBlock
+                  $ DB.Block
                     { DB.blockHash = configGenesisHash cfg
                     , DB.blockEpochNo = Nothing
                     , DB.blockSlotNo = Nothing
@@ -154,11 +158,12 @@ insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
               disInOut <- liftIO $ getDisableInOutState syncEnv
               unless disInOut $ do
                 lift $ mapM_ (insertTxOuts syncEnv tracer bid) $ genesisUtxOs cfg
-              liftIO . logInfo tracer $
-                "Initial genesis distribution populated. Hash "
-                  <> renderByteArray (configGenesisHash cfg)
-              when hasStakes $
-                insertStaking tracer useNoCache bid cfg
+              liftIO
+                . logInfo tracer
+                $ "Initial genesis distribution populated. Hash "
+                <> renderByteArray (configGenesisHash cfg)
+              when hasStakes
+                $ insertStaking tracer useNoCache bid cfg
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
@@ -177,43 +182,43 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
-    when (DB.metaStartTime meta /= configStartTime cfg) $
-      dbSyncNodeError $
-        Text.concat
-          [ "Shelley: Mismatch chain start time. Config value "
-          , textShow (configStartTime cfg)
-          , " does not match DB value of "
-          , textShow (DB.metaStartTime meta)
-          ]
+    when (DB.metaStartTime meta /= configStartTime cfg)
+      $ dbSyncNodeError
+      $ Text.concat
+        [ "Shelley: Mismatch chain start time. Config value "
+        , textShow (configStartTime cfg)
+        , " does not match DB value of "
+        , textShow (DB.metaStartTime meta)
+        ]
 
-    when (DB.metaNetworkName meta /= networkName) $
-      dbSyncNodeError $
-        Text.concat
-          [ "Shelley.validateGenesisDistribution: Provided network name "
-          , networkName
-          , " does not match DB value "
-          , DB.metaNetworkName meta
-          ]
+    when (DB.metaNetworkName meta /= networkName)
+      $ dbSyncNodeError
+      $ Text.concat
+        [ "Shelley.validateGenesisDistribution: Provided network name "
+        , networkName
+        , " does not match DB value "
+        , DB.metaNetworkName meta
+        ]
 
     txCount <- lift $ DB.queryBlockTxCount bid
-    when (txCount /= expectedTxCount) $
-      dbSyncNodeError $
-        Text.concat
-          [ "Shelley.validateGenesisDistribution: Expected initial block to have "
-          , textShow expectedTxCount
-          , " but got "
-          , textShow txCount
-          ]
+    when (txCount /= expectedTxCount)
+      $ dbSyncNodeError
+      $ Text.concat
+        [ "Shelley.validateGenesisDistribution: Expected initial block to have "
+        , textShow expectedTxCount
+        , " but got "
+        , textShow txCount
+        ]
     totalSupply <- lift $ DB.queryShelleyGenesisSupply txOutTableType
     let expectedSupply = configGenesisSupply cfg
-    when (expectedSupply /= totalSupply && not prunes) $
-      dbSyncNodeError $
-        Text.concat
-          [ "Shelley.validateGenesisDistribution: Expected total supply to be "
-          , textShow expectedSupply
-          , " but got "
-          , textShow totalSupply
-          ]
+    when (expectedSupply /= totalSupply && not prunes)
+      $ dbSyncNodeError
+      $ Text.concat
+        [ "Shelley.validateGenesisDistribution: Expected total supply to be "
+        , textShow expectedSupply
+        , " but got "
+        , textShow totalSupply
+        ]
     liftIO $ do
       logInfo tracer "Initial genesis distribution present and correct"
       logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
@@ -231,8 +236,8 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <-
-    DB.insertTx $
-      DB.Tx
+    DB.insertTx
+      $ DB.Tx
         { DB.txHash = Generic.unTxHash txInId
         , DB.txBlockId = blkId
         , DB.txBlockIndex = 0
@@ -251,8 +256,9 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
   _ <- insertStakeAddressRefIfMissing trce useNoCache (txOut ^. Core.addrTxOutL)
   case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
     DB.TxOutCore ->
-      void . DB.insertTxOut $
-        DB.CTxOutW
+      void
+        . DB.insertTxOut
+        $ DB.CTxOutW
           C.TxOut
             { C.txOutAddress = Generic.renderAddress addr
             , C.txOutAddressHasScript = hasScript
@@ -320,22 +326,22 @@ insertStaking tracer cache blkId genesis = do
   -- All Genesis staking comes from an artifical transaction
   -- with a hash generated by hashing the address.
   txId <-
-    lift $
-      DB.insertTx $
-        DB.Tx
-          { DB.txHash = configGenesisStakingHash
-          , DB.txBlockId = blkId
-          , DB.txBlockIndex = 0
-          , DB.txOutSum = DB.DbLovelace 0
-          , DB.txFee = DB.DbLovelace 0
-          , DB.txDeposit = Just 0
-          , DB.txSize = 0
-          , DB.txInvalidHereafter = Nothing
-          , DB.txInvalidBefore = Nothing
-          , DB.txValidContract = True
-          , DB.txScriptSize = 0
-          , DB.txTreasuryDonation = DB.DbLovelace 0
-          }
+    lift
+      $ DB.insertTx
+      $ DB.Tx
+        { DB.txHash = configGenesisStakingHash
+        , DB.txBlockId = blkId
+        , DB.txBlockIndex = 0
+        , DB.txOutSum = DB.DbLovelace 0
+        , DB.txFee = DB.DbLovelace 0
+        , DB.txDeposit = Just 0
+        , DB.txSize = 0
+        , DB.txInvalidHereafter = Nothing
+        , DB.txInvalidBefore = Nothing
+        , DB.txValidContract = True
+        , DB.txScriptSize = 0
+        , DB.txTreasuryDonation = DB.DbLovelace 0
+        }
   let params = zip [0 ..] $ ListMap.elems $ sgsPools $ sgStaking genesis
   let network = sgNetworkId genesis
   -- TODO: add initial deposits for genesis pools.

@@ -19,8 +19,8 @@ import Prelude ()
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync.Util.Address"
       [ ("serialiseAddress byron simple", prop_serialiseAddress_byron)
       , ("serialiseAddress byron roundtrip", prop_serialiseAddress_byron_roundtrip)

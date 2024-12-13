@@ -45,8 +45,8 @@ paramsToConfig params = do
   appUsers <- readAppUsers $ sspAdminUsers params
   tracer <- configureLogging (sspConfigFile params) "smash-server"
 
-  pure $
-    SmashServerConfig
+  pure
+    $ SmashServerConfig
       { sscSmashPort = sspSmashPort params
       , sscTrace = tracer
       , sscAdmins = appUsers

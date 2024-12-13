@@ -15,8 +15,8 @@ import qualified Hedgehog.Gen as Gen
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync"
       [
         ( "extractSyncOptions passes prune consume migration"

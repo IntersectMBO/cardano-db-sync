@@ -255,8 +255,8 @@ toLedgerEventConway evt hasRewards =
               (Conway.GovInfoEvent en droppedEnacted expired uncl)
             )
         ) ->
-        Just $
-          LedgerGovInfo
+        Just
+          $ LedgerGovInfo
             (toGovActionRefunded <$> toList en)
             (toGovActionRefunded <$> toList droppedEnacted)
             (toGovActionRefunded <$> toList expired)
@@ -292,8 +292,8 @@ convertPoolDepositRefunds ::
   Map StakeCred (Map PoolKeyHash Coin) ->
   Generic.Rewards
 convertPoolDepositRefunds rwds =
-  Generic.Rewards $
-    Map.map (Set.fromList . map convert . Map.toList) rwds
+  Generic.Rewards
+    $ Map.map (Set.fromList . map convert . Map.toList) rwds
   where
     convert :: (PoolKeyHash, Coin) -> Generic.Reward
     convert (kh, coin) =
@@ -318,8 +318,8 @@ convertMirRewards resPay trePay =
 
     mkPayment :: RewardSource -> Coin -> Set Generic.RewardRest
     mkPayment src coin =
-      Set.singleton $
-        Generic.RewardRest
+      Set.singleton
+        $ Generic.RewardRest
           { Generic.irSource = src
           , Generic.irAmount = coin
           }
@@ -335,8 +335,8 @@ convertPoolRewards ::
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   Generic.Rewards
 convertPoolRewards rmap =
-  Generic.Rewards $
-    map (Set.map convertReward) rmap
+  Generic.Rewards
+    $ map (Set.map convertReward) rmap
   where
     convertReward :: Ledger.Reward StandardCrypto -> Generic.Reward
     convertReward sr =
