@@ -241,10 +241,14 @@ unitTests iom knownMigrations =
         "Governance"
         [ test "drep distribution" Governance.drepDistr
         , test "new committee member" Governance.newCommittee
+        , test "chained committee proposals" Governance.chainedNewCommittee
+        , test "rollback new committee member" Governance.rollbackNewCommittee
+        , test "rollback new committee member proposal" Governance.rollbackNewCommitteeProposal
         , test "update constitution" Governance.updateConstitution
         , test "treasury withdrawal" Governance.treasuryWithdrawal
         , test "parameter change" Governance.parameterChange
         , test "hard fork" Governance.hardFork
+        , test "rollback hardfork" Governance.rollbackHardFork
         , test "info action" Governance.infoAction
         ]
     ]
