@@ -64,7 +64,7 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
     epochSlotTimecheck = do
       when (sdSlotTime details > sdCurrentTime details)
         $ liftIO
-          . logError trce
+        . logError trce
         $ mconcat
           ["Slot time '", textShow (sdSlotTime details), "' is in the future"]
       updateEpochStart syncEnv cache details isNewEpochEvent False
@@ -82,20 +82,20 @@ updateEpochStart syncEnv cache slotDetails isNewEpochEvent isBoundaryBlock = do
   let curEpochNo = unEpochNo $ sdEpochNo slotDetails
 
   if
-      -- The tip has been reached so now replace/update the epoch every block.
-      | getSyncStatus slotDetails == SyncFollowing ->
-          handleEpochWhenFollowing syncEnv cache mLastMapEpochFromCache mEpochBlockDiff curEpochNo
-      -- When syncing we check if current block is the first block in an epoch.
-      -- If so then it's time to put the previous epoch into the DB.
-      | isNewEpochEvent ->
-          updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache curEpochNo isBoundaryBlock
-      -- we're syncing and the epochNo are the same so we just update the cache until above check passes.
-      | otherwise ->
-          handleEpochCachingWhenSyncing
-            syncEnv
-            cache
-            mLastMapEpochFromCache
-            mEpochBlockDiff
+    -- The tip has been reached so now replace/update the epoch every block.
+    | getSyncStatus slotDetails == SyncFollowing ->
+        handleEpochWhenFollowing syncEnv cache mLastMapEpochFromCache mEpochBlockDiff curEpochNo
+    -- When syncing we check if current block is the first block in an epoch.
+    -- If so then it's time to put the previous epoch into the DB.
+    | isNewEpochEvent ->
+        updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache curEpochNo isBoundaryBlock
+    -- we're syncing and the epochNo are the same so we just update the cache until above check passes.
+    | otherwise ->
+        handleEpochCachingWhenSyncing
+          syncEnv
+          cache
+          mLastMapEpochFromCache
+          mEpochBlockDiff
 
 -----------------------------------------------------------------------------------------------------
 -- When Following

@@ -104,10 +104,10 @@ queryStakeAddressBalance txOutTableType address = do
       TxOutVariantAddress -> do
         res <- select $ do
           (txo :& addr) <-
-            from
-              $ table @V.TxOut
+            from $
+              table @V.TxOut
                 `innerJoin` table @V.Address
-              `on` (\(txo :& addr) -> txo ^. V.TxOutAddressId ==. addr ^. V.AddressId)
+                  `on` (\(txo :& addr) -> txo ^. V.TxOutAddressId ==. addr ^. V.AddressId)
           where_ (addr ^. V.AddressStakeAddressId ==. just (val saId))
           pure (sum_ (txo ^. V.TxOutValue))
         pure $ unValueSumAda (listToMaybe res)
@@ -135,26 +135,26 @@ queryStakeAddressBalance txOutTableType address = do
       TxOutCore -> do
         res <- select $ do
           (txOut :& tx :& _txIn) <-
-            from
-              $ table @C.TxOut
+            from $
+              table @C.TxOut
                 `innerJoin` table @Tx
-              `on` (\(txOut :& tx) -> txOut ^. C.TxOutTxId ==. tx ^. TxId)
+                  `on` (\(txOut :& tx) -> txOut ^. C.TxOutTxId ==. tx ^. TxId)
                 `innerJoin` table @TxIn
-              `on` (\(txOut :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. C.TxOutIndex)
+                  `on` (\(txOut :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. C.TxOutIndex)
           where_ (txOut ^. C.TxOutStakeAddressId ==. just (val saId))
           pure (sum_ (txOut ^. C.TxOutValue), sum_ (tx ^. TxFee), sum_ (tx ^. TxDeposit))
         pure $ maybe (0, 0, 0) convert (listToMaybe res)
       TxOutVariantAddress -> do
         res <- select $ do
           (txOut :& addr :& tx :& _txIn) <-
-            from
-              $ table @V.TxOut
+            from $
+              table @V.TxOut
                 `innerJoin` table @V.Address
-              `on` (\(txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
+                  `on` (\(txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
                 `innerJoin` table @Tx
-              `on` (\(txOut :& _addr :& tx) -> txOut ^. V.TxOutTxId ==. tx ^. TxId)
+                  `on` (\(txOut :& _addr :& tx) -> txOut ^. V.TxOutTxId ==. tx ^. TxId)
                 `innerJoin` table @TxIn
-              `on` (\(txOut :& _addr :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. V.TxOutIndex)
+                  `on` (\(txOut :& _addr :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. V.TxOutIndex)
           where_ (addr ^. V.AddressStakeAddressId ==. just (val saId))
           pure (sum_ (txOut ^. V.TxOutValue), sum_ (tx ^. TxFee), sum_ (tx ^. TxDeposit))
         pure $ maybe (0, 0, 0) convert (listToMaybe res)

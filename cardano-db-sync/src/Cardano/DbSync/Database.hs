@@ -129,16 +129,16 @@ rollbackLedger syncEnv point =
         Right st -> do
           let statePoint = headerStatePoint $ headerState $ clsState st
           -- This is an extra validation that should always succeed.
-          unless (point == statePoint) $
-            logAndThrowIO (getTrace syncEnv) $
-              SNErrDatabaseRollBackLedger $
-                mconcat
-                  [ "Ledger "
-                  , show statePoint
-                  , " and ChainSync "
-                  , show point
-                  , " don't match."
-                  ]
+          unless (point == statePoint)
+            $ logAndThrowIO (getTrace syncEnv)
+            $ SNErrDatabaseRollBackLedger
+            $ mconcat
+              [ "Ledger "
+              , show statePoint
+              , " and ChainSync "
+              , show point
+              , " don't match."
+              ]
           pure Nothing
         Left lsfs ->
           Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
@@ -153,21 +153,25 @@ validateConsistentLevel syncEnv stPoint = do
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
-      logAndThrowIO tracer $
-        SNErrDatabaseValConstLevel $
-          "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
+      logAndThrowIO tracer
+        $ SNErrDatabaseValConstLevel
+        $ "Found Unchecked Consistent Level. "
+        <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
     compareTips (Point Origin) _ DBAheadOfLedger = pure ()
     compareTips (Point (At blk)) (Just tip) Consistent
-      | getHeaderHash (blockPointHash blk) == bHash tip
-          && blockPointSlot blk == bSlotNo tip =
+      | getHeaderHash (blockPointHash blk)
+          == bHash tip
+          && blockPointSlot blk
+          == bSlotNo tip =
           pure ()
     compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
-      logAndThrowIO tracer $
-        SNErrDatabaseValConstLevel $
-          "Unexpected Consistent Level. " <> showContext dbTip cLevel
+      logAndThrowIO tracer
+        $ SNErrDatabaseValConstLevel
+        $ "Unexpected Consistent Level. "
+        <> showContext dbTip cLevel
 
     tracer = getTrace syncEnv
     showContext dbTip cLevel =

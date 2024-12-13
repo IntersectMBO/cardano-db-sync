@@ -117,8 +117,10 @@ insertPoolRetire ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire trce txId cache epochNum idx keyHash = do
   poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache UpdateCache True keyHash
-  void . lift . DB.insertPoolRetire $
-    DB.PoolRetire
+  void
+    . lift
+    . DB.insertPoolRetire
+    $ DB.PoolRetire
       { DB.poolRetireHashId = poolId
       , DB.poolRetireCertIndex = idx
       , DB.poolRetireAnnouncedTxId = txId
@@ -151,8 +153,10 @@ insertPoolOwner ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner trce cache network poolUpdateId skh = do
   saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network (Ledger.KeyHashObj skh)
-  void . lift . DB.insertPoolOwner $
-    DB.PoolOwner
+  void
+    . lift
+    . DB.insertPoolOwner
+    $ DB.PoolOwner
       { DB.poolOwnerAddrId = saId
       , DB.poolOwnerPoolUpdateId = poolUpdateId
       }

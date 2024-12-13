@@ -409,9 +409,9 @@ pBootstrap =
 
 command' :: String -> String -> Parser a -> Opt.Mod Opt.CommandFields a
 command' c descr p =
-  Opt.command c $
-    Opt.info (p <**> Opt.helper) $
-      mconcat [Opt.progDesc descr]
+  Opt.command c
+    $ Opt.info (p <**> Opt.helper)
+    $ mconcat [Opt.progDesc descr]
 
 runVersionCommand :: IO ()
 runVersionCommand = do

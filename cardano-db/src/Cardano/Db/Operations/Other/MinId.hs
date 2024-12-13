@@ -80,8 +80,8 @@ textToMinIdsCore :: Text -> Maybe (MinIds 'TxOutCore)
 textToMinIdsCore txt =
   case Text.split (== ':') txt of
     [tminTxInId, tminTxOutId, tminMaTxOutId] ->
-      Just $
-        MinIds
+      Just
+        $ MinIds
           { minTxInId = toSqlKey <$> readMaybe (Text.unpack tminTxInId)
           , minTxOutId = toSqlKey <$> readMaybe (Text.unpack tminTxOutId)
           , minMaTxOutId = toSqlKey <$> readMaybe (Text.unpack tminMaTxOutId)
@@ -92,15 +92,15 @@ textToMinIdsVariant :: Text -> Maybe (MinIds 'TxOutVariantAddress)
 textToMinIdsVariant txt =
   case Text.split (== ':') txt of
     [tminTxInId, tminTxOutId, tminMaTxOutId] ->
-      Just $
-        MinIds
+      Just
+        $ MinIds
           { minTxInId = toSqlKey <$> readMaybe (Text.unpack tminTxInId)
           , minTxOutId = readMaybe (Text.unpack tminTxOutId)
           , minMaTxOutId = toSqlKey <$> readMaybe (Text.unpack tminMaTxOutId)
           }
     _otherwise -> Nothing
 
-minJust :: (Ord a) => Maybe a -> Maybe a -> Maybe a
+minJust :: Ord a => Maybe a -> Maybe a -> Maybe a
 minJust Nothing y = y
 minJust x Nothing = x
 minJust (Just x) (Just y) = Just (min x y)
@@ -109,7 +109,7 @@ minJust (Just x) (Just y) = Just (min x y)
 -- CompleteMinId
 --------------------------------------------------------------------------------
 completeMinId ::
-  (MonadIO m) =>
+  MonadIO m =>
   Maybe TxId ->
   MinIdsWrapper ->
   ReaderT SqlBackend m MinIdsWrapper
@@ -127,8 +127,8 @@ completeMinIdCore mTxId minIds = do
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
         Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) C.MaTxOutTxOutId txOutId
-      pure $
-        MinIds
+      pure
+        $ MinIds
           { minTxInId = mTxInId
           , minTxOutId = mTxOutId
           , minMaTxOutId = mMaTxOutId
@@ -144,8 +144,8 @@ completeMinIdVariant mTxId minIds = do
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
         Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) V.MaTxOutTxOutId txOutId
-      pure $
-        MinIds
+      pure
+        $ MinIds
           { minTxInId = mTxInId
           , minTxOutId = mTxOutId
           , minMaTxOutId = mMaTxOutId

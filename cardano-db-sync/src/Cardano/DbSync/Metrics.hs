@@ -41,8 +41,8 @@ data Metrics = Metrics
 withMetricSetters :: Int -> (MetricSetters -> IO a) -> IO a
 withMetricSetters prometheusPort action =
   withMetricsServer prometheusPort $ \metrics -> do
-    action $
-      MetricSetters
+    action
+      $ MetricSetters
         { metricsSetNodeBlockHeight = \(BlockNo nodeHeight) ->
             Gauge.set (fromIntegral nodeHeight) $ mNodeBlockHeight metrics
         , metricsSetDbQueueLength = \queuePostWrite ->

@@ -81,8 +81,8 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
   addrId <-
     lift $ queryOrInsertRewardAccount trce cache UpdateCache $ pProcReturnAddr pp
   votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
-  mParamProposalId <- lift $
-    case pProcGovAction pp of
+  mParamProposalId <- lift
+    $ case pProcGovAction pp of
       ParameterChange _ pparams _ ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
       _ -> pure Nothing
@@ -90,24 +90,24 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
     Nothing -> pure Nothing
     Just prevGovActionId -> Just <$> resolveGovActionProposal cache prevGovActionId
   govActionProposalId <-
-    lift $
-      DB.insertGovActionProposal $
-        DB.GovActionProposal
-          { DB.govActionProposalTxId = txId
-          , DB.govActionProposalIndex = index
-          , DB.govActionProposalPrevGovActionProposal = prevGovActionDBId
-          , DB.govActionProposalDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
-          , DB.govActionProposalReturnAddress = addrId
-          , DB.govActionProposalExpiration = (\epochNum -> unEpochNo epochNum + 1) <$> govExpiresAt
-          , DB.govActionProposalVotingAnchorId = Just votingAnchorId
-          , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
-          , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode (pProcGovAction pp)
-          , DB.govActionProposalParamProposal = mParamProposalId
-          , DB.govActionProposalRatifiedEpoch = Nothing
-          , DB.govActionProposalEnactedEpoch = Nothing
-          , DB.govActionProposalDroppedEpoch = Nothing
-          , DB.govActionProposalExpiredEpoch = Nothing
-          }
+    lift
+      $ DB.insertGovActionProposal
+      $ DB.GovActionProposal
+        { DB.govActionProposalTxId = txId
+        , DB.govActionProposalIndex = index
+        , DB.govActionProposalPrevGovActionProposal = prevGovActionDBId
+        , DB.govActionProposalDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
+        , DB.govActionProposalReturnAddress = addrId
+        , DB.govActionProposalExpiration = (\epochNum -> unEpochNo epochNum + 1) <$> govExpiresAt
+        , DB.govActionProposalVotingAnchorId = Just votingAnchorId
+        , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
+        , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode (pProcGovAction pp)
+        , DB.govActionProposalParamProposal = mParamProposalId
+        , DB.govActionProposalRatifiedEpoch = Nothing
+        , DB.govActionProposalEnactedEpoch = Nothing
+        , DB.govActionProposalDroppedEpoch = Nothing
+        , DB.govActionProposalExpiredEpoch = Nothing
+        }
   case pProcGovAction pp of
     TreasuryWithdrawals mp _ -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
     UpdateCommittee {} -> lift $ insertNewCommittee govActionProposalId
@@ -125,8 +125,8 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
     insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
       addrId <-
         queryOrInsertRewardAccount trce cache UpdateCache rwdAcc
-      DB.insertTreasuryWithdrawal $
-        DB.TreasuryWithdrawal
+      DB.insertTreasuryWithdrawal
+        $ DB.TreasuryWithdrawal
           { DB.treasuryWithdrawalGovActionProposalId = gaId
           , DB.treasuryWithdrawalStakeAddressId = addrId
           , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
@@ -151,16 +151,17 @@ insertCommittee mgapId committee = do
     r = unboundRational $ committeeThreshold committee -- TODO work directly with Ratio Word64. This is not currently supported in ledger
     insertNewMember committeeId (cred, e) = do
       chId <- insertCommitteeHash cred
-      void . DB.insertCommitteeMember $
-        DB.CommitteeMember
+      void
+        . DB.insertCommitteeMember
+        $ DB.CommitteeMember
           { DB.committeeMemberCommitteeId = committeeId
           , DB.committeeMemberCommitteeHashId = chId
           , DB.committeeMemberExpirationEpoch = unEpochNo e
           }
 
     insertCommitteeDB =
-      DB.insertCommittee $
-        DB.Committee
+      DB.insertCommittee
+        $ DB.Committee
           { DB.committeeGovActionProposalId = mgapId
           , DB.committeeQuorumNumerator = fromIntegral $ numerator r
           , DB.committeeQuorumDenominator = fromIntegral $ denominator r
@@ -178,8 +179,8 @@ resolveGovActionProposal cache gaId = do
   let txId = gaidTxId gaId
   gaTxId <- liftLookupFail "resolveGovActionProposal.queryTxId" $ queryTxIdWithCache cache txId
   let (GovActionIx index) = gaidGovActionIx gaId
-  liftLookupFail "resolveGovActionProposal.queryGovActionProposalId" $
-    DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
+  liftLookupFail "resolveGovActionProposal.queryGovActionProposalId"
+    $ DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -189,8 +190,8 @@ insertParamProposal ::
   ReaderT SqlBackend m DB.ParamProposalId
 insertParamProposal blkId txId pp = do
   cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (pppCostmdls pp)
-  DB.insertParamProposal $
-    DB.ParamProposal
+  DB.insertParamProposal
+    $ DB.ParamProposal
       { DB.paramProposalRegisteredTxId = txId
       , DB.paramProposalEpochNo = unEpochNo <$> pppEpochNo pp
       , DB.paramProposalKey = pppKey pp
@@ -252,8 +253,8 @@ insertParamProposal blkId txId pp = do
 insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m DB.ConstitutionId
 insertConstitution blockId mgapId constitution = do
   votingAnchorId <- insertVotingAnchor blockId DB.ConstitutionAnchor $ constitutionAnchor constitution
-  DB.insertConstitution $
-    DB.Constitution
+  DB.insertConstitution
+    $ DB.Constitution
       { DB.constitutionGovActionProposalId = mgapId
       , DB.constitutionVotingAnchorId = votingAnchorId
       , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
@@ -313,8 +314,8 @@ insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
 
 insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
 insertVotingAnchor blockId anchorType anchor =
-  DB.insertAnchor $
-    DB.VotingAnchor
+  DB.insertAnchor
+    $ DB.VotingAnchor
       { DB.votingAnchorBlockId = blockId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
       , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
@@ -357,8 +358,8 @@ insertDrepDistr e pSnapshot = do
     mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
     mkEntry (drep, coin) = do
       drepId <- insertDrep drep
-      pure $
-        DB.DrepDistr
+      pure
+        $ DB.DrepDistr
           { DB.drepDistrHashId = drepId
           , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
           , DB.drepDistrEpochNo = unEpochNo e
@@ -377,8 +378,8 @@ insertCostModel ::
   Map Language Ledger.CostModel ->
   ReaderT SqlBackend m DB.CostModelId
 insertCostModel _blkId cms =
-  DB.insertCostModel $
-    DB.CostModel
+  DB.insertCostModel
+    $ DB.CostModel
       { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.mkCostModels cms
       , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
       }
@@ -431,15 +432,15 @@ insertUpdateEnacted ::
 insertUpdateEnacted trce cache blkId epochNo enactedState = do
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
   constitutionId <- handleConstitution
-  void $
-    lift $
-      DB.insertEpochState
-        DB.EpochState
-          { DB.epochStateCommitteeId = mcommitteeId
-          , DB.epochStateNoConfidenceId = mnoConfidenceGaId
-          , DB.epochStateConstitutionId = Just constitutionId
-          , DB.epochStateEpochNo = unEpochNo epochNo
-          }
+  void
+    $ lift
+    $ DB.insertEpochState
+      DB.EpochState
+        { DB.epochStateCommitteeId = mcommitteeId
+        , DB.epochStateNoConfidenceId = mnoConfidenceGaId
+        , DB.epochStateConstitutionId = Just constitutionId
+        , DB.epochStateEpochNo = unEpochNo epochNo
+        }
   where
     govIds = govStatePrevGovActionIds enactedState
 
@@ -469,14 +470,14 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
             [] -> do
               -- This should never happen. Having a committee and an enacted action, means
               -- the committee came from a proposal which should be returned from the query.
-              liftIO $
-                logWarning trce $
-                  mconcat
-                    [ "The impossible happened! Couldn't find the committee "
-                    , textShow committee
-                    , " which was enacted by a proposal "
-                    , textShow committeeGaId
-                    ]
+              liftIO
+                $ logWarning trce
+                $ mconcat
+                  [ "The impossible happened! Couldn't find the committee "
+                  , textShow committee
+                  , " which was enacted by a proposal "
+                  , textShow committeeGaId
+                  ]
               pure (Nothing, Nothing)
             (committeeId : _rest) ->
               pure (Just committeeId, Nothing)
@@ -493,13 +494,13 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
         -- On next epochs there will be at least one constitution, so the query will return something.
         [] -> lift $ insertConstitution blkId Nothing (cgsConstitution enactedState)
         constitutionId : rest -> do
-          unless (null rest) $
-            liftIO $
-              logWarning trce $
-                mconcat
-                  [ "Found multiple constitutions for proposal "
-                  , textShow mConstitutionGaId
-                  , ": "
-                  , textShow constitutionIds
-                  ]
+          unless (null rest)
+            $ liftIO
+            $ logWarning trce
+            $ mconcat
+              [ "Found multiple constitutions for proposal "
+              , textShow mConstitutionGaId
+              , ": "
+              , textShow constitutionIds
+              ]
           pure constitutionId

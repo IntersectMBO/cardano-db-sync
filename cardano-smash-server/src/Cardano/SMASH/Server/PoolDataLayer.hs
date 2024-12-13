@@ -59,15 +59,16 @@ postgresqlPoolDataLayer tracer conn =
         pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, dbToServantPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
     , dlAddReservedTicker = \ticker poolId -> do
         inserted <-
-          Db.runPoolDbIohkLogging conn tracer $
-            Db.insertReservedPoolTicker $
-              Db.ReservedPoolTicker (getTickerName ticker) (servantToDbPoolId poolId)
+          Db.runPoolDbIohkLogging conn tracer
+            $ Db.insertReservedPoolTicker
+            $ Db.ReservedPoolTicker (getTickerName ticker) (servantToDbPoolId poolId)
         case inserted of
           Just _ -> pure $ Right ticker
           Nothing -> pure $ Left $ TickerAlreadyReserved ticker
     , dlCheckReservedTicker = \ticker -> do
-        Db.runPoolDbIohkLogging conn tracer $
-          fmap dbToServantPoolId <$> Db.queryReservedTicker (getTickerName ticker)
+        Db.runPoolDbIohkLogging conn tracer
+          $ fmap dbToServantPoolId
+          <$> Db.queryReservedTicker (getTickerName ticker)
     , dlGetDelistedPools = do
         fmap dbToServantPoolId <$> Db.runPoolDbIohkLogging conn tracer Db.queryDelistedPools
     , dlCheckDelistedPool = \poolHash -> do
@@ -83,8 +84,8 @@ postgresqlPoolDataLayer tracer conn =
               pure $ Right poolHash
     , dlRemoveDelistedPool = \poolHash -> do
         deleted <-
-          Db.runPoolDbIohkLogging conn tracer $
-            Db.deleteDelistedPool (servantToDbPoolId poolHash)
+          Db.runPoolDbIohkLogging conn tracer
+            $ Db.deleteDelistedPool (servantToDbPoolId poolHash)
         if deleted
           then pure $ Right poolHash
           else pure $ Left RecordDoesNotExist
@@ -97,8 +98,8 @@ postgresqlPoolDataLayer tracer conn =
         pure $ Right $ dbToServantPoolId <$> ls
     , dlGetFetchErrors = \poolId mTimeFrom -> do
         fetchErrors <-
-          Db.runPoolDbIohkLogging conn tracer $
-            Db.queryOffChainPoolFetchError (servantToDbPoolId poolId) mTimeFrom
+          Db.runPoolDbIohkLogging conn tracer
+            $ Db.queryOffChainPoolFetchError (servantToDbPoolId poolId) mTimeFrom
         pure $ Right $ dbToServantFetchError poolId <$> fetchErrors
     , dlGetPool = \poolId -> do
         isActive <- isPoolActive tracer conn poolId

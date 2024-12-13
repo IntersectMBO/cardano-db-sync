@@ -66,12 +66,12 @@ performBasicPrune useTxOutAddress = do
     blks <- forgeAndSubmitBlocks interpreter mockServer 50
 
     -- Add blocks with transactions
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
 
     -- Check tx-out count before pruning
     assertBlockNoBackoff dbSync (fullBlockSize blks)
@@ -109,12 +109,12 @@ performPruneWithSimpleRollback useTxOutAddress =
     atomically $ addBlock mockServer blk1
 
     -- Create some payment transactions
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 1) (UTxOIndex 0) 10_000 10_000 0
     assertEqQuery dbSync (DB.queryTxOutCount txOutTableType) 14 ""
 
     -- Submit some blocks
@@ -193,12 +193,12 @@ performPruningShouldKeepSomeTx useTxOutAddress = do
     blk1 <- forgeAndSubmitBlocks interpreter mockServer 80
     -- These two blocks/transactions will fall within the last (2 * securityParam) 20
     -- blocks so should not be pruned
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 2) (UTxOIndex 3) 10_000 10_000 0
     blk2 <- forgeAndSubmitBlocks interpreter mockServer 18
     -- Verify the two transactions above weren't pruned
     assertBlockNoBackoff dbSync (fromIntegral $ length (blk1 <> blk2) + 2)
@@ -230,9 +230,9 @@ performPruneAndRollBackOneBlock useTxOutAddress =
     void $ forgeAndSubmitBlocks interpreter mockServer 98
     -- These transactions will fall within the last (2 * securityParam) 20
     -- blocks so should not be pruned
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Create a block to rollback to
     blk100 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     state' <- getConwayLedgerState interpreter
@@ -275,9 +275,9 @@ performNoPruneAndRollBack useTxOutAddress =
     -- Forge some blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 98
     -- Add a block with transactions
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 10_000 0
     -- Create a block to rollback to
     blk100 <- forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Add some more blocks

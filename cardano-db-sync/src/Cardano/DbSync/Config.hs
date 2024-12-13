@@ -59,8 +59,8 @@ coalesceConfig ::
   IO SyncNodeConfig
 coalesceConfig pcfg ncfg adjustGenesisPath = do
   lc <- Logging.setupFromRepresentation $ pcLoggingConfig pcfg
-  pure $
-    SyncNodeConfig
+  pure
+    $ SyncNodeConfig
       { dncNetworkName = pcNetworkName pcfg
       , dncLoggingConfig = lc
       , dncNodeConfigFile = pcNodeConfigFile pcfg

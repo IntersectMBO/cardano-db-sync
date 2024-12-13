@@ -27,8 +27,8 @@ import Prelude (String ())
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync.Era.Shelley.Generic.Script"
       [ ("multisigToJSON simple", prop_multisigToJSON)
       , ("multisigToJSON negative", prop_multisigToJSON_bad)

@@ -148,38 +148,38 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   -- use when updating the Epoch, thus saving us having to recalulating them later.
   case cblk of
     BlockByron blk ->
-      newExceptT $
-        insertByronBlock syncEnv isStartEventOrRollback blk details
+      newExceptT
+        $ insertByronBlock syncEnv isStartEventOrRollback blk details
     BlockShelley blk ->
-      newExceptT $
-        insertBlockUniversal' $
-          Generic.fromShelleyBlock blk
+      newExceptT
+        $ insertBlockUniversal'
+        $ Generic.fromShelleyBlock blk
     BlockAllegra blk ->
-      newExceptT $
-        insertBlockUniversal' $
-          Generic.fromAllegraBlock blk
+      newExceptT
+        $ insertBlockUniversal'
+        $ Generic.fromAllegraBlock blk
     BlockMary blk ->
-      newExceptT $
-        insertBlockUniversal' $
-          Generic.fromMaryBlock blk
+      newExceptT
+        $ insertBlockUniversal'
+        $ Generic.fromMaryBlock blk
     BlockAlonzo blk ->
-      newExceptT $
-        insertBlockUniversal' $
-          Generic.fromAlonzoBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+      newExceptT
+        $ insertBlockUniversal'
+        $ Generic.fromAlonzoBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockBabbage blk ->
-      newExceptT $
-        insertBlockUniversal' $
-          Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+      newExceptT
+        $ insertBlockUniversal'
+        $ Generic.fromBabbageBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
     BlockConway blk ->
-      newExceptT $
-        insertBlockUniversal' $
-          Generic.fromConwayBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+      newExceptT
+        $ insertBlockUniversal'
+        $ Generic.fromConwayBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
   -- update the epoch
   updateEpoch details isNewEpochEvent
-  whenPruneTxOut syncEnv $
-    when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
-      do
-        lift $ DB.deleteConsumedTxOut tracer txOutTableType (getSafeBlockNoDiff syncEnv)
+  whenPruneTxOut syncEnv
+    $ when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0)
+    $ do
+      lift $ DB.deleteConsumedTxOut tracer txOutTableType (getSafeBlockNoDiff syncEnv)
   commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv

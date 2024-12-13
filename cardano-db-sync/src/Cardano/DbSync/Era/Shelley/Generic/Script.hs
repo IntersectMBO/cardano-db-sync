@@ -214,7 +214,7 @@ parseScriptAny = Aeson.withObject "any" $ \obj -> do
     _ -> fail "\"any\" script value not found"
 
 parseScriptMOf ::
-  (FromJSON script) =>
+  FromJSON script =>
   Aeson.Value ->
   Parser (Int, [script])
 parseScriptMOf = Aeson.withObject "atLeast" $ \obj -> do
@@ -223,19 +223,19 @@ parseScriptMOf = Aeson.withObject "atLeast" $ \obj -> do
     "atLeast" -> do
       scripts <- obj .: "scripts"
       req <- obj .: "required"
-      when (req > length scripts) $
-        reqMismatchedFailure req scripts
+      when (req > length scripts)
+        $ reqMismatchedFailure req scripts
 
       pure (req, scripts)
     _ -> fail "\"atLeast\" script value not found"
   where
     reqMismatchedFailure req scripts =
-      fail $
-        "Required number of script signature exceeds the number of scripts."
-          <> " Required: "
-          <> show req
-          <> " Scripts: "
-          <> show (length scripts)
+      fail
+        $ "Required number of script signature exceeds the number of scripts."
+        <> " Required: "
+        <> show req
+        <> " Scripts: "
+        <> show (length scripts)
 
 parseTimelockExpire :: (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => Aeson.Value -> Parser (Allegra.Timelock era)
 parseTimelockExpire = Aeson.withObject "before" $ \obj -> do

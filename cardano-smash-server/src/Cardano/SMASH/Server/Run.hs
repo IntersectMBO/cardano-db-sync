@@ -36,8 +36,8 @@ runSmashServer :: SmashServerConfig -> IO ()
 runSmashServer config = do
   let trce = sscTrace config
   let settings =
-        setPort (sscSmashPort config) $
-          setBeforeMainLoop
+        setPort (sscSmashPort config)
+          $ setBeforeMainLoop
             (logInfo trce $ "SMASH listening on port " <> textShow (sscSmashPort config))
             defaultSettings
 
@@ -53,8 +53,8 @@ mkApp trce dataLayer appUsers = do
   -- You can always run the migrations first.
   threadDelay 2_000_000
 
-  pure $
-    serveWithContext
+  pure
+    $ serveWithContext
       fullAPI
       (basicAuthServerContext appUsers)
       (server $ ServerEnv trce dataLayer)
@@ -91,8 +91,8 @@ checkIfUserValid (ApplicationUsers applicationUsers) applicationUser@(Applicatio
 runAppStubbed :: Trace IO Text -> Int -> IO ()
 runAppStubbed trce port = do
   let settings =
-        setPort port $
-          setBeforeMainLoop
+        setPort port
+          $ setBeforeMainLoop
             (hPutStrLn stderr ("SMASH-stubbed listening on port " ++ show port))
             defaultSettings
 
@@ -102,8 +102,8 @@ mkAppStubbed :: Trace IO Text -> IO Application
 mkAppStubbed trce = do
   dataLayer <- createCachedPoolDataLayer Nothing
 
-  pure $
-    serveWithContext
+  pure
+    $ serveWithContext
       fullAPI
       (basicAuthServerContext stubbedApplicationUsers)
       (server $ ServerEnv trce dataLayer)

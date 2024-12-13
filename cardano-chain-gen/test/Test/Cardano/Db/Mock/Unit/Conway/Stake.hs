@@ -43,22 +43,22 @@ registrationTx =
     startDBSync dbSync
 
     -- Forge some registration txs
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkUnRegTxCert SNothing)]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkUnRegTxCert SNothing)]
 
     -- Add interval so txs don't have the same ID
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        fmap (Conway.addValidityInterval 1000)
-          . Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        fmap (Conway.addValidityInterval 2000)
-          . Conway.mkSimpleDCertTx [(StakeIndex 1, Conway.mkUnRegTxCert SNothing)]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ fmap (Conway.addValidityInterval 1000)
+      . Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ fmap (Conway.addValidityInterval 2000)
+      . Conway.mkSimpleDCertTx [(StakeIndex 1, Conway.mkUnRegTxCert SNothing)]
 
     -- Wait for it to sync and verify counts
     assertBlockNoBackoff dbSync 4
@@ -100,15 +100,15 @@ registrationsSameTx =
     startDBSync dbSync
 
     -- Forge a transaction with some registrations
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx
-          [ (StakeIndexNew 1, Conway.mkRegTxCert SNothing)
-          , (StakeIndexNew 1, Conway.mkUnRegTxCert SNothing)
-          , -- The certificates need to be unique, otherwise they'll be deduplicated
-            (StakeIndexNew 1, Conway.mkRegTxCert (SJust $ Coin 0))
-          , (StakeIndexNew 1, Conway.mkUnRegTxCert (SJust $ Coin 0))
-          ]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx
+        [ (StakeIndexNew 1, Conway.mkRegTxCert SNothing)
+        , (StakeIndexNew 1, Conway.mkUnRegTxCert SNothing)
+        , -- The certificates need to be unique, otherwise they'll be deduplicated
+          (StakeIndexNew 1, Conway.mkRegTxCert (SJust $ Coin 0))
+        , (StakeIndexNew 1, Conway.mkUnRegTxCert (SJust $ Coin 0))
+        ]
 
     -- Wait for it to sync and verify counts
     assertBlockNoBackoff dbSync 1
@@ -123,14 +123,14 @@ stakeAddressPtr =
 
     -- Forge a block with a cert
     blk <-
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+        $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
 
     -- Forge a block pointing to the cert
     let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
 
     -- Wait for it to sync and verify counts
     assertBlockNoBackoff dbSync 2
@@ -145,8 +145,8 @@ stakeAddressPtrDereg =
 
     -- Forge a block with a registration
     blk <-
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert SNothing)]
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+        $ Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert SNothing)]
     -- Forge a block with a pointer
     let ptr0 = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
     blk' <- Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
@@ -202,23 +202,23 @@ stakeAddressPtrUseBefore =
     startDBSync dbSync
 
     -- Use a stake credential
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx
-          (UTxOIndex 1)
-          (UTxOAddressNewWithStake 0 $ StakeIndexNew 1)
-          10_000
-          500
-          0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx
+        (UTxOIndex 1)
+        (UTxOAddressNewWithStake 0 $ StakeIndexNew 1)
+        10_000
+        500
+        0
     -- Register it
     blk <-
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+        $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Create a pointer to it
     let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
 
     -- Wait for it to sync and verify count
     assertBlockNoBackoff dbSync 3
@@ -384,8 +384,8 @@ delegationsManyNotDense =
     -- Blocks come on average every 5 slots. If we skip 15 slots before each block,
     -- we are expected to get only 1/4 of the expected blocks. The adjusted slices
     -- should still be long enough to cover everything.
-    replicateM_ 40 $
-      Api.forgeNextSkipSlotsFindLeaderAndSubmit interpreter mockServer 15 []
+    replicateM_ 40
+      $ Api.forgeNextSkipSlotsFindLeaderAndSubmit interpreter mockServer 15 []
 
     -- Even if the chain is sparse, all distributions are inserted.
     assertEpochStakeEpoch dbSync 7 40_005

@@ -111,8 +111,9 @@ insertOffChainPoolResults trce resultQueue = do
   unless (null res) $ do
     let resLength = length res
         resErrorsLength = length $ filter isFetchError res
-    liftIO . logInfo trce $
-      logInsertOffChainResults "Pool" resLength resErrorsLength
+    liftIO
+      . logInfo trce
+      $ logInsertOffChainResults "Pool" resLength resErrorsLength
   mapM_ insert res
   where
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
@@ -135,8 +136,9 @@ insertOffChainVoteResults trce resultQueue = do
   unless (null res) $ do
     let resLength = length res
         resErrorsLength = length $ filter isFetchError res
-    liftIO . logInfo trce $
-      logInsertOffChainResults "Voting Anchor" resLength resErrorsLength
+    liftIO
+      . logInfo trce
+      $ logInsertOffChainResults "Voting Anchor" resLength resErrorsLength
   mapM_ insert res
   where
     insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
@@ -182,17 +184,18 @@ runFetchOffChainPoolThread syncEnv = do
   -- if dissable gov is active then don't run voting anchor thread
   when (ioOffChainPoolData iopts) $ do
     logInfo trce "Running Offchain Pool fetch thread"
-    runIohkLogging trce $
-      withPostgresqlConn (envConnectionString syncEnv) $
-        \backendPool -> liftIO $
-          forever $ do
-            tDelay
-            -- load the offChain vote work queue using the db
-            _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) backendPool
-            poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue syncEnv)
-            manager <- Http.newManager tlsManagerSettings
-            now <- liftIO Time.getPOSIXTime
-            mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
+    runIohkLogging trce
+      $ withPostgresqlConn (envConnectionString syncEnv)
+      $ \backendPool -> liftIO
+        $ forever
+        $ do
+          tDelay
+          -- load the offChain vote work queue using the db
+          _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) backendPool
+          poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue syncEnv)
+          manager <- Http.newManager tlsManagerSettings
+          now <- liftIO Time.getPOSIXTime
+          mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
@@ -205,16 +208,17 @@ runFetchOffChainVoteThread syncEnv = do
   -- if dissable gov is active then don't run voting anchor thread
   when (ioGov iopts) $ do
     logInfo trce "Running Offchain Vote Anchor fetch thread"
-    runIohkLogging trce $
-      withPostgresqlConn (envConnectionString syncEnv) $
-        \backendVote -> liftIO $
-          forever $ do
-            tDelay
-            -- load the offChain vote work queue using the db
-            _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
-            voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
-            now <- liftIO Time.getPOSIXTime
-            mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
+    runIohkLogging trce
+      $ withPostgresqlConn (envConnectionString syncEnv)
+      $ \backendVote -> liftIO
+        $ forever
+        $ do
+          tDelay
+          -- load the offChain vote work queue using the db
+          _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
+          voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
+          now <- liftIO Time.getPOSIXTime
+          mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
@@ -242,8 +246,8 @@ fetchOffChainPoolData _tracer manager time oPoolWorkQ =
     convert eres =
       case eres of
         Right sPoolData ->
-          OffChainPoolResultMetadata $
-            DB.OffChainPoolData
+          OffChainPoolResultMetadata
+            $ DB.OffChainPoolData
               { DB.offChainPoolDataPoolId = oPoolWqHashId oPoolWorkQ
               , DB.offChainPoolDataTickerName = spodTickerName sPoolData
               , DB.offChainPoolDataHash = spodHash sPoolData
@@ -252,8 +256,8 @@ fetchOffChainPoolData _tracer manager time oPoolWorkQ =
               , DB.offChainPoolDataPmrId = oPoolWqReferenceId oPoolWorkQ
               }
         Left err ->
-          OffChainPoolResultError $
-            DB.OffChainPoolFetchError
+          OffChainPoolResultError
+            $ DB.OffChainPoolFetchError
               { DB.offChainPoolFetchErrorPoolId = oPoolWqHashId oPoolWorkQ
               , DB.offChainPoolFetchErrorFetchTime = Time.posixSecondsToUTCTime time
               , DB.offChainPoolFetchErrorPmrId = oPoolWqReferenceId oPoolWorkQ
@@ -294,8 +298,8 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
            in
             OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
         Left err ->
-          OffChainVoteResultError $
-            DB.OffChainVoteFetchError
+          OffChainVoteResultError
+            $ DB.OffChainVoteFetchError
               { DB.offChainVoteFetchErrorVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
               , DB.offChainVoteFetchErrorFetchError = show err
               , DB.offChainVoteFetchErrorFetchTime = Time.posixSecondsToUTCTime time
@@ -303,8 +307,8 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
               }
     mkGovAction ocvdId = \case
       Vote.OffChainVoteDataGa dt ->
-        Just $
-          DB.OffChainVoteGovActionData
+        Just
+          $ DB.OffChainVoteGovActionData
             { DB.offChainVoteGovActionDataOffChainVoteDataId = ocvdId
             , DB.offChainVoteGovActionDataTitle = Vote.textValue $ Vote.title $ Vote.body dt
             , DB.offChainVoteGovActionDataAbstract = Vote.textValue $ Vote.abstract $ Vote.body dt
@@ -315,8 +319,8 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
 
     mkDrep ocvdId = \case
       Vote.OffChainVoteDataDr dt ->
-        Just $
-          DB.OffChainVoteDrepData
+        Just
+          $ DB.OffChainVoteDrepData
             { DB.offChainVoteDrepDataOffChainVoteDataId = ocvdId
             , DB.offChainVoteDrepDataPaymentAddress = Vote.textValue <$> Vote.paymentAddress (Vote.body dt)
             , DB.offChainVoteDrepDataGivenName = Vote.textValue $ Vote.givenName $ Vote.body dt

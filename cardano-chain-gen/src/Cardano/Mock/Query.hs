@@ -98,8 +98,8 @@ queryDRepDistrAmount drepHash epochNo = do
     (distr :& hash) <-
       from
         $ table @Db.DrepDistr
-          `innerJoin` table @Db.DrepHash
-        `on` (\(distr :& hash) -> (hash ^. Db.DrepHashId) ==. (distr ^. Db.DrepDistrHashId))
+        `innerJoin` table @Db.DrepHash
+          `on` (\(distr :& hash) -> (hash ^. Db.DrepHashId) ==. (distr ^. Db.DrepDistrHashId))
 
     where_ $ hash ^. Db.DrepHashRaw ==. just (val drepHash)
     where_ $ distr ^. Db.DrepDistrEpochNo ==. val epochNo
@@ -140,14 +140,14 @@ queryConstitutionAnchor epochNo = do
     (_ :& anchor :& epochState) <-
       from
         $ table @Db.Constitution
-          `innerJoin` table @Db.VotingAnchor
-        `on` ( \(constit :& anchor) ->
-                (constit ^. Db.ConstitutionVotingAnchorId) ==. (anchor ^. Db.VotingAnchorId)
-             )
-          `innerJoin` table @Db.EpochState
-        `on` ( \(constit :& _ :& epoch) ->
-                just (constit ^. Db.ConstitutionId) ==. (epoch ^. Db.EpochStateConstitutionId)
-             )
+        `innerJoin` table @Db.VotingAnchor
+          `on` ( \(constit :& anchor) ->
+                  (constit ^. Db.ConstitutionVotingAnchorId) ==. (anchor ^. Db.VotingAnchorId)
+               )
+        `innerJoin` table @Db.EpochState
+          `on` ( \(constit :& _ :& epoch) ->
+                  just (constit ^. Db.ConstitutionId) ==. (epoch ^. Db.EpochStateConstitutionId)
+               )
 
     where_ (epochState ^. Db.EpochStateEpochNo ==. val epochNo)
 
@@ -193,11 +193,13 @@ queryVoteCounts txHash idx = do
         (vote :& tx) <-
           from
             $ table @Db.VotingProcedure
-              `innerJoin` table @Db.Tx
-            `on` (\(vote :& tx) -> vote ^. Db.VotingProcedureTxId ==. tx ^. Db.TxId)
-        where_ $
-          vote ^. Db.VotingProcedureVote ==. val v
-            &&. tx ^. Db.TxHash ==. val txHash
-            &&. vote ^. Db.VotingProcedureIndex ==. val idx
+            `innerJoin` table @Db.Tx
+              `on` (\(vote :& tx) -> vote ^. Db.VotingProcedureTxId ==. tx ^. Db.TxId)
+        where_
+          $ vote
+          ^. Db.VotingProcedureVote
+          ==. val v
+          &&. tx ^. Db.TxHash ==. val txHash
+          &&. vote ^. Db.VotingProcedureIndex ==. val idx
         pure countRows
       pure (maybe 0 unValue res)

@@ -15,8 +15,8 @@ import Prelude ()
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync.Config.Types"
       [ ("SyncInsertConfig FromJSON", prop_syncInsertConfigFromJSON)
       , ("SyncInsertConfig roundtrip", prop_syncInsertConfigRoundtrip)

@@ -89,8 +89,9 @@ optimiseCaches cache =
   case cache of
     NoCache -> pure ()
     ActiveCache c ->
-      withCacheOptimisationCheck c (pure ()) $
-        liftIO $ do
+      withCacheOptimisationCheck c (pure ())
+        $ liftIO
+        $ do
           -- empty caches not to be used anymore
           atomically $ modifyTVar (cTxIds c) FIFO.cleanupCache
           atomically $ writeTVar (cStake c) (StakeCache Map.empty (LRU.empty 0))
@@ -139,8 +140,8 @@ insertStakeAddress ::
   Maybe ByteString ->
   ReaderT SqlBackend m DB.StakeAddressId
 insertStakeAddress rewardAddr stakeCredBs = do
-  DB.insertStakeAddress $
-    DB.StakeAddress
+  DB.insertStakeAddress
+    $ DB.StakeAddress
       { DB.stakeAddressHashRaw = addrBs
       , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
       , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
@@ -195,9 +196,9 @@ queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred
                       UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
                       UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
                       _otherwise -> stakeCache
-                liftIO $
-                  atomically $
-                    writeTVar (cStake ci) stakeCache'
+                liftIO
+                  $ atomically
+                  $ writeTVar (cStake ci) stakeCache'
                 pure $ Right stakeAddrsId
   where
     rsStkAdrrs bs = mapLeft (,bs) <$> resolveStakeAddress bs
@@ -233,11 +234,11 @@ queryPoolKeyWithCache cache cacheUA hsh =
         Just phId -> do
           liftIO $ hitPools (cStats ci)
           -- hit so we can't cache even with 'CacheNew'
-          when (cacheUA == EvictAndUpdateCache) $
-            liftIO $
-              atomically $
-                modifyTVar (cPools ci) $
-                  Map.delete hsh
+          when (cacheUA == EvictAndUpdateCache)
+            $ liftIO
+            $ atomically
+            $ modifyTVar (cPools ci)
+            $ Map.delete hsh
           pure $ Right phId
         Nothing -> do
           liftIO $ missPools (cStats ci)
@@ -246,11 +247,11 @@ queryPoolKeyWithCache cache cacheUA hsh =
             Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
             Just phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
-              when (shouldCache cacheUA) $
-                liftIO $
-                  atomically $
-                    modifyTVar (cPools ci) $
-                      Map.insert hsh phId
+              when (shouldCache cacheUA)
+                $ liftIO
+                $ atomically
+                $ modifyTVar (cPools ci)
+                $ Map.insert hsh phId
               pure $ Right phId
 
 insertPoolKeyWithCache ::
@@ -262,8 +263,8 @@ insertPoolKeyWithCache ::
 insertPoolKeyWithCache cache cacheUA pHash =
   case cache of
     NoCache ->
-      DB.insertPoolHash $
-        DB.PoolHash
+      DB.insertPoolHash
+        $ DB.PoolHash
           { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
           , DB.poolHashView = Generic.unKeyHashView pHash
           }
@@ -272,25 +273,25 @@ insertPoolKeyWithCache cache cacheUA pHash =
       case Map.lookup pHash mp of
         Just phId -> do
           liftIO $ hitPools (cStats ci)
-          when (cacheUA == EvictAndUpdateCache) $
-            liftIO $
-              atomically $
-                modifyTVar (cPools ci) $
-                  Map.delete pHash
+          when (cacheUA == EvictAndUpdateCache)
+            $ liftIO
+            $ atomically
+            $ modifyTVar (cPools ci)
+            $ Map.delete pHash
           pure phId
         Nothing -> do
           liftIO $ missPools (cStats ci)
           phId <-
-            DB.insertPoolHash $
-              DB.PoolHash
+            DB.insertPoolHash
+              $ DB.PoolHash
                 { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
                 , DB.poolHashView = Generic.unKeyHashView pHash
                 }
-          when (shouldCache cacheUA) $
-            liftIO $
-              atomically $
-                modifyTVar (cPools ci) $
-                  Map.insert pHash phId
+          when (shouldCache cacheUA)
+            $ liftIO
+            $ atomically
+            $ modifyTVar (cPools ci)
+            $ Map.insert pHash phId
           pure phId
 
 queryPoolKeyOrInsert ::
@@ -307,18 +308,18 @@ queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
   case pk of
     Right poolHashId -> pure poolHashId
     Left err -> do
-      when logsWarning $
-        liftIO $
-          logWarning trce $
-            mconcat
-              [ "Failed with "
-              , textShow err
-              , " while trying to find pool "
-              , textShow hsh
-              , " for "
-              , txt
-              , ". We will assume that the pool exists and move on."
-              ]
+      when logsWarning
+        $ liftIO
+        $ logWarning trce
+        $ mconcat
+          [ "Failed with "
+          , textShow err
+          , " while trying to find pool "
+          , textShow hsh
+          , " for "
+          , txt
+          , ". We will assume that the pool exists and move on."
+          ]
       insertPoolKeyWithCache cache cacheUA hsh
 
 queryMAWithCache ::
@@ -344,8 +345,11 @@ queryMAWithCache cache policyId asset =
             let !policyBs = Generic.unScriptHash $ policyID policyId
             let !assetNameBs = Generic.unAssetName asset
             maId <- maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
-            whenRight maId $
-              liftIO . atomically . modifyTVar (cMultiAssets ci) . LRU.insert (policyId, asset)
+            whenRight maId
+              $ liftIO
+              . atomically
+              . modifyTVar (cMultiAssets ci)
+              . LRU.insert (policyId, asset)
             pure maId
   where
     queryDb = do
@@ -481,10 +485,10 @@ insertDatumAndCache cache hsh dt = do
     NoCache -> pure datumId
     ActiveCache ci ->
       withCacheOptimisationCheck ci (pure datumId) $ do
-        liftIO $
-          atomically $
-            modifyTVar (cDatum ci) $
-              LRU.insert hsh datumId
+        liftIO
+          $ atomically
+          $ modifyTVar (cDatum ci)
+          $ LRU.insert hsh datumId
         pure datumId
 
 withCacheOptimisationCheck ::

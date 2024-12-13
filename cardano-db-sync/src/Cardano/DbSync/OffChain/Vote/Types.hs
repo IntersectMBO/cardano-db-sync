@@ -110,7 +110,7 @@ newtype TextValue = TextValue {textValue :: Text}
 instance Show TextValue where
   show = show . textValue
 
-deriving instance (Show (Body tp)) => Show (OffChainVoteDataTp tp)
+deriving instance Show (Body tp) => Show (OffChainVoteDataTp tp)
 deriving instance Generic (OffChainVoteDataTp tp)
 
 data Author = Author

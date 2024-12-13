@@ -36,8 +36,8 @@ serialiseToBech32 :: Text -> ByteString -> Text
 serialiseToBech32 prefix bytes = encodeLenient humanReadablePart dataPart
   where
     humanReadablePart =
-      either (panic . show) id $
-        humanReadablePartFromText prefix
+      either (panic . show) id
+        $ humanReadablePartFromText prefix
     dataPart = dataPartFromBytes bytes
 
 -- | Deserialise a bech32 address to a ByteString

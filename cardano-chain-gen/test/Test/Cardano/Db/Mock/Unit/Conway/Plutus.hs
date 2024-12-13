@@ -88,9 +88,9 @@ simpleScript =
     epoch <- Api.fillUntilNextEpoch interpreter mockServer
 
     -- Forge a block with a script
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline True] 20_000 20_000
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline True] 20_000 20_000
 
     -- Verify the outputs match expected
     assertBlockNoBackoff dbSync (length epoch + 2)
@@ -123,8 +123,8 @@ simpleScript =
       ( renderAddress Examples.alwaysSucceedsScriptAddr
       , True
       , DB.DbLovelace 20_000
-      , Just $
-          hashToBytes (extractHash $ hashData @StandardConway Examples.plutusDataList)
+      , Just
+          $ hashToBytes (extractHash $ hashData @StandardConway Examples.plutusDataList)
       )
 
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
@@ -171,17 +171,17 @@ unlockScriptNoPlutus =
 
     -- Lock some funds
     lockTx <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline True] 20_000 20_000
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline True] 20_000 20_000
     -- Unlock the funds above with a script
     let utxos = map UTxOPair (Conway.mkUTxOConway lockTx)
     unlockTx <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTx utxos (UTxOIndex 1) (UTxOIndex 2) True 10_000 500
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTx utxos (UTxOIndex 1) (UTxOIndex 2) True 10_000 500
 
     -- Submit them
-    void $
-      Api.forgeNextFindLeaderAndSubmit
+    void
+      $ Api.forgeNextFindLeaderAndSubmit
         interpreter
         mockServer
         (map TxConway [lockTx, unlockTx])
@@ -204,23 +204,23 @@ failedScript =
 
     -- Forge a block with a script
     tx <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx] (NodeId 1)
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx] (NodeId 1)
 
     -- Forge another block with a failing unlock script
     let utxo = head (Conway.mkUTxOConway tx)
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkUnlockScriptTx
-          [UTxOPair utxo]
-          (UTxOIndex 1)
-          (UTxOIndex 2)
-          False -- Force failure
-          10_000
-          500
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkUnlockScriptTx
+        [UTxOPair utxo]
+        (UTxOIndex 1)
+        (UTxOIndex 2)
+        False -- Force failure
+        10_000
+        500
 
     -- Verify the invalid tx counts
     assertBlockNoBackoff dbSync 2
@@ -235,23 +235,23 @@ failedScriptFees =
 
     -- Forge a block with a lock script
     tx <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx] (NodeId 1)
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx] (NodeId 1)
 
     -- Forge another block with a failing unlock script
     let utxo = head (Conway.mkUTxOConway tx)
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkUnlockScriptTx
-          [UTxOPair utxo]
-          (UTxOIndex 1)
-          (UTxOIndex 2)
-          False -- Force failure
-          10_000
-          500
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkUnlockScriptTx
+        [UTxOPair utxo]
+        (UTxOIndex 1)
+        (UTxOIndex 2)
+        False -- Force failure
+        10_000
+        500
 
     -- Verify fees
     assertBlockNoBackoff dbSync 2
@@ -305,8 +305,8 @@ multipleScripts =
 
     -- Forge multiple script transactions
     tx0 <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           (map Conway.TxOutNoInline [True, False, True])
           20_000
@@ -315,8 +315,8 @@ multipleScripts =
         pair1 = head utxo
         pair2 = utxo !! 2
     tx1 <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTx
           [UTxOPair pair1, UTxOPair pair2]
           (UTxOIndex 1)
           (UTxOIndex 2)
@@ -325,12 +325,12 @@ multipleScripts =
           500
 
     -- Submit the txs in separate blocks
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx0] (NodeId 1)
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx1] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx0] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx1] (NodeId 1)
 
     -- Verify tx counts
     assertBlockNoBackoff dbSync 2
@@ -345,8 +345,8 @@ multipleScriptsRollback =
 
     -- Create multiple scripts
     tx0 <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           (map Conway.TxOutNoInline [True, False, True])
           20_000
@@ -355,8 +355,8 @@ multipleScriptsRollback =
         pair1 = head utxo
         pair2 = utxo !! 2
     tx1 <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTx
           [UTxOPair pair1, UTxOPair pair2]
           (UTxOIndex 1)
           (UTxOIndex 2)
@@ -365,12 +365,12 @@ multipleScriptsRollback =
           500
 
     -- Submit the txs in separate blocks
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx0] (NodeId 1)
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx1] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx0] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx1] (NodeId 1)
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
@@ -382,12 +382,12 @@ multipleScriptsRollback =
     void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
 
     -- Submit the txs again
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx0] (NodeId 1)
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx1] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx0] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx1] (NodeId 1)
 
     -- Verify tx counts
     assertBlockNoBackoff dbSync 3
@@ -435,30 +435,30 @@ multipleScriptsFailed =
 
     -- Forge a block with multiple scripts
     tx0 <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           (map Conway.TxOutNoInline [True, False, True])
           20_000
           20_000
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx0] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx0] (NodeId 1)
 
     -- Forge another block with failing scripts
     let utxos = Conway.mkUTxOConway tx0
     tx1 <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTx
           (map UTxOPair utxos)
           (UTxOIndex 1)
           (UTxOIndex 2)
           False -- Force failure
           10_000
           500
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx1] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx1] (NodeId 1)
 
     -- Verify failed txs
     assertBlockNoBackoff dbSync 2
@@ -505,9 +505,9 @@ registrationScriptTx =
     startDBSync dbSync
 
     -- Forge a transaction with a registration cert
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexScript True, Conway.mkRegTxCert SNothing)]
 
     -- Verify stake address script counts
     assertBlockNoBackoff dbSync 1
@@ -676,8 +676,8 @@ mintMultiAsset =
     -- Forge a block with a multi-asset script
     void $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \state' -> do
       let val =
-            MultiAsset $
-              Map.singleton
+            MultiAsset
+              $ Map.singleton
                 (PolicyID Examples.alwaysMintScriptHash)
                 (Map.singleton (head Examples.assetNames) 1)
       Conway.mkMultiAssetsScriptTx
@@ -747,14 +747,14 @@ swapMultiAssets =
           policy0 = PolicyID Examples.alwaysMintScriptHash
           policy1 = PolicyID Examples.alwaysSucceedsScriptHash
           mintValue =
-            MultiAsset $
-              Map.fromList [(policy0, assetsMinted), (policy1, assetsMinted)]
+            MultiAsset
+              $ Map.fromList [(policy0, assetsMinted), (policy1, assetsMinted)]
           assets =
             Map.fromList [(head Examples.assetNames, 5), (Examples.assetNames !! 1, 2)]
           outValue =
-            MaryValue (Coin 20) $
-              MultiAsset $
-                Map.fromList [(policy0, assets), (policy1, assets)]
+            MaryValue (Coin 20)
+              $ MultiAsset
+              $ Map.fromList [(policy0, assets), (policy1, assets)]
 
       -- Forge a multi-asset script
       tx0 <-

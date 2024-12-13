@@ -76,8 +76,9 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
-      lift . insertBlockAndCache cache $
-        DB.Block
+      lift
+        . insertBlockAndCache cache
+        $ DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo
           , DB.blockSlotNo = Just $ unSlotNo (Generic.blkSlotNo blk)
@@ -117,16 +118,16 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
           , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
           }
 
-    when withinHalfHour $
-      insertReverseIndex blkId minIds
+    when withinHalfHour
+      $ insertReverseIndex blkId minIds
 
     liftIO $ do
       let epoch = unEpochNo epochNo
           slotWithinEpoch = unEpochSlot (sdEpochSlot details)
 
       when (withinTwoMins && slotWithinEpoch /= 0 && unBlockNo (Generic.blkBlockNo blk) `mod` 20 == 0) $ do
-        logInfo tracer $
-          mconcat
+        logInfo tracer
+          $ mconcat
             [ renderInsertName (Generic.blkEra blk)
             , ": continuing epoch "
             , textShow epoch
@@ -136,8 +137,8 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
             , textShow (unEpochSize $ sdEpochSize details)
             , ")"
             ]
-      logger tracer $
-        mconcat
+      logger tracer
+        $ mconcat
           [ renderInsertName (Generic.blkEra blk)
           , ": epoch "
           , textShow (unEpochNo epochNo)

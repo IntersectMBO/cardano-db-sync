@@ -214,8 +214,14 @@ instance HasNewEpochState StandardShelley where
     _ -> Nothing
 
   applyNewEpochState st =
-    hApplyExtLedgerState $
-      fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* fn id :* Nil
+    hApplyExtLedgerState
+      $ fn (applyNewEpochState' st)
+      :* fn id
+      :* fn id
+      :* fn id
+      :* fn id
+      :* fn id
+      :* Nil
 
 instance HasNewEpochState StandardAllegra where
   getNewEpochState st = case ledgerState st of
@@ -223,8 +229,14 @@ instance HasNewEpochState StandardAllegra where
     _ -> Nothing
 
   applyNewEpochState st =
-    hApplyExtLedgerState $
-      fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* Nil
+    hApplyExtLedgerState
+      $ fn id
+      :* fn (applyNewEpochState' st)
+      :* fn id
+      :* fn id
+      :* fn id
+      :* fn id
+      :* Nil
 
 instance HasNewEpochState StandardMary where
   getNewEpochState st = case ledgerState st of
@@ -232,8 +244,14 @@ instance HasNewEpochState StandardMary where
     _ -> Nothing
 
   applyNewEpochState st =
-    hApplyExtLedgerState $
-      fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* Nil
+    hApplyExtLedgerState
+      $ fn id
+      :* fn id
+      :* fn (applyNewEpochState' st)
+      :* fn id
+      :* fn id
+      :* fn id
+      :* Nil
 
 instance HasNewEpochState StandardAlonzo where
   getNewEpochState st = case ledgerState st of
@@ -241,8 +259,14 @@ instance HasNewEpochState StandardAlonzo where
     _ -> Nothing
 
   applyNewEpochState st =
-    hApplyExtLedgerState $
-      fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* Nil
+    hApplyExtLedgerState
+      $ fn id
+      :* fn id
+      :* fn id
+      :* fn (applyNewEpochState' st)
+      :* fn id
+      :* fn id
+      :* Nil
 
 instance HasNewEpochState StandardBabbage where
   getNewEpochState st = case ledgerState st of
@@ -250,8 +274,14 @@ instance HasNewEpochState StandardBabbage where
     _ -> Nothing
 
   applyNewEpochState st =
-    hApplyExtLedgerState $
-      fn id :* fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* Nil
+    hApplyExtLedgerState
+      $ fn id
+      :* fn id
+      :* fn id
+      :* fn id
+      :* fn (applyNewEpochState' st)
+      :* fn id
+      :* Nil
 
 instance HasNewEpochState StandardConway where
   getNewEpochState st = case ledgerState st of
@@ -259,8 +289,14 @@ instance HasNewEpochState StandardConway where
     _ -> Nothing
 
   applyNewEpochState st =
-    hApplyExtLedgerState $
-      fn id :* fn id :* fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* Nil
+    hApplyExtLedgerState
+      $ fn id
+      :* fn id
+      :* fn id
+      :* fn id
+      :* fn id
+      :* fn (applyNewEpochState' st)
+      :* Nil
 
 hApplyExtLedgerState ::
   NP (LedgerState -.-> LedgerState) (CardanoShelleyEras StandardCrypto) ->

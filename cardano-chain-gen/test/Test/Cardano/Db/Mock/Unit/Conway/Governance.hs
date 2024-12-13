@@ -88,8 +88,9 @@ newCommittee =
     let committeeHash = "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
         committeeCred = KeyHashObj (KeyHash committeeHash)
 
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+    void
+      $ Api.withConwayFindLeaderAndSubmit interpreter server
+      $ \ledger -> do
         let
           -- Create gov action tx
           addCcTx = Conway.mkAddCommitteeTx committeeCred
@@ -145,8 +146,9 @@ updateConstitution =
         anchor = Governance.Anchor newUrl dataHash
 
     -- Create and vote for a governance proposal
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ -> do
+    void
+      $ Api.withConwayFindLeaderAndSubmit interpreter server
+      $ \_ -> do
         let
           -- Create gov action tx
           proposalTx = Conway.mkNewConstitutionTx anchor
@@ -199,13 +201,15 @@ treasuryWithdrawal =
     void (Api.registerCommitteeCreds interpreter server)
 
     -- Make sure we have treasury to spend
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter server $ \_ ->
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter server
+      $ \_ ->
         Right $ Conway.mkDonationTx (Coin 50_000)
 
     -- Create and vote for a governance proposal
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+    void
+      $ Api.withConwayFindLeaderAndSubmit interpreter server
+      $ \ledger -> do
         rewardAccount <-
           RewardAccount Testnet <$> Forging.resolveStakeCreds (StakeIndex 0) ledger
 
@@ -259,8 +263,9 @@ parameterChange =
     void (Api.registerCommitteeCreds interpreter server)
 
     -- Create and vote for gov action
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+    void
+      $ Api.withConwayFindLeaderAndSubmit interpreter server
+      $ \ledger -> do
         let
           -- Create gov action tx
           govActionTx = Conway.mkParamChangeTx
@@ -323,8 +328,9 @@ hardFork =
     void (Api.registerCommitteeCreds interpreter server)
 
     -- Create and vote for gov action
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
+    void
+      $ Api.withConwayFindLeaderAndSubmit interpreter server
+      $ \ledger -> do
         let
           -- Create gov action tx
           govActionTx = Conway.mkHardForkInitTx
@@ -412,8 +418,9 @@ infoAction =
           }
 
     -- Submit them
-    void $
-      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+    void
+      $ Api.withConwayFindLeaderAndSubmit interpreter server
+      $ \_ ->
         pure [govActionTx, addVoteTx]
 
     -- There is no ratification/enactment for info actions, so let it expire

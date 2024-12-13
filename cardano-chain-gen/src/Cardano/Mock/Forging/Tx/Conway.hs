@@ -227,17 +227,17 @@ mkPaymentTx' inputIndex outputIndices fees donation state' = do
           NoDatum
           SNothing
 
-  pure $
-    mkSimpleTx True $
-      consPaymentTxBody
-        inputs
-        mempty
-        mempty
-        (StrictSeq.fromList $ outputs <> [change])
-        SNothing
-        (Coin fees)
-        mempty
-        (Coin donation)
+  pure
+    $ mkSimpleTx True
+    $ consPaymentTxBody
+      inputs
+      mempty
+      mempty
+      (StrictSeq.fromList $ outputs <> [change])
+      SNothing
+      (Coin fees)
+      mempty
+      (Coin donation)
   where
     mkOutputs (outIx, val) = do
       addr <- resolveAddress outIx state'
@@ -268,17 +268,17 @@ mkLockByScriptTx inputIndex txOutTypes amount fees state' = do
           NoDatum
           SNothing
 
-  pure $
-    mkSimpleTx True $
-      consPaymentTxBody
-        inputs
-        mempty
-        mempty
-        (StrictSeq.fromList $ outputs <> [change])
-        SNothing
-        (Coin fees)
-        mempty
-        (Coin 0)
+  pure
+    $ mkSimpleTx True
+    $ consPaymentTxBody
+      inputs
+      mempty
+      mempty
+      (StrictSeq.fromList $ outputs <> [change])
+      SNothing
+      (Coin fees)
+      mempty
+      (Coin 0)
 
 mkUnlockScriptTx ::
   [ConwayUTxOIndex] ->
@@ -348,9 +348,9 @@ mkDCertPoolTx consDCert state' = do
 
 mkDCertTxPools :: ConwayLedgerState -> Either ForgingError (AlonzoTx StandardConway)
 mkDCertTxPools state' =
-  Right $
-    mkSimpleTx True $
-      consCertTxBody Nothing (allPoolStakeCert' state') (Withdrawals mempty)
+  Right
+    $ mkSimpleTx True
+    $ consCertTxBody Nothing (allPoolStakeCert' state') (Withdrawals mempty)
 
 mkSimpleTx :: Bool -> ConwayTxBody StandardConway -> AlonzoTx StandardConway
 mkSimpleTx isValid' txBody =
@@ -394,9 +394,9 @@ mkScriptDCertTx consCert isValid' state' = do
     cred <- resolveStakeCreds stakeIndex state'
     pure $ mkDCert cred
 
-  pure $
-    mkScriptTx isValid' (mapMaybe prepareRedeemer . zip [0 ..] $ consCert) $
-      consCertTxBody Nothing dcerts (Withdrawals mempty)
+  pure
+    $ mkScriptTx isValid' (mapMaybe prepareRedeemer . zip [0 ..] $ consCert)
+    $ consCertTxBody Nothing dcerts (Withdrawals mempty)
   where
     prepareRedeemer (n, (StakeIndexScript bl, shouldAddRedeemer, _))
       | not shouldAddRedeemer = Nothing
@@ -428,24 +428,24 @@ mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees 
       refInputs' = Set.fromList $ map (fst . fst) refs
       colInputs' = Set.singleton $ fst colInput
 
-  pure $
-    mkScriptTx succeeds (mkScriptInps (map fst inputs) ++ mkScriptMint' minted) $
-      consTxBody
-        inputs'
-        colInputs'
-        refInputs'
-        (StrictSeq.fromList outputs)
-        SNothing
-        (Coin fees)
-        mempty
-        mempty -- TODO[sgillespie]: minted?
-        (Withdrawals mempty)
-        (Coin 0)
+  pure
+    $ mkScriptTx succeeds (mkScriptInps (map fst inputs) ++ mkScriptMint' minted)
+    $ consTxBody
+      inputs'
+      colInputs'
+      refInputs'
+      (StrictSeq.fromList outputs)
+      SNothing
+      (Coin fees)
+      mempty
+      mempty -- TODO[sgillespie]: minted?
+      (Withdrawals mempty)
+      (Coin 0)
   where
     mkOuts (outIx, val) = do
       addr <- resolveAddress outIx state'
-      pure $
-        BabbageTxOut
+      pure
+        $ BabbageTxOut
           addr
           val
           (DatumHash $ hashData @StandardConway plutusDataList)
@@ -468,19 +468,19 @@ mkDepositTxPools inputIndex deposit state' = do
           NoDatum
           SNothing
 
-  pure $
-    mkSimpleTx True $
-      consTxBody
-        input
-        mempty
-        mempty
-        (StrictSeq.fromList [change])
-        SNothing
-        (Coin 0)
-        mempty
-        (allPoolStakeCert' state')
-        (Withdrawals mempty)
-        (Coin 0)
+  pure
+    $ mkSimpleTx True
+    $ consTxBody
+      input
+      mempty
+      mempty
+      (StrictSeq.fromList [change])
+      SNothing
+      (Coin 0)
+      mempty
+      (allPoolStakeCert' state')
+      (Withdrawals mempty)
+      (Coin 0)
 
 mkRegisterDRepTx ::
   Credential 'DRepRole StandardCrypto ->
@@ -663,8 +663,8 @@ mkFullTx n m state' = do
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') refInputs
   collateralInput <- Set.singleton . fst . fst <$> resolveUTxOIndex collateralInputs state'
 
-  pure $
-    AlonzoTx
+  pure
+    $ AlonzoTx
       { body =
           txBody
             (mkInputs inputPairs)
@@ -748,8 +748,8 @@ mkFullTx n m state' = do
       , ConwayTxCertPool $ Core.RegPool poolParams1
       , ConwayTxCertPool $ Core.RetirePool (Prelude.head unregisteredPools) (EpochNo 0)
       , ConwayTxCertDeleg $ ConwayUnRegCert (unregisteredStakeCredentials !! 2) SNothing
-      , ConwayTxCertDeleg $
-          ConwayDelegCert
+      , ConwayTxCertDeleg
+          $ ConwayDelegCert
             (unregisteredStakeCredentials !! 1)
             (DelegStake $ unregisteredPools !! 2)
       ]
@@ -766,8 +766,8 @@ mkFullTx n m state' = do
 
     -- Withdrawals
     withdrawals =
-      Withdrawals $
-        Map.fromList
+      Withdrawals
+        $ Map.fromList
           [ (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
           , (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
           ]
@@ -899,17 +899,17 @@ mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds 
           NoDatum
           SNothing
 
-  pure $
-    mkScriptTx succeeds (mkScriptInps inputPairs) $
-      consPaymentTxBody
-        inputs
-        colInputs
-        refInputs
-        (StrictSeq.singleton output)
-        (maybeToStrictMaybe colOut)
-        (Coin fees)
-        mempty
-        (Coin 0)
+  pure
+    $ mkScriptTx succeeds (mkScriptInps inputPairs)
+    $ consPaymentTxBody
+      inputs
+      colInputs
+      refInputs
+      (StrictSeq.singleton output)
+      (maybeToStrictMaybe colOut)
+      (Coin fees)
+      mempty
+      (Coin 0)
 
 allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)

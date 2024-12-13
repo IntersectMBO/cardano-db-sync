@@ -290,11 +290,11 @@ validateTickerName name = do
   if tickerLen >= 3 && tickerLen <= 5
     then Right $ TickerName name
     else
-      Left $
-        "\"ticker\" must have at least 3 and at most 5 "
-          <> "characters, but it has "
-          <> show (length name)
-          <> " characters."
+      Left
+        $ "\"ticker\" must have at least 3 and at most 5 "
+        <> "characters, but it has "
+        <> show (length name)
+        <> " characters."
 
 instance ToParamSchema TickerName
 

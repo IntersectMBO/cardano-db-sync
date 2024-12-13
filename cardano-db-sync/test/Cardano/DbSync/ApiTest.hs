@@ -11,8 +11,8 @@ import Hedgehog
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync.Api"
       [ ("extractInsertOptions", prop_extractInsertOptions)
       , ("extractInsertOptions rewards", prop_extractInsertOptionsRewards)

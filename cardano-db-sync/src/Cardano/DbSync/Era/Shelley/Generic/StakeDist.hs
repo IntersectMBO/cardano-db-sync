@@ -116,8 +116,10 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
     -- epoch plus one.
     stakeSnapshot :: Ledger.SnapShot c
     stakeSnapshot =
-      Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
-        Consensus.shelleyLedgerState lstate
+      Ledger.ssStakeMark
+        . Shelley.esSnapshots
+        . Shelley.nesEs
+        $ Consensus.shelleyLedgerState lstate
 
     delegations :: VMap.KVVector VB VB (Credential 'Staking c, KeyHash 'StakePool c)
     delegations = VMap.unVMap $ Ledger.ssDelegations stakeSnapshot
@@ -172,9 +174,9 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
 
         distribution :: Map StakeCred (Coin, PoolKeyHash)
         distribution =
-          VMap.toMap $
-            VMap.mapMaybe id $
-              VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced
+          VMap.toMap
+            $ VMap.mapMaybe id
+            $ VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced
 
 getPoolDistr ::
   ExtLedgerState CardanoBlock ->
@@ -191,7 +193,7 @@ getPoolDistr els =
 
 genericPoolDistr ::
   forall era p.
-  (EraCrypto era ~ StandardCrypto) =>
+  EraCrypto era ~ StandardCrypto =>
   LedgerState (ShelleyBlock p era) ->
   (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
 genericPoolDistr lstate =

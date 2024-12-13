@@ -87,8 +87,8 @@ parseName obj = do
   if length name <= 50
     then pure $ PoolName name
     else
-      fail $
-        mconcat
+      fail
+        $ mconcat
           [ "\"name\" must have at most 50 characters, but it has "
           , show (length name)
           , " characters."
@@ -105,8 +105,8 @@ parseDescription obj = do
   if length description <= 255
     then pure $ PoolDescription description
     else
-      fail $
-        mconcat
+      fail
+        $ mconcat
           [ "\"description\" must have at most 255 characters, but it has "
           , show (length description)
           , " characters."
@@ -123,8 +123,8 @@ parseTicker obj = do
   if tickerLen >= 3 && tickerLen <= 5
     then pure $ PoolTicker ticker
     else
-      fail $
-        mconcat
+      fail
+        $ mconcat
           [ "\"ticker\" must have at least 3 and at most 5 "
           , "characters, but it has "
           , show (length ticker)

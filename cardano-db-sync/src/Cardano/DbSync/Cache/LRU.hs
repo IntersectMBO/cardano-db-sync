@@ -68,8 +68,8 @@ trim cache
 -- It trims the cache if necessary to maintain the capacity.
 insert :: Ord k => k -> v -> LRUCache k v -> LRUCache k v
 insert k v cache =
-  trim $!
-    cache
+  trim
+    $! cache
       { cTick = cTick cache + 1 -- Increment the tick counter
       , cQueue = queue
       }

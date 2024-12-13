@@ -63,8 +63,8 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
     case Aeson.eitherDecode' respLBS of
       Left err -> left $ OCFErrJsonDecodeFail (Just url) (Text.pack err)
       Right res -> pure res
-  pure $
-    SimplifiedOffChainPoolData
+  pure
+    $ SimplifiedOffChainPoolData
       { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
       , spodHash = metadataHash
       , spodBytes = respBS
@@ -109,8 +109,8 @@ httpGetOffChainVoteDataSingle vurl metaHash anchorType = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
-  pure $
-    SimplifiedOffChainVoteData
+  pure
+    $ SimplifiedOffChainVoteData
       { sovaHash = metadataHash
       , sovaBytes = respBS
       , sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedValue)
@@ -167,9 +167,9 @@ httpGetBytes manager request bytesToRead maxBytes url =
           if "text/html" `BS.isInfixOf` ct && isPossiblyJsonObject respBS
             then pure ()
             else do
-              when ("text/html" `BS.isInfixOf` ct) $
-                left $
-                  OCFErrBadContentTypeHtml url (Text.decodeLatin1 ct)
+              when ("text/html" `BS.isInfixOf` ct)
+                $ left
+                $ OCFErrBadContentTypeHtml url (Text.decodeLatin1 ct)
               unless
                 ( "application/json"
                     `BS.isInfixOf` ct

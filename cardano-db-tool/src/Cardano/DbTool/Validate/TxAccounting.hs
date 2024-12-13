@@ -176,12 +176,12 @@ queryInputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT S
 queryInputsBody txId = do
   res <- select $ do
     (tx :& txin :& txout) <-
-      from
-        $ table @Tx
+      from $
+        table @Tx
           `innerJoin` table @TxIn
-        `on` (\(tx :& txin) -> tx ^. TxId ==. txin ^. TxInTxInId)
+            `on` (\(tx :& txin) -> tx ^. TxId ==. txin ^. TxInTxInId)
           `innerJoin` table @(TxOutTable a)
-        `on` (\(_tx :& txin :& txout) -> txin ^. TxInTxOutId ==. txout ^. txOutTxIdField @a)
+            `on` (\(_tx :& txin :& txout) -> txin ^. TxInTxOutId ==. txout ^. txOutTxIdField @a)
     where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
     where_ (txout ^. txOutIndexField @a ==. txin ^. TxInTxOutIndex)
     pure txout
@@ -196,10 +196,10 @@ queryTxOutputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> Reader
 queryTxOutputsBody txId = do
   res <- select $ do
     (tx :& txout) <-
-      from
-        $ table @Tx
+      from $
+        table @Tx
           `innerJoin` table @(TxOutTable a)
-        `on` (\(tx :& txout) -> tx ^. TxId ==. txout ^. txOutTxIdField @a)
+            `on` (\(tx :& txout) -> tx ^. TxId ==. txout ^. txOutTxIdField @a)
     where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
     pure txout
   pure $ entityVal <$> res

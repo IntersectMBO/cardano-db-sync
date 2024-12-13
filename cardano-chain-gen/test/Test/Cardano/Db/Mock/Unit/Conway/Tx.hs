@@ -35,9 +35,9 @@ addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTx =
   withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge a block
-    void $
-      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+    void
+      $ UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     startDBSync dbSync
     -- Verify it syncs
@@ -52,9 +52,9 @@ addSimpleTxShelley :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTxShelley =
   withFullConfig shelleyConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge a shelley block
-    void $
-      UnifiedApi.withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
+    void
+      $ UnifiedApi.withShelleyFindLeaderAndSubmitTx interpreter mockServer
+      $ Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500
 
     startDBSync dbSync
     -- Verify it syncs
@@ -67,9 +67,9 @@ addSimpleTxNoLedger :: IOManager -> [(Text, Text)] -> Assertion
 addSimpleTxNoLedger = do
   withCustomConfig args (Just configLedgerIgnore) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge a block
-    void $
-      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+    void
+      $ UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     startDBSync dbSync
     -- Verify it syncs
@@ -90,9 +90,9 @@ addTxTreasuryDonation =
     startDBSync dbSync
 
     -- Forge a block
-    void $
-      UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 1_000
+    void
+      $ UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 1_000
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 1
@@ -124,12 +124,13 @@ consumeSameBlock =
 
 addTxMetadata :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadata = do
-  withCustomConfigAndDropDB args (Just configMetadataEnable) cfgDir testLabel $
-    \interpreter mockServer dbSync -> do
+  withCustomConfigAndDropDB args (Just configMetadataEnable) cfgDir testLabel
+    $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       -- Add blocks with transactions
-      void $
-        UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+      void
+        $ UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer
+        $ \_ ->
           let txBody = Conway.mkDummyTxBody
               auxData = Map.fromList [(1, I 1), (2, I 2)]
            in Right (Conway.mkAuxDataTx True txBody auxData)
@@ -169,12 +170,13 @@ addTxMetadataWhitelist = do
 
 addTxMetadataDisabled :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadataDisabled = do
-  withCustomConfigAndDropDB args (Just configMetadataDisable) cfgDir testLabel $
-    \interpreter mockServer dbSync -> do
+  withCustomConfigAndDropDB args (Just configMetadataDisable) cfgDir testLabel
+    $ \interpreter mockServer dbSync -> do
       startDBSync dbSync
       -- Add blocks with transactions
-      void $
-        UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+      void
+        $ UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer
+        $ \_ ->
           let txBody = Conway.mkDummyTxBody
               auxData = Map.fromList [(1, I 1), (2, I 2)]
            in Right (Conway.mkAuxDataTx True txBody auxData)

@@ -123,9 +123,9 @@ lazyRollback =
     rollbackTo interpreter mockServer (blockPoint lastBlk)
 
     -- Here we create the fork
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 40
     -- Verify the new block count
@@ -151,9 +151,9 @@ lazyRollbackRestart =
     startDBSync dbSync
 
     -- Here we create the fork
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 30
     -- Verify the new block count
@@ -177,18 +177,18 @@ doubleRollback =
     -- Rollback to second block point
     rollbackTo interpreter mockServer (blockPoint lastBlk2)
     -- Here we create a fork
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
 
     -- Rollback to first block point
     rollbackTo interpreter mockServer (blockPoint lastBlk1)
     -- Create another fork
-    void $
-      withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert $ SJust (Coin 100))]
+    void
+      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert $ SJust (Coin 100))]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     -- Wait for it to sync

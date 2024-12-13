@@ -59,15 +59,15 @@ todoSwagger =
         , _infoDescription = Just "Stakepool Metadata Aggregation Server"
         , _infoTermsOfService = Nothing
         , _infoContact =
-            Just $
-              Contact
+            Just
+              $ Contact
                 { _contactName = Just "IOHK"
                 , _contactUrl = Just $ URL "https://iohk.io/"
                 , _contactEmail = Just "operations@iohk.io"
                 }
         , _infoLicense =
-            Just $
-              License
+            Just
+              $ License
                 { _licenseName = "APACHE2"
                 , _licenseUrl = Just $ URL "https://github.com/IntersectMBO/cardano-db-sync/blob/master/LICENSE"
                 }
@@ -119,8 +119,10 @@ getOffChainPoolMetadata (ServerEnv trce dataLayer) poolId poolMetaHash =
 -- | Simple health status, there are ideas for improvement.
 getHealthStatus :: Handler (ApiResult DBFail HealthStatus)
 getHealthStatus =
-  pure . ApiResult . Right $
-    HealthStatus
+  pure
+    . ApiResult
+    . Right
+    $ HealthStatus
       { hsStatus = "OK"
       , hsVersion = toS $ showVersion version
       }

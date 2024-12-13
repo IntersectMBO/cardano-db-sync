@@ -130,8 +130,8 @@ runSyncNodeClient ::
   IO ()
 runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) = do
   logInfo trce $ "Connecting to node via " <> textShow socketPath
-  void $
-    subscribe
+  void
+    $ subscribe
       (localSnocket iomgr)
       (envNetworkMagic syncEnv)
       (supportedNodeToClientVersions (Proxy @CardanoBlock))
@@ -192,10 +192,10 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     , localTxSubmissionProtocol = dummylocalTxSubmit
     , localStateQueryProtocol = localStateQuery
     , localTxMonitorProtocol =
-        InitiatorProtocolOnly $
-          mkMiniProtocolCbFromPeer $
-            const
-              (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
+        InitiatorProtocolOnly
+          $ mkMiniProtocolCbFromPeer
+          $ const
+            (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
     }
   where
     codecs = clientCodecs codecConfig bversion version
@@ -217,18 +217,18 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
           logInfo tracer "Found no wrong consumed_by_tx_id entries"
           oldActionFixes channel
         Just wrongEntriesSize -> do
-          logInfo tracer $
-            mconcat ["Found ", textShow wrongEntriesSize, " consumed_by_tx_id wrong entries"]
+          logInfo tracer
+            $ mconcat ["Found ", textShow wrongEntriesSize, " consumed_by_tx_id wrong entries"]
           fixedEntries <-
             runPeer
               localChainSyncTracer
               (cChainSyncCodec codecs)
               channel
-              ( Client.chainSyncClientPeer $
-                  chainSyncClientFixConsumed backend syncEnv wrongEntriesSize
+              ( Client.chainSyncClientPeer
+                  $ chainSyncClientFixConsumed backend syncEnv wrongEntriesSize
               )
-          logInfo tracer $
-            mconcat ["Fixed ", textShow fixedEntries, " consumed_by_tx_id wrong entries"]
+          logInfo tracer
+            $ mconcat ["Fixed ", textShow fixedEntries, " consumed_by_tx_id wrong entries"]
           pure False
 
     oldActionFixes channel = do
@@ -238,15 +238,15 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
       if noneFixed fr && (onlyFix || not skipFix)
         then do
           fd <- runDbIohkLogging backend tracer $ getWrongPlutusData tracer
-          unless (nullData fd) $
-            void $
-              runPeer
-                localChainSyncTracer
-                (cChainSyncCodec codecs)
-                channel
-                ( Client.chainSyncClientPeer $
-                    chainSyncClientFixData backend tracer fd
-                )
+          unless (nullData fd)
+            $ void
+            $ runPeer
+              localChainSyncTracer
+              (cChainSyncCodec codecs)
+              channel
+              ( Client.chainSyncClientPeer
+                  $ chainSyncClientFixData backend tracer fd
+              )
           if onlyFix
             then do
               setIsFixed syncEnv DataFixRan
@@ -256,15 +256,15 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
           if isDataFixed fr && (onlyFix || not skipFix)
             then do
               ls <- runDbIohkLogging backend tracer $ getWrongPlutusScripts tracer
-              unless (nullPlutusScripts ls) $
-                void $
-                  runPeer
-                    localChainSyncTracer
-                    (cChainSyncCodec codecs)
-                    channel
-                    ( Client.chainSyncClientPeer $
-                        chainSyncClientFixScripts backend tracer ls
-                    )
+              unless (nullPlutusScripts ls)
+                $ void
+                $ runPeer
+                  localChainSyncTracer
+                  (cChainSyncCodec codecs)
+                  channel
+                  ( Client.chainSyncClientPeer
+                      $ chainSyncClientFixScripts backend tracer ls
+                  )
               when onlyFix $ panic "All Good! This error is only thrown to exit db-sync"
               setIsFixed syncEnv AllFixRan
               pure False
@@ -273,8 +273,9 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
               pure True
 
     localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
-    localChainSyncPtcl = InitiatorProtocolOnly $
-      MiniProtocolCb $ \_ctx channel ->
+    localChainSyncPtcl = InitiatorProtocolOnly
+      $ MiniProtocolCb
+      $ \_ctx channel ->
         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
           isInitComplete <- runAndSetDone tc $ initAction channel
           when isInitComplete $ do
@@ -283,20 +284,20 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
 
             (latestPoints, currentTip) <- waitRestartState tc
             let (inMemory, onDisk) = List.span snd latestPoints
-            logInfo tracer $
-              mconcat
+            logInfo tracer
+              $ mconcat
                 [ "Suggesting intersection points from memory: "
                 , textShow (fst <$> inMemory)
                 , " and from disk: "
                 , textShow (fst <$> onDisk)
                 ]
-            void $
-              runPipelinedPeer
+            void
+              $ runPipelinedPeer
                 localChainSyncTracer
                 (cChainSyncCodec codecs)
                 channel
-                ( chainSyncClientPeerPipelined $
-                    chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
+                ( chainSyncClientPeerPipelined
+                    $ chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
                 )
             atomically $ writeDbActionQueue tc DbFinish
             -- We should return leftover bytes returned by 'runPipelinedPeer', but
@@ -307,33 +308,33 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
 
     dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
     dummylocalTxSubmit =
-      InitiatorProtocolOnly $
-        mkMiniProtocolCbFromPeer $
-          const
-            ( Logging.nullTracer
-            , cTxSubmissionCodec codecs
-            , localTxSubmissionPeerNull
-            )
+      InitiatorProtocolOnly
+        $ mkMiniProtocolCbFromPeer
+        $ const
+          ( Logging.nullTracer
+          , cTxSubmissionCodec codecs
+          , localTxSubmissionPeerNull
+          )
 
     localStateQuery :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
     localStateQuery =
       case envLedgerEnv syncEnv of
         HasLedger _ ->
-          InitiatorProtocolOnly $
-            mkMiniProtocolCbFromPeer $
-              const
-                ( Logging.nullTracer
-                , cStateQueryCodec codecs
-                , localStateQueryPeerNull
-                )
+          InitiatorProtocolOnly
+            $ mkMiniProtocolCbFromPeer
+            $ const
+              ( Logging.nullTracer
+              , cStateQueryCodec codecs
+              , localStateQueryPeerNull
+              )
         NoLedger nle ->
-          InitiatorProtocolOnly $
-            mkMiniProtocolCbFromPeer $
-              const
-                ( contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer
-                , cStateQueryCodec codecs
-                , localStateQueryClientPeer $ localStateQueryHandler nle
-                )
+          InitiatorProtocolOnly
+            $ mkMiniProtocolCbFromPeer
+            $ const
+              ( contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer
+              , cStateQueryCodec codecs
+              , localStateQueryClientPeer $ localStateQueryHandler nle
+              )
 
 -- | 'ChainSyncClient' which traces received blocks and ignores when it
 -- receives a request to rollbackwar.  A real wallet client should:
@@ -456,8 +457,8 @@ drainThePipe n0 client = go n0
       case n of
         Zero -> client
         Succ n' ->
-          CollectResponse Nothing $
-            ClientStNext
+          CollectResponse Nothing
+            $ ClientStNext
               { recvMsgRollForward = \_hdr _tip -> pure $ go n'
               , recvMsgRollBackward = \_pt _tip -> pure $ go n'
               }
@@ -472,9 +473,9 @@ chainSyncClientFixConsumed backend syncEnv wrongTotalSize = Client.ChainSyncClie
     clientStIntersect =
       Client.ClientStIntersect
         { Client.recvMsgIntersectFound = \_blk _tip ->
-            Client.ChainSyncClient $
-              pure $
-                Client.SendMsgRequestNext (pure ()) (clientStNext (0, (0, [])))
+            Client.ChainSyncClient
+              $ pure
+              $ Client.SendMsgRequestNext (pure ()) (clientStNext (0, (0, [])))
         , Client.recvMsgIntersectNotFound = \_tip ->
             panic "Failed to find intersection with genesis."
         }
@@ -496,9 +497,9 @@ chainSyncClientFixConsumed backend syncEnv wrongTotalSize = Client.ChainSyncClie
                 logSize sizeFixedTotal sizeNewFixedTotal
                 pure $ Client.SendMsgRequestNext (pure ()) (clientStNext (sizeNewFixedTotal, (sizeUnfixed, unfixedEntries)))
         , Client.recvMsgRollBackward = \_point _tip ->
-            Client.ChainSyncClient $
-              pure $
-                Client.SendMsgRequestNext (pure ()) (clientStNext (sizeFixedTotal, (sizeFixEntries, fixEntries)))
+            Client.ChainSyncClient
+              $ pure
+              $ Client.SendMsgRequestNext (pure ()) (clientStNext (sizeFixedTotal, (sizeFixEntries, fixEntries)))
         }
 
     fixAccumulatedEntries = fixEntriesConsumed backend tracer . concat . reverse
@@ -510,9 +511,9 @@ chainSyncClientFixConsumed backend syncEnv wrongTotalSize = Client.ChainSyncClie
 
     logSize :: Integer -> Integer -> IO ()
     logSize lastSize newSize = do
-      when (newSize `div` 200_000 > lastSize `div` 200_000) $
-        logInfo tracer $
-          mconcat ["Fixed ", textShow newSize, "/", textShow wrongTotalSize, " entries"]
+      when (newSize `div` 200_000 > lastSize `div` 200_000)
+        $ logInfo tracer
+        $ mconcat ["Fixed ", textShow newSize, "/", textShow wrongTotalSize, " entries"]
 
 chainSyncClientFixData ::
   SqlBackend -> Trace IO Text -> FixData -> ChainSyncClient CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
@@ -536,27 +537,27 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
           liftIO $ logInfo tracer "Finished chainsync to fix Plutus Data."
           pure $ Client.SendMsgDone ()
         Just (point, fdOnPoint, fdRest) -> do
-          when shouldLog $
-            liftIO $
-              logInfo tracer $
-                mconcat ["Starting fixing Plutus Data ", textShow point]
+          when shouldLog
+            $ liftIO
+            $ logInfo tracer
+            $ mconcat ["Starting fixing Plutus Data ", textShow point]
           newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixData fds)
           let clientStIntersect =
                 Client.ClientStIntersect
                   { Client.recvMsgIntersectFound = \_pnt _tip ->
-                      Client.ChainSyncClient $
-                        pure $
-                          Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fdOnPoint fdRest)
+                      Client.ChainSyncClient
+                        $ pure
+                        $ Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fdOnPoint fdRest)
                   , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
-                      liftIO $
-                        logWarning tracer $
-                          mconcat
-                            [ "Node can't find block "
-                            , textShow point
-                            , ". It's probably behind, at "
-                            , textShow tip
-                            , ". Sleeping for 3 mins and retrying.."
-                            ]
+                      liftIO
+                        $ logWarning tracer
+                        $ mconcat
+                          [ "Node can't find block "
+                          , textShow point
+                          , ". It's probably behind, at "
+                          , textShow tip
+                          , ". Sleeping for 3 mins and retrying.."
+                          ]
                       liftIO $ threadDelay $ 180 * 1_000_000
                       pure $ Client.SendMsgFindIntersect [point] clientStIntersect
                   }
@@ -569,9 +570,9 @@ chainSyncClientFixData backend tracer fixData = Client.ChainSyncClient $ do
             runDbIohkLogging backend tracer $ fixPlutusData tracer blk fdOnPoint
             clientStIdle False lastSize fdRest
         , Client.recvMsgRollBackward = \_point _tip ->
-            Client.ChainSyncClient $
-              pure $
-                Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fdOnPoint fdRest)
+            Client.ChainSyncClient
+              $ pure
+              $ Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fdOnPoint fdRest)
         }
 
 chainSyncClientFixScripts ::
@@ -596,27 +597,27 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
           liftIO $ logInfo tracer "Finished chainsync to fix Plutus Scripts."
           pure $ Client.SendMsgDone ()
         Just (point, fpsOnPoint, fpsRest) -> do
-          when shouldLog $
-            liftIO $
-              logInfo tracer $
-                mconcat ["Starting fixing Plutus Scripts ", textShow point]
+          when shouldLog
+            $ liftIO
+            $ logInfo tracer
+            $ mconcat ["Starting fixing Plutus Scripts ", textShow point]
           newLastSize <- liftIO $ updateSizeAndLog lastSize (sizeFixPlutusScripts fps')
           let clientStIntersect =
                 Client.ClientStIntersect
                   { Client.recvMsgIntersectFound = \_pnt _tip ->
-                      Client.ChainSyncClient $
-                        pure $
-                          Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fpsOnPoint fpsRest)
+                      Client.ChainSyncClient
+                        $ pure
+                        $ Client.SendMsgRequestNext (pure ()) (clientStNext newLastSize fpsOnPoint fpsRest)
                   , Client.recvMsgIntersectNotFound = \tip -> Client.ChainSyncClient $ do
-                      liftIO $
-                        logWarning tracer $
-                          mconcat
-                            [ "Node can't find block "
-                            , textShow point
-                            , ". It's probably behind, at "
-                            , textShow tip
-                            , ". Sleeping for 3 mins and retrying.."
-                            ]
+                      liftIO
+                        $ logWarning tracer
+                        $ mconcat
+                          [ "Node can't find block "
+                          , textShow point
+                          , ". It's probably behind, at "
+                          , textShow tip
+                          , ". Sleeping for 3 mins and retrying.."
+                          ]
                       liftIO $ threadDelay $ 180 * 1_000_000
                       pure $ Client.SendMsgFindIntersect [point] clientStIntersect
                   }
@@ -629,7 +630,7 @@ chainSyncClientFixScripts backend tracer fps = Client.ChainSyncClient $ do
             runDbIohkLogging backend tracer $ fixPlutusScripts tracer blk fpsOnPoint
             clientStIdle False lastSize fpsRest
         , Client.recvMsgRollBackward = \_point _tip ->
-            Client.ChainSyncClient $
-              pure $
-                Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fpsOnPoint fpsRest)
+            Client.ChainSyncClient
+              $ pure
+              $ Client.SendMsgRequestNext (pure ()) (clientStNext lastSize fpsOnPoint fpsRest)
         }

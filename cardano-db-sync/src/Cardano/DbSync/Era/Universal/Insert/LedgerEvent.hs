@@ -68,8 +68,8 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
-          lift $
-            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
+          lift
+            $ insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
           sqlBackend <- lift ask
           persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
@@ -95,10 +95,12 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo enacted dropped expired uncl -> do
-          unless (Set.null uncl) $
-            liftIO $
-              logInfo tracer $
-                "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
+          unless (Set.null uncl)
+            $ liftIO
+            $ logInfo tracer
+            $ "Found "
+            <> textShow (Set.size uncl)
+            <> " unclaimed proposal refunds"
           updateDropped cache (EpochNo curEpoch) (garGovActionId <$> (dropped <> expired))
           let refunded = filter (\e -> Set.notMember (garGovActionId e) uncl) (enacted <> dropped <> expired)
           insertProposalRefunds tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache refunded -- TODO: check if they are disjoint to avoid double entries.

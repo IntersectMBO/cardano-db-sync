@@ -81,10 +81,10 @@ queryTxOutValue txOutTableType hashIndex =
     queryTxOutValue' (hash, index) = do
       res <- select $ do
         (tx :& txOut) <-
-          from
-            $ table @Tx
+          from $
+            table @Tx
               `innerJoin` table @(TxOutTable a)
-            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+                `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
         where_ (txOut ^. txOutIndexField @a ==. val index &&. tx ^. TxHash ==. val hash)
         pure (txOut ^. txOutTxIdField @a, txOut ^. txOutValueField @a)
       pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
@@ -114,10 +114,10 @@ queryTxOutId txOutTableType hashIndex =
     queryTxOutId' (hash, index) = do
       res <- select $ do
         (tx :& txOut) <-
-          from
-            $ table @Tx
+          from $
+            table @Tx
               `innerJoin` table @(TxOutTable a)
-            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+                `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
         where_ (txOut ^. txOutIndexField @a ==. val index &&. tx ^. TxHash ==. val hash)
         pure (txOut ^. txOutTxIdField @a, txOut ^. txOutIdField @a)
       pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
@@ -128,7 +128,7 @@ queryTxOutId txOutTableType hashIndex =
 
 -- | Like 'queryTxOutId' but also return the 'TxOutIdValue'
 queryTxOutIdValue ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   (ByteString, Word64) ->
   ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdW, DbLovelace))
@@ -148,10 +148,10 @@ queryTxOutIdValue getTxOutTableType hashIndex = do
     queryTxOutIdValue' (hash, index) = do
       res <- select $ do
         (tx :& txOut) <-
-          from
-            $ table @Tx
+          from $
+            table @Tx
               `innerJoin` table @(TxOutTable a)
-            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+                `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
         where_ (txOut ^. txOutIndexField @a ==. val index &&. tx ^. TxHash ==. val hash)
         pure (txOut ^. txOutTxIdField @a, txOut ^. txOutIdField @a, txOut ^. txOutValueField @a)
       pure $ maybeToEither (DbLookupTxHash hash) unValue3 (listToMaybe res)
@@ -175,10 +175,10 @@ queryTxOutCredentialsCore :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBac
 queryTxOutCredentialsCore (hash, index) = do
   res <- select $ do
     (tx :& txOut) <-
-      from
-        $ table @Tx
+      from $
+        table @Tx
           `innerJoin` table @C.TxOut
-        `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. C.TxOutTxId)
+            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. C.TxOutTxId)
     where_ (txOut ^. C.TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
     pure (txOut ^. C.TxOutPaymentCred, txOut ^. C.TxOutAddressHasScript)
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
@@ -187,13 +187,13 @@ queryTxOutCredentialsVariant :: MonadIO m => (ByteString, Word64) -> ReaderT Sql
 queryTxOutCredentialsVariant (hash, index) = do
   res <- select $ do
     (tx :& txOut :& address) <-
-      from
-        $ ( table @Tx
-              `innerJoin` table @V.TxOut
+      from $
+        ( table @Tx
+            `innerJoin` table @V.TxOut
               `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. V.TxOutTxId)
-          )
+        )
           `innerJoin` table @V.Address
-        `on` (\((_ :& txOut) :& address) -> txOut ^. V.TxOutAddressId ==. address ^. V.AddressId)
+            `on` (\((_ :& txOut) :& address) -> txOut ^. V.TxOutAddressId ==. address ^. V.AddressId)
     where_ (txOut ^. V.TxOutIndex ==. val index &&. tx ^. TxHash ==. val hash)
     pure (address ^. V.AddressPaymentCred, address ^. V.AddressHasScript)
   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
@@ -217,7 +217,7 @@ queryAddressId addrRaw = do
 -- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
 -- rewards are part of the ledger state and hence not on chain.
 queryTotalSupply ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   ReaderT SqlBackend m Ada
 queryTotalSupply txOutTableType =
@@ -242,7 +242,7 @@ queryTotalSupply txOutTableType =
 
 -- | Return the total Genesis coin supply.
 queryGenesisSupply ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   ReaderT SqlBackend m Ada
 queryGenesisSupply txOutTableType =
@@ -257,12 +257,12 @@ queryGenesisSupply txOutTableType =
     query = do
       res <- select $ do
         (_tx :& txOut :& blk) <-
-          from
-            $ table @Tx
+          from $
+            table @Tx
               `innerJoin` table @(TxOutTable a)
-            `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+                `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
               `innerJoin` table @Block
-            `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+                `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
         where_ (isNothing $ blk ^. BlockPreviousId)
         pure $ sum_ (txOut ^. txOutValueField @a)
       pure $ unValueSumAda (listToMaybe res)
@@ -303,12 +303,12 @@ queryShelleyGenesisSupply txOutTableType =
     query = do
       res <- select $ do
         (txOut :& _tx :& blk) <-
-          from
-            $ table @(TxOutTable a)
+          from $
+            table @(TxOutTable a)
               `innerJoin` table @Tx
-            `on` (\(txOut :& tx) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
+                `on` (\(txOut :& tx) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
               `innerJoin` table @Block
-            `on` (\(_txOut :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+                `on` (\(_txOut :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
         where_ (isJust $ blk ^. BlockPreviousId)
         where_ (isNothing $ blk ^. BlockEpochNo)
         pure $ sum_ (txOut ^. txOutValueField @a)
@@ -353,19 +353,19 @@ queryUtxoAtBlockIdCore :: MonadIO m => BlockId -> ReaderT SqlBackend m [UtxoQuer
 queryUtxoAtBlockIdCore blkid = do
   outputs <- select $ do
     (txout :& _txin :& _tx1 :& blk :& tx2) <-
-      from
-        $ table @C.TxOut
+      from $
+        table @C.TxOut
           `leftJoin` table @TxIn
-        `on` ( \(txout :& txin) ->
-                (just (txout ^. C.TxOutTxId) ==. txin ?. TxInTxOutId)
-                  &&. (just (txout ^. C.TxOutIndex) ==. txin ?. TxInTxOutIndex)
-             )
+            `on` ( \(txout :& txin) ->
+                    (just (txout ^. C.TxOutTxId) ==. txin ?. TxInTxOutId)
+                      &&. (just (txout ^. C.TxOutIndex) ==. txin ?. TxInTxOutIndex)
+                 )
           `leftJoin` table @Tx
-        `on` (\(_txout :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
+            `on` (\(_txout :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
           `leftJoin` table @Block
-        `on` (\(_txout :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
+            `on` (\(_txout :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
           `leftJoin` table @Tx
-        `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. C.TxOutTxId) ==. tx2 ?. TxId)
+            `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. C.TxOutTxId) ==. tx2 ?. TxId)
 
     where_ $
       (txout ^. C.TxOutTxId `in_` txLessEqual blkid)
@@ -377,21 +377,21 @@ queryUtxoAtBlockIdVariant :: MonadIO m => BlockId -> ReaderT SqlBackend m [UtxoQ
 queryUtxoAtBlockIdVariant blkid = do
   outputs <- select $ do
     (txout :& _txin :& _tx1 :& blk :& tx2 :& address) <-
-      from
-        $ table @V.TxOut
+      from $
+        table @V.TxOut
           `leftJoin` table @TxIn
-        `on` ( \(txout :& txin) ->
-                (just (txout ^. V.TxOutTxId) ==. txin ?. TxInTxOutId)
-                  &&. (just (txout ^. V.TxOutIndex) ==. txin ?. TxInTxOutIndex)
-             )
+            `on` ( \(txout :& txin) ->
+                    (just (txout ^. V.TxOutTxId) ==. txin ?. TxInTxOutId)
+                      &&. (just (txout ^. V.TxOutIndex) ==. txin ?. TxInTxOutIndex)
+                 )
           `leftJoin` table @Tx
-        `on` (\(_txout :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
+            `on` (\(_txout :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
           `leftJoin` table @Block
-        `on` (\(_txout :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
+            `on` (\(_txout :& _txin :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
           `leftJoin` table @Tx
-        `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. V.TxOutTxId) ==. tx2 ?. TxId)
+            `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. V.TxOutTxId) ==. tx2 ?. TxId)
           `innerJoin` table @V.Address
-        `on` (\(txout :& _ :& _ :& _ :& _ :& address) -> txout ^. V.TxOutAddressId ==. address ^. V.AddressId)
+            `on` (\(txout :& _ :& _ :& _ :& _ :& address) -> txout ^. V.TxOutAddressId ==. address ^. V.AddressId)
 
     where_ $
       (txout ^. V.TxOutTxId `in_` txLessEqual blkid)
@@ -438,16 +438,16 @@ queryAddressBalanceAtSlot txOutTableType addr slotNo = do
         TxOutCore -> do
           res <- select $ do
             (txout :& _ :& _ :& blk :& _) <-
-              from
-                $ table @C.TxOut
+              from $
+                table @C.TxOut
                   `leftJoin` table @TxIn
-                `on` (\(txout :& txin) -> just (txout ^. C.TxOutTxId) ==. txin ?. TxInTxOutId)
+                    `on` (\(txout :& txin) -> just (txout ^. C.TxOutTxId) ==. txin ?. TxInTxOutId)
                   `leftJoin` table @Tx
-                `on` (\(_ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
+                    `on` (\(_ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
                   `leftJoin` table @Block
-                `on` (\(_ :& _ :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
+                    `on` (\(_ :& _ :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
                   `leftJoin` table @Tx
-                `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. C.TxOutTxId) ==. tx2 ?. TxId)
+                    `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. C.TxOutTxId) ==. tx2 ?. TxId)
             where_ $
               (txout ^. C.TxOutTxId `in_` txLessEqual blkid)
                 &&. (isNothing (blk ?. BlockBlockNo) ||. (blk ?. BlockId >. just (val blkid)))
@@ -457,18 +457,18 @@ queryAddressBalanceAtSlot txOutTableType addr slotNo = do
         TxOutVariantAddress -> do
           res <- select $ do
             (txout :& _ :& _ :& blk :& _ :& address) <-
-              from
-                $ table @V.TxOut
+              from $
+                table @V.TxOut
                   `leftJoin` table @TxIn
-                `on` (\(txout :& txin) -> just (txout ^. V.TxOutTxId) ==. txin ?. TxInTxOutId)
+                    `on` (\(txout :& txin) -> just (txout ^. V.TxOutTxId) ==. txin ?. TxInTxOutId)
                   `leftJoin` table @Tx
-                `on` (\(_ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
+                    `on` (\(_ :& txin :& tx1) -> txin ?. TxInTxInId ==. tx1 ?. TxId)
                   `leftJoin` table @Block
-                `on` (\(_ :& _ :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
+                    `on` (\(_ :& _ :& tx1 :& blk) -> tx1 ?. TxBlockId ==. blk ?. BlockId)
                   `leftJoin` table @Tx
-                `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. V.TxOutTxId) ==. tx2 ?. TxId)
+                    `on` (\(txout :& _ :& _ :& _ :& tx2) -> just (txout ^. V.TxOutTxId) ==. tx2 ?. TxId)
                   `innerJoin` table @V.Address
-                `on` (\(txout :& _ :& _ :& _ :& _ :& address) -> txout ^. V.TxOutAddressId ==. address ^. V.AddressId)
+                    `on` (\(txout :& _ :& _ :& _ :& _ :& address) -> txout ^. V.TxOutAddressId ==. address ^. V.AddressId)
             where_ $
               (txout ^. V.TxOutTxId `in_` txLessEqual blkid)
                 &&. (isNothing (blk ?. BlockBlockNo) ||. (blk ?. BlockId >. just (val blkid)))

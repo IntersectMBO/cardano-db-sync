@@ -180,8 +180,8 @@ runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutTableType = getTxOutTableType syncEnv
   logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
-  DB.runDbIohkNoLogging (envBackend syncEnv) $
-    DB.runExtraMigrations
+  DB.runDbIohkNoLogging (envBackend syncEnv)
+    $ DB.runExtraMigrations
       (getTrace syncEnv)
       txOutTableType
       (getSafeBlockNoDiff syncEnv)
@@ -201,11 +201,11 @@ getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 getPruneInterval :: SyncEnv -> Word64
 getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
-whenConsumeOrPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
+whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenConsumeOrPruneTxOut env =
   when (DB.pcmConsumedTxOut $ getPruneConsume env)
 
-whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
+whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
   when (DB.pcmPruneTxOut $ getPruneConsume env)
 
@@ -293,8 +293,8 @@ getDbLatestBlockInfo backend = do
     block <- MaybeT $ DB.runDbIohkNoLogging backend DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
-    pure $
-      TipInfo
+    pure
+      $ TipInfo
         { bHash = DB.blockHash block
         , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
         , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
@@ -384,15 +384,15 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
             syncOptions
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       (Just _, False) -> do
-        logWarning trce $
-          "Disabling the ledger doesn't require having a --state-dir."
-            <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
+        logWarning trce
+          $ "Disabling the ledger doesn't require having a --state-dir."
+          <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
         NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       -- This won't ever call because we error out this combination at parse time
       (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
 
-  pure $
-    SyncEnv
+  pure
+    $ SyncEnv
       { envBackend = backend
       , envBootstrap = bootstrapVar
       , envCache = cache
@@ -523,7 +523,7 @@ getSecurityParam syncEnv =
     NoLedger nle -> getMaxRollbacks $ nleProtocolInfo nle
 
 getMaxRollbacks ::
-  (ConsensusProtocol (BlockProtocol blk)) =>
+  ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
   Word64
 getMaxRollbacks = maxRollbacks . configSecurityParam . pInfoConfig
@@ -546,27 +546,27 @@ getBootstrapInProgress trce bootstrapFlag sqlBackend = do
       (False, DB.BootstrapInProgress) -> do
         liftIO $ DB.logAndThrowIO trce "Bootstrap flag not set, but still in progress"
       (True, DB.BootstrapNotStarted) -> do
-        liftIO $
-          logInfo trce $
-            mconcat
-              [ "Syncing with bootstrap. "
-              , "This won't populate tx_out until the tip of the chain."
-              ]
+        liftIO
+          $ logInfo trce
+          $ mconcat
+            [ "Syncing with bootstrap. "
+            , "This won't populate tx_out until the tip of the chain."
+            ]
         DB.insertExtraMigration DB.BootstrapStarted
         pure True
       (True, DB.BootstrapInProgress) -> do
-        liftIO $
-          logInfo trce $
-            mconcat
-              [ "Syncing with bootstrap is in progress. "
-              , "This won't populate tx_out until the tip of the chain."
-              ]
+        liftIO
+          $ logInfo trce
+          $ mconcat
+            [ "Syncing with bootstrap is in progress. "
+            , "This won't populate tx_out until the tip of the chain."
+            ]
         pure True
       (True, DB.BootstrapDone) -> do
-        liftIO $
-          logWarning trce $
-            mconcat
-              [ "Bootstrap flag is set, but it will be ignored, "
-              , "since bootstrap is already done."
-              ]
+        liftIO
+          $ logWarning trce
+          $ mconcat
+            [ "Bootstrap flag is set, but it will be ignored, "
+            , "since bootstrap is already done."
+            ]
         pure False

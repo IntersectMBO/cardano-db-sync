@@ -237,8 +237,8 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
     mkStake cache (saddr, (coin, pool)) = do
       saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
       poolId <- lift $ queryPoolKeyOrInsert "insertEpochStake" trce cache UpdateCache (ioShelley iopts) pool
-      pure $
-        DB.EpochStake
+      pure
+        $ DB.EpochStake
           { DB.epochStakeAddrId = saId
           , DB.epochStakePoolId = poolId
           , DB.epochStakeAmount = Generic.coinToDbLovelace coin
@@ -279,8 +279,8 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.Reward
     prepareReward saId rwd = do
       poolId <- queryPool (Generic.rewardPool rwd)
-      pure $
-        DB.Reward
+      pure
+        $ DB.Reward
           { DB.rewardAddrId = saId
           , DB.rewardType = Generic.rewardSource rwd
           , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
@@ -354,8 +354,8 @@ insertProposalRefunds trce nw earnedEpoch spendableEpoch cache refunds = do
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.RewardRest
     mkReward refund = do
       saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw (raCredential $ garReturnAddr refund)
-      pure $
-        DB.RewardRest
+      pure
+        $ DB.RewardRest
           { DB.rewardRestAddrId = saId
           , DB.rewardRestType = DB.RwdProposalRefund
           , DB.rewardRestAmount = Generic.coinToDbLovelace (garDeposit refund)

@@ -47,29 +47,29 @@ unlockDatumOutput =
     void $ Api.registerAllStakeCreds interpreter mockServer
     -- Forge a tx with a lock script
     tx <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           [Conway.TxOutInline True Conway.InlineDatum Conway.NoReferenceScript]
           20_000
           20_000
     -- Add it to a block
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx] (NodeId 1)
 
     let utxo = head (Conway.mkUTxOConway tx)
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkUnlockScriptTxBabbage
-          [UTxOPair utxo]
-          (UTxOIndex 1)
-          (UTxOIndex 2)
-          [UTxOPair utxo]
-          False
-          True
-          10_000
-          500
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkUnlockScriptTxBabbage
+        [UTxOPair utxo]
+        (UTxOIndex 1)
+        (UTxOIndex 2)
+        [UTxOPair utxo]
+        False
+        True
+        10_000
+        500
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 3
@@ -118,9 +118,9 @@ unlockDatumOutputSameBlock =
 
       pure [tx0, tx1]
     -- Add the transactions to a block
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock (TxConway <$> txs') (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock (TxConway <$> txs') (NodeId 1)
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
@@ -140,8 +140,8 @@ inlineDatumCBOR =
     void $ Api.registerAllStakeCreds interpreter mockServer
     -- Forge a transaction with inline datum cbor
     tx <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           [ Conway.TxOutInline
               True
@@ -151,9 +151,9 @@ inlineDatumCBOR =
           20_000
           20_000
     -- Add it to a block
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx] (NodeId 1)
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
@@ -171,30 +171,30 @@ spendRefScript =
     void $ Api.registerAllStakeCreds interpreter mockServer
     -- Forge a tx with a script
     tx <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           [Conway.TxOutInline True Conway.NotInlineDatum (Conway.ReferenceScript True)]
           20_000
           20_000
     -- Add it to a block
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock [TxConway tx] (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock [TxConway tx] (NodeId 1)
 
     -- Spend the utxo from above
     let utxo = head (Conway.mkUTxOConway tx)
-    void $
-      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
-        Conway.mkUnlockScriptTxBabbage
-          [UTxOPair utxo]
-          (UTxOIndex 1)
-          (UTxOAddress Examples.alwaysSucceedsScriptAddr)
-          [UTxOPair utxo]
-          False
-          True
-          10_000
-          500
+    void
+      $ Api.withConwayFindLeaderAndSubmitTx interpreter mockServer
+      $ Conway.mkUnlockScriptTxBabbage
+        [UTxOPair utxo]
+        (UTxOIndex 1)
+        (UTxOAddress Examples.alwaysSucceedsScriptAddr)
+        [UTxOPair utxo]
+        False
+        True
+        10_000
+        500
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 3
@@ -243,9 +243,9 @@ spendRefScriptSameBlock =
       pure [tx0, tx1]
 
     -- Add them to a block
-    void $
-      Api.forgeNextAndSubmit interpreter mockServer $
-        MockBlock (TxConway <$> txs') (NodeId 1)
+    void
+      $ Api.forgeNextAndSubmit interpreter mockServer
+      $ MockBlock (TxConway <$> txs') (NodeId 1)
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
@@ -266,16 +266,16 @@ spendCollateralOutput =
 
     -- Forge a transaction with a script
     tx0 <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
     -- Add it to a block
     void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer [TxConway tx0]
 
     -- tx fails, so its collateral output becomes actual output
     let utxo0 = head (Conway.mkUTxOConway tx0)
     tx1 <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTxBabbage
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTxBabbage
           [UTxOInput (fst utxo0)]
           (UTxOIndex 1)
           (UTxOIndex 2)
@@ -292,8 +292,8 @@ spendCollateralOutput =
     -- Spend collateral output from tx1
     let utxo1 = head (Conway.mkUTxOCollConway tx1)
     tx2 <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTxBabbage
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTxBabbage
           [UTxOPair utxo1]
           (UTxOIndex 3)
           (UTxOIndex 1)
@@ -342,16 +342,16 @@ spendCollateralOutputRollback =
     mkSpendCollOutput interpreter mockServer dbSync n = do
       -- Forge a tx with a lock script
       tx0 <-
-        withConwayLedgerState interpreter $
-          Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
+        withConwayLedgerState interpreter
+          $ Conway.mkLockByScriptTx (UTxOIndex 0) [Conway.TxOutNoInline False] 20_000 20_000
       -- Add it to a block
       void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer [TxConway tx0]
 
       -- Create a failing tx so its collateral becomes actual output
       let utxo0 = head (Conway.mkUTxOConway tx0)
       tx1 <-
-        withConwayLedgerState interpreter $
-          Conway.mkUnlockScriptTxBabbage
+        withConwayLedgerState interpreter
+          $ Conway.mkUnlockScriptTxBabbage
             [UTxOInput (fst utxo0)]
             (UTxOIndex 1)
             (UTxOIndex 2)
@@ -368,8 +368,8 @@ spendCollateralOutputRollback =
       -- Create a succeeding transaction that spends the failing tx's outputs
       let utxo1 = head (Conway.mkUTxOCollConway tx1)
       tx2 <-
-        withConwayLedgerState interpreter $
-          Conway.mkUnlockScriptTxBabbage
+        withConwayLedgerState interpreter
+          $ Conway.mkUnlockScriptTxBabbage
             [UTxOPair utxo1]
             (UTxOIndex 3)
             (UTxOIndex 1)
@@ -497,8 +497,8 @@ supplyScriptsTwoWays =
     void $ Api.registerAllStakeCreds interpreter mockServer
     -- Create a lock script
     tx0 <-
-      withConwayLedgerState interpreter $
-        Conway.mkLockByScriptTx
+      withConwayLedgerState interpreter
+        $ Conway.mkLockByScriptTx
           (UTxOIndex 0)
           [ Conway.TxOutInline True Conway.InlineDatum (Conway.ReferenceScript True)
           , Conway.TxOutNoInline True
@@ -512,8 +512,8 @@ supplyScriptsTwoWays =
     let utxos = Conway.mkUTxOConway tx0
         (utxo0, utxo1) = (head utxos, utxos !! 1)
     tx1 <-
-      withConwayLedgerState interpreter $
-        Conway.mkUnlockScriptTxBabbage
+      withConwayLedgerState interpreter
+        $ Conway.mkUnlockScriptTxBabbage
           [UTxOPair utxo0, UTxOPair utxo1]
           (UTxOIndex 1)
           (UTxOIndex 2)
@@ -598,8 +598,8 @@ referenceMintingScript =
       -- Use a reference to an output which has a minting script
       let utxo = head (Conway.mkUTxOConway tx0)
           val =
-            MultiAsset $
-              Map.singleton
+            MultiAsset
+              $ Map.singleton
                 (PolicyID Examples.alwaysSucceedsScriptHash)
                 (Map.singleton (head Examples.assetNames) 1)
       tx1 <-
@@ -646,8 +646,8 @@ referenceDelegation =
       -- Create a tx with a reference to an output which has a minting script
       let utxo = head (Conway.mkUTxOConway tx0)
           val =
-            MultiAsset $
-              Map.singleton
+            MultiAsset
+              $ Map.singleton
                 (PolicyID Examples.alwaysSucceedsScriptHash)
                 (Map.singleton (head Examples.assetNames) 1)
       tx1 <-

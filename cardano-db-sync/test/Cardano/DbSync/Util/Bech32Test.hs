@@ -20,8 +20,8 @@ import Prelude ()
 
 tests :: IO Bool
 tests =
-  checkParallel $
-    Group
+  checkParallel
+    $ Group
       "Cardano.DbSync.Util.Bech32"
       [ ("serialiseVerKeyVrfToBech32 simple", prop_serialiseToBech32)
       , ("serialiseVerKeyVrfToBech32 roundtrip", prop_serialiseVerKeyVrfToBech32_roundtrip)

@@ -81,14 +81,16 @@ queryNewVoteWorkQueue now maxCount = do
   res <- select $ do
     va <- from $ table @VotingAnchor
     where_
-      ( notExists $
-          from (table @OffChainVoteData) >>= \ocvd ->
+      ( notExists
+          $ from (table @OffChainVoteData)
+          >>= \ocvd ->
             where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. va ^. VotingAnchorId)
       )
     where_ (va ^. VotingAnchorType !=. val ConstitutionAnchor)
     where_
-      ( notExists $
-          from (table @OffChainVoteFetchError) >>= \ocvfe ->
+      ( notExists
+          $ from (table @OffChainVoteFetchError)
+          >>= \ocvfe ->
             where_ (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
       )
     limit $ fromIntegral maxCount
@@ -116,8 +118,8 @@ queryOffChainVoteWorkQueue _now maxCount = do
     (va :& ocpfe) <-
       from
         $ table @VotingAnchor
-          `innerJoin` table @OffChainVoteFetchError
-        `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
+        `innerJoin` table @OffChainVoteFetchError
+          `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
     orderBy [asc (ocpfe ^. OffChainVoteFetchErrorId)]
     where_ (just (ocpfe ^. OffChainVoteFetchErrorId) `in_` latestRefs)
     where_ (va ^. VotingAnchorType !=. val ConstitutionAnchor)
@@ -148,8 +150,9 @@ queryOffChainVoteWorkQueue _now maxCount = do
         ocvfe <- from (table @OffChainVoteFetchError)
         groupBy (ocvfe ^. OffChainVoteFetchErrorVotingAnchorId)
         where_
-          ( notExists $
-              from (table @OffChainVoteData) >>= \ocvd ->
+          ( notExists
+              $ from (table @OffChainVoteData)
+              >>= \ocvd ->
                 where_ (ocvd ^. OffChainVoteDataVotingAnchorId ==. ocvfe ^. OffChainVoteFetchErrorVotingAnchorId)
           )
         pure $ max_ (ocvfe ^. OffChainVoteFetchErrorId)
@@ -175,17 +178,19 @@ queryNewPoolWorkQueue now maxCount = do
     (ph :& pmr) <-
       from
         $ table @PoolHash
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
+        `innerJoin` table @PoolMetadataRef
+          `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
     where_ (just (pmr ^. PoolMetadataRefId) `in_` latestRefs)
     where_
-      ( notExists $
-          from (table @OffChainPoolData) >>= \pod ->
+      ( notExists
+          $ from (table @OffChainPoolData)
+          >>= \pod ->
             where_ (pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId)
       )
     where_
-      ( notExists $
-          from (table @OffChainPoolFetchError) >>= \pofe ->
+      ( notExists
+          $ from (table @OffChainPoolFetchError)
+          >>= \pofe ->
             where_ (pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
       )
     limit $ fromIntegral maxCount
@@ -226,10 +231,10 @@ queryOffChainPoolWorkQueue _now maxCount = do
     (ph :& pmr :& pofe) <-
       from
         $ table @PoolHash
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
-          `innerJoin` table @OffChainPoolFetchError
-        `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
+        `innerJoin` table @PoolMetadataRef
+          `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
+        `innerJoin` table @OffChainPoolFetchError
+          `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
     where_ (just (pofe ^. OffChainPoolFetchErrorId) `in_` latestRefs)
     orderBy [asc (pofe ^. OffChainPoolFetchErrorId)]
     limit $ fromIntegral maxCount
