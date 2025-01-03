@@ -240,7 +240,7 @@ queryStakeAddressCount = do
 queryCollateralTxOutCount :: MonadIO io => ReaderT SqlBackend io Word
 queryCollateralTxOutCount = do
   res <- selectOne $ do
-    _ <- from (table @Db.CollateralTxOut)
+    _ <- from (table @C.CollateralTxOut)
     pure countRows
   pure $ maybe 0 unValue res
 

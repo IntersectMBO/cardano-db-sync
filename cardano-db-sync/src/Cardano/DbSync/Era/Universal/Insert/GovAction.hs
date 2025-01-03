@@ -498,8 +498,9 @@ handleCommittee syncEnv govIds epochNo enactedState = do
       mGaId <- resolveGovActionProposal syncEnv $ unGovPurposeId prevId
       case mGaId of
         Nothing -> pure Nothing
-        Just prevId ->
-          fmap Just <$> resolveGovActionProposal cache $ unGovPurposeId prevId
+        Just gaId -> do
+          _nCommittee <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+          pure $ Just gaId
 
   case (mCommitteeGaId, strictMaybeToMaybe (cgsCommittee enactedState)) of
     (Nothing, Nothing) -> pure (Nothing, Nothing)
@@ -548,8 +549,9 @@ handleConstitution syncEnv blkId govIds epochNo enactedState = do
       mGaId <- resolveGovActionProposal syncEnv $ unGovPurposeId prevId
       case mGaId of
         Nothing -> pure Nothing
-        Just prevId ->
-          fmap Just <$> resolveGovActionProposal cache $ unGovPurposeId prevId
+        Just gaId -> do
+          _nConstitution <- lift $ DB.updateGovActionEnacted gaId (unEpochNo epochNo)
+          pure $ Just gaId
 
   constitutionIds <- lift $ DB.queryProposalConstitution mConstitutionGaId
   case constitutionIds of

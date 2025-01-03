@@ -270,7 +270,7 @@ insertTxOut syncEnv cache iopts (txId, txHash) (Generic.TxOut index addr value m
             addrId <- lift $ insertAddress addr vAddress
             pure $
               DB.VTxOutW
-                (mkTxOutVariant addrId mDatumId mScriptId)
+                (mkTxOutVariant mSaId addrId mDatumId mScriptId)
                 Nothing
 
       let !eutxo =
@@ -466,48 +466,50 @@ insertCollateralTxOut syncEnv cache (txId, _txHash) txout@(Generic.TxOut index a
 
     insertColTxOutPart2 mDatumId mScriptId = do
       mSaId <- lift $ insertStakeAddressRefIfMissing syncEnv cache addr
-      _ <- case ioTxOutTableType iopts of
-        DB.TxOutCore -> do
-          lift
-            . DB.insertCollateralTxOut
-            $ DB.CCollateralTxOutW
-            $ C.CollateralTxOut
-              { C.collateralTxOutTxId = txId
-              , C.collateralTxOutIndex = index
-              , C.collateralTxOutAddress = Generic.renderAddress addr
-              , C.collateralTxOutAddressHasScript = hasScript
-              , C.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
-              , C.collateralTxOutStakeAddressId = mSaId
-              , C.collateralTxOutValue = Generic.coinToDbLovelace value
-              , C.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
-              , C.collateralTxOutMultiAssetsDescr = textShow maMap
-              , C.collateralTxOutInlineDatumId = mDatumId
-              , C.collateralTxOutReferenceScriptId = mScriptId
-              }
-        DB.TxOutVariantAddress -> do
-          let vAddress =
-                V.Address
-                  { V.addressAddress = Generic.renderAddress addr
-                  , V.addressRaw = Ledger.serialiseAddr addr
-                  , V.addressHasScript = hasScript
-                  , V.addressPaymentCred = Generic.maybePaymentCred addr
-                  , V.addressStakeAddressId = mSaId
-                  }
-          addrId <- lift $ insertAddress addr vAddress
-          lift
-            . DB.insertCollateralTxOut
-            $ DB.VCollateralTxOutW
-            $ V.CollateralTxOut
-              { V.collateralTxOutTxId = txId
-              , V.collateralTxOutIndex = index
-              , V.collateralTxOutAddressId = addrId
-              , V.collateralTxOutStakeAddressId = mSaId
-              , V.collateralTxOutValue = Generic.coinToDbLovelace value
-              , V.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
-              , V.collateralTxOutMultiAssetsDescr = textShow maMap
-              , V.collateralTxOutInlineDatumId = mDatumId
-              , V.collateralTxOutReferenceScriptId = mScriptId
-              }
+      _ <-
+        case ioTxOutTableType $ getInsertOptions syncEnv of
+          DB.TxOutCore -> do
+            lift . DB.insertCollateralTxOut
+              $ DB.CCollateralTxOutW
+              $ C.CollateralTxOut
+                { C.collateralTxOutTxId = txId
+                , C.collateralTxOutIndex = index
+                , C.collateralTxOutAddress = Generic.renderAddress addr
+                , C.collateralTxOutAddressHasScript = hasScript
+                , C.collateralTxOutPaymentCred = Generic.maybePaymentCred addr
+                , C.collateralTxOutStakeAddressId = mSaId
+                , C.collateralTxOutValue = Generic.coinToDbLovelace value
+                , C.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
+                , C.collateralTxOutMultiAssetsDescr = textShow maMap
+                , C.collateralTxOutInlineDatumId = mDatumId
+                , C.collateralTxOutReferenceScriptId = mScriptId
+                }
+          DB.TxOutVariantAddress -> do
+            let vAddress =
+                  V.Address
+                    { V.addressAddress = Generic.renderAddress addr
+                    , V.addressRaw = Ledger.serialiseAddr addr
+                    , V.addressHasScript = hasScript
+                    , V.addressPaymentCred = Generic.maybePaymentCred addr
+                    , V.addressStakeAddressId = mSaId
+                    }
+            addrId <- lift $ insertAddress addr vAddress
+            lift
+              . DB.insertCollateralTxOut
+              $ DB.VCollateralTxOutW
+              $ V.CollateralTxOut
+                { V.collateralTxOutTxId = txId
+                , V.collateralTxOutIndex = index
+                , V.collateralTxOutAddressId = addrId
+                , V.collateralTxOutStakeAddressId = mSaId
+                , V.collateralTxOutValue = Generic.coinToDbLovelace value
+                , V.collateralTxOutDataHash = Generic.dataHashToBytes <$> Generic.getTxOutDatumHash dt
+                , V.collateralTxOutMultiAssetsDescr = textShow maMap
+                , V.collateralTxOutInlineDatumId = mDatumId
+                , V.collateralTxOutReferenceScriptId = mScriptId
+                }
+
+      pure ()
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
