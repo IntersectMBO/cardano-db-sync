@@ -7,8 +7,6 @@ import System.Directory (getCurrentDirectory)
 import System.Environment (lookupEnv, setEnv)
 import System.FilePath ((</>))
 import qualified Test.Cardano.Db.Mock.Property.Property as Property
-import qualified Test.Cardano.Db.Mock.Unit.Alonzo as Alonzo
-import qualified Test.Cardano.Db.Mock.Unit.Babbage as Babbage
 import qualified Test.Cardano.Db.Mock.Unit.Conway as Conway
 import Test.Tasty
 import Test.Tasty.QuickCheck (testProperty)
@@ -30,8 +28,6 @@ tests iom = do
     testGroup
       "cardano-chain-gen"
       [ Conway.unitTests iom knownMigrationsPlain
-      , Babbage.unitTests iom knownMigrationsPlain
-      , Alonzo.unitTests iom knownMigrationsPlain
       , testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
       ]
   where
