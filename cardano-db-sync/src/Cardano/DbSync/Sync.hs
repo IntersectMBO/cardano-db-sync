@@ -201,32 +201,30 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     localChainSyncPtcl = InitiatorProtocolOnly $
       MiniProtocolCb $ \_ctx channel ->
         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
-          when True $ do
-            logInfo tracer "Starting ChainSync client"
-            setConsistentLevel syncEnv Unchecked
+          logInfo tracer "Starting ChainSync client"
+          setConsistentLevel syncEnv Unchecked
 
-            (latestPoints, currentTip) <- waitRestartState tc
-            let (inMemory, onDisk) = List.span snd latestPoints
-            logInfo tracer $
-              mconcat
-                [ "Suggesting intersection points from memory: "
-                , textShow (fst <$> inMemory)
-                , " and from disk: "
-                , textShow (fst <$> onDisk)
-                ]
-            void $
-              runPipelinedPeer
-                localChainSyncTracer
-                (cChainSyncCodec codecs)
-                channel
-                ( chainSyncClientPeerPipelined $
-                    chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
-                )
-            atomically $ writeDbActionQueue tc DbFinish
-            -- We should return leftover bytes returned by 'runPipelinedPeer', but
-            -- client application do not care about them (it's only important if one
-            -- would like to restart a protocol on the same mux and thus bearer).
-            pure ()
+          (latestPoints, currentTip) <- waitRestartState tc
+          let (inMemory, onDisk) = List.span snd latestPoints
+          logInfo tracer $
+            mconcat
+              [ "Suggesting intersection points from memory: "
+              , textShow (fst <$> inMemory)
+              , " and from disk: "
+              , textShow (fst <$> onDisk)
+              ]
+          void $
+            runPipelinedPeer
+              localChainSyncTracer
+              (cChainSyncCodec codecs)
+              channel
+              ( chainSyncClientPeerPipelined $
+                  chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
+              )
+          atomically $ writeDbActionQueue tc DbFinish
+          -- We should return leftover bytes returned by 'runPipelinedPeer', but
+          -- client application do not care about them (it's only important if one
+          -- would like to restart a protocol on the same mux and thus bearer).
           pure ((), Nothing)
 
     dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void

@@ -70,8 +70,6 @@ syncNodeParams =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
-    <*> Gen.bool
-    <*> Gen.bool
     <*> Gen.word64 (Range.linear 0 1000)
     <*> Gen.word64 (Range.linear 0 1000)
     <*> pure Nothing

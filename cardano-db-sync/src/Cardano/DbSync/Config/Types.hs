@@ -103,8 +103,6 @@ data SyncNodeParams = SyncNodeParams
   , enpPGPassSource :: !PGPassSource
   , enpEpochDisabled :: !Bool
   , enpHasCache :: !Bool
-  , enpSkipFix :: !Bool
-  , enpOnlyFix :: !Bool
   , enpForceIndexes :: !Bool
   , enpHasInOut :: !Bool
   , enpSnEveryFollowing :: !Word64

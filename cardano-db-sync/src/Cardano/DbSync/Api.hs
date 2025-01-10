@@ -13,11 +13,6 @@ module Cardano.DbSync.Api (
   getConsistentLevel,
   isConsistent,
   getIsConsumedFixed,
-  noneFixed,
-  isDataFixed,
-  getIsSyncFixed,
-  setIsFixed,
-  setIsFixedAndMigrate,
   getDisableInOutState,
   getRanIndexes,
   runIndexMigrations,
@@ -124,26 +119,6 @@ getIsConsumedFixed env =
     txOutTableType = getTxOutTableType env
     pcm = soptPruneConsumeMigration $ envOptions env
     backend = envBackend env
-
-noneFixed :: FixesRan -> Bool
-noneFixed NoneFixRan = True
-noneFixed _ = False
-
-isDataFixed :: FixesRan -> Bool
-isDataFixed DataFixRan = True
-isDataFixed _ = False
-
-getIsSyncFixed :: SyncEnv -> IO FixesRan
-getIsSyncFixed = readTVarIO . envIsFixed
-
-setIsFixed :: SyncEnv -> FixesRan -> IO ()
-setIsFixed env fr = do
-  atomically $ writeTVar (envIsFixed env) fr
-
-setIsFixedAndMigrate :: SyncEnv -> FixesRan -> IO ()
-setIsFixedAndMigrate env fr = do
-  envRunDelayedMigration env DB.Fix
-  atomically $ writeTVar (envIsFixed env) fr
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
@@ -343,10 +318,9 @@ mkSyncEnv ::
   SystemStart ->
   SyncNodeConfig ->
   SyncNodeParams ->
-  Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
+mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -361,7 +335,6 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
             }
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
-  fixDataVar <- newTVarIO $ if ranMigrations then DataFixRan else NoneFixRan
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
   bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
@@ -403,7 +376,6 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envCurrentEpochNo = epochVar
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar
-      , envIsFixed = fixDataVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
       , envOffChainPoolResultQueue = oprq
@@ -427,12 +399,10 @@ mkSyncEnvFromConfig ::
   GenesisConfig ->
   SyncNodeConfig ->
   SyncNodeParams ->
-  -- | migrations were ran on startup
-  Bool ->
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -468,7 +438,6 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
               syncNodeConfigFromFile
               syncNodeParams
-              ranMigration
               runMigrationFnc
 
 -- | 'True' is for in memory points and 'False' for on disk

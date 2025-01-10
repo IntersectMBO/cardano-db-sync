@@ -46,7 +46,7 @@ main = do
         -- Or to ignore ledger and not specify the state
         (Nothing, LedgerIgnore) -> error stateDirErrorMsg
         -- Otherwise, it's OK
-        _ -> pure ()
+        _otherwise -> pure ()
 
       let prometheusPort = dncPrometheusPort syncNodeConfigFromFile
       withMetricSetters prometheusPort $ \metricsSetters ->
@@ -87,8 +87,6 @@ pRunDbSyncNode = do
     <*> pPGPassSource
     <*> pEpochDisabled
     <*> pHasCache
-    <*> pSkipFix
-    <*> pOnlyFix
     <*> pForceIndexes
     <*> pHasInOut
     <*> pure 500
@@ -144,15 +142,6 @@ pEpochDisabled =
         <> Opt.help "Makes epoch table remain empty"
     )
 
-pSkipFix :: Parser Bool
-pSkipFix =
-  Opt.flag
-    False
-    True
-    ( Opt.long "skip-fix"
-        <> Opt.help "Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes."
-    )
-
 pForceIndexes :: Parser Bool
 pForceIndexes =
   Opt.flag
@@ -160,18 +149,6 @@ pForceIndexes =
     True
     ( Opt.long "force-indexes"
         <> Opt.help "Forces the Index creation at the start of db-sync. Normally they're created later."
-    )
-
-pOnlyFix :: Parser Bool
-pOnlyFix =
-  Opt.flag
-    False
-    True
-    ( Opt.long "fix-only"
-        <> Opt.help
-          "Runs only the db-sync fix procedure for the wrong datum, redeemer_data and plutus script bytes and exits. \
-          \This doesn't run any migrations. This can also be ran on previous schema, ie 13.0 13.1 to fix the issues without \
-          \bumping the schema version minor number."
     )
 
 pHasCache :: Parser Bool
