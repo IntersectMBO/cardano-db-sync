@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (
   fromBabbageTx,
@@ -13,6 +14,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (
   fromTxOut,
 ) where
 
+import Cardano.DbSync.Config.Types (PlutusConfig)
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
@@ -35,8 +37,8 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
 
-fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
-fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
+fromBabbageTx :: PlutusConfig -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
+fromBabbageTx plutusConfig mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txLedgerTxId = mkTxId tx
@@ -105,7 +107,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
       case Alonzo.isValid tx of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (Left . toShelleyCert)
+    (finalMaps, redeemers) = resolveRedeemers plutusConfig mprices tx (Left . toShelleyCert)
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody

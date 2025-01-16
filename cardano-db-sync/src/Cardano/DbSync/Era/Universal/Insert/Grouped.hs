@@ -185,7 +185,9 @@ insertReverseIndex blockId minIdsWrapper =
 resolveTxInputs ::
   MonadIO m =>
   SyncEnv ->
+  -- | Has the output been consumed?
   Bool ->
+  -- | Does the output need a value?
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
