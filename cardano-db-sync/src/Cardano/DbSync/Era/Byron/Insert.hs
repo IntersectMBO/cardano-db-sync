@@ -25,11 +25,12 @@ import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
+  insertAddressUsingCache,
   insertBlockAndCache,
   queryPrevBlockWithCache,
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
-import Cardano.DbSync.Cache.Types (CacheStatus (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
@@ -366,11 +367,13 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
               , C.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               }
       DB.TxOutVariantAddress -> do
-        addrDetailId <- insertAddress
+        addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
         void . DB.insertTxOut $ DB.VTxOutW (vTxOut addrDetailId) Nothing
   where
     addrRaw :: ByteString
     addrRaw = serialize' (Byron.txOutAddress txout)
+
+    cache = envCache syncEnv
 
     vTxOut :: V.AddressId -> V.TxOut
     vTxOut addrDetailId =
@@ -395,16 +398,6 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
         , V.addressPaymentCred = Nothing -- Byron does not have a payment credential.
         , V.addressStakeAddressId = Nothing -- Byron does not have a stake address.
         }
-
-    insertAddress ::
-      (MonadBaseControl IO m, MonadIO m) =>
-      ReaderT SqlBackend m V.AddressId
-    insertAddress = do
-      mAddrId <- DB.queryAddressId addrRaw
-      case mAddrId of
-        Nothing -> DB.insertAddress vAddress
-        -- this address is already in the database, so we can just return the id to be linked to the txOut.
-        Just addrId -> pure addrId
 
 insertTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>

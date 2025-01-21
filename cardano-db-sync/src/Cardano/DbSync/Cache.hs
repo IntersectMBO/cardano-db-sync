@@ -18,6 +18,7 @@ module Cardano.DbSync.Cache (
   queryPrevBlockWithCache,
   queryOrInsertStakeAddress,
   queryOrInsertRewardAccount,
+  insertAddressUsingCache,
   insertStakeAddress,
   queryStakeAddrWithCache,
   queryTxIdWithCache,
@@ -31,6 +32,7 @@ module Cardano.DbSync.Cache (
 
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
@@ -252,6 +254,61 @@ queryPoolKeyWithCache cache cacheUA hsh =
                     modifyTVar (cPools ci) $
                       Map.insert hsh phId
               pure $ Right phId
+
+insertAddressUsingCache ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  CacheStatus ->
+  CacheAction ->
+  ByteString ->
+  V.Address ->
+  ReaderT SqlBackend m V.AddressId
+insertAddressUsingCache cache cacheUA addrRaw vAdrs = do
+  case cache of
+    NoCache -> do
+      -- Directly query the database for the address ID when no caching is active.
+      mAddrId <- DB.queryAddressId addrRaw
+      processResult mAddrId
+    ActiveCache ci -> do
+      -- Use active cache to attempt fetching the address ID from the cache.
+      adrs <- liftIO $ readTVarIO (cAddress ci)
+      case LRU.lookup addrRaw adrs of
+        Just (addrId, adrs') -> do
+          -- If found in cache, record a cache hit and update the cache state.
+          liftIO $ hitAddress (cStats ci)
+          liftIO $ atomically $ writeTVar (cAddress ci) adrs'
+          pure addrId
+        Nothing -> do
+          -- If not found in cache, log a miss, and query the database.
+          liftIO $ missAddress (cStats ci)
+          mAddrId <- DB.queryAddressId addrRaw
+          processWithCache mAddrId ci
+  where
+    processResult mAddrId =
+      case mAddrId of
+        -- If address ID isn't found in the database, insert it.
+        Nothing -> DB.insertAddress vAdrs
+        -- Return the found address ID.
+        Just addrId -> pure addrId
+
+    processWithCache mAddrId ci =
+      case mAddrId of
+        -- If address ID isn't found, insert and possibly cache it.
+        Nothing -> do
+          addrId <- DB.insertAddress vAdrs
+          cacheIfNeeded addrId ci
+          pure addrId
+        -- If found, optionally cache it.
+        Just addrId -> do
+          cacheIfNeeded addrId ci
+          pure addrId
+
+    cacheIfNeeded addrId ci =
+      -- Cache the address ID if the caching action specifies it should be cached.
+      when (shouldCache cacheUA) $
+        liftIO $
+          atomically $
+            modifyTVar (cAddress ci) $
+              LRU.insert addrRaw addrId
 
 insertPoolKeyWithCache ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -534,6 +591,15 @@ hitMAssets ref =
 missMAssets :: StrictTVar IO CacheStatistics -> IO ()
 missMAssets ref =
   atomically $ modifyTVar ref (\cs -> cs {multiAssetsQueries = 1 + multiAssetsQueries cs})
+
+-- Address
+hitAddress :: StrictTVar IO CacheStatistics -> IO ()
+hitAddress ref =
+  atomically $ modifyTVar ref (\cs -> cs {addressHits = 1 + addressHits cs, addressQueries = 1 + addressQueries cs})
+
+missAddress :: StrictTVar IO CacheStatistics -> IO ()
+missAddress ref =
+  atomically $ modifyTVar ref (\cs -> cs {addressQueries = 1 + addressQueries cs})
 
 -- Blocks
 hitPBlock :: StrictTVar IO CacheStatistics -> IO ()
