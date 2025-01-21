@@ -45,7 +45,7 @@ main = do
         Right bs -> bs
 
     cleanOpt :: [String] -> [String]
-    cleanOpt ls = List.delete "ga" $ List.delete "vote" $ List.delete "drep" $ List.delete "pool" ls
+    cleanOpt ls = ls List.\\ ["url", "ga", "drep", "other", "vote", "committee_dereg", "const"]
 
     getVoteType :: [String] -> Maybe OffChainVoteType
     getVoteType ls
