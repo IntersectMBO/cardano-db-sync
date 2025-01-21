@@ -98,3 +98,13 @@ source-repository-package
     trace-dispatcher
     trace-forward
     trace-resources
+
+
+source-repository-package
+  type: git
+  location: https://github.com/sgillespie/persistent
+  tag: 36155c676499088e1a6f130e626072596429734b
+  --sha256: sha256-inh+Y4z1NbMNBasQizeQriUDPzbAaNmobCAM/sAQBdE=
+  subdir:
+    persistent
+    persistent-postgresql
