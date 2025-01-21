@@ -14,10 +14,13 @@ module Cardano.Mock.Query (
   queryRewardRests,
   queryTreasuryDonations,
   queryVoteCounts,
+  queryEpochStateCount,
+  queryCommitteeByTxHash,
+  queryCommitteeMemberCountByTxHash,
 ) where
 
 import qualified Cardano.Db as Db
-import Cardano.Prelude hiding (from, on)
+import Cardano.Prelude hiding (from, isNothing, on)
 import Database.Esqueleto.Experimental
 import Prelude ()
 
@@ -201,3 +204,69 @@ queryVoteCounts txHash idx = do
             &&. vote ^. Db.VotingProcedureIndex ==. val idx
         pure countRows
       pure (maybe 0 unValue res)
+
+queryEpochStateCount ::
+  MonadIO io =>
+  Word64 ->
+  ReaderT SqlBackend io Word64
+queryEpochStateCount epochNo = do
+  res <- selectOne $ do
+    epochState <- from (table @Db.EpochState)
+    where_ (epochState ^. Db.EpochStateEpochNo ==. val epochNo)
+    pure countRows
+
+  pure (maybe 0 unValue res)
+
+queryCommitteeByTxHash ::
+  MonadIO io =>
+  ByteString ->
+  ReaderT SqlBackend io (Maybe Db.Committee)
+queryCommitteeByTxHash txHash = do
+  res <- selectOne $ do
+    (committee :& _ :& tx) <-
+      from
+        $ table @Db.Committee
+          `innerJoin` table @Db.GovActionProposal
+        `on` ( \(committee :& govAction) ->
+                committee ^. Db.CommitteeGovActionProposalId ==. just (govAction ^. Db.GovActionProposalId)
+             )
+          `innerJoin` table @Db.Tx
+        `on` ( \(_ :& govAction :& tx) ->
+                govAction ^. Db.GovActionProposalTxId ==. tx ^. Db.TxId
+             )
+    where_ (tx ^. Db.TxHash ==. val txHash)
+    pure committee
+
+  pure (entityVal <$> res)
+
+queryCommitteeMemberCountByTxHash ::
+  MonadIO io =>
+  Maybe ByteString ->
+  ReaderT SqlBackend io Word64
+queryCommitteeMemberCountByTxHash txHash = do
+  res <- selectOne $ do
+    (_ :& committee :& _ :& tx) <-
+      from
+        $ table @Db.CommitteeMember
+          `innerJoin` table @Db.Committee
+        `on` ( \(member :& committee) ->
+                member ^. Db.CommitteeMemberCommitteeId ==. committee ^. Db.CommitteeId
+             )
+          `leftJoin` table @Db.GovActionProposal
+        `on` ( \(_ :& committee :& govAction) ->
+                committee ^. Db.CommitteeGovActionProposalId ==. govAction ?. Db.GovActionProposalId
+             )
+          `leftJoin` table @Db.Tx
+        `on` ( \(_ :& _ :& govAction :& tx) ->
+                govAction ?. Db.GovActionProposalTxId ==. tx ?. Db.TxId
+             )
+
+    where_ $
+      case txHash of
+        -- Search by Tx hash, if specified
+        Just _ -> tx ?. Db.TxHash ==. val txHash
+        -- Otherwise, get the initial committee
+        Nothing -> isNothing (committee ^. Db.CommitteeGovActionProposalId)
+    pure countRows
+
+  pure (maybe 0 unValue res)
