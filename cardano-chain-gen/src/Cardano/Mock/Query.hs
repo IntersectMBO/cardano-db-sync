@@ -1,4 +1,8 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Mock.Query (
@@ -14,6 +18,7 @@ module Cardano.Mock.Query (
   queryRewardRests,
   queryTreasuryDonations,
   queryVoteCounts,
+  queryConsumedTxOutCount,
 ) where
 
 import qualified Cardano.Db as Db
@@ -201,3 +206,15 @@ queryVoteCounts txHash idx = do
             &&. vote ^. Db.VotingProcedureIndex ==. val idx
         pure countRows
       pure (maybe 0 unValue res)
+
+queryConsumedTxOutCount ::
+  forall (a :: Db.TxOutTableType) io.
+  (MonadIO io, Db.TxOutFields a) =>
+  ReaderT SqlBackend io Word64
+queryConsumedTxOutCount = do
+  res <- selectOne $ do
+    txOut <- from $ table @(Db.TxOutTable a)
+    where_ (not_ $ isNothing_ $ txOut ^. Db.txOutConsumedByTxIdField @a)
+    pure countRows
+
+  pure $ maybe 0 unValue res
