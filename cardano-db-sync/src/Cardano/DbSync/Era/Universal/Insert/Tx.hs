@@ -24,7 +24,7 @@ import Cardano.DbSync.Cache (insertAddressUsingCache, queryTxIdWithCache, tryUpd
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..), fromMultiAssetMap)
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertCertificate)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertGovActionProposal,
@@ -240,6 +240,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
               , C.txOutReferenceScriptId = mScriptId
               , C.txOutStakeAddressId = mSaId
               , C.txOutTxId = txId
+              , C.txOutMaTxOut = Just multiAssetsJson
               , C.txOutValue = Generic.coinToDbLovelace value
               }
       DB.TxOutVariantAddress -> do
@@ -261,7 +262,9 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         case ioTxOutTableType iopts of
           DB.TxOutCore -> ExtendedTxOut txHash txOut
           DB.TxOutVariantAddress -> ExtendedTxOut txHash txOut
-  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ insertMaTxOuts tracer cache maMap
+  !maTxOuts <-
+    whenFalseMempty (ioMultiAssets iopts) $
+      insertMaTxOuts tracer cache maMap
   pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
@@ -269,6 +272,10 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
 
     addrText :: Text
     addrText = Generic.renderAddress addr
+
+    multiAssetsJson :: Text
+    multiAssetsJson =
+      decodeUtf8 . LBS.toStrict . Aeson.encode . fromMultiAssetMap $ maMap
 
     mkTxOutVariant :: Maybe DB.StakeAddressId -> V.AddressId -> Maybe DB.DatumId -> Maybe DB.ScriptId -> V.TxOut
     mkTxOutVariant mSaId addrId mDatumId mScriptId =
@@ -281,6 +288,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         , V.txOutReferenceScriptId = mScriptId
         , V.txOutTxId = txId
         , V.txOutValue = Generic.coinToDbLovelace value
+        , V.txOutMaTxOut = Just multiAssetsJson
         , V.txOutStakeAddressId = mSaId
         }
 
