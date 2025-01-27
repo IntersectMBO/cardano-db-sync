@@ -24,6 +24,10 @@
       url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
       flake = false;
     };
+    # Note[PostgreSQL 17]: This is a workaround to get postgresql_17 from nixpkgs. It's
+    # available in nixpkgs unstable, but has not been updated in haskell.nix yet. Remove
+    # this after the next time haskell.nix updates nixpkgs.
+    nixpkgsUpstream.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs = { self, ... }@inputs:
@@ -36,6 +40,12 @@
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
         let
+          # TODO: Remove me (See Note[PostgreSQL 17]).
+          nixpkgsUpstream = import inputs.nixpkgsUpstream {
+            inherit system;
+            inherit (inputs.haskellNix) config;
+          };
+
           nixpkgs = import inputs.nixpkgs {
             inherit system;
             inherit (inputs.haskellNix) config;
@@ -91,6 +101,11 @@
 
                       doCheck = false;
                     });
+                })
+
+                # TODO: Remove me (See Note[PostgreSQL 17])
+                (final: prev: {
+                  postgresql_17 = nixpkgsUpstream.postgresql_17;
                 })
               ];
           };
