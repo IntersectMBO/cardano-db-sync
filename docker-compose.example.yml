@@ -4,7 +4,7 @@ name: cardano-db-sync
 
 services:
   postgres:
-    image: postgres:14.10-alpine
+    image: postgres:17.2-alpine
     environment:
       - POSTGRES_LOGGING=true
       - POSTGRES_DB=cexplorer
