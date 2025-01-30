@@ -30,8 +30,8 @@ import Cardano.Db.Types (
   readVoterRole,
   renderAnchorType,
   renderGovActionType,
-  renderScriptPurpose,
-  renderScriptType,
+  scriptPurposeFromText,
+  scriptPurposeToText,
   renderSyncState,
   renderVote,
   renderVoterRole,
@@ -109,13 +109,13 @@ instance PersistField SyncState where
     Left $ mconcat ["Failed to parse Haskell type SyncState: ", Text.pack (show x)]
 
 instance PersistField ScriptPurpose where
-  toPersistValue = PersistText . renderScriptPurpose
+  toPersistValue = PersistText . scriptPurposeFromText
   fromPersistValue (PersistLiteral bs) = Right $ readScriptPurpose (BS.unpack bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type ScriptPurpose: ", Text.pack (show x)]
 
 instance PersistField ScriptType where
-  toPersistValue = PersistText . renderScriptType
+  toPersistValue = PersistText . scriptPurposeToText
   fromPersistValue (PersistLiteral bs) = Right $ readScriptType (BS.unpack bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type ScriptType: ", Text.pack (show x)]

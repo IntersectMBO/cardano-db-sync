@@ -42,22 +42,22 @@ module Cardano.Db.Types (
   scientificToAda,
   readDbInt65,
   showDbInt65,
-  readRewardSource,
-  readScriptPurpose,
-  readScriptType,
-  readSyncState,
-  renderScriptPurpose,
-  renderScriptType,
-  renderSyncState,
-  showRewardSource,
-  renderVote,
-  readVote,
-  renderVoterRole,
-  readVoterRole,
-  renderGovActionType,
-  readGovActionType,
-  renderAnchorType,
-  readAnchorType,
+  rewardSourceFromText,
+  syncStateToText,
+  syncStateFromText,
+  scriptPurposeFromText,
+  scriptPurposeToText,
+  scriptTypeFromText,
+  scriptTypeToText,
+  rewardSourceToText,
+  voteToText,
+  voteFromText,
+  voterRoleToText,
+  voterRoleFromText,
+  govActionTypeToText,
+  govActionTypeFromText,
+  anchorTypeToText,
+  anchorTypeFromText,
   word64ToAda,
   hardcodedAlwaysAbstain,
   hardcodedAlwaysNoConfidence,
@@ -337,9 +337,9 @@ showDbInt65 i65 =
     NegInt65 0 -> "0"
     NegInt65 w -> '-' : show w
 
-readRewardSource :: Text -> RewardSource
-readRewardSource str =
-  case str of
+rewardSourceFromText :: Text -> RewardSource
+rewardSourceFromText txt =
+  case txt of
     "member" -> RwdMember
     "leader" -> RwdLeader
     "reserves" -> RwdReserves
@@ -348,25 +348,25 @@ readRewardSource str =
     "proposal_refund" -> RwdProposalRefund
     -- This should never happen. On the Postgres side we defined an ENUM with
     -- only the two values as above.
-    _other -> error $ "readRewardSource: Unknown RewardSource " ++ Text.unpack str
+    _other -> error $ "rewardSourceFromText: Unknown RewardSource " ++ show txt
 
-readSyncState :: String -> SyncState
-readSyncState str =
-  case str of
+syncStateFromText :: Text -> SyncState
+syncStateFromText txt =
+  case txt of
     "lagging" -> SyncLagging
     "following" -> SyncFollowing
     -- This should never happen. On the Postgres side we defined an ENUM with
     -- only the two values as above.
-    _other -> error $ "readSyncState: Unknown SyncState " ++ str
+    _other -> error $ "syncStateToText: Unknown SyncState " ++ show txt
 
-renderSyncState :: SyncState -> Text
-renderSyncState ss =
+syncStateToText :: SyncState -> Text
+syncStateToText ss =
   case ss of
     SyncFollowing -> "following"
     SyncLagging -> "lagging"
 
-renderScriptPurpose :: ScriptPurpose -> Text
-renderScriptPurpose ss =
+scriptPurposeFromText :: ScriptPurpose -> Text
+scriptPurposeFromText ss =
   case ss of
     Spend -> "spend"
     Mint -> "mint"
@@ -375,19 +375,19 @@ renderScriptPurpose ss =
     Vote -> "vote"
     Propose -> "propose"
 
-readScriptPurpose :: String -> ScriptPurpose
-readScriptPurpose str =
-  case str of
+scriptPurposeToText :: Text -> ScriptPurpose
+scriptPurposeToText txt =
+  case txt of
     "spend" -> Spend
     "mint" -> Mint
     "cert" -> Cert
     "reward" -> Rewrd
     "vote" -> Vote
     "propose" -> Propose
-    _other -> error $ "readScriptPurpose: Unknown ScriptPurpose " ++ str
+    _other -> error $ "scriptPurposeFromText: Unknown ScriptPurpose " ++ show txt
 
-showRewardSource :: RewardSource -> Text
-showRewardSource rs =
+rewardSourceToText :: RewardSource -> Text
+rewardSourceToText rs =
   case rs of
     RwdMember -> "member"
     RwdLeader -> "leader"
@@ -396,8 +396,8 @@ showRewardSource rs =
     RwdDepositRefund -> "refund"
     RwdProposalRefund -> "proposal_refund"
 
-renderScriptType :: ScriptType -> Text
-renderScriptType st =
+scriptTypeToText :: ScriptType -> Text
+scriptTypeToText st =
   case st of
     MultiSig -> "multisig"
     Timelock -> "timelock"
@@ -405,48 +405,48 @@ renderScriptType st =
     PlutusV2 -> "plutusV2"
     PlutusV3 -> "plutusV3"
 
-readScriptType :: String -> ScriptType
-readScriptType str =
-  case str of
+scriptTypeFromText :: Text -> ScriptType
+scriptTypeFromText txt =
+  case txt of
     "multisig" -> MultiSig
     "timelock" -> Timelock
     "plutusV1" -> PlutusV1
     "plutusV2" -> PlutusV2
     "plutusV3" -> PlutusV3
-    _other -> error $ "readScriptType: Unknown ScriptType " ++ str
+    _other -> error $ "scriptTypeFromText: Unknown ScriptType " ++ show txt
 
-renderVote :: Vote -> Text
-renderVote ss =
+voteToText :: Vote -> Text
+voteToText ss =
   case ss of
     VoteYes -> "Yes"
     VoteNo -> "No"
     VoteAbstain -> "Abstain"
 
-readVote :: String -> Vote
-readVote str =
-  case str of
+voteFromText :: Text -> Vote
+voteFromText txt =
+  case txt of
     "Yes" -> VoteYes
     "No" -> VoteNo
     "Abstain" -> VoteAbstain
-    _other -> error $ "readVote: Unknown Vote " ++ str
+    _other -> error $ "readVote: Unknown Vote " ++ show txt
 
-renderVoterRole :: VoterRole -> Text
-renderVoterRole ss =
+voterRoleToText :: VoterRole -> Text
+voterRoleToText ss =
   case ss of
     ConstitutionalCommittee -> "ConstitutionalCommittee"
     DRep -> "DRep"
     SPO -> "SPO"
 
-readVoterRole :: String -> VoterRole
-readVoterRole str =
-  case str of
+voterRoleFromText :: Text -> VoterRole
+voterRoleFromText txt =
+  case txt of
     "ConstitutionalCommittee" -> ConstitutionalCommittee
     "DRep" -> DRep
     "SPO" -> SPO
-    _other -> error $ "readVoterRole: Unknown VoterRole " ++ str
+    _other -> error $ "voterRoleFromText: Unknown VoterRole " ++ show txt
 
-renderGovActionType :: GovActionType -> Text
-renderGovActionType gav =
+govActionTypeToText :: GovActionType -> Text
+govActionTypeToText gav =
   case gav of
     ParameterChange -> "ParameterChange"
     HardForkInitiation -> "HardForkInitiation"
@@ -456,19 +456,19 @@ renderGovActionType gav =
     NewConstitution -> "NewConstitution"
     InfoAction -> "InfoAction"
 
-readGovActionType :: String -> GovActionType
-readGovActionType str =
-  case str of
+govActionTypeFromText :: Text -> GovActionType
+govActionTypeFromText txt =
+  case txt of
     "ParameterChange" -> ParameterChange
     "HardForkInitiation" -> HardForkInitiation
     "TreasuryWithdrawals" -> TreasuryWithdrawals
     "NoConfidence" -> NoConfidence
     "NewCommittee" -> NewCommitteeType
     "NewConstitution" -> NewConstitution
-    _other -> error $ "readGovActionType: Unknown GovActionType " ++ str
+    _other -> error $ "govActionTypeFromText: Unknown GovActionType " ++ show txt
 
-renderAnchorType :: AnchorType -> Text
-renderAnchorType gav =
+anchorTypeToText :: AnchorType -> Text
+anchorTypeToText gav =
   case gav of
     GovActionAnchor -> "gov_action"
     DrepAnchor -> "drep"
@@ -477,16 +477,16 @@ renderAnchorType gav =
     CommitteeDeRegAnchor -> "committee_dereg"
     ConstitutionAnchor -> "constitution"
 
-readAnchorType :: String -> AnchorType
-readAnchorType str =
-  case str of
+anchorTypeFromText :: Text -> AnchorType
+anchorTypeFromText txt =
+  case txt of
     "gov_action" -> GovActionAnchor
     "drep" -> DrepAnchor
     "other" -> OtherAnchor
     "vote" -> VoteAnchor
     "committee_dereg" -> CommitteeDeRegAnchor
     "constitution" -> ConstitutionAnchor
-    _other -> error $ "readAnchorType: Unknown AnchorType " ++ str
+    _other -> error $ "anchorTypeFromText: Unknown AnchorType " ++ show txt
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =
