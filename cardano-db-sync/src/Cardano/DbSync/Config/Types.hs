@@ -127,6 +127,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncProtocol :: !SyncProtocol
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
   , dncEnableLogging :: !Bool
+  , dncEnableDbLogging :: !Bool
   , dncEnableMetrics :: !Bool
   , dncPrometheusPort :: !Int
   , dncPBftSignatureThreshold :: !(Maybe Double)
@@ -155,6 +156,7 @@ data SyncPreConfig = SyncPreConfig
   , pcNodeConfigFile :: !NodeConfigFile
   , pcEnableFutureGenesis :: !Bool
   , pcEnableLogging :: !Bool
+  , pcEnableDbLogging :: !Bool
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
@@ -388,7 +390,7 @@ isPlutusEnabled PlutusDisable = False
 isPlutusEnabled PlutusEnable = True
 isPlutusEnabled (PlutusScripts _) = True
 
--- -------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 
 instance FromJSON SyncPreConfig where
   parseJSON =
@@ -402,6 +404,7 @@ parseGenSyncNodeConfig o =
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> fmap (fromMaybe True) (o .:? "EnableFutureGenesis")
     <*> o .: "EnableLogging"
+    <*> fmap (fromMaybe False) (o .:? "EnableDbLogging")
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
     <*> o .:? "insert_options" .!= def
@@ -455,6 +458,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj .:? "db_debug" .!= sioDbDebug baseOptions
 
 instance ToJSON SyncInsertConfig where
   toJSON (SyncInsertConfig preset options) =
@@ -476,6 +480,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
+    , toJsonIfSet "db_debug" sioDbDebug
     ]
 
 toJsonIfSet :: ToJSON a => Text -> a -> Maybe Pair
@@ -497,6 +502,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj .:? "db_debug" .!= sioDbDebug def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -513,6 +519,7 @@ instance ToJSON SyncInsertOptions where
       , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
+      , "db_debug" .= sioDbDebug
       ]
 
 instance ToJSON RewardsConfig where

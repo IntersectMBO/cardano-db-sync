@@ -32,7 +32,7 @@ module Cardano.DbSync.Cache (
 
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
@@ -259,8 +259,8 @@ insertAddressUsingCache ::
   CacheStatus ->
   CacheAction ->
   ByteString ->
-  VA.Address ->
-  ReaderT SqlBackend m VA.AddressId
+  V.Address ->
+  ReaderT SqlBackend m V.AddressId
 insertAddressUsingCache cache cacheUA addrRaw vAdrs = do
   case cache of
     NoCache -> do

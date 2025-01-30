@@ -93,6 +93,7 @@ import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
+import qualified Hasql.Connection as HqlC
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -155,7 +156,7 @@ runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutTableType = getTxOutVariantType syncEnv
   logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
-  DB.runDbIohkNoLogging (envBackend syncEnv) $
+  DB.runDbIohkNoLogging (envDbEnv syncEnv) $
     DB.runExtraMigrations
       (getTrace syncEnv)
       txOutTableType
@@ -164,11 +165,17 @@ runExtraMigrationsMaybe syncEnv = do
 
 runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.enableJsonbInSchema
+  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
 
-runRemoveJsonbFromSchema :: SyncEnv -> IO ()
-runRemoveJsonbFromSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.disableJsonbInSchema
+runRemoveJsonbFromSchema
+  :: (MonadIO m, AsDbError e)
+  => SyncEnv
+  -> DbAction e m ()
+runRemoveJsonbFromSchema syncEnv = do
+  DB.runDbTx DB.Write transx
+  where
+    dbEnv = envDbEnv syncEnv
+    transx = mkDbTransaction "runRemoveJsonbFromSchema" mkCallSite (DB.disableJsonbInSchema (dbConnection dbEnv))
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -307,9 +314,61 @@ getCurrentTipBlockNo env = do
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
+mkSyncEnvFromConfig ::
+  Trace IO Text ->
+  Db.DbEnv ->
+  ConnectionString ->
+  SyncOptions ->
+  GenesisConfig ->
+  SyncNodeConfig ->
+  SyncNodeParams ->
+  -- | migrations were ran on startup
+  Bool ->
+  -- | run migration function
+  RunMigration ->
+  IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce dbEnv connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+  case genCfg of
+    GenesisCardano _ bCfg sCfg _ _
+      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
+              [ "ProtocolMagicId "
+              , textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              , " /= "
+              , textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+              ]
+      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
+              [ "SystemStart "
+              , textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              , " /= "
+              , textShow (Shelley.sgSystemStart $ scConfig sCfg)
+              ]
+      | otherwise ->
+          Right
+            <$> mkSyncEnv
+              trce
+              dbEnv
+              connectionString
+              syncOptions
+              (fst $ mkProtocolInfoCardano genCfg [])
+              (Shelley.sgNetworkId $ scConfig sCfg)
+              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              syncNodeConfigFromFile
+              syncNodeParams
+              ranMigration
+              runMigrationFnc
+
 mkSyncEnv ::
   Trace IO Text ->
-  SqlBackend ->
+  Db.DbEnv ->
   ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -320,7 +379,11 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
+<<<<<<< HEAD
 mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
+=======
+mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
+>>>>>>> 29841e49 (more functionality)
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -367,7 +430,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
   pure $
     SyncEnv
-      { envBackend = backend
+      { envDbEnv = dbEnv
       , envBootstrap = bootstrapVar
       , envCache = cache
       , envConnectionString = connectionString
@@ -393,7 +456,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->
-  SqlBackend ->
+  Pool ->
   ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
@@ -402,7 +465,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+mkSyncEnvFromConfig trce dbPool connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -429,7 +492,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
           Right
             <$> mkSyncEnv
               trce
-              backend
+              dbPool
               connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])

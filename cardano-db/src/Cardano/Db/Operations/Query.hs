@@ -105,7 +105,7 @@ module Cardano.Db.Operations.Query (
 
 import Cardano.Db.Error
 import Cardano.Db.Operations.QueryHelper (defaultUTCTime, isJust, maybeToEither, unValue2, unValue3, unValue5, unValueSumAda)
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Core
 import Cardano.Db.Types
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
 import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))

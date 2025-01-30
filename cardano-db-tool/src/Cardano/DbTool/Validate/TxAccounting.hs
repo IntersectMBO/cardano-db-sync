@@ -11,8 +11,8 @@ module Cardano.DbTool.Validate.TxAccounting (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variant.TxOutCore as C
 import Cardano.DbTool.Validate.Util
 import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -43,8 +43,10 @@ import Database.Esqueleto.Experimental (
  )
 import qualified System.Random as Random
 
-validateTxAccounting :: TxOutVariantType -> IO ()
-validateTxAccounting getTxOutVariantType = do
+{- HLINT ignore "Fuse on/on" -}
+
+validateTxAccounting :: TxOutTableType -> IO ()
+validateTxAccounting getTxOutTableType = do
   txIdRange <- runDbNoLoggingEnv queryTestTxIds
   putStrF $
     "For "
@@ -53,7 +55,7 @@ validateTxAccounting getTxOutVariantType = do
       ++ show (snd txIdRange)
       ++ " accounting is: "
   ids <- randomTxIds testCount txIdRange
-  res <- runExceptT $ traverse (validateAccounting getTxOutVariantType) ids
+  res <- runExceptT $ traverse (validateAccounting getTxOutTableType) ids
   case res of
     Left err -> error $ redText (reportError err)
     Right _ -> putStrLn $ greenText "ok"
@@ -111,11 +113,11 @@ showTxOut txo =
     ]
   where
     (txId, value) = case txo of
-      CTxOutW cTxOut -> (VC.txOutTxId cTxOut, VC.txOutValue cTxOut)
-      VTxOutW vTxOut _ -> (VA.txOutTxId vTxOut, VA.txOutValue vTxOut)
+      CTxOutW cTxOut -> (C.txOutTxId cTxOut, C.txOutValue cTxOut)
+      VTxOutW vTxOut _ -> (V.txOutTxId vTxOut, V.txOutValue vTxOut)
 
 -- For a given TxId, validate the input/output accounting.
-validateAccounting :: TxOutVariantType -> Word64 -> ExceptT ValidateError IO ()
+validateAccounting :: TxOutTableType -> Word64 -> ExceptT ValidateError IO ()
 validateAccounting txOutTableType txId = do
   (fee, deposit) <- liftIO $ runDbNoLoggingEnv (queryTxFeeDeposit txId)
   withdrawal <- liftIO $ runDbNoLoggingEnv (queryTxWithdrawal txId)
@@ -138,8 +140,8 @@ sumValues = word64ToAda . sum . map txOutValue
   where
     txOutValue =
       unDbLovelace . \case
-        CTxOutW cTxOut -> VC.txOutValue cTxOut
-        VTxOutW vTxOut _ -> VA.txOutValue vTxOut
+        CTxOutW cTxOut -> C.txOutValue cTxOut
+        VTxOutW vTxOut _ -> V.txOutValue vTxOut
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -165,9 +167,9 @@ queryTxFeeDeposit txId = do
     convert :: (Value DbLovelace, Value (Maybe Int64)) -> (Ada, Int64)
     convert (Value (DbLovelace w64), d) = (word64ToAda w64, fromMaybe 0 (unValue d))
 
-queryTxInputs :: MonadIO m => TxOutVariantType -> Word64 -> ReaderT SqlBackend m [TxOutW]
+queryTxInputs :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [TxOutW]
 queryTxInputs txOutTableType txId = case txOutTableType of
-  TxOutVariantCore -> map CTxOutW <$> queryInputsBody @'TxOutVariantCore txId
+  TxOutCore -> map CTxOutW <$> queryInputsBody @'TxOutCore txId
   TxOutVariantAddress -> map (`VTxOutW` Nothing) <$> queryInputsBody @'TxOutVariantAddress txId
 
 queryInputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT SqlBackend m [TxOutTable a]
@@ -185,9 +187,9 @@ queryInputsBody txId = do
     pure txout
   pure $ entityVal <$> res
 
-queryTxOutputs :: MonadIO m => TxOutVariantType -> Word64 -> ReaderT SqlBackend m [TxOutW]
+queryTxOutputs :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [TxOutW]
 queryTxOutputs txOutTableType txId = case txOutTableType of
-  TxOutVariantCore -> map CTxOutW <$> queryTxOutputsBody @'TxOutVariantCore txId
+  TxOutCore -> map CTxOutW <$> queryTxOutputsBody @'TxOutCore txId
   TxOutVariantAddress -> map (`VTxOutW` Nothing) <$> queryTxOutputsBody @'TxOutVariantAddress txId
 
 queryTxOutputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT SqlBackend m [TxOutTable a]

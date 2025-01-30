@@ -12,7 +12,7 @@ import Cardano.Db (
   PGPassSource (PGPassDefaultEnv),
   readPGPass,
   runOrThrowIODb,
-  toConnectionString,
+  toConnectionSetting,
  )
 import qualified Cardano.Db as Db
 import Cardano.Prelude
@@ -42,7 +42,7 @@ runSmashServer config = do
             defaultSettings
 
   pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
-  Db.runIohkLogging trce $ withPostgresqlPool (toConnectionString pgconfig) (sscSmashPort config) $ \pool -> do
+  Db.runIohkLogging trce $ withPostgresqlPool (toConnectionSetting pgconfig) (sscSmashPort config) $ \pool -> do
     let poolDataLayer = postgresqlPoolDataLayer trce pool
     app <- liftIO $ mkApp (sscTrace config) poolDataLayer (sscAdmins config)
     liftIO $ runSettings settings app

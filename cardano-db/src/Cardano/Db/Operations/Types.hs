@@ -8,16 +8,16 @@
 
 module Cardano.Db.Operations.Types where
 
-import Cardano.Db.Schema.BaseSchema
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import Cardano.Db.Schema.Core
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.Db.Types (DbLovelace (..), DbWord64)
 import Cardano.Prelude (ByteString, Text, Word64, mapMaybe)
 import Data.Kind (Type)
 import Database.Esqueleto.Experimental (PersistEntity (..))
 import Database.Persist.Sql (PersistField)
 
-data TxOutVariantType = TxOutVariantCore | TxOutVariantAddress
+data TxOutTableType = TxOutCore | TxOutVariantAddress
   deriving (Eq, Show)
 
 --------------------------------------------------------------------------------
@@ -26,17 +26,17 @@ data TxOutVariantType = TxOutVariantCore | TxOutVariantAddress
 
 -- | A wrapper for TxOut that allows us to handle both Core and Variant TxOuts
 data TxOutW
-  = CTxOutW !VC.TxOut
-  | VTxOutW !VA.TxOut !(Maybe VA.Address)
+  = CTxOutW !C.TxOut
+  | VTxOutW !V.TxOut !(Maybe V.Address)
 
 -- | A wrapper for TxOutId
 data TxOutIdW
-  = CTxOutIdW !VC.TxOutId
-  | VTxOutIdW !VA.TxOutId
+  = CTxOutIdW !C.TxOutId
+  | VTxOutIdW !V.TxOutId
   deriving (Show)
 
--- TxOut fields for a given TxOutVariantType
-class (PersistEntity (TxOutTable a), PersistField (TxOutIdFor a)) => TxOutFields (a :: TxOutVariantType) where
+-- TxOut fields for a given TxOutTableType
+class (PersistEntity (TxOutTable a), PersistField (TxOutIdFor a)) => TxOutFields (a :: TxOutTableType) where
   type TxOutTable a :: Type
   type TxOutIdFor a :: Type
   txOutIdField :: EntityField (TxOutTable a) (TxOutIdFor a)
@@ -48,37 +48,37 @@ class (PersistEntity (TxOutTable a), PersistField (TxOutIdFor a)) => TxOutFields
   txOutReferenceScriptIdField :: EntityField (TxOutTable a) (Maybe ScriptId)
   txOutConsumedByTxIdField :: EntityField (TxOutTable a) (Maybe TxId)
 
--- TxOutVariantCore fields
-instance TxOutFields 'TxOutVariantCore where
-  type TxOutTable 'TxOutVariantCore = VC.TxOut
-  type TxOutIdFor 'TxOutVariantCore = VC.TxOutId
-  txOutTxIdField = VC.TxOutTxId
-  txOutIndexField = VC.TxOutIndex
-  txOutValueField = VC.TxOutValue
-  txOutIdField = VC.TxOutId
-  txOutDataHashField = VC.TxOutDataHash
-  txOutInlineDatumIdField = VC.TxOutInlineDatumId
-  txOutReferenceScriptIdField = VC.TxOutReferenceScriptId
-  txOutConsumedByTxIdField = VC.TxOutConsumedByTxId
+-- TxOutCore fields
+instance TxOutFields 'TxOutCore where
+  type TxOutTable 'TxOutCore = C.TxOut
+  type TxOutIdFor 'TxOutCore = C.TxOutId
+  txOutTxIdField = C.TxOutTxId
+  txOutIndexField = C.TxOutIndex
+  txOutValueField = C.TxOutValue
+  txOutIdField = C.TxOutId
+  txOutDataHashField = C.TxOutDataHash
+  txOutInlineDatumIdField = C.TxOutInlineDatumId
+  txOutReferenceScriptIdField = C.TxOutReferenceScriptId
+  txOutConsumedByTxIdField = C.TxOutConsumedByTxId
 
 -- TxOutVariantAddress fields
 instance TxOutFields 'TxOutVariantAddress where
-  type TxOutTable 'TxOutVariantAddress = VA.TxOut
-  type TxOutIdFor 'TxOutVariantAddress = VA.TxOutId
-  txOutTxIdField = VA.TxOutTxId
-  txOutIndexField = VA.TxOutIndex
-  txOutValueField = VA.TxOutValue
-  txOutIdField = VA.TxOutId
-  txOutDataHashField = VA.TxOutDataHash
-  txOutInlineDatumIdField = VA.TxOutInlineDatumId
-  txOutReferenceScriptIdField = VA.TxOutReferenceScriptId
-  txOutConsumedByTxIdField = VA.TxOutConsumedByTxId
+  type TxOutTable 'TxOutVariantAddress = V.TxOut
+  type TxOutIdFor 'TxOutVariantAddress = V.TxOutId
+  txOutTxIdField = V.TxOutTxId
+  txOutIndexField = V.TxOutIndex
+  txOutValueField = V.TxOutValue
+  txOutIdField = V.TxOutId
+  txOutDataHashField = V.TxOutDataHash
+  txOutInlineDatumIdField = V.TxOutInlineDatumId
+  txOutReferenceScriptIdField = V.TxOutReferenceScriptId
+  txOutConsumedByTxIdField = V.TxOutConsumedByTxId
 
 --------------------------------------------------------------------------------
 -- Address
 -- related fields for TxOutVariantAddress only
 --------------------------------------------------------------------------------
-class AddressFields (a :: TxOutVariantType) where
+class AddressFields (a :: TxOutTableType) where
   type AddressTable a :: Type
   type AddressIdFor a :: Type
   addressField :: EntityField (AddressTable a) Text
@@ -90,14 +90,14 @@ class AddressFields (a :: TxOutVariantType) where
 
 -- TxOutVariant fields
 instance AddressFields 'TxOutVariantAddress where
-  type AddressTable 'TxOutVariantAddress = VA.Address
-  type AddressIdFor 'TxOutVariantAddress = VA.AddressId
-  addressField = VA.AddressAddress
-  addressRawField = VA.AddressRaw
-  addressHasScriptField = VA.AddressHasScript
-  addressPaymentCredField = VA.AddressPaymentCred
-  addressStakeAddressIdField = VA.AddressStakeAddressId
-  addressIdField = VA.AddressId
+  type AddressTable 'TxOutVariantAddress = V.Address
+  type AddressIdFor 'TxOutVariantAddress = V.AddressId
+  addressField = V.AddressAddress
+  addressRawField = V.AddressRaw
+  addressHasScriptField = V.AddressHasScript
+  addressPaymentCredField = V.AddressPaymentCred
+  addressStakeAddressIdField = V.AddressStakeAddressId
+  addressIdField = V.AddressId
 
 --------------------------------------------------------------------------------
 -- MaTxOut
@@ -105,39 +105,39 @@ instance AddressFields 'TxOutVariantAddress where
 
 -- | A wrapper for MaTxOut
 data MaTxOutW
-  = CMaTxOutW !VC.MaTxOut
-  | VMaTxOutW !VA.MaTxOut
+  = CMaTxOutW !C.MaTxOut
+  | VMaTxOutW !V.MaTxOut
   deriving (Show)
 
 -- | A wrapper for MaTxOutId
 data MaTxOutIdW
-  = CMaTxOutIdW !VC.MaTxOutId
-  | VMaTxOutIdW !VA.MaTxOutId
+  = CMaTxOutIdW !C.MaTxOutId
+  | VMaTxOutIdW !V.MaTxOutId
   deriving (Show)
 
--- MaTxOut fields for a given TxOutVariantType
-class PersistEntity (MaTxOutTable a) => MaTxOutFields (a :: TxOutVariantType) where
+-- MaTxOut fields for a given TxOutTableType
+class PersistEntity (MaTxOutTable a) => MaTxOutFields (a :: TxOutTableType) where
   type MaTxOutTable a :: Type
   type MaTxOutIdFor a :: Type
   maTxOutTxOutIdField :: EntityField (MaTxOutTable a) (TxOutIdFor a)
   maTxOutIdentField :: EntityField (MaTxOutTable a) MultiAssetId
   maTxOutQuantityField :: EntityField (MaTxOutTable a) DbWord64
 
--- TxOutVariantCore fields
-instance MaTxOutFields 'TxOutVariantCore where
-  type MaTxOutTable 'TxOutVariantCore = VC.MaTxOut
-  type MaTxOutIdFor 'TxOutVariantCore = VC.MaTxOutId
-  maTxOutTxOutIdField = VC.MaTxOutTxOutId
-  maTxOutIdentField = VC.MaTxOutIdent
-  maTxOutQuantityField = VC.MaTxOutQuantity
+-- TxOutCore fields
+instance MaTxOutFields 'TxOutCore where
+  type MaTxOutTable 'TxOutCore = C.MaTxOut
+  type MaTxOutIdFor 'TxOutCore = C.MaTxOutId
+  maTxOutTxOutIdField = C.MaTxOutTxOutId
+  maTxOutIdentField = C.MaTxOutIdent
+  maTxOutQuantityField = C.MaTxOutQuantity
 
 -- TxOutVariantAddress fields
 instance MaTxOutFields 'TxOutVariantAddress where
-  type MaTxOutTable 'TxOutVariantAddress = VA.MaTxOut
-  type MaTxOutIdFor 'TxOutVariantAddress = VA.MaTxOutId
-  maTxOutTxOutIdField = VA.MaTxOutTxOutId
-  maTxOutIdentField = VA.MaTxOutIdent
-  maTxOutQuantityField = VA.MaTxOutQuantity
+  type MaTxOutTable 'TxOutVariantAddress = V.MaTxOut
+  type MaTxOutIdFor 'TxOutVariantAddress = V.MaTxOutId
+  maTxOutTxOutIdField = V.MaTxOutTxOutId
+  maTxOutIdentField = V.MaTxOutIdent
+  maTxOutQuantityField = V.MaTxOutQuantity
 
 -- | UtxoQueryResult which has utxoAddress that can come from Core or Variant TxOut
 data UtxoQueryResult = UtxoQueryResult
@@ -147,20 +147,20 @@ data UtxoQueryResult = UtxoQueryResult
   }
 
 --------------------------------------------------------------------------------
--- CollateralTxOut fields for a given TxOutVariantType
+-- CollateralTxOut fields for a given TxOutTableType
 --------------------------------------------------------------------------------
 data CollateralTxOutW
-  = CCollateralTxOutW !VC.CollateralTxOut
-  | VCollateralTxOutW !VA.CollateralTxOut
+  = CCollateralTxOutW !C.CollateralTxOut
+  | VCollateralTxOutW !V.CollateralTxOut
   deriving (Show)
 
 -- | A wrapper for TxOutId
 data CollateralTxOutIdW
-  = CCollateralTxOutIdW !VC.CollateralTxOutId
-  | VCollateralTxOutIdW !VA.CollateralTxOutId
+  = CCollateralTxOutIdW !C.CollateralTxOutId
+  | VCollateralTxOutIdW !V.CollateralTxOutId
   deriving (Show)
 
-class PersistEntity (CollateralTxOutTable a) => CollateralTxOutFields (a :: TxOutVariantType) where
+class PersistEntity (CollateralTxOutTable a) => CollateralTxOutFields (a :: TxOutTableType) where
   type CollateralTxOutTable a :: Type
   type CollateralTxOutIdFor a :: Type
   collateralTxOutIdField :: EntityField (CollateralTxOutTable a) (CollateralTxOutIdFor a)
@@ -172,44 +172,44 @@ class PersistEntity (CollateralTxOutTable a) => CollateralTxOutFields (a :: TxOu
 --------------------------------------------------------------------------------
 -- Helper functions
 --------------------------------------------------------------------------------
-extractCoreTxOut :: TxOutW -> VC.TxOut
+extractCoreTxOut :: TxOutW -> C.TxOut
 extractCoreTxOut (CTxOutW txOut) = txOut
 -- this will never error as we can only have either CoreTxOut or VariantTxOut
 extractCoreTxOut (VTxOutW _ _) = error "Unexpected VTxOut in CoreTxOut list"
 
-extractVariantTxOut :: TxOutW -> VA.TxOut
+extractVariantTxOut :: TxOutW -> V.TxOut
 extractVariantTxOut (VTxOutW txOut _) = txOut
 -- this will never error as we can only have either CoreTxOut or VariantTxOut
 extractVariantTxOut (CTxOutW _) = error "Unexpected CTxOut in VariantTxOut list"
 
-convertTxOutIdCore :: [TxOutIdW] -> [VC.TxOutId]
+convertTxOutIdCore :: [TxOutIdW] -> [C.TxOutId]
 convertTxOutIdCore = mapMaybe unwrapCore
   where
     unwrapCore (CTxOutIdW txOutid) = Just txOutid
     unwrapCore _ = Nothing
 
-convertTxOutIdVariant :: [TxOutIdW] -> [VA.TxOutId]
+convertTxOutIdVariant :: [TxOutIdW] -> [V.TxOutId]
 convertTxOutIdVariant = mapMaybe unwrapVariant
   where
     unwrapVariant (VTxOutIdW txOutid) = Just txOutid
     unwrapVariant _ = Nothing
 
-convertMaTxOutIdCore :: [MaTxOutIdW] -> [VC.MaTxOutId]
+convertMaTxOutIdCore :: [MaTxOutIdW] -> [C.MaTxOutId]
 convertMaTxOutIdCore = mapMaybe unwrapCore
   where
     unwrapCore (CMaTxOutIdW maTxOutId) = Just maTxOutId
     unwrapCore _ = Nothing
 
-convertMaTxOutIdVariant :: [MaTxOutIdW] -> [VA.MaTxOutId]
+convertMaTxOutIdVariant :: [MaTxOutIdW] -> [V.MaTxOutId]
 convertMaTxOutIdVariant = mapMaybe unwrapVariant
   where
     unwrapVariant (VMaTxOutIdW maTxOutId) = Just maTxOutId
     unwrapVariant _ = Nothing
 
-isTxOutVariantCore :: TxOutVariantType -> Bool
-isTxOutVariantCore TxOutVariantCore = True
-isTxOutVariantCore TxOutVariantAddress = False
+isTxOutCore :: TxOutTableType -> Bool
+isTxOutCore TxOutCore = True
+isTxOutCore TxOutVariantAddress = False
 
-isTxOutVariantAddress :: TxOutVariantType -> Bool
+isTxOutVariantAddress :: TxOutTableType -> Bool
 isTxOutVariantAddress TxOutVariantAddress = True
-isTxOutVariantAddress TxOutVariantCore = False
+isTxOutVariantAddress TxOutCore = False

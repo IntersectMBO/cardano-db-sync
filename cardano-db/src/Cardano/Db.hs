@@ -26,6 +26,6 @@ import Cardano.Db.Operations.TxOut.TxOutQuery as X
 import Cardano.Db.Operations.Types as X
 import Cardano.Db.PGConfig as X
 import Cardano.Db.Run as X
-import Cardano.Db.Schema.BaseSchema as X
+import Cardano.Db.Schema.Core as X
 import Cardano.Db.Schema.Types as X
 import Cardano.Db.Types as X
