@@ -17,8 +17,8 @@ import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variant.TxOutCore as C
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (insertAddressUsingCache)
@@ -49,8 +49,8 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer insertAction
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) insertAction
+    then newExceptT $ DB.runDbIohkLogging (envDbEnv syncEnv) tracer insertAction
+    else newExceptT $ DB.runDbIohkNoLogging (envDbEnv syncEnv) insertAction
   where
     tracer = getTrace syncEnv
 
@@ -114,7 +114,7 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
               "Initial genesis distribution populated. Hash "
                 <> renderByteArray (configGenesisHash cfg)
 
-            supply <- lift $ DB.queryTotalSupply $ getTxOutVariantType syncEnv
+            supply <- lift $ DB.queryTotalSupply $ getTxOutTableType syncEnv
             liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
@@ -161,7 +161,7 @@ validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
           , textShow txCount
           ]
     unless disInOut $ do
-      totalSupply <- lift $ DB.queryGenesisSupply $ getTxOutVariantType syncEnv
+      totalSupply <- lift $ DB.queryGenesisSupply $ getTxOutTableType syncEnv
       case DB.word64ToAda <$> configGenesisSupply cfg of
         Left err -> dbSyncNodeError $ "validateGenesisDistribution: " <> textShow err
         Right expectedSupply ->
@@ -210,22 +210,22 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
             }
       --
       unless disInOut $
-        case getTxOutVariantType syncEnv of
-          DB.TxOutVariantCore ->
+        case getTxOutTableType syncEnv of
+          DB.TxOutCore ->
             void . DB.insertTxOut $
               DB.CTxOutW
-                VC.TxOut
-                  { VC.txOutTxId = txId
-                  , VC.txOutIndex = 0
-                  , VC.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-                  , VC.txOutAddressHasScript = False
-                  , VC.txOutPaymentCred = Nothing
-                  , VC.txOutStakeAddressId = Nothing
-                  , VC.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
-                  , VC.txOutDataHash = Nothing
-                  , VC.txOutInlineDatumId = Nothing
-                  , VC.txOutReferenceScriptId = Nothing
-                  , VC.txOutConsumedByTxId = Nothing
+                C.TxOut
+                  { C.txOutTxId = txId
+                  , C.txOutIndex = 0
+                  , C.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
+                  , C.txOutAddressHasScript = False
+                  , C.txOutPaymentCred = Nothing
+                  , C.txOutStakeAddressId = Nothing
+                  , C.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
+                  , C.txOutDataHash = Nothing
+                  , C.txOutInlineDatumId = Nothing
+                  , C.txOutReferenceScriptId = Nothing
+                  , C.txOutConsumedByTxId = Nothing
                   }
           DB.TxOutVariantAddress -> do
             let addrRaw = serialize' address
@@ -236,28 +236,28 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
   where
     cache = envCache syncEnv
 
-    mkVTxOut :: DB.TxId -> VA.AddressId -> VA.TxOut
+    mkVTxOut :: DB.TxId -> V.AddressId -> V.TxOut
     mkVTxOut txId addrDetailId =
-      VA.TxOut
-        { VA.txOutTxId = txId
-        , VA.txOutIndex = 0
-        , VA.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
-        , VA.txOutDataHash = Nothing
-        , VA.txOutInlineDatumId = Nothing
-        , VA.txOutReferenceScriptId = Nothing
-        , VA.txOutAddressId = addrDetailId
-        , VA.txOutConsumedByTxId = Nothing
-        , VA.txOutStakeAddressId = Nothing
+      V.TxOut
+        { V.txOutTxId = txId
+        , V.txOutIndex = 0
+        , V.txOutValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
+        , V.txOutDataHash = Nothing
+        , V.txOutInlineDatumId = Nothing
+        , V.txOutReferenceScriptId = Nothing
+        , V.txOutAddressId = addrDetailId
+        , V.txOutConsumedByTxId = Nothing
+        , V.txOutStakeAddressId = Nothing
         }
 
-    mkVAddress :: ByteString -> VA.Address
+    mkVAddress :: ByteString -> V.Address
     mkVAddress addrRaw = do
-      VA.Address
-        { VA.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-        , VA.addressRaw = addrRaw
-        , VA.addressHasScript = False
-        , VA.addressPaymentCred = Nothing -- Byron does not have a payment credential.
-        , VA.addressStakeAddressId = Nothing -- Byron does not have a stake address.
+      V.Address
+        { V.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
+        , V.addressRaw = addrRaw
+        , V.addressHasScript = False
+        , V.addressPaymentCred = Nothing -- Byron does not have a payment credential.
+        , V.addressStakeAddressId = Nothing -- Byron does not have a stake address.
         }
 
 ---------------------------------------------------------------------------------

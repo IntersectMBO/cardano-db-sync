@@ -53,9 +53,25 @@ library
                         Cardano.Db.Operations.TxOut.TxOutQuery
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
-                        Cardano.Db.Schema.BaseSchema
+                        Cardano.Db.Schema.Core
+                        Cardano.Db.Schema.Core.Base
+                        Cardano.Db.Schema.Core.EpochAndProtocol
+                        Cardano.Db.Schema.Core.GovernanceAndVoting
+                        Cardano.Db.Schema.Core.MultiAsset
+                        Cardano.Db.Schema.Core.OffChain
+                        Cardano.Db.Schema.Core.Pool
+                        Cardano.Db.Schema.Core.StakeDeligation
+                        Cardano.Db.Schema.Ids
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
+                        Cardano.Db.Statement
+                        Cardano.Db.Statement.Base
+                        Cardano.Db.Statement.EpochAndProtocol
+                        Cardano.Db.Statement.GovernanceAndVoting
+                        Cardano.Db.Statement.MultiAsset
+                        Cardano.Db.Statement.OffChain
+                        Cardano.Db.Statement.Pool
+                        Cardano.Db.Statement.StakeDeligation
                         Cardano.Db.Types
 
   build-depends:        aeson
@@ -77,6 +93,8 @@ library
                       , fast-logger
                       , filepath
                       , file-embed
+                      , hasql
+                      , hasql-transaction
                       , iohk-monitoring
                       , lifted-base
                       , memory

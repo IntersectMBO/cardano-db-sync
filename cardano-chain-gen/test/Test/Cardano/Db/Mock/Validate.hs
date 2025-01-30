@@ -44,8 +44,8 @@ module Test.Cardano.Db.Mock.Validate (
 
 import Cardano.Db
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variant.TxOutCore as C
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
@@ -107,7 +107,7 @@ assertTxCount env n = do
 
 assertTxOutCount :: DBSyncEnv -> Word -> IO ()
 assertTxOutCount env n = do
-  assertEqBackoff env (queryTxOutCount TxOutVariantCore) n defaultDelays "Unexpected txOut count"
+  assertEqBackoff env (queryTxOutCount TxOutCore) n defaultDelays "Unexpected txOut count"
 
 assertTxInCount :: DBSyncEnv -> Word -> IO ()
 assertTxInCount env n = do
@@ -138,7 +138,7 @@ expectFailSilent name action = testCase name $ do
 -- checking that unspent count matches from tx_in to tx_out
 assertUnspentTx :: DBSyncEnv -> IO ()
 assertUnspentTx dbSyncEnv = do
-  let txOutTableType = txOutVariantTypeFromConfig dbSyncEnv
+  let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
   unspentTxCount <- queryDBSync dbSyncEnv $ DB.queryTxOutConsumedNullCount txOutTableType
   consumedNullCount <- queryDBSync dbSyncEnv $ DB.queryTxOutUnspentCount txOutTableType
   assertEqual "Unexpected tx unspent count between tx-in & tx-out" unspentTxCount consumedNullCount
@@ -216,7 +216,7 @@ assertAddrValues ::
 assertAddrValues env ix expected sta = do
   addr <- assertRight $ resolveAddress ix sta
   let address = Generic.renderAddress addr
-      q = queryAddressOutputs TxOutVariantCore address
+      q = queryAddressOutputs TxOutCore address
   assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a
@@ -375,7 +375,7 @@ assertAlonzoCounts env expected =
       colInputs <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
-      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs TxOutVariantCore
+      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs TxOutCore
       redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
       invalidTx <- fromIntegral . length <$> queryInvalidTx
       txIninvalidTx <- fromIntegral . length <$> queryTxInFailedTx
@@ -408,7 +408,7 @@ assertBabbageCounts env expected =
       colInputs <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity CollateralTxIn)) -> pure countRows)
-      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs TxOutVariantCore
+      scriptOutputs <- fromIntegral . length <$> queryScriptOutputs TxOutCore
       redeemerTxIn <- fromIntegral . length <$> queryTxInRedeemer
       invalidTx <- fromIntegral . length <$> queryInvalidTx
       txIninvalidTx <- fromIntegral . length <$> queryTxInFailedTx
@@ -418,29 +418,29 @@ assertBabbageCounts env expected =
       referenceTxIn <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity ReferenceTxIn)) -> pure countRows)
-      collTxOut <- case txOutVariantTypeFromConfig env of
-        TxOutVariantCore -> do
+      collTxOut <- case txOutTableTypeFromConfig env of
+        TxOutCore -> do
           maybe 0 unValue . listToMaybe
-            <$> (select . from $ \(_a :: SqlExpr (Entity VC.CollateralTxOut)) -> pure countRows)
+            <$> (select . from $ \(_a :: SqlExpr (Entity C.CollateralTxOut)) -> pure countRows)
         TxOutVariantAddress -> do
           maybe 0 unValue . listToMaybe
-            <$> (select . from $ \(_a :: SqlExpr (Entity VA.CollateralTxOut)) -> pure countRows)
+            <$> (select . from $ \(_a :: SqlExpr (Entity V.CollateralTxOut)) -> pure countRows)
       inlineDatum <-
-        case txOutVariantTypeFromConfig env of
-          TxOutVariantCore -> do
+        case txOutTableTypeFromConfig env of
+          TxOutCore -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VC.TxOutInlineDatumId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutInlineDatumId)) >> pure countRows)
           TxOutVariantAddress -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VA.TxOutInlineDatumId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. V.TxOutInlineDatumId)) >> pure countRows)
       referenceScript <-
-        case txOutVariantTypeFromConfig env of
-          TxOutVariantCore -> do
+        case txOutTableTypeFromConfig env of
+          TxOutCore -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VC.TxOutReferenceScriptId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutReferenceScriptId)) >> pure countRows)
           TxOutVariantAddress -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VA.TxOutReferenceScriptId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. V.TxOutReferenceScriptId)) >> pure countRows)
       pure
         ( scripts
         , redeemers

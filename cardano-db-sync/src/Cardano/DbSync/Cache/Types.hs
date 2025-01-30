@@ -31,7 +31,7 @@ module Cardano.DbSync.Cache.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
 import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
@@ -82,7 +82,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
-  , cAddress :: !(StrictTVar IO (LRUCache ByteString VA.AddressId))
+  , cAddress :: !(StrictTVar IO (LRUCache ByteString V.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
   }
 
