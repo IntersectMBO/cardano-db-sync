@@ -151,6 +151,10 @@ import Database.Persist.Types (
   entityKey,
  )
 import Database.PostgreSQL.Simple (SqlError)
+import Hasql.Statement (Statement)
+import qualified Hasql.Transaction.Sessions as Transaction
+import qualified Hasql.Transaction as Transactio
+
 
 -- The original naive way of inserting rows into Postgres was:
 --
@@ -171,8 +175,25 @@ import Database.PostgreSQL.Simple (SqlError)
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
 insertAdaPots = insertUnchecked "AdaPots"
 
-insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlock = insertUnchecked "Block"
+-- insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
+-- insertBlock = insertUnchecked "Block"
+
+insertBlock :: Block -> Session BlockId
+insertBlock block = Transaction.transaction Transaction.ReadCommitted Transaction.Write insertBlockTransaction
+
+insertBlockStatement :: Statement Block BlockId
+insertBlockStatement =
+  Statement
+    "INSERT INTO block (id, hash, slot_no, epoch_no) VALUES ($1, $2, $3, $4) RETURNING id"
+    blockEncoder
+    (BlockId <$> Decode.int64)
+
+insertBlockTransaction :: Block -> Transaction BlockId
+insertBlockTransaction block = do
+  result <- Transaction.statement block insertBlockStatement
+  case result of
+    Right blockId -> pure blockId
+    Left err -> liftIO $ throwIO (DbInsertException "Block" (fromString $ show err))
 
 insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
 insertCollateralTxIn = insertUnchecked "CollateralTxIn"
