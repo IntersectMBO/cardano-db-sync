@@ -89,6 +89,7 @@ library
                       , filepath
                       , file-embed
                       , hasql
+                      , hasql-pool
                       , hasql-transaction
                       , iohk-monitoring
                       , lifted-base
