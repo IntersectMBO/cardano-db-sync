@@ -97,7 +97,7 @@ module Cardano.Db.Operations.Insert (
 ) where
 
 import Cardano.Db.Operations.Query
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Core
 import Cardano.Db.Types
 import Cardano.Prelude (textShow)
 import Control.Exception.Lifted (Exception, handle, throwIO)
@@ -152,9 +152,8 @@ import Database.Persist.Types (
  )
 import Database.PostgreSQL.Simple (SqlError)
 import Hasql.Statement (Statement)
-import qualified Hasql.Transaction.Sessions as Transaction
 import qualified Hasql.Transaction as Transactio
-
+import qualified Hasql.Transaction.Sessions as Transaction
 
 -- The original naive way of inserting rows into Postgres was:
 --

@@ -6,8 +6,8 @@
 module Cardano.Db.Operations.TxOut.TxOutDelete where
 
 import Cardano.Db.Operations.Types (TxOutTableType (..))
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.Prelude (Int64)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO)

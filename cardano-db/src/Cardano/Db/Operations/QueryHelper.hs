@@ -5,7 +5,7 @@
 
 module Cardano.Db.Operations.QueryHelper where
 
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Core
 import Cardano.Db.Types
 import Data.Fixed (Micro)
 import Data.Time.Clock (UTCTime)

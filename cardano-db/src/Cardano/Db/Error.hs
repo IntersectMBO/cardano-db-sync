@@ -10,7 +10,7 @@ module Cardano.Db.Error (
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Core
 import Cardano.Prelude (throwIO)
 import Control.Exception (Exception)
 import qualified Data.ByteString.Base16 as Base16
