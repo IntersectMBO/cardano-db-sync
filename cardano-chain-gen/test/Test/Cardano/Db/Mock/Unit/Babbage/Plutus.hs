@@ -32,8 +32,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variant.TxOutCore as C
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
