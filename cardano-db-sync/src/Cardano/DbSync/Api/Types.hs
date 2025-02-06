@@ -32,12 +32,11 @@ import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Postgresql (ConnectionString)
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 
 data SyncEnv = SyncEnv
-  { envBackend :: !SqlBackend
+  { envPool :: !!Pool.Pool
   , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
