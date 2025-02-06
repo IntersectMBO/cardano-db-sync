@@ -8,9 +8,9 @@
 
 module Cardano.Db.Operations.Types where
 
-import Cardano.Db.Schema.BaseSchema
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import Cardano.Db.Schema.Core
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.Db.Types (DbLovelace (..), DbWord64)
 import Cardano.Prelude (ByteString, Text, Word64, mapMaybe)
 import Data.Kind (Type)

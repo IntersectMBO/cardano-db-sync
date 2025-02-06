@@ -15,7 +15,7 @@ module Test.IO.Cardano.Db.Util (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Control.Monad (unless)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
