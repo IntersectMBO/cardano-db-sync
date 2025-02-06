@@ -9,8 +9,8 @@ module Cardano.Db.Operations.TxOut.TxOutInsert where
 
 import Cardano.Db.Operations.Insert (insertMany', insertUnchecked)
 import Cardano.Db.Operations.Types (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutW (..))
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)

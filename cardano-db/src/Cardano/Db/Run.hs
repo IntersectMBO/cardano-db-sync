@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Run (
+  createPool,
   getBackendGhci,
   ghciDebugQuery,
   runDbHandleLogger,
@@ -76,6 +77,22 @@ import Database.PostgreSQL.Simple (connectPostgreSQL)
 import Language.Haskell.TH.Syntax (Loc)
 import System.IO (Handle, stdout)
 import System.Log.FastLogger (LogStr, fromLogStr)
+import qualified Hasql.Pool as HP
+import qualified Hasql.Pool.Config as HPC
+
+-- | Create a connection pool.
+createPool :: PGConfig -> IO HP.Pool
+createPool pgc =
+  case toConnectionString pgc of
+    Left err -> error $ "createPool: " ++ err
+    Right connStr ->
+      HP.acquire $ HPC.settings
+            [ HPC.size 10                        -- number of connections
+            , HPC.acquisitionTimeout 10          -- seconds
+            , HPC.agingTimeout 1800              -- 30 minutes
+            , HPC.idlenessTimeout 1800           -- 30 minutes
+            , HPC.staticConnectionSettings [connStr]
+            ]
 
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> PGPassSource -> ReaderT SqlBackend (LoggingT IO) a -> IO a

@@ -12,9 +12,9 @@ module Cardano.Db.Operations.Other.MinId where
 
 import Cardano.Db.Operations.Query (queryMinRefId)
 import Cardano.Db.Operations.Types (MaTxOutFields (..), TxOutFields (..), TxOutTableType (..))
-import Cardano.Db.Schema.BaseSchema
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import Cardano.Db.Schema.Core
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.Prelude
 import qualified Data.Text as Text
 import Database.Persist.Sql (PersistEntity, PersistField, SqlBackend, fromSqlKey, toSqlKey)

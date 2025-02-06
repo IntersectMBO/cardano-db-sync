@@ -10,15 +10,15 @@ module Cardano.Db.Error (
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Ids
 import Cardano.Prelude (throwIO)
 import Control.Exception (Exception)
-import qualified Data.ByteString.Base16 as Base16
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
-import qualified Data.Text.Encoding as Text
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.Text.Encoding as Text
 
 data LookupFail
   = DbLookupBlockHash !ByteString

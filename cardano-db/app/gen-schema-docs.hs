@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Cardano.Db (schemaDocs)
-import Cardano.Db.Schema.Core.TxOut (schemaDocsTxOutCore)
-import Cardano.Db.Schema.Variant.TxOut (schemaDocsTxOutVariant)
+import Cardano.Db.Schema.Variants.TxOutAddress (schemaDocsTxOutVariant)
+import Cardano.Db.Schema.Variants.TxOutCore (schemaDocsTxOutCore)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
