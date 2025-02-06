@@ -184,6 +184,8 @@ library
                       , extra
                       , filepath
                       , groups
+                      , hasql
+                      , hasql-pool
                       , http-client
                       , http-client-tls
                       , http-types

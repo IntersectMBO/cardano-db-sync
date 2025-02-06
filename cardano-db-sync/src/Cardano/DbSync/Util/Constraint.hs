@@ -41,9 +41,9 @@ dbConstraintNamesExists :: MonadIO m => SqlBackend -> m ManualDbConstraints
 dbConstraintNamesExists sqlBackend = do
   runReaderT queryRewardAndEpochStakeConstraints sqlBackend
 
-queryIsJsonbInSchema :: MonadIO m => SqlBackend -> m Bool
-queryIsJsonbInSchema sqlBackend = do
-  runReaderT DB.queryJsonbInSchemaExists sqlBackend
+queryIsJsonbInSchema :: MonadIO m => Pool -> m Bool
+queryIsJsonbInSchema pool = do
+  runReaderT DB.queryJsonbInSchemaExists pool
 
 queryRewardAndEpochStakeConstraints ::
   MonadIO m =>

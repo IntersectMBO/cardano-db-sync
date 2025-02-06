@@ -164,19 +164,20 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-
-  Db.runIohkLogging trce $
-    withPostgresqlConn dbConnString $
-      \backend -> liftIO $ do
+  cPool <- createPool dbConnString
+  bracket
+    cPool
+    Pool.release
+    (\pool -> do
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- queryIsJsonbInSchema backend
+          isJsonbInSchema <- queryIsJsonbInSchema pool
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
                 trce
-                backend
+                pool
                 dbConnString
                 syncOptions
                 genCfg
@@ -196,7 +197,7 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations backend trce
+            Db.noLedgerMigrations pool trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread

@@ -309,7 +309,7 @@ getCurrentTipBlockNo env = do
 
 mkSyncEnv ::
   Trace IO Text ->
-  SqlBackend ->
+  Pool ->
   ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -367,7 +367,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
   pure $
     SyncEnv
-      { envBackend = backend
+      { envPool = dbPool
       , envBootstrap = bootstrapVar
       , envCache = cache
       , envConnectionString = connectionString
@@ -393,7 +393,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->
-  SqlBackend ->
+  Pool ->
   ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
@@ -402,7 +402,11 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
+<<<<<<< HEAD
 mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+=======
+mkSyncEnvFromConfig trce dbPool connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+>>>>>>> 77f1a2c6 (make a start to stetting up hasql with db pools)
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -429,7 +433,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
           Right
             <$> mkSyncEnv
               trce
-              backend
+              dbPool
               connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])
