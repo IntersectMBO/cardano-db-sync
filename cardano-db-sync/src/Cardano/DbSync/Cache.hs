@@ -32,7 +32,7 @@ module Cardano.DbSync.Cache (
 
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU

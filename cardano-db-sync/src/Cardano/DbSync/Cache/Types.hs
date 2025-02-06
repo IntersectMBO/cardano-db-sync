@@ -31,7 +31,7 @@ module Cardano.DbSync.Cache.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
 import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)

@@ -57,6 +57,7 @@ import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
+import Hasql.Connection as HC
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
@@ -112,7 +113,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     then logInfo trce "All user indexes were created"
     else logInfo trce "New user indexes were not created. They may be created later if necessary."
 
-  let connectionString = Db.toConnectionString pgConfig
+  let setting = Db.toConnectionSetting pgConfig
 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
@@ -148,14 +149,14 @@ runSyncNode ::
   MetricSetters ->
   Trace IO Text ->
   IOManager ->
-  ConnectionString ->
+  Setting ->
   -- | run migration function
   RunMigration ->
   SyncNodeConfig ->
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr connSetting runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -164,19 +165,21 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-
-  Db.runIohkLogging trce $
-    withPostgresqlConn dbConnString $
-      \backend -> liftIO $ do
+  -- Our main thread
+  bracket
+    (runOrThrowIO $ HC.acquire [connSetting])
+    release
+    (\connection -> do
         runOrThrowIO $ runExceptT $ do
+          let dbEnv = Db.DbEnv connection (dncEnableDbLogging syncNodeConfigFromFile)
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- queryIsJsonbInSchema backend
+          isJsonbInSchema <- queryIsJsonbInSchema dbEnv
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
                 trce
-                backend
+                dbEnv
                 dbConnString
                 syncOptions
                 genCfg
@@ -196,7 +199,7 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations backend trce
+            Db.noLedgerMigrations pool trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread

@@ -17,8 +17,8 @@ import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variant.TxOutCore as C
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (insertAddressUsingCache)
@@ -49,8 +49,8 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer insertAction
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) insertAction
+    then newExceptT $ DB.runDbIohkLogging (envDbEnv syncEnv) tracer insertAction
+    else newExceptT $ DB.runDbIohkNoLogging (envDbEnv syncEnv) insertAction
   where
     tracer = getTrace syncEnv
 

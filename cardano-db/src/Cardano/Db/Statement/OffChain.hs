@@ -1,3 +1,5 @@
+module Cardano.Db.Statement.OffChain where
+
 -- off_chain_pool_data
 -- off_chain_pool_fetch_error
 -- off_chain_vote_data

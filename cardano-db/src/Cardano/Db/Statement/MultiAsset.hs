@@ -1,5 +1,7 @@
-These tables handle multi-asset (native token) data.
+module Cardano.Db.Statement.MultiAsset where
 
-multi_asset
-ma_tx_mint
-ma_tx_out
+-- These tables handle multi-asset (native token) data.
+
+-- multi_asset
+-- ma_tx_mint
+-- ma_tx_out
