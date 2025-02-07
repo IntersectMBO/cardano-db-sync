@@ -32,7 +32,6 @@ library
   exposed-modules:      Cardano.Db
                         Cardano.Db.Schema.Core.TxOut
                         Cardano.Db.Schema.Variant.TxOut
-                        Cardano.Db.Version.V13_0
 
   other-modules:        Cardano.Db.Error
                         Cardano.Db.Git.RevFromGit
@@ -58,8 +57,6 @@ library
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
                         Cardano.Db.Types
-                        Cardano.Db.Version.V13_0.Query
-                        Cardano.Db.Version.V13_0.Schema
 
   build-depends:        aeson
                       , base                            >= 4.14         && < 5

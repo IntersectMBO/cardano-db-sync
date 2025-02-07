@@ -8,7 +8,6 @@ module Cardano.DbSync.Api.Types (
   InsertOptions (..),
   LedgerEnv (..),
   RunMigration,
-  FixesRan (..),
   ConsistentLevel (..),
   CurrentEpochNo (..),
 ) where
@@ -46,7 +45,6 @@ data SyncEnv = SyncEnv
   , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
-  , envIsFixed :: !(StrictTVar IO FixesRan)
   , envBootstrap :: !(StrictTVar IO Bool)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
@@ -64,8 +62,6 @@ data SyncOptions = SyncOptions
   { soptEpochAndCacheEnabled :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
-  , soptSkipFix :: !Bool
-  , soptOnlyFix :: !Bool
   , soptPruneConsumeMigration :: !DB.PruneConsumeMigration
   , soptInsertOptions :: !InsertOptions
   , snapshotEveryFollowing :: !Word64
@@ -97,8 +93,6 @@ data LedgerEnv where
   NoLedger :: NoLedgerEnv -> LedgerEnv
 
 type RunMigration = DB.MigrationToRun -> IO ()
-
-data FixesRan = NoneFixRan | DataFixRan | AllFixRan
 
 data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
   deriving (Show, Eq)

@@ -199,7 +199,9 @@ queryVoteCounts txHash idx = do
               `innerJoin` table @Db.Tx
             `on` (\(vote :& tx) -> vote ^. Db.VotingProcedureTxId ==. tx ^. Db.TxId)
         where_ $
-          vote ^. Db.VotingProcedureVote ==. val v
+          vote
+            ^. Db.VotingProcedureVote
+            ==. val v
             &&. tx ^. Db.TxHash ==. val txHash
             &&. vote ^. Db.VotingProcedureIndex ==. val idx
         pure countRows
