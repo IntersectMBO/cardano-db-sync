@@ -364,6 +364,7 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
               , C.txOutReferenceScriptId = Nothing
               , C.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
               , C.txOutTxId = txId
+              , C.txOutMaTxOut = Nothing
               , C.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               }
       DB.TxOutVariantAddress -> do
@@ -385,6 +386,7 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
         , V.txOutInlineDatumId = Nothing
         , V.txOutReferenceScriptId = Nothing
         , V.txOutTxId = txId
+        , V.txOutMaTxOut = Nothing
         , V.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
         , V.txOutStakeAddressId = Nothing
         }

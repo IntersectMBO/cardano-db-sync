@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 #if __GLASGOW_HASKELL__ >= 908
@@ -33,14 +34,17 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
   mintMultiAssets,
   swapMultiAssets,
   swapMultiAssetsDisabled,
+  multiAssetsTxOut,
 ) where
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
-import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
+import Cardano.DbSync.Era.Shelley.Generic (TxOutMultiAsset (..))
+import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress, unTxHash)
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Core (txIdTx)
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Plutus.Data
 import Cardano.Ledger.SafeHash (extractHash)
@@ -49,8 +53,10 @@ import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
-import Cardano.Mock.Query (queryMultiAssetCount)
+import Cardano.Mock.Query (queryMultiAssetCount, queryTxOutMultiAssets)
 import Cardano.Prelude hiding (head)
+import qualified Data.Aeson as Aeson
+import Data.ByteString.Lazy (fromStrict)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
 import GHC.Base (error)
@@ -70,7 +76,7 @@ import Test.Cardano.Db.Mock.Config (
  )
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
-import Test.Tasty.HUnit (Assertion ())
+import Test.Tasty.HUnit (Assertion)
 import Prelude (head, tail, (!!))
 
 ------------------------------------------------------------------------------
@@ -834,3 +840,59 @@ swapMultiAssetsDisabled =
 
     testLabel = "conwayConfigMultiAssetsDisabled"
     cfgDir = conwayConfigDir
+
+multiAssetsTxOut :: IOManager -> [(Text, Text)] -> Assertion
+multiAssetsTxOut =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    let txOutVariant = txOutTableTypeFromConfig dbSync
+
+    startDBSync dbSync
+
+    -- Forge a multi-asset transaction
+    let assetName = head Examples.assetNames
+        policy = PolicyID Examples.alwaysMintScriptHash
+        assets = Map.singleton (head Examples.assetNames) 5
+        outValue = MaryValue (Coin 20) (MultiAsset $ Map.singleton policy assets)
+        mintValue = MultiAsset $ Map.singleton policy assets
+
+    tx <- withConwayLedgerState interpreter $ \state' ->
+      Conway.mkMultiAssetsScriptTx
+        [UTxOIndex 0]
+        (UTxOIndex 1)
+        [(UTxOAddress Examples.alwaysMintScriptAddr, outValue)]
+        []
+        mintValue
+        True
+        100
+        state'
+
+    -- Submit it
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter server $
+        const (Right tx)
+
+    let txHash = unTxHash (txIdTx tx)
+        txIndex = 0
+        expectedMultiAssets =
+          Just
+            [ TxOutMultiAsset
+                { txOutMaPolicyId = policy
+                , txOutMaAssetName = assetName
+                , txOutMaAmount = 5
+                }
+            ]
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 1
+
+    -- Should now have tx_out.ma_tx_out
+    assertEqBackoff dbSync queryMultiAssetCount 1 [] "Expected multi-assets"
+    assertBackoff
+      dbSync
+      (queryTxOutMultiAssets txOutVariant txHash txIndex)
+      []
+      ((== expectedMultiAssets) . parseMultiAsset)
+      (const "Unexpected multi-assets")
+  where
+    testLabel = "conwayMultiAssetsTxOut"
+    parseMultiAsset = join . fmap (Aeson.decode . fromStrict . encodeUtf8)
