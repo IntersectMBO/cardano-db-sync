@@ -51,7 +51,7 @@ consumeTx =
 
 consumeTxConsumed :: IOManager -> [(Text, Text)] -> Assertion
 consumeTxConsumed =
-  withCustomConfig cmdLineArgs cfg conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigAndDropDB cmdLineArgs cfg conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a payment transaction
