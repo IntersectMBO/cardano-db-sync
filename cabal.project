@@ -103,8 +103,8 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/sgillespie/persistent
-  tag: 36155c676499088e1a6f130e626072596429734b
-  --sha256: sha256-inh+Y4z1NbMNBasQizeQriUDPzbAaNmobCAM/sAQBdE=
+  tag: 0202aaca65bb3dc289c7a1611c56101efe5f146e
+  --sha256: sha256-MXp0dubopTh+wcnPTDh10y2qN17WKd1q+p8UYufWzKM=
   subdir:
     persistent
     persistent-postgresql
