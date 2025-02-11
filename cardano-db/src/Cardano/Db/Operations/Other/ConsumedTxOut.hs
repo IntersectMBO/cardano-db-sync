@@ -137,7 +137,9 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
       case (isConsumeTxOutPreviouslySet, pcmConsumedTxOut, pcmPruneTxOut) of
         -- No Migration Needed
         (False, False, False) -> do
-          liftIO $ logInfo trce "runExtraMigrations: No extra migration specified"
+          liftIO $ logInfo trce "runExtraMigrations: Running extra migration no_consumed_tx_out"
+          insertExtraMigration NoConsumeTxOut
+          migrateTxOut trce txOutTableType (Just migrationValues)
         -- Already migrated
         (True, True, False) -> do
           liftIO $ logInfo trce "runExtraMigrations: Extra migration consumed_tx_out already executed"
@@ -255,7 +257,12 @@ migrateTxOut trce txOutTableType mMvs = do
     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
       void createPruneConstraintTxOut
-  migrateNextPageTxOut (Just trce) txOutTableType 0
+    if pcmConsumedTxOut (pruneConsumeMigration mvs)
+      then do
+        migrateNextPageTxOut (Just trce) txOutTableType 0
+      else do
+        liftIO $ logInfo trce "migrateTxOut: removing column consumed_by_tx from tx_out table"
+        void (dropColumnConsumedByTxOut trce)
 
 migrateNextPageTxOut :: MonadIO m => Maybe (Trace IO Text) -> TxOutTableType -> Word64 -> ReaderT SqlBackend m ()
 migrateNextPageTxOut mTrce txOutTableType offst = do
@@ -414,6 +421,29 @@ createPruneConstraintTxOut = do
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
       liftIO $ throwIO (DBPruneConsumed $ show e)
+
+dropColumnConsumedByTxOut ::
+  forall io.
+  (MonadBaseControl IO io, MonadIO io) =>
+  Trace IO Text ->
+  ReaderT SqlBackend io ()
+dropColumnConsumedByTxOut trace = do
+  handle exceptionHandler (rawExecute dropViewsQuery [])
+  liftIO $ logInfo trace "dropColumnConsumedByTxOut: Dropped views"
+
+  handle exceptionHandler (rawExecute dropColumn [])
+  liftIO $ logInfo trace "dropColumnConsumedByTxOut: Altered tx_out"
+  where
+    dropColumn = "ALTER TABLE tx_out DROP COLUMN IF EXISTS consumed_by_tx_id;"
+
+    dropViewsQuery =
+      Text.unlines
+        [ "DROP VIEW IF EXISTS utxo_byron_view;"
+        , "DROP VIEW IF EXISTS utxo_view;"
+        ]
+
+    exceptionHandler :: SqlError -> ReaderT SqlBackend io a
+    exceptionHandler = liftIO . throwIO . DBPruneConsumed . show
 
 -- Be very mindfull that these queries can fail silently and make tests fail making it hard to know why.
 -- To help mitigate this, logs are printed after each query is ran, so one can know where it stopped.

@@ -41,7 +41,7 @@ share
     address             Text
     addressHasScript    Bool
     dataHash            ByteString Maybe    sqltype=hash32type
-    consumedByTxId      TxId Maybe          noreference
+    consumedByTxId      TxId Maybe          noreference default=null
     index               Word64              sqltype=txindex
     inlineDatumId       DatumId Maybe       noreference
     paymentCred         ByteString Maybe    sqltype=hash28type

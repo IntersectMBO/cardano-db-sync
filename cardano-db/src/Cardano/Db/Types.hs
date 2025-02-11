@@ -199,6 +199,7 @@ data ExtraMigration
   | BootstrapFinished
   | ConsumeTxOutPreviouslySet
   | TxOutAddressPreviouslySet
+  | NoConsumeTxOut
   deriving (Eq, Show, Read)
 
 data MigrationValues = MigrationValues
@@ -259,6 +260,8 @@ extraDescription = \case
     "The --consume-tx-out flag has previously been enabled"
   TxOutAddressPreviouslySet ->
     "The addition of a Address table for TxOuts was previously set"
+  NoConsumeTxOut ->
+    "The --consume-tx-out flag has previously been disabled"
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
 
