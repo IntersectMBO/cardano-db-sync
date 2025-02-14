@@ -37,7 +37,11 @@ jobs:
       - name: Install GHC and Cabal
         uses: input-output-hk/actions/devx@latest
         with:
-          platform: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-linux' || 'x86_64-darwin' }}
+          platform:
+            ${{ (runner.os == 'Linux' && 'x86_64-linux') ||
+                (runner.os == 'macOS' && runner.arch == 'X64' && 'x86_64-darwin') ||
+                (runner.os == 'macOS' && runner.arch == 'ARM64' && 'aarch64-darwin')
+             }}
           target-platform: ""
           compiler-nix-name: ${{ matrix.compiler-nix-name }}
           minimal: false
