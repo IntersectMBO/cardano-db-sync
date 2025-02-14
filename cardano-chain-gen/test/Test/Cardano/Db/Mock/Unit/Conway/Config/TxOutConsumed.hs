@@ -42,7 +42,7 @@ consumeTx =
     -- Should not have consumed_by_tx
     assertEqBackoff
       dbSync
-      (Query.queryConsumedTxOutCount @'Db.TxOutCore)
+      Query.queryConsumedTxOutCount
       0
       []
       "Unexpected consumed_by_tx count"
@@ -72,7 +72,7 @@ consumeTxConsumed =
     -- Should have consumed_by_tx
     assertEqBackoff
       dbSync
-      (Query.queryConsumedTxOutCount @'Db.TxOutCore)
+      Query.queryConsumedTxOutCount
       2
       []
       "Unexpected consumed_by_tx count"

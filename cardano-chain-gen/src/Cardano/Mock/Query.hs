@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -280,10 +281,15 @@ queryConsumedTxOutCount ::
   forall (a :: Db.TxOutTableType) io.
   (MonadIO io, Db.TxOutFields a) =>
   ReaderT SqlBackend io Word64
+queryConsumedTxOutCount :: MonadIO io => ReaderT SqlBackend io Word64
 queryConsumedTxOutCount = do
-  res <- selectOne $ do
-    txOut <- from $ table @(Db.TxOutTable a)
-    where_ (not_ $ isNothing_ $ txOut ^. Db.txOutConsumedByTxIdField @a)
-    pure countRows
-
-  pure $ maybe 0 unValue res
+  maybe 0 unSingle . head <$> rawSql @(Single Word64) q []
+  where
+    -- tx_out.consumed_by_tx_id may or may not exist, depending on the runtime configuration!
+    -- We use an obscure trick to avoid the error `column "consumed_by_tx_id" does not exist`
+    q =
+      "select count "
+        <> "from (select null as consumed_by_tx_id)"
+        <> "cross join lateral ("
+        <> "select count(*) from tx_out where consumed_by_tx_id is not null"
+        <> ") as count"
