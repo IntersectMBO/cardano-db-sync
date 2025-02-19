@@ -1,4 +1,9 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Mock.Query (
@@ -17,6 +22,7 @@ module Cardano.Mock.Query (
   queryEpochStateCount,
   queryCommitteeByTxHash,
   queryCommitteeMemberCountByTxHash,
+  queryConsumedTxOutCount,
 ) where
 
 import qualified Cardano.Db as Db
@@ -270,3 +276,16 @@ queryCommitteeMemberCountByTxHash txHash = do
     pure countRows
 
   pure (maybe 0 unValue res)
+
+queryConsumedTxOutCount :: MonadIO io => ReaderT SqlBackend io Word64
+queryConsumedTxOutCount = do
+  maybe 0 unSingle . head <$> rawSql @(Single Word64) q []
+  where
+    -- tx_out.consumed_by_tx_id may or may not exist, depending on the runtime configuration!
+    -- We use an obscure trick to avoid the error `column "consumed_by_tx_id" does not exist`
+    q =
+      "select count "
+        <> "from (select null as consumed_by_tx_id)"
+        <> "cross join lateral ("
+        <> "select count(*) from tx_out where consumed_by_tx_id is not null"
+        <> ") as count"

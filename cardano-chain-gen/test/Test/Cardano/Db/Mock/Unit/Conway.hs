@@ -7,6 +7,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.TxOutConsumed as TxOutConsumed
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Governance as Governance
 import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
@@ -84,6 +85,11 @@ unitTests iom knownMigrations =
             , expectFailSilent
                 "populate db then reset with use_address_table config config active"
                 $ MigrateConsumedPruneTxOut.populateDbRestartWithAddressConfig iom knownMigrations
+            ]
+        , testGroup
+            "tx-out consumed by tx id"
+            [ test "without txout-consumed" TxOutConsumed.consumeTx
+            , test "with txout-consumed" TxOutConsumed.consumeTxConsumed
             ]
         ]
     , testGroup
