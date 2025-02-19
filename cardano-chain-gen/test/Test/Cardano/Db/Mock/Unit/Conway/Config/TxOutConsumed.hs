@@ -1,13 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Config.TxOutConsumed (
   consumeTx,
   consumeTxConsumed,
 ) where
 
-import qualified Cardano.Db as Db
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
