@@ -277,10 +277,6 @@ queryCommitteeMemberCountByTxHash txHash = do
 
   pure (maybe 0 unValue res)
 
-queryConsumedTxOutCount ::
-  forall (a :: Db.TxOutTableType) io.
-  (MonadIO io, Db.TxOutFields a) =>
-  ReaderT SqlBackend io Word64
 queryConsumedTxOutCount :: MonadIO io => ReaderT SqlBackend io Word64
 queryConsumedTxOutCount = do
   maybe 0 unSingle . head <$> rawSql @(Single Word64) q []
