@@ -1,5 +1,7 @@
 # Revision history for cardano-db-sync
 
+- Fixes an issue where stopping the docker container results in non graceful shutdown
+
 ## 13.6.0.4
 - Fixes an issue from ledger where DRep delegations could be removed under some conditions
 - Fix an issue with migration from 13.5.x when consumed_tx_out config is enabled
