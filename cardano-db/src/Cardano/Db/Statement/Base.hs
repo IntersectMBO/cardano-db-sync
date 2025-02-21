@@ -3,22 +3,26 @@
 module Cardano.Db.Statement.Base where
 
 import Cardano.Db.Schema.Core (Block)
-import Cardano.Db.Schema.Ids (BlockId (..), idDecoder)
-import qualified Hasql.Transaction as SqlTx
-import Cardano.Prelude (MonadIO)
-import Cardano.Db.Error (AsDbError)
-import Cardano.Db.Types (DbAction, runDbTx, DbTxMode (..))
-import Cardano.Db.Schema.Core.Base (blockEncoder)
-import qualified Hasql.Statement as SqlStmt
-import qualified Hasql.Decoders as SqlDecode
+import Cardano.Db.Schema.Core.Base ( TxIn (..), blockEncoder )
+import Cardano.Db.Schema.Ids (BlockId (..), idDecoder, TxInId (..), TxId (..), RedeemerId (..))
+import Cardano.Db.Types (DbAction, DbTxMode (..))
+import Cardano.Prelude (MonadIO, Word64)
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Statement as HsqlS
+import qualified Hasql.Transaction as HsqlT
+import qualified Hasql.Encoders as HsqlE
+import Data.Functor.Contravariant ((>$<))
+import Contravariant.Extras (contrazip4)
+import Cardano.Db.Statement.Helpers (runDbT, mkDbTransaction, bulkInsert)
 
 -- The wrapped version that provides the DbAction context
-insertBlockTx :: (MonadIO m, AsDbError e) => Block -> DbAction e m BlockId
-insertBlockTx block = runDbTx Write $ insertBlockStm block
+insertBlock :: MonadIO m => Block -> DbAction m BlockId
+insertBlock block =
+  runDbT Write $ mkDbTransaction "" $ insertBlockStm block
 
-insertBlockStm :: Block -> SqlTx.Transaction BlockId
+insertBlockStm :: Block -> HsqlT.Transaction BlockId
 insertBlockStm block =
-  SqlTx.statement block $ SqlStmt.Statement sql blockEncoder (SqlDecode.singleRow $ idDecoder BlockId) True
+  HsqlT.statement block $ HsqlS.Statement sql blockEncoder (HsqlD.singleRow $ idDecoder BlockId) True
   where
     sql =
       "INSERT INTO block \
@@ -30,6 +34,34 @@ insertBlockStm block =
       \RETURNING id"
 
 
+insertManyTxIn :: MonadIO m => [TxIn] -> DbAction m [TxInId]
+insertManyTxIn txIns = runDbT Write $ mkDbTransaction "insertManyTxIn" (insertManyTxInStm txIns)
+
+insertManyTxInStm :: [TxIn] -> HsqlT.Transaction [TxInId]
+insertManyTxInStm txIns =
+  bulkInsert
+    "tx_in"
+    ["tx_in_id", "tx_out_id", "tx_out_index", "redeemer_id"]
+    ["bigint[]", "bigint[]", "int8[]", "int8[]"]
+    extractTxIn
+    encodeTxIn
+    (HsqlD.rowList $ idDecoder TxInId)
+    txIns
+
+  where
+    extractTxIn :: [TxIn] -> ([TxId], [TxId], [Word64], [Maybe RedeemerId])
+    extractTxIn xs = ( map txInTxInId xs
+      , map txInTxOutId xs
+      , map txInTxOutIndex xs
+      , map txInRedeemerId xs
+      )
+
+    encodeTxIn :: HsqlE.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
+    encodeTxIn = contrazip4
+      (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray $ HsqlE.nonNullable $ getTxId >$< HsqlE.int8)
+      (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray $ HsqlE.nonNullable $ getTxId >$< HsqlE.int8)
+      (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+      (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray $ HsqlE.nullable $ getRedeemerId >$< HsqlE.int8)
 
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 

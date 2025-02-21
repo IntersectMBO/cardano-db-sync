@@ -68,6 +68,7 @@ library
                         Cardano.Db.Statement.Base
                         Cardano.Db.Statement.EpochAndProtocol
                         Cardano.Db.Statement.GovernanceAndVoting
+                        Cardano.Db.Statement.Helpers
                         Cardano.Db.Statement.MultiAsset
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool
@@ -86,6 +87,7 @@ library
                       , containers
                       , conduit-extra
                       , contra-tracer
+                      , contravariant-extras
                       , cryptonite
                       , directory
                       , esqueleto
