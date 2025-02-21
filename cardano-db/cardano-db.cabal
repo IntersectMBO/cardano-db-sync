@@ -64,6 +64,14 @@ library
                         Cardano.Db.Schema.Ids
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
+                        Cardano.Db.Statement
+                        Cardano.Db.Statement.Base
+                        Cardano.Db.Statement.EpochAndProtocol
+                        Cardano.Db.Statement.GovernanceAndVoting
+                        Cardano.Db.Statement.MultiAsset
+                        Cardano.Db.Statement.OffChain
+                        Cardano.Db.Statement.Pool
+                        Cardano.Db.Statement.StakeDeligation
                         Cardano.Db.Types
 
   build-depends:        aeson
@@ -86,7 +94,6 @@ library
                       , filepath
                       , file-embed
                       , hasql
-                      , hasql-pool
                       , hasql-transaction
                       , iohk-monitoring
                       , lifted-base
