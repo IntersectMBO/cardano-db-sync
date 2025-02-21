@@ -36,8 +36,9 @@ import Database.Persist.Postgresql (ConnectionString)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 
+
 data SyncEnv = SyncEnv
-  { envPool :: !!Pool.Pool
+  { envDbEnv :: !!DB.DbEnv
   , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)

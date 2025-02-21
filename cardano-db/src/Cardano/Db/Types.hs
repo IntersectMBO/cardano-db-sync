@@ -6,8 +6,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.Db.Types (
+  DbAction (..),
+  DbTxMode (..),
+  DbEnv (..),
   Ada (..),
   AnchorType (..),
   AssetFingerprint (..),
@@ -30,6 +34,9 @@ module Cardano.Db.Types (
   VoterRole (..),
   GovActionType (..),
   BootstrapState (..),
+  runDbTx,
+  mkCallSite,
+  mkDbTransaction,
   dbInt65Decoder,
   dbInt65Encoder,
   rewardSourceDecoder,
@@ -110,12 +117,98 @@ import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 import Quiet (Quiet (..))
 import Data.Int (Int64)
-import Cardano.Prelude (Bifunctor(..))
+import Cardano.Prelude (Bifunctor(..), MonadError (..), MonadIO (..), ask)
 import Data.Bits (Bits(..))
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
 import Data.Functor.Contravariant ((>$<))
 import Data.WideWord (Word128 (..))
+import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Reader (ReaderT)
+import Control.Monad.Logger (LoggingT, MonadLogger)
+import Cardano.Db.Error (AsDbError, DbError (..), toDbError, CallSite (..))
+import qualified Hasql.Connection as HasqlC
+import qualified Hasql.Session as HasqlS
+import qualified Hasql.Transaction as HasqlTx
+import qualified Hasql.Transaction.Sessions as HasqlTx
+import Cardano.BM.Trace (Trace, logDebug)
+import GHC.Stack (SrcLoc (..), HasCallStack, getCallStack, callStack)
+import Data.Time (getCurrentTime, diffUTCTime)
+
+-- | The database action monad.
+newtype DbAction e m a = DbAction
+  { runDbAction :: ExceptT e (ReaderT DbEnv (LoggingT m)) a }
+  deriving newtype
+    ( Functor, Applicative, Monad
+    , MonadError e
+    , MonadIO, MonadLogger
+    )
+
+data DbTxMode = Write | ReadOnly
+
+-- Environment with transaction settings
+data DbEnv = DbEnv
+  { dbConnection :: !HasqlC.Connection
+  , dbEnableLogging :: !Bool
+  ,dbTracer :: !(Trace IO Text)
+  }
+
+-- | Transaction wrapper for debuging/logging.
+data DbTransaction a = DbTransaction
+  { dtFunctionName :: !Text
+  , dtCallSite :: !CallSite
+  , dtTx :: !(HasqlTx.Transaction a)
+  }
+
+mkCallSite :: HasCallStack => CallSite
+mkCallSite =
+  case reverse (getCallStack callStack) of
+    (_, srcLoc) : _ -> CallSite
+      { csModule = Text.pack $ srcLocModule srcLoc
+      , csFile = Text.pack $ srcLocFile srcLoc
+      , csLine = srcLocStartLine srcLoc
+      }
+    [] -> error "No call stack info"
+
+mkDbTransaction :: Text -> CallSite -> HasqlTx.Transaction a -> DbTransaction a
+mkDbTransaction funcName callSite transx =
+  DbTransaction { dtFunctionName = funcName
+                , dtCallSite = callSite
+                , dtTx = transx
+                }
+
+runDbTx :: (MonadIO m, AsDbError e)
+        => DbTxMode
+        -> DbTransaction a
+        -> DbAction e m a
+runDbTx mode DbTransaction{..} = DbAction $ do
+  env <- ask
+  let session = HasqlTx.transaction HasqlTx.Serializable txMode dtTx
+      txMode = case mode of
+        Write -> HasqlTx.Write
+        ReadOnly -> HasqlTx.Read
+  if not (dbEnableLogging env)
+    then do
+      -- Just run the transaction without any logging overhead
+      result <- liftIO $ HasqlS.run session (dbConnection env)
+      either (throwError . toDbError . QueryError "Transaction failed" dtCallSite) pure result
+    else do
+      -- Logging path with timing and location info
+      let locationInfo = " at " <> csModule dtCallSite <> ":" <>
+                      csFile dtCallSite <> ":" <> Text.pack (show $ csLine dtCallSite)
+
+      logDbDebug env $ "Starting transaction: " <> dtFunctionName <> locationInfo
+      start <- liftIO getCurrentTime
+      result <- liftIO $ HasqlS.run session (dbConnection env)
+      end <- liftIO getCurrentTime
+      let duration = diffUTCTime end start
+      logDbDebug env $ "Transaction completed: "
+         <> dtFunctionName <> locationInfo <> " in " <> Text.pack (show duration)
+      either (throwError . toDbError . QueryError "Transaction failed" dtCallSite) pure result
+
+logDbDebug :: MonadIO m => DbEnv -> Text -> m ()
+logDbDebug dbEnv msg =
+  liftIO $ logDebug (dbTracer dbEnv) msg
 
 newtype Ada = Ada
   { unAda :: Micro
@@ -131,7 +224,7 @@ instance ToJSON Ada where
   -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
   toEncoding (Ada ada) =
     unsafeToEncoding $
-      Builder.string8 $ -- convert ByteString to Aeson's Encoding -- convert ByteString to Aeson's Encoding -- convert ByteString to Aeson's Encoding -- convert ByteString to Aeson's Encoding
+      Builder.string8 $ -- convert ByteString to Aeson's
         showFixed True ada -- convert String to ByteString using Latin1 encoding
         -- convert Micro to String chopping off trailing zeros
 

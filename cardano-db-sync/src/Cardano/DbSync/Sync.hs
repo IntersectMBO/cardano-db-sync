@@ -207,7 +207,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     tracer = getTrace syncEnv
 
     backend :: SqlBackend
-    backend = envBackend syncEnv
+    backend = envDbEnv syncEnv
 
     initAction channel = do
       consumedFixed <- getIsConsumedFixed syncEnv

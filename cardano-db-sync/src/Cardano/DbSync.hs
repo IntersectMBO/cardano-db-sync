@@ -57,6 +57,7 @@ import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
+import Hasql.Connection as HC
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
@@ -115,7 +116,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     then logInfo trce "All user indexes were created"
     else logInfo trce "New user indexes were not created. They may be created later if necessary."
 
-  let connectionString = Db.toConnectionString pgConfig
+  let setting = Db.toConnectionSetting pgConfig
 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
@@ -124,7 +125,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     metricsSetters
     trce
     iomgr
-    connectionString
+    connectionSetting
     ranMigrations
     (void . runMigration)
     syncNodeConfigFromFile
@@ -152,7 +153,7 @@ runSyncNode ::
   MetricSetters ->
   Trace IO Text ->
   IOManager ->
-  ConnectionString ->
+  Setting ->
   -- | migrations were ran on startup
   Bool ->
   -- | run migration function
@@ -161,7 +162,7 @@ runSyncNode ::
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr connSetting ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -170,20 +171,21 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-  cPool <- createPool dbConnString
+  -- Our main thread
   bracket
-    cPool
-    Pool.release
-    (\pool -> do
+    (runOrThrowIO $ HC.acquire [connSetting])
+    release
+    (\connection -> do
         runOrThrowIO $ runExceptT $ do
+          let dbEnv = Db.DbEnv connection (dncEnableDbLogging syncNodeConfigFromFile)
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- queryIsJsonbInSchema pool
+          isJsonbInSchema <- queryIsJsonbInSchema dbEnv
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
                 trce
-                pool
+                dbEnv
                 dbConnString
                 syncOptions
                 genCfg
