@@ -220,8 +220,8 @@ txInDecoder =
 txInEncoder :: E.Params TxIn
 txInEncoder =
   mconcat
-    [ txInId >$< idEncoder getTxInId
-    , txInTxInId >$< idEncoder getTxId
+    [ -- txInId >$< idEncoder getTxInId
+      txInTxInId >$< idEncoder getTxId
     , txInTxOutId >$< idEncoder getTxId
     , txInTxOutIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , txInRedeemerId >$< maybeIdEncoder getRedeemerId
