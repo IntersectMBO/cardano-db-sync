@@ -49,8 +49,8 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
   if False
-    then newExceptT $ DB.runDbIohkLogging (envBackend syncEnv) tracer insertAction
-    else newExceptT $ DB.runDbIohkNoLogging (envBackend syncEnv) insertAction
+    then newExceptT $ DB.runDbIohkLogging (envDbEnv syncEnv) tracer insertAction
+    else newExceptT $ DB.runDbIohkNoLogging (envDbEnv syncEnv) insertAction
   where
     tracer = getTrace syncEnv
 

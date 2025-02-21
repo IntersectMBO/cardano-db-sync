@@ -13,7 +13,7 @@ module Cardano.Db.PGConfig (
   readPGPassFileEnv,
   readPGPassFile,
   readPGPassFileExit,
-  toConnectionString,
+  toConnectionSetting,
 ) where
 
 import Control.Exception (IOException)
@@ -52,8 +52,8 @@ newtype PGPassFile
   = PGPassFile FilePath
 
 -- | Convert PGConfig to Hasql connection settings, or return an error message.
-toConnectionString :: PGConfig -> Either String HC.Setting
-toConnectionString pgc = do
+toConnectionSetting :: PGConfig -> Either String HC.Setting
+toConnectionSetting pgc = do
   -- Convert the port from Text to Word16
   portWord16 <- textToWord16 (pgcPort pgc)
   -- Build the connection settings

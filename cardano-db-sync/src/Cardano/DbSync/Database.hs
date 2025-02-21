@@ -38,45 +38,106 @@ data NextState
   | Done
   deriving (Eq)
 
+
 runDbThread ::
   SyncEnv ->
   MetricSetters ->
   ThreadChannels ->
   IO ()
 runDbThread syncEnv metricsSetters queue = do
-  logInfo trce "Running DB thread"
-  logException trce "runDBThread: " loop
-  logInfo trce "Shutting down DB thread"
+  logInfo tracer "Starting DB thread"
+  logException tracer "runDbThread: " processQueue
+  logInfo tracer "Shutting down DB thread"
   where
-    trce = getTrace syncEnv
-    loop = do
-      xs <- blockingFlushDbActionQueue queue
+    tracer = getTrace syncEnv
 
-      when (length xs > 1) $ do
-        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+    -- Main loop to process the queue
+    processQueue :: IO ()
+    processQueue = do
+      actions <- blockingFlushDbActionQueue queue
 
-      case hasRestart xs of
-        Nothing -> do
-          eNextState <- runExceptT $ runActions syncEnv xs
+      -- Log the number of blocks being processed if there are multiple
+      when (length actions > 1) $ do
+        logDebug tracer $ "Processing " <> textShow (length actions) <> " blocks"
 
-          mBlock <- getDbLatestBlockInfo (envBackend syncEnv)
-          whenJust mBlock $ \block -> do
-            setDbBlockHeight metricsSetters $ bBlockNo block
-            setDbSlotHeight metricsSetters $ bSlotNo block
+      -- Handle the case where the syncing thread has restarted
+      case hasRestart actions of
+        Just resultVar -> handleRestart resultVar
+        Nothing -> processActions actions
 
-          case eNextState of
-            Left err -> logError trce $ show err
-            Right Continue -> loop
-            Right Done -> pure ()
-        Just resultVar -> do
-          -- In this case the syncing thread has restarted, so ignore all blocks that are not
-          -- inserted yet.
-          logInfo trce "Chain Sync client thread has restarted"
-          latestPoints <- getLatestPoints syncEnv
-          currentTip <- getCurrentTipBlockNo syncEnv
-          logDbState syncEnv
-          atomically $ putTMVar resultVar (latestPoints, currentTip)
-          loop
+    -- Process a list of actions
+    processActions :: [DbAction] -> IO ()
+    processActions actions = do
+      result <- runExceptT $ runActions syncEnv actions -- runActions is where we start inserting information we recieve from the node.
+
+      -- Update metrics with the latest block information
+      updateBlockMetrics
+
+      -- Handle the result of running the actions
+      case result of
+        Left err -> logError tracer $ "Error: " <> show err
+        Right Continue -> processQueue  -- Continue processing
+        Right Done -> pure ()           -- Stop processing
+
+    -- Handle the case where the syncing thread has restarted
+    handleRestart :: TMVar (LatestPoints, CurrentTip) -> IO ()
+    handleRestart resultVar = do
+      logInfo tracer "Chain Sync client thread has restarted"
+      latestPoints <- getLatestPoints syncEnv
+      currentTip <- getCurrentTipBlockNo syncEnv
+      logDbState syncEnv
+      atomically $ putTMVar resultVar (latestPoints, currentTip)
+      processQueue  -- Continue processing
+
+    -- Update block and slot height metrics
+    updateBlockMetrics :: IO ()
+    updateBlockMetrics = do
+      mBlock <- getDbLatestBlockInfo (envDbEnv syncEnv)
+      whenJust mBlock $ \block -> do
+        setDbBlockHeight metricsSetters $ bBlockNo block
+        setDbSlotHeight metricsSetters $ bSlotNo block
+
+
+-- runDbThread ::
+--   SyncEnv ->
+--   MetricSetters ->
+--   ThreadChannels ->
+--   IO ()
+-- runDbThread syncEnv metricsSetters queue = do
+--   logInfo trce "Running DB thread"
+--   logException trce "runDBThread: " loop
+--   logInfo trce "Shutting down DB thread"
+--   where
+--     trce = getTrace syncEnv
+--     loop = do
+--       xs <- blockingFlushDbActionQueue queue
+
+--       when (length xs > 1) $ do
+--         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+
+--       case hasRestart xs of
+--         Nothing -> do
+--           eNextState <- runExceptT $ runActions syncEnv xs
+
+--           mBlock <- getDbLatestBlockInfo (envDbEnv syncEnv)
+--           whenJust mBlock $ \block -> do
+--             setDbBlockHeight metricsSetters $ bBlockNo block
+--             setDbSlotHeight metricsSetters $ bSlotNo block
+
+--           case eNextState of
+--             Left err -> logError trce $ show err
+--             Right Continue -> loop
+--             Right Done -> pure ()
+--         Just resultVar -> do
+--           -- In this case the syncing thread has restarted, so ignore all blocks that are not
+--           -- inserted yet.
+--           logInfo trce "Chain Sync client thread has restarted"
+--           latestPoints <- getLatestPoints syncEnv
+--           currentTip <- getCurrentTipBlockNo syncEnv
+--           logDbState syncEnv
+--           atomically $ putTMVar resultVar (latestPoints, currentTip)
+--           loop
+
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
@@ -148,7 +209,7 @@ rollbackLedger syncEnv point =
 -- 'Consistent' Level is correct based on the db tip.
 validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
 validateConsistentLevel syncEnv stPoint = do
-  dbTipInfo <- getDbLatestBlockInfo (envBackend syncEnv)
+  dbTipInfo <- getDbLatestBlockInfo (envDbEnv syncEnv)
   cLevel <- getConsistentLevel syncEnv
   compareTips stPoint dbTipInfo cLevel
   where

@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Run (
-  createPool,
   getBackendGhci,
   ghciDebugQuery,
   runDbHandleLogger,
@@ -77,29 +76,15 @@ import Database.PostgreSQL.Simple (connectPostgreSQL)
 import Language.Haskell.TH.Syntax (Loc)
 import System.IO (Handle, stdout)
 import System.Log.FastLogger (LogStr, fromLogStr)
-import qualified Hasql.Pool as HP
-import qualified Hasql.Pool.Config as HPC
+import Hasql.Connection (Connection)
 
--- | Create a connection pool.
-createPool :: PGConfig -> IO HP.Pool
-createPool pgc =
-  case toConnectionString pgc of
-    Left err -> error $ "createPool: " ++ err
-    Right connStr ->
-      HP.acquire $ HPC.settings
-            [ HPC.size 10                        -- number of connections
-            , HPC.acquisitionTimeout 10          -- seconds
-            , HPC.agingTimeout 1800              -- 30 minutes
-            , HPC.idlenessTimeout 1800           -- 30 minutes
-            , HPC.staticConnectionSettings [connStr]
-            ]
 
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> PGPassSource -> ReaderT SqlBackend (LoggingT IO) a -> IO a
 runDbHandleLogger logHandle source dbAction = do
   pgconfig <- runOrThrowIODb (readPGPass source)
   runHandleLoggerT
-    . withPostgresqlConn (toConnectionString pgconfig)
+    . withPostgresqlConn (toConnectionSetting pgconfig)
     $ \backend ->
       -- The 'runSqlConnWithIsolation' function starts a transaction, runs the 'dbAction'
       -- and then commits the transaction.
@@ -126,12 +111,12 @@ runWithConnectionNoLogging ::
 runWithConnectionNoLogging source dbAction = do
   pgconfig <- runOrThrowIODb (readPGPass source)
   runNoLoggingT
-    . withPostgresqlConn (toConnectionString pgconfig)
+    . withPostgresqlConn (toConnectionSetting pgconfig)
     $ \backend ->
       runSqlConnWithIsolation dbAction backend Serializable
 
 -- | Run a DB action logging via iohk-monitoring-framework.
-runDbIohkLogging :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
+runDbIohkLogging :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ReaderT Connection (LoggingT m) b -> m b
 runDbIohkLogging backend tracer dbAction = do
   runIohkLogging tracer $ runSqlConnWithIsolation dbAction backend Serializable
 
@@ -183,7 +168,7 @@ runDbNoLogging ::
 runDbNoLogging source action = do
   pgconfig <- liftIO $ runOrThrowIODb (readPGPass source)
   runNoLoggingT
-    . withPostgresqlConn (toConnectionString pgconfig)
+    . withPostgresqlConn (toConnectionSetting pgconfig)
     $ \backend ->
       runSqlConnWithIsolation action backend Serializable
 
@@ -192,21 +177,21 @@ runDbStdoutLogging :: PGPassSource -> ReaderT SqlBackend (LoggingT IO) b -> IO b
 runDbStdoutLogging source action = do
   pgconfig <- runOrThrowIODb (readPGPass source)
   runStdoutLoggingT
-    . withPostgresqlConn (toConnectionString pgconfig)
+    . withPostgresqlConn (toConnectionSetting pgconfig)
     $ \backend ->
       runSqlConnWithIsolation action backend Serializable
 
 getBackendGhci :: IO SqlBackend
 getBackendGhci = do
   pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
-  connection <- connectPostgreSQL (toConnectionString pgconfig)
+  connection <- connectPostgreSQL (toConnectionSetting pgconfig)
   openSimpleConn (defaultOutput stdout) connection
 
 ghciDebugQuery :: SqlSelect a r => SqlQuery a -> IO ()
 ghciDebugQuery query = do
   pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
   runStdoutLoggingT
-    . withPostgresqlConn (toConnectionString pgconfig)
+    . withPostgresqlConn (toConnectionSetting pgconfig)
     $ \backend -> do
       let (sql, params) = toRawSql SELECT (backend, initialIdentState) query
       liftIO $ do
@@ -215,3 +200,17 @@ ghciDebugQuery query = do
 
 transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
 transactionCommit = transactionSaveWithIsolation Serializable
+
+-- | Create a connection pool.
+-- createPool :: PGConfig -> IO HP.Pool
+-- createPool pgc =
+--   case toConnectionSetting pgc of
+--     Left err -> error $ "createPool: " ++ err
+--     Right connStr ->
+--       HP.acquire $ HPC.settings
+--             [ HPC.size 10                        -- number of connections
+--             , HPC.acquisitionTimeout 10          -- seconds
+--             , HPC.agingTimeout 1800              -- 30 minutes
+--             , HPC.idlenessTimeout 1800           -- 30 minutes
+--             , HPC.staticConnectionSettings [connStr]
+--             ]
