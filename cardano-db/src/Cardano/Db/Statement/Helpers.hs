@@ -1,12 +1,26 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Statement.Helpers where
+module Cardano.Db.Statement.Helpers
+  ( runDbT,
+    mkDbTransaction,
+    insert,
+    insertCheckUnique,
+    bulkInsertNoReturn,
+    bulkInsertReturnIds,
+    insertManyUnique,
+    manyEncoder,
+  )
+where
 
 import Cardano.BM.Trace (logDebug)
 import Cardano.Db.Error (CallSite (..), DbError (..))
-import Cardano.Db.Types (DbAction (..), DbTxMode (..), DbTransaction (..), DbEnv (..))
-import Cardano.Prelude (MonadIO (..), ask, when, MonadError (..))
+import Cardano.Db.Types (DbAction (..), DbTxMode (..), DbTransaction (..), DbEnv (..), HasDbInfo (..))
+import Cardano.Prelude (MonadIO (..), ask, when, MonadError (..), Proxy(..))
 import Data.Time (getCurrentTime, diffUTCTime)
 import GHC.Stack (HasCallStack, getCallStack, callStack, SrcLoc (..))
 import qualified Data.Text as Text
@@ -17,6 +31,7 @@ import qualified Hasql.Statement as HsqlS
 import qualified Hasql.Transaction as HsqlT
 import qualified Hasql.Transaction.Sessions as HsqlT
 import qualified Data.Text.Encoding as TextEnc
+import qualified Data.List.NonEmpty as NE
 
 -- | Runs a database transaction with optional logging.
 --
@@ -26,7 +41,7 @@ import qualified Data.Text.Encoding as TextEnc
 -- for debugging purposes when logging is active.
 --
 -- ==== Parameters
--- * @mode@: The transaction mode (`Write` or `ReadOnly`).
+-- * @DbTxMode@: The transaction mode (`Write` or `ReadOnly`).
 -- * @DbTransaction{..}@: The transaction to execute, containing the function name,
 --   call site, and the `Hasql` transaction.
 --
@@ -96,37 +111,153 @@ mkDbTransaction funcName transx =
           }
         [] -> error "No call stack info"
 
+-- | The result type of an insert operation (usualy it's newly generated id).
+data ResultType c r where
+  NoResult   :: ResultType c ()  -- No IDs, result type is ()
+  WithResult :: HsqlD.Result [c] -> ResultType c [c]  -- Return IDs, result type is [c]
+
+-- | Whether to add a unique constraint to an insert operation.
+data WithConstraint a =
+  NoConstraint | WithConstraint a
+
+-- | Inserts a record into a table, with option of returning the generated ID.
+--
+-- ==== Parameters
+-- * @encoder@: The encoder for the record.
+-- * @resultType@: Whether to return a result (usually it's newly generated id) and decoder.
+-- * @record@: The record to insert.
+insert
+  :: forall a c r. (HasDbInfo a)
+  => HsqlE.Params a             -- Encoder
+  -> ResultType c r             -- Whether to return a result and decoder
+  -> a                          -- Record
+  -> HsqlT.Transaction r
+insert encoder resultType record =
+  HsqlT.statement record $ HsqlS.Statement sql encoder decoder True
+  where
+    (decoder, shouldReturntype) = case resultType of
+      NoResult -> (HsqlD.noResult, "")
+      WithResult dec  -> (dec, "RETURNING id")
+
+    table = tableName (Proxy @a)
+    -- columns drop the ID column
+    colsNoId = NE.fromList $ NE.drop 1 (columnNames (Proxy @a))
+
+    values = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "INSERT INTO " <> table
+      , " (" <> Text.intercalate ", " (NE.toList colsNoId) <> ")"
+      , " VALUES (" <> values <> ")"
+      , shouldReturntype
+      ]
+
+-- | Inserts a record into a table, checking for a unique constraint violation.
+--
+-- ==== Parameters
+-- * @constraintName@: The name of the unique constraint to check.
+-- * @encoder@: The encoder for the record.
+-- * @resultType@: Whether to return a result (usually it's newly generated id) and decoder.
+-- * @record@: The record to insert.
+insertCheckUnique
+  :: forall a c r. (HasDbInfo a)
+  => Text.Text                  -- Unique constraint name
+  -> HsqlE.Params a             -- Encoder
+  -> ResultType c r             -- Whether to return a result and decoder
+  -> a                          -- Record
+  -> HsqlT.Transaction r
+insertCheckUnique constraintName encoder resultType record =
+  HsqlT.statement record $ HsqlS.Statement sql encoder decoder True
+  where
+    (decoder, shouldReturntype) = case resultType of
+      NoResult -> (HsqlD.noResult, "")
+      WithResult dec  -> (dec, "RETURNING id")
+
+    table = tableName (Proxy @a)
+    cols = columnNames (Proxy @a)
+    -- Drop the ID column
+    colsNoId = NE.fromList $ NE.drop 1 cols
+    dummyUpdateField = NE.head cols
+    placeholders = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "INSERT INTO " <> table
+      , " (" <> Text.intercalate ", " (NE.toList cols) <> ")"
+      , " VALUES (" <> placeholders <> ")"
+      , " ON CONFLICT ON CONSTRAINT " <> constraintName
+      , " DO UPDATE SET " <> dummyUpdateField <> " = EXCLUDED." <> dummyUpdateField
+      , shouldReturntype
+      ]
+
+-- | Inserts multiple records into a table in a single transaction using UNNEST and discards the generated IDs.
+bulkInsertNoReturn
+  :: forall a b. (HasDbInfo a)
+  => ([a] -> b)                 -- Field extractor (e.g., to tuple)
+  -> HsqlE.Params b             -- Bulk encoder
+  -> [a]                        -- Records
+  -> HsqlT.Transaction ()
+bulkInsertNoReturn extract enc = bulkInsert extract enc NoConstraint NoResult
+
+-- | Inserts multiple records into a table in a single transaction using UNNEST and returns the generated IDs.
+bulkInsertReturnIds
+  :: forall a b c. (HasDbInfo a)
+  => ([a] -> b)                 -- Field extractor (e.g., to tuple)
+  -> HsqlE.Params b             -- Bulk Encoder
+  -> HsqlD.Result [c]           -- Bulk decoder
+  -> [a]                        -- Records
+  -> HsqlT.Transaction [c]
+bulkInsertReturnIds extract enc dec = bulkInsert extract enc NoConstraint (WithResult dec)
+
+insertManyUnique
+  :: forall a b. (HasDbInfo a)
+  => ([a] -> b)                -- Field extractor (e.g., to tuple)
+  -> HsqlE.Params b            -- Bulk Encoder
+  -> WithConstraint Text.Text  -- Whether to add a constraint
+  -> [a]                       -- Records
+  -> HsqlT.Transaction ()
+insertManyUnique extract enc withConstraint = bulkInsert extract enc withConstraint NoResult
+
 -- | Inserts multiple records into a table in a single transaction using UNNEST.
 --
 -- This function performs a bulk insert into a specified table, using PostgreSQL’s
 -- `UNNEST` to expand arrays of field values into rows. It’s designed for efficiency,
--- executing all inserts in one SQL statement, and returns the generated IDs.
---
--- ==== Parameters
--- * @table@: Text - The name of the table to insert into.
--- * @cols@: [Text] - List of column names (excluding the ID column).
--- * @types@: [Text] - List of PostgreSQL type casts for each column (e.g., "bigint[]").
--- * @extract@: ([a] -> [b]) - Function to extract fields from a list of records into a tuple of lists.
--- * @enc@: HsqlE.Params [b] - Encoder for the extracted fields as a tuple of lists.
--- * @dec@: HsqlD.Result [c] - Decoder for the returned IDs.
--- * @xs@: [a] - List of records to insert.
---
--- ==== Returns
--- * @DbAction m [c]@: The list of generated IDs wrapped in the `DbAction` monad.
+-- executing all inserts in one SQL statement, and can return the generated IDs.
 bulkInsert
-  :: Text.Text -- Table name
-  -> [Text.Text] -- Column names
-  -> [Text.Text] -- Type casts for UNNEST
-  -> ([a] -> b) -- Field extractor (e.g., to tuple)
-  -> HsqlE.Params b -- Bulk encoder
-  -> HsqlD.Result [c] -- ID decoder
-  -> [a] -- Records
-  -> HsqlT.Transaction [c]  -- Resulting IDs
-bulkInsert table cols types extract enc dec xs =
-  HsqlT.statement params $ HsqlS.Statement sql enc dec True
+  :: forall a b c r. (HasDbInfo a)
+  => ([a] -> b)                 -- Field extractor (e.g., to tuple)
+  -> HsqlE.Params b             -- Encoder
+  -> WithConstraint Text.Text   -- Whether to add a constraint
+  -> ResultType c r             -- Whether to return a result and decoder
+  -> [a]                        -- Records
+  -> HsqlT.Transaction r
+bulkInsert extract enc withConstraint returnIds xs =
+  HsqlT.statement params $ HsqlS.Statement sql enc decoder True
   where
     params = extract xs
-    sql = TextEnc.encodeUtf8 $
-      "INSERT INTO " <> table <> " (" <> Text.intercalate ", " cols <> ") \
-          \SELECT * FROM UNNEST (" <> Text.intercalate ", " (zipWith (\i t -> "$" <> Text.pack (show i) <> "::" <> t) [1..] types) <> ") \
-          \RETURNING id"
+    table = tableName (Proxy @a)
+    cols = NE.toList $ columnNames (Proxy @a)
+    colsNoId = drop 1 cols
+
+    unnestVals = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+
+    conflictClause :: Text.Text
+    conflictClause = case withConstraint of
+      WithConstraint constraint -> " ON CONFLICT ON CONSTRAINT " <> constraint <> " DO NOTHING"
+      NoConstraint -> ""
+
+    (decoder, shouldReturnId) = case returnIds of
+      NoResult -> (HsqlD.noResult, "")
+      WithResult dec  -> (dec, "RETURNING id")
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      ["INSERT INTO " <> table
+      , " (" <> Text.intercalate ", " colsNoId <> ") "
+      , " SELECT * FROM UNNEST ("
+      , unnestVals <> " ) "
+      , conflictClause
+      , shouldReturnId
+      ]
+
+-- | Creates a parameter encoder for an array of values from a single-value encoder
+manyEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
+manyEncoder v = HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray v

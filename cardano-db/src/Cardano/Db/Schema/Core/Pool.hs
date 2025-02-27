@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.Pool where
 
@@ -28,9 +29,12 @@ import Cardano.Db.Types (
   DbWord64 (..),
   DbLovelace (..),
   dbLovelaceDecoder,
-  dbLovelaceEncoder
+  dbLovelaceEncoder, HasDbInfo (..)
   )
 import Data.Functor.Contravariant ((>$<))
+import Contravariant.Extras (contrazip6)
+import Cardano.Db.Statement.Helpers (manyEncoder)
+import qualified Data.List.NonEmpty as NE
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- POOLS
@@ -63,7 +67,7 @@ poolHashEncoder =
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
-Table Name: pool_meta_data
+Table Name: pool_stat
 Description: A table containing information about pool metadata.
 -}
 data PoolStat = PoolStat
@@ -75,6 +79,11 @@ data PoolStat = PoolStat
   , poolStatStake :: !DbWord64          -- sqltype=word64type
   , poolStatVotingPower :: !(Maybe DbWord64) -- sqltype=word64type
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolStat where
+  tableName _ = "pool_stat"
+  columnNames _ = NE.fromList [ "id" , "pool_hash_id", "epoch_no", "number_of_blocks", "number_of_delegators", "stake", "voting_power"]
+  typeCasts _ = NE.fromList ["int8[]", "int4[]", "numeric[]", "numeric[]", "numeric[]", "numeric[]"]
 
 poolStatDecoder :: D.Row PoolStat
 poolStatDecoder =
@@ -98,6 +107,16 @@ poolStatEncoder =
     , poolStatStake >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , poolStatVotingPower >$< E.param (E.nullable $ fromIntegral . unDbWord64 >$< E.int8)
     ]
+
+poolStatEncoderMany :: E.Params ([PoolHashId], [Word64], [DbWord64], [DbWord64], [DbWord64], [Maybe DbWord64])
+poolStatEncoderMany =
+  contrazip6
+    (manyEncoder $ E.nonNullable $ getPoolHashId >$< E.int8) -- poolHashId
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int4) -- epoch_no
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_blocks
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_delegators
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- stake
+    (manyEncoder $ E.nullable $ fromIntegral . unDbWord64 >$< E.numeric) -- voting_power
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
