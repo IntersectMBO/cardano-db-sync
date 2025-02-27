@@ -1,4 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+
 
 module Cardano.Db.Schema.Core.Base where
 
@@ -18,7 +23,7 @@ import Cardano.Db.Types (
   dbLovelaceDecoder,
   maybeDbWord64Decoder,
   dbLovelaceEncoder,
-  maybeDbWord64Encoder,
+  maybeDbWord64Encoder, HasDbInfo (..),
  )
 import Data.ByteString.Char8 (ByteString)
 import Data.Int (Int64)
@@ -27,6 +32,9 @@ import Data.Time.Clock (UTCTime)
 import Data.Word (Word16, Word64)
 import Data.Functor.Contravariant
 import GHC.Generics (Generic)
+import Contravariant.Extras (contrazip4)
+import Cardano.Db.Statement.Helpers (manyEncoder)
+import qualified Data.List.NonEmpty as NE
 
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
@@ -63,6 +71,19 @@ data Block = Block
   , blockOpCert :: !(Maybe ByteString) -- sqltype=hash32type
   , blockOpCertCounter :: !(Maybe Word64) -- sqltype=hash63type
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo Block where
+  tableName _ = "block"
+  columnNames _ = NE.fromList
+    [ "id", "hash", "epoch_no", "slot_no", "epoch_slot_no", "block_no", "previous_id"
+    , "slot_leader_id", "size", "time", "tx_count", "proto_major", "proto_minor"
+    , "vrf_key", "op_cert", "op_cert_counter"
+    ]
+  typeCasts _ = NE.fromList
+    [ "int8[]", "bytea[]", "int4[]", "int8[]", "int4[]", "int4[]", "int8[]"
+    , "int8[]", "int4[]", "timestampt[]", "int8[]", "int4[]", "int4[]"
+    , "varchar[]", "bytea[]", "int8[]"
+    ]
 
 blockDecoder :: D.Row Block
 blockDecoder =
@@ -128,6 +149,17 @@ data Tx = Tx
   , txTreasuryDonation :: !DbLovelace -- sqltype=lovelace default=0
   } deriving (Show, Eq, Generic)
 
+instance HasDbInfo Tx where
+  tableName _ = "tx"
+  columnNames _ = NE.fromList
+    [ "id", "hash", "block_id", "block_index", "out_sum", "fee", "deposit", "size"
+    , "invalid_before", "invalid_hereafter", "valid_contract", "script_size", "treasury_donation"
+    ]
+  typeCasts _ = NE.fromList
+    [ "int8[]", "bytea[]", "int8[]", "int4[]", "numeric[]", "numeric[]", "int8[]", "int4[]"
+    , "numeric[]", "numeric[]", "bool[]", "int4[]", "numeric[]"
+    ]
+
 txDecoder :: D.Row Tx
 txDecoder =
   Tx
@@ -176,6 +208,11 @@ data TxMetadata = TxMetadata
   , txMetadataTxId :: !TxId              -- noreference
   } deriving (Eq, Show, Generic)
 
+instance HasDbInfo TxMetadata where
+  tableName _ = "tx_metadata"
+  columnNames _ = NE.fromList ["id", "key", "json", "bytes", "tx_id"]
+  typeCasts _ = NE.fromList ["int8[]", "numeric[]", "jsonb[]", "bytea[]", "int8[]"]
+
 txMetadataDecoder :: D.Row TxMetadata
 txMetadataDecoder =
   TxMetadata
@@ -188,12 +225,20 @@ txMetadataDecoder =
 txMetadataEncoder :: E.Params TxMetadata
 txMetadataEncoder =
   mconcat
-    [ txMetadataId >$< idEncoder getTxMetadataId
-    , txMetadataKey >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    [ -- txMetadataId >$< idEncoder getTxMetadataId
+      txMetadataKey >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , txMetadataJson >$< E.param (E.nullable E.text)
     , txMetadataBytes >$< E.param (E.nonNullable E.bytea)
     , txMetadataTxId >$< idEncoder getTxId
     ]
+
+txMetadataEncoderMany :: E.Params ([DbWord64], [Maybe Text], [ByteString], [TxId])
+txMetadataEncoderMany =
+  contrazip4
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    (manyEncoder $ E.nullable E.text)
+    (manyEncoder $ E.nonNullable E.bytea)
+    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
@@ -207,6 +252,11 @@ data TxIn = TxIn
   , txInTxOutIndex :: !Word64 -- sqltype=txindex
   , txInRedeemerId :: !(Maybe RedeemerId)
   } deriving (Show, Eq, Generic)
+
+instance HasDbInfo TxIn where
+  tableName _ = "tx_in"
+  columnNames _ = NE.fromList ["id", "tx_in_id", "tx_out_id", "tx_out_index", "redeemer_id"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int2[]", "int8[]"]
 
 txInDecoder :: D.Row TxIn
 txInDecoder =
@@ -227,6 +277,14 @@ txInEncoder =
     , txInRedeemerId >$< maybeIdEncoder getRedeemerId
     ]
 
+encodeTxInMany :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
+encodeTxInMany = contrazip4
+  (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+  (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+  (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+  (manyEncoder $ E.nullable $ getRedeemerId >$< E.int8)
+
+
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
 Table Name: collateral_tx_in
@@ -238,6 +296,11 @@ data CollateralTxIn = CollateralTxIn
   , collateralTxInTxOutId :: !TxId        -- noreference -- The transaction where this was created as an output.
   , collateralTxInTxOutIndex :: !Word64   -- sqltype=txindex
   } deriving (Show, Eq, Generic)
+
+instance HasDbInfo CollateralTxIn where
+  tableName _ = "collateral_tx_in"
+  columnNames _ = NE.fromList ["id", "tx_in_id", "tx_out_id", "tx_out_index"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int2[]"]
 
 collateralTxInDecoder :: D.Row CollateralTxIn
 collateralTxInDecoder =
@@ -268,6 +331,11 @@ data ReferenceTxIn = ReferenceTxIn
   , referenceTxInTxOutIndex :: !Word64  -- sqltype=txindex
   } deriving (Show, Eq, Generic)
 
+instance HasDbInfo ReferenceTxIn where
+  tableName _ = "reference_tx_in"
+  columnNames _ = NE.fromList ["id", "tx_in_id", "tx_out_id", "tx_out_index"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int2[]"]
+
 referenceTxInDecoder :: D.Row ReferenceTxIn
 referenceTxInDecoder =
   ReferenceTxIn
@@ -296,6 +364,11 @@ data ReverseIndex = ReverseIndex
   , reverseIndexMinIds :: !Text
   } deriving (Show, Eq, Generic)
 
+instance HasDbInfo ReverseIndex where
+  tableName _ = "reverse_index"
+  columnNames _ = NE.fromList ["id", "block_id", "min_ids"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "varchar[]"]
+
 reverseIndexDecoder :: D.Row ReverseIndex
 reverseIndexDecoder =
   ReverseIndex
@@ -322,6 +395,11 @@ data TxCbor = TxCbor
   , txCborTxId :: !TxId           -- noreference
   , txCborBytes :: !ByteString    -- sqltype=bytea
   } deriving (Show, Eq, Generic)
+
+instance HasDbInfo TxCbor where
+  tableName _ = "tx_cbor"
+  columnNames _ = NE.fromList ["id", "tx_id", "bytes"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "bytea[]"]
 
 txCborDecoder :: D.Row TxCbor
 txCborDecoder =
@@ -351,6 +429,11 @@ data Datum = Datum
   , datumBytes :: !ByteString     -- sqltype=bytea
   } deriving (Eq, Show, Generic)
 -- UniqueDatum  hash
+
+instance HasDbInfo Datum where
+  tableName _ = "datum"
+  columnNames _ = NE.fromList ["id", "hash", "tx_id", "value", "bytes"]
+  typeCasts _ = NE.fromList ["int8[]", "bytea[]", "int8[]", "jsonb[]", "bytea[]"]
 
 datumDecoder :: D.Row Datum
 datumDecoder =
@@ -386,6 +469,11 @@ data Script = Script
   , scriptSerialisedSize :: !(Maybe Word64) -- sqltype=word31type
   } deriving (Eq, Show, Generic)
 -- UniqueScript  hash
+
+instance HasDbInfo Script where
+  tableName _ = "script"
+  columnNames _ = NE.fromList ["id", "tx_id", "hash", "type", "json", "bytes", "serialised_size"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "bytea[]", "scripttype[]", "jsonb[]", "bytea[]", "int4[]"]
 
 scriptDecoder :: D.Row Script
 scriptDecoder =
@@ -430,6 +518,17 @@ data Redeemer = Redeemer
   , redeemerRedeemerDataId :: !RedeemerDataId -- noreference
   } deriving (Eq, Show, Generic)
 
+instance HasDbInfo Redeemer where
+  tableName _ = "redeemer"
+  columnNames _ = NE.fromList
+    [ "id", "tx_id", "unit_mem", "unit_steps", "fee"
+    , "purpose", "index", "script_hash", "redeemer_data_id"
+    ]
+  typeCasts _ = NE.fromList
+    [ "int8[]", "int8[]", "int8[]", "int8[]", "numeric[]"
+    , "scriptpurposetype[]", "int4[]", "bytea[]", "int8[]"
+    ]
+
 redeemerDecoder :: D.Row Redeemer
 redeemerDecoder =
   Redeemer
@@ -471,6 +570,11 @@ data RedeemerData = RedeemerData
   } deriving (Eq, Show, Generic)
 -- UniqueRedeemerData  hash
 
+instance HasDbInfo RedeemerData where
+  tableName _ = "redeemer_data"
+  columnNames _ = NE.fromList ["id", "hash", "tx_id", "value", "bytes"]
+  typeCasts _ = NE.fromList ["int8[]", "bytea[]", "int8[]", "jsonb[]", "bytea[]"]
+
 redeemerDataDecoder :: D.Row RedeemerData
 redeemerDataDecoder =
   RedeemerData
@@ -501,6 +605,11 @@ data ExtraKeyWitness = ExtraKeyWitness
   , extraKeyWitnessTxId :: !TxId       -- noreference
   } deriving (Eq, Show, Generic)
 
+instance HasDbInfo ExtraKeyWitness where
+  tableName _ = "extra_key_witness"
+  columnNames _ = NE.fromList ["id", "hash", "tx_id"]
+  typeCasts _ = NE.fromList ["int8[]", "bytea[]", "int8[]"]
+
 extraKeyWitnessDecoder :: D.Row ExtraKeyWitness
 extraKeyWitnessDecoder =
   ExtraKeyWitness
@@ -527,6 +636,11 @@ data SlotLeader = SlotLeader
   , slotLeaderPoolHashId :: !(Maybe Int)  -- This will be non-null when a block is mined by a pool
   , slotLeaderDescription :: !Text -- Description of the Slots leader
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo SlotLeader where
+  tableName _ = "slot_leader"
+  columnNames _ = NE.fromList ["id", "hash", "pool_hash_id", "description"]
+  typeCasts _ = NE.fromList ["int8[]", "bytea[]", "int8[]", "varchar[]"]
 
 slotLeaderDecoder :: D.Row SlotLeader
 slotLeaderDecoder =
@@ -562,15 +676,22 @@ Description: A table for schema versioning.
 --    Stage 3: Set up 'VIEW' tables (for use by other languages and applications).
 -- This table should have a single row.
 data SchemaVersion = SchemaVersion
-  { schemaVersionStageOne :: !Int
+  { schemaVersionId :: !SchemaVersionId -- noreference
+  , schemaVersionStageOne :: !Int
   , schemaVersionStageTwo :: !Int
   , schemaVersionStageThree :: !Int
   } deriving (Eq, Show, Generic)
 
+instance HasDbInfo SchemaVersion where
+  tableName _ = "schema_version"
+  columnNames _ = NE.fromList ["id", "stage_one", "stage_two", "stage_three"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int8[]"]
+
 schemaVersionDecoder :: D.Row SchemaVersion
 schemaVersionDecoder =
   SchemaVersion
-    <$> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageOne
+    <$> idDecoder SchemaVersionId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageOne
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageTwo
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageThree
 
@@ -594,6 +715,11 @@ data Meta = Meta
   , metaNetworkName :: !Text
   , metaVersion :: !Text
   } deriving (Show, Eq, Generic)
+
+instance HasDbInfo Meta where
+  tableName _ = "meta"
+  columnNames _ = NE.fromList ["id", "start_time", "network_name", "version"]
+  typeCasts _ = NE.fromList ["int8[]", "timestamp[]", "varchar[]", "varchar[]"]
 
 metaDecoder :: D.Row Meta
 metaDecoder =
@@ -623,6 +749,11 @@ data ExtraMigrations = ExtraMigrations
   , extraMigrationsToken :: !Text
   , extraMigrationsDescription :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo ExtraMigrations where
+  tableName _ = "extra_migrations"
+  columnNames _ = NE.fromList ["id", "token", "description"]
+  typeCasts _ = NE.fromList ["int8[]", "varchar[]", "varchar[]"]
 
 extraMigrationsDecoder :: D.Row ExtraMigrations
 extraMigrationsDecoder =

@@ -7,12 +7,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 
 module Cardano.Db.Types (
   DbAction (..),
   DbTxMode (..),
   DbTransaction (..),
   DbEnv (..),
+  HasDbInfo(..),
   Ada (..),
   AnchorType (..),
   AssetFingerprint (..),
@@ -96,42 +101,40 @@ module Cardano.Db.Types (
   hardcodedAlwaysNoConfidence,
 ) where
 
+import Cardano.BM.Trace (Trace)
+import Cardano.Db.Error (DbError (..), CallSite (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import qualified Codec.Binary.Bech32 as Bech32
-import Crypto.Hash (Blake2b_160)
-import qualified Crypto.Hash
-import Data.Aeson.Encoding (unsafeToEncoding)
-import Data.Aeson.Types (FromJSON (..), ToJSON (..))
-import qualified Data.Aeson.Types as Aeson
-import qualified Data.ByteArray as ByteArray
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Builder as Builder
-import Data.Either (fromRight)
-import Data.Fixed (Micro, showFixed)
-import Data.Scientific (Scientific)
-import Data.Text (Text)
-import qualified Data.Text as Text
-import Data.Word (Word16, Word64)
-import GHC.Generics (Generic)
-import Quiet (Quiet (..))
-import Data.Int (Int64)
-import Cardano.Prelude (Bifunctor(..), MonadError (..), MonadIO (..), ask, MonadReader, when)
-import Data.Bits (Bits(..))
-import qualified Hasql.Decoders as D
-import qualified Hasql.Encoders as E
-import Data.Functor.Contravariant ((>$<))
-import Data.WideWord (Word128 (..))
+import Cardano.Prelude (Bifunctor(..), MonadError (..), MonadIO (..), MonadReader, Proxy)
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Reader (ReaderT)
-import Cardano.Db.Error (DbError (..), CallSite (..))
+import Crypto.Hash (Blake2b_160)
+import Data.Aeson.Encoding (unsafeToEncoding)
+import Data.Aeson.Types (FromJSON (..), ToJSON (..))
+import Data.Bits (Bits(..))
+import Data.ByteString (ByteString)
+import Data.Char (toLower, isUpper)
+import Data.Either (fromRight)
+import Data.Fixed (Micro, showFixed)
+import Data.Functor.Contravariant ((>$<))
+import Data.Int (Int64)
+import Data.Proxy
+import Data.Scientific (Scientific)
+import Data.Text (Text)
+import Data.WideWord (Word128 (..))
+import Data.Word (Word16, Word64)
+import GHC.Generics
+import Quiet (Quiet (..))
+import qualified Codec.Binary.Bech32 as Bech32
+import qualified Crypto.Hash
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.ByteArray as ByteArray
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Text as Text
 import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Session as HsqlS
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
 import qualified Hasql.Transaction as HsqlT
-import qualified Hasql.Transaction.Sessions as HsqlT
-import Cardano.BM.Trace (Trace, logDebug)
-import GHC.Stack (SrcLoc (..), HasCallStack, getCallStack, callStack)
-import Data.Time (getCurrentTime, diffUTCTime)
-
 
 newtype DbAction m a = DbAction
   { runDbAction :: ExceptT DbError (ReaderT DbEnv m) a }
@@ -158,6 +161,57 @@ data DbTransaction a = DbTransaction
   , dtTx :: !(HsqlT.Transaction a)
   }
 
+-- | Class for getting database type information.
+class HasDbInfo a where
+  tableName :: Proxy a -> Text
+
+  columnNames :: Proxy a -> NE.NonEmpty Text
+  default columnNames :: (Generic a, GetFieldNames (Rep a)) => Proxy a -> NE.NonEmpty Text
+  columnNames _ =
+    let fieldNames = getFieldNames (from (undefined :: a))
+    in case fieldNames of
+         [] -> error "No fields found"
+         ns -> NE.fromList $ map fieldToColumn ns
+
+-- Transform field name to column name
+fieldToColumn :: String -> Text
+fieldToColumn field =
+  let (_prefix, suffix) = span (/= '_') field
+      afterUnderscore = if null suffix then field else drop 1 suffix
+      snakeCase = camelToSnake afterUnderscore
+  in Text.pack snakeCase
+
+-- Convert camel case to snake case
+camelToSnake :: String -> String
+camelToSnake [] = []
+camelToSnake (x:xs) = toLower x : go xs
+  where
+    go [] = []
+    go (c:cs)
+      | isUpper c = '_' : toLower c : go cs
+      | otherwise = c : go cs
+
+-- Typeclass for getting record field names
+class GetFieldNames f where
+  getFieldNames :: f p -> [String]
+
+instance (Selector c) => GetFieldNames (M1 S c (K1 i a)) where
+  getFieldNames = pure . selName
+
+instance GetFieldNames f => GetFieldNames (M1 D c f) where
+  getFieldNames (M1 x) = getFieldNames x
+
+instance GetFieldNames f => GetFieldNames (M1 C c f) where
+  getFieldNames (M1 x) = getFieldNames x
+
+instance (GetFieldNames a, GetFieldNames b) => GetFieldNames (a :*: b) where
+  getFieldNames (a :*: b) = getFieldNames a ++ getFieldNames b
+
+instance GetFieldNames U1 where
+  getFieldNames _ = []
+
+
+-- | Convert a `Scientific` to `Ada`.
 newtype Ada = Ada
   { unAda :: Micro
   }
