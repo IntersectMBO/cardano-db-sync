@@ -8,7 +8,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.Pool where
 
@@ -34,7 +33,6 @@ import Cardano.Db.Types (
 import Data.Functor.Contravariant ((>$<))
 import Contravariant.Extras (contrazip6)
 import Cardano.Db.Statement.Helpers (manyEncoder)
-import qualified Data.List.NonEmpty as NE
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- POOLS
@@ -45,24 +43,26 @@ Table Name: pool_hash
 Description: A table containing information about pool hashes.
 -}
 data PoolHash = PoolHash
-  { poolHashId :: !PoolHashId
-  , poolHashHashRaw :: !ByteString  -- unique hashRaw sqltype=hash28type
-  , poolHashView :: !Text
+  { poolHash_Id :: !PoolHashId
+  , poolHash_HashRaw :: !ByteString  -- unique hashRaw sqltype=hash28type
+  , poolHash_View :: !Text
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolHash
 
 poolHashDecoder :: D.Row PoolHash
 poolHashDecoder =
   PoolHash
-    <$> idDecoder PoolHashId -- poolHashId
-    <*> D.column (D.nonNullable D.bytea) -- poolHashHashRaw
-    <*> D.column (D.nonNullable D.text) -- poolHashView
+    <$> idDecoder PoolHashId -- poolHash_Id
+    <*> D.column (D.nonNullable D.bytea) -- poolHash_HashRaw
+    <*> D.column (D.nonNullable D.text) -- poolHash_View
 
 poolHashEncoder :: E.Params PoolHash
 poolHashEncoder =
   mconcat
-    [ (getPoolHashId . poolHashId) >$< E.param (E.nonNullable E.int8) -- poolHashId
-    , poolHashHashRaw >$< E.param (E.nonNullable E.bytea) --poolHashHashRaw
-    , poolHashView >$< E.param (E.nonNullable E.text) -- poolHashView
+    [ (getPoolHashId . poolHash_Id) >$< E.param (E.nonNullable E.int8) -- poolHash_Id
+    , poolHash_HashRaw >$< E.param (E.nonNullable E.bytea) --poolHashHashRaw
+    , poolHash_View >$< E.param (E.nonNullable E.text) -- poolHash_View
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -71,47 +71,44 @@ Table Name: pool_stat
 Description: A table containing information about pool metadata.
 -}
 data PoolStat = PoolStat
-  { poolStatId :: !PoolStatId
-  , poolStatPoolHashId :: !PoolHashId   -- noreference
-  , poolStatEpochNo :: !Word64          -- sqltype=word31type
-  , poolStatNumberOfBlocks :: !DbWord64 -- sqltype=word64type
-  , poolStatNumberOfDelegators :: !DbWord64 -- sqltype=word64type
-  , poolStatStake :: !DbWord64          -- sqltype=word64type
-  , poolStatVotingPower :: !(Maybe DbWord64) -- sqltype=word64type
+  { poolStat_Id :: !PoolStatId
+  , poolStat_PoolHashId :: !PoolHashId   -- noreference
+  , poolStat_EpochNo :: !Word64          -- sqltype=word31type
+  , poolStat_NumberOfBlocks :: !DbWord64 -- sqltype=word64type
+  , poolStat_NumberOfDelegators :: !DbWord64 -- sqltype=word64type
+  , poolStat_Stake :: !DbWord64          -- sqltype=word64type
+  , poolStat_VotingPower :: !(Maybe DbWord64) -- sqltype=word64type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo PoolStat where
-  tableName _ = "pool_stat"
-  columnNames _ = NE.fromList [ "id" , "pool_hash_id", "epoch_no", "number_of_blocks", "number_of_delegators", "stake", "voting_power"]
-  typeCasts _ = NE.fromList ["int8[]", "int4[]", "numeric[]", "numeric[]", "numeric[]", "numeric[]"]
+instance HasDbInfo PoolStat
 
 poolStatDecoder :: D.Row PoolStat
 poolStatDecoder =
   PoolStat
-    <$> idDecoder PoolStatId -- poolStatId
-    <*> idDecoder PoolHashId -- poolStatPoolHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolStatEpochNo
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatNumberOfBlocks
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatNumberOfDelegators
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatStake
-    <*> D.column (D.nullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatVotingPower
+    <$> idDecoder PoolStatId -- poolStat_Id
+    <*> idDecoder PoolHashId -- poolStat_PoolHashId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolStat_EpochNo
+    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStat_NumberOfBlocks
+    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStat_NumberOfDelegators
+    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStat_Stake
+    <*> D.column (D.nullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStat_VotingPower
 
 poolStatEncoder :: E.Params PoolStat
 poolStatEncoder =
   mconcat
-    [ poolStatId >$< idEncoder getPoolStatId
-    , poolStatPoolHashId >$< idEncoder getPoolHashId
-    , poolStatEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , poolStatNumberOfBlocks >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , poolStatNumberOfDelegators >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , poolStatStake >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , poolStatVotingPower >$< E.param (E.nullable $ fromIntegral . unDbWord64 >$< E.int8)
+    [ poolStat_Id >$< idEncoder getPoolStatId
+    , poolStat_PoolHashId >$< idEncoder getPoolHashId
+    , poolStat_EpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , poolStat_NumberOfBlocks >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    , poolStat_NumberOfDelegators >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    , poolStat_Stake >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    , poolStat_VotingPower >$< E.param (E.nullable $ fromIntegral . unDbWord64 >$< E.int8)
     ]
 
 poolStatEncoderMany :: E.Params ([PoolHashId], [Word64], [DbWord64], [DbWord64], [DbWord64], [Maybe DbWord64])
 poolStatEncoderMany =
   contrazip6
-    (manyEncoder $ E.nonNullable $ getPoolHashId >$< E.int8) -- poolHashId
+    (manyEncoder $ E.nonNullable $ getPoolHashId >$< E.int8) -- poolHash_Id
     (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int4) -- epoch_no
     (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_blocks
     (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_delegators
@@ -124,51 +121,53 @@ Table Name: pool_update
 Description: A table containing information about pool updates.
 -}
 data PoolUpdate = PoolUpdate
-  { poolUpdateId :: !PoolUpdateId
-  , poolUpdateHashId :: !PoolHashId        -- noreference
-  , poolUpdateCertIndex :: !Word16
-  , poolUpdateVrfKeyHash :: !ByteString    -- sqltype=hash32type
-  , poolUpdatePledge :: !DbLovelace        -- sqltype=lovelace
-  , poolUpdateRewardAddrId :: !StakeAddressId -- noreference
-  , poolUpdateActiveEpochNo :: !Word64
-  , poolUpdateMetaId :: !(Maybe PoolMetadataRefId) -- noreference
-  , poolUpdateMargin :: !Double            -- sqltype=percentage????
-  , poolUpdateFixedCost :: !DbLovelace     -- sqltype=lovelace
-  , poolUpdateDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
-  , poolUpdateRegisteredTxId :: !TxId      -- noreference -- Slot number in which the pool was registered.
+  { poolUpdate_Id :: !PoolUpdateId
+  , poolUpdate_HashId :: !PoolHashId        -- noreference
+  , poolUpdate_CertIndex :: !Word16
+  , poolUpdate_VrfKeyHash :: !ByteString    -- sqltype=hash32type
+  , poolUpdate_Pledge :: !DbLovelace        -- sqltype=lovelace
+  , poolUpdate_RewardAddrId :: !StakeAddressId -- noreference
+  , poolUpdate_ActiveEpochNo :: !Word64
+  , poolUpdate_MetaId :: !(Maybe PoolMetadataRefId) -- noreference
+  , poolUpdate_Margin :: !Double            -- sqltype=percentage????
+  , poolUpdate_FixedCost :: !DbLovelace     -- sqltype=lovelace
+  , poolUpdate_Deposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , poolUpdate_RegisteredTxId :: !TxId      -- noreference -- Slot number in which the pool was registered.
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolUpdate
 
 poolUpdateDecoder :: D.Row PoolUpdate
 poolUpdateDecoder =
   PoolUpdate
-    <$> idDecoder PoolUpdateId -- poolUpdateId
-    <*> idDecoder PoolHashId -- poolUpdateHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolUpdateCertIndex (Word16)
-    <*> D.column (D.nonNullable D.bytea) -- poolUpdateVrfKeyHash
-    <*> dbLovelaceDecoder -- poolUpdatePledge
-    <*> idDecoder StakeAddressId -- poolUpdateRewardAddrId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolUpdateActiveEpochNo
-    <*> maybeIdDecoder PoolMetadataRefId -- poolUpdateMetaId
-    <*> D.column (D.nonNullable D.float8) -- poolUpdateMargin
-    <*> dbLovelaceDecoder -- poolUpdateFixedCost
-    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- poolUpdateDeposit
-    <*> idDecoder TxId -- poolUpdateRegisteredTxId
+    <$> idDecoder PoolUpdateId -- poolUpdate_Id
+    <*> idDecoder PoolHashId -- poolUpdate_HashId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolUpdate_CertIndex (Word16)
+    <*> D.column (D.nonNullable D.bytea) -- poolUpdate_VrfKeyHash
+    <*> dbLovelaceDecoder -- poolUpdate_Pledge
+    <*> idDecoder StakeAddressId -- poolUpdate_RewardAddrId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolUpdate_ActiveEpochNo
+    <*> maybeIdDecoder PoolMetadataRefId -- poolUpdate_MetaId
+    <*> D.column (D.nonNullable D.float8) -- poolUpdate_Margin
+    <*> dbLovelaceDecoder -- poolUpdate_FixedCost
+    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- poolUpdate_Deposit
+    <*> idDecoder TxId -- poolUpdate_RegisteredTxId
 
 poolUpdateEncoder :: E.Params PoolUpdate
 poolUpdateEncoder =
   mconcat
-    [ poolUpdateId >$< idEncoder getPoolUpdateId
-    , poolUpdateHashId >$< idEncoder getPoolHashId
-    , poolUpdateCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , poolUpdateVrfKeyHash >$< E.param (E.nonNullable E.bytea)
-    , poolUpdatePledge >$< dbLovelaceEncoder
-    , poolUpdateRewardAddrId >$< idEncoder getStakeAddressId
-    , poolUpdateActiveEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , poolUpdateMetaId >$< maybeIdEncoder getPoolMetadataRefId
-    , poolUpdateMargin >$< E.param (E.nonNullable E.float8)
-    , poolUpdateFixedCost >$< dbLovelaceEncoder
-    , poolUpdateDeposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
-    , poolUpdateRegisteredTxId >$< idEncoder getTxId
+    [ poolUpdate_Id >$< idEncoder getPoolUpdateId
+    , poolUpdate_HashId >$< idEncoder getPoolHashId
+    , poolUpdate_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , poolUpdate_VrfKeyHash >$< E.param (E.nonNullable E.bytea)
+    , poolUpdate_Pledge >$< dbLovelaceEncoder
+    , poolUpdate_RewardAddrId >$< idEncoder getStakeAddressId
+    , poolUpdate_ActiveEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , poolUpdate_MetaId >$< maybeIdEncoder getPoolMetadataRefId
+    , poolUpdate_Margin >$< E.param (E.nonNullable E.float8)
+    , poolUpdate_FixedCost >$< dbLovelaceEncoder
+    , poolUpdate_Deposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
+    , poolUpdate_RegisteredTxId >$< idEncoder getTxId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -177,30 +176,32 @@ Table Name: pool_metadata_ref
 Description: A table containing references to pool metadata.
 -}
 data PoolMetadataRef = PoolMetadataRef
-  { poolMetadataRefId :: !PoolMetadataRefId
-  , poolMetadataRefPoolId :: !PoolHashId -- noreference
-  , poolMetadataRefUrl :: !PoolUrl      -- sqltype=varchar
-  , poolMetadataRefHash :: !ByteString  -- sqltype=hash32type
-  , poolMetadataRefRegisteredTxId :: !TxId -- noreference
+  { poolMetadataRef_Id :: !PoolMetadataRefId
+  , poolMetadataRef_PoolId :: !PoolHashId -- noreference
+  , poolMetadataRef_Url :: !PoolUrl      -- sqltype=varchar
+  , poolMetadataRef_Hash :: !ByteString  -- sqltype=hash32type
+  , poolMetadataRef_RegisteredTxId :: !TxId -- noreference
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolMetadataRef
 
 poolMetadataRefDecoder :: D.Row PoolMetadataRef
 poolMetadataRefDecoder =
   PoolMetadataRef
-    <$> idDecoder PoolMetadataRefId -- poolMetadataRefId
-    <*> idDecoder PoolHashId -- poolMetadataRefPoolId
-    <*> D.column (D.nonNullable (PoolUrl <$> D.text))-- poolMetadataRefUrl
-    <*> D.column (D.nonNullable D.bytea) -- poolMetadataRefHash
-    <*> idDecoder TxId -- poolMetadataRefRegisteredTxId
+    <$> idDecoder PoolMetadataRefId -- poolMetadataRef_Id
+    <*> idDecoder PoolHashId -- poolMetadataRef_PoolId
+    <*> D.column (D.nonNullable (PoolUrl <$> D.text))-- poolMetadataRef_Url
+    <*> D.column (D.nonNullable D.bytea) -- poolMetadataRef_Hash
+    <*> idDecoder TxId -- poolMetadataRef_RegisteredTxId
 
 poolMetadataRefEncoder :: E.Params PoolMetadataRef
 poolMetadataRefEncoder =
   mconcat
-    [ poolMetadataRefId >$< idEncoder getPoolMetadataRefId
-    , poolMetadataRefPoolId >$< idEncoder getPoolHashId
-    , poolMetadataRefUrl >$< E.param (E.nonNullable (unPoolUrl >$< E.text))
-    , poolMetadataRefHash >$< E.param (E.nonNullable E.bytea)
-    , poolMetadataRefRegisteredTxId >$< idEncoder getTxId
+    [ poolMetadataRef_Id >$< idEncoder getPoolMetadataRefId
+    , poolMetadataRef_PoolId >$< idEncoder getPoolHashId
+    , poolMetadataRef_Url >$< E.param (E.nonNullable (unPoolUrl >$< E.text))
+    , poolMetadataRef_Hash >$< E.param (E.nonNullable E.bytea)
+    , poolMetadataRef_RegisteredTxId >$< idEncoder getTxId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -209,24 +210,26 @@ Table Name: pool_owner
 Description: A table containing information about pool owners.
 -}
 data PoolOwner = PoolOwner
-  { poolOwnerId :: !PoolOwnerId
-  , poolOwnerAddrId :: !StakeAddressId     -- noreference
-  , poolOwnerPoolUpdateId :: !PoolUpdateId -- noreference
+  { poolOwner_Id :: !PoolOwnerId
+  , poolOwner_AddrId :: !StakeAddressId     -- noreference
+  , poolOwner_PoolUpdateId :: !PoolUpdateId -- noreference
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolOwner
 
 poolOwnerDecoder :: D.Row PoolOwner
 poolOwnerDecoder =
   PoolOwner
-    <$> idDecoder PoolOwnerId      -- poolOwnerId
-    <*> idDecoder StakeAddressId   -- poolOwnerAddrId
-    <*> idDecoder PoolUpdateId     -- poolOwnerPoolUpdateId
+    <$> idDecoder PoolOwnerId      -- poolOwner_Id
+    <*> idDecoder StakeAddressId   -- poolOwner_AddrId
+    <*> idDecoder PoolUpdateId     -- poolOwner_PoolUpdateId
 
 poolOwnerEncoder :: E.Params PoolOwner
 poolOwnerEncoder =
   mconcat
-    [ poolOwnerId >$< idEncoder getPoolOwnerId
-    , poolOwnerAddrId >$< idEncoder getStakeAddressId
-    , poolOwnerPoolUpdateId >$< idEncoder getPoolUpdateId
+    [ poolOwner_Id >$< idEncoder getPoolOwnerId
+    , poolOwner_AddrId >$< idEncoder getStakeAddressId
+    , poolOwner_PoolUpdateId >$< idEncoder getPoolUpdateId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -235,30 +238,32 @@ Table Name: pool_retire
 Description: A table containing information about pool retirements.
 -}
 data PoolRetire = PoolRetire
-  { poolRetireId :: !PoolRetireId
-  , poolRetireHashId :: !PoolHashId        -- noreference
-  , poolRetireCertIndex :: !Word16
-  , poolRetireAnnouncedTxId :: !TxId       -- noreference -- Slot number in which the pool announced it was retiring.
-  , poolRetireRetiringEpoch :: !Word64     -- sqltype=word31type -- Epoch number in which the pool will retire.
+  { poolRetire_Id :: !PoolRetireId
+  , poolRetire_HashId :: !PoolHashId        -- noreference
+  , poolRetire_CertIndex :: !Word16
+  , poolRetire_AnnouncedTxId :: !TxId       -- noreference -- Slot number in which the pool announced it was retiring.
+  , poolRetire_RetiringEpoch :: !Word64     -- sqltype=word31type -- Epoch number in which the pool will retire.
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolRetire
 
 poolRetireDecoder :: D.Row PoolRetire
 poolRetireDecoder =
   PoolRetire
-    <$> idDecoder PoolRetireId -- poolRetireId
-    <*> idDecoder PoolHashId -- poolRetireHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolRetireCertIndex
-    <*> idDecoder TxId -- poolRetireAnnouncedTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolRetireRetiringEpoch
+    <$> idDecoder PoolRetireId -- poolRetire_Id
+    <*> idDecoder PoolHashId -- poolRetire_HashId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolRetire_CertIndex
+    <*> idDecoder TxId -- poolRetire_AnnouncedTxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolRetire_RetiringEpoch
 
 poolRetireEncoder :: E.Params PoolRetire
 poolRetireEncoder =
   mconcat
-    [ poolRetireId >$< idEncoder getPoolRetireId
-    , poolRetireHashId >$< idEncoder getPoolHashId
-    , poolRetireCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , poolRetireAnnouncedTxId >$< idEncoder getTxId
-    , poolRetireRetiringEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ poolRetire_Id >$< idEncoder getPoolRetireId
+    , poolRetire_HashId >$< idEncoder getPoolHashId
+    , poolRetire_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , poolRetire_AnnouncedTxId >$< idEncoder getTxId
+    , poolRetire_RetiringEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -268,36 +273,38 @@ Description: A table containing information about pool relays.
 -}
 -----------------------------------------------------------------------------------------------------------------------------------
 data PoolRelay = PoolRelay
-  { poolRelayId :: !PoolRelayId
-  , poolRelayUpdateId :: !PoolUpdateId  -- noreference
-  , poolRelayIpv4 :: !(Maybe Text)
-  , poolRelayIpv6 :: !(Maybe Text)
-  , poolRelayDnsName :: !(Maybe Text)
-  , poolRelayDnsSrvName :: !(Maybe Text)
-  , poolRelayPort :: !(Maybe Word16)
+  { poolRelay_Id :: !PoolRelayId
+  , poolRelay_UpdateId :: !PoolUpdateId  -- noreference
+  , poolRelay_Ipv4 :: !(Maybe Text)
+  , poolRelay_Ipv6 :: !(Maybe Text)
+  , poolRelay_DnsName :: !(Maybe Text)
+  , poolRelay_DnsSrvName :: !(Maybe Text)
+  , poolRelay_Port :: !(Maybe Word16)
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo PoolRelay
 
 poolRelayDecoder :: D.Row PoolRelay
 poolRelayDecoder =
   PoolRelay
-    <$> idDecoder PoolRelayId -- poolRelayId
-    <*> idDecoder PoolUpdateId -- poolRelayUpdateId
-    <*> D.column (D.nullable D.text) -- poolRelayIpv4
-    <*> D.column (D.nullable D.text) -- poolRelayIpv6
-    <*> D.column (D.nullable D.text) -- poolRelayDnsName
-    <*> D.column (D.nullable D.text) -- poolRelayDnsSrvName
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- poolRelayPort
+    <$> idDecoder PoolRelayId -- poolRelay_Id
+    <*> idDecoder PoolUpdateId -- poolRelay_UpdateId
+    <*> D.column (D.nullable D.text) -- poolRelay_Ipv4
+    <*> D.column (D.nullable D.text) -- poolRelay_Ipv6
+    <*> D.column (D.nullable D.text) -- poolRelay_DnsName
+    <*> D.column (D.nullable D.text) -- poolRelay_DnsSrvName
+    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- poolRelay_Port
 
 poolRelayEncoder :: E.Params PoolRelay
 poolRelayEncoder =
   mconcat
-    [ poolRelayId >$< idEncoder getPoolRelayId
-    , poolRelayUpdateId >$< idEncoder getPoolUpdateId
-    , poolRelayIpv4 >$< E.param (E.nullable E.text)
-    , poolRelayIpv6 >$< E.param (E.nullable E.text)
-    , poolRelayDnsName >$< E.param (E.nullable E.text)
-    , poolRelayDnsSrvName >$< E.param (E.nullable E.text)
-    , poolRelayPort >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    [ poolRelay_Id >$< idEncoder getPoolRelayId
+    , poolRelay_UpdateId >$< idEncoder getPoolUpdateId
+    , poolRelay_Ipv4 >$< E.param (E.nullable E.text)
+    , poolRelay_Ipv6 >$< E.param (E.nullable E.text)
+    , poolRelay_DnsName >$< E.param (E.nullable E.text)
+    , poolRelay_DnsSrvName >$< E.param (E.nullable E.text)
+    , poolRelay_Port >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -307,21 +314,23 @@ Description: A table containing a managed list of delisted pools.
 -}
 -----------------------------------------------------------------------------------------------------------------------------------
 data DelistedPool = DelistedPool
-  { delistedPoolId :: !DelistedPoolId
-  , delistedPoolHashRaw :: !ByteString                      -- sqltype=hash28type
+  { delistedPool_Id :: !DelistedPoolId
+  , delistedPool_HashRaw :: !ByteString                      -- sqltype=hash28type
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo DelistedPool
 
 delistedPoolDecoder :: D.Row DelistedPool
 delistedPoolDecoder =
   DelistedPool
-    <$> idDecoder DelistedPoolId -- delistedPoolId
-    <*> D.column (D.nonNullable D.bytea) -- delistedPoolHashRaw
+    <$> idDecoder DelistedPoolId -- delistedPool_Id
+    <*> D.column (D.nonNullable D.bytea) -- delistedPool_HashRaw
 
 delistedPoolEncoder :: E.Params DelistedPool
 delistedPoolEncoder =
   mconcat
-    [ delistedPoolId >$< idEncoder getDelistedPoolId
-    , delistedPoolHashRaw >$< E.param (E.nonNullable E.bytea)
+    [ delistedPool_Id >$< idEncoder getDelistedPoolId
+    , delistedPool_HashRaw >$< E.param (E.nonNullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -332,22 +341,24 @@ Description: A table containing a managed list of reserved ticker names.
 -}
 -----------------------------------------------------------------------------------------------------------------------------------
 data ReservedPoolTicker = ReservedPoolTicker
-  { reservedPoolTickerId :: !ReservedPoolTickerId
-  , reservedPoolTickerName :: !Text
-  , reservedPoolTickerPoolHash :: !ByteString               -- sqltype=hash28type
+  { reservedPoolTicker_Id :: !ReservedPoolTickerId
+  , reservedPoolTicker_Name :: !Text
+  , reservedPoolTicker_PoolHash :: !ByteString               -- sqltype=hash28type
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo ReservedPoolTicker
 
 reservedPoolTickerDecoder :: D.Row ReservedPoolTicker
 reservedPoolTickerDecoder =
   ReservedPoolTicker
-    <$> idDecoder ReservedPoolTickerId -- reservedPoolTickerId
-    <*> D.column (D.nonNullable D.text) -- reservedPoolTickerName
-    <*> D.column (D.nonNullable D.bytea) -- reservedPoolTickerPoolHash
+    <$> idDecoder ReservedPoolTickerId -- reservedPoolTicker_Id
+    <*> D.column (D.nonNullable D.text) -- reservedPoolTicker_Name
+    <*> D.column (D.nonNullable D.bytea) -- reservedPoolTicker_PoolHash
 
 reservedPoolTickerEncoder :: E.Params ReservedPoolTicker
 reservedPoolTickerEncoder =
   mconcat
-    [ reservedPoolTickerId >$< idEncoder getReservedPoolTickerId
-    , reservedPoolTickerName >$< E.param (E.nonNullable E.text)
-    , reservedPoolTickerPoolHash >$< E.param (E.nonNullable E.bytea)
+    [ reservedPoolTicker_Id >$< idEncoder getReservedPoolTickerId
+    , reservedPoolTicker_Name >$< E.param (E.nonNullable E.text)
+    , reservedPoolTicker_PoolHash >$< E.param (E.nonNullable E.bytea)
     ]
