@@ -1,16 +1,14 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE FlexibleInstances #-}
-
 
 module Cardano.Db.Types (
   DbAction (..),
@@ -135,6 +133,7 @@ import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
 import qualified Hasql.Transaction as HsqlT
+import Data.Typeable (Typeable, typeRep, typeRepTyCon, tyConName)
 
 newtype DbAction m a = DbAction
   { runDbAction :: ExceptT DbError (ReaderT DbEnv m) a }
@@ -151,7 +150,7 @@ data DbTxMode = Write | ReadOnly
 data DbEnv = DbEnv
   { dbConnection :: !HsqlC.Connection
   , dbEnableLogging :: !Bool
-  ,dbTracer :: !(Trace IO Text)
+  , dbTracer :: !(Trace IO Text)
   }
 
 -- | Transaction wrapper for debuging/logging.
@@ -162,8 +161,11 @@ data DbTransaction a = DbTransaction
   }
 
 -- | Class for getting database type information.
-class HasDbInfo a where
+class Typeable a => HasDbInfo a where
+
   tableName :: Proxy a -> Text
+  default tableName :: Proxy a -> Text
+  tableName p = Text.pack $ camelToSnake $ tyConName $ typeRepTyCon $ typeRep p
 
   columnNames :: Proxy a -> NE.NonEmpty Text
   default columnNames :: (Generic a, GetFieldNames (Rep a)) => Proxy a -> NE.NonEmpty Text
