@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.GovernanceAndVoting where
 
@@ -38,7 +37,6 @@ import Cardano.Db.Types (
   maybeDbWord64Decoder,
   maybeDbLovelaceDecoder, HasDbInfo (..)
   )
-import qualified Data.List.NonEmpty as NE
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- GOVERNANCE AND VOTING
@@ -49,32 +47,29 @@ Table Name: drep_hash
 Description: Stores hashes of DRep (Decentralized Reputation) records, which are used in governance processes.
 -}
 data DrepHash = DrepHash
-  { drepHashId :: !DrepHashId
-  , drepHashRaw :: !(Maybe ByteString) -- sqltype=hash28type
-  , drepHashView :: !Text
-  , drepHashHasScript :: !Bool
+  { drepHash_Id :: !DrepHashId
+  , drepHash_Raw :: !(Maybe ByteString) -- sqltype=hash28type
+  , drepHash_View :: !Text
+  , drepHash_HasScript :: !Bool
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo DrepHash where
-  tableName _ = "drep_hash"
-  columnNames _ = NE.fromList ["id", "raw", "view", "has_script"]
-  typeCasts _ = NE.fromList ["int8[]", "bytea[]", "varchar[]", "bool[]"]
+instance HasDbInfo DrepHash
 
 drepHashDecoder :: D.Row DrepHash
 drepHashDecoder =
   DrepHash
-    <$> idDecoder DrepHashId -- drepHashId
-    <*> D.column (D.nullable D.bytea) -- drepHashRaw
-    <*> D.column (D.nonNullable D.text) -- drepHashView
-    <*> D.column (D.nonNullable D.bool) -- drepHashHasScript
+    <$> idDecoder DrepHashId -- drepHash_Id
+    <*> D.column (D.nullable D.bytea) -- drepHash_Raw
+    <*> D.column (D.nonNullable D.text) -- drepHash_View
+    <*> D.column (D.nonNullable D.bool) -- drepHash_HasScript
 
 drepHashEncoder :: E.Params DrepHash
 drepHashEncoder =
   mconcat
-    [ drepHashId >$< idEncoder getDrepHashId
-    , drepHashRaw >$< E.param (E.nullable E.bytea)
-    , drepHashView >$< E.param (E.nonNullable E.text)
-    , drepHashHasScript >$< E.param (E.nonNullable E.bool)
+    [ drepHash_Id >$< idEncoder getDrepHashId
+    , drepHash_Raw >$< E.param (E.nullable E.bytea)
+    , drepHash_View >$< E.param (E.nonNullable E.text)
+    , drepHash_HasScript >$< E.param (E.nonNullable E.bool)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -83,38 +78,35 @@ Table Name: drep_registration
 Description: Contains details about the registration of DReps, including their public keys and other identifying information.
 -}
 data DrepRegistration = DrepRegistration
-  { drepRegistrationId :: !DrepRegistrationId
-  , drepRegistrationTxId :: !TxId          -- noreference
-  , drepRegistrationCertIndex :: !Word16
-  , drepRegistrationDeposit :: !(Maybe Int64)
-  , drepRegistrationDrepHashId :: !DrepHashId   -- noreference
-  , drepRegistrationVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
+  { drepRegistration_Id :: !DrepRegistrationId
+  , drepRegistration_TxId :: !TxId          -- noreference
+  , drepRegistration_CertIndex :: !Word16
+  , drepRegistration_Deposit :: !(Maybe Int64)
+  , drepRegistration_DrepHashId :: !DrepHashId   -- noreference
+  , drepRegistration_VotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo DrepRegistration where
-  tableName _ = "drep_registration"
-  columnNames _ = NE.fromList ["id", "tx_id", "cert_index", "deposit", "drep_hash_id", "voting_anchor_id" ]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int2[]", "int8[]", "int8[]", "int8[]"]
+instance HasDbInfo DrepRegistration
 
 drepRegistrationDecoder :: D.Row DrepRegistration
 drepRegistrationDecoder =
   DrepRegistration
-    <$> idDecoder DrepRegistrationId -- drepRegistrationId
-    <*> idDecoder TxId -- drepRegistrationTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- drepRegistrationCertIndex
-    <*> D.column (D.nullable D.int8) -- drepRegistrationDeposit
-    <*> idDecoder DrepHashId -- drepRegistrationDrepHashId
-    <*> maybeIdDecoder VotingAnchorId -- drepRegistrationVotingAnchorId
+    <$> idDecoder DrepRegistrationId -- drepRegistration_Id
+    <*> idDecoder TxId -- drepRegistration_TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- drepRegistration_CertIndex
+    <*> D.column (D.nullable D.int8) -- drepRegistration_Deposit
+    <*> idDecoder DrepHashId -- drepRegistration_DrepHashId
+    <*> maybeIdDecoder VotingAnchorId -- drepRegistration_VotingAnchorId
 
 drepRegistrationEncoder :: E.Params DrepRegistration
 drepRegistrationEncoder =
   mconcat
-    [ drepRegistrationId >$< idEncoder getDrepRegistrationId
-    , drepRegistrationTxId >$< idEncoder getTxId
-    , drepRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , drepRegistrationDeposit >$< E.param (E.nullable E.int8)
-    , drepRegistrationDrepHashId >$< idEncoder getDrepHashId
-    , drepRegistrationVotingAnchorId >$< maybeIdEncoder getVotingAnchorId
+    [ drepRegistration_Id >$< idEncoder getDrepRegistrationId
+    , drepRegistration_TxId >$< idEncoder getTxId
+    , drepRegistration_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , drepRegistration_Deposit >$< E.param (E.nullable E.int8)
+    , drepRegistration_DrepHashId >$< idEncoder getDrepHashId
+    , drepRegistration_VotingAnchorId >$< maybeIdEncoder getVotingAnchorId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -123,35 +115,32 @@ Table Name: drep_distr
 Description: Contains information about the distribution of DRep tokens, including the amount distributed and the epoch in which the distribution occurred.
 -}
 data DrepDistr = DrepDistr
-  { drepDistrId :: !DrepDistrId
-  , drepDistrHashId :: !DrepHashId         -- noreference
-  , drepDistrAmount :: !Word64
-  , drepDistrEpochNo :: !Word64            -- sqltype=word31type
-  , drepDistrActiveUntil :: !(Maybe Word64)  -- sqltype=word31type
+  { drepDistr_Id :: !DrepDistrId
+  , drepDistr_HashId :: !DrepHashId         -- noreference
+  , drepDistr_Amount :: !Word64
+  , drepDistr_EpochNo :: !Word64            -- sqltype=word31type
+  , drepDistr_ActiveUntil :: !(Maybe Word64)  -- sqltype=word31type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo DrepDistr where
-  tableName _ = "drep_distr"
-  columnNames _ = NE.fromList ["id", "hash_id", "amount", "epoch_no", "active_until"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int4[]", "int4[]"]
+instance HasDbInfo DrepDistr
 
 drepDistrDecoder :: D.Row DrepDistr
 drepDistrDecoder =
   DrepDistr
-    <$> idDecoder DrepDistrId -- drepDistrId
-    <*> idDecoder DrepHashId -- drepDistrHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- drepDistrAmount
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- drepDistrEpochNo
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- drepDistrActiveUntil
+    <$> idDecoder DrepDistrId -- drepDistr_Id
+    <*> idDecoder DrepHashId -- drepDistr_HashId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- drepDistr_Amount
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- drepDistr_EpochNo
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- drepDistr_ActiveUntil
 
 drepDistrEncoder :: E.Params DrepDistr
 drepDistrEncoder =
   mconcat
-    [ drepDistrId >$< idEncoder getDrepDistrId
-    , drepDistrHashId >$< idEncoder getDrepHashId
-    , drepDistrAmount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , drepDistrEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , drepDistrActiveUntil >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    [ drepDistr_Id >$< idEncoder getDrepDistrId
+    , drepDistr_HashId >$< idEncoder getDrepHashId
+    , drepDistr_Amount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , drepDistr_EpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , drepDistr_ActiveUntil >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -160,38 +149,35 @@ Table Name: delegation_vote
 Description: Tracks votes cast by stakeholders to delegate their voting rights to other entities within the governance framework.
 -}
 data DelegationVote = DelegationVote
-  { delegationVoteId :: !DelegationVoteId
-  , delegationVoteAddrId :: !StakeAddressId -- noreference
-  , delegationVoteCertIndex :: !Word16
-  , delegationVoteDrepHashId :: !DrepHashId -- noreference
-  , delegationVoteTxId :: !TxId             -- noreference
-  , delegationVoteRedeemerId :: !(Maybe RedeemerId) -- noreference
+  { delegationVote_Id :: !DelegationVoteId
+  , delegationVote_AddrId :: !StakeAddressId -- noreference
+  , delegationVote_CertIndex :: !Word16
+  , delegationVote_DrepHashId :: !DrepHashId -- noreference
+  , delegationVote_TxId :: !TxId             -- noreference
+  , delegationVote_RedeemerId :: !(Maybe RedeemerId) -- noreference
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo DelegationVote where
-  tableName _ = "delegation_vote"
-  columnNames _ = NE.fromList ["id", "addr_id", "cert_index", "drep_hash_id", "tx_id", "redeemer_id"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int4[]", "int8[]", "int8[]", "int8[]"]
+instance HasDbInfo DelegationVote
 
 delegationVoteDecoder :: D.Row DelegationVote
 delegationVoteDecoder =
   DelegationVote
-    <$> idDecoder DelegationVoteId -- delegationVoteId
-    <*> idDecoder StakeAddressId -- delegationVoteAddrId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- delegationVoteCertIndex
-    <*> idDecoder DrepHashId -- delegationVoteDrepHashId
-    <*> idDecoder TxId -- delegationVoteTxId
-    <*> maybeIdDecoder RedeemerId -- delegationVoteRedeemerId
+    <$> idDecoder DelegationVoteId -- delegationVote_Id
+    <*> idDecoder StakeAddressId -- delegationVote_AddrId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- delegationVote_CertIndex
+    <*> idDecoder DrepHashId -- delegationVote_DrepHashId
+    <*> idDecoder TxId -- delegationVote_TxId
+    <*> maybeIdDecoder RedeemerId -- delegationVote_RedeemerId
 
 delegationVoteEncoder :: E.Params DelegationVote
 delegationVoteEncoder =
   mconcat
-    [ delegationVoteId >$< idEncoder getDelegationVoteId
-    , delegationVoteAddrId >$< idEncoder getStakeAddressId
-    , delegationVoteCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , delegationVoteDrepHashId >$< idEncoder getDrepHashId
-    , delegationVoteTxId >$< idEncoder getTxId
-    , delegationVoteRedeemerId >$< maybeIdEncoder getRedeemerId
+    [ delegationVote_Id >$< idEncoder getDelegationVoteId
+    , delegationVote_AddrId >$< idEncoder getStakeAddressId
+    , delegationVote_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , delegationVote_DrepHashId >$< idEncoder getDrepHashId
+    , delegationVote_TxId >$< idEncoder getTxId
+    , delegationVote_RedeemerId >$< maybeIdEncoder getRedeemerId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -200,73 +186,62 @@ Table Name: gov_action_proposal
 Description: Contains proposals for governance actions, including the type of action, the amount of the deposit, and the expiration date.
 -}
 data GovActionProposal = GovActionProposal
-  { govActionProposalId :: !GovActionProposalId
-  , govActionProposalTxId :: !TxId           -- noreference
-  , govActionProposalIndex :: !Word64
-  , govActionProposalPrevGovActionProposal :: !(Maybe GovActionProposalId) -- noreference
-  , govActionProposalDeposit :: !DbLovelace  -- sqltype=lovelace
-  , govActionProposalReturnAddress :: !StakeAddressId -- noreference
-  , govActionProposalExpiration :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
-  , govActionProposalType :: !GovActionType   -- sqltype=govactiontype
-  , govActionProposalDescription :: !Text     -- sqltype=jsonb
-  , govActionProposalParamProposal :: !(Maybe ParamProposalId) -- noreference
-  , govActionProposalRatifiedEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalEnactedEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalDroppedEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalExpiredEpoch :: !(Maybe Word64)  -- sqltype=word31type
+  { govActionProposal_Id :: !GovActionProposalId
+  , govActionProposal_TxId :: !TxId           -- noreference
+  , govActionProposal_Index :: !Word64
+  , govActionProposal_PrevGovActionProposal :: !(Maybe GovActionProposalId) -- noreference
+  , govActionProposal_Deposit :: !DbLovelace  -- sqltype=lovelace
+  , govActionProposal_ReturnAddress :: !StakeAddressId -- noreference
+  , govActionProposal_Expiration :: !(Maybe Word64)  -- sqltype=word31type
+  , govActionProposal_VotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
+  , govActionProposal_Type :: !GovActionType   -- sqltype=govactiontype
+  , govActionProposal_Description :: !Text     -- sqltype=jsonb
+  , govActionProposal_ParamProposal :: !(Maybe ParamProposalId) -- noreference
+  , govActionProposal_RatifiedEpoch :: !(Maybe Word64)  -- sqltype=word31type
+  , govActionProposal_EnactedEpoch :: !(Maybe Word64)  -- sqltype=word31type
+  , govActionProposal_DroppedEpoch :: !(Maybe Word64)  -- sqltype=word31type
+  , govActionProposal_ExpiredEpoch :: !(Maybe Word64)  -- sqltype=word31type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo GovActionProposal where
-  tableName _ = "gov_action_proposal"
-  columnNames _ = NE.fromList
-    [ "id", "tx_id", "index", "prev_gov_action_proposal", "deposit", "return_address"
-    , "expiration", "voting_anchor_id" , "type", "description", "param_proposal"
-    , "ratified_epoch", "enacted_epoch", "dropped_epoch", "expired_epoch"
-    ]
-  typeCasts _ = NE.fromList
-    [ "int8[]", "int8[]", "int8[]", "int8[]", "numeric[]"
-    , "int8[]", "int4[]", "int8[]" , "govactiontype[]", "jsonb[]"
-    , "int8[]", "int4[]", "int4[]", "int4[]", "int4[]"
-    ]
+instance HasDbInfo GovActionProposal
 
 govActionProposalDecoder :: D.Row GovActionProposal
 govActionProposalDecoder =
   GovActionProposal
-    <$> idDecoder GovActionProposalId -- govActionProposalId
-    <*> idDecoder TxId -- govActionProposalTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- govActionProposalIndex
-    <*> maybeIdDecoder GovActionProposalId -- govActionProposalPrevGovActionProposal
-    <*> dbLovelaceDecoder -- govActionProposalDeposit
-    <*> idDecoder StakeAddressId -- govActionProposalReturnAddress
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalExpiration
-    <*> maybeIdDecoder VotingAnchorId -- govActionProposalVotingAnchorId
-    <*> D.column (D.nonNullable govActionTypeDecoder) -- govActionProposalType
-    <*> D.column (D.nonNullable D.text) -- govActionProposalDescription
-    <*> maybeIdDecoder ParamProposalId -- govActionProposalParamProposal
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalRatifiedEpoch
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalEnactedEpoch
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalDroppedEpoch
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalExpiredEpoch
+    <$> idDecoder GovActionProposalId -- govActionProposal_Id
+    <*> idDecoder TxId -- govActionProposal_TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- govActionProposal_Index
+    <*> maybeIdDecoder GovActionProposalId -- govActionProposal_PrevGovActionProposal
+    <*> dbLovelaceDecoder -- govActionProposal_Deposit
+    <*> idDecoder StakeAddressId -- govActionProposal_ReturnAddress
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposal_Expiration
+    <*> maybeIdDecoder VotingAnchorId -- govActionProposal_VotingAnchorId
+    <*> D.column (D.nonNullable govActionTypeDecoder) -- govActionProposal_Type
+    <*> D.column (D.nonNullable D.text) -- govActionProposal_Description
+    <*> maybeIdDecoder ParamProposalId -- govActionProposal_ParamProposal
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposal_RatifiedEpoch
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposal_EnactedEpoch
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposal_DroppedEpoch
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposal_ExpiredEpoch
 
 govActionProposalEncoder :: E.Params GovActionProposal
 govActionProposalEncoder =
   mconcat
-    [ govActionProposalId >$< idEncoder getGovActionProposalId
-    , govActionProposalTxId >$< idEncoder getTxId
-    , govActionProposalIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , govActionProposalPrevGovActionProposal >$< maybeIdEncoder getGovActionProposalId
-    , govActionProposalDeposit >$< dbLovelaceEncoder
-    , govActionProposalReturnAddress >$< idEncoder getStakeAddressId
-    , govActionProposalExpiration >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , govActionProposalVotingAnchorId >$< maybeIdEncoder getVotingAnchorId
-    , govActionProposalType >$< E.param (E.nonNullable govActionTypeEncoder)
-    , govActionProposalDescription >$< E.param (E.nonNullable E.text)
-    , govActionProposalParamProposal >$< maybeIdEncoder getParamProposalId
-    , govActionProposalRatifiedEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , govActionProposalEnactedEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , govActionProposalDroppedEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , govActionProposalExpiredEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    [ govActionProposal_Id >$< idEncoder getGovActionProposalId
+    , govActionProposal_TxId >$< idEncoder getTxId
+    , govActionProposal_Index >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , govActionProposal_PrevGovActionProposal >$< maybeIdEncoder getGovActionProposalId
+    , govActionProposal_Deposit >$< dbLovelaceEncoder
+    , govActionProposal_ReturnAddress >$< idEncoder getStakeAddressId
+    , govActionProposal_Expiration >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , govActionProposal_VotingAnchorId >$< maybeIdEncoder getVotingAnchorId
+    , govActionProposal_Type >$< E.param (E.nonNullable govActionTypeEncoder)
+    , govActionProposal_Description >$< E.param (E.nonNullable E.text)
+    , govActionProposal_ParamProposal >$< maybeIdEncoder getParamProposalId
+    , govActionProposal_RatifiedEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , govActionProposal_EnactedEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , govActionProposal_DroppedEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , govActionProposal_ExpiredEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -275,59 +250,50 @@ Table Name: voting_procedure
 Description: Defines the procedures and rules governing the voting process, including quorum requirements and tallying mechanisms.
 -}
 data VotingProcedure = VotingProcedure
-  { votingProcedureId :: !VotingProcedureId
-  , votingProcedureTxId :: !TxId                    -- noreference
-  , votingProcedureIndex :: !Word16
-  , votingProcedureGovActionProposalId :: !GovActionProposalId -- noreference
-  , votingProcedureVoterRole :: !VoterRole           -- sqltype=voterrole
-  , votingProcedureDrepVoter :: !(Maybe DrepHashId)    -- noreference
-  , votingProcedurePoolVoter :: !(Maybe PoolHashId)    -- noreference
-  , votingProcedureVote :: !Vote                     -- sqltype=vote
-  , votingProcedureVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
-  , votingProcedureCommitteeVoter :: !(Maybe CommitteeHashId) -- noreference
-  , votingProcedureInvalid :: !(Maybe EventInfoId)    -- noreference
+  { votingProcedure_Id :: !VotingProcedureId
+  , votingProcedure_TxId :: !TxId                    -- noreference
+  , votingProcedure_Index :: !Word16
+  , votingProcedure_GovActionProposalId :: !GovActionProposalId -- noreference
+  , votingProcedure_VoterRole :: !VoterRole           -- sqltype=voterrole
+  , votingProcedure_DrepVoter :: !(Maybe DrepHashId)    -- noreference
+  , votingProcedure_PoolVoter :: !(Maybe PoolHashId)    -- noreference
+  , votingProcedure_Vote :: !Vote                     -- sqltype=vote
+  , votingProcedure_VotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
+  , votingProcedure_CommitteeVoter :: !(Maybe CommitteeHashId) -- noreference
+  , votingProcedure_Invalid :: !(Maybe EventInfoId)    -- noreference
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo VotingProcedure where
-  tableName _ = "voting_procedure"
-  columnNames _ = NE.fromList
-    [ "id", "tx_id", "index", "gov_action_proposal_id", "voter_role" , "drep_voter"
-    , "pool_voter", "vote", "voting_anchor_id", "committee_voter", "invalid"
-    ]
-  typeCasts _ = NE.fromList
-    [ "int8[]", "int8[]", "int4[]", "int8[]", "voterrole[]", "int8[]"
-    , "int8[]", "vote[]", "int8[]", "int8[]", "int8[]"
-    ]
+instance HasDbInfo VotingProcedure
 
 votingProcedureDecoder :: D.Row VotingProcedure
 votingProcedureDecoder =
   VotingProcedure
-    <$> idDecoder VotingProcedureId -- votingProcedureId
-    <*> idDecoder TxId -- votingProcedureTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- votingProcedureIndex
-    <*> idDecoder GovActionProposalId -- votingProcedureGovActionProposalId
-    <*> D.column (D.nonNullable voterRoleDecoder) -- votingProcedureVoterRole
-    <*> maybeIdDecoder DrepHashId -- votingProcedureDrepVoter
-    <*> maybeIdDecoder PoolHashId -- votingProcedurePoolVoter
-    <*> D.column (D.nonNullable voteDecoder) -- votingProcedureVote
-    <*> maybeIdDecoder VotingAnchorId -- votingProcedureVotingAnchorId
-    <*> maybeIdDecoder CommitteeHashId -- votingProcedureCommitteeVoter
-    <*> maybeIdDecoder EventInfoId -- votingProcedureInvalid
+    <$> idDecoder VotingProcedureId -- votingProcedure_Id
+    <*> idDecoder TxId -- votingProcedure_TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- votingProcedure_Index
+    <*> idDecoder GovActionProposalId -- votingProcedure_GovActionProposalId
+    <*> D.column (D.nonNullable voterRoleDecoder) -- votingProcedure_VoterRole
+    <*> maybeIdDecoder DrepHashId -- votingProcedure_DrepVoter
+    <*> maybeIdDecoder PoolHashId -- votingProcedure_PoolVoter
+    <*> D.column (D.nonNullable voteDecoder) -- votingProcedure_Vote
+    <*> maybeIdDecoder VotingAnchorId -- votingProcedure_VotingAnchorId
+    <*> maybeIdDecoder CommitteeHashId -- votingProcedure_CommitteeVoter
+    <*> maybeIdDecoder EventInfoId -- votingProcedure_Invalid
 
 votingProcedureEncoder :: E.Params VotingProcedure
 votingProcedureEncoder =
   mconcat
-    [ votingProcedureId >$< idEncoder getVotingProcedureId
-    , votingProcedureTxId >$< idEncoder getTxId
-    , votingProcedureIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , votingProcedureGovActionProposalId >$< idEncoder getGovActionProposalId
-    , votingProcedureVoterRole >$< E.param (E.nonNullable voterRoleEncoder)
-    , votingProcedureDrepVoter >$< maybeIdEncoder getDrepHashId
-    , votingProcedurePoolVoter >$< maybeIdEncoder getPoolHashId
-    , votingProcedureVote >$< E.param (E.nonNullable voteEncoder)
-    , votingProcedureVotingAnchorId >$< maybeIdEncoder getVotingAnchorId
-    , votingProcedureCommitteeVoter >$< maybeIdEncoder getCommitteeHashId
-    , votingProcedureInvalid >$< maybeIdEncoder getEventInfoId
+    [ votingProcedure_Id >$< idEncoder getVotingProcedureId
+    , votingProcedure_TxId >$< idEncoder getTxId
+    , votingProcedure_Index >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , votingProcedure_GovActionProposalId >$< idEncoder getGovActionProposalId
+    , votingProcedure_VoterRole >$< E.param (E.nonNullable voterRoleEncoder)
+    , votingProcedure_DrepVoter >$< maybeIdEncoder getDrepHashId
+    , votingProcedure_PoolVoter >$< maybeIdEncoder getPoolHashId
+    , votingProcedure_Vote >$< E.param (E.nonNullable voteEncoder)
+    , votingProcedure_VotingAnchorId >$< maybeIdEncoder getVotingAnchorId
+    , votingProcedure_CommitteeVoter >$< maybeIdEncoder getCommitteeHashId
+    , votingProcedure_Invalid >$< maybeIdEncoder getEventInfoId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -336,36 +302,33 @@ Table Name: voting_anchor
 Description: Acts as an anchor point for votes, ensuring they are securely recorded and linked to specific proposals.
 -}
 data VotingAnchor = VotingAnchor
-  { votingAnchorId :: !VotingAnchorId
-  , votingAnchorUrl :: !VoteUrl           -- sqltype=varchar
-  , votingAnchorDataHash :: !ByteString
-  , votingAnchorType :: !AnchorType       -- sqltype=anchorType
-  , votingAnchorBlockId :: !BlockId       -- noreference
+  { votingAnchor_Id :: !VotingAnchorId
+  , votingAnchor_Url :: !VoteUrl           -- sqltype=varchar
+  , votingAnchor_DataHash :: !ByteString
+  , votingAnchor_Type :: !AnchorType       -- sqltype=anchorType
+  , votingAnchor_BlockId :: !BlockId       -- noreference
   } deriving (Eq, Show, Generic)
 -- UniqueVotingAnchor  dataHash url type
 
-instance HasDbInfo VotingAnchor where
-  tableName _ = "voting_anchor"
-  columnNames _ = NE.fromList ["id", "url", "data_hash", "type", "block_id"]
-  typeCasts _ = NE.fromList ["int8[]", "varchar[]", "bytea[]", "anchortype[]", "int8[]"]
+instance HasDbInfo VotingAnchor
 
 votingAnchorDecoder :: D.Row VotingAnchor
 votingAnchorDecoder =
   VotingAnchor
-    <$> idDecoder VotingAnchorId -- votingAnchorId
-    <*> D.column (D.nonNullable voteUrlDecoder) -- votingAnchorUrl
-    <*> D.column (D.nonNullable D.bytea) -- votingAnchorDataHash
-    <*> D.column (D.nonNullable anchorTypeDecoder) -- votingAnchorType
-    <*> idDecoder BlockId -- votingAnchorBlockId
+    <$> idDecoder VotingAnchorId -- votingAnchor_Id
+    <*> D.column (D.nonNullable voteUrlDecoder) -- votingAnchor_Url
+    <*> D.column (D.nonNullable D.bytea) -- votingAnchor_DataHash
+    <*> D.column (D.nonNullable anchorTypeDecoder) -- votingAnchor_Type
+    <*> idDecoder BlockId -- votingAnchor_BlockId
 
 votingAnchorEncoder :: E.Params VotingAnchor
 votingAnchorEncoder =
   mconcat
-    [ votingAnchorId >$< idEncoder getVotingAnchorId
-    , votingAnchorUrl >$< E.param (E.nonNullable voteUrlEncoder)
-    , votingAnchorDataHash >$< E.param (E.nonNullable E.bytea)
-    , votingAnchorType >$< E.param (E.nonNullable anchorTypeEncoder)
-    , votingAnchorBlockId >$< idEncoder getBlockId
+    [ votingAnchor_Id >$< idEncoder getVotingAnchorId
+    , votingAnchor_Url >$< E.param (E.nonNullable voteUrlEncoder)
+    , votingAnchor_DataHash >$< E.param (E.nonNullable E.bytea)
+    , votingAnchor_Type >$< E.param (E.nonNullable anchorTypeEncoder)
+    , votingAnchor_BlockId >$< idEncoder getBlockId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -374,32 +337,29 @@ Table Name: constitution
 Description: Holds the on-chain constitution, which defines the rules and principles of the blockchain's governance system.
 -}
 data Constitution = Constitution
-  { constitutionId :: !ConstitutionId
-  , constitutionGovActionProposalId :: !(Maybe GovActionProposalId) -- noreference
-  , constitutionVotingAnchorId :: !VotingAnchorId                -- noreference
-  , constitutionScriptHash :: !(Maybe ByteString)                  -- sqltype=hash28type
+  { constitution_Id :: !ConstitutionId
+  , constitution_GovActionProposalId :: !(Maybe GovActionProposalId) -- noreference
+  , constitution_VotingAnchorId :: !VotingAnchorId                -- noreference
+  , constitution_ScriptHash :: !(Maybe ByteString)                  -- sqltype=hash28type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo Constitution where
-  tableName _ = "constitution"
-  columnNames _ = NE.fromList ["id", "gov_action_proposal_id", "voting_anchor_id", "script_hash"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "bytea[]"]
+instance HasDbInfo Constitution
 
 constitutionDecoder :: D.Row Constitution
 constitutionDecoder =
   Constitution
-    <$> idDecoder ConstitutionId -- constitutionId
-    <*> maybeIdDecoder GovActionProposalId -- constitutionGovActionProposalId
-    <*> idDecoder VotingAnchorId -- constitutionVotingAnchorId
-    <*> D.column (D.nullable D.bytea) -- constitutionScriptHash
+    <$> idDecoder ConstitutionId -- constitution_Id
+    <*> maybeIdDecoder GovActionProposalId -- constitution_GovActionProposalId
+    <*> idDecoder VotingAnchorId -- constitution_VotingAnchorId
+    <*> D.column (D.nullable D.bytea) -- constitution_ScriptHash
 
 constitutionEncoder :: E.Params Constitution
 constitutionEncoder =
   mconcat
-    [ constitutionId >$< idEncoder getConstitutionId
-    , constitutionGovActionProposalId >$< maybeIdEncoder getGovActionProposalId
-    , constitutionVotingAnchorId >$< idEncoder getVotingAnchorId
-    , constitutionScriptHash >$< E.param (E.nullable E.bytea)
+    [ constitution_Id >$< idEncoder getConstitutionId
+    , constitution_GovActionProposalId >$< maybeIdEncoder getGovActionProposalId
+    , constitution_VotingAnchorId >$< idEncoder getVotingAnchorId
+    , constitution_ScriptHash >$< E.param (E.nullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -408,32 +368,29 @@ Table Name: committee
 Description: Contains information about the committee, including the quorum requirements and the proposal being considered.
 -}
 data Committee = Committee
-  { committeeId :: !CommitteeId
-  , committeeGovActionProposalId :: !(Maybe GovActionProposalId) -- noreference
-  , committeeQuorumNumerator :: !Word64
-  , committeeQuorumDenominator :: !Word64
+  { committee_Id :: !CommitteeId
+  , committee_GovActionProposalId :: !(Maybe GovActionProposalId) -- noreference
+  , committee_QuorumNumerator :: !Word64
+  , committee_QuorumDenominator :: !Word64
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo Committee where
-  tableName _ = "committee"
-  columnNames _ = NE.fromList ["id", "gov_action_proposal_id", "quorum_numerator", "quorum_denominator"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int8[]"]
+instance HasDbInfo Committee
 
 committeeDecoder :: D.Row Committee
 committeeDecoder =
   Committee
-    <$> idDecoder CommitteeId -- committeeId
-    <*> maybeIdDecoder GovActionProposalId -- committeeGovActionProposalId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumNumerator
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumDenominator
+    <$> idDecoder CommitteeId -- committee_Id
+    <*> maybeIdDecoder GovActionProposalId -- committee_GovActionProposalId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committee_QuorumNumerator
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committee_QuorumDenominator
 
 committeeEncoder :: E.Params Committee
 committeeEncoder =
   mconcat
-    [ committeeId >$< idEncoder getCommitteeId
-    , committeeGovActionProposalId >$< maybeIdEncoder getGovActionProposalId
-    , committeeQuorumNumerator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , committeeQuorumDenominator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ committee_Id >$< idEncoder getCommitteeId
+    , committee_GovActionProposalId >$< maybeIdEncoder getGovActionProposalId
+    , committee_QuorumNumerator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , committee_QuorumDenominator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -442,30 +399,27 @@ Table Name: committee_hash
 Description: Stores hashes of committee records, which are used in governance processes.
 -}
 data CommitteeHash = CommitteeHash
-  { committeeHashId :: !CommitteeHashId
-  , committeeHashRaw :: !ByteString    -- sqltype=hash28type
-  , committeeHashHasScript :: !Bool
+  { committeeHash_Id :: !CommitteeHashId
+  , committeeHash_Raw :: !ByteString    -- sqltype=hash28type
+  , committeeHash_HasScript :: !Bool
   } deriving (Eq, Show, Generic)
 -- UniqueCommitteeHash  raw hasScript
 
-instance HasDbInfo CommitteeHash where
-  tableName _ = "committee_hash"
-  columnNames _ = NE.fromList ["id", "raw", "has_script"]
-  typeCasts _ = NE.fromList ["int8[]", "bytea[]", "bool[]"]
+instance HasDbInfo CommitteeHash
 
 committeeHashDecoder :: D.Row CommitteeHash
 committeeHashDecoder =
   CommitteeHash
-    <$> idDecoder CommitteeHashId -- committeeHashId
-    <*> D.column (D.nonNullable D.bytea) -- committeeHashRaw
-    <*> D.column (D.nonNullable D.bool) -- committeeHashHasScript
+    <$> idDecoder CommitteeHashId -- committeeHash_Id
+    <*> D.column (D.nonNullable D.bytea) -- committeeHash_Raw
+    <*> D.column (D.nonNullable D.bool) -- committeeHash_HasScript
 
 committeeHashEncoder :: E.Params CommitteeHash
 committeeHashEncoder =
   mconcat
-    [ committeeHashId >$< idEncoder getCommitteeHashId
-    , committeeHashRaw >$< E.param (E.nonNullable E.bytea)
-    , committeeHashHasScript >$< E.param (E.nonNullable E.bool)
+    [ committeeHash_Id >$< idEncoder getCommitteeHashId
+    , committeeHash_Raw >$< E.param (E.nonNullable E.bytea)
+    , committeeHash_HasScript >$< E.param (E.nonNullable E.bool)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -474,32 +428,29 @@ Table Name: committee_member
 Description: Contains information about committee members.
 -}
 data CommitteeMember = CommitteeMember
-  { committeeMemberId :: !CommitteeMemberId
-  , committeeMemberCommitteeId :: !CommitteeId          -- OnDeleteCascade -- here intentionally we use foreign keys
-  , committeeMemberCommitteeHashId :: !CommitteeHashId  -- noreference
-  , committeeMemberExpirationEpoch :: !Word64           -- sqltype=word31type
+  { committeeMember_Id :: !CommitteeMemberId
+  , committeeMember_CommitteeId :: !CommitteeId          -- OnDeleteCascade -- here intentionally we use foreign keys
+  , committeeMember_CommitteeHashId :: !CommitteeHashId  -- noreference
+  , committeeMember_ExpirationEpoch :: !Word64           -- sqltype=word31type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo CommitteeMember where
-  tableName _ = "committee_member"
-  columnNames _ = NE.fromList ["id", "committee_id", "committee_hash_id", "expiration_epoch"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int4[]"]
+instance HasDbInfo CommitteeMember
 
 committeeMemberDecoder :: D.Row CommitteeMember
 committeeMemberDecoder =
   CommitteeMember
-    <$> idDecoder CommitteeMemberId -- committeeMemberId
-    <*> idDecoder CommitteeId -- committeeMemberCommitteeId
-    <*> idDecoder CommitteeHashId -- committeeMemberCommitteeHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeMemberExpirationEpoch
+    <$> idDecoder CommitteeMemberId -- committeeMember_Id
+    <*> idDecoder CommitteeId -- committeeMember_CommitteeId
+    <*> idDecoder CommitteeHashId -- committeeMember_CommitteeHashId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeMember_ExpirationEpoch
 
 committeeMemberEncoder :: E.Params CommitteeMember
 committeeMemberEncoder =
   mconcat
-    [ committeeMemberId >$< idEncoder getCommitteeMemberId
-    , committeeMemberCommitteeId >$< idEncoder getCommitteeId
-    , committeeMemberCommitteeHashId >$< idEncoder getCommitteeHashId
-    , committeeMemberExpirationEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ committeeMember_Id >$< idEncoder getCommitteeMemberId
+    , committeeMember_CommitteeId >$< idEncoder getCommitteeId
+    , committeeMember_CommitteeHashId >$< idEncoder getCommitteeHashId
+    , committeeMember_ExpirationEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -508,35 +459,32 @@ Table Name: committee_registration
 Description: Contains information about the registration of committee members, including their public keys and other identifying information.
 -}
 data CommitteeRegistration = CommitteeRegistration
-  { committeeRegistrationId :: !CommitteeRegistrationId
-  , committeeRegistrationTxId :: !TxId -- noreference
-  , committeeRegistrationCertIndex :: !Word16
-  , committeeRegistrationColdKeyId :: !CommitteeHashId -- noreference
-  , committeeRegistrationHotKeyId :: !CommitteeHashId  -- noreference
+  { committeeRegistration_Id :: !CommitteeRegistrationId
+  , committeeRegistration_TxId :: !TxId -- noreference
+  , committeeRegistration_CertIndex :: !Word16
+  , committeeRegistration_ColdKeyId :: !CommitteeHashId -- noreference
+  , committeeRegistration_HotKeyId :: !CommitteeHashId  -- noreference
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo CommitteeRegistration where
-  tableName _ = "committee_registration"
-  columnNames _ = NE.fromList ["id", "tx_id", "cert_index", "cold_key_id", "hot_key_id"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int4[]", "int8[]", "int8[]"]
+instance HasDbInfo CommitteeRegistration
 
 committeeRegistrationDecoder :: D.Row CommitteeRegistration
 committeeRegistrationDecoder =
   CommitteeRegistration
-    <$> idDecoder CommitteeRegistrationId -- committeeRegistrationId
-    <*> idDecoder TxId -- committeeRegistrationTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeRegistrationCertIndex
-    <*> idDecoder CommitteeHashId -- committeeRegistrationColdKeyId
-    <*> idDecoder CommitteeHashId -- committeeRegistrationHotKeyId
+    <$> idDecoder CommitteeRegistrationId -- committeeRegistration_Id
+    <*> idDecoder TxId -- committeeRegistration_TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeRegistration_CertIndex
+    <*> idDecoder CommitteeHashId -- committeeRegistration_ColdKeyId
+    <*> idDecoder CommitteeHashId -- committeeRegistration_HotKeyId
 
 committeeRegistrationEncoder :: E.Params CommitteeRegistration
 committeeRegistrationEncoder =
   mconcat
-    [ committeeRegistrationId >$< idEncoder getCommitteeRegistrationId
-    , committeeRegistrationTxId >$< idEncoder getTxId
-    , committeeRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , committeeRegistrationColdKeyId >$< idEncoder getCommitteeHashId
-    , committeeRegistrationHotKeyId >$< idEncoder getCommitteeHashId
+    [ committeeRegistration_Id >$< idEncoder getCommitteeRegistrationId
+    , committeeRegistration_TxId >$< idEncoder getTxId
+    , committeeRegistration_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , committeeRegistration_ColdKeyId >$< idEncoder getCommitteeHashId
+    , committeeRegistration_HotKeyId >$< idEncoder getCommitteeHashId
     ]
 
 {-|
@@ -544,35 +492,32 @@ Table Name: committee_de_registration
 Description: Contains information about the deregistration of committee members, including their public keys and other identifying information.
 -}
 data CommitteeDeRegistration = CommitteeDeRegistration
-  { committeeDeRegistrationId :: !CommitteeDeRegistrationId
-  , committeeDeRegistrationTxId :: !TxId -- noreference
-  , committeeDeRegistrationCertIndex :: !Word16
-  , committeeDeRegistrationVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
-  , committeeDeRegistrationColdKeyId :: !CommitteeHashId -- noreference
+  { committeeDeRegistration_Id :: !CommitteeDeRegistrationId
+  , committeeDeRegistration_TxId :: !TxId -- noreference
+  , committeeDeRegistration_CertIndex :: !Word16
+  , committeeDeRegistration_VotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
+  , committeeDeRegistration_ColdKeyId :: !CommitteeHashId -- noreference
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo CommitteeDeRegistration where
-  tableName _ = "committee_de_registration"
-  columnNames _ = NE.fromList ["id", "tx_id", "cert_index", "voting_anchor_id", "cold_key_id"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int4[]", "int8[]", "int8[]"]
+instance HasDbInfo CommitteeDeRegistration
 
 committeeDeRegistrationDecoder :: D.Row CommitteeDeRegistration
 committeeDeRegistrationDecoder =
   CommitteeDeRegistration
-    <$> idDecoder CommitteeDeRegistrationId -- committeeDeRegistrationId
-    <*> idDecoder TxId -- committeeDeRegistrationTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeDeRegistrationCertIndex
-    <*> maybeIdDecoder VotingAnchorId -- committeeDeRegistrationVotingAnchorId
-    <*> idDecoder CommitteeHashId -- committeeDeRegistrationColdKeyId
+    <$> idDecoder CommitteeDeRegistrationId -- committeeDeRegistration_Id
+    <*> idDecoder TxId -- committeeDeRegistration_TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeDeRegistration_CertIndex
+    <*> maybeIdDecoder VotingAnchorId -- committeeDeRegistration_VotingAnchorId
+    <*> idDecoder CommitteeHashId -- committeeDeRegistration_ColdKeyId
 
 committeeDeRegistrationEncoder :: E.Params CommitteeDeRegistration
 committeeDeRegistrationEncoder =
   mconcat
-    [ committeeDeRegistrationId >$< idEncoder getCommitteeDeRegistrationId
-    , committeeDeRegistrationTxId >$< idEncoder getTxId
-    , committeeDeRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , committeeDeRegistrationVotingAnchorId >$< maybeIdEncoder getVotingAnchorId
-    , committeeDeRegistrationColdKeyId >$< idEncoder getCommitteeHashId
+    [ committeeDeRegistration_Id >$< idEncoder getCommitteeDeRegistrationId
+    , committeeDeRegistration_TxId >$< idEncoder getTxId
+    , committeeDeRegistration_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , committeeDeRegistration_VotingAnchorId >$< maybeIdEncoder getVotingAnchorId
+    , committeeDeRegistration_ColdKeyId >$< idEncoder getCommitteeHashId
     ]
 
 {-|
@@ -580,216 +525,188 @@ Table Name: param_proposal
 Description: Contains proposals for changes to the protocol parameters, including the proposed values and the expiration date.
 -}
 data ParamProposal = ParamProposal
-  { paramProposalId :: !ParamProposalId
-  , paramProposalEpochNo :: !(Maybe Word64)                -- sqltype=word31type
-  , paramProposalKey :: !(Maybe ByteString)                -- sqltype=hash28type
-  , paramProposalMinFeeA :: !(Maybe DbWord64)              -- sqltype=word64type
-  , paramProposalMinFeeB :: !(Maybe DbWord64)              -- sqltype=word64type
-  , paramProposalMaxBlockSize :: !(Maybe DbWord64)         -- sqltype=word64type
-  , paramProposalMaxTxSize :: !(Maybe DbWord64)            -- sqltype=word64type
-  , paramProposalMaxBhSize :: !(Maybe DbWord64)            -- sqltype=word64type
-  , paramProposalKeyDeposit :: !(Maybe DbLovelace)         -- sqltype=lovelace
-  , paramProposalPoolDeposit :: !(Maybe DbLovelace)        -- sqltype=lovelace
-  , paramProposalMaxEpoch :: !(Maybe DbWord64)             -- sqltype=word64type
-  , paramProposalOptimalPoolCount :: !(Maybe DbWord64)     -- sqltype=word64type
-  , paramProposalInfluence :: !(Maybe Double)
-  , paramProposalMonetaryExpandRate :: !(Maybe Double)
-  , paramProposalTreasuryGrowthRate :: !(Maybe Double)
-  , paramProposalDecentralisation :: !(Maybe Double)
-  , paramProposalEntropy :: !(Maybe ByteString)            -- sqltype=hash32type
-  , paramProposalProtocolMajor :: !(Maybe Word16)          -- sqltype=word31type
-  , paramProposalProtocolMinor :: !(Maybe Word16)          -- sqltype=word31type
-  , paramProposalMinUtxoValue :: !(Maybe DbLovelace)       -- sqltype=lovelace
-  , paramProposalMinPoolCost :: !(Maybe DbLovelace)        -- sqltype=lovelace
+  { paramProposal_Id :: !ParamProposalId
+  , paramProposal_EpochNo :: !(Maybe Word64)                -- sqltype=word31type
+  , paramProposal_Key :: !(Maybe ByteString)                -- sqltype=hash28type
+  , paramProposal_MinFeeA :: !(Maybe DbWord64)              -- sqltype=word64type
+  , paramProposal_MinFeeB :: !(Maybe DbWord64)              -- sqltype=word64type
+  , paramProposal_MaxBlockSize :: !(Maybe DbWord64)         -- sqltype=word64type
+  , paramProposal_MaxTxSize :: !(Maybe DbWord64)            -- sqltype=word64type
+  , paramProposal_MaxBhSize :: !(Maybe DbWord64)            -- sqltype=word64type
+  , paramProposal_KeyDeposit :: !(Maybe DbLovelace)         -- sqltype=lovelace
+  , paramProposal_PoolDeposit :: !(Maybe DbLovelace)        -- sqltype=lovelace
+  , paramProposal_MaxEpoch :: !(Maybe DbWord64)             -- sqltype=word64type
+  , paramProposal_OptimalPoolCount :: !(Maybe DbWord64)     -- sqltype=word64type
+  , paramProposal_Influence :: !(Maybe Double)
+  , paramProposal_MonetaryExpandRate :: !(Maybe Double)
+  , paramProposal_TreasuryGrowthRate :: !(Maybe Double)
+  , paramProposal_Decentralisation :: !(Maybe Double)
+  , paramProposal_Entropy :: !(Maybe ByteString)            -- sqltype=hash32type
+  , paramProposal_ProtocolMajor :: !(Maybe Word16)          -- sqltype=word31type
+  , paramProposal_ProtocolMinor :: !(Maybe Word16)          -- sqltype=word31type
+  , paramProposal_MinUtxoValue :: !(Maybe DbLovelace)       -- sqltype=lovelace
+  , paramProposal_MinPoolCost :: !(Maybe DbLovelace)        -- sqltype=lovelace
 
-  , paramProposalCostModelId :: !(Maybe CostModelId)       -- noreference
-  , paramProposalPriceMem :: !(Maybe Double)
-  , paramProposalPriceStep :: !(Maybe Double)
-  , paramProposalMaxTxExMem :: !(Maybe DbWord64)           -- sqltype=word64type
-  , paramProposalMaxTxExSteps :: !(Maybe DbWord64)         -- sqltype=word64type
-  , paramProposalMaxBlockExMem :: !(Maybe DbWord64)        -- sqltype=word64type
-  , paramProposalMaxBlockExSteps :: !(Maybe DbWord64)      -- sqltype=word64type
-  , paramProposalMaxValSize :: !(Maybe DbWord64)           -- sqltype=word64type
-  , paramProposalCollateralPercent :: !(Maybe Word16)      -- sqltype=word31type
-  , paramProposalMaxCollateralInputs :: !(Maybe Word16)    -- sqltype=word31type
-  , paramProposalRegisteredTxId :: !TxId                   -- noreference
-  , paramProposalCoinsPerUtxoSize :: !(Maybe DbLovelace)   -- sqltype=lovelace
+  , paramProposal_CostModelId :: !(Maybe CostModelId)       -- noreference
+  , paramProposal_PriceMem :: !(Maybe Double)
+  , paramProposal_PriceStep :: !(Maybe Double)
+  , paramProposal_MaxTxExMem :: !(Maybe DbWord64)           -- sqltype=word64type
+  , paramProposal_MaxTxExSteps :: !(Maybe DbWord64)         -- sqltype=word64type
+  , paramProposal_MaxBlockExMem :: !(Maybe DbWord64)        -- sqltype=word64type
+  , paramProposal_MaxBlockExSteps :: !(Maybe DbWord64)      -- sqltype=word64type
+  , paramProposal_MaxValSize :: !(Maybe DbWord64)           -- sqltype=word64type
+  , paramProposal_CollateralPercent :: !(Maybe Word16)      -- sqltype=word31type
+  , paramProposal_MaxCollateralInputs :: !(Maybe Word16)    -- sqltype=word31type
+  , paramProposal_RegisteredTxId :: !TxId                   -- noreference
+  , paramProposal_CoinsPerUtxoSize :: !(Maybe DbLovelace)   -- sqltype=lovelace
 
-  , paramProposalPvtMotionNoConfidence :: !(Maybe Double)
-  , paramProposalPvtCommitteeNormal :: !(Maybe Double)
-  , paramProposalPvtCommitteeNoConfidence :: !(Maybe Double)
-  , paramProposalPvtHardForkInitiation :: !(Maybe Double)
-  , paramProposalPvtppSecurityGroup :: !(Maybe Double)
+  , paramProposal_PvtMotionNoConfidence :: !(Maybe Double)
+  , paramProposal_PvtCommitteeNormal :: !(Maybe Double)
+  , paramProposal_PvtCommitteeNoConfidence :: !(Maybe Double)
+  , paramProposal_PvtHardForkInitiation :: !(Maybe Double)
+  , paramProposal_PvtppSecurityGroup :: !(Maybe Double)
 
-  , paramProposalDvtMotionNoConfidence :: !(Maybe Double)
-  , paramProposalDvtCommitteeNormal :: !(Maybe Double)
-  , paramProposalDvtCommitteeNoConfidence :: !(Maybe Double)
-  , paramProposalDvtUpdateToConstitution :: !(Maybe Double)
-  , paramProposalDvtHardForkInitiation :: !(Maybe Double)
-  , paramProposalDvtPPNetworkGroup :: !(Maybe Double)
-  , paramProposalDvtPPEconomicGroup :: !(Maybe Double)
-  , paramProposalDvtPPTechnicalGroup :: !(Maybe Double)
-  , paramProposalDvtPPGovGroup :: !(Maybe Double)
-  , paramProposalDvtTreasuryWithdrawal :: !(Maybe Double)
+  , paramProposal_DvtMotionNoConfidence :: !(Maybe Double)
+  , paramProposal_DvtCommitteeNormal :: !(Maybe Double)
+  , paramProposal_DvtCommitteeNoConfidence :: !(Maybe Double)
+  , paramProposal_DvtUpdateToConstitution :: !(Maybe Double)
+  , paramProposal_DvtHardForkInitiation :: !(Maybe Double)
+  , paramProposal_DvtPPNetworkGroup :: !(Maybe Double)
+  , paramProposal_DvtPPEconomicGroup :: !(Maybe Double)
+  , paramProposal_DvtPPTechnicalGroup :: !(Maybe Double)
+  , paramProposal_DvtPPGovGroup :: !(Maybe Double)
+  , paramProposal_DvtTreasuryWithdrawal :: !(Maybe Double)
 
-  , paramProposalCommitteeMinSize :: !(Maybe DbWord64)     -- sqltype=word64type
-  , paramProposalCommitteeMaxTermLength :: !(Maybe DbWord64) --
-  , paramProposalGovActionLifetime :: !(Maybe DbWord64)    -- sqltype=word64type
-  , paramProposalGovActionDeposit :: !(Maybe DbWord64)     -- sqltype=word64type
-  , paramProposalDrepDeposit :: !(Maybe DbWord64)          -- sqltype=word64type
-  , paramProposalDrepActivity :: !(Maybe DbWord64)         -- sqltype=word64type
-  , paramProposalMinFeeRefScriptCostPerByte :: !(Maybe Double)
+  , paramProposal_CommitteeMinSize :: !(Maybe DbWord64)     -- sqltype=word64type
+  , paramProposal_CommitteeMaxTermLength :: !(Maybe DbWord64) --
+  , paramProposal_GovActionLifetime :: !(Maybe DbWord64)    -- sqltype=word64type
+  , paramProposal_GovActionDeposit :: !(Maybe DbWord64)     -- sqltype=word64type
+  , paramProposal_DrepDeposit :: !(Maybe DbWord64)          -- sqltype=word64type
+  , paramProposal_DrepActivity :: !(Maybe DbWord64)         -- sqltype=word64type
+  , paramProposal_MinFeeRefScriptCostPerByte :: !(Maybe Double)
 
   } deriving (Show, Eq, Generic)
 
 
-instance HasDbInfo ParamProposal where
-  tableName _ = "param_proposal"
-  columnNames _ = NE.fromList
-    [ "id", "epoch_no", "key", "min_fee_a", "min_fee_b"
-    , "max_block_size", "max_tx_size", "max_bh_size", "key_deposit", "pool_deposit"
-    , "max_epoch", "optimal_pool_count", "influence", "monetary_expand_rate", "treasury_growth_rate"
-    , "decentralisation", "entropy", "protocol_major", "protocol_minor", "min_utxo_value"
-    , "min_pool_cost", "cost_model_id", "price_mem", "price_step", "max_tx_ex_mem"
-    , "max_tx_ex_steps", "max_block_ex_mem", "max_block_ex_steps", "max_val_size", "collateral_percent"
-    , "max_collateral_inputs", "registered_tx_id", "coins_per_utxo_size", "pvt_motion_no_confidence", "pvt_committee_normal"
-    , "pvt_committee_no_confidence", "pvt_hard_fork_initiation", "dvt_motion_no_confidence", "dvt_committee_normal", "dvt_committee_no_confidence"
-    , "dvt_update_to_constitution", "dvt_hard_fork_initiation", "dvt_p_p_network_group", "dvt_p_p_economic_group", "dvt_p_p_technical_group"
-    , "dvt_p_p_gov_group", "dvt_treasury_withdrawal", "committee_min_size", "committee_max_term_length", "gov_action_lifetime"
-    , "gov_action_deposit", "drep_deposit", "drep_activity", "pvtpp_security_group", "min_fee_ref_script_cost_per_byte"
-    ]
-  typeCasts _ = NE.fromList
-    [ "int8[]", "int4[]", "bytea[]", "numeric[]", "numeric[]"
-    , "numeric[]", "numeric[]", "numeric[]", "numeric[]", "numeric[]"
-    , "numeric[]", "numeric[]", "float8[]", "float8[]", "float8[]"
-    , "float8[]", "bytea[]", "int4[]", "int4[]", "numeric[]"
-    , "numeric[]", "int8[]", "float8[]", "float8[]", "numeric[]"
-    , "numeric[]", "numeric[]", "numeric[]", "numeric[]", "int4[]"
-    , "int4[]", "int8[]", "numeric[]", "float8[]", "float8[]"
-    , "float8[]", "float8[]", "float8[]", "float8[]", "float8[]"
-    , "float8[]", "float8[]", "float8[]", "float8[]", "float8[]"
-    , "float8[]", "float8[]", "numeric[]", "numeric[]", "numeric[]"
-    , "numeric[]", "numeric[]", "numeric[]", "float8[]", "float8[]"
-    ]
-
+instance HasDbInfo ParamProposal
 
 paramProposalDecoder :: D.Row ParamProposal
 paramProposalDecoder =
   ParamProposal
-    <$> idDecoder ParamProposalId -- paramProposalId
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- paramProposalEpochNo
-    <*> D.column (D.nullable D.bytea) -- paramProposalKey
-    <*> maybeDbWord64Decoder -- paramProposalMinFeeA
-    <*> maybeDbWord64Decoder -- paramProposalMinFeeB
-    <*> maybeDbWord64Decoder -- paramProposalMaxBlockSize
-    <*> maybeDbWord64Decoder -- paramProposalMaxTxSize
-    <*> maybeDbWord64Decoder -- paramProposalMaxBhSize
-    <*> maybeDbLovelaceDecoder -- paramProposalKeyDeposit
-    <*> maybeDbLovelaceDecoder -- paramProposalPoolDeposit
-    <*> maybeDbWord64Decoder -- paramProposalMaxEpoch
-    <*> maybeDbWord64Decoder -- paramProposalOptimalPoolCount
-    <*> D.column (D.nullable D.float8) -- paramProposalInfluence
-    <*> D.column (D.nullable D.float8) -- paramProposalMonetaryExpandRate
-    <*> D.column (D.nullable D.float8) -- paramProposalTreasuryGrowthRate
-    <*> D.column (D.nullable D.float8) -- paramProposalDecentralisation
-    <*> D.column (D.nullable D.bytea) -- paramProposalEntropy
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalProtocolMajor
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalProtocolMinor
-    <*> maybeDbLovelaceDecoder -- paramProposalMinUtxoValue
-    <*> maybeDbLovelaceDecoder -- paramProposalMinPoolCost
-    <*> maybeIdDecoder CostModelId -- paramProposalCostModelId
-    <*> D.column (D.nullable D.float8) -- paramProposalPriceMem
-    <*> D.column (D.nullable D.float8) -- paramProposalPriceStep
-    <*> maybeDbWord64Decoder -- paramProposalMaxTxExMem
-    <*> maybeDbWord64Decoder -- paramProposalMaxTxExSteps
-    <*> maybeDbWord64Decoder -- paramProposalMaxBlockExMem
-    <*> maybeDbWord64Decoder -- paramProposalMaxBlockExSteps
-    <*> maybeDbWord64Decoder -- paramProposalMaxValSize
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalCollateralPercent
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalMaxCollateralInputs
-    <*> idDecoder TxId -- paramProposalRegisteredTxId
-    <*> maybeDbLovelaceDecoder -- paramProposalCoinsPerUtxoSize
-    <*> D.column (D.nullable D.float8) -- paramProposalPvtMotionNoConfidence
-    <*> D.column (D.nullable D.float8) -- paramProposalPvtCommitteeNormal
-    <*> D.column (D.nullable D.float8) -- paramProposalPvtCommitteeNoConfidence
-    <*> D.column (D.nullable D.float8) -- paramProposalPvtHardForkInitiation
-    <*> D.column (D.nullable D.float8) -- paramProposalPvtppSecurityGroup
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtMotionNoConfidence
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtCommitteeNormal
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtCommitteeNoConfidence
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtUpdateToConstitution
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtHardForkInitiation
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtPPNetworkGroup
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtPPEconomicGroup
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtPPTechnicalGroup
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtPPGovGroup
-    <*> D.column (D.nullable D.float8) -- paramProposalDvtTreasuryWithdrawal
-    <*> maybeDbWord64Decoder -- paramProposalCommitteeMinSize
-    <*> maybeDbWord64Decoder -- paramProposalCommitteeMaxTermLength
-    <*> maybeDbWord64Decoder -- paramProposalGovActionLifetime
-    <*> maybeDbWord64Decoder -- paramProposalGovActionDeposit
-    <*> maybeDbWord64Decoder -- paramProposalDrepDeposit
-    <*> maybeDbWord64Decoder -- paramProposalDrepActivity
-    <*> D.column (D.nullable D.float8) -- paramProposalMinFeeRefScriptCostPerByte
+    <$> idDecoder ParamProposalId -- paramProposal_Id
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- paramProposal_EpochNo
+    <*> D.column (D.nullable D.bytea) -- paramProposal_Key
+    <*> maybeDbWord64Decoder -- paramProposal_MinFeeA
+    <*> maybeDbWord64Decoder -- paramProposal_MinFeeB
+    <*> maybeDbWord64Decoder -- paramProposal_MaxBlockSize
+    <*> maybeDbWord64Decoder -- paramProposal_MaxTxSize
+    <*> maybeDbWord64Decoder -- paramProposal_MaxBhSize
+    <*> maybeDbLovelaceDecoder -- paramProposal_KeyDeposit
+    <*> maybeDbLovelaceDecoder -- paramProposal_PoolDeposit
+    <*> maybeDbWord64Decoder -- paramProposal_MaxEpoch
+    <*> maybeDbWord64Decoder -- paramProposal_OptimalPoolCount
+    <*> D.column (D.nullable D.float8) -- paramProposal_Influence
+    <*> D.column (D.nullable D.float8) -- paramProposal_MonetaryExpandRate
+    <*> D.column (D.nullable D.float8) -- paramProposal_TreasuryGrowthRate
+    <*> D.column (D.nullable D.float8) -- paramProposal_Decentralisation
+    <*> D.column (D.nullable D.bytea) -- paramProposal_Entropy
+    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposal_ProtocolMajor
+    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposal_ProtocolMinor
+    <*> maybeDbLovelaceDecoder -- paramProposal_MinUtxoValue
+    <*> maybeDbLovelaceDecoder -- paramProposal_MinPoolCost
+    <*> maybeIdDecoder CostModelId -- paramProposal_CostModelId
+    <*> D.column (D.nullable D.float8) -- paramProposal_PriceMem
+    <*> D.column (D.nullable D.float8) -- paramProposal_PriceStep
+    <*> maybeDbWord64Decoder -- paramProposal_MaxTxExMem
+    <*> maybeDbWord64Decoder -- paramProposal_MaxTxExSteps
+    <*> maybeDbWord64Decoder -- paramProposal_MaxBlockExMem
+    <*> maybeDbWord64Decoder -- paramProposal_MaxBlockExSteps
+    <*> maybeDbWord64Decoder -- paramProposal_MaxValSize
+    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposal_CollateralPercent
+    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposal_MaxCollateralInputs
+    <*> idDecoder TxId -- paramProposal_RegisteredTxId
+    <*> maybeDbLovelaceDecoder -- paramProposal_CoinsPerUtxoSize
+    <*> D.column (D.nullable D.float8) -- paramProposal_PvtMotionNoConfidence
+    <*> D.column (D.nullable D.float8) -- paramProposal_PvtCommitteeNormal
+    <*> D.column (D.nullable D.float8) -- paramProposal_PvtCommitteeNoConfidence
+    <*> D.column (D.nullable D.float8) -- paramProposal_PvtHardForkInitiation
+    <*> D.column (D.nullable D.float8) -- paramProposal_PvtppSecurityGroup
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtMotionNoConfidence
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtCommitteeNormal
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtCommitteeNoConfidence
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtUpdateToConstitution
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtHardForkInitiation
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtPPNetworkGroup
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtPPEconomicGroup
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtPPTechnicalGroup
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtPPGovGroup
+    <*> D.column (D.nullable D.float8) -- paramProposal_DvtTreasuryWithdrawal
+    <*> maybeDbWord64Decoder -- paramProposal_CommitteeMinSize
+    <*> maybeDbWord64Decoder -- paramProposal_CommitteeMaxTermLength
+    <*> maybeDbWord64Decoder -- paramProposal_GovActionLifetime
+    <*> maybeDbWord64Decoder -- paramProposal_GovActionDeposit
+    <*> maybeDbWord64Decoder -- paramProposal_DrepDeposit
+    <*> maybeDbWord64Decoder -- paramProposal_DrepActivity
+    <*> D.column (D.nullable D.float8) -- paramProposal_MinFeeRefScriptCostPerByte
 
 paramProposalEncoder :: E.Params ParamProposal
 paramProposalEncoder =
   mconcat
-    [ paramProposalId >$< idEncoder getParamProposalId
-    , paramProposalEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , paramProposalKey >$< E.param (E.nullable E.bytea)
-    , paramProposalMinFeeA >$< maybeDbWord64Encoder
-    , paramProposalMinFeeB >$< maybeDbWord64Encoder
-    , paramProposalMaxBlockSize >$< maybeDbWord64Encoder
-    , paramProposalMaxTxSize >$< maybeDbWord64Encoder
-    , paramProposalMaxBhSize >$< maybeDbWord64Encoder
-    , paramProposalKeyDeposit >$< maybeDbLovelaceEncoder
-    , paramProposalPoolDeposit >$< maybeDbLovelaceEncoder
-    , paramProposalMaxEpoch >$< maybeDbWord64Encoder
-    , paramProposalOptimalPoolCount >$< maybeDbWord64Encoder
-    , paramProposalInfluence >$< E.param (E.nullable E.float8)
-    , paramProposalMonetaryExpandRate >$< E.param (E.nullable E.float8)
-    , paramProposalTreasuryGrowthRate >$< E.param (E.nullable E.float8)
-    , paramProposalDecentralisation >$< E.param (E.nullable E.float8)
-    , paramProposalEntropy >$< E.param (E.nullable E.bytea)
-    , paramProposalProtocolMajor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalMinUtxoValue >$< maybeDbLovelaceEncoder
-    , paramProposalCoinsPerUtxoSize >$< maybeDbLovelaceEncoder
-    , paramProposalCostModelId >$< maybeIdEncoder getCostModelId
-    , paramProposalPriceMem >$< E.param (E.nullable E.float8)
-    , paramProposalPriceStep >$< E.param (E.nullable E.float8)
-    , paramProposalMaxTxExMem >$< maybeDbWord64Encoder
-    , paramProposalMaxTxExSteps >$< maybeDbWord64Encoder
-    , paramProposalMaxBlockExMem >$< maybeDbWord64Encoder
-    , paramProposalMaxBlockExSteps >$< maybeDbWord64Encoder
-    , paramProposalMaxValSize >$< maybeDbWord64Encoder
-    , paramProposalCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalRegisteredTxId >$< idEncoder getTxId
-    , paramProposalMinPoolCost >$< maybeDbLovelaceEncoder
-    , paramProposalPvtMotionNoConfidence >$< E.param (E.nullable E.float8)
-    , paramProposalPvtCommitteeNormal >$< E.param (E.nullable E.float8)
-    , paramProposalPvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
-    , paramProposalPvtHardForkInitiation >$< E.param (E.nullable E.float8)
-    , paramProposalPvtppSecurityGroup >$< E.param (E.nullable E.float8)
-    , paramProposalDvtMotionNoConfidence >$< E.param (E.nullable E.float8)
-    , paramProposalDvtCommitteeNormal >$< E.param (E.nullable E.float8)
-    , paramProposalDvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
-    , paramProposalDvtUpdateToConstitution >$< E.param (E.nullable E.float8)
-    , paramProposalDvtHardForkInitiation >$< E.param (E.nullable E.float8)
-    , paramProposalDvtPPNetworkGroup >$< E.param (E.nullable E.float8)
-    , paramProposalDvtPPEconomicGroup >$< E.param (E.nullable E.float8)
-    , paramProposalDvtPPTechnicalGroup >$< E.param (E.nullable E.float8)
-    , paramProposalDvtPPGovGroup >$< E.param (E.nullable E.float8)
-    , paramProposalDvtTreasuryWithdrawal >$< E.param (E.nullable E.float8)
-    , paramProposalCommitteeMinSize >$< maybeDbWord64Encoder
-    , paramProposalCommitteeMaxTermLength >$< maybeDbWord64Encoder
-    , paramProposalGovActionLifetime >$< maybeDbWord64Encoder
-    , paramProposalGovActionDeposit >$< maybeDbWord64Encoder
-    , paramProposalDrepDeposit >$< maybeDbWord64Encoder
-    , paramProposalDrepActivity >$< maybeDbWord64Encoder
-    , paramProposalMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
+    [ paramProposal_Id >$< idEncoder getParamProposalId
+    , paramProposal_EpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , paramProposal_Key >$< E.param (E.nullable E.bytea)
+    , paramProposal_MinFeeA >$< maybeDbWord64Encoder
+    , paramProposal_MinFeeB >$< maybeDbWord64Encoder
+    , paramProposal_MaxBlockSize >$< maybeDbWord64Encoder
+    , paramProposal_MaxTxSize >$< maybeDbWord64Encoder
+    , paramProposal_MaxBhSize >$< maybeDbWord64Encoder
+    , paramProposal_KeyDeposit >$< maybeDbLovelaceEncoder
+    , paramProposal_PoolDeposit >$< maybeDbLovelaceEncoder
+    , paramProposal_MaxEpoch >$< maybeDbWord64Encoder
+    , paramProposal_OptimalPoolCount >$< maybeDbWord64Encoder
+    , paramProposal_Influence >$< E.param (E.nullable E.float8)
+    , paramProposal_MonetaryExpandRate >$< E.param (E.nullable E.float8)
+    , paramProposal_TreasuryGrowthRate >$< E.param (E.nullable E.float8)
+    , paramProposal_Decentralisation >$< E.param (E.nullable E.float8)
+    , paramProposal_Entropy >$< E.param (E.nullable E.bytea)
+    , paramProposal_ProtocolMajor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , paramProposal_ProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , paramProposal_MinUtxoValue >$< maybeDbLovelaceEncoder
+    , paramProposal_CoinsPerUtxoSize >$< maybeDbLovelaceEncoder
+    , paramProposal_CostModelId >$< maybeIdEncoder getCostModelId
+    , paramProposal_PriceMem >$< E.param (E.nullable E.float8)
+    , paramProposal_PriceStep >$< E.param (E.nullable E.float8)
+    , paramProposal_MaxTxExMem >$< maybeDbWord64Encoder
+    , paramProposal_MaxTxExSteps >$< maybeDbWord64Encoder
+    , paramProposal_MaxBlockExMem >$< maybeDbWord64Encoder
+    , paramProposal_MaxBlockExSteps >$< maybeDbWord64Encoder
+    , paramProposal_MaxValSize >$< maybeDbWord64Encoder
+    , paramProposal_CollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , paramProposal_MaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , paramProposal_RegisteredTxId >$< idEncoder getTxId
+    , paramProposal_MinPoolCost >$< maybeDbLovelaceEncoder
+    , paramProposal_PvtMotionNoConfidence >$< E.param (E.nullable E.float8)
+    , paramProposal_PvtCommitteeNormal >$< E.param (E.nullable E.float8)
+    , paramProposal_PvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
+    , paramProposal_PvtHardForkInitiation >$< E.param (E.nullable E.float8)
+    , paramProposal_PvtppSecurityGroup >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtMotionNoConfidence >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtCommitteeNormal >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtUpdateToConstitution >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtHardForkInitiation >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtPPNetworkGroup >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtPPEconomicGroup >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtPPTechnicalGroup >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtPPGovGroup >$< E.param (E.nullable E.float8)
+    , paramProposal_DvtTreasuryWithdrawal >$< E.param (E.nullable E.float8)
+    , paramProposal_CommitteeMinSize >$< maybeDbWord64Encoder
+    , paramProposal_CommitteeMaxTermLength >$< maybeDbWord64Encoder
+    , paramProposal_GovActionLifetime >$< maybeDbWord64Encoder
+    , paramProposal_GovActionDeposit >$< maybeDbWord64Encoder
+    , paramProposal_DrepDeposit >$< maybeDbWord64Encoder
+    , paramProposal_DrepActivity >$< maybeDbWord64Encoder
+    , paramProposal_MinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -798,32 +715,29 @@ Table Name: treasury_withdrawal
 Description:
 -}
 data TreasuryWithdrawal = TreasuryWithdrawal
-  { treasuryWithdrawalId :: !TreasuryWithdrawalId
-  , treasuryWithdrawalGovActionProposalId :: !GovActionProposalId -- noreference
-  , treasuryWithdrawalStakeAddressId :: !StakeAddressId          -- noreference
-  , treasuryWithdrawalAmount :: !DbLovelace                      -- sqltype=lovelace
+  { treasuryWithdrawal_Id :: !TreasuryWithdrawalId
+  , treasuryWithdrawal_GovActionProposalId :: !GovActionProposalId -- noreference
+  , treasuryWithdrawal_StakeAddressId :: !StakeAddressId          -- noreference
+  , treasuryWithdrawal_Amount :: !DbLovelace                      -- sqltype=lovelace
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo TreasuryWithdrawal where
-  tableName _ = "treasury_withdrawal"
-  columnNames _ = NE.fromList ["id", "gov_action_proposal_id", "stake_address_id", "amount"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "numeric[]"]
+instance HasDbInfo TreasuryWithdrawal
 
 treasuryWithdrawalDecoder :: D.Row TreasuryWithdrawal
 treasuryWithdrawalDecoder =
   TreasuryWithdrawal
-    <$> idDecoder TreasuryWithdrawalId -- treasuryWithdrawalId
-    <*> idDecoder GovActionProposalId -- treasuryWithdrawalGovActionProposalId
-    <*> idDecoder StakeAddressId -- treasuryWithdrawalStakeAddressId
-    <*> dbLovelaceDecoder -- treasuryWithdrawalAmount
+    <$> idDecoder TreasuryWithdrawalId -- treasuryWithdrawal_Id
+    <*> idDecoder GovActionProposalId -- treasuryWithdrawal_GovActionProposalId
+    <*> idDecoder StakeAddressId -- treasuryWithdrawal_StakeAddressId
+    <*> dbLovelaceDecoder -- treasuryWithdrawal_Amount
 
 treasuryWithdrawalEncoder :: E.Params TreasuryWithdrawal
 treasuryWithdrawalEncoder =
   mconcat
-    [ treasuryWithdrawalId >$< idEncoder getTreasuryWithdrawalId
-    , treasuryWithdrawalGovActionProposalId >$< idEncoder getGovActionProposalId
-    , treasuryWithdrawalStakeAddressId >$< idEncoder getStakeAddressId
-    , treasuryWithdrawalAmount >$< dbLovelaceEncoder
+    [ treasuryWithdrawal_Id >$< idEncoder getTreasuryWithdrawalId
+    , treasuryWithdrawal_GovActionProposalId >$< idEncoder getGovActionProposalId
+    , treasuryWithdrawal_StakeAddressId >$< idEncoder getStakeAddressId
+    , treasuryWithdrawal_Amount >$< dbLovelaceEncoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -832,33 +746,30 @@ Table Name: event_info
 Description: Contains information about events, including the epoch in which they occurred and the type of event.
 -}
 data EventInfo = EventInfo
-  { eventInfoId :: !EventInfoId
-  , eventInfoTxId :: !(Maybe TxId)           -- noreference
-  , eventInfoEpoch :: !Word64              -- sqltype=word31type
-  , eventInfoType :: !Text
-  , eventInfoExplanation :: !(Maybe Text)
+  { eventInfo_Id :: !EventInfoId
+  , eventInfo_TxId :: !(Maybe TxId)           -- noreference
+  , eventInfo_Epoch :: !Word64              -- sqltype=word31type
+  , eventInfo_Type :: !Text
+  , eventInfo_Explanation :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo EventInfo where
-  tableName _ = "event_info"
-  columnNames _ = NE.fromList ["id", "tx_id", "epoch", "type", "explanation"]
-  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int4[]", "varchar[]", "varchar[]"]
+instance HasDbInfo EventInfo
 
 eventInfoDecoder :: D.Row EventInfo
 eventInfoDecoder =
   EventInfo
-    <$> idDecoder EventInfoId -- eventInfoId
-    <*> maybeIdDecoder TxId -- eventInfoTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- eventInfoEpoch
-    <*> D.column (D.nonNullable D.text) -- eventInfoType
-    <*> D.column (D.nullable D.text) -- eventInfoExplanation
+    <$> idDecoder EventInfoId -- eventInfo_Id
+    <*> maybeIdDecoder TxId -- eventInfo_TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- eventInfo_Epoch
+    <*> D.column (D.nonNullable D.text) -- eventInfo_Type
+    <*> D.column (D.nullable D.text) -- eventInfo_Explanation
 
 eventInfoEncoder :: E.Params EventInfo
 eventInfoEncoder =
   mconcat
-    [ eventInfoId >$< idEncoder getEventInfoId
-    , eventInfoTxId >$< maybeIdEncoder getTxId
-    , eventInfoEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , eventInfoType >$< E.param (E.nonNullable E.text)
-    , eventInfoExplanation >$< E.param (E.nullable E.text)
+    [ eventInfo_Id >$< idEncoder getEventInfoId
+    , eventInfo_TxId >$< maybeIdEncoder getTxId
+    , eventInfo_Epoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , eventInfo_Type >$< E.param (E.nonNullable E.text)
+    , eventInfo_Explanation >$< E.param (E.nullable E.text)
     ]
