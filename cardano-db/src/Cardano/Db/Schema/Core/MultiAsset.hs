@@ -8,21 +8,22 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.MultiAsset where
 
-import Cardano.Db.Schema.Ids
+import Contravariant.Extras (contrazip3)
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
--- import Database.Persist.Class (Unique)
--- import Database.Persist.Documentation (deriveShowFields, document, (#), (--^))
--- import Database.Persist.EntityDef.Internal (EntityDef (..))
 import GHC.Generics (Generic)
-
 import Hasql.Decoders as D
 import Hasql.Encoders as E
+
+import Cardano.Db.Schema.Ids
+import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Types (DbInfo(..))
 import Cardano.Db.Types (DbInt65, dbInt65Decoder, dbInt65Encoder)
-import Data.Functor.Contravariant ((>$<))
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- MULTI ASSETS
@@ -39,7 +40,9 @@ data MultiAsset = MultiAsset
   , multiAssetName :: !ByteString   -- sqltype=asset32type
   , multiAssetFingerprint :: !Text
   } deriving (Eq, Show, Generic)
--- UniqueMultiAsset  policy name
+
+instance DbInfo MultiAsset where
+  uniqueFields _ = ["policy", "name"]
 
 multiAssetDecoder :: D.Row MultiAsset
 multiAssetDecoder =
@@ -74,24 +77,32 @@ Description: Contains information about the minting of multi-assets, including t
 -}
 data MaTxMint = MaTxMint
   { maTxMintId :: !MaTxMintId
-  , maTxMintIdent :: !MultiAssetId -- noreference
   , maTxMintQuantity :: !DbInt65   -- sqltype=int65type
+  , maTxMintIdent :: !MultiAssetId -- noreference
   , maTxMintTxId :: !TxId          -- noreference
   } deriving (Eq, Show, Generic)
+
+instance DbInfo MaTxMint
 
 maTxMintDecoder :: D.Row MaTxMint
 maTxMintDecoder =
   MaTxMint
     <$> idDecoder MaTxMintId
-    <*> idDecoder MultiAssetId
     <*> D.column (D.nonNullable dbInt65Decoder)
+    <*> idDecoder MultiAssetId
     <*> idDecoder TxId
 
 maTxMintEncoder :: E.Params MaTxMint
 maTxMintEncoder =
   mconcat
-    [ maTxMintId >$< idEncoder getMaTxMintId
+    [ maTxMintQuantity >$< E.param (E.nonNullable dbInt65Encoder)
     , maTxMintIdent >$< idEncoder getMultiAssetId
-    , maTxMintQuantity >$< E.param (E.nonNullable dbInt65Encoder)
     , maTxMintTxId >$< idEncoder getTxId
     ]
+
+maTxMintEncoderMany :: E.Params ([DbInt65], [MultiAssetId], [TxId])
+maTxMintEncoderMany =
+  contrazip3
+    (manyEncoder $ E.nonNullable dbInt65Encoder)
+    (manyEncoder $ E.nonNullable $ getMultiAssetId >$< E.int8)
+    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)

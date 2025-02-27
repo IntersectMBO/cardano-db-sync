@@ -115,6 +115,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
 
   let setting = Db.toConnectionSetting pgConfig
 
+
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo

@@ -148,8 +148,8 @@ insertOffChainVoteResults trce resultQueue = do
             void $ DB.insertOffChainVoteGovActionData ocvga
           whenJust (offChainVoteDrep accessors ocvdId) $ \ocvdr ->
             void $ DB.insertOffChainVoteDrepData ocvdr
-          DB.insertOffChainVoteAuthors $ offChainVoteAuthors accessors ocvdId
-          DB.insertOffChainVoteReference $ offChainVoteReferences accessors ocvdId
+          DB.insertManyOffChainVoteAuthors $ offChainVoteAuthors accessors ocvdId
+          DB.insertManyOffChainVoteReference $ offChainVoteReferences accessors ocvdId
           DB.insertOffChainVoteExternalUpdate $ offChainVoteExternalUpdates accessors ocvdId
       OffChainVoteResultError fe -> void $ DB.insertOffChainVoteFetchError fe
 
