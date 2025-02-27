@@ -12,6 +12,7 @@ import Cardano.Db.Types (
   maybeDbLovelaceDecoder,
   maybeDbLovelaceEncoder,
   rewardSourceDecoder,
+  dbLovelaceEncoder,
   rewardSourceEncoder,
  )
 import Data.ByteString.Char8 (ByteString)
@@ -25,6 +26,8 @@ import GHC.Generics (Generic)
 
 import Hasql.Decoders as D
 import Hasql.Encoders as E
+import Contravariant.Extras (contrazip5)
+import Cardano.Db.Statement.Helpers (manyEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- | STAKE DELEGATION
@@ -220,8 +223,7 @@ Description: Contains information about the remaining reward for each stakeholde
 -}
 -----------------------------------------------------------------------------------------------------------------------------------
 data RewardRest = RewardRest
-  { rewardRestId :: !RewardRestId
-  , rewardRestAddrId :: !StakeAddressId -- noreference
+  { rewardRestAddrId :: !StakeAddressId -- noreference
   , rewardRestType :: !RewardSource     -- sqltype=rewardtype
   , rewardRestAmount :: !DbLovelace     -- sqltype=lovelace
   , rewardRestEarnedEpoch :: !Word64    -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
@@ -231,8 +233,7 @@ data RewardRest = RewardRest
 rewardRestDecoder :: D.Row RewardRest
 rewardRestDecoder =
   RewardRest
-    <$> idDecoder RewardRestId -- rewardRestId
-    <*> idDecoder StakeAddressId -- rewardRestAddrId
+    <$> idDecoder StakeAddressId -- rewardRestAddrId
     <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
     <*> dbLovelaceDecoder -- rewardRestAmount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestEarnedEpoch
@@ -241,13 +242,21 @@ rewardRestDecoder =
 rewardRestEncoder :: E.Params RewardRest
 rewardRestEncoder =
   mconcat
-    [ rewardRestId >$< idEncoder getRewardRestId
-    , rewardRestAddrId >$< idEncoder getStakeAddressId
+    [ rewardRestAddrId >$< idEncoder getStakeAddressId
     , rewardRestType >$< E.param (E.nonNullable rewardSourceEncoder)
     , rewardRestAmount >$< dbLovelaceEncoder
     , rewardRestEarnedEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , rewardRestSpendableEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
+
+rewardRestEncoderMany :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
+rewardRestEncoderMany =
+  contrazip5
+    (manyEncoder $ idEncoderMany getStakeAddressId)
+    (manyEncoder $ E.nonNullable rewardSourceEncoder)
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|

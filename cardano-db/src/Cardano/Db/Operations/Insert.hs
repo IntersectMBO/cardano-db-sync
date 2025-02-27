@@ -16,11 +16,11 @@ module Cardano.Db.Operations.Insert (
   insertEpochParam,
   insertEpochSyncTime,
   insertExtraKeyWitness,
-  insertManyEpochStakes,
-  insertManyRewards,
-  insertManyRewardRests,
-  insertManyDrepDistr,
-  insertManyTxIn,
+--  insertManyEpochStakes,
+--  insertManyRewards,
+--  insertManyRewardRests,
+--  insertManyDrepDistr,
+--  insertManyTxIn,
   insertMaTxMint,
   insertMeta,
   insertMultiAssetUnchecked,
@@ -42,8 +42,8 @@ module Cardano.Db.Operations.Insert (
   insertTx,
   insertTxCBOR,
   insertTxIn,
-  insertManyTxMint,
-  insertManyTxMetadata,
+  -- insertManyTxMint,
+  -- insertManyTxMetadata,
   insertWithdrawal,
   insertRedeemer,
   insertCostModel,
@@ -55,8 +55,8 @@ module Cardano.Db.Operations.Insert (
   insertOffChainVoteData,
   insertOffChainVoteGovActionData,
   insertOffChainVoteDrepData,
-  insertOffChainVoteAuthors,
-  insertOffChainVoteReference,
+  insertManyOffChainVoteAuthors,
+  insertManyOffChainVoteReference,
   insertOffChainVoteExternalUpdate,
   insertOffChainVoteFetchError,
   insertReservedPoolTicker,
@@ -87,7 +87,7 @@ module Cardano.Db.Operations.Insert (
   insertCommitteeDeRegistration,
   insertDrepRegistration,
   insertEpochState,
-  insertManyPoolStat,
+  -- insertManyPoolStat,
   insertAlwaysAbstainDrep,
   insertAlwaysNoConfidence,
   insertUnchecked,
@@ -177,8 +177,8 @@ insertAdaPots = insertUnchecked "AdaPots"
 -- insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
 -- insertBlock = insertUnchecked "Block"
 
-insertBlock :: Block -> Session BlockId
-insertBlock block = Transaction.transaction Transaction.ReadCommitted Transaction.Write insertBlockTransaction
+-- insertBlock :: Block -> Session BlockId
+-- insertBlock block = Transaction.transaction Transaction.ReadCommitted Transaction.Write insertBlockTransaction
 
 insertBlockStatement :: Statement Block BlockId
 insertBlockStatement =
@@ -233,11 +233,11 @@ insertManyRewards ::
   ReaderT SqlBackend m ()
 insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
-insertManyRewardRests ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  [RewardRest] ->
-  ReaderT SqlBackend m ()
-insertManyRewardRests = insertManyUnique "Many Rewards Rest" Nothing
+-- insertManyRewardRests ::
+--   (MonadBaseControl IO m, MonadIO m) =>
+--   [RewardRest] ->
+--   ReaderT SqlBackend m ()
+-- insertManyRewardRests = insertManyUnique "Many Rewards Rest" Nothing
 
 insertManyDrepDistr ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -245,8 +245,8 @@ insertManyDrepDistr ::
   ReaderT SqlBackend m ()
 insertManyDrepDistr = insertManyCheckUnique "Many DrepDistr"
 
-insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
-insertManyTxIn = insertMany' "Many TxIn"
+-- insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
+-- insertManyTxIn = insertMany' "Many TxIn"
 
 insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
 insertMaTxMint = insertUnchecked "insertMaTxMint"
@@ -308,11 +308,11 @@ insertTx tx = insertUnchecked ("Tx: " ++ show (BS.length (txHash tx))) tx
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
 insertTxIn = insertUnchecked "TxIn"
 
-insertManyTxMetadata :: (MonadBaseControl IO m, MonadIO m) => [TxMetadata] -> ReaderT SqlBackend m [TxMetadataId]
-insertManyTxMetadata = insertMany' "TxMetadata"
+-- insertManyTxMetadata :: (MonadBaseControl IO m, MonadIO m) => [TxMetadata] -> ReaderT SqlBackend m [TxMetadataId]
+-- insertManyTxMetadata = insertMany' "TxMetadata"
 
-insertManyTxMint :: (MonadBaseControl IO m, MonadIO m) => [MaTxMint] -> ReaderT SqlBackend m [MaTxMintId]
-insertManyTxMint = insertMany' "TxMint"
+-- insertManyTxMint :: (MonadBaseControl IO m, MonadIO m) => [MaTxMint] -> ReaderT SqlBackend m [MaTxMintId]
+-- insertManyTxMint = insertMany' "TxMint"
 
 insertTxCBOR :: (MonadBaseControl IO m, MonadIO m) => TxCbor -> ReaderT SqlBackend m TxCborId
 insertTxCBOR = insertUnchecked "TxCBOR"
@@ -360,14 +360,14 @@ insertOffChainVoteGovActionData = insertUnchecked "OffChainVoteGovActionData"
 insertOffChainVoteDrepData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteDrepData -> ReaderT SqlBackend m OffChainVoteDrepDataId
 insertOffChainVoteDrepData = insertUnchecked "OffChainVoteDrepData"
 
-insertOffChainVoteAuthors :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteAuthor] -> ReaderT SqlBackend m ()
-insertOffChainVoteAuthors = void . insertMany' "OffChainVoteAuthor"
+-- insertManyOffChainVoteAuthors :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteAuthor] -> ReaderT SqlBackend m ()
+-- insertManyOffChainVoteAuthors = void . insertMany' "OffChainVoteAuthor"
 
-insertOffChainVoteReference :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteReference] -> ReaderT SqlBackend m ()
-insertOffChainVoteReference = void . insertMany' "OffChainVoteReference"
+-- insertManyOffChainVoteReference :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteReference] -> ReaderT SqlBackend m ()
+-- insertManyOffChainVoteReference = void . insertMany' "OffChainVoteReference"
 
-insertOffChainVoteExternalUpdate :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteExternalUpdate] -> ReaderT SqlBackend m ()
-insertOffChainVoteExternalUpdate = void . insertMany' "OffChainVoteExternalUpdate"
+-- insertOffChainVoteExternalUpdate :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteExternalUpdate] -> ReaderT SqlBackend m ()
+-- insertOffChainVoteExternalUpdate = void . insertMany' "OffChainVoteExternalUpdate"
 
 insertOffChainVoteFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteFetchError -> ReaderT SqlBackend m ()
 insertOffChainVoteFetchError ocvfe = do
