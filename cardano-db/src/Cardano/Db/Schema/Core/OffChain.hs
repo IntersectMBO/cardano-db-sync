@@ -8,12 +8,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.OffChain where
 
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Types (
+import Cardano.Db.Types (HasDbInfo (..)
  )
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
@@ -23,6 +24,9 @@ import GHC.Generics (Generic)
 
 import Hasql.Decoders as D
 import Hasql.Encoders as E
+import Contravariant.Extras (contrazip5, contrazip6, contrazip3)
+import Cardano.Db.Statement.Helpers (manyEncoder)
+import qualified Data.List.NonEmpty as NE
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- OFFCHAIN
@@ -240,6 +244,11 @@ data OffChainVoteAuthor = OffChainVoteAuthor
   , offChainVoteAuthorWarning :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
 
+instance HasDbInfo OffChainVoteAuthor where
+  tableName _ = "off_chain_vote_author"
+  columnNames _ = NE.fromList [ "id" , "off_chain_vote_data_id", "name", "witness_algorithm", "public_key", "signature", "warning"]
+  typeCasts _ = NE.fromList ["int8[]", "varchar[]", "varchar[]", "varchar[]", "varchar[]", "varchar[]"]
+
 offChainVoteAuthorDecoder :: D.Row OffChainVoteAuthor
 offChainVoteAuthorDecoder =
   OffChainVoteAuthor
@@ -254,14 +263,25 @@ offChainVoteAuthorDecoder =
 offChainVoteAuthorEncoder :: E.Params OffChainVoteAuthor
 offChainVoteAuthorEncoder =
   mconcat
-    [ offChainVoteAuthorId >$< idEncoder getOffChainVoteAuthorId
-    , offChainVoteAuthorOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    [ -- offChainVoteAuthorId >$< idEncoder getOffChainVoteAuthorId
+      offChainVoteAuthorOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
     , offChainVoteAuthorName >$< E.param (E.nullable E.text)
     , offChainVoteAuthorWitnessAlgorithm >$< E.param (E.nonNullable E.text)
     , offChainVoteAuthorPublicKey >$< E.param (E.nonNullable E.text)
     , offChainVoteAuthorSignature >$< E.param (E.nonNullable E.text)
     , offChainVoteAuthorWarning >$< E.param (E.nullable E.text)
     ]
+
+offChainVoteAuthorManyEncoder
+  :: E.Params ([OffChainVoteDataId], [Maybe Text], [Text], [Text], [Text], [Maybe Text])
+offChainVoteAuthorManyEncoder =
+  contrazip6
+    (manyEncoder $ idEncoderMany getOffChainVoteDataId)
+    (manyEncoder $ E.nullable E.text)
+    (manyEncoder $ E.nonNullable E.text)
+    (manyEncoder $ E.nonNullable E.text)
+    (manyEncoder $ E.nonNullable E.text)
+    (manyEncoder $ E.nullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
@@ -277,6 +297,11 @@ data OffChainVoteReference = OffChainVoteReference
   , offChainVoteReferenceHashAlgorithm :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
 
+instance HasDbInfo OffChainVoteReference where
+  tableName _ = "off_chain_vote_reference"
+  columnNames _ = NE.fromList [ "id" , "off_chain_vote_data_id", "label", "uri", "hash_digest", "hash_algorithm"]
+  typeCasts _ = NE.fromList ["bytea[]", "int8[]", "varchar[]", "varchar[]", "varchar[]"]
+
 offChainVoteReferenceDecoder :: D.Row OffChainVoteReference
 offChainVoteReferenceDecoder =
   OffChainVoteReference
@@ -290,13 +315,22 @@ offChainVoteReferenceDecoder =
 offChainVoteReferenceEncoder :: E.Params OffChainVoteReference
 offChainVoteReferenceEncoder =
   mconcat
-    [ offChainVoteReferenceId >$< idEncoder getOffChainVoteReferenceId
-    , offChainVoteReferenceOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    [ -- offChainVoteReferenceId >$< idEncoder getOffChainVoteReferenceId
+      offChainVoteReferenceOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
     , offChainVoteReferenceLabel >$< E.param (E.nonNullable E.text)
     , offChainVoteReferenceUri >$< E.param (E.nonNullable E.text)
     , offChainVoteReferenceHashDigest >$< E.param (E.nullable E.text)
     , offChainVoteReferenceHashAlgorithm >$< E.param (E.nullable E.text)
     ]
+
+offChainVoteReferenceManyEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text], [Maybe Text], [Maybe Text])
+offChainVoteReferenceManyEncoder =
+  contrazip5
+    (manyEncoder $ idEncoderMany getOffChainVoteDataId)
+    (manyEncoder $ E.nonNullable E.text)
+    (manyEncoder $ E.nonNullable E.text)
+    (manyEncoder $ E.nullable E.text)
+    (manyEncoder $ E.nullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
@@ -309,6 +343,11 @@ data OffChainVoteExternalUpdate = OffChainVoteExternalUpdate
   , offChainVoteExternalUpdateTitle :: !Text
   , offChainVoteExternalUpdateUri :: !Text
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo OffChainVoteExternalUpdate where
+  tableName _ = "off_chain_vote_external_update"
+  columnNames _ = NE.fromList [ "id" , "off_chain_vote_data_id", "title", "uri"]
+  typeCasts _ = NE.fromList ["int8[]", "varchar[]", "varchar[]", "varchar[]"]
 
 offChainVoteExternalUpdateDecoder :: D.Row OffChainVoteExternalUpdate
 offChainVoteExternalUpdateDecoder =
@@ -326,6 +365,13 @@ offChainVoteExternalUpdateEncoder =
     , offChainVoteExternalUpdateTitle >$< E.param (E.nonNullable E.text)
     , offChainVoteExternalUpdateUri >$< E.param (E.nonNullable E.text)
     ]
+
+offChainVoteExternalUpdatesEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text])
+offChainVoteExternalUpdatesEncoder =
+  contrazip3
+    (manyEncoder $ idEncoderMany getOffChainVoteDataId)
+    (manyEncoder $ E.nonNullable E.text)
+    (manyEncoder $ E.nonNullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|

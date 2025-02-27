@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -24,7 +25,7 @@ import Cardano.Db.Types (
   word128Decoder,
   word128Encoder,
   syncStateDecoder,
-  syncStateEncoder, DbWord64, SyncState, DbInt65
+  syncStateEncoder, DbWord64, SyncState, DbInt65, HasDbInfo (..)
  )
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
@@ -36,6 +37,7 @@ import GHC.Generics (Generic)
 
 import Hasql.Decoders as D
 import Hasql.Encoders as E
+import qualified Data.List.NonEmpty as NE
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- EPOCH AND PROTOCOL PARAMETER
@@ -60,6 +62,11 @@ data Epoch = Epoch
   , epochStartTime :: !UTCTime       -- sqltype=timestamp
   , epochEndTime :: !UTCTime         -- sqltype=timestamp
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo Epoch where
+  tableName _ = "epoch"
+  columnNames _ = NE.fromList [ "id", "out_sum", "fees", "tx_count", "blk_count", "no", "start_time", "end_time"]
+  typeCasts _ = NE.fromList ["int8[]", "numeric[]", "numeric[]", "int4[]", "int4[]", "int4[]", "timestampt[]", "timestampt[]"]
 
 epochDecoder :: D.Row Epoch
 epochDecoder =
@@ -107,7 +114,6 @@ data EpochParam = EpochParam
   , epochParamMonetaryExpandRate :: !Double
   , epochParamTreasuryGrowthRate :: !Double
   , epochParamDecentralisation :: !Double
-  , epochParamExtraEntropy :: !(Maybe ByteString) -- sqltype=hash32type
   , epochParamProtocolMajor :: !Word16         -- sqltype=word31type
   , epochParamProtocolMinor :: !Word16         -- sqltype=word31type
   , epochParamMinUtxoValue :: !DbLovelace      -- sqltype=lovelace
@@ -126,6 +132,8 @@ data EpochParam = EpochParam
   , epochParamMaxValSize :: !(Maybe DbWord64)    -- sqltype=word64type
   , epochParamCollateralPercent :: !(Maybe Word16) -- sqltype=word31type
   , epochParamMaxCollateralInputs :: !(Maybe Word16) -- sqltype=word31type
+  , epochParamBlockId :: !BlockId                 -- noreference -- The first block where these parameters are valid.
+  , epochParamExtraEntropy :: !(Maybe ByteString) -- sqltype=hash32type
   , epochParamPvtMotionNoConfidence :: !(Maybe Double)
   , epochParamPvtCommitteeNormal :: !(Maybe Double)
   , epochParamPvtCommitteeNoConfidence :: !(Maybe Double)
@@ -150,8 +158,36 @@ data EpochParam = EpochParam
   , epochParamDrepDeposit :: !(Maybe DbWord64)       -- sqltype=word64type
   , epochParamDrepActivity :: !(Maybe DbWord64)      -- sqltype=word64type
   , epochParamMinFeeRefScriptCostPerByte :: !(Maybe Double)
-  , epochParamBlockId :: !BlockId                 -- noreference -- The first block where these parameters are valid.
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo EpochParam where
+  tableName _ = "epoch_param"
+  columnNames _ = NE.fromList
+    [ "id", "epoch_no", "min_fee_a", "min_fee_b", "max_block_size"
+    , "max_tx_size", "max_bh_size" , "key_deposit", "pool_deposit", "max_epoch"
+    , "optimal_pool_count", "influence", "monetary_expand_rate" , "treasury_growth_rate", "decentralisation"
+    , "protocol_major", "protocol_minor" , "min_utxo_value", "min_pool_cost", "nonce"
+    , "cost_model_id", "price_mem", "price_step", "max_tx_ex_mem", "max_tx_ex_steps"
+    , "max_block_ex_mem", "max_block_ex_steps" , "max_val_size", "collateral_percent", "max_collateral_inputs"
+    , "block_id", "extra_entropy", "coins_per_utxo_size" , "pvt_motion_no_confidence" , "pvt_committee_normal"
+    , "pvt_committee_no_confidence", "pvt_hard_fork_initiation" , "dvt_motion_no_confidence", "dvt_committee_normal", "dvt_committee_no_confidence"
+    , "dvt_update_to_constitution", "dvt_hard_fork_initiation", "dvt_pp_network_group", "dvt_pp_economic_group", "dvt_pp_technical_group"
+    , "dvt_pp_gov_group", "dvt_treasury_withdrawal", "committee_min_size", "committee_max_term_length", "gov_action_lifetime"
+    , "gov_action_deposit", "drep_deposit", "drep_activity", "pvtpp_security_group", "min_fee_ref_script_cost_per_byte"
+    ]
+  typeCasts _ = NE.fromList
+    [ "int8[]", "int4[]", "int4[]", "int4[]", "int4[]"
+    , "int4[]", "int4[]", "numeric[]", "numeric[]", "int4[]"
+    , "int4[]", "float8[]", "float8[]", "float8[]", "float8[]"
+    , "int4[]", "int4[]", "numeric[]", "numeric[]", "bytea[]"
+    , "int8[]", "float8[]", "float8[]", "numeric[]", "numeric[]"
+    , "numeric[]", "numeric[]", "numeric[]", "int4[]", "int4[]"
+    , "int8[]", "bytea[]", "numeric[]", "float8[]", "float8[]"
+    , "float8[]", "float8[]", "float8[]", "float8[]", "float8[]"
+    , "float8[]", "float8[]", "float8[]", "float8[]", "float8[]"
+    , "float8[]", "float8[]", "numeric[]", "numeric[]", "numeric[]"
+    , "numeric[]", "numeric[]", "numeric[]", "float8[]", "float8[]"
+    ]
 
 epochParamDecoder :: D.Row EpochParam
 epochParamDecoder =
@@ -171,7 +207,6 @@ epochParamDecoder =
     <*> D.column (D.nonNullable D.float8) -- epochParamMonetaryExpandRate
     <*> D.column (D.nonNullable D.float8) -- epochParamTreasuryGrowthRate
     <*> D.column (D.nonNullable D.float8) -- epochParamDecentralisation
-    <*> D.column (D.nullable D.bytea) -- epochParamExtraEntropy
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- epochParamProtocolMajor
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- epochParamProtocolMinor
     <*> dbLovelaceDecoder -- epochParamMinUtxoValue
@@ -188,6 +223,8 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamMaxValSize
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- epochParamCollateralPercent
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- epochParamMaxCollateralInputs
+    <*> idDecoder BlockId -- epochParamBlockId
+    <*> D.column (D.nullable D.bytea) -- epochParamExtraEntropy
     <*> D.column (D.nullable D.float8) -- epochParamPvtMotionNoConfidence
     <*> D.column (D.nullable D.float8) -- epochParamPvtCommitteeNormal
     <*> D.column (D.nullable D.float8) -- epochParamPvtCommitteeNoConfidence
@@ -210,7 +247,6 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamDrepDeposit
     <*> maybeDbWord64Decoder -- epochParamDrepActivity
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
-    <*> idDecoder BlockId -- epochParamBlockId
 
 epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
@@ -230,7 +266,6 @@ epochParamEncoder =
     , epochParamMonetaryExpandRate >$< E.param (E.nonNullable E.float8)
     , epochParamTreasuryGrowthRate >$< E.param (E.nonNullable E.float8)
     , epochParamDecentralisation >$< E.param (E.nonNullable E.float8)
-    , epochParamExtraEntropy >$< E.param (E.nullable E.bytea)
     , epochParamProtocolMajor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , epochParamProtocolMinor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , epochParamMinUtxoValue >$< dbLovelaceEncoder
@@ -247,6 +282,8 @@ epochParamEncoder =
     , epochParamMaxValSize >$< maybeDbWord64Encoder
     , epochParamCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , epochParamMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , epochParamBlockId >$< idEncoder getBlockId
+    , epochParamExtraEntropy >$< E.param (E.nullable E.bytea)
     , epochParamPvtMotionNoConfidence >$< E.param (E.nullable E.float8)
     , epochParamPvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , epochParamPvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
@@ -269,7 +306,6 @@ epochParamEncoder =
     , epochParamDrepDeposit >$< maybeDbWord64Encoder
     , epochParamDrepActivity >$< maybeDbWord64Encoder
     , epochParamMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
-    , epochParamBlockId >$< idEncoder getBlockId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -284,6 +320,11 @@ data EpochState = EpochState
   , epochStateConstitutionId :: !(Maybe ConstitutionId)   -- noreference
   , epochStateEpochNo :: !Word64                        -- sqltype=word31type
   } deriving (Eq, Show, Generic)
+
+instance HasDbInfo EpochState where
+  tableName _ = "epoch_state"
+  columnNames _ = NE.fromList [ "id", "committee_id", "no_confidence_id", "constitution_id", "epoch_no"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "int8[]", "int4[]"]
 
 epochStateDecoder :: D.Row EpochState
 epochStateDecoder =
@@ -316,6 +357,11 @@ data EpochSyncTime = EpochSyncTime
   , epochSyncTimeState :: !SyncState   -- sqltype=syncstatetype
   } deriving (Show, Eq, Generic)
 -- UniqueEpochSyncTime no
+
+instance HasDbInfo EpochSyncTime where
+  tableName _ = "epoch_sync_time"
+  columnNames _ = NE.fromList [ "id", "no", "seconds", "state"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int8[]", "syncstatetype[]"]
 
 epochSyncTimeDecoder :: D.Row EpochSyncTime
 epochSyncTimeDecoder =
@@ -351,11 +397,22 @@ data AdaPots = AdaPots
   , adaPotsRewards :: !DbLovelace    -- sqltype=lovelace
   , adaPotsUtxo :: !DbLovelace       -- sqltype=lovelace
   , adaPotsDepositsStake :: !DbLovelace -- sqltype=lovelace
-  , adaPotsDepositsDrep :: !DbLovelace -- sqltype=lovelace
-  , adaPotsDepositsProposal :: !DbLovelace -- sqltype=lovelace
   , adaPotsFees :: !DbLovelace       -- sqltype=lovelace
   , adaPotsBlockId :: !BlockId       -- noreference
+  , adaPotsDepositsDrep :: !DbLovelace -- sqltype=lovelace
+  , adaPotsDepositsProposal :: !DbLovelace -- sqltype=lovelace
   } deriving (Eq)
+
+instance HasDbInfo AdaPots where
+  tableName _ = "ada_pots"
+  columnNames _ = NE.fromList
+    [ "id", "slot_no", "epoch_no", "treasury", "reserves", "rewards"
+    , "utxo", "deposits_stake", "fees", "block_id", "deposits_drep", "deposits_proposal"
+    ]
+  typeCasts _ = NE.fromList
+    [ "int8[]", "int8[]", "int4[]", "numeric[]", "numeric[]", "numeric[]"
+    , "numeric[]", "numeric[]", "numeric[]", "int8[]", "numeric[]", "numeric[]"
+    ]
 
 adaPotsDecoder :: D.Row AdaPots
 adaPotsDecoder =
@@ -368,10 +425,10 @@ adaPotsDecoder =
     <*> dbLovelaceDecoder -- adaPotsRewards
     <*> dbLovelaceDecoder -- adaPotsUtxo
     <*> dbLovelaceDecoder -- adaPotsDepositsStake
-    <*> dbLovelaceDecoder -- adaPotsDepositsDrep
-    <*> dbLovelaceDecoder -- adaPotsDepositsProposal
     <*> dbLovelaceDecoder -- adaPotsFees
     <*> idDecoder BlockId -- adaPotsBlockId
+    <*> dbLovelaceDecoder -- adaPotsDepositsDrep
+    <*> dbLovelaceDecoder -- adaPotsDepositsProposal
 
 adaPotsEncoder :: E.Params AdaPots
 adaPotsEncoder =
@@ -384,10 +441,10 @@ adaPotsEncoder =
     , adaPotsRewards >$< dbLovelaceEncoder
     , adaPotsUtxo >$< dbLovelaceEncoder
     , adaPotsDepositsStake >$< dbLovelaceEncoder
-    , adaPotsDepositsDrep >$< dbLovelaceEncoder
-    , adaPotsDepositsProposal >$< dbLovelaceEncoder
     , adaPotsFees >$< dbLovelaceEncoder
     , adaPotsBlockId >$< idEncoder getBlockId
+    , adaPotsDepositsDrep >$< dbLovelaceEncoder
+    , adaPotsDepositsProposal >$< dbLovelaceEncoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -402,6 +459,11 @@ data PotTransfer = PotTransfer
   , potTransferReserves :: !DbInt65    -- sqltype=int65type
   , potTransferTxId :: !TxId           -- noreference
   } deriving (Show, Eq, Generic)
+
+instance HasDbInfo PotTransfer where
+  tableName _ = "pot_transfer"
+  columnNames _ = NE.fromList [ "id", "cert_index", "treasury", "reserves", "tx_id"]
+  typeCasts _ = NE.fromList ["int8[]", "int4[]", "numeric[]", "numeric[]", "int8[]"]
 
 potTransferDecoder :: D.Row PotTransfer
 potTransferDecoder =
@@ -435,6 +497,11 @@ data Treasury = Treasury
   , treasuryTxId :: !TxId             -- noreference
   } deriving (Show, Eq, Generic)
 
+instance HasDbInfo Treasury where
+  tableName _ = "treasury"
+  columnNames _ = NE.fromList [ "id", "addr_id", "cert_index", "amount", "tx_id"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int4[]", "numeric[]", "int8[]"]
+
 treasuryDecoder :: D.Row Treasury
 treasuryDecoder =
   Treasury
@@ -467,6 +534,11 @@ data Reserve = Reserve
   , reserveTxId :: !TxId              -- noreference
   } deriving (Show, Eq, Generic)
 
+instance HasDbInfo Reserve where
+  tableName _ = "reserve"
+  columnNames _ = NE.fromList [ "id", "addr_id", "cert_index", "amount", "tx_id"]
+  typeCasts _ = NE.fromList ["int8[]", "int8[]", "int4[]", "numeric[]", "int8[]"]
+
 reserveDecoder :: D.Row Reserve
 reserveDecoder =
   Reserve
@@ -493,22 +565,27 @@ Description: Defines the cost model used for estimating transaction fees, ensuri
 -}
 data CostModel = CostModel
   { costModelId :: !CostModelId
-  , costModelHash :: !ByteString    -- sqltype=hash32type
   , costModelCosts :: !Text         -- sqltype=jsonb
+  , costModelHash :: !ByteString    -- sqltype=hash32type
   } deriving (Eq, Show, Generic)
 -- uniqueCostModel  hash
+
+instance HasDbInfo CostModel where
+  tableName _ = "cost_model"
+  columnNames _ = NE.fromList [ "id", "costs", "hash"]
+  typeCasts _ = NE.fromList ["int8[]", "jsonb[]", "bytea[]"]
 
 costModelDecoder :: D.Row CostModel
 costModelDecoder =
   CostModel
     <$> idDecoder CostModelId -- costModelId
-    <*> D.column (D.nonNullable D.bytea) -- costModelHash
     <*> D.column (D.nonNullable D.text) -- costModelCosts
+    <*> D.column (D.nonNullable D.bytea) -- costModelHash
 
 costModelEncoder :: E.Params CostModel
 costModelEncoder =
   mconcat
     [ costModelId >$< idEncoder getCostModelId
-    , costModelHash >$< E.param (E.nonNullable E.bytea)
     , costModelCosts >$< E.param (E.nonNullable E.text)
+    , costModelHash >$< E.param (E.nonNullable E.bytea)
     ]
