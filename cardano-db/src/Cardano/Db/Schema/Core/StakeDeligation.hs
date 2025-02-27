@@ -1,9 +1,21 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.StakeDeligation where
 
-import Cardano.Db.Schema.Orphans ()
+import Contravariant.Extras (contrazip5)
+import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant
+import Data.Text (Text)
+import Data.Word (Word16, Word64)
+import GHC.Generics (Generic)
+import Hasql.Decoders as D
+import Hasql.Encoders as E
+
 import Cardano.Db.Schema.Ids
+import Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Types (DbInfo(..))
 import Cardano.Db.Types (
   DbLovelace(..),
   RewardSource,
@@ -12,19 +24,9 @@ import Cardano.Db.Types (
   maybeDbLovelaceDecoder,
   maybeDbLovelaceEncoder,
   rewardSourceDecoder,
+  dbLovelaceEncoder,
   rewardSourceEncoder,
  )
-import Data.ByteString.Char8 (ByteString)
-import Data.Text (Text)
-import Data.Word (Word16, Word64)
-import Data.Functor.Contravariant
--- import Database.Persist.Class (Unique)
--- import Database.Persist.Documentation (deriveShowFields, document, (#), (--^))
--- import Database.Persist.EntityDef.Internal (EntityDef (..))
-import GHC.Generics (Generic)
-
-import Hasql.Decoders as D
-import Hasql.Encoders as E
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- | STAKE DELEGATION
@@ -36,10 +38,13 @@ Description: Contains information about stakeholder addresses.
 -}
 data StakeAddress = StakeAddress  -- Can be an address of a script hash
   { stakeAddressId :: !StakeAddressId -- noreference
-    , stakeAddressHashRaw :: !ByteString        -- sqltype=addr29type
+  , stakeAddressHashRaw :: !ByteString        -- sqltype=addr29type
   , stakeAddressView :: !Text
   , stakeAddressScriptHash :: !(Maybe ByteString) -- sqltype=hash28type
   } deriving (Show, Eq, Generic)
+
+instance DbInfo StakeAddress where
+  uniqueFields _ = ["hash_raw"]
 
 stakeAddressDecoder :: D.Row StakeAddress
 stakeAddressDecoder =
@@ -71,6 +76,8 @@ data StakeRegistration = StakeRegistration
   , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
   , stakeRegistrationTxId :: !TxId              -- noreference
   } deriving (Eq, Show, Generic)
+
+instance DbInfo StakeRegistration
 
 stakeRegistrationDecoder :: D.Row StakeRegistration
 stakeRegistrationDecoder =
@@ -107,6 +114,8 @@ data StakeDeregistration = StakeDeregistration
   , stakeDeregistrationTxId :: !TxId            -- noreference
   , stakeDeregistrationRedeemerId :: !(Maybe RedeemerId) -- noreference
   } deriving (Eq, Show, Generic)
+
+instance DbInfo StakeDeregistration
 
 stakeDeregistrationDecoder :: D.Row StakeDeregistration
 stakeDeregistrationDecoder =
@@ -146,6 +155,8 @@ data Delegation = Delegation
   , delegationRedeemerId :: !(Maybe RedeemerId)   -- noreference
   } deriving (Eq, Show, Generic)
 
+instance DbInfo Delegation
+
 delegationDecoder :: D.Row Delegation
 delegationDecoder =
   Delegation
@@ -173,7 +184,7 @@ delegationEncoder =
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
-Table Name:
+Table Name: reward
 Description: Reward, Stake and Treasury need to be obtained from the ledger state.
   The reward for each stake address and. This is not a balance, but a reward amount and the
   epoch in which the reward was earned.
@@ -189,6 +200,8 @@ data Reward = Reward
   , rewardSpendableEpoch :: !Word64
   , rewardPoolId :: !PoolHashId       -- noreference
   } deriving (Show, Eq, Generic)
+
+instance DbInfo Reward
 
 rewardDecoder :: D.Row Reward
 rewardDecoder =
@@ -220,19 +233,19 @@ Description: Contains information about the remaining reward for each stakeholde
 -}
 -----------------------------------------------------------------------------------------------------------------------------------
 data RewardRest = RewardRest
-  { rewardRestId :: !RewardRestId
-  , rewardRestAddrId :: !StakeAddressId -- noreference
+  { rewardRestAddrId :: !StakeAddressId -- noreference
   , rewardRestType :: !RewardSource     -- sqltype=rewardtype
   , rewardRestAmount :: !DbLovelace     -- sqltype=lovelace
   , rewardRestEarnedEpoch :: !Word64    -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
   , rewardRestSpendableEpoch :: !Word64
   } deriving (Show, Eq, Generic)
 
+instance DbInfo RewardRest
+
 rewardRestDecoder :: D.Row RewardRest
 rewardRestDecoder =
   RewardRest
-    <$> idDecoder RewardRestId -- rewardRestId
-    <*> idDecoder StakeAddressId -- rewardRestAddrId
+    <$> idDecoder StakeAddressId -- rewardRestAddrId
     <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
     <*> dbLovelaceDecoder -- rewardRestAmount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestEarnedEpoch
@@ -241,13 +254,21 @@ rewardRestDecoder =
 rewardRestEncoder :: E.Params RewardRest
 rewardRestEncoder =
   mconcat
-    [ rewardRestId >$< idEncoder getRewardRestId
-    , rewardRestAddrId >$< idEncoder getStakeAddressId
+    [ rewardRestAddrId >$< idEncoder getStakeAddressId
     , rewardRestType >$< E.param (E.nonNullable rewardSourceEncoder)
     , rewardRestAmount >$< dbLovelaceEncoder
     , rewardRestEarnedEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , rewardRestSpendableEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
+
+rewardRestEncoderMany :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
+rewardRestEncoderMany =
+  contrazip5
+    (manyEncoder $ idEncoderMany getStakeAddressId)
+    (manyEncoder $ E.nonNullable rewardSourceEncoder)
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
@@ -265,6 +286,8 @@ data EpochStake = EpochStake
   } deriving (Show, Eq, Generic)
 -- similar scenario as in Reward the constraint that was here is now set manually in
 -- `applyAndInsertBlockMaybe` at a more optimal time.
+
+instance DbInfo EpochStake
 
 epochStakeDecoder :: D.Row EpochStake
 epochStakeDecoder =
@@ -297,6 +320,9 @@ data EpochStakeProgress = EpochStakeProgress
   , epochStakeProgressCompleted :: !Bool
   -- UniqueEpochStakeProgress epochNo
   } deriving (Show, Eq, Generic)
+
+instance DbInfo EpochStakeProgress where
+  uniqueFields _ = ["epoch_no"]
 
 epochStakeProgressDecoder :: D.Row EpochStakeProgress
 epochStakeProgressDecoder =

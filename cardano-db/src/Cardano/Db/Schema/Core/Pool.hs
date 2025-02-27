@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.Pool where
 
@@ -31,6 +32,9 @@ import Cardano.Db.Types (
   dbLovelaceEncoder
   )
 import Data.Functor.Contravariant ((>$<))
+import Contravariant.Extras (contrazip6)
+import Cardano.Db.Statement.Types (DbInfo(..))
+import Cardano.Db.Statement.Function.Core (manyEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- POOLS
@@ -45,6 +49,9 @@ data PoolHash = PoolHash
   , poolHashHashRaw :: !ByteString  -- unique hashRaw sqltype=hash28type
   , poolHashView :: !Text
   } deriving (Eq, Show, Generic)
+
+instance DbInfo PoolHash where
+  uniqueFields _ = ["hash_raw"]
 
 poolHashDecoder :: D.Row PoolHash
 poolHashDecoder =
@@ -63,7 +70,7 @@ poolHashEncoder =
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
-Table Name: pool_meta_data
+Table Name: pool_stat
 Description: A table containing information about pool metadata.
 -}
 data PoolStat = PoolStat
@@ -75,6 +82,8 @@ data PoolStat = PoolStat
   , poolStatStake :: !DbWord64          -- sqltype=word64type
   , poolStatVotingPower :: !(Maybe DbWord64) -- sqltype=word64type
   } deriving (Eq, Show, Generic)
+
+instance DbInfo PoolStat
 
 poolStatDecoder :: D.Row PoolStat
 poolStatDecoder =
@@ -99,6 +108,16 @@ poolStatEncoder =
     , poolStatVotingPower >$< E.param (E.nullable $ fromIntegral . unDbWord64 >$< E.int8)
     ]
 
+poolStatEncoderMany :: E.Params ([PoolHashId], [Word64], [DbWord64], [DbWord64], [DbWord64], [Maybe DbWord64])
+poolStatEncoderMany =
+  contrazip6
+    (manyEncoder $ E.nonNullable $ getPoolHashId >$< E.int8) -- poolHashId
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int4) -- epoch_no
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_blocks
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_delegators
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- stake
+    (manyEncoder $ E.nullable $ fromIntegral . unDbWord64 >$< E.numeric) -- voting_power
+
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
 Table Name: pool_update
@@ -118,6 +137,8 @@ data PoolUpdate = PoolUpdate
   , poolUpdateDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
   , poolUpdateRegisteredTxId :: !TxId      -- noreference -- Slot number in which the pool was registered.
   } deriving (Eq, Show, Generic)
+
+instance DbInfo PoolUpdate
 
 poolUpdateDecoder :: D.Row PoolUpdate
 poolUpdateDecoder =
@@ -165,6 +186,8 @@ data PoolMetadataRef = PoolMetadataRef
   , poolMetadataRefRegisteredTxId :: !TxId -- noreference
   } deriving (Eq, Show, Generic)
 
+instance DbInfo PoolMetadataRef
+
 poolMetadataRefDecoder :: D.Row PoolMetadataRef
 poolMetadataRefDecoder =
   PoolMetadataRef
@@ -195,6 +218,8 @@ data PoolOwner = PoolOwner
   , poolOwnerPoolUpdateId :: !PoolUpdateId -- noreference
   } deriving (Eq, Show, Generic)
 
+instance DbInfo PoolOwner
+
 poolOwnerDecoder :: D.Row PoolOwner
 poolOwnerDecoder =
   PoolOwner
@@ -222,6 +247,8 @@ data PoolRetire = PoolRetire
   , poolRetireAnnouncedTxId :: !TxId       -- noreference -- Slot number in which the pool announced it was retiring.
   , poolRetireRetiringEpoch :: !Word64     -- sqltype=word31type -- Epoch number in which the pool will retire.
   } deriving (Eq, Show, Generic)
+
+instance DbInfo PoolRetire
 
 poolRetireDecoder :: D.Row PoolRetire
 poolRetireDecoder =
@@ -258,6 +285,8 @@ data PoolRelay = PoolRelay
   , poolRelayPort :: !(Maybe Word16)
   } deriving (Eq, Show, Generic)
 
+instance DbInfo PoolRelay
+
 poolRelayDecoder :: D.Row PoolRelay
 poolRelayDecoder =
   PoolRelay
@@ -292,6 +321,9 @@ data DelistedPool = DelistedPool
   , delistedPoolHashRaw :: !ByteString                      -- sqltype=hash28type
   } deriving (Eq, Show, Generic)
 
+instance DbInfo DelistedPool where
+  uniqueFields _ = ["hash_raw"]
+
 delistedPoolDecoder :: D.Row DelistedPool
 delistedPoolDecoder =
   DelistedPool
@@ -317,6 +349,9 @@ data ReservedPoolTicker = ReservedPoolTicker
   , reservedPoolTickerName :: !Text
   , reservedPoolTickerPoolHash :: !ByteString               -- sqltype=hash28type
   } deriving (Eq, Show, Generic)
+
+instance DbInfo ReservedPoolTicker where
+  uniqueFields _ = ["name"]
 
 reservedPoolTickerDecoder :: D.Row ReservedPoolTicker
 reservedPoolTickerDecoder =

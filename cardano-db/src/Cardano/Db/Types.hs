@@ -1,16 +1,18 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Types (
   DbAction (..),
-  DbTxMode (..),
+  DbTransMode (..),
   DbTransaction (..),
   DbEnv (..),
   Ada (..),
@@ -96,42 +98,37 @@ module Cardano.Db.Types (
   hardcodedAlwaysNoConfidence,
 ) where
 
+import Cardano.BM.Trace (Trace)
+import Cardano.Db.Error (DbError (..), CallSite (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import qualified Codec.Binary.Bech32 as Bech32
-import Crypto.Hash (Blake2b_160)
-import qualified Crypto.Hash
-import Data.Aeson.Encoding (unsafeToEncoding)
-import Data.Aeson.Types (FromJSON (..), ToJSON (..))
-import qualified Data.Aeson.Types as Aeson
-import qualified Data.ByteArray as ByteArray
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Builder as Builder
-import Data.Either (fromRight)
-import Data.Fixed (Micro, showFixed)
-import Data.Scientific (Scientific)
-import Data.Text (Text)
-import qualified Data.Text as Text
-import Data.Word (Word16, Word64)
-import GHC.Generics (Generic)
-import Quiet (Quiet (..))
-import Data.Int (Int64)
-import Cardano.Prelude (Bifunctor(..), MonadError (..), MonadIO (..), ask, MonadReader, when)
-import Data.Bits (Bits(..))
-import qualified Hasql.Decoders as D
-import qualified Hasql.Encoders as E
-import Data.Functor.Contravariant ((>$<))
-import Data.WideWord (Word128 (..))
+import Cardano.Prelude (Bifunctor(..), MonadError (..), MonadIO (..), MonadReader)
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Reader (ReaderT)
-import Cardano.Db.Error (DbError (..), CallSite (..))
+import Crypto.Hash (Blake2b_160)
+import Data.Aeson.Encoding (unsafeToEncoding)
+import Data.Aeson.Types (FromJSON (..), ToJSON (..))
+import Data.Bits (Bits(..))
+import Data.ByteString (ByteString)
+import Data.Either (fromRight)
+import Data.Fixed (Micro, showFixed)
+import Data.Functor.Contravariant ((>$<))
+import Data.Int (Int64)
+import Data.Scientific (Scientific)
+import Data.Text (Text)
+import Data.WideWord (Word128 (..))
+import Data.Word (Word16, Word64)
+import GHC.Generics
+import Quiet (Quiet (..))
+import qualified Codec.Binary.Bech32 as Bech32
+import qualified Crypto.Hash
+import qualified Data.Aeson.Types as Aeson
+import qualified Data.ByteArray as ByteArray
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.Text as Text
 import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Session as HsqlS
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
 import qualified Hasql.Transaction as HsqlT
-import qualified Hasql.Transaction.Sessions as HsqlT
-import Cardano.BM.Trace (Trace, logDebug)
-import GHC.Stack (SrcLoc (..), HasCallStack, getCallStack, callStack)
-import Data.Time (getCurrentTime, diffUTCTime)
-
 
 newtype DbAction m a = DbAction
   { runDbAction :: ExceptT DbError (ReaderT DbEnv m) a }
@@ -142,13 +139,13 @@ newtype DbAction m a = DbAction
     , MonadIO
     )
 
-data DbTxMode = Write | ReadOnly
+data DbTransMode = TransWrite | TransReadOnly
 
 -- Environment with transaction settings
 data DbEnv = DbEnv
   { dbConnection :: !HsqlC.Connection
   , dbEnableLogging :: !Bool
-  ,dbTracer :: !(Trace IO Text)
+  , dbTracer :: !(Trace IO Text)
   }
 
 -- | Transaction wrapper for debuging/logging.
@@ -158,6 +155,7 @@ data DbTransaction a = DbTransaction
   , dtTx :: !(HsqlT.Transaction a)
   }
 
+-- | Convert a `Scientific` to `Ada`.
 newtype Ada = Ada
   { unAda :: Micro
   }

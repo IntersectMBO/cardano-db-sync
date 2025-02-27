@@ -65,14 +65,17 @@ library
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
                         Cardano.Db.Statement
+                        Cardano.Db.Statement.Function.Core
+                        Cardano.Db.Statement.Function.Query
+                        Cardano.Db.Statement.Function.Insert
                         Cardano.Db.Statement.Base
                         Cardano.Db.Statement.EpochAndProtocol
                         Cardano.Db.Statement.GovernanceAndVoting
-                        Cardano.Db.Statement.Helpers
                         Cardano.Db.Statement.MultiAsset
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool
                         Cardano.Db.Statement.StakeDeligation
+                        Cardano.Db.Statement.Types
                         Cardano.Db.Types
 
   build-depends:        aeson

@@ -1,4 +1,5 @@
 module Cardano.Db.Schema.Ids where
+
 import Data.Int (Int64)
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
@@ -25,9 +26,11 @@ maybeIdDecoder f = D.column (D.nullable $ f <$> D.int8)
 idEncoder :: (a -> Int64) -> E.Params a
 idEncoder f = E.param $ E.nonNullable $ f >$< E.int8
 
+idEncoderMany :: (a -> Int64) -> E.NullableOrNot E.Value  a
+idEncoderMany f = E.nonNullable $ f >$< E.int8
+
 maybeIdEncoder :: (a -> Int64) -> E.Params (Maybe a)
 maybeIdEncoder f = E.param $ E.nullable $ f >$< E.int8
-
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- BASE TABLES
@@ -77,10 +80,16 @@ newtype ExtraKeyWitnessId = ExtraKeyWitnessId { getExtraKeyWitnessId :: Int64 }
 newtype SlotLeaderId = SlotLeaderId { getSlotLeaderId :: Int64 }
   deriving (Eq, Show, Ord)
 
+newtype SchemaVersionId = SchemaVersionId { getSchemaVersionId :: Int64 }
+  deriving (Eq, Show, Ord)
+
 newtype MetaId = MetaId { getMetaId :: Int64 }
   deriving (Eq, Show, Ord)
 
 newtype ExtraMigrationsId = ExtraMigrationsId { getExtraMigrationsId :: Int64 }
+  deriving (Eq, Show, Ord)
+
+newtype WithdrawalId = WithdrawalId { getWithdrawalId :: Int64 }
   deriving (Eq, Show, Ord)
 
 -----------------------------------------------------------------------------------------------------------------------------------
