@@ -19,7 +19,7 @@ extra-source-files:     CHANGELOG.md
 custom-setup
   setup-depends:
                         base
-                      , Cabal
+                      , Cabal < 3.14
                       , bytestring
                       , cardano-crypto-class
                       , directory

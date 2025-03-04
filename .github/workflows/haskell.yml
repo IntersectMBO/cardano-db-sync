@@ -61,6 +61,15 @@ jobs:
         run: cabal build all -j --enable-tests --only-dependencies
       - name: cabal build
         run: cabal build all -j --enable-tests
+
+      - name: save cabal cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cabal-devx/packages
+            ~/.cabal-devx/store
+          key: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
+
       - name: postgres init
         working-directory:
         run: |
