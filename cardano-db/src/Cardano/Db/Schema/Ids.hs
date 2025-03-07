@@ -32,7 +32,6 @@ idEncoderMany f = E.nonNullable $ f >$< E.int8
 maybeIdEncoder :: (a -> Int64) -> E.Params (Maybe a)
 maybeIdEncoder f = E.param $ E.nullable $ f >$< E.int8
 
-
 -----------------------------------------------------------------------------------------------------------------------------------
 -- BASE TABLES
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -88,6 +87,9 @@ newtype MetaId = MetaId { getMetaId :: Int64 }
   deriving (Eq, Show, Ord)
 
 newtype ExtraMigrationsId = ExtraMigrationsId { getExtraMigrationsId :: Int64 }
+  deriving (Eq, Show, Ord)
+
+newtype WithdrawalId = WithdrawalId { getWithdrawalId :: Int64 }
   deriving (Eq, Show, Ord)
 
 -----------------------------------------------------------------------------------------------------------------------------------
