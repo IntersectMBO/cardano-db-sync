@@ -8,23 +8,23 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.OffChain where
 
-import Cardano.Db.Schema.Orphans ()
-import Cardano.Db.Schema.Ids
-import Cardano.Db.Types (HasDbInfo (..)
- )
+import Contravariant.Extras (contrazip5, contrazip6, contrazip3)
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Data.Functor.Contravariant
 import GHC.Generics (Generic)
-
 import Hasql.Decoders as D
 import Hasql.Encoders as E
-import Contravariant.Extras (contrazip5, contrazip6, contrazip3)
-import Cardano.Db.Statement.Helpers (manyEncoder)
+
+import Cardano.Db.Schema.Ids
+import Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Types (DbInfo(..))
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- OFFCHAIN
@@ -35,38 +35,39 @@ Table Name: off_chain_pool_data
 Description:
 -}
 data OffChainPoolData = OffChainPoolData
-  { offChainPoolData_Id :: !OffChainPoolDataId
-  , offChainPoolData_PoolId :: !PoolHashId           -- noreference
-  , offChainPoolData_TickerName :: !Text
-  , offChainPoolData_Hash :: !ByteString             -- sqltype=hash32type
-  , offChainPoolData_Json :: !Text                   -- sqltype=jsonb
-  , offChainPoolData_Bytes :: !ByteString            -- sqltype=bytea
-  , offChainPoolData_PmrId :: !PoolMetadataRefId     -- noreference
+  { offChainPoolDataId :: !OffChainPoolDataId
+  , offChainPoolDataPoolId :: !PoolHashId           -- noreference
+  , offChainPoolDataTickerName :: !Text
+  , offChainPoolDataHash :: !ByteString             -- sqltype=hash32type
+  , offChainPoolDataJson :: !Text                   -- sqltype=jsonb
+  , offChainPoolDataBytes :: !ByteString            -- sqltype=bytea
+  , offChainPoolDataPmrId :: !PoolMetadataRefId     -- noreference
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainPoolData
+instance DbInfo OffChainPoolData where
+  uniqueFields _ = ["pool_id", "prm_id"]
 
 offChainPoolDataDecoder :: D.Row OffChainPoolData
 offChainPoolDataDecoder =
   OffChainPoolData
-    <$> idDecoder OffChainPoolDataId -- offChainPoolData_Id
-    <*> idDecoder PoolHashId -- offChainPoolData_PoolId
-    <*> D.column (D.nonNullable D.text) -- offChainPoolData_TickerName
-    <*> D.column (D.nonNullable D.bytea) -- offChainPoolData_Hash
-    <*> D.column (D.nonNullable D.text) -- offChainPoolData_Json
-    <*> D.column (D.nonNullable D.bytea) -- offChainPoolData_Bytes
-    <*> idDecoder PoolMetadataRefId -- offChainPoolData_PmrId
+    <$> idDecoder OffChainPoolDataId -- offChainPoolDataId
+    <*> idDecoder PoolHashId -- offChainPoolDataPoolId
+    <*> D.column (D.nonNullable D.text) -- offChainPoolDataTickerName
+    <*> D.column (D.nonNullable D.bytea) -- offChainPoolDataHash
+    <*> D.column (D.nonNullable D.text) -- offChainPoolDataJson
+    <*> D.column (D.nonNullable D.bytea) -- offChainPoolDataBytes
+    <*> idDecoder PoolMetadataRefId -- offChainPoolDataPmrId
 
 offChainPoolDataEncoder :: E.Params OffChainPoolData
 offChainPoolDataEncoder =
   mconcat
-    [ offChainPoolData_Id >$< idEncoder getOffChainPoolDataId
-    , offChainPoolData_PoolId >$< idEncoder getPoolHashId
-    , offChainPoolData_TickerName >$< E.param (E.nonNullable E.text)
-    , offChainPoolData_Hash >$< E.param (E.nonNullable E.bytea)
-    , offChainPoolData_Json >$< E.param (E.nonNullable E.text)
-    , offChainPoolData_Bytes >$< E.param (E.nonNullable E.bytea)
-    , offChainPoolData_PmrId >$< idEncoder getPoolMetadataRefId
+    [ offChainPoolDataId >$< idEncoder getOffChainPoolDataId
+    , offChainPoolDataPoolId >$< idEncoder getPoolHashId
+    , offChainPoolDataTickerName >$< E.param (E.nonNullable E.text)
+    , offChainPoolDataHash >$< E.param (E.nonNullable E.bytea)
+    , offChainPoolDataJson >$< E.param (E.nonNullable E.text)
+    , offChainPoolDataBytes >$< E.param (E.nonNullable E.bytea)
+    , offChainPoolDataPmrId >$< idEncoder getPoolMetadataRefId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -77,35 +78,36 @@ Description:
 -- The pool metadata fetch error. We duplicate the poolId for easy access.
 -- TODO(KS): Debatable whether we need to persist this between migrations!
 data OffChainPoolFetchError = OffChainPoolFetchError
-  { offChainPoolFetchError_Id :: !OffChainPoolFetchErrorId
-  , offChainPoolFetchError_PoolId :: !PoolHashId              -- noreference
-  , offChainPoolFetchError_FetchTime :: !UTCTime              -- sqltype=timestamp
-  , offChainPoolFetchError_PmrId :: !PoolMetadataRefId        -- noreference
-  , offChainPoolFetchError_FetchError :: !Text
-  , offChainPoolFetchError_RetryCount :: !Word                -- sqltype=word31type
+  { offChainPoolFetchErrorId :: !OffChainPoolFetchErrorId
+  , offChainPoolFetchErrorPoolId :: !PoolHashId              -- noreference
+  , offChainPoolFetchErrorFetchTime :: !UTCTime              -- sqltype=timestamp
+  , offChainPoolFetchErrorPmrId :: !PoolMetadataRefId        -- noreference
+  , offChainPoolFetchErrorFetchError :: !Text
+  , offChainPoolFetchErrorRetryCount :: !Word                -- sqltype=word31type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainPoolFetchError
+instance DbInfo OffChainPoolFetchError where
+  uniqueFields _ = ["pool_id", "fetch_time", "retry_count"]
 
 offChainPoolFetchErrorDecoder :: D.Row OffChainPoolFetchError
 offChainPoolFetchErrorDecoder =
   OffChainPoolFetchError
-    <$> idDecoder OffChainPoolFetchErrorId -- offChainPoolFetchError_Id
-    <*> idDecoder PoolHashId -- offChainPoolFetchError_PoolId
-    <*> D.column (D.nonNullable D.timestamptz) -- offChainPoolFetchError_FetchTime
-    <*> idDecoder PoolMetadataRefId -- offChainPoolFetchError_PmrId
-    <*> D.column (D.nonNullable D.text) -- offChainPoolFetchError_FetchError
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainPoolFetchError_RetryCount
+    <$> idDecoder OffChainPoolFetchErrorId -- offChainPoolFetchErrorId
+    <*> idDecoder PoolHashId -- offChainPoolFetchErrorPoolId
+    <*> D.column (D.nonNullable D.timestamptz) -- offChainPoolFetchErrorFetchTime
+    <*> idDecoder PoolMetadataRefId -- offChainPoolFetchErrorPmrId
+    <*> D.column (D.nonNullable D.text) -- offChainPoolFetchErrorFetchError
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainPoolFetchErrorRetryCount
 
 offChainPoolFetchErrorEncoder :: E.Params OffChainPoolFetchError
 offChainPoolFetchErrorEncoder =
   mconcat
-    [ offChainPoolFetchError_Id >$< idEncoder getOffChainPoolFetchErrorId
-    , offChainPoolFetchError_PoolId >$< idEncoder getPoolHashId
-    , offChainPoolFetchError_FetchTime >$< E.param (E.nonNullable E.timestamptz)
-    , offChainPoolFetchError_PmrId >$< idEncoder getPoolMetadataRefId
-    , offChainPoolFetchError_FetchError >$< E.param (E.nonNullable E.text)
-    , offChainPoolFetchError_RetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ offChainPoolFetchErrorId >$< idEncoder getOffChainPoolFetchErrorId
+    , offChainPoolFetchErrorPoolId >$< idEncoder getPoolHashId
+    , offChainPoolFetchErrorFetchTime >$< E.param (E.nonNullable E.timestamptz)
+    , offChainPoolFetchErrorPmrId >$< idEncoder getPoolMetadataRefId
+    , offChainPoolFetchErrorFetchError >$< E.param (E.nonNullable E.text)
+    , offChainPoolFetchErrorRetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -114,44 +116,45 @@ Table Name: off_chain_vote_data
 Description:
 -}
 data OffChainVoteData = OffChainVoteData
-  { offChainVoteData_Id :: !OffChainVoteDataId
-  , offChainVoteData_VotingAnchorId :: !VotingAnchorId         -- noreference
-  , offChainVoteData_Hash :: !ByteString
-  , offChainVoteData_Language :: !Text
-  , offChainVoteData_Comment :: !(Maybe Text)
-  , offChainVoteData_Json :: !Text                             -- sqltype=jsonb
-  , offChainVoteData_Bytes :: !ByteString                      -- sqltype=bytea
-  , offChainVoteData_Warning :: !(Maybe Text)
-  , offChainVoteData_IsValid :: !(Maybe Bool)
+  { offChainVoteDataId :: !OffChainVoteDataId
+  , offChainVoteDataVotingAnchorId :: !VotingAnchorId         -- noreference
+  , offChainVoteDataHash :: !ByteString
+  , offChainVoteDataLanguage :: !Text
+  , offChainVoteDataComment :: !(Maybe Text)
+  , offChainVoteDataJson :: !Text                             -- sqltype=jsonb
+  , offChainVoteDataBytes :: !ByteString                      -- sqltype=bytea
+  , offChainVoteDataWarning :: !(Maybe Text)
+  , offChainVoteDataIsValid :: !(Maybe Bool)
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteData
+instance DbInfo OffChainVoteData where
+  uniqueFields _ = ["hash", "voting_anchor_id"]
 
 offChainVoteDataDecoder :: D.Row OffChainVoteData
 offChainVoteDataDecoder =
   OffChainVoteData
-    <$> idDecoder OffChainVoteDataId -- offChainVoteData_Id
-    <*> idDecoder VotingAnchorId -- offChainVoteData_VotingAnchorId
-    <*> D.column (D.nonNullable D.bytea) -- offChainVoteData_Hash
-    <*> D.column (D.nonNullable D.text) -- offChainVoteData_Language
-    <*> D.column (D.nullable D.text) -- offChainVoteData_Comment
-    <*> D.column (D.nonNullable D.text) -- offChainVoteData_Json
-    <*> D.column (D.nonNullable D.bytea) -- offChainVoteData_Bytes
-    <*> D.column (D.nullable D.text) -- offChainVoteData_Warning
-    <*> D.column (D.nullable D.bool) -- offChainVoteData_IsValid
+    <$> idDecoder OffChainVoteDataId -- offChainVoteDataId
+    <*> idDecoder VotingAnchorId -- offChainVoteDataVotingAnchorId
+    <*> D.column (D.nonNullable D.bytea) -- offChainVoteDataHash
+    <*> D.column (D.nonNullable D.text) -- offChainVoteDataLanguage
+    <*> D.column (D.nullable D.text) -- offChainVoteDataComment
+    <*> D.column (D.nonNullable D.text) -- offChainVoteDataJson
+    <*> D.column (D.nonNullable D.bytea) -- offChainVoteDataBytes
+    <*> D.column (D.nullable D.text) -- offChainVoteDataWarning
+    <*> D.column (D.nullable D.bool) -- offChainVoteDataIsValid
 
 offChainVoteDataEncoder :: E.Params OffChainVoteData
 offChainVoteDataEncoder =
   mconcat
-    [ offChainVoteData_Id >$< idEncoder getOffChainVoteDataId
-    , offChainVoteData_VotingAnchorId >$< idEncoder getVotingAnchorId
-    , offChainVoteData_Hash >$< E.param (E.nonNullable E.bytea)
-    , offChainVoteData_Language >$< E.param (E.nonNullable E.text)
-    , offChainVoteData_Comment >$< E.param (E.nullable E.text)
-    , offChainVoteData_Json >$< E.param (E.nonNullable E.text)
-    , offChainVoteData_Bytes >$< E.param (E.nonNullable E.bytea)
-    , offChainVoteData_Warning >$< E.param (E.nullable E.text)
-    , offChainVoteData_IsValid >$< E.param (E.nullable E.bool)
+    [ offChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    , offChainVoteDataVotingAnchorId >$< idEncoder getVotingAnchorId
+    , offChainVoteDataHash >$< E.param (E.nonNullable E.bytea)
+    , offChainVoteDataLanguage >$< E.param (E.nonNullable E.text)
+    , offChainVoteDataComment >$< E.param (E.nullable E.text)
+    , offChainVoteDataJson >$< E.param (E.nonNullable E.text)
+    , offChainVoteDataBytes >$< E.param (E.nonNullable E.bytea)
+    , offChainVoteDataWarning >$< E.param (E.nullable E.text)
+    , offChainVoteDataIsValid >$< E.param (E.nullable E.bool)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -160,35 +163,35 @@ Table Name: off_chain_vote_gov_action_data
 Description:
 -}
 data OffChainVoteGovActionData = OffChainVoteGovActionData
-  { offChainVoteGovActionData_Id :: !OffChainVoteGovActionDataId
-  , offChainVoteGovActionData_OffChainVoteDataId :: !OffChainVoteDataId -- noreference
-  , offChainVoteGovActionData_Title :: !Text
-  , offChainVoteGovActionData_Abstract :: !Text
-  , offChainVoteGovActionData_Motivation :: !Text
-  , offChainVoteGovActionData_Rationale :: !Text
+  { offChainVoteGovActionDataId :: !OffChainVoteGovActionDataId
+  , offChainVoteGovActionDataOffChainVoteDataId :: !OffChainVoteDataId -- noreference
+  , offChainVoteGovActionDataTitle :: !Text
+  , offChainVoteGovActionDataAbstract :: !Text
+  , offChainVoteGovActionDataMotivation :: !Text
+  , offChainVoteGovActionDataRationale :: !Text
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteGovActionData
+instance DbInfo OffChainVoteGovActionData
 
 offChainVoteGovActionDataDecoder :: D.Row OffChainVoteGovActionData
 offChainVoteGovActionDataDecoder =
   OffChainVoteGovActionData
-    <$> idDecoder OffChainVoteGovActionDataId -- offChainVoteGovActionData_Id
-    <*> idDecoder OffChainVoteDataId -- offChainVoteGovActionData_OffChainVoteDataId
-    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionData_Title
-    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionData_Abstract
-    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionData_Motivation
-    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionData_Rationale
+    <$> idDecoder OffChainVoteGovActionDataId -- offChainVoteGovActionDataId
+    <*> idDecoder OffChainVoteDataId -- offChainVoteGovActionDataOffChainVoteDataId
+    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionDataTitle
+    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionDataAbstract
+    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionDataMotivation
+    <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionDataRationale
 
 offChainVoteGovActionDataEncoder :: E.Params OffChainVoteGovActionData
 offChainVoteGovActionDataEncoder =
   mconcat
-    [ offChainVoteGovActionData_Id >$< idEncoder getOffChainVoteGovActionDataId
-    , offChainVoteGovActionData_OffChainVoteDataId >$< idEncoder getOffChainVoteDataId
-    , offChainVoteGovActionData_Title >$< E.param (E.nonNullable E.text)
-    , offChainVoteGovActionData_Abstract >$< E.param (E.nonNullable E.text)
-    , offChainVoteGovActionData_Motivation >$< E.param (E.nonNullable E.text)
-    , offChainVoteGovActionData_Rationale >$< E.param (E.nonNullable E.text)
+    [ offChainVoteGovActionDataId >$< idEncoder getOffChainVoteGovActionDataId
+    , offChainVoteGovActionDataOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    , offChainVoteGovActionDataTitle >$< E.param (E.nonNullable E.text)
+    , offChainVoteGovActionDataAbstract >$< E.param (E.nonNullable E.text)
+    , offChainVoteGovActionDataMotivation >$< E.param (E.nonNullable E.text)
+    , offChainVoteGovActionDataRationale >$< E.param (E.nonNullable E.text)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -197,44 +200,44 @@ Table Name: off_chain_vote_drep_data
 Description:
 -}
 data OffChainVoteDrepData = OffChainVoteDrepData
-  { offChainVoteDrepData_Id :: !OffChainVoteDrepDataId
-  , offChainVoteDrepData_OffChainVoteDataId :: !OffChainVoteDataId -- noreference
-  , offChainVoteDrepData_PaymentAddress :: !(Maybe Text)
-  , offChainVoteDrepData_GivenName :: !Text
-  , offChainVoteDrepData_Objectives :: !(Maybe Text)
-  , offChainVoteDrepData_Motivations :: !(Maybe Text)
-  , offChainVoteDrepData_Qualifications :: !(Maybe Text)
-  , offChainVoteDrepData_ImageUrl :: !(Maybe Text)
-  , offChainVoteDrepData_ImageHash :: !(Maybe Text)
+  { offChainVoteDrepDataId :: !OffChainVoteDrepDataId
+  , offChainVoteDrepDataOffChainVoteDataId :: !OffChainVoteDataId -- noreference
+  , offChainVoteDrepDataPaymentAddress :: !(Maybe Text)
+  , offChainVoteDrepDataGivenName :: !Text
+  , offChainVoteDrepDataObjectives :: !(Maybe Text)
+  , offChainVoteDrepDataMotivations :: !(Maybe Text)
+  , offChainVoteDrepDataQualifications :: !(Maybe Text)
+  , offChainVoteDrepDataImageUrl :: !(Maybe Text)
+  , offChainVoteDrepDataImageHash :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteDrepData
+instance DbInfo OffChainVoteDrepData
 
 offChainVoteDrepDataDecoder :: D.Row OffChainVoteDrepData
 offChainVoteDrepDataDecoder =
   OffChainVoteDrepData
-    <$> idDecoder OffChainVoteDrepDataId -- offChainVoteDrepData_Id
-    <*> idDecoder OffChainVoteDataId -- offChainVoteDrepData_OffChainVoteDataId
-    <*> D.column (D.nullable D.text) -- offChainVoteDrepData_PaymentAddress
-    <*> D.column (D.nonNullable D.text) -- offChainVoteDrepData_GivenName
-    <*> D.column (D.nullable D.text) -- offChainVoteDrepData_Objectives
-    <*> D.column (D.nullable D.text) -- offChainVoteDrepData_Motivations
-    <*> D.column (D.nullable D.text) -- offChainVoteDrepData_Qualifications
-    <*> D.column (D.nullable D.text) -- offChainVoteDrepData_ImageUrl
-    <*> D.column (D.nullable D.text) -- offChainVoteDrepData_ImageHash
+    <$> idDecoder OffChainVoteDrepDataId -- offChainVoteDrepDataId
+    <*> idDecoder OffChainVoteDataId -- offChainVoteDrepDataOffChainVoteDataId
+    <*> D.column (D.nullable D.text) -- offChainVoteDrepDataPaymentAddress
+    <*> D.column (D.nonNullable D.text) -- offChainVoteDrepDataGivenName
+    <*> D.column (D.nullable D.text) -- offChainVoteDrepDataObjectives
+    <*> D.column (D.nullable D.text) -- offChainVoteDrepDataMotivations
+    <*> D.column (D.nullable D.text) -- offChainVoteDrepDataQualifications
+    <*> D.column (D.nullable D.text) -- offChainVoteDrepDataImageUrl
+    <*> D.column (D.nullable D.text) -- offChainVoteDrepDataImageHash
 
 offChainVoteDrepDataEncoder :: E.Params OffChainVoteDrepData
 offChainVoteDrepDataEncoder =
   mconcat
-    [ offChainVoteDrepData_Id >$< idEncoder getOffChainVoteDrepDataId
-    , offChainVoteDrepData_OffChainVoteDataId >$< idEncoder getOffChainVoteDataId
-    , offChainVoteDrepData_PaymentAddress >$< E.param (E.nullable E.text)
-    , offChainVoteDrepData_GivenName >$< E.param (E.nonNullable E.text)
-    , offChainVoteDrepData_Objectives >$< E.param (E.nullable E.text)
-    , offChainVoteDrepData_Motivations >$< E.param (E.nullable E.text)
-    , offChainVoteDrepData_Qualifications >$< E.param (E.nullable E.text)
-    , offChainVoteDrepData_ImageUrl >$< E.param (E.nullable E.text)
-    , offChainVoteDrepData_ImageHash >$< E.param (E.nullable E.text)
+    [ offChainVoteDrepDataId >$< idEncoder getOffChainVoteDrepDataId
+    , offChainVoteDrepDataOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    , offChainVoteDrepDataPaymentAddress >$< E.param (E.nullable E.text)
+    , offChainVoteDrepDataGivenName >$< E.param (E.nonNullable E.text)
+    , offChainVoteDrepDataObjectives >$< E.param (E.nullable E.text)
+    , offChainVoteDrepDataMotivations >$< E.param (E.nullable E.text)
+    , offChainVoteDrepDataQualifications >$< E.param (E.nullable E.text)
+    , offChainVoteDrepDataImageUrl >$< E.param (E.nullable E.text)
+    , offChainVoteDrepDataImageHash >$< E.param (E.nullable E.text)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -243,38 +246,38 @@ Table Name: off_chain_vote_author
 Description:
 -}
 data OffChainVoteAuthor = OffChainVoteAuthor
-  { offChainVoteAuthor_Id :: !OffChainVoteAuthorId
-  , offChainVoteAuthor_OffChainVoteDataId :: !OffChainVoteDataId -- noreference
-  , offChainVoteAuthor_Name :: !(Maybe Text)
-  , offChainVoteAuthor_WitnessAlgorithm :: !Text
-  , offChainVoteAuthor_PublicKey :: !Text
-  , offChainVoteAuthor_Signature :: !Text
-  , offChainVoteAuthor_Warning :: !(Maybe Text)
+  { offChainVoteAuthorId :: !OffChainVoteAuthorId
+  , offChainVoteAuthorOffChainVoteDataId :: !OffChainVoteDataId -- noreference
+  , offChainVoteAuthorName :: !(Maybe Text)
+  , offChainVoteAuthorWitnessAlgorithm :: !Text
+  , offChainVoteAuthorPublicKey :: !Text
+  , offChainVoteAuthorSignature :: !Text
+  , offChainVoteAuthorWarning :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteAuthor
+instance DbInfo OffChainVoteAuthor
 
 offChainVoteAuthorDecoder :: D.Row OffChainVoteAuthor
 offChainVoteAuthorDecoder =
   OffChainVoteAuthor
-    <$> idDecoder OffChainVoteAuthorId -- offChainVoteAuthor_Id
-    <*> idDecoder OffChainVoteDataId -- offChainVoteAuthor_OffChainVoteDataId
-    <*> D.column (D.nullable D.text) -- offChainVoteAuthor_Name
-    <*> D.column (D.nonNullable D.text) -- offChainVoteAuthor_WitnessAlgorithm
-    <*> D.column (D.nonNullable D.text) -- offChainVoteAuthor_PublicKey
-    <*> D.column (D.nonNullable D.text) -- offChainVoteAuthor_Signature
-    <*> D.column (D.nullable D.text) -- offChainVoteAuthor_Warning
+    <$> idDecoder OffChainVoteAuthorId -- offChainVoteAuthorId
+    <*> idDecoder OffChainVoteDataId -- offChainVoteAuthorOffChainVoteDataId
+    <*> D.column (D.nullable D.text) -- offChainVoteAuthorName
+    <*> D.column (D.nonNullable D.text) -- offChainVoteAuthorWitnessAlgorithm
+    <*> D.column (D.nonNullable D.text) -- offChainVoteAuthorPublicKey
+    <*> D.column (D.nonNullable D.text) -- offChainVoteAuthorSignature
+    <*> D.column (D.nullable D.text) -- offChainVoteAuthorWarning
 
 offChainVoteAuthorEncoder :: E.Params OffChainVoteAuthor
 offChainVoteAuthorEncoder =
   mconcat
-    [ -- offChainVoteAuthor_Id >$< idEncoder getOffChainVoteAuthorId
-      offChainVoteAuthor_OffChainVoteDataId >$< idEncoder getOffChainVoteDataId
-    , offChainVoteAuthor_Name >$< E.param (E.nullable E.text)
-    , offChainVoteAuthor_WitnessAlgorithm >$< E.param (E.nonNullable E.text)
-    , offChainVoteAuthor_PublicKey >$< E.param (E.nonNullable E.text)
-    , offChainVoteAuthor_Signature >$< E.param (E.nonNullable E.text)
-    , offChainVoteAuthor_Warning >$< E.param (E.nullable E.text)
+    [ -- offChainVoteAuthorId >$< idEncoder getOffChainVoteAuthorId
+      offChainVoteAuthorOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    , offChainVoteAuthorName >$< E.param (E.nullable E.text)
+    , offChainVoteAuthorWitnessAlgorithm >$< E.param (E.nonNullable E.text)
+    , offChainVoteAuthorPublicKey >$< E.param (E.nonNullable E.text)
+    , offChainVoteAuthorSignature >$< E.param (E.nonNullable E.text)
+    , offChainVoteAuthorWarning >$< E.param (E.nullable E.text)
     ]
 
 offChainVoteAuthorManyEncoder
@@ -294,35 +297,35 @@ Table Name: off_chain_vote_reference
 Description:
 -}
 data OffChainVoteReference = OffChainVoteReference
-  { offChainVoteReference_Id :: !OffChainVoteReferenceId
-  , offChainVoteReference_OffChainVoteDataId :: !OffChainVoteDataId -- noreference
-  , offChainVoteReference_Label :: !Text
-  , offChainVoteReference_Uri :: !Text
-  , offChainVoteReference_HashDigest :: !(Maybe Text)
-  , offChainVoteReference_HashAlgorithm :: !(Maybe Text)
+  { offChainVoteReferenceId :: !OffChainVoteReferenceId
+  , offChainVoteReferenceOffChainVoteDataId :: !OffChainVoteDataId -- noreference
+  , offChainVoteReferenceLabel :: !Text
+  , offChainVoteReferenceUri :: !Text
+  , offChainVoteReferenceHashDigest :: !(Maybe Text)
+  , offChainVoteReferenceHashAlgorithm :: !(Maybe Text)
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteReference
+instance DbInfo OffChainVoteReference
 
 offChainVoteReferenceDecoder :: D.Row OffChainVoteReference
 offChainVoteReferenceDecoder =
   OffChainVoteReference
-    <$> idDecoder OffChainVoteReferenceId -- offChainVoteReference_Id
-    <*> idDecoder OffChainVoteDataId -- offChainVoteReference_OffChainVoteDataId
-    <*> D.column (D.nonNullable D.text) -- offChainVoteReference_Label
-    <*> D.column (D.nonNullable D.text) -- offChainVoteReference_Uri
-    <*> D.column (D.nullable D.text) -- offChainVoteReference_HashDigest
-    <*> D.column (D.nullable D.text) -- offChainVoteReference_HashAlgorithm
+    <$> idDecoder OffChainVoteReferenceId -- offChainVoteReferenceId
+    <*> idDecoder OffChainVoteDataId -- offChainVoteReferenceOffChainVoteDataId
+    <*> D.column (D.nonNullable D.text) -- offChainVoteReferenceLabel
+    <*> D.column (D.nonNullable D.text) -- offChainVoteReferenceUri
+    <*> D.column (D.nullable D.text) -- offChainVoteReferenceHashDigest
+    <*> D.column (D.nullable D.text) -- offChainVoteReferenceHashAlgorithm
 
 offChainVoteReferenceEncoder :: E.Params OffChainVoteReference
 offChainVoteReferenceEncoder =
   mconcat
-    [ -- offChainVoteReference_Id >$< idEncoder getOffChainVoteReferenceId
-      offChainVoteReference_OffChainVoteDataId >$< idEncoder getOffChainVoteDataId
-    , offChainVoteReference_Label >$< E.param (E.nonNullable E.text)
-    , offChainVoteReference_Uri >$< E.param (E.nonNullable E.text)
-    , offChainVoteReference_HashDigest >$< E.param (E.nullable E.text)
-    , offChainVoteReference_HashAlgorithm >$< E.param (E.nullable E.text)
+    [ -- offChainVoteReferenceId >$< idEncoder getOffChainVoteReferenceId
+      offChainVoteReferenceOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    , offChainVoteReferenceLabel >$< E.param (E.nonNullable E.text)
+    , offChainVoteReferenceUri >$< E.param (E.nonNullable E.text)
+    , offChainVoteReferenceHashDigest >$< E.param (E.nullable E.text)
+    , offChainVoteReferenceHashAlgorithm >$< E.param (E.nullable E.text)
     ]
 
 offChainVoteReferenceManyEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text], [Maybe Text], [Maybe Text])
@@ -340,29 +343,29 @@ Table Name: off_chain_vote_external_update
 Description:
 -}
 data OffChainVoteExternalUpdate = OffChainVoteExternalUpdate
-  { offChainVoteExternalUpdate_Id :: !OffChainVoteExternalUpdateId
-  , offChainVoteExternalUpdate_OffChainVoteDataId :: !OffChainVoteDataId -- noreference
-  , offChainVoteExternalUpdate_Title :: !Text
-  , offChainVoteExternalUpdate_Uri :: !Text
+  { offChainVoteExternalUpdateId :: !OffChainVoteExternalUpdateId
+  , offChainVoteExternalUpdateOffChainVoteDataId :: !OffChainVoteDataId -- noreference
+  , offChainVoteExternalUpdateTitle :: !Text
+  , offChainVoteExternalUpdateUri :: !Text
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteExternalUpdate
+instance DbInfo OffChainVoteExternalUpdate
 
 offChainVoteExternalUpdateDecoder :: D.Row OffChainVoteExternalUpdate
 offChainVoteExternalUpdateDecoder =
   OffChainVoteExternalUpdate
-    <$> idDecoder OffChainVoteExternalUpdateId -- offChainVoteExternalUpdate_Id
-    <*> idDecoder OffChainVoteDataId -- offChainVoteExternalUpdate_OffChainVoteDataId
-    <*> D.column (D.nonNullable D.text) -- offChainVoteExternalUpdate_Title
-    <*> D.column (D.nonNullable D.text) -- offChainVoteExternalUpdate_Uri
+    <$> idDecoder OffChainVoteExternalUpdateId -- offChainVoteExternalUpdateId
+    <*> idDecoder OffChainVoteDataId -- offChainVoteExternalUpdateOffChainVoteDataId
+    <*> D.column (D.nonNullable D.text) -- offChainVoteExternalUpdateTitle
+    <*> D.column (D.nonNullable D.text) -- offChainVoteExternalUpdateUri
 
 offChainVoteExternalUpdateEncoder :: E.Params OffChainVoteExternalUpdate
 offChainVoteExternalUpdateEncoder =
   mconcat
-    [ offChainVoteExternalUpdate_Id >$< idEncoder getOffChainVoteExternalUpdateId
-    , offChainVoteExternalUpdate_OffChainVoteDataId >$< idEncoder getOffChainVoteDataId
-    , offChainVoteExternalUpdate_Title >$< E.param (E.nonNullable E.text)
-    , offChainVoteExternalUpdate_Uri >$< E.param (E.nonNullable E.text)
+    [ offChainVoteExternalUpdateId >$< idEncoder getOffChainVoteExternalUpdateId
+    , offChainVoteExternalUpdateOffChainVoteDataId >$< idEncoder getOffChainVoteDataId
+    , offChainVoteExternalUpdateTitle >$< E.param (E.nonNullable E.text)
+    , offChainVoteExternalUpdateUri >$< E.param (E.nonNullable E.text)
     ]
 
 offChainVoteExternalUpdatesEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text])
@@ -378,30 +381,31 @@ Table Name: off_chain_vote_fetch_error
 Description:
 -}
 data OffChainVoteFetchError = OffChainVoteFetchError
-  { offChainVoteFetchError_Id :: !OffChainVoteFetchErrorId
-  , offChainVoteFetchError_VotingAnchorId :: !VotingAnchorId        -- noreference
-  , offChainVoteFetchError_FetchError :: !Text
-  , offChainVoteFetchError_FetchTime :: !UTCTime                    -- sqltype=timestamp
-  , offChainVoteFetchError_RetryCount :: !Word                      -- sqltype=word31type
+  { offChainVoteFetchErrorId :: !OffChainVoteFetchErrorId
+  , offChainVoteFetchErrorVotingAnchorId :: !VotingAnchorId        -- noreference
+  , offChainVoteFetchErrorFetchError :: !Text
+  , offChainVoteFetchErrorFetchTime :: !UTCTime                    -- sqltype=timestamp
+  , offChainVoteFetchErrorRetryCount :: !Word                      -- sqltype=word31type
   } deriving (Eq, Show, Generic)
 
-instance HasDbInfo OffChainVoteFetchError
+instance DbInfo OffChainVoteFetchError where
+  uniqueFields _ = ["voting_anchor_id", "retry_count"]
 
 offChainVoteFetchErrorDecoder :: D.Row OffChainVoteFetchError
 offChainVoteFetchErrorDecoder =
   OffChainVoteFetchError
-    <$> idDecoder OffChainVoteFetchErrorId -- offChainVoteFetchError_Id
-    <*> idDecoder VotingAnchorId -- offChainVoteFetchError_VotingAnchorId
-    <*> D.column (D.nonNullable D.text) -- offChainVoteFetchError_FetchError
-    <*> D.column (D.nonNullable D.timestamptz) -- offChainVoteFetchError_FetchTime
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainVoteFetchError_RetryCount
+    <$> idDecoder OffChainVoteFetchErrorId -- offChainVoteFetchErrorId
+    <*> idDecoder VotingAnchorId -- offChainVoteFetchErrorVotingAnchorId
+    <*> D.column (D.nonNullable D.text) -- offChainVoteFetchErrorFetchError
+    <*> D.column (D.nonNullable D.timestamptz) -- offChainVoteFetchErrorFetchTime
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainVoteFetchErrorRetryCount
 
 offChainVoteFetchErrorEncoder :: E.Params OffChainVoteFetchError
 offChainVoteFetchErrorEncoder =
   mconcat
-    [ offChainVoteFetchError_Id >$< idEncoder getOffChainVoteFetchErrorId
-    , offChainVoteFetchError_VotingAnchorId >$< idEncoder getVotingAnchorId
-    , offChainVoteFetchError_FetchError >$< E.param (E.nonNullable E.text)
-    , offChainVoteFetchError_FetchTime >$< E.param (E.nonNullable E.timestamptz)
-    , offChainVoteFetchError_RetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ offChainVoteFetchErrorId >$< idEncoder getOffChainVoteFetchErrorId
+    , offChainVoteFetchErrorVotingAnchorId >$< idEncoder getVotingAnchorId
+    , offChainVoteFetchErrorFetchError >$< E.param (E.nonNullable E.text)
+    , offChainVoteFetchErrorFetchTime >$< E.param (E.nonNullable E.timestamptz)
+    , offChainVoteFetchErrorRetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
