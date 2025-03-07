@@ -5,11 +5,7 @@
 
 module Cardano.Db.Operations.Other.JsonbQuery where
 
-import Cardano.Db.Error (DbError (..), AsDbError (..))
-import Cardano.Db.Types (mkCallSite, DbAction)
-import Cardano.Prelude (ExceptT, MonadError (..), forM, traverse_, MonadIO, forM_)
 import Control.Monad.IO.Class (liftIO)
-
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import qualified Hasql.Connection as HsqlC
@@ -19,35 +15,9 @@ import qualified Hasql.Session as HsqlS
 import qualified Hasql.Statement as HsqlS
 import qualified Hasql.Transaction as HsqlT
 
-
--- enableJsonbInSchema :: AsDbError e => HsqlC.Connection -> ExceptT e IO ()
--- enableJsonbInSchema conn = do
---   results <- forM stmts (\stmt -> liftIO $ HsqlS.run (HasqlS.statement () (enableJsonbInSchemaStmt stmt)) conn)
---   traverse_ handleResult results
---   where
---     enableJsonbInSchemaStmt ::  (ByteString, ByteString) -> HsqlS.Statement () ()
---     enableJsonbInSchemaStmt (t, c) =
---       HsqlS.Statement
---         ("ALTER TABLE " <> t <> " ALTER COLUMN " <> c <> " TYPE jsonb USING " <> c <> "::jsonb")
---         HsqlE.noParams
---         HsqlD.noResult
---         True
-
---     handleResult res =
---       case res of
---         Left err -> throwError $ toDbError $ QueryError "enableJsonbInSchema" mkCallSite err
---         Right _ -> pure ()
-
---     stmts :: [(ByteString, ByteString)]
---     stmts = [ ("tx_metadata", "json")
---             , ("script", "json")
---             , ("datum", "value")
---             , ("redeemer_data", "value")
---             , ("cost_model", "costs")
---             , ("gov_action_proposal", "description")
---             , ("off_chain_pool_data", "json")
---             , ("off_chain_vote_data", "json")
---             ]
+import Cardano.Db.Error (DbError (..), AsDbError (..))
+import Cardano.Db.Statement.Function.Core (mkCallSite)
+import Cardano.Prelude (ExceptT, MonadError (..), forM_)
 
 enableJsonbInSchema :: HsqlT.Transaction ()
 enableJsonbInSchema = do
@@ -72,7 +42,6 @@ enableJsonbInSchema = do
             , ("off_chain_vote_data", "json")
             ]
 
-
 disableJsonbInSchema :: HsqlT.Transaction ()
 disableJsonbInSchema = do
   forM_ stmts $ \(t, c) -> HsqlT.statement () (disableJsonbInSchemaStmt t c)
@@ -93,35 +62,6 @@ disableJsonbInSchema = do
             , ("off_chain_pool_data", "json")
             , ("off_chain_vote_data", "json")
             ]
-
--- disableJsonbInSchema' :: (MonadIO m, AsDbError e) => HsqlC.Connection -> DbAction e m ()
--- disableJsonbInSchema' conn = do
---   results <- forM stmts (\stmt -> liftIO $ HsqlS.run (statement () (disableJsonbInSchemaStmt stmt)) conn)
---   traverse_ handleResult results
---   where
---     disableJsonbInSchemaStmt ::  (ByteString, ByteString) -> HsqlS.Statement () ()
---     disableJsonbInSchemaStmt (t, c) =
---       HsqlS.Statement
---         ("ALTER TABLE " <> t <> " ALTER COLUMN " <> c <> " TYPE VARCHAR")
---         HsqlE.noParams
---         HsqlD.noResult
---         True
-
---     handleResult res =
---       case res of
---         Left err -> throwError $ toDbError $ QueryError "disableJsonbInSchema" mkCallSite err
---         Right _ -> pure ()
-
---     stmts :: [(ByteString, ByteString)]
---     stmts = [ ("tx_metadata", "json")
---             , ("script", "json")
---             , ("datum", "value")
---             , ("redeemer_data", "value")
---             , ("cost_model", "costs")
---             , ("gov_action_proposal", "description")
---             , ("off_chain_pool_data", "json")
---             , ("off_chain_vote_data", "json")
---             ]
 
 queryJsonbInSchemaExists :: AsDbError e => HsqlC.Connection -> ExceptT e IO Bool
 queryJsonbInSchemaExists conn = do
