@@ -335,17 +335,17 @@ insertManyDrepDistr = insertManyCheckUnique "Many DrepDistr"
 -- insertReverseIndex :: (MonadBaseControl IO m, MonadIO m) => ReverseIndex -> ReaderT SqlBackend m ReverseIndexId
 -- insertReverseIndex = insertUnchecked "ReverseIndex"
 
-insertCheckOffChainPoolData :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolData -> ReaderT SqlBackend m ()
-insertCheckOffChainPoolData pod = do
-  foundPool <- existsPoolHashId (offChainPoolDataPoolId pod)
-  foundMeta <- existsPoolMetadataRefId (offChainPoolDataPmrId pod)
-  when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolData" pod
+-- insertCheckOffChainPoolData :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolData -> ReaderT SqlBackend m ()
+-- insertCheckOffChainPoolData pod = do
+--   foundPool <- existsPoolHashId (offChainPoolDataPoolId pod)
+--   foundMeta <- existsPoolMetadataRefId (offChainPoolDataPmrId pod)
+--   when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolData" pod
 
-insertCheckOffChainPoolFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolFetchError -> ReaderT SqlBackend m ()
-insertCheckOffChainPoolFetchError pofe = do
-  foundPool <- existsPoolHashId (offChainPoolFetchErrorPoolId pofe)
-  foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
-  when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
+-- insertCheckOffChainPoolFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolFetchError -> ReaderT SqlBackend m ()
+-- insertCheckOffChainPoolFetchError pofe = do
+--   foundPool <- existsPoolHashId (offChainPoolFetchErrorPoolId pofe)
+--   foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
+--   when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
 
 -- insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m (Maybe OffChainVoteDataId)
 -- insertOffChainVoteData ocvd = do
@@ -384,12 +384,12 @@ insertCheckOffChainPoolFetchError pofe = do
 -- insertDelistedPool :: (MonadBaseControl IO m, MonadIO m) => DelistedPool -> ReaderT SqlBackend m DelistedPoolId
 -- insertDelistedPool = insertCheckUnique "DelistedPool"
 
-insertExtraMigration :: (MonadBaseControl IO m, MonadIO m) => ExtraMigration -> ReaderT SqlBackend m ()
-insertExtraMigration token = void . insert $ ExtraMigrations (textShow token) (Just $ extraDescription token)
+-- insertExtraMigration :: (MonadBaseControl IO m, MonadIO m) => ExtraMigration -> ReaderT SqlBackend m ()
+-- insertExtraMigration token = void . insert $ ExtraMigrations (textShow token) (Just $ extraDescription token)
 
-insertEpochStakeProgress :: (MonadBaseControl IO m, MonadIO m) => [EpochStakeProgress] -> ReaderT SqlBackend m ()
-insertEpochStakeProgress =
-  insertManyCheckUnique "Many EpochStakeProgress"
+-- insertEpochStakeProgress :: (MonadBaseControl IO m, MonadIO m) => [EpochStakeProgress] -> ReaderT SqlBackend m ()
+-- insertEpochStakeProgress =
+--   insertManyCheckUnique "Many EpochStakeProgress"
 
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
@@ -606,18 +606,18 @@ insertManyWithManualUnique str contraintExists constraintName =
   where
     mConstraintName = if contraintExists then Just constraintName else Nothing
 
-insertManyCheckUnique ::
-  forall m record.
-  ( MonadBaseControl IO m
-  , MonadIO m
-  , OnlyOneUniqueKey record
-  ) =>
-  String ->
-  [record] ->
-  ReaderT SqlBackend m ()
-insertManyCheckUnique vtype records = do
-  let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
-  insertManyUnique vtype (Just constraintName) records
+-- insertManyCheckUnique ::
+--   forall m record.
+--   ( MonadBaseControl IO m
+--   , MonadIO m
+--   , OnlyOneUniqueKey record
+--   ) =>
+--   String ->
+--   [record] ->
+--   ReaderT SqlBackend m ()
+-- insertManyCheckUnique vtype records = do
+--   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
+--   insertManyUnique vtype (Just constraintName) records
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.

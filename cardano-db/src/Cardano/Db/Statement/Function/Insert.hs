@@ -21,7 +21,7 @@ import qualified Data.Text.Encoding as TextEnc
 import qualified Data.List.NonEmpty as NE
 
 import Cardano.Prelude (Proxy(..))
-import Cardano.Db.Statement.Types (DbInfo (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity)
 import Cardano.Db.Statement.Function.Core (ResultType(..), ResultTypeBulk (..))
 
 -- | Inserts a record into a table, with option of returning the generated ID.
@@ -32,29 +32,55 @@ import Cardano.Db.Statement.Function.Core (ResultType(..), ResultTypeBulk (..))
 -- * @record@: The record to insert.
 insert
   :: forall a c r. (DbInfo a)
-  => HsqlE.Params a             -- Encoder
-  -> ResultType c r             -- Whether to return a result and decoder
-  -> a                          -- Record
+  => HsqlE.Params a              -- Encoder for record (without ID)
+  -> ResultType (Entity a) r     -- Whether to return Entity and decoder
+  -> a                           -- Record to insert
   -> HsqlT.Transaction r
 insert encoder resultType record =
   HsqlT.statement record $ HsqlS.Statement sql encoder decoder True
   where
-    (decoder, shouldReturntype) = case resultType of
+    (decoder, returnClause) = case resultType of
       NoResult -> (HsqlD.noResult, "")
-      WithResult dec  -> (dec, "RETURNING id")
+      WithResult dec -> (dec, "RETURNING id, " <> columns)
 
     table = tableName (Proxy @a)
-    -- columns drop the ID column
     colsNoId = NE.fromList $ NE.drop 1 (columnNames (Proxy @a))
+    columns = Text.intercalate ", " (NE.toList colsNoId)
 
     values = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
 
     sql = TextEnc.encodeUtf8 $ Text.concat
       [ "INSERT INTO " <> table
-      , " (" <> Text.intercalate ", " (NE.toList colsNoId) <> ")"
+      , " (" <> columns <> ")"
       , " VALUES (" <> values <> ")"
-      , shouldReturntype
+      , returnClause
       ]
+
+-- insert
+--   :: forall a c r. (DbInfo a)
+--   => HsqlE.Params a             -- Encoder
+--   -> ResultType c r             -- Whether to return a result and if so it's decoder
+--   -> a                          -- Record
+--   -> HsqlT.Transaction r
+-- insert encoder resultType record =
+--   HsqlT.statement record $ HsqlS.Statement sql encoder decoder True
+--   where
+--     (decoder, shouldReturntype) = case resultType of
+--       NoResult -> (HsqlD.noResult, "")
+--       WithResult dec  -> (dec, "RETURNING id")
+
+--     table = tableName (Proxy @a)
+--     -- columns drop the ID column
+--     colsNoId = NE.fromList $ NE.drop 1 (columnNames (Proxy @a))
+
+--     values = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+
+--     sql = TextEnc.encodeUtf8 $ Text.concat
+--       [ "INSERT INTO " <> table
+--       , " (" <> Text.intercalate ", " (NE.toList colsNoId) <> ")"
+--       , " VALUES (" <> values <> ")"
+--       , shouldReturntype
+--       ]
 
 -- | Inserts a record into a table, checking for a unique constraint violation.
 --
@@ -116,14 +142,6 @@ bulkInsertReturnIds
   -> [a]                        -- Records
   -> HsqlT.Transaction [c]
 bulkInsertReturnIds extract enc dec = bulkInsert extract enc (WithResultBulk dec)
-
--- insertManyUnique
---   :: forall a b. (DbInfo a)
---   => ([a] -> b)                -- Field extractor (e.g., to tuple)
---   -> HsqlE.Params b            -- Bulk Encoder
---   -> [a]                       -- Records
---   -> HsqlT.Transaction ()
--- insertManyUnique extract enc = bulkInsert extract enc NoResultBulk
 
 -- | Inserts multiple records into a table in a single transaction using UNNEST.
 --

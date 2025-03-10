@@ -40,7 +40,7 @@ import GHC.Generics (Generic)
 
 import Hasql.Decoders as D
 import Hasql.Encoders as E
-import Cardano.Db.Statement.Types (DbInfo(..))
+import Cardano.Db.Statement.Types (DbInfo(..), Entity (..), Key)
 import Contravariant.Extras (contrazip5)
 import Cardano.Db.Statement.Function.Core (manyEncoder)
 
@@ -58,8 +58,7 @@ Description: The Epoch table is an aggregation of data in the 'Block' table, but
   in a single epoch is relatively low.
 -}
 data Epoch = Epoch
-  { epochId :: !EpochId
-  , epochOutSum :: !Word128          -- sqltype=word128type
+  { epochOutSum :: !Word128          -- sqltype=word128type
   , epochFees :: !DbLovelace         -- sqltype=lovelace
   , epochTxCount :: !Word64          -- sqltype=word31type
   , epochBlkCount :: !Word64         -- sqltype=word31type
@@ -71,11 +70,18 @@ data Epoch = Epoch
 instance DbInfo Epoch where
   uniqueFields _ = ["no"]
 
+type instance Key Epoch = EpochId
+
+entityEpochDecoder:: D.Row (Entity Epoch)
+entityEpochDecoder =
+  Entity
+    <$> idDecoder EpochId
+    <*> epochDecoder
+
 epochDecoder :: D.Row Epoch
 epochDecoder =
   Epoch
-    <$> idDecoder EpochId -- epochId
-    <*> D.column (D.nonNullable word128Decoder) -- epochOutSum
+    <$> D.column (D.nonNullable word128Decoder) -- epochOutSum
     <*> dbLovelaceDecoder -- epochFees
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochTxCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochBlkCount
@@ -83,11 +89,17 @@ epochDecoder =
     <*> D.column (D.nonNullable D.timestamptz) -- epochStartTime
     <*> D.column (D.nonNullable D.timestamptz) -- epochEndTime
 
+entityEpochEncoder :: E.Params (Entity Epoch)
+entityEpochEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getEpochId
+    , entityVal >$< epochEncoder
+    ]
+
 epochEncoder :: E.Params Epoch
 epochEncoder =
   mconcat
-    [ epochId >$< idEncoder getEpochId
-    , epochOutSum >$< E.param (E.nonNullable word128Encoder)
+    [ epochOutSum >$< E.param (E.nonNullable word128Encoder)
     , epochFees >$< dbLovelaceEncoder
     , epochTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochBlkCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
@@ -102,8 +114,7 @@ Table Name: epochparam
 Description: Stores parameters relevant to each epoch, such as the number of slots per epoch or the block size limit.
 -}
 data EpochParam = EpochParam
-  { epochParamId :: !EpochParamId
-  , epochParamEpochNo :: !Word64               -- sqltype=word31type
+  { epochParamEpochNo :: !Word64               -- sqltype=word31type
   , epochParamMinFeeA :: !Word64               -- sqltype=word31type
   , epochParamMinFeeB :: !Word64               -- sqltype=word31type
   , epochParamMaxBlockSize :: !Word64          -- sqltype=word31type
@@ -165,11 +176,18 @@ data EpochParam = EpochParam
 
 instance DbInfo EpochParam
 
+type instance Key EpochParam = EpochParamId
+
+entityEpochParamDecoder :: D.Row (Entity EpochParam)
+entityEpochParamDecoder =
+  Entity
+    <$> idDecoder EpochParamId
+    <*> epochParamDecoder
+
 epochParamDecoder :: D.Row EpochParam
 epochParamDecoder =
   EpochParam
-    <$> idDecoder EpochParamId -- epochParamId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamEpochNo
+    <$> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamEpochNo
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMinFeeA
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMinFeeB
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMaxBlockSize
@@ -224,11 +242,17 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamDrepActivity
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
 
+entityEpochParamEncoder :: E.Params (Entity EpochParam)
+entityEpochParamEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getEpochParamId
+    , entityVal >$< epochParamEncoder
+    ]
+
 epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
   mconcat
-    [ epochParamId >$< idEncoder getEpochParamId
-    , epochParamEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ epochParamEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochParamMinFeeA >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochParamMinFeeB >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochParamMaxBlockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
@@ -290,8 +314,7 @@ Table Name: epochstate
 Description: Contains the state of the blockchain at the end of each epoch, including the committee, constitution, and no-confidence votes.
 -}
 data EpochState = EpochState
-  { epochStateId :: !EpochStateId
-  , epochStateCommitteeId :: !(Maybe CommitteeId)         -- noreference
+  { epochStateCommitteeId :: !(Maybe CommitteeId)         -- noreference
   , epochStateNoConfidenceId :: !(Maybe GovActionProposalId) -- noreference
   , epochStateConstitutionId :: !(Maybe ConstitutionId)   -- noreference
   , epochStateEpochNo :: !Word64                        -- sqltype=word31type
@@ -299,20 +322,33 @@ data EpochState = EpochState
 
 instance DbInfo EpochState
 
+type instance Key EpochState = EpochStateId
+
+entityEpochStateDecoder :: D.Row (Entity EpochState)
+entityEpochStateDecoder =
+  Entity
+    <$> idDecoder EpochStateId
+    <*> epochStateDecoder
+
 epochStateDecoder :: D.Row EpochState
 epochStateDecoder =
   EpochState
-    <$> idDecoder EpochStateId -- epochStateId
-    <*> maybeIdDecoder CommitteeId -- epochStateCommitteeId
+    <$> maybeIdDecoder CommitteeId -- epochStateCommitteeId
     <*> maybeIdDecoder GovActionProposalId -- epochStateNoConfidenceId
     <*> maybeIdDecoder ConstitutionId -- epochStateConstitutionId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochStateEpochNo
 
+entityEpochStateEncoder :: E.Params (Entity EpochState)
+entityEpochStateEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getEpochStateId
+    , entityVal >$< epochStateEncoder
+    ]
+
 epochStateEncoder :: E.Params EpochState
 epochStateEncoder =
   mconcat
-    [ epochStateId >$< idEncoder getEpochStateId
-    , epochStateCommitteeId >$< maybeIdEncoder getCommitteeId
+    [ epochStateCommitteeId >$< maybeIdEncoder getCommitteeId
     , epochStateNoConfidenceId >$< maybeIdEncoder getGovActionProposalId
     , epochStateConstitutionId >$< maybeIdEncoder getConstitutionId
     , epochStateEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
@@ -331,8 +367,7 @@ Table Name: epochsync_time
 Description: Tracks synchronization times for epochs, ensuring nodes are in consensus regarding the current state.
 -}
 data EpochSyncTime = EpochSyncTime
-  { epochSyncTimeId :: !EpochSyncTimeId
-  , epochSyncTimeNo :: !Word64         -- sqltype=word31type
+  { epochSyncTimeNo :: !Word64         -- sqltype=word31type
   , epochSyncTimeSeconds :: !Word64    -- sqltype=word63type
   , epochSyncTimeState :: !SyncState   -- sqltype=syncstatetype
   } deriving (Show, Eq, Generic)
@@ -340,19 +375,32 @@ data EpochSyncTime = EpochSyncTime
 instance DbInfo EpochSyncTime where
   uniqueFields _ = ["no"]
 
+type instance Key EpochSyncTime = EpochSyncTimeId
+
+entityEpochSyncTimeDecoder :: D.Row (Entity EpochSyncTime)
+entityEpochSyncTimeDecoder =
+  Entity
+    <$> idDecoder EpochSyncTimeId
+    <*> epochSyncTimeDecoder
+
 epochSyncTimeDecoder :: D.Row EpochSyncTime
 epochSyncTimeDecoder =
   EpochSyncTime
-    <$> idDecoder EpochSyncTimeId -- epochSyncTimeId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochSyncTimeNo
+    <$> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochSyncTimeNo
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochSyncTimeSeconds
     <*> D.column (D.nonNullable syncStateDecoder) -- epochSyncTimeState
+
+entityEpochSyncTimeEncoder :: E.Params (Entity EpochSyncTime)
+entityEpochSyncTimeEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getEpochSyncTimeId
+    , entityVal >$< epochSyncTimeEncoder
+    ]
 
 epochSyncTimeEncoder :: E.Params EpochSyncTime
 epochSyncTimeEncoder =
   mconcat
-    [ epochSyncTimeId >$< idEncoder getEpochSyncTimeId
-    , epochSyncTimeNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ epochSyncTimeNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochSyncTimeSeconds >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochSyncTimeState >$< E.param (E.nonNullable syncStateEncoder)
     ]
@@ -366,8 +414,7 @@ Description: A table with all the different types of total balances.
   fields change block by block.
 -}
 data AdaPots = AdaPots
-  { adaPotsId :: !AdaPotsId
-  , adaPotsSlotNo :: !Word64         -- sqltype=word63type
+  { adaPotsSlotNo :: !Word64         -- sqltype=word63type
   , adaPotsEpochNo :: !Word64        -- sqltype=word31type
   , adaPotsTreasury :: !DbLovelace   -- sqltype=lovelace
   , adaPotsReserves :: !DbLovelace   -- sqltype=lovelace
@@ -382,11 +429,18 @@ data AdaPots = AdaPots
 
 instance DbInfo AdaPots
 
+type instance Key AdaPots = AdaPotsId
+
+entityAdaPotsDecoder :: D.Row (Entity AdaPots)
+entityAdaPotsDecoder =
+  Entity
+    <$> idDecoder AdaPotsId
+    <*> adaPotsDecoder
+
 adaPotsDecoder :: D.Row AdaPots
 adaPotsDecoder =
   AdaPots
-    <$> idDecoder AdaPotsId -- adaPotsId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- adaPotsSlotNo
+    <$> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- adaPotsSlotNo
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- adaPotsEpochNo
     <*> dbLovelaceDecoder -- adaPotsTreasury
     <*> dbLovelaceDecoder -- adaPotsReserves
@@ -398,11 +452,17 @@ adaPotsDecoder =
     <*> dbLovelaceDecoder -- adaPotsDepositsDrep
     <*> dbLovelaceDecoder -- adaPotsDepositsProposal
 
+entityAdaPotsEncoder :: E.Params (Entity AdaPots)
+entityAdaPotsEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getAdaPotsId
+    , entityVal >$< adaPotsEncoder
+    ]
+
 adaPotsEncoder :: E.Params AdaPots
 adaPotsEncoder =
   mconcat
-    [ adaPotsId >$< idEncoder getAdaPotsId
-    , adaPotsSlotNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ adaPotsSlotNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , adaPotsEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , adaPotsTreasury >$< dbLovelaceEncoder
     , adaPotsReserves >$< dbLovelaceEncoder
@@ -421,8 +481,7 @@ Table Name: pot_transfer
 Description: Records transfers between different pots (e.g., from the rewards pot to the treasury pot).
 -}
 data PotTransfer = PotTransfer
-  { potTransferId :: !PotTransferId
-  , potTransferCertIndex :: !Word16
+  { potTransferCertIndex :: !Word16
   , potTransferTreasury :: !DbInt65    -- sqltype=int65type
   , potTransferReserves :: !DbInt65    -- sqltype=int65type
   , potTransferTxId :: !TxId           -- noreference
@@ -430,20 +489,33 @@ data PotTransfer = PotTransfer
 
 instance DbInfo PotTransfer
 
+type instance Key PotTransfer = PotTransferId
+
+entityPotTransferDecoder :: D.Row (Entity PotTransfer)
+entityPotTransferDecoder =
+  Entity
+    <$> idDecoder PotTransferId
+    <*> potTransferDecoder
+
 potTransferDecoder :: D.Row PotTransfer
 potTransferDecoder =
   PotTransfer
-    <$> idDecoder PotTransferId -- potTransferId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- potTransferCertIndex
+    <$> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- potTransferCertIndex
     <*> D.column (D.nonNullable dbInt65Decoder) -- potTransferTreasury
     <*> D.column (D.nonNullable dbInt65Decoder) -- potTransferReserves
     <*> idDecoder TxId -- potTransferTxId
 
+entityPotTransferEncoder :: E.Params (Entity PotTransfer)
+entityPotTransferEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getPotTransferId
+    , entityVal >$< potTransferEncoder
+    ]
+
 potTransferEncoder :: E.Params PotTransfer
 potTransferEncoder =
   mconcat
-    [ potTransferId >$< idEncoder getPotTransferId
-    , potTransferCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    [ potTransferCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , potTransferTreasury >$< E.param (E.nonNullable dbInt65Encoder)
     , potTransferReserves >$< E.param (E.nonNullable dbInt65Encoder)
     , potTransferTxId >$< idEncoder getTxId
@@ -455,8 +527,7 @@ Table Name: treasury
 Description: Holds funds allocated to the treasury, which can be used for network upgrades or other community initiatives.
 -}
 data Treasury = Treasury
-  { treasuryId :: !TreasuryId
-  , treasuryAddrId :: !StakeAddressId -- noreference
+  { treasuryAddrId :: !StakeAddressId -- noreference
   , treasuryCertIndex :: !Word16
   , treasuryAmount :: !DbInt65        -- sqltype=int65type
   , treasuryTxId :: !TxId             -- noreference
@@ -464,20 +535,33 @@ data Treasury = Treasury
 
 instance DbInfo Treasury
 
+type instance Key Treasury = TreasuryId
+
+entityTreasuryDecoder :: D.Row (Entity Treasury)
+entityTreasuryDecoder =
+  Entity
+    <$> idDecoder TreasuryId
+    <*> treasuryDecoder
+
 treasuryDecoder :: D.Row Treasury
 treasuryDecoder =
   Treasury
-    <$> idDecoder TreasuryId -- treasuryId
-    <*> idDecoder StakeAddressId -- treasuryAddrId
+    <$> idDecoder StakeAddressId -- treasuryAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- treasuryCertIndex
     <*> D.column (D.nonNullable dbInt65Decoder) -- treasuryAmount
     <*> idDecoder TxId -- treasuryTxId
 
+entityTreasuryEncoder :: E.Params (Entity Treasury)
+entityTreasuryEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getTreasuryId
+    , entityVal >$< treasuryEncoder
+    ]
+
 treasuryEncoder :: E.Params Treasury
 treasuryEncoder =
   mconcat
-    [ treasuryId >$< idEncoder getTreasuryId
-    , treasuryAddrId >$< idEncoder getStakeAddressId
+    [ treasuryAddrId >$< idEncoder getStakeAddressId
     , treasuryCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , treasuryAmount >$< E.param (E.nonNullable dbInt65Encoder)
     , treasuryTxId >$< idEncoder getTxId
@@ -489,8 +573,7 @@ Table Name: reserve
 Description: Stores reserves set aside by the protocol to stabilize the cryptocurrency's value or fund future activities.
 -}
 data Reserve = Reserve
-  { reserveId :: !ReserveId
-  , reserveAddrId :: !StakeAddressId  -- noreference
+  { reserveAddrId :: !StakeAddressId  -- noreference
   , reserveCertIndex :: !Word16
   , reserveAmount :: !DbInt65         -- sqltype=int65type
   , reserveTxId :: !TxId              -- noreference
@@ -498,20 +581,33 @@ data Reserve = Reserve
 
 instance DbInfo Reserve
 
+type instance Key Reserve = ReserveId
+
+entityReserveDecoder :: D.Row (Entity Reserve)
+entityReserveDecoder =
+  Entity
+    <$> idDecoder ReserveId
+    <*> reserveDecoder
+
 reserveDecoder :: D.Row Reserve
 reserveDecoder =
   Reserve
-    <$> idDecoder ReserveId -- reserveId
-    <*> idDecoder StakeAddressId -- reserveAddrId
+    <$> idDecoder StakeAddressId -- reserveAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- reserveCertIndex
     <*> D.column (D.nonNullable dbInt65Decoder) -- reserveAmount
     <*> idDecoder TxId -- reserveTxId
 
+entityReserveEncoder :: E.Params (Entity Reserve)
+entityReserveEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getReserveId
+    , entityVal >$< reserveEncoder
+    ]
+
 reserveEncoder :: E.Params Reserve
 reserveEncoder =
   mconcat
-    [ reserveId >$< idEncoder getReserveId
-    , reserveAddrId >$< idEncoder getStakeAddressId
+    [ reserveAddrId >$< idEncoder getStakeAddressId
     , reserveCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , reserveAmount >$< E.param (E.nonNullable dbInt65Encoder)
     , reserveTxId >$< idEncoder getTxId
@@ -523,25 +619,37 @@ Table Name: cost_model
 Description: Defines the cost model used for estimating transaction fees, ensuring efficient resource allocation on the network.
 -}
 data CostModel = CostModel
-  { costModelId :: !CostModelId
-  , costModelCosts :: !Text         -- sqltype=jsonb
+  { costModelCosts :: !Text         -- sqltype=jsonb
   , costModelHash :: !ByteString    -- sqltype=hash32type
   } deriving (Eq, Show, Generic)
 
 instance DbInfo CostModel where
   uniqueFields _ = ["hash"]
 
+type instance Key CostModel = CostModelId
+
+entityCostModelDecoder :: D.Row (Entity CostModel)
+entityCostModelDecoder =
+  Entity
+    <$> idDecoder CostModelId
+    <*> costModelDecoder
+
 costModelDecoder :: D.Row CostModel
 costModelDecoder =
   CostModel
-    <$> idDecoder CostModelId -- costModelId
-    <*> D.column (D.nonNullable D.text) -- costModelCosts
+    <$> D.column (D.nonNullable D.text) -- costModelCosts
     <*> D.column (D.nonNullable D.bytea) -- costModelHash
+
+entityCostModelEncoder :: E.Params (Entity CostModel)
+entityCostModelEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getCostModelId
+    , entityVal >$< costModelEncoder
+    ]
 
 costModelEncoder :: E.Params CostModel
 costModelEncoder =
   mconcat
-    [ costModelId >$< idEncoder getCostModelId
-    , costModelCosts >$< E.param (E.nonNullable E.text)
+    [ costModelCosts >$< E.param (E.nonNullable E.text)
     , costModelHash >$< E.param (E.nonNullable E.bytea)
     ]

@@ -4,152 +4,221 @@
 module Cardano.Db.Statement.GovernanceAndVoting where
 
 import qualified Hasql.Decoders as HsqlD
+import qualified Data.Text.Encoding as TextEnc
+import qualified Hasql.Transaction as HsqlT
+import qualified Hasql.Statement as HsqlS
+import qualified Hasql.Encoders as HsqlE
 
-import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as GaV
+
+import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Types (DbAction, DbTransMode (..))
-import qualified Cardano.Db.Schema.Core.EpochAndProtocol as EaP
+import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import Cardano.Db.Schema.Ids (CommitteeId(..), idDecoder)
 import Cardano.Db.Statement.Function.Core (runDbT, mkDbTransaction, ResultType (..))
 import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Statement.Function.Query (queryIdExists)
-import Cardano.Prelude (MonadIO)
+import Cardano.Db.Statement.Types (DbInfo(..), Entity (..))
+import Cardano.Db.Types (DbAction, DbTransMode (..), hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
+import Cardano.Prelude (MonadIO, Proxy (..), ByteString)
+import qualified Data.Text as Text
 
 --------------------------------------------------------------------------------
 -- | Committee
 --------------------------------------------------------------------------------
-insertCommittee :: MonadIO m => GaV.Committee -> DbAction m Id.CommitteeId
+insertCommittee :: MonadIO m => SGV.Committee -> DbAction m Id.CommitteeId
 insertCommittee committee = runDbT TransWrite $ mkDbTransaction "insertCommittee" $
   insert
-    GaV.committeeEncoder
+    SGV.committeeEncoder
     (WithResult (HsqlD.singleRow $ idDecoder CommitteeId))
     committee
 
 --------------------------------------------------------------------------------
 -- | CommitteeHash
 --------------------------------------------------------------------------------
-insertCommitteeHash :: MonadIO m => GaV.CommitteeHash -> DbAction m Id.CommitteeHashId
+
+-- Insert
+insertCommitteeHash :: MonadIO m => SGV.CommitteeHash -> DbAction m Id.CommitteeHashId
 insertCommitteeHash committeeHash = runDbT TransWrite $ mkDbTransaction "insertCommitteeHash" $
   insert
-    GaV.committeeHashEncoder
+    SGV.committeeHashEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.CommitteeHashId))
     committeeHash
 
-insertCommitteeMember :: MonadIO m => GaV.CommitteeMember -> DbAction m Id.CommitteeMemberId
+-- Query
+queryCommitteeHash :: MonadIO m => ByteString -> DbAction m (Maybe Id.CommitteeHashId)
+queryCommitteeHash hash = runDbT TransReadOnly $ mkDbTransaction "queryCommitteeHash" $ do
+  HsqlT.statement hash $ HsqlS.Statement sql encoder decoder True
+  where
+    table = tableName (Proxy @SGV.CommitteeHash)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT id FROM " <> table
+      , " WHERE raw IS NULL"
+      , " LIMIT 1"
+      ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+    decoder = HsqlD.singleRow $ Id.maybeIdDecoder Id.CommitteeHashId
+
+--------------------------------------------------------------------------------
+-- | CommitteeMember
+--------------------------------------------------------------------------------
+insertCommitteeMember :: MonadIO m => SGV.CommitteeMember -> DbAction m Id.CommitteeMemberId
 insertCommitteeMember committeeMember = runDbT TransWrite $ mkDbTransaction "insertCommitteeMember" $
   insert
-    GaV.committeeMemberEncoder
+    SGV.committeeMemberEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.CommitteeMemberId))
     committeeMember
 
-insertCommitteeDeRegistration :: MonadIO m => GaV.CommitteeDeRegistration -> DbAction m Id.CommitteeDeRegistrationId
+insertCommitteeDeRegistration :: MonadIO m => SGV.CommitteeDeRegistration -> DbAction m Id.CommitteeDeRegistrationId
 insertCommitteeDeRegistration committeeDeRegistration = runDbT TransWrite $ mkDbTransaction "insertCommitteeDeRegistration" $
   insert
-    GaV.committeeDeRegistrationEncoder
+    SGV.committeeDeRegistrationEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.CommitteeDeRegistrationId))
     committeeDeRegistration
 
-insertCommitteeRegistration :: MonadIO m => GaV.CommitteeRegistration -> DbAction m Id.CommitteeRegistrationId
+insertCommitteeRegistration :: MonadIO m => SGV.CommitteeRegistration -> DbAction m Id.CommitteeRegistrationId
 insertCommitteeRegistration committeeRegistration = runDbT TransWrite $ mkDbTransaction "insertCommitteeRegistration" $
   insert
-    GaV.committeeRegistrationEncoder
+    SGV.committeeRegistrationEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.CommitteeRegistrationId))
     committeeRegistration
 
 --------------------------------------------------------------------------------
 -- | Constitution
 --------------------------------------------------------------------------------
-insertConstitution :: MonadIO m => GaV.Constitution -> DbAction m Id.ConstitutionId
+insertConstitution :: MonadIO m => SGV.Constitution -> DbAction m Id.ConstitutionId
 insertConstitution constitution = runDbT TransWrite $ mkDbTransaction "insertConstitution" $
   insert
-    GaV.constitutionEncoder
+    SGV.constitutionEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.ConstitutionId))
     constitution
 
 --------------------------------------------------------------------------------
 -- | DelegationVote
 --------------------------------------------------------------------------------
-insertDelegationVote :: MonadIO m => GaV.DelegationVote -> DbAction m Id.DelegationVoteId
+insertDelegationVote :: MonadIO m => SGV.DelegationVote -> DbAction m Id.DelegationVoteId
 insertDelegationVote delegationVote = runDbT TransWrite $ mkDbTransaction "insertDelegationVote" $
   insert
-    GaV.delegationVoteEncoder
+    SGV.delegationVoteEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.DelegationVoteId))
     delegationVote
 
 --------------------------------------------------------------------------------
 -- | Drep
 --------------------------------------------------------------------------------
-insertDrepHash :: MonadIO m => GaV.DrepHash -> DbAction m Id.DrepHashId
-insertDrepHash drepHash = runDbT TransWrite $ mkDbTransaction "insertDrepHash" $
-  insert
-    GaV.drepHashEncoder
-    (WithResult (HsqlD.singleRow $ idDecoder Id.DrepHashId))
-    drepHash
 
-insertDrepRegistration :: MonadIO m => GaV.DrepRegistration -> DbAction m Id.DrepRegistrationId
+-- INSERT
+insertDrepHash :: MonadIO m => SGV.DrepHash -> DbAction m Id.DrepHashId
+insertDrepHash drepHash = runDbT TransWrite $ mkDbTransaction "insertDrepHash" $ do
+  entity <- insert
+    SGV.drepHashEncoder
+    (WithResult (HsqlD.singleRow SGV.entityDrepHashDecoder))
+    drepHash
+  pure (entityKey entity)
+
+insertAlwaysAbstainDrepHash :: MonadIO m => DbAction m Id.DrepHashId
+insertAlwaysAbstainDrepHash = do
+  qr <- queryDrepHashAlwaysAbstain
+  maybe ins pure qr
+  where
+    ins = runDbT TransWrite $ mkDbTransaction "insertAlwaysAbstainDrepHash" $ do
+      entity <- insert
+        SGV.drepHashEncoder
+        (WithResult (HsqlD.singleRow SGV.entityDrepHashDecoder))
+        SGV.DrepHash
+          { SGV.drepHashRaw = Nothing
+          , SGV.drepHashView = hardcodedAlwaysAbstain
+          , SGV.drepHashHasScript = False
+          }
+      pure (entityKey entity)
+
+insertDrepRegistration :: MonadIO m => SGV.DrepRegistration -> DbAction m Id.DrepRegistrationId
 insertDrepRegistration drepRegistration = runDbT TransWrite $ mkDbTransaction "insertDrepRegistration" $
   insert
-    GaV.drepRegistrationEncoder
+    SGV.drepRegistrationEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.DrepRegistrationId))
     drepRegistration
+
+-- QUERY
+queryDrepHashAlwaysAbstain :: MonadIO m => DbAction m (Maybe Id.DrepHashId)
+queryDrepHashAlwaysAbstain =
+  runDbT TransReadOnly $ mkDbTransaction "queryDrepHashAlwaysAbstain" $
+    queryDrepHashAlways hardcodedAlwaysAbstain
+
+queryDrepHashAlwaysNoConfidence :: MonadIO m => DbAction m (Maybe Id.DrepHashId)
+queryDrepHashAlwaysNoConfidence =
+  runDbT TransReadOnly $ mkDbTransaction "queryDrepHashAlwaysNoConfidence" $
+    queryDrepHashAlways hardcodedAlwaysNoConfidence
+
+queryDrepHashAlways :: Text.Text -> HsqlT.Transaction (Maybe Id.DrepHashId)
+queryDrepHashAlways hardcodedAlways =
+  HsqlT.statement () $ HsqlS.Statement sql HsqlE.noParams decoder True
+  where
+    table = tableName (Proxy @SGV.DrepHash)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT id FROM " <> table
+      , " WHERE raw IS NULL"
+      , " AND view = '" <> hardcodedAlways <> "'"
+      , " LIMIT 1"
+      ]
+    decoder = HsqlD.singleRow $ Id.maybeIdDecoder Id.DrepHashId
 
 --------------------------------------------------------------------------------
 -- | GovActionProposal
 --------------------------------------------------------------------------------
-insertGovActionProposal :: MonadIO m => GaV.GovActionProposal -> DbAction m Id.GovActionProposalId
+insertGovActionProposal :: MonadIO m => SGV.GovActionProposal -> DbAction m Id.GovActionProposalId
 insertGovActionProposal govActionProposal = runDbT TransWrite $ mkDbTransaction "insertGovActionProposal" $
   insert
-    GaV.govActionProposalEncoder
+    SGV.govActionProposalEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.GovActionProposalId))
     govActionProposal
 
 --------------------------------------------------------------------------------
 -- | ParamProposal
 --------------------------------------------------------------------------------
-insertParamProposal :: MonadIO m => GaV.ParamProposal -> DbAction m Id.ParamProposalId
+insertParamProposal :: MonadIO m => SGV.ParamProposal -> DbAction m Id.ParamProposalId
 insertParamProposal paramProposal = runDbT TransWrite $ mkDbTransaction "insertParamProposal" $
   insert
-    GaV.paramProposalEncoder
+    SGV.paramProposalEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.ParamProposalId))
     paramProposal
 
 --------------------------------------------------------------------------------
 -- | Treasury
 --------------------------------------------------------------------------------
-insertTreasury :: MonadIO m => EaP.Treasury -> DbAction m Id.TreasuryId
+insertTreasury :: MonadIO m => SEP.Treasury -> DbAction m Id.TreasuryId
 insertTreasury treasury = runDbT TransWrite $ mkDbTransaction "insertTreasury" $
   insert
-    EaP.treasuryEncoder
+    SEP.treasuryEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.TreasuryId))
     treasury
 
-insertTreasuryWithdrawal :: MonadIO m => GaV.TreasuryWithdrawal -> DbAction m Id.TreasuryWithdrawalId
+insertTreasuryWithdrawal :: MonadIO m => SGV.TreasuryWithdrawal -> DbAction m Id.TreasuryWithdrawalId
 insertTreasuryWithdrawal treasuryWithdrawal = runDbT TransWrite $ mkDbTransaction "insertTreasuryWithdrawal" $
   insert
-    GaV.treasuryWithdrawalEncoder
+    SGV.treasuryWithdrawalEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.TreasuryWithdrawalId))
     treasuryWithdrawal
 
 --------------------------------------------------------------------------------
 -- | Voting
 --------------------------------------------------------------------------------
-insertVotingAnchor :: MonadIO m => GaV.VotingAnchor -> DbAction m Id.VotingAnchorId
+insertVotingAnchor :: MonadIO m => SGV.VotingAnchor -> DbAction m Id.VotingAnchorId
 insertVotingAnchor votingAnchor = runDbT TransWrite $ mkDbTransaction "insertVotingAnchor" $
   insert
-    GaV.votingAnchorEncoder
+    SGV.votingAnchorEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.VotingAnchorId))
     votingAnchor
 
-insertVotingProcedure :: MonadIO m => GaV.VotingProcedure -> DbAction m Id.VotingProcedureId
+insertVotingProcedure :: MonadIO m => SGV.VotingProcedure -> DbAction m Id.VotingProcedureId
 insertVotingProcedure votingProcedure = runDbT TransWrite $ mkDbTransaction "insertVotingProcedure" $
   insert
-    GaV.votingProcedureEncoder
+    SGV.votingProcedureEncoder
     (WithResult (HsqlD.singleRow $ idDecoder Id.VotingProcedureId))
     votingProcedure
 
 queryVotingAnchorIdExists :: MonadIO m => Id.VotingAnchorId -> DbAction m Bool
 queryVotingAnchorIdExists votingAnchorId = runDbT TransReadOnly $ mkDbTransaction "queryVotingAnchorIdExists" $
-  queryIdExists @GaV.VotingAnchor
+  queryIdExists @SGV.VotingAnchor
     (Id.idEncoder Id.getVotingAnchorId)
     (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
     votingAnchorId
