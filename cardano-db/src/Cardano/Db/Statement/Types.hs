@@ -3,6 +3,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Cardano.Db.Statement.Types where
 
@@ -14,6 +18,7 @@ import qualified Data.List.NonEmpty as NE
 import Data.Char (toLower, isUpper)
 import Data.Typeable (Typeable, typeRep, typeRepTyCon, tyConName)
 import Data.List (stripPrefix)
+import qualified Hasql.Decoders as HsqlD
 
 -- | DbInfo provides automatic derivation of table and column names from Haskell types.
 -- Table names are derived from the type name converted to snake_case.
@@ -106,3 +111,35 @@ instance GRecordFieldNames (K1 i c) where
 
 data TxOutTableType = TxOutCore | TxOutVariantAddress
   deriving (Eq, Show)
+
+
+--------------------------------------------------------------------------------
+-- Entity
+--------------------------------------------------------------------------------
+
+data Entity record =
+  Entity
+    { entityKey :: Key record
+    , entityVal :: record
+    }
+
+-- Type family for keys
+type family Key a
+
+-- Add standalone deriving instances
+deriving instance Generic (Entity record)
+deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
+deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
+deriving instance (Show (Key record), Show record) => Show (Entity record)
+deriving instance (Read (Key record), Read record) => Read (Entity record)
+
+-- Functions to work with entities
+fromEntity :: Entity a -> a
+fromEntity = entityVal
+
+toEntity :: Key a -> a -> Entity a
+toEntity = Entity
+
+-- Decoder for Entity
+entityDecoder :: HsqlD.Row (Key a) -> HsqlD.Row a -> HsqlD.Row (Entity a)
+entityDecoder keyDec valDec = Entity <$> keyDec <*> valDec

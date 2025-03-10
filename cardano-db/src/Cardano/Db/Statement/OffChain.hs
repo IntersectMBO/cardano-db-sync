@@ -37,9 +37,9 @@ insertCheckOffChainPoolFetchError offChainPoolFetchError = do
 --------------------------------------------------------------------------------
 -- | OffChainVoteAuthor
 --------------------------------------------------------------------------------
-insertManyOffChainVoteAuthors :: MonadIO m => [SO.OffChainVoteAuthor] -> DbAction m ()
-insertManyOffChainVoteAuthors offChainVoteAuthors =
-  runDbT TransWrite $ mkDbTransaction "insertManyOffChainVoteAuthors" $
+bulkInsertOffChainVoteAuthors :: MonadIO m => [SO.OffChainVoteAuthor] -> DbAction m ()
+bulkInsertOffChainVoteAuthors offChainVoteAuthors =
+  runDbT TransWrite $ mkDbTransaction "bulkInsertOffChainVoteAuthors" $
     bulkInsertNoReturn
       extractOffChainVoteAuthor
       SO.offChainVoteAuthorManyEncoder
@@ -80,9 +80,9 @@ insertOffChainVoteDrepData drepData =
 --------------------------------------------------------------------------------
 -- | OffChainVoteExternalUpdate
 --------------------------------------------------------------------------------
-insertManyOffChainVoteExternalUpdate :: MonadIO m => [SO.OffChainVoteExternalUpdate] -> DbAction m ()
-insertManyOffChainVoteExternalUpdate offChainVoteExternalUpdates =
-  runDbT TransWrite $ mkDbTransaction "insertManyOffChainVoteExternalUpdate" $
+bulkInsertOffChainVoteExternalUpdate :: MonadIO m => [SO.OffChainVoteExternalUpdate] -> DbAction m ()
+bulkInsertOffChainVoteExternalUpdate offChainVoteExternalUpdates =
+  runDbT TransWrite $ mkDbTransaction "bulkInsertOffChainVoteExternalUpdate" $
     bulkInsertNoReturn
       extractOffChainVoteExternalUpdate
       SO.offChainVoteExternalUpdatesEncoder
@@ -119,9 +119,9 @@ insertOffChainVoteGovActionData offChainVoteGovActionData = runDbT TransWrite $ 
 --------------------------------------------------------------------------------
 -- | OffChainVoteReference
 --------------------------------------------------------------------------------
-insertManyOffChainVoteReferences :: MonadIO m => [SO.OffChainVoteReference] -> DbAction m ()
-insertManyOffChainVoteReferences offChainVoteReferences =
-  runDbT TransWrite $ mkDbTransaction "insertManyOffChainVoteReferences" $
+bulkInsertOffChainVoteReferences :: MonadIO m => [SO.OffChainVoteReference] -> DbAction m ()
+bulkInsertOffChainVoteReferences offChainVoteReferences =
+  runDbT TransWrite $ mkDbTransaction "bulkInsertOffChainVoteReferences" $
     bulkInsertNoReturn
       extractOffChainVoteReference
       SO.offChainVoteReferenceManyEncoder

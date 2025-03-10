@@ -78,8 +78,8 @@ insertPoolRetire poolRetire = runDbT TransWrite $ mkDbTransaction "insertPoolRet
     (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolRetireId))
     poolRetire
 
-insertManyPoolStat :: MonadIO m => [SP.PoolStat] -> DbAction m ()
-insertManyPoolStat poolStats = runDbT TransWrite $ mkDbTransaction "insertManyPoolStat" $
+bulkInsertPoolStat :: MonadIO m => [SP.PoolStat] -> DbAction m ()
+bulkInsertPoolStat poolStats = runDbT TransWrite $ mkDbTransaction "bulkInsertPoolStat" $
   bulkInsertNoReturn
     extractPoolStat
     encodePoolStatMany
