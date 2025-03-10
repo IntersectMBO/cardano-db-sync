@@ -1,5 +1,14 @@
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Cardano.Db.Schema.Core.Base where
 
@@ -14,24 +23,25 @@ import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
 
+-- import Cardano.Db.Schema.Orphans ()
+
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
-  DbLovelace(..),
-  DbWord64(..),
+  DbLovelace (..),
+  DbWord64 (..),
   ScriptPurpose,
   ScriptType,
+  dbLovelaceDecoder,
+  dbLovelaceEncoder,
+  maybeDbWord64Decoder,
+  maybeDbWord64Encoder,
   scriptPurposeDecoder,
   scriptPurposeEncoder,
-  scriptTypeEncoder,
   scriptTypeDecoder,
-  dbLovelaceDecoder,
-  maybeDbWord64Decoder,
-  dbLovelaceEncoder,
-  maybeDbWord64Encoder
-  )
+  scriptTypeEncoder,
+ )
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
@@ -43,22 +53,21 @@ import Cardano.Db.Types (
 -- BASE TABLES
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: block
-Description: Stores information about individual blocks in the blockchain, including their hash, size,
-  and the transactions they contain.
--}
+
+-- |
+-- Table Name: block
+-- Description: Stores information about individual blocks in the blockchain, including their hash, size,
+--   and the transactions they contain.
 data Block = Block
-  { blockId :: !BlockId
-  , blockHash :: !ByteString -- sqltype=hash32type
+  { blockHash :: !ByteString -- sqltype=hash32type
   , blockEpochNo :: !(Maybe Word64) -- sqltype=word31type
   , blockSlotNo :: !(Maybe Word64) -- sqltype=word63type
   , blockEpochSlotNo :: !(Maybe Word64) -- sqltype=word31type
   , blockBlockNo :: !(Maybe Word64) -- sqltype=word31type
-  , blockPreviousId :: !(Maybe Int)  -- noreference
-  , blockSlotLeaderId :: !SlotLeaderId  -- noreference
+  , blockPreviousId :: !(Maybe Int) -- noreference
+  , blockSlotLeaderId :: !SlotLeaderId -- noreference
   , blockSize :: !Word64 -- sqltype=word31type
-  , blockTime :: !UTCTime  -- sqltype=timestamp
+  , blockTime :: !UTCTime -- sqltype=timestamp
   , blockTxCount :: !Word64
   , blockProtoMajor :: !Word16 -- sqltype=word31type
   , blockProtoMinor :: !Word16 -- sqltype=word31type
@@ -66,16 +75,23 @@ data Block = Block
   , blockVrfKey :: !(Maybe Text)
   , blockOpCert :: !(Maybe ByteString) -- sqltype=hash32type
   , blockOpCertCounter :: !(Maybe Word64) -- sqltype=hash63type
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key Block = BlockId
 instance DbInfo Block where
   uniqueFields _ = ["hash"]
+
+entityBlockDecoder :: D.Row (Entity Block)
+entityBlockDecoder =
+  Entity
+    <$> idDecoder BlockId
+    <*> blockDecoder
 
 blockDecoder :: D.Row Block
 blockDecoder =
   Block
-    <$> idDecoder BlockId -- blockId
-    <*> D.column (D.nonNullable D.bytea) -- blockHash
+    <$> D.column (D.nonNullable D.bytea) -- blockHash
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockEpochNo
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockSlotNo
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockEpochSlotNo
@@ -91,11 +107,17 @@ blockDecoder =
     <*> D.column (D.nullable D.bytea) -- blockOpCert
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockOpCertCounter
 
+entityBlockEncoder :: E.Params (Entity Block)
+entityBlockEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getBlockId
+    , entityVal >$< blockEncoder
+    ]
+
 blockEncoder :: E.Params Block
 blockEncoder =
   mconcat
-    [ blockHash >$< E.param (E.nonNullable E.bytea)
-    , blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    [ blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockEpochSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockBlockNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
@@ -112,37 +134,43 @@ blockEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: tx
-Description: Contains data related to transactions, such as transaction ID, inputs, outputs, and metadata
--}
+
+-- |
+-- Table Name: tx
+-- Description: Contains data related to transactions, such as transaction ID, inputs, outputs, and metadata
 data Tx = Tx
-  { txId :: !TxId
-  , txHash :: !ByteString -- sqltype=hash32type
+  { txHash :: !ByteString -- sqltype=hash32type
   , txBlockId :: !BlockId -- noreference -- This type is the primary key for the 'block' table.
   , txBlockIndex :: !Word64 -- sqltype=word31type -- The index of this transaction within the block.
   , txOutSum :: !DbLovelace -- sqltype=lovelace
   , txFee :: !DbLovelace -- sqltype=lovelace
   , txDeposit :: !(Maybe Int64) -- Needs to allow negaitve values.
   , txSize :: !Word64 -- sqltype=word31type
-    -- New for Allega
+  -- New for Allega
   , txInvalidBefore :: !(Maybe DbWord64) -- sqltype=word64type
   , txInvalidHereafter :: !(Maybe DbWord64) -- sqltype=word64type
-    -- New for Alonzo
+  -- New for Alonzo
   , txValidContract :: !Bool -- False if the contract is invalid, True otherwise.
   , txScriptSize :: !Word64 -- sqltype=word31type
-    -- New for Conway
+  -- New for Conway
   , txTreasuryDonation :: !DbLovelace -- sqltype=lovelace default=0
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key Tx = TxId
 instance DbInfo Tx where
   uniqueFields _ = ["hash"]
+
+entityTxDecoder :: D.Row (Entity Tx)
+entityTxDecoder =
+  Entity
+    <$> idDecoder TxId
+    <*> txDecoder
 
 txDecoder :: D.Row Tx
 txDecoder =
   Tx
-    <$> idDecoder TxId -- txId
-    <*> D.column (D.nonNullable D.bytea) -- txHash
+    <$> D.column (D.nonNullable D.bytea) -- txHash
     <*> idDecoder BlockId -- txBlockId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txBlockIndex
     <*> dbLovelaceDecoder -- txOutSum
@@ -155,11 +183,17 @@ txDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txScriptSize
     <*> dbLovelaceDecoder -- txTreasuryDonation
 
+entityTxEncoder :: E.Params (Entity Tx)
+entityTxEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getTxId
+    , entityVal >$< txEncoder
+    ]
+
 txEncoder :: E.Params Tx
 txEncoder =
   mconcat
-    [ txId >$< idEncoder getTxId
-    , txHash >$< E.param (E.nonNullable E.bytea)
+    [ txHash >$< E.param (E.nonNullable E.bytea)
     , txBlockId >$< idEncoder getBlockId
     , txBlockIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , txOutSum >$< dbLovelaceEncoder
@@ -174,41 +208,53 @@ txEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: txmetadata
-Description: Contains metadata associated with transactions, such as metadata ID, key, and date.
--}
-data TxMetadata = TxMetadata
-  { txMetadataId :: !TxMetadataId
-  , txMetadataKey :: !DbWord64           -- sqltype=word64type
-  , txMetadataJson :: !(Maybe Text)        -- sqltype=jsonb
-  , txMetadataBytes :: !ByteString       -- sqltype=bytea
-  , txMetadataTxId :: !TxId              -- noreference
-  } deriving (Eq, Show, Generic)
 
+-- |
+-- Table Name: txmetadata
+-- Description: Contains metadata associated with transactions, such as metadata ID, key, and date.
+data TxMetadata = TxMetadata
+  { txMetadataKey :: !DbWord64 -- sqltype=word64type
+  , txMetadataJson :: !(Maybe Text) -- sqltype=jsonb
+  , txMetadataBytes :: !ByteString -- sqltype=bytea
+  , txMetadataTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key TxMetadata = TxMetadataId
 instance DbInfo TxMetadata
+
+entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
+entityTxMetadataDecoder =
+  Entity
+    <$> idDecoder TxMetadataId
+    <*> txMetadataDecoder
 
 txMetadataDecoder :: D.Row TxMetadata
 txMetadataDecoder =
   TxMetadata
-    <$> idDecoder TxMetadataId -- txMetadataId
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- txMetadataKey
+    <$> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- txMetadataKey
     <*> D.column (D.nullable D.text) -- txMetadataJson
     <*> D.column (D.nonNullable D.bytea) -- txMetadataBytes
     <*> idDecoder TxId -- txMetadataTxId
 
+entityTxMetadataEncoder :: E.Params (Entity TxMetadata)
+entityTxMetadataEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getTxMetadataId
+    , entityVal >$< txMetadataEncoder
+    ]
+
 txMetadataEncoder :: E.Params TxMetadata
 txMetadataEncoder =
   mconcat
-    [ -- txMetadataId >$< idEn
-      txMetadataKey >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    [ txMetadataKey >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , txMetadataJson >$< E.param (E.nullable E.text)
     , txMetadataBytes >$< E.param (E.nonNullable E.bytea)
     , txMetadataTxId >$< idEncoder getTxId
     ]
 
-txMetadataEncoderMany :: E.Params ([DbWord64], [Maybe Text], [ByteString], [TxId])
-txMetadataEncoderMany =
+txMetadataBulkEncoder :: E.Params ([DbWord64], [Maybe Text], [ByteString], [TxId])
+txMetadataBulkEncoder =
   contrazip4
     (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     (manyEncoder $ E.nullable E.text)
@@ -216,234 +262,319 @@ txMetadataEncoderMany =
     (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: txin
-Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
--}
+
+-- |
+-- Table Name: txin
+-- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
 data TxIn = TxIn
-  { txInId :: !TxInId
-  , txInTxInId :: !TxId -- The transaction where this is used as an input.
+  { txInTxInId :: !TxId -- The transaction where this is used as an input.
   , txInTxOutId :: !TxId -- The transaction where this was created as an output.
   , txInTxOutIndex :: !Word64 -- sqltype=txindex
   , txInRedeemerId :: !(Maybe RedeemerId)
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key TxIn = TxInId
 instance DbInfo TxIn
+
+entityTxInDecoder :: D.Row (Entity TxIn)
+entityTxInDecoder =
+  Entity
+    <$> idDecoder TxInId
+    <*> txInDecoder
 
 txInDecoder :: D.Row TxIn
 txInDecoder =
   TxIn
-    <$> idDecoder TxInId -- txInId
-    <*> idDecoder TxId -- txInTxInId
+    <$> idDecoder TxId -- txInTxInId
     <*> idDecoder TxId -- txInTxOutId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txInTxOutIndex
     <*> maybeIdDecoder RedeemerId -- txInRedeemerId
 
+entityTxInEncoder :: E.Params (Entity TxIn)
+entityTxInEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getTxInId
+    , entityVal >$< txInEncoder
+    ]
+
 txInEncoder :: E.Params TxIn
 txInEncoder =
   mconcat
-    [ -- txInId >$< idEncoder getTxInId
-      txInTxInId >$< idEncoder getTxId
+    [ txInTxInId >$< idEncoder getTxId
     , txInTxOutId >$< idEncoder getTxId
     , txInTxOutIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , txInRedeemerId >$< maybeIdEncoder getRedeemerId
     ]
 
-encodeTxInMany :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
-encodeTxInMany = contrazip4
-  (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
-  (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
-  (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-  (manyEncoder $ E.nullable $ getRedeemerId >$< E.int8)
+encodeTxInBulk :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
+encodeTxInBulk =
+  contrazip4
+    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ E.nullable $ getRedeemerId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: collateral_txin
-Description:
--}
-data CollateralTxIn = CollateralTxIn
-  { collateralTxInId :: !CollateralTxInId -- noreference
-  , collateralTxInTxInId :: !TxId         -- noreference -- The transaction where this is used as an input.
-  , collateralTxInTxOutId :: !TxId        -- noreference -- The transaction where this was created as an output.
-  , collateralTxInTxOutIndex :: !Word64   -- sqltype=txindex
-  } deriving (Show, Eq, Generic)
 
+-- |
+-- Table Name: collateral_txin
+-- Description:
+data CollateralTxIn = CollateralTxIn
+  { collateralTxInTxInId :: !TxId -- noreference -- The transaction where this is used as an input.
+  , collateralTxInTxOutId :: !TxId -- noreference -- The transaction where this was created as an output.
+  , collateralTxInTxOutIndex :: !Word64 -- sqltype=txindex
+  }
+  deriving (Show, Eq, Generic)
+
+type instance Key CollateralTxIn = CollateralTxInId
 instance DbInfo CollateralTxIn
+
+entityCollateralTxInDecoder :: D.Row (Entity CollateralTxIn)
+entityCollateralTxInDecoder =
+  Entity
+    <$> idDecoder CollateralTxInId
+    <*> collateralTxInDecoder
 
 collateralTxInDecoder :: D.Row CollateralTxIn
 collateralTxInDecoder =
   CollateralTxIn
-    <$> idDecoder CollateralTxInId -- collateralTxInId
-    <*> idDecoder TxId -- collateralTxInTxInId
+    <$> idDecoder TxId -- collateralTxInTxInId
     <*> idDecoder TxId -- collateralTxInTxOutId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- collateralTxInTxOutIndex
+
+entityCollateralTxInEncoder :: E.Params (Entity CollateralTxIn)
+entityCollateralTxInEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getCollateralTxInId
+    , entityVal >$< collateralTxInEncoder
+    ]
 
 collateralTxInEncoder :: E.Params CollateralTxIn
 collateralTxInEncoder =
   mconcat
-    [ collateralTxInId >$< idEncoder getCollateralTxInId
-    , collateralTxInTxInId >$< idEncoder getTxId
+    [ collateralTxInTxInId >$< idEncoder getTxId
     , collateralTxInTxOutId >$< idEncoder getTxId
     , collateralTxInTxOutIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reference_txin
-Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
--}
-data ReferenceTxIn = ReferenceTxIn
-  { referenceTxInId :: !ReferenceTxInId -- noreference
-  , referenceTxInTxInId :: !TxId        -- noreference -- The transaction where this is used as an input.
-  , referenceTxInTxOutId :: !TxId       -- noreference -- The transaction where this was created as an output.
-  , referenceTxInTxOutIndex :: !Word64  -- sqltype=txindex
-  } deriving (Show, Eq, Generic)
 
+-- |
+-- Table Name: reference_txin
+-- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
+data ReferenceTxIn = ReferenceTxIn
+  { referenceTxInTxInId :: !TxId -- noreference -- The transaction where this is used as an input.
+  , referenceTxInTxOutId :: !TxId -- noreference -- The transaction where this was created as an output.
+  , referenceTxInTxOutIndex :: !Word64 -- sqltype=txindex
+  }
+  deriving (Show, Eq, Generic)
+
+type instance Key ReferenceTxIn = ReferenceTxInId
 instance DbInfo ReferenceTxIn
+
+entityReferenceTxInDecoder :: D.Row (Entity ReferenceTxIn)
+entityReferenceTxInDecoder =
+  Entity
+    <$> idDecoder ReferenceTxInId
+    <*> referenceTxInDecoder
 
 referenceTxInDecoder :: D.Row ReferenceTxIn
 referenceTxInDecoder =
   ReferenceTxIn
-    <$> idDecoder ReferenceTxInId -- referenceTxInId
-    <*> idDecoder TxId -- referenceTxInTxInId
+    <$> idDecoder TxId -- referenceTxInTxInId
     <*> idDecoder TxId -- referenceTxInTxOutId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- referenceTxInTxOutIndex
+
+entityReferenceTxInEncoder :: E.Params (Entity ReferenceTxIn)
+entityReferenceTxInEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getReferenceTxInId
+    , entityVal >$< referenceTxInEncoder
+    ]
 
 referenceTxInEncoder :: E.Params ReferenceTxIn
 referenceTxInEncoder =
   mconcat
-    [ referenceTxInId >$< idEncoder getReferenceTxInId
-    , referenceTxInTxInId >$< idEncoder getTxId
+    [ referenceTxInTxInId >$< idEncoder getTxId
     , referenceTxInTxOutId >$< idEncoder getTxId
     , referenceTxInTxOutIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reverse_index
-Description: Provides a reverse lookup mechanism for transaction inputs, allowing efficient querying of the origin of funds.
--}
-data ReverseIndex = ReverseIndex
-  { reverseIndexId :: !ReverseIndexId -- noreference
-  , reverseIndexBlockId :: !BlockId   -- noreference
-  , reverseIndexMinIds :: !Text
-  } deriving (Show, Eq, Generic)
 
+-- |
+-- Table Name: reverse_index
+-- Description: Provides a reverse lookup mechanism for transaction inputs, allowing efficient querying of the origin of funds.
+data ReverseIndex = ReverseIndex
+  { reverseIndexBlockId :: !BlockId -- noreference
+  , reverseIndexMinIds :: !Text
+  }
+  deriving (Show, Eq, Generic)
+
+type instance Key ReverseIndex = ReverseIndexId
 instance DbInfo ReverseIndex
+
+entityReverseIndexDecoder :: D.Row (Entity ReverseIndex)
+entityReverseIndexDecoder =
+  Entity
+    <$> idDecoder ReverseIndexId
+    <*> reverseIndexDecoder
 
 reverseIndexDecoder :: D.Row ReverseIndex
 reverseIndexDecoder =
   ReverseIndex
-    <$> idDecoder ReverseIndexId -- reverseIndexId
-    <*> idDecoder BlockId -- reverseIndexBlockId
+    <$> idDecoder BlockId -- reverseIndexBlockId
     <*> D.column (D.nonNullable D.text) -- reverseIndexMinIds
+
+entityReverseIndexEncoder :: E.Params (Entity ReverseIndex)
+entityReverseIndexEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getReverseIndexId
+    , entityVal >$< reverseIndexEncoder
+    ]
 
 reverseIndexEncoder :: E.Params ReverseIndex
 reverseIndexEncoder =
   mconcat
-    [ reverseIndexId >$< idEncoder getReverseIndexId
-    , reverseIndexBlockId >$< idEncoder getBlockId
+    [ reverseIndexBlockId >$< idEncoder getBlockId
     , reverseIndexMinIds >$< E.param (E.nonNullable E.text)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: txcbor
-Description: Stores the raw CBOR (Concise Binary Object Representation) encoding of transactions, useful for validation
-  and serialization purposes.
--}
-data TxCbor = TxCbor
-  { txCborId :: !TxCborId -- noreference
-  , txCborTxId :: !TxId           -- noreference
-  , txCborBytes :: !ByteString    -- sqltype=bytea
-  } deriving (Show, Eq, Generic)
 
+-- |
+-- Table Name: txcbor
+-- Description: Stores the raw CBOR (Concise Binary Object Representation) encoding of transactions, useful for validation
+--   and serialization purposes.
+data TxCbor = TxCbor
+  { txCborTxId :: !TxId -- noreference
+  , txCborBytes :: !ByteString -- sqltype=bytea
+  }
+  deriving (Show, Eq, Generic)
+
+type instance Key TxCbor = TxCborId
 instance DbInfo TxCbor
+
+entityTxCborDecoder :: D.Row (Entity TxCbor)
+entityTxCborDecoder =
+  Entity
+    <$> idDecoder TxCborId
+    <*> txCborDecoder
 
 txCborDecoder :: D.Row TxCbor
 txCborDecoder =
   TxCbor
-    <$> idDecoder TxCborId -- txCborId
-    <*> idDecoder TxId -- txCborTxId
+    <$> idDecoder TxId -- txCborTxId
     <*> D.column (D.nonNullable D.bytea) -- txCborBytes
+
+entityTxCborEncoder :: E.Params (Entity TxCbor)
+entityTxCborEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getTxCborId
+    , entityVal >$< txCborEncoder
+    ]
 
 txCborEncoder :: E.Params TxCbor
 txCborEncoder =
   mconcat
-    [ txCborId >$< idEncoder getTxCborId
-    , txCborTxId >$< idEncoder getTxId
+    [ txCborTxId >$< idEncoder getTxId
     , txCborBytes >$< E.param (E.nonNullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: datum
-Description: Contains the data associated with a transaction output, which can be used as input for a script.
--}
-data Datum = Datum
-  { datumId :: !DatumId
-  , datumHash :: !ByteString      -- sqltype=hash32type
-  , datumTxId :: !TxId            -- noreference
-  , datumValue :: !(Maybe Text)     -- sqltype=jsonb
-  , datumBytes :: !ByteString     -- sqltype=bytea
-  } deriving (Eq, Show, Generic)
 
+-- |
+-- Table Name: datum
+-- Description: Contains the data associated with a transaction output, which can be used as input for a script.
+data Datum = Datum
+  { datumHash :: !ByteString -- sqltype=hash32type
+  , datumTxId :: !TxId -- noreference
+  , datumValue :: !(Maybe Text) -- sqltype=jsonb
+  , datumBytes :: !ByteString -- sqltype=bytea
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key Datum = DatumId
 instance DbInfo Datum where
   uniqueFields _ = ["hash"]
+
+entityDatumDecoder :: D.Row (Entity Datum)
+entityDatumDecoder =
+  Entity
+    <$> idDecoder DatumId
+    <*> datumDecoder
 
 datumDecoder :: D.Row Datum
 datumDecoder =
   Datum
-    <$> idDecoder DatumId -- datumId
-    <*> D.column (D.nonNullable D.bytea) -- datumHash
+    <$> D.column (D.nonNullable D.bytea) -- datumHash
     <*> idDecoder TxId -- datumTxId
     <*> D.column (D.nullable D.text) -- datumValue
     <*> D.column (D.nonNullable D.bytea) -- datumBytes
 
+entityDatumEncoder :: E.Params (Entity Datum)
+entityDatumEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getDatumId
+    , entityVal >$< datumEncoder
+    ]
+
 datumEncoder :: E.Params Datum
 datumEncoder =
   mconcat
-    [ datumId >$< idEncoder getDatumId
-    , datumHash >$< E.param (E.nonNullable E.bytea)
+    [ datumHash >$< E.param (E.nonNullable E.bytea)
     , datumTxId >$< idEncoder getTxId
     , datumValue >$< E.param (E.nullable E.text)
     , datumBytes >$< E.param (E.nonNullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: script
-Description: Contains the script associated with a transaction output, which can be used as input for a script.
--}
+
+-- |
+-- Table Name: script
+-- Description: Contains the script associated with a transaction output, which can be used as input for a script.
 data Script = Script
-  { scriptId :: !ScriptId
-  , scriptTxId :: !TxId           -- noreference
-  , scriptHash :: !ByteString     -- sqltype=hash28type
-  , scriptType :: !ScriptType     -- sqltype=scripttype
-  , scriptJson :: !(Maybe Text)     -- sqltype=jsonb
+  { scriptTxId :: !TxId -- noreference
+  , scriptHash :: !ByteString -- sqltype=hash28type
+  , scriptType :: !ScriptType -- sqltype=scripttype
+  , scriptJson :: !(Maybe Text) -- sqltype=jsonb
   , scriptBytes :: !(Maybe ByteString) -- sqltype=bytea
   , scriptSerialisedSize :: !(Maybe Word64) -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key Script = ScriptId
 instance DbInfo Script where
   uniqueFields _ = ["hash"]
+
+entityScriptDecoder :: D.Row (Entity Script)
+entityScriptDecoder =
+  Entity
+    <$> idDecoder ScriptId
+    <*> scriptDecoder
 
 scriptDecoder :: D.Row Script
 scriptDecoder =
   Script
-    <$> idDecoder ScriptId -- scriptId
-    <*> idDecoder TxId -- scriptTxId
+    <$> idDecoder TxId -- scriptTxId
     <*> D.column (D.nonNullable D.bytea) -- scriptHash
     <*> D.column (D.nonNullable scriptTypeDecoder) -- scriptType
     <*> D.column (D.nullable D.text) -- scriptJson
     <*> D.column (D.nullable D.bytea) -- scriptBytes
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- scriptSerialisedSize
 
+entityScriptEncoder :: E.Params (Entity Script)
+entityScriptEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getScriptId
+    , entityVal >$< scriptEncoder
+    ]
+
 scriptEncoder :: E.Params Script
 scriptEncoder =
   mconcat
-    [ scriptId >$< idEncoder getScriptId
-    , scriptTxId >$< idEncoder getTxId
+    [ scriptTxId >$< idEncoder getTxId
     , scriptHash >$< E.param (E.nonNullable E.bytea)
     , scriptType >$< E.param (E.nonNullable scriptTypeEncoder)
     , scriptJson >$< E.param (E.nullable E.text)
@@ -452,32 +583,41 @@ scriptEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: redeemer
-Description: Holds the redeemer data used to satisfy script conditions during transaction processing.
--}
+
+-- |
+-- Table Name: redeemer
+-- Description: Holds the redeemer data used to satisfy script conditions during transaction processing.
+
 -- Unit step is in picosends, and `maxBound :: !Int64` picoseconds is over 100 days, so using
 -- Word64/word63type is safe here. Similarly, `maxBound :: !Int64` if unit step would be an
--- *enormous* amount a memory which would cost a fortune.
-data Redeemer = Redeemer
-  { redeemerId :: !RedeemerId
-  , redeemerTxId :: !TxId                     -- noreference
-  , redeemerUnitMem :: !Word64                -- sqltype=word63type
-  , redeemerUnitSteps :: !Word64              -- sqltype=word63type
-  , redeemerFee :: !(Maybe DbLovelace)          -- sqltype=lovelace
-  , redeemerPurpose :: !ScriptPurpose         -- sqltype=scriptpurposetype
-  , redeemerIndex :: !Word64                  -- sqltype=word31type
-  , redeemerScriptHash :: !(Maybe ByteString)   -- sqltype=hash28type
-  , redeemerRedeemerDataId :: !RedeemerDataId -- noreference
-  } deriving (Eq, Show, Generic)
 
+-- * enormous* amount a memory which would cost a fortune.
+
+data Redeemer = Redeemer
+  { redeemerTxId :: !TxId -- noreference
+  , redeemerUnitMem :: !Word64 -- sqltype=word63type
+  , redeemerUnitSteps :: !Word64 -- sqltype=word63type
+  , redeemerFee :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , redeemerPurpose :: !ScriptPurpose -- sqltype=scriptpurposetype
+  , redeemerIndex :: !Word64 -- sqltype=word31type
+  , redeemerScriptHash :: !(Maybe ByteString) -- sqltype=hash28type
+  , redeemerRedeemerDataId :: !RedeemerDataId -- noreference
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key Redeemer = RedeemerId
 instance DbInfo Redeemer
+
+entityRedeemerDecoder :: D.Row (Entity Redeemer)
+entityRedeemerDecoder =
+  Entity
+    <$> idDecoder RedeemerId
+    <*> redeemerDecoder
 
 redeemerDecoder :: D.Row Redeemer
 redeemerDecoder =
   Redeemer
-    <$> idDecoder RedeemerId -- redeemerId
-    <*> idDecoder TxId -- redeemerTxId
+    <$> idDecoder TxId -- redeemerTxId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- redeemerUnitMem
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- redeemerUnitSteps
     <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- redeemerFee
@@ -486,11 +626,17 @@ redeemerDecoder =
     <*> D.column (D.nullable D.bytea) -- redeemerScriptHash
     <*> idDecoder RedeemerDataId -- redeemerRedeemerDataId
 
+entityRedeemerEncoder :: E.Params (Entity Redeemer)
+entityRedeemerEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getRedeemerId
+    , entityVal >$< redeemerEncoder
+    ]
+
 redeemerEncoder :: E.Params Redeemer
 redeemerEncoder =
   mconcat
-    [ redeemerId >$< idEncoder getRedeemerId
-    , redeemerTxId >$< idEncoder getTxId
+    [ redeemerTxId >$< idEncoder getTxId
     , redeemerUnitMem >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , redeemerUnitSteps >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , redeemerFee >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
@@ -501,96 +647,132 @@ redeemerEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: redeemer_data
-Description: Additional details about the redeemer, including its type and any associated metadata.
--}
+
+-- |
+-- Table Name: redeemer_data
+-- Description: Additional details about the redeemer, including its type and any associated metadata.
 data RedeemerData = RedeemerData
-  { redeemerDataId :: !RedeemerDataId
-  , redeemerDataHash :: !ByteString  -- sqltype=hash32type
-  , redeemerDataTxId :: !TxId        -- noreference
+  { redeemerDataHash :: !ByteString -- sqltype=hash32type
+  , redeemerDataTxId :: !TxId -- noreference
   , redeemerDataValue :: !(Maybe Text) -- sqltype=jsonb
   , redeemerDataBytes :: !ByteString -- sqltype=bytea
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key RedeemerData = RedeemerDataId
 instance DbInfo RedeemerData where
   uniqueFields _ = ["hash"]
+
+entityRedeemerDataDecoder :: D.Row (Entity RedeemerData)
+entityRedeemerDataDecoder =
+  Entity
+    <$> idDecoder RedeemerDataId
+    <*> redeemerDataDecoder
 
 redeemerDataDecoder :: D.Row RedeemerData
 redeemerDataDecoder =
   RedeemerData
-    <$> idDecoder RedeemerDataId -- redeemerDataId
-    <*> D.column (D.nonNullable D.bytea) -- redeemerDataHash
+    <$> D.column (D.nonNullable D.bytea) -- redeemerDataHash
     <*> idDecoder TxId -- redeemerDataTxId
     <*> D.column (D.nullable D.text) -- redeemerDataValue
     <*> D.column (D.nonNullable D.bytea) -- redeemerDataBytes
 
+entityRedeemerDataEncoder :: E.Params (Entity RedeemerData)
+entityRedeemerDataEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getRedeemerDataId
+    , entityVal >$< redeemerDataEncoder
+    ]
+
 redeemerDataEncoder :: E.Params RedeemerData
 redeemerDataEncoder =
   mconcat
-    [ redeemerDataId >$< idEncoder getRedeemerDataId
-    , redeemerDataHash >$< E.param (E.nonNullable E.bytea)
+    [ redeemerDataHash >$< E.param (E.nonNullable E.bytea)
     , redeemerDataTxId >$< idEncoder getTxId
     , redeemerDataValue >$< E.param (E.nullable E.text)
     , redeemerDataBytes >$< E.param (E.nonNullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: extra_key_witness
-Description: Contains additional key witnesses for transactions, which are used to validate the transaction's signature.
--}
-data ExtraKeyWitness = ExtraKeyWitness
-  { extraKeyWitnessId :: !ExtraKeyWitnessId
-  , extraKeyWitnessHash :: !ByteString -- sqltype=hash28type
-  , extraKeyWitnessTxId :: !TxId       -- noreference
-  } deriving (Eq, Show, Generic)
 
+-- |
+-- Table Name: extra_key_witness
+-- Description: Contains additional key witnesses for transactions, which are used to validate the transaction's signature.
+data ExtraKeyWitness = ExtraKeyWitness
+  { extraKeyWitnessHash :: !ByteString -- sqltype=hash28type
+  , extraKeyWitnessTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key ExtraKeyWitness = ExtraKeyWitnessId
 instance DbInfo ExtraKeyWitness
+
+entityExtraKeyWitnessDecoder :: D.Row (Entity ExtraKeyWitness)
+entityExtraKeyWitnessDecoder =
+  Entity
+    <$> idDecoder ExtraKeyWitnessId
+    <*> extraKeyWitnessDecoder
 
 extraKeyWitnessDecoder :: D.Row ExtraKeyWitness
 extraKeyWitnessDecoder =
   ExtraKeyWitness
-    <$> idDecoder ExtraKeyWitnessId -- extraKeyWitnessId
-    <*> D.column (D.nonNullable D.bytea) -- extraKeyWitnessHash
+    <$> D.column (D.nonNullable D.bytea) -- extraKeyWitnessHash
     <*> idDecoder TxId -- extraKeyWitnessTxId
+
+entityExtraKeyWitnessEncoder :: E.Params (Entity ExtraKeyWitness)
+entityExtraKeyWitnessEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getExtraKeyWitnessId
+    , entityVal >$< extraKeyWitnessEncoder
+    ]
 
 extraKeyWitnessEncoder :: E.Params ExtraKeyWitness
 extraKeyWitnessEncoder =
   mconcat
-    [ extraKeyWitnessId >$< idEncoder getExtraKeyWitnessId
-    , extraKeyWitnessHash >$< E.param (E.nonNullable E.bytea)
+    [ extraKeyWitnessHash >$< E.param (E.nonNullable E.bytea)
     , extraKeyWitnessTxId >$< idEncoder getTxId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: slot_leader
-Description:Contains information about the slot leader for a given block, including the slot leader's ID, hash, and description.
--}
-data SlotLeader = SlotLeader
-  { slotLeaderId :: !SlotLeaderId
-  , slotLeaderHash :: !ByteString -- sqltype=hash28type
-  , slotLeaderPoolHashId :: !(Maybe Int)  -- This will be non-null when a block is mined by a pool
-  , slotLeaderDescription :: !Text -- Description of the Slots leader
-  } deriving (Eq, Show, Generic)
 
+-- |
+-- Table Name: slot_leader
+-- Description:Contains information about the slot leader for a given block, including the slot leader's ID, hash, and description.
+data SlotLeader = SlotLeader
+  { slotLeaderHash :: !ByteString -- sqltype=hash28type
+  , slotLeaderPoolHashId :: !(Maybe Int) -- This will be non-null when a block is mined by a pool
+  , slotLeaderDescription :: !Text -- Description of the Slots leader
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key SlotLeader = SlotLeaderId
 instance DbInfo SlotLeader where
   uniqueFields _ = ["hash"]
+
+entitySlotLeaderDecoder :: D.Row (Entity SlotLeader)
+entitySlotLeaderDecoder =
+  Entity
+    <$> idDecoder SlotLeaderId
+    <*> slotLeaderDecoder
 
 slotLeaderDecoder :: D.Row SlotLeader
 slotLeaderDecoder =
   SlotLeader
-    <$> idDecoder SlotLeaderId -- slotLeaderId
-    <*> D.column (D.nonNullable D.bytea) -- slotLeaderHash
+    <$> D.column (D.nonNullable D.bytea) -- slotLeaderHash
     <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- slotLeaderPoolHashId
     <*> D.column (D.nonNullable D.text) -- slotLeaderDescription
+
+entitySlotLeaderEncoder :: E.Params (Entity SlotLeader)
+entitySlotLeaderEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getSlotLeaderId
+    , entityVal >$< slotLeaderEncoder
+    ]
 
 slotLeaderEncoder :: E.Params SlotLeader
 slotLeaderEncoder =
   mconcat
-    [ slotLeaderId >$< idEncoder getSlotLeaderId
-    , slotLeaderHash >$< E.param (E.nonNullable E.bytea)
+    [ slotLeaderHash >$< E.param (E.nonNullable E.bytea)
     , slotLeaderPoolHashId >$< E.param (E.nullable $ fromIntegral >$< E.int4)
     , slotLeaderDescription >$< E.param (E.nonNullable E.text)
     ]
@@ -601,10 +783,11 @@ slotLeaderEncoder =
 -----------------------------------------------------------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: schema_version
-Description: A table for schema versioning.
--}
+
+-- |
+-- Table Name: schema_version
+-- Description: A table for schema versioning.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Schema versioning has three stages to best allow handling of schema migrations.
 --    Stage 1: Set up PostgreSQL data types (using SQL 'DOMAIN' statements).
@@ -612,21 +795,34 @@ Description: A table for schema versioning.
 --    Stage 3: Set up 'VIEW' tables (for use by other languages and applications).
 -- This table should have a single row.
 data SchemaVersion = SchemaVersion
-  { schemaVersionId :: !SchemaVersionId -- noreference
-  , schemaVersionStageOne :: !Int
+  { schemaVersionStageOne :: !Int
   , schemaVersionStageTwo :: !Int
   , schemaVersionStageThree :: !Int
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key SchemaVersion = SchemaVersionId
 instance DbInfo SchemaVersion
+
+entitySchemaVersionDecoder :: D.Row (Entity SchemaVersion)
+entitySchemaVersionDecoder =
+  Entity
+    <$> idDecoder SchemaVersionId
+    <*> schemaVersionDecoder
 
 schemaVersionDecoder :: D.Row SchemaVersion
 schemaVersionDecoder =
   SchemaVersion
-    <$> idDecoder SchemaVersionId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageOne
+    <$> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageOne
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageTwo
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageThree
+
+entitySchemaVersionEncoder :: E.Params (Entity SchemaVersion)
+entitySchemaVersionEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getSchemaVersionId
+    , entityVal >$< schemaVersionEncoder
+    ]
 
 schemaVersionEncoder :: E.Params SchemaVersion
 schemaVersionEncoder =
@@ -637,92 +833,137 @@ schemaVersionEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: meta
-Description: A table containing metadata about the chain. There will probably only ever be one value in this table
--}
+
+-- |
+-- Table Name: meta
+-- Description: A table containing metadata about the chain. There will probably only ever be one value in this table
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Meta = Meta
-  { metaId :: !MetaId -- noreference
-  , metaStartTime :: !UTCTime       -- sqltype=timestamp
+  { metaStartTime :: !UTCTime -- sqltype=timestamp
   , metaNetworkName :: !Text
   , metaVersion :: !Text
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key Meta = MetaId
 instance DbInfo Meta where
   uniqueFields _ = ["start_time"]
+
+entityMetaDecoder :: D.Row (Entity Meta)
+entityMetaDecoder =
+  Entity
+    <$> idDecoder MetaId
+    <*> metaDecoder
 
 metaDecoder :: D.Row Meta
 metaDecoder =
   Meta
-    <$> idDecoder MetaId -- metaId
-    <*> D.column (D.nonNullable D.timestamptz) -- metaStartTime
+    <$> D.column (D.nonNullable D.timestamptz) -- metaStartTime
     <*> D.column (D.nonNullable D.text) -- metaNetworkName
     <*> D.column (D.nonNullable D.text) -- metaVersion
+
+entityMetaEncoder :: E.Params (Entity Meta)
+entityMetaEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getMetaId
+    , entityVal >$< metaEncoder
+    ]
 
 metaEncoder :: E.Params Meta
 metaEncoder =
   mconcat
-    [ metaId >$< idEncoder getMetaId
-    , metaStartTime >$< E.param (E.nonNullable E.timestamptz)
+    [ metaStartTime >$< E.param (E.nonNullable E.timestamptz)
     , metaNetworkName >$< E.param (E.nonNullable E.text)
     , metaVersion >$< E.param (E.nonNullable E.text)
     ]
 
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- Table Name: migration
+-- Description: A table containing information about migrations.
+
+-----------------------------------------------------------------------------------------------------------------------------------
 data Withdrawal = Withdrawal
-  { withdrawalId :: !WithdrawalId
-  , withdrawalAddrId :: !StakeAddressId
+  { withdrawalAddrId :: !StakeAddressId
   , withdrawalAmount :: !DbLovelace
   , withdrawalRedeemerId :: !(Maybe RedeemerId)
   , withdrawalTxId :: !TxId
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key Withdrawal = WithdrawalId
 instance DbInfo Withdrawal
+
+entityWithdrawalDecoder :: D.Row (Entity Withdrawal)
+entityWithdrawalDecoder =
+  Entity
+    <$> idDecoder WithdrawalId
+    <*> withdrawalDecoder
 
 withdrawalDecoder :: D.Row Withdrawal
 withdrawalDecoder =
   Withdrawal
-    <$> idDecoder WithdrawalId -- withdrawalId
-    <*> idDecoder StakeAddressId -- withdrawalAddrId
+    <$> idDecoder StakeAddressId -- withdrawalAddrId
     <*> dbLovelaceDecoder -- withdrawalAmount
     <*> maybeIdDecoder RedeemerId -- withdrawalRedeemerId
     <*> idDecoder TxId -- withdrawalTxId
 
+entityWithdrawalEncoder :: E.Params (Entity Withdrawal)
+entityWithdrawalEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getWithdrawalId
+    , entityVal >$< withdrawalEncoder
+    ]
+
 withdrawalEncoder :: E.Params Withdrawal
 withdrawalEncoder =
   mconcat
-    [ withdrawalId >$< idEncoder getWithdrawalId
-    , withdrawalAddrId >$< idEncoder getStakeAddressId
+    [ withdrawalAddrId >$< idEncoder getStakeAddressId
     , withdrawalAmount >$< dbLovelaceEncoder
     , withdrawalRedeemerId >$< maybeIdEncoder getRedeemerId
     , withdrawalTxId >$< idEncoder getTxId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: extra_migrations
-Description: = A table containing information about extra migrations.
--}
+
+-- |
+-- Table Name: extra_migrations
+-- Description: = A table containing information about extra migrations.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data ExtraMigrations = ExtraMigrations
-  { extraMigrationsId :: !ExtraMigrationsId
-  , extraMigrationsToken :: !Text
+  { extraMigrationsToken :: !Text
   , extraMigrationsDescription :: !(Maybe Text)
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key ExtraMigrations = ExtraMigrationsId
 instance DbInfo ExtraMigrations
+
+entityExtraMigrationsDecoder :: D.Row (Entity ExtraMigrations)
+entityExtraMigrationsDecoder =
+  Entity
+    <$> idDecoder ExtraMigrationsId
+    <*> extraMigrationsDecoder
 
 extraMigrationsDecoder :: D.Row ExtraMigrations
 extraMigrationsDecoder =
   ExtraMigrations
-    <$> idDecoder ExtraMigrationsId -- extraMigrationsId
-    <*> D.column (D.nonNullable D.text) -- extraMigrationsToken
+    <$> D.column (D.nonNullable D.text) -- extraMigrationsToken
     <*> D.column (D.nullable D.text) -- extraMigrationsDescription
+
+entityExtraMigrationsEncoder :: E.Params (Entity ExtraMigrations)
+entityExtraMigrationsEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getExtraMigrationsId
+    , entityVal >$< extraMigrationsEncoder
+    ]
 
 extraMigrationsEncoder :: E.Params ExtraMigrations
 extraMigrationsEncoder =
   mconcat
-    [ extraMigrationsId >$< idEncoder getExtraMigrationsId
-    , extraMigrationsToken >$< E.param (E.nonNullable E.text)
+    [ extraMigrationsToken >$< E.param (E.nonNullable E.text)
     , extraMigrationsDescription >$< E.param (E.nullable E.text)
     ]

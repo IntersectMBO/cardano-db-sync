@@ -1,31 +1,56 @@
 module Cardano.Db.Statement.MultiAsset where
 
-import Cardano.Db.Schema.Core.MultiAsset (MaTxMint(..))
-import Cardano.Db.Types (DbAction, DbTransMode (..))
-import Cardano.Db.Schema.Ids (MaTxMintId)
-import qualified Hasql.Transaction as HsqlT
 import Cardano.Db (DbWord64)
+import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
+import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Types (DbAction, DbTransMode (..))
 
 --------------------------------------------------------------------------------
+
 -- | MultiAsset
---------------------------------------------------------------------------------
-insertMultiAsset :: MonadIO m => MultiAsset -> DbAction m MultiAssetId
-insertMultiAsset multiAsset = runDbT TransWrite $ mkDbTransaction "insertMultiAsset" $
-  insert
-    multiAssetEncoder
-    (WithResult (HsqlD.singleRow $ idDecoder MultiAssetId))
-    multiAsset
 
 --------------------------------------------------------------------------------
--- | MaTxMint
+
+-- | INSERT
+insertMultiAssetStmt :: HsqlS.Statement SMA.MultiAsset (Entity SMA.MultiAsset)
+insertMultiAssetStmt =
+  insert
+    SMA.multiAssetEncoder
+    (WithResult $ HsqlD.singleRow SMA.entityMultiAssetDecoder)
+
+insertMultiAsset :: MonadIO m => SMA.MultiAsset -> DbAction m Id.MultiAssetId
+insertMultiAsset multiAsset = do
+  entity <-
+    runDbSession (mkCallInfo "insertMultiAsset") $
+      HsqlS.statement multiAsset insertMultiAssetStmt
+  pure $ entityKey entity
+
 --------------------------------------------------------------------------------
-insertManyMaTxMint :: MonadIO m => [MaTxMint] -> DbAction m [MaTxMintId]
-insertManyMaTxMint maTxMints = runDbT TransWrite $ mkDbTransaction "insertManyTxInMetadata" $
-  bulkInsertReturnIds
-    extractMaTxMint
-    maTxMintEncoderMany
-    (HsqlD.rowList $ idDecoder MaTxMintId)
-    maTxMints
+
+-- | MaTxMint
+
+--------------------------------------------------------------------------------
+insertMaTxMintStmt :: HsqlS.Statement SMA.MaTxMint (Entity SMA.MaTxMint)
+insertMaTxMintStmt =
+  insert
+    SMA.maTxMintEncoder
+    (WithResult $ HsqlD.singleRow SMA.entityMaTxMintDecoder)
+
+insertMaTxMint :: MonadIO m => SMA.MaTxMint -> DbAction m Id.MaTxMintId
+insertMaTxMint maTxMint = do
+  entity <- runDbSession (mkCallInfo "insertMaTxMint") $ HsqlS.statement maTxMint insertMaTxMintStmt
+  pure $ entityKey entity
+
+bulkInsertMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
+bulkInsertMaTxMint maTxMints =
+  runDbT TransWrite $ mkDbTransaction "bulkInsertTxInMetadata" $ do
+    entity <-
+      bulkInsert
+        extractMaTxMint
+        SMA.maTxMintBulkEncoder
+        (HsqlD.rowList SMA.entityMaTxMintDecoder)
+        maTxMints
+    pure (map entityKey entity)
   where
     extractMaTxMint :: [MaTxMint] -> ([DbInt65], [MultiAssetId], [TxId])
     extractMaTxMint xs =
@@ -33,13 +58,6 @@ insertManyMaTxMint maTxMints = runDbT TransWrite $ mkDbTransaction "insertManyTx
       , map maTxMintIdent xs
       , map maTxMintTxId xs
       )
-
-insertMaTxMint :: MonadIO m => MaTxMint -> DbAction m MaTxMintId
-insertMaTxMint maTxMint = runDbT TransWrite $ mkDbTransaction "insertMaTxMint" $
-  insert
-    maTxMint
-    (WithResult (HsqlD.singleRow $ idDecoder MaTxMintId))
-    maTxMint
 
 -- These tables handle multi-asset (native token) data.
 

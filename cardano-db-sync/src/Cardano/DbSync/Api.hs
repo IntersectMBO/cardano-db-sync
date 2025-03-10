@@ -84,6 +84,7 @@ import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
+import qualified Hasql.Connection as HqlC
 import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
@@ -93,7 +94,6 @@ import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
-import qualified Hasql.Connection as HqlC
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -119,7 +119,7 @@ getIsConsumedFixed env =
   where
     txOutTableType = getTxOutVariantType env
     pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envBackend env
+    backend = envDbEnv env
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
@@ -167,12 +167,12 @@ runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
   void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
 
-runRemoveJsonbFromSchema
-  :: (MonadIO m, AsDbError e)
-  => SyncEnv
-  -> DbAction e m ()
+runRemoveJsonbFromSchema ::
+  (MonadIO m, AsDbError e) =>
+  SyncEnv ->
+  DbAction e m ()
 runRemoveJsonbFromSchema syncEnv = do
-  DB.runDbTx DB.Write transx
+  DB.runDbT DB.Write transx
   where
     dbEnv = envDbEnv syncEnv
     transx = mkDbTransaction "runRemoveJsonbFromSchema" mkCallSite (DB.disableJsonbInSchema (dbConnection dbEnv))
@@ -285,12 +285,12 @@ getDbLatestBlockInfo backend = do
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   case mblk of
     Nothing -> logInfo tracer "Database is empty"
     Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
@@ -309,7 +309,7 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  maybeTip <- getDbLatestBlockInfo (envDbEnv env)
   case maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
@@ -379,11 +379,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-<<<<<<< HEAD
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
-=======
-mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
->>>>>>> 29841e49 (more functionality)
+mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -512,7 +508,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
+      lastPoints <- DB.runDbIohkNoLogging (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -524,7 +520,7 @@ verifySnapshotPoint env snapPoints =
   where
     validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
     validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
+      hashes <- getSlotHash (envDbEnv env) (lsfSlotNo lsf)
       let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
       case valid of
         Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
@@ -533,7 +529,7 @@ verifySnapshotPoint env snapPoints =
       case pnt of
         GenesisPoint -> pure Nothing
         BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envBackend env) slotNo
+          hashes <- getSlotHash (envDbEnv env) slotNo
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)

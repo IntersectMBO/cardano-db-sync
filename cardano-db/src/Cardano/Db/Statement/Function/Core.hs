@@ -1,118 +1,131 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cardano.Db.Statement.Function.Core
-  ( runDbT,
-    mkDbTransaction,
-    mkCallSite,
-    manyEncoder,
-    ResultType(..),
-    ResultTypeBulk(..),
-  )
+module Cardano.Db.Statement.Function.Core (
+  runDbSession,
+  mkCallInfo,
+  mkCallSite,
+  -- runPipelinedSession,
+  -- runDbActionWith,
+  manyEncoder,
+  ResultType (..),
+  ResultTypeBulk (..),
+)
 where
 
 import Cardano.BM.Trace (logDebug)
 import Cardano.Db.Error (CallSite (..), DbError (..))
-import Cardano.Db.Types (DbAction (..), DbTransMode (..), DbTransaction (..), DbEnv (..))
-import Cardano.Prelude (MonadIO (..), ask, when, MonadError (..))
-import Data.Time (getCurrentTime, diffUTCTime)
-import GHC.Stack (HasCallStack, getCallStack, callStack, SrcLoc (..))
+import Cardano.Db.Types (DbAction (..), DbCallInfo (..), DbEnv (..))
+import Cardano.Prelude (MonadError (..), MonadIO (..), Text, ask, for_, when)
 import qualified Data.Text as Text
+import Data.Time (diffUTCTime, getCurrentTime)
+import GHC.Stack (HasCallStack, SrcLoc (..), callStack, getCallStack)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
-import qualified Hasql.Transaction as HsqlT
-import qualified Hasql.Transaction.Sessions as HsqlT
 
--- | Runs a database transaction with optional logging.
+-- | Runs a database session (regular or pipelined) with optional logging.
 --
--- This function executes a `DbTransaction` within the `DbAction` monad, handling
--- the transaction mode (read-only or write) and logging execution details if
--- enabled in the `DbEnv`. It captures timing information and call site details
--- for debugging purposes when logging is active.
+-- This function executes a `Session` within the `DbAction` monad, handling
+-- the execution and logging details if enabled in the `DbEnv`. It captures
+-- timing information and call site details for debugging purposes when logging
+-- is active.
+--
+-- This is the core function for executing both regular and pipelined database
+-- operations.
 --
 -- ==== Parameters
--- * @DbTransMode@: The transaction mode (`Write` or `ReadOnly`).
--- * @DbTransaction{..}@: The transaction to execute, containing the function name,
---   call site, and the `Hasql` transaction.
+-- * @DbCallInfo@: Call site information for debugging and logging.
+-- * @Session a@: The `Hasql` session to execute (can be a regular session or pipeline).
 --
 -- ==== Returns
--- * @DbAction m a@: The result of the transaction wrapped in the `DbAction` monad.
-runDbT
-  :: MonadIO m
-  => DbTransMode
-  -> DbTransaction a
-  -> DbAction m a
-runDbT mode DbTransaction{..} = DbAction $ do
+-- * @DbAction m a@: The result of the session wrapped in the `DbAction` monad.
+--
+-- ==== Examples
+-- ```
+-- -- Regular session:
+-- result <- runDbSession (mkCallInfo "operation") $
+--   HsqlS.statement record statement
+--
+-- -- Pipeline session:
+-- results <- runDbSession (mkCallInfo "batchOperation") $
+--   HsqlS.pipeline $ do
+--     r1 <- HsqlP.statement input1 statement1
+--     r2 <- HsqlP.statement input2 statement2
+--     pure (r1, r2)
+-- ```
+runDbSession :: MonadIO m => DbCallInfo -> HsqlS.Session a -> DbAction m a
+runDbSession DbCallInfo {..} session = DbAction $ do
   dbEnv <- ask
-  let logMsg msg = when (dbEnableLogging dbEnv) $ liftIO $ logDebug (dbTracer dbEnv) msg
-
-  -- Run the session and handle the result
-  let runSession = do
-        result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
-        case result of
-          Left err -> throwError $ QueryError "Transaction failed" dtCallSite err
-          Right val -> pure val
+  let logMsg msg =
+        when (dbEnableLogging dbEnv) $
+          for_ (dbTracer dbEnv) $
+            \tracer -> liftIO $ logDebug tracer msg
+      locationInfo =
+        " at "
+          <> csModule dciCallSite
+          <> ":"
+          <> csFile dciCallSite
+          <> ":"
+          <> Text.pack (show $ csLine dciCallSite)
 
   if dbEnableLogging dbEnv
     then do
       start <- liftIO getCurrentTime
-      result <- runSession
+      result <- run dbEnv
       end <- liftIO getCurrentTime
       let duration = diffUTCTime end start
-      logMsg $ "Transaction: " <> dtFunctionName <> locationInfo <> " in " <> Text.pack (show duration)
+      logMsg $ "Query: " <> dciName <> locationInfo <> " in " <> Text.pack (show duration)
       pure result
-    else runSession
+    else run dbEnv
   where
-    session = HsqlT.transaction HsqlT.Serializable transMode dtTx
-    transMode = case mode of
-      TransWrite -> HsqlT.Write
-      TransReadOnly -> HsqlT.Read
-    locationInfo = " at " <> csModule dtCallSite <> ":" <>
-                    csFile dtCallSite <> ":" <> Text.pack (show $ csLine dtCallSite)
+    run dbEnv = do
+      result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
+      case result of
+        Left sessionErr ->
+          throwError $ DbError dciCallSite "Database query failed: " (Just sessionErr)
+        Right val -> pure val
 
--- | Creates a `DbTransaction` with a function name and call site.
---
--- Constructs a `DbTransaction` record for use with `runDbT`, capturing the
--- function name and call site from the current stack trace. This is useful
--- for logging and debugging database operations.
+-- | Creates a `DbCallInfo` with a function name and call site.
 --
 -- ==== Parameters
--- * @funcName@: The name of the function or operation being performed.
--- * @transx@: The `Hasql` transaction to encapsulate.
+-- * @name@: The name of the function or database operation being performed.
 --
 -- ==== Returns
--- * @DbTransaction a@: A transaction record with metadata.
-mkDbTransaction :: Text.Text -> HsqlT.Transaction a -> DbTransaction a
-mkDbTransaction funcName transx =
-  DbTransaction
-    { dtFunctionName = funcName
-    , dtCallSite = mkCallSite
-    , dtTx = transx
-    }
+-- * @DbCallInfo@: A call information record with operation name and location metadata.
+mkCallInfo :: HasCallStack => Text -> DbCallInfo
+mkCallInfo name = DbCallInfo name mkCallSite
 
+-- | Extracts call site information from the current call stack.
+--
+-- This helper function parses the Haskell call stack to provide source location
+-- details.
+--
+-- ==== Returns
+-- * @CallSite@: A record containing module name, file path, and line number
 mkCallSite :: HasCallStack => CallSite
 mkCallSite =
   case reverse (getCallStack callStack) of
-    (_, srcLoc) : _ -> CallSite
-      { csModule = Text.pack $ srcLocModule srcLoc
-      , csFile = Text.pack $ srcLocFile srcLoc
-      , csLine = srcLocStartLine srcLoc
-      }
+    (_, srcLoc) : _ ->
+      CallSite
+        { csModule = Text.pack $ srcLocModule srcLoc
+        , csFile = Text.pack $ srcLocFile srcLoc
+        , csLine = srcLocStartLine srcLoc
+        }
     [] -> error "No call stack info"
 
 -- | The result type of an insert operation (usualy it's newly generated id).
 data ResultType c r where
-  NoResult   :: ResultType c ()  -- No ID, result type is ()
-  WithResult :: HsqlD.Result c -> ResultType c c  -- Return ID, result type is c
+  NoResult :: ResultType c () -- No ID, result type is ()
+  WithResult :: HsqlD.Result c -> ResultType c c -- Return ID, result type is c
 
 -- | The result type of an insert operation (usualy it's newly generated id).
 data ResultTypeBulk c r where
-  NoResultBulk   :: ResultTypeBulk c ()  -- No IDs, result type is ()
-  WithResultBulk :: HsqlD.Result [c] -> ResultTypeBulk c [c]  -- Return IDs, result type is [c]
+  NoResultBulk :: ResultTypeBulk c () -- No IDs, result type is ()
+  WithResultBulk :: HsqlD.Result [c] -> ResultTypeBulk c [c] -- Return IDs, result type is [c]
 
 -- | Creates a parameter encoder for an array of values from a single-value encoder
 manyEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]

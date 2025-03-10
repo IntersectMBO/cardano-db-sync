@@ -1,4 +1,3 @@
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -8,12 +7,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Types (
   DbAction (..),
-  DbTransMode (..),
-  DbTransaction (..),
+  DbCallInfo (..),
   DbEnv (..),
   Ada (..),
   AnchorType (..),
@@ -99,60 +96,56 @@ module Cardano.Db.Types (
 ) where
 
 import Cardano.BM.Trace (Trace)
-import Cardano.Db.Error (DbError (..), CallSite (..))
+import Cardano.Db.Error (CallSite (..), DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor(..), MonadError (..), MonadIO (..), MonadReader)
+import Cardano.Prelude (Bifunctor (..), MonadError (..), MonadIO (..), MonadReader)
+import qualified Codec.Binary.Bech32 as Bech32
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
+import qualified Crypto.Hash
 import Data.Aeson.Encoding (unsafeToEncoding)
 import Data.Aeson.Types (FromJSON (..), ToJSON (..))
-import Data.Bits (Bits(..))
+import qualified Data.Aeson.Types as Aeson
+import Data.Bits (Bits (..))
+import qualified Data.ByteArray as ByteArray
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Builder as Builder
 import Data.Either (fromRight)
 import Data.Fixed (Micro, showFixed)
 import Data.Functor.Contravariant ((>$<))
 import Data.Int (Int64)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
+import qualified Data.Text as Text
 import Data.WideWord (Word128 (..))
 import Data.Word (Word16, Word64)
 import GHC.Generics
+import qualified Hasql.Connection as HsqlCon
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as HsqlE
 import Quiet (Quiet (..))
-import qualified Codec.Binary.Bech32 as Bech32
-import qualified Crypto.Hash
-import qualified Data.Aeson.Types as Aeson
-import qualified Data.ByteArray as ByteArray
-import qualified Data.ByteString.Builder as Builder
-import qualified Data.Text as Text
-import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Decoders as D
-import qualified Hasql.Encoders as E
-import qualified Hasql.Transaction as HsqlT
 
 newtype DbAction m a = DbAction
-  { runDbAction :: ExceptT DbError (ReaderT DbEnv m) a }
+  {runDbAction :: ExceptT DbError (ReaderT DbEnv m) a}
   deriving newtype
-    ( Functor, Applicative, Monad
+    ( Functor
+    , Applicative
+    , Monad
     , MonadError DbError
     , MonadReader DbEnv
     , MonadIO
     )
 
-data DbTransMode = TransWrite | TransReadOnly
-
--- Environment with transaction settings
-data DbEnv = DbEnv
-  { dbConnection :: !HsqlC.Connection
-  , dbEnableLogging :: !Bool
-  , dbTracer :: !(Trace IO Text)
+data DbCallInfo = DbCallInfo
+  { dciName :: !Text
+  , dciCallSite :: !CallSite
   }
 
--- | Transaction wrapper for debuging/logging.
-data DbTransaction a = DbTransaction
-  { dtFunctionName :: !Text
-  , dtCallSite :: !CallSite
-  , dtTx :: !(HsqlT.Transaction a)
+data DbEnv = DbEnv
+  { dbConnection :: !HsqlCon.Connection
+  , dbEnableLogging :: !Bool
+  , dbTracer :: !(Maybe (Trace IO Text))
   }
 
 -- | Convert a `Scientific` to `Ada`.
@@ -203,7 +196,7 @@ mkAssetFingerprint policyBs assetNameBs =
 --   | NegInt65 !Word64
 --   deriving (Eq, Generic, Show)
 
-newtype DbInt65 = DbInt65 { unDbInt65 :: Word64 }
+newtype DbInt65 = DbInt65 {unDbInt65 :: Word64}
   deriving (Eq, Generic)
 
 instance Show DbInt65 where
@@ -212,24 +205,24 @@ instance Show DbInt65 where
 instance Read DbInt65 where
   readsPrec d = map (first toDbInt65) . readsPrec d
 
-dbInt65Decoder :: D.Value DbInt65
-dbInt65Decoder = toDbInt65 <$> D.int8
+dbInt65Decoder :: HsqlD.Value DbInt65
+dbInt65Decoder = toDbInt65 <$> HsqlD.int8
 
-dbInt65Encoder :: E.Value DbInt65
-dbInt65Encoder = fromDbInt65 >$< E.int8
+dbInt65Encoder :: HsqlE.Value DbInt65
+dbInt65Encoder = fromDbInt65 >$< HsqlE.int8
 
 -- Helper functions to pack/unpack the sign and value
 toDbInt65 :: Int64 -> DbInt65
-toDbInt65 n = DbInt65 $
-  if n >= 0
-    then fromIntegral n
-    else setBit (fromIntegral (abs n)) 63  -- Set sign bit for negative
-
+toDbInt65 n =
+  DbInt65 $
+    if n >= 0
+      then fromIntegral n
+      else setBit (fromIntegral (abs n)) 63 -- Set sign bit for negative
 
 fromDbInt65 :: DbInt65 -> Int64
 fromDbInt65 (DbInt65 w) =
   if testBit w 63
-    then negate $ fromIntegral (clearBit w 63)  -- Clear sign bit for value
+    then negate $ fromIntegral (clearBit w 63) -- Clear sign bit for value
     else fromIntegral w
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
@@ -237,34 +230,34 @@ newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
   deriving (Eq, Generic, Ord)
   deriving (Read, Show) via (Quiet DbLovelace)
 
-dbLovelaceEncoder :: E.Params DbLovelace
-dbLovelaceEncoder = E.param $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8
+dbLovelaceEncoder :: HsqlE.Params DbLovelace
+dbLovelaceEncoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
 
-maybeDbLovelaceEncoder :: E.Params (Maybe DbLovelace)
-maybeDbLovelaceEncoder = E.param $ E.nullable $ fromIntegral . unDbLovelace >$< E.int8
+maybeDbLovelaceEncoder :: HsqlE.Params (Maybe DbLovelace)
+maybeDbLovelaceEncoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
 
-dbLovelaceDecoder :: D.Row DbLovelace
-dbLovelaceDecoder = D.column (D.nonNullable (DbLovelace . fromIntegral <$> D.int8))
+dbLovelaceDecoder :: HsqlD.Row DbLovelace
+dbLovelaceDecoder = HsqlD.column (HsqlD.nonNullable (DbLovelace . fromIntegral <$> HsqlD.int8))
 
-maybeDbLovelaceDecoder :: D.Row (Maybe DbLovelace)
-maybeDbLovelaceDecoder = D.column (D.nullable (DbLovelace . fromIntegral <$> D.int8))
+maybeDbLovelaceDecoder :: HsqlD.Row (Maybe DbLovelace)
+maybeDbLovelaceDecoder = HsqlD.column (HsqlD.nullable (DbLovelace . fromIntegral <$> HsqlD.int8))
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
 newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
   deriving (Eq, Generic, Num)
   deriving (Read, Show) via (Quiet DbWord64)
 
-dbWord64Encoder :: E.Params DbWord64
-dbWord64Encoder = E.param $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8
+dbWord64Encoder :: HsqlE.Params DbWord64
+dbWord64Encoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbWord64 >$< HsqlE.int8
 
-maybeDbWord64Encoder :: E.Params (Maybe DbWord64)
-maybeDbWord64Encoder = E.param $ E.nullable $ fromIntegral . unDbWord64 >$< E.int8
+maybeDbWord64Encoder :: HsqlE.Params (Maybe DbWord64)
+maybeDbWord64Encoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbWord64 >$< HsqlE.int8
 
-dbWord64Decoder :: D.Row DbWord64
-dbWord64Decoder = D.column (D.nonNullable (DbWord64 . fromIntegral <$> D.int8))
+dbWord64Decoder :: HsqlD.Row DbWord64
+dbWord64Decoder = HsqlD.column (HsqlD.nonNullable (DbWord64 . fromIntegral <$> HsqlD.int8))
 
-maybeDbWord64Decoder :: D.Row (Maybe DbWord64)
-maybeDbWord64Decoder = D.column (D.nullable (DbWord64 . fromIntegral <$> D.int8))
+maybeDbWord64Decoder :: HsqlD.Row (Maybe DbWord64)
+maybeDbWord64Decoder = HsqlD.column (HsqlD.nullable (DbWord64 . fromIntegral <$> HsqlD.int8))
 
 --------------------------------------------------------------------------------
 -- The following must be in alphabetic order.
@@ -277,8 +270,8 @@ data RewardSource
   | RwdProposalRefund
   deriving (Bounded, Enum, Eq, Ord, Show)
 
-rewardSourceDecoder :: D.Value RewardSource
-rewardSourceDecoder = D.enum $ \case
+rewardSourceDecoder :: HsqlD.Value RewardSource
+rewardSourceDecoder = HsqlD.enum $ \case
   "leader" -> Just RwdLeader
   "member" -> Just RwdMember
   "reserves" -> Just RwdReserves
@@ -287,8 +280,8 @@ rewardSourceDecoder = D.enum $ \case
   "proposal_refund" -> Just RwdProposalRefund
   _ -> Nothing
 
-rewardSourceEncoder :: E.Value RewardSource
-rewardSourceEncoder = E.enum $ \case
+rewardSourceEncoder :: HsqlE.Value RewardSource
+rewardSourceEncoder = HsqlE.enum $ \case
   RwdLeader -> "leader"
   RwdMember -> "member"
   RwdReserves -> "reserves"
@@ -302,14 +295,14 @@ data SyncState
   | SyncFollowing -- Local tip is following global chain tip.
   deriving (Eq, Show)
 
-syncStateDecoder :: D.Value SyncState
-syncStateDecoder = D.enum $ \case
+syncStateDecoder :: HsqlD.Value SyncState
+syncStateDecoder = HsqlD.enum $ \case
   "lagging" -> Just SyncLagging
   "following" -> Just SyncFollowing
   _ -> Nothing
 
-syncStateEncoder :: E.Value SyncState
-syncStateEncoder = E.enum $ \case
+syncStateEncoder :: HsqlE.Value SyncState
+syncStateEncoder = HsqlE.enum $ \case
   SyncLagging -> "lagging"
   SyncFollowing -> "following"
 
@@ -323,8 +316,8 @@ data ScriptPurpose
   | Propose
   deriving (Eq, Generic, Show)
 
-scriptPurposeDecoder :: D.Value ScriptPurpose
-scriptPurposeDecoder = D.enum $ \case
+scriptPurposeDecoder :: HsqlD.Value ScriptPurpose
+scriptPurposeDecoder = HsqlD.enum $ \case
   "spend" -> Just Spend
   "mint" -> Just Mint
   "cert" -> Just Cert
@@ -333,8 +326,8 @@ scriptPurposeDecoder = D.enum $ \case
   "propose" -> Just Propose
   _ -> Nothing
 
-scriptPurposeEncoder :: E.Value ScriptPurpose
-scriptPurposeEncoder = E.enum $ \case
+scriptPurposeEncoder :: HsqlE.Value ScriptPurpose
+scriptPurposeEncoder = HsqlE.enum $ \case
   Spend -> "spend"
   Mint -> "mint"
   Cert -> "cert"
@@ -351,8 +344,8 @@ data ScriptType
   | PlutusV3
   deriving (Eq, Generic, Show)
 
-scriptTypeDecoder :: D.Value ScriptType
-scriptTypeDecoder = D.enum $ \case
+scriptTypeDecoder :: HsqlD.Value ScriptType
+scriptTypeDecoder = HsqlD.enum $ \case
   "multisig" -> Just MultiSig
   "timelock" -> Just Timelock
   "plutusv1" -> Just PlutusV1
@@ -360,8 +353,8 @@ scriptTypeDecoder = D.enum $ \case
   "plutusv3" -> Just PlutusV3
   _ -> Nothing
 
-scriptTypeEncoder :: E.Value ScriptType
-scriptTypeEncoder = E.enum $ \case
+scriptTypeEncoder :: HsqlE.Value ScriptType
+scriptTypeEncoder = HsqlE.enum $ \case
   MultiSig -> "multisig"
   Timelock -> "timelock"
   PlutusV1 -> "plutusv1"
@@ -461,18 +454,20 @@ instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
 
 --------------------------------------------------------------------------------
+
 -- | The vote url wrapper so we have some additional safety.
 newtype VoteUrl = VoteUrl {unVoteUrl :: Text}
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet VoteUrl)
 
-voteUrlDecoder :: D.Value VoteUrl
-voteUrlDecoder = VoteUrl <$> D.text
+voteUrlDecoder :: HsqlD.Value VoteUrl
+voteUrlDecoder = VoteUrl <$> HsqlD.text
 
-voteUrlEncoder :: E.Value VoteUrl
-voteUrlEncoder = unVoteUrl >$< E.text
+voteUrlEncoder :: HsqlE.Value VoteUrl
+voteUrlEncoder = unVoteUrl >$< HsqlE.text
 
 --------------------------------------------------------------------------------
+
 -- | The raw binary hash of a vote metadata.
 newtype VoteMetaHash = VoteMetaHash {unVoteMetaHash :: ByteString}
   deriving (Eq, Ord, Generic)
@@ -483,15 +478,15 @@ data Vote = VoteYes | VoteNo | VoteAbstain
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet Vote)
 
-voteDecoder :: D.Value Vote
-voteDecoder = D.enum $ \case
+voteDecoder :: HsqlD.Value Vote
+voteDecoder = HsqlD.enum $ \case
   "yes" -> Just VoteYes
   "no" -> Just VoteNo
   "abstain" -> Just VoteAbstain
   _ -> Nothing
 
-voteEncoder :: E.Value Vote
-voteEncoder = E.enum $ \case
+voteEncoder :: HsqlE.Value Vote
+voteEncoder = HsqlE.enum $ \case
   VoteYes -> "yes"
   VoteNo -> "no"
   VoteAbstain -> "abstain"
@@ -501,20 +496,21 @@ data VoterRole = ConstitutionalCommittee | DRep | SPO
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet VoterRole)
 
-voterRoleDecoder :: D.Value VoterRole
-voterRoleDecoder = D.enum $ \case
+voterRoleDecoder :: HsqlD.Value VoterRole
+voterRoleDecoder = HsqlD.enum $ \case
   "constitutional-committee" -> Just ConstitutionalCommittee
   "drep" -> Just DRep
   "spo" -> Just SPO
   _ -> Nothing
 
-voterRoleEncoder :: E.Value VoterRole
-voterRoleEncoder = E.enum $ \case
+voterRoleEncoder :: HsqlE.Value VoterRole
+voterRoleEncoder = HsqlE.enum $ \case
   ConstitutionalCommittee -> "constitutional-committee"
   DRep -> "drep"
   SPO -> "spo"
 
 --------------------------------------------------------------------------------
+
 -- | The type of governance action.
 data GovActionType
   = ParameterChange
@@ -527,8 +523,8 @@ data GovActionType
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet GovActionType)
 
-govActionTypeDecoder :: D.Value GovActionType
-govActionTypeDecoder = D.enum $ \case
+govActionTypeDecoder :: HsqlD.Value GovActionType
+govActionTypeDecoder = HsqlD.enum $ \case
   "parameter-change" -> Just ParameterChange
   "hard-fork-initiation" -> Just HardForkInitiation
   "treasury-withdrawals" -> Just TreasuryWithdrawals
@@ -538,8 +534,8 @@ govActionTypeDecoder = D.enum $ \case
   "info-action" -> Just InfoAction
   _ -> Nothing
 
-govActionTypeEncoder :: E.Value GovActionType
-govActionTypeEncoder = E.enum $ \case
+govActionTypeEncoder :: HsqlE.Value GovActionType
+govActionTypeEncoder = HsqlE.enum $ \case
   ParameterChange -> "parameter-change"
   HardForkInitiation -> "hard-fork-initiation"
   TreasuryWithdrawals -> "treasury-withdrawals"
@@ -549,6 +545,7 @@ govActionTypeEncoder = E.enum $ \case
   InfoAction -> "info-action"
 
 --------------------------------------------------------------------------------
+
 -- | The type of anchor.
 data AnchorType
   = GovActionAnchor
@@ -560,8 +557,8 @@ data AnchorType
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet AnchorType)
 
-anchorTypeDecoder :: D.Value AnchorType
-anchorTypeDecoder = D.enum $ \case
+anchorTypeDecoder :: HsqlD.Value AnchorType
+anchorTypeDecoder = HsqlD.enum $ \case
   "gov-action" -> Just GovActionAnchor
   "drep" -> Just DrepAnchor
   "other" -> Just OtherAnchor
@@ -570,8 +567,8 @@ anchorTypeDecoder = D.enum $ \case
   "constitution" -> Just ConstitutionAnchor
   _ -> Nothing
 
-anchorTypeEncoder :: E.Value AnchorType
-anchorTypeEncoder = E.enum $ \case
+anchorTypeEncoder :: HsqlE.Value AnchorType
+anchorTypeEncoder = HsqlE.enum $ \case
   GovActionAnchor -> "gov-action"
   DrepAnchor -> "drep"
   OtherAnchor -> "other"
@@ -601,16 +598,17 @@ integerToDbInt65 i
 --     then PosInt65 (fromIntegral i)
 --     else NegInt65 (fromIntegral $ negate i)
 
-word128Decoder :: D.Value Word128
-word128Decoder = D.composite $ do
-  hi <- D.field (D.nonNullable $ fromIntegral <$> D.int8)
-  lo <- D.field (D.nonNullable $ fromIntegral <$> D.int8)
+word128Decoder :: HsqlD.Value Word128
+word128Decoder = HsqlD.composite $ do
+  hi <- HsqlD.field (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+  lo <- HsqlD.field (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
   pure $ Word128 hi lo
 
-word128Encoder :: E.Value Word128
-word128Encoder = E.composite $
-  E.field (E.nonNullable $ fromIntegral . word128Hi64 >$< E.int8) <>
-  E.field (E.nonNullable $ fromIntegral . word128Lo64 >$< E.int8)
+word128Encoder :: HsqlE.Value Word128
+word128Encoder =
+  HsqlE.composite $
+    HsqlE.field (HsqlE.nonNullable $ fromIntegral . word128Hi64 >$< HsqlE.int8)
+      <> HsqlE.field (HsqlE.nonNullable $ fromIntegral . word128Lo64 >$< HsqlE.int8)
 
 lovelaceToAda :: Micro -> Ada
 lovelaceToAda ll =

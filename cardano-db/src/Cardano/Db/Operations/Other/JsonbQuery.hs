@@ -5,6 +5,7 @@
 
 module Cardano.Db.Operations.Other.JsonbQuery where
 
+import Cardano.Prelude (ExceptT, MonadError (..))
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
@@ -13,71 +14,91 @@ import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
 import qualified Hasql.Statement as HsqlS
-import qualified Hasql.Transaction as HsqlT
 
-import Cardano.Db.Error (DbError (..), AsDbError (..))
+import Cardano.Db.Error (DbError (..))
 import Cardano.Db.Statement.Function.Core (mkCallSite)
-import Cardano.Prelude (ExceptT, MonadError (..), forM_)
 
-enableJsonbInSchema :: HsqlT.Transaction ()
+enableJsonbInSchema :: HsqlS.Statement () ()
 enableJsonbInSchema = do
-  forM_ stmts $ \stmt -> HsqlT.statement () (enableJsonbInSchemaStmt stmt)
+  HsqlS.Statement
+    ( mconcat $
+        zipWith
+          ( \s i ->
+              (if i > (0 :: Integer) then "; " else "")
+                <> "ALTER TABLE "
+                <> fst s
+                <> " ALTER COLUMN "
+                <> snd s
+                <> " TYPE jsonb USING "
+                <> snd s
+                <> "::jsonb"
+          )
+          jsonbColumns
+          [0 ..]
+    )
+    HsqlE.noParams
+    HsqlD.noResult
+    True
   where
-    enableJsonbInSchemaStmt ::  (ByteString, ByteString) -> HsqlS.Statement () ()
-    enableJsonbInSchemaStmt (t, c) =
-      HsqlS.Statement
-        ("ALTER TABLE " <> t <> " ALTER COLUMN " <> c <> " TYPE jsonb USING " <> c <> "::jsonb")
-        HsqlE.noParams
-        HsqlD.noResult
-        True
+    jsonbColumns :: [(ByteString, ByteString)]
+    jsonbColumns =
+      [ ("tx_metadata", "json")
+      , ("script", "json")
+      , ("datum", "value")
+      , ("redeemer_data", "value")
+      , ("cost_model", "costs")
+      , ("gov_action_proposal", "description")
+      , ("off_chain_pool_data", "json")
+      , ("off_chain_vote_data", "json")
+      ]
 
-    stmts :: [(ByteString, ByteString)]
-    stmts = [ ("tx_metadata", "json")
-            , ("script", "json")
-            , ("datum", "value")
-            , ("redeemer_data", "value")
-            , ("cost_model", "costs")
-            , ("gov_action_proposal", "description")
-            , ("off_chain_pool_data", "json")
-            , ("off_chain_vote_data", "json")
-            ]
-
-disableJsonbInSchema :: HsqlT.Transaction ()
-disableJsonbInSchema = do
-  forM_ stmts $ \(t, c) -> HsqlT.statement () (disableJsonbInSchemaStmt t c)
+disableJsonbInSchema :: HsqlS.Statement () ()
+disableJsonbInSchema =
+  HsqlS.Statement
+    ( mconcat $
+        zipWith
+          ( \columnDef i ->
+              (if i > (0 :: Integer) then "; " else "")
+                <> "ALTER TABLE "
+                <> fst columnDef
+                <> " ALTER COLUMN "
+                <> snd columnDef
+                <> " TYPE VARCHAR"
+          )
+          jsonColumnsToRevert
+          [0 ..]
+    )
+    HsqlE.noParams
+    HsqlD.noResult
+    True
   where
-    disableJsonbInSchemaStmt t c = HsqlS.Statement
-      ("ALTER TABLE " <> t <> " ALTER COLUMN " <> c <> " TYPE VARCHAR")
-      HsqlE.noParams
-      HsqlD.noResult
-      True
+    -- List of table and column pairs to convert back from JSONB
+    jsonColumnsToRevert :: [(ByteString, ByteString)]
+    jsonColumnsToRevert =
+      [ ("tx_metadata", "json")
+      , ("script", "json")
+      , ("datum", "value")
+      , ("redeemer_data", "value")
+      , ("cost_model", "costs")
+      , ("gov_action_proposal", "description")
+      , ("off_chain_pool_data", "json")
+      , ("off_chain_vote_data", "json")
+      ]
 
-    stmts :: [(ByteString, ByteString)]
-    stmts = [ ("tx_metadata", "json")
-            , ("script", "json")
-            , ("datum", "value")
-            , ("redeemer_data", "value")
-            , ("cost_model", "costs")
-            , ("gov_action_proposal", "description")
-            , ("off_chain_pool_data", "json")
-            , ("off_chain_vote_data", "json")
-            ]
-
-queryJsonbInSchemaExists :: AsDbError e => HsqlC.Connection -> ExceptT e IO Bool
+queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
 queryJsonbInSchemaExists conn = do
   result <- liftIO $ HsqlS.run (HsqlS.statement () jsonbSchemaStatement) conn
   case result of
-    Left err -> throwError $ toDbError $ QueryError "queryJsonbInSchemaExists" mkCallSite err
+    Left err -> throwError $ DbError mkCallSite "queryJsonbInSchemaExists" $ Just err
     Right countRes -> pure $ countRes == 1
   where
     jsonbSchemaStatement :: HsqlS.Statement () Int64
     jsonbSchemaStatement =
       HsqlS.Statement
         query
-        HsqlE.noParams  -- No parameters needed
+        HsqlE.noParams -- No parameters needed
         decoder
-        True  -- Prepared statement
-
+        True -- Prepared statement
     query =
       "SELECT COUNT(*) \
       \FROM information_schema.columns \
@@ -86,6 +107,7 @@ queryJsonbInSchemaExists conn = do
       \AND data_type = 'jsonb';"
 
     decoder :: HsqlD.Result Int64
-    decoder = HsqlD.singleRow $
-      HsqlD.column $
-        HsqlD.nonNullable HsqlD.int8
+    decoder =
+      HsqlD.singleRow $
+        HsqlD.column $
+          HsqlD.nonNullable HsqlD.int8

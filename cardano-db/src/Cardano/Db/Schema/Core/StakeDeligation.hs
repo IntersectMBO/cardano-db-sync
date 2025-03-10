@@ -1,9 +1,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Db.Schema.Core.StakeDeligation where
 
-import Contravariant.Extras (contrazip5)
+import Contravariant.Extras (contrazip2, contrazip4, contrazip5, contrazip6)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)
@@ -15,85 +16,110 @@ import Hasql.Encoders as E
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
-  DbLovelace(..),
+  DbLovelace (..),
   RewardSource,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
   maybeDbLovelaceDecoder,
   maybeDbLovelaceEncoder,
   rewardSourceDecoder,
-  dbLovelaceEncoder,
   rewardSourceEncoder,
  )
 
 -----------------------------------------------------------------------------------------------------------------------------------
+
 -- | STAKE DELEGATION
 -- | These tables handle stake addresses, delegation, and reward
+
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: stake_address
-Description: Contains information about stakeholder addresses.
--}
-data StakeAddress = StakeAddress  -- Can be an address of a script hash
-  { stakeAddressId :: !StakeAddressId -- noreference
-  , stakeAddressHashRaw :: !ByteString        -- sqltype=addr29type
+
+-- |
+-- Table Name: stake_address
+-- Description: Contains information about stakeholder addresses.
+data StakeAddress = StakeAddress -- Can be an address of a script hash
+  { stakeAddressHashRaw :: !ByteString -- sqltype=addr29type
   , stakeAddressView :: !Text
   , stakeAddressScriptHash :: !(Maybe ByteString) -- sqltype=hash28type
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key StakeAddress = StakeAddressId
 instance DbInfo StakeAddress where
   uniqueFields _ = ["hash_raw"]
+
+entityStakeAddressDecoder :: D.Row (Entity StakeAddress)
+entityStakeAddressDecoder =
+  Entity
+    <$> idDecoder StakeAddressId
+    <*> stakeAddressDecoder
 
 stakeAddressDecoder :: D.Row StakeAddress
 stakeAddressDecoder =
   StakeAddress
-    <$> idDecoder StakeAddressId -- stakeAddressId
-    <*> D.column (D.nonNullable D.bytea) -- stakeAddressHashRaw
+    <$> D.column (D.nonNullable D.bytea) -- stakeAddressHashRaw
     <*> D.column (D.nonNullable D.text) -- stakeAddressView
     <*> D.column (D.nullable D.bytea) -- stakeAddressScriptHash
+
+entityStakeAddressEncoder :: E.Params (Entity StakeAddress)
+entityStakeAddressEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getStakeAddressId
+    , entityVal >$< stakeAddressEncoder
+    ]
 
 stakeAddressEncoder :: E.Params StakeAddress
 stakeAddressEncoder =
   mconcat
-    [ stakeAddressId >$< idEncoder getStakeAddressId
-    , stakeAddressHashRaw >$< E.param (E.nonNullable E.bytea)
+    [ stakeAddressHashRaw >$< E.param (E.nonNullable E.bytea)
     , stakeAddressView >$< E.param (E.nonNullable E.text)
     , stakeAddressScriptHash >$< E.param (E.nullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: stake_registration
-Description: Contains information about stakeholder registrations.
--}
-data StakeRegistration = StakeRegistration
-  { stakeRegistrationId :: !StakeRegistrationId
-  , stakeRegistrationAddrId :: !StakeAddressId  -- noreference
-  , stakeRegistrationCertIndex :: !Word16
-  , stakeRegistrationEpochNo :: !Word64         -- sqltype=word31type
-  , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
-  , stakeRegistrationTxId :: !TxId              -- noreference
-  } deriving (Eq, Show, Generic)
 
+-- |
+-- Table Name: stake_registration
+-- Description: Contains information about stakeholder registrations.
+data StakeRegistration = StakeRegistration
+  { stakeRegistrationAddrId :: !StakeAddressId -- noreference
+  , stakeRegistrationCertIndex :: !Word16
+  , stakeRegistrationEpochNo :: !Word64 -- sqltype=word31type
+  , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , stakeRegistrationTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key StakeRegistration = StakeRegistrationId
 instance DbInfo StakeRegistration
+
+entityStakeRegistrationDecoder :: D.Row (Entity StakeRegistration)
+entityStakeRegistrationDecoder =
+  Entity
+    <$> idDecoder StakeRegistrationId
+    <*> stakeRegistrationDecoder
 
 stakeRegistrationDecoder :: D.Row StakeRegistration
 stakeRegistrationDecoder =
   StakeRegistration
-    <$> idDecoder StakeRegistrationId -- stakeRegistrationId
-    <*> idDecoder StakeAddressId -- stakeRegistrationAddrId
+    <$> idDecoder StakeAddressId -- stakeRegistrationAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- stakeRegistrationCertIndex
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- stakeRegistrationEpochNo
     <*> maybeDbLovelaceDecoder -- stakeRegistrationDeposit
     <*> idDecoder TxId -- stakeRegistrationTxId
 
+entityStakeRegistrationEncoder :: E.Params (Entity StakeRegistration)
+entityStakeRegistrationEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getStakeRegistrationId
+    , entityVal >$< stakeRegistrationEncoder
+    ]
+
 stakeRegistrationEncoder :: E.Params StakeRegistration
 stakeRegistrationEncoder =
   mconcat
-    [ stakeRegistrationId >$< idEncoder getStakeRegistrationId
-    , stakeRegistrationAddrId >$< idEncoder getStakeAddressId
+    [ stakeRegistrationAddrId >$< idEncoder getStakeAddressId
     , stakeRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , stakeRegistrationEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , stakeRegistrationDeposit >$< maybeDbLovelaceEncoder
@@ -101,37 +127,50 @@ stakeRegistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: stake_deregistration
-Description: Contains information about stakeholder deregistrations.
--}
+
+-- |
+-- Table Name: stake_deregistration
+-- Description: Contains information about stakeholder deregistrations.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data StakeDeregistration = StakeDeregistration
-  { stakeDeregistrationId :: !StakeDeregistrationId
-  , stakeDeregistrationAddrId :: !StakeAddressId -- noreference
+  { stakeDeregistrationAddrId :: !StakeAddressId -- noreference
   , stakeDeregistrationCertIndex :: !Word16
-  , stakeDeregistrationEpochNo :: !Word64       -- sqltype=word31type
-  , stakeDeregistrationTxId :: !TxId            -- noreference
+  , stakeDeregistrationEpochNo :: !Word64 -- sqltype=word31type
+  , stakeDeregistrationTxId :: !TxId -- noreference
   , stakeDeregistrationRedeemerId :: !(Maybe RedeemerId) -- noreference
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key StakeDeregistration = StakeDeregistrationId
 instance DbInfo StakeDeregistration
+
+entityStakeDeregistrationDecoder :: D.Row (Entity StakeDeregistration)
+entityStakeDeregistrationDecoder =
+  Entity
+    <$> idDecoder StakeDeregistrationId
+    <*> stakeDeregistrationDecoder
 
 stakeDeregistrationDecoder :: D.Row StakeDeregistration
 stakeDeregistrationDecoder =
   StakeDeregistration
-    <$> idDecoder StakeDeregistrationId -- stakeDeregistrationId
-    <*> idDecoder StakeAddressId -- stakeDeregistrationAddrId
+    <$> idDecoder StakeAddressId -- stakeDeregistrationAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- stakeDeregistrationCertIndex
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- stakeDeregistrationEpochNo
     <*> idDecoder TxId -- stakeDeregistrationTxId
     <*> maybeIdDecoder RedeemerId -- stakeDeregistrationRedeemerId
 
+entityStakeDeregistrationEncoder :: E.Params (Entity StakeDeregistration)
+entityStakeDeregistrationEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getStakeDeregistrationId
+    , entityVal >$< stakeDeregistrationEncoder
+    ]
+
 stakeDeregistrationEncoder :: E.Params StakeDeregistration
 stakeDeregistrationEncoder =
   mconcat
-    [ stakeDeregistrationId >$< idEncoder getStakeDeregistrationId
-    , stakeDeregistrationAddrId >$< idEncoder getStakeAddressId
+    [ stakeDeregistrationAddrId >$< idEncoder getStakeAddressId
     , stakeDeregistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , stakeDeregistrationEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , stakeDeregistrationTxId >$< idEncoder getTxId
@@ -139,29 +178,36 @@ stakeDeregistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: delegation
-Description:Contains information about stakeholder delegations, including the stakeholder's address and the pool to which they are delegating.
--}
+
+-- |
+-- Table Name: delegation
+-- Description:Contains information about stakeholder delegations, including the stakeholder's address and the pool to which they are delegating.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Delegation = Delegation
-  { delegationId :: !DelegationId
-  , delegationAddrId :: !StakeAddressId         -- noreference
+  { delegationAddrId :: !StakeAddressId -- noreference
   , delegationCertIndex :: !Word16
-  , delegationPoolHashId :: !PoolHashId         -- noreference
+  , delegationPoolHashId :: !PoolHashId -- noreference
   , delegationActiveEpochNo :: !Word64
-  , delegationTxId :: !TxId                     -- noreference
-  , delegationSlotNo :: !Word64                 -- sqltype=word63type
-  , delegationRedeemerId :: !(Maybe RedeemerId)   -- noreference
-  } deriving (Eq, Show, Generic)
+  , delegationTxId :: !TxId -- noreference
+  , delegationSlotNo :: !Word64 -- sqltype=word63type
+  , delegationRedeemerId :: !(Maybe RedeemerId) -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
+type instance Key Delegation = DelegationId
 instance DbInfo Delegation
+
+entityDelegationDecoder :: D.Row (Entity Delegation)
+entityDelegationDecoder =
+  Entity
+    <$> idDecoder DelegationId
+    <*> delegationDecoder
 
 delegationDecoder :: D.Row Delegation
 delegationDecoder =
   Delegation
-    <$> idDecoder DelegationId -- delegationId
-    <*> idDecoder StakeAddressId -- delegationAddrId
+    <$> idDecoder StakeAddressId -- delegationAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- delegationCertIndex
     <*> idDecoder PoolHashId -- delegationPoolHashId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- delegationActiveEpochNo
@@ -169,11 +215,17 @@ delegationDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- delegationSlotNo
     <*> maybeIdDecoder RedeemerId -- delegationRedeemerId
 
+entityDelegationEncoder :: E.Params (Entity Delegation)
+entityDelegationEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getDelegationId
+    , entityVal >$< delegationEncoder
+    ]
+
 delegationEncoder :: E.Params Delegation
 delegationEncoder =
   mconcat
-    [ delegationId >$< idEncoder getDelegationId
-    , delegationAddrId >$< idEncoder getStakeAddressId
+    [ delegationAddrId >$< idEncoder getStakeAddressId
     , delegationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , delegationPoolHashId >$< idEncoder getPoolHashId
     , delegationActiveEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
@@ -183,42 +235,55 @@ delegationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reward
-Description: Reward, Stake and Treasury need to be obtained from the ledger state.
-  The reward for each stake address and. This is not a balance, but a reward amount and the
-  epoch in which the reward was earned.
-  This table should never get rolled back.
--}
+
+-- |
+-- Table Name: reward
+-- Description: Reward, Stake and Treasury need to be obtained from the ledger state.
+--   The reward for each stake address and. This is not a balance, but a reward amount and the
+--   epoch in which the reward was earned.
+--   This table should never get rolled back.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Reward = Reward
-  { rewardId :: !RewardId
-  , rewardAddrId :: !StakeAddressId   -- noreference
-  , rewardType :: !RewardSource       -- sqltype=rewardtype
-  , rewardAmount :: !DbLovelace       -- sqltype=lovelace
-  , rewardEarnedEpoch :: !Word64      -- generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
+  { rewardAddrId :: !StakeAddressId -- noreference
+  , rewardType :: !RewardSource -- sqltype=rewardtype
+  , rewardAmount :: !DbLovelace -- sqltype=lovelace
+  , rewardEarnedEpoch :: !Word64 -- generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
   , rewardSpendableEpoch :: !Word64
-  , rewardPoolId :: !PoolHashId       -- noreference
-  } deriving (Show, Eq, Generic)
+  , rewardPoolId :: !PoolHashId -- noreference
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key Reward = RewardId
 instance DbInfo Reward
+
+entityRewardDecoder :: D.Row (Entity Reward)
+entityRewardDecoder =
+  Entity
+    <$> idDecoder RewardId
+    <*> rewardDecoder
 
 rewardDecoder :: D.Row Reward
 rewardDecoder =
   Reward
-    <$> idDecoder RewardId -- rewardId
-    <*> idDecoder StakeAddressId -- rewardAddrId
+    <$> idDecoder StakeAddressId -- rewardAddrId
     <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardType
     <*> dbLovelaceDecoder -- rewardAmount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardEarnedEpoch
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardSpendableEpoch
     <*> idDecoder PoolHashId -- rewardPoolId
 
+entityRewardEncoder :: E.Params (Entity Reward)
+entityRewardEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getRewardId
+    , entityVal >$< rewardEncoder
+    ]
+
 rewardEncoder :: E.Params Reward
 rewardEncoder =
   mconcat
-    [ rewardId >$< idEncoder getRewardId
-    , rewardAddrId >$< idEncoder getStakeAddressId
+    [ rewardAddrId >$< idEncoder getStakeAddressId
     , rewardType >$< E.param (E.nonNullable rewardSourceEncoder)
     , rewardAmount >$< dbLovelaceEncoder
     , rewardEarnedEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
@@ -226,115 +291,178 @@ rewardEncoder =
     , rewardPoolId >$< idEncoder getPoolHashId
     ]
 
+rewardBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64], [PoolHashId])
+rewardBulkEncoder =
+  contrazip6
+    (manyEncoder $ idBulkEncoder getStakeAddressId)
+    (manyEncoder $ E.nonNullable rewardSourceEncoder)
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ idBulkEncoder getPoolHashId)
+
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reward_rest
-Description: Contains information about the remaining reward for each stakeholder.
--}
+
+-- |
+-- Table Name: reward_rest
+-- Description: Contains information about the remaining reward for each stakeholder.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data RewardRest = RewardRest
-  { rewardRestAddrId :: !StakeAddressId -- noreference
-  , rewardRestType :: !RewardSource     -- sqltype=rewardtype
-  , rewardRestAmount :: !DbLovelace     -- sqltype=lovelace
-  , rewardRestEarnedEpoch :: !Word64    -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
+  { rewardRestType :: !RewardSource -- sqltype=rewardtype
+  , rewardRestAmount :: !DbLovelace -- sqltype=lovelace
+  , rewardRestEarnedEpoch :: !Word64 -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
   , rewardRestSpendableEpoch :: !Word64
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key RewardRest = RewardRestId
 instance DbInfo RewardRest
+
+entityRewardRestDecoder :: D.Row (Entity RewardRest)
+entityRewardRestDecoder =
+  Entity
+    <$> idDecoder RewardRestId
+    <*> rewardRestDecoder
 
 rewardRestDecoder :: D.Row RewardRest
 rewardRestDecoder =
   RewardRest
-    <$> idDecoder StakeAddressId -- rewardRestAddrId
-    <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
+    <$> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
     <*> dbLovelaceDecoder -- rewardRestAmount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestEarnedEpoch
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestSpendableEpoch
 
+entityRewardRestEncoder :: E.Params (Entity RewardRest)
+entityRewardRestEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getRewardRestId
+    , entityVal >$< rewardRestEncoder
+    ]
+
 rewardRestEncoder :: E.Params RewardRest
 rewardRestEncoder =
   mconcat
-    [ rewardRestAddrId >$< idEncoder getStakeAddressId
-    , rewardRestType >$< E.param (E.nonNullable rewardSourceEncoder)
+    [ rewardRestType >$< E.param (E.nonNullable rewardSourceEncoder)
     , rewardRestAmount >$< dbLovelaceEncoder
     , rewardRestEarnedEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , rewardRestSpendableEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
-rewardRestEncoderMany :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
-rewardRestEncoderMany =
+rewardRestBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
+rewardRestBulkEncoder =
   contrazip5
-    (manyEncoder $ idEncoderMany getStakeAddressId)
+    (manyEncoder $ idBulkEncoder getStakeAddressId)
     (manyEncoder $ E.nonNullable rewardSourceEncoder)
     (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
     (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
     (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epoch_stake
-Description: Contains information about the stake of each stakeholder in each epoch.
-  This table should never get rolled back
--}
+
+-- |
+-- Table Name: epoch_stake
+-- Description: Contains information about the stake of each stakeholder in each epoch.
+--   This table should never get rolled back
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data EpochStake = EpochStake
-  { epochStakeId :: !EpochStakeId
-  , epochStakeAddrId :: !StakeAddressId -- noreference
-  , epochStakePoolId :: !PoolHashId     -- noreference
-  , epochStakeAmount :: !DbLovelace     -- sqltype=lovelace
-  , epochStakeEpochNo :: !Word64        -- sqltype=word31type
-  } deriving (Show, Eq, Generic)
+  { epochStakeAddrId :: !StakeAddressId -- noreference
+  , epochStakePoolId :: !PoolHashId -- noreference
+  , epochStakeAmount :: !DbLovelace -- sqltype=lovelace
+  , epochStakeEpochNo :: !Word64 -- sqltype=word31type
+  }
+  deriving (Show, Eq, Generic)
+
 -- similar scenario as in Reward the constraint that was here is now set manually in
 -- `applyAndInsertBlockMaybe` at a more optimal time.
 
+type instance Key EpochStake = EpochStakeId
 instance DbInfo EpochStake
+
+entityEpochStakeDecoder :: D.Row (Entity EpochStake)
+entityEpochStakeDecoder =
+  Entity
+    <$> idDecoder EpochStakeId
+    <*> epochStakeDecoder
 
 epochStakeDecoder :: D.Row EpochStake
 epochStakeDecoder =
   EpochStake
-    <$> idDecoder EpochStakeId -- epochStakeId
-    <*> idDecoder StakeAddressId -- epochStakeAddrId
+    <$> idDecoder StakeAddressId -- epochStakeAddrId
     <*> idDecoder PoolHashId -- epochStakePoolId
     <*> dbLovelaceDecoder -- epochStakeAmount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochStakeEpochNo
 
+entityEpochStakeEncoder :: E.Params (Entity EpochStake)
+entityEpochStakeEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getEpochStakeId
+    , entityVal >$< epochStakeEncoder
+    ]
+
 epochStakeEncoder :: E.Params EpochStake
 epochStakeEncoder =
   mconcat
-    [ epochStakeId >$< idEncoder getEpochStakeId
-    , epochStakeAddrId >$< idEncoder getStakeAddressId
+    [ epochStakeAddrId >$< idEncoder getStakeAddressId
     , epochStakePoolId >$< idEncoder getPoolHashId
     , epochStakeAmount >$< dbLovelaceEncoder
     , epochStakeEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
+epochStakeBulkEncoder :: E.Params ([StakeAddressId], [PoolHashId], [DbLovelace], [Word64])
+epochStakeBulkEncoder =
+  contrazip4
+    (manyEncoder $ idBulkEncoder getStakeAddressId)
+    (manyEncoder $ idBulkEncoder getPoolHashId)
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epoch_stake_progress
-Description: Contains information about the progress of the epoch stake calculation.
--}
+
+-- |
+-- Table Name: epoch_stake_progress
+-- Description: Contains information about the progress of the epoch stake calculation.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data EpochStakeProgress = EpochStakeProgress
-  { epochStakeProgressId :: !EpochStakeProgressId
-  , epochStakeProgressEpochNo :: !Word64  -- sqltype=word31type
+  { epochStakeProgressEpochNo :: !Word64 -- sqltype=word31type
   , epochStakeProgressCompleted :: !Bool
-  -- UniqueEpochStakeProgress epochNo
-  } deriving (Show, Eq, Generic)
+  }
+  deriving (Show, Eq, Generic)
 
+type instance Key EpochStakeProgress = EpochStakeProgressId
 instance DbInfo EpochStakeProgress where
   uniqueFields _ = ["epoch_no"]
+
+entityEpochStakeProgressDecoder :: D.Row (Entity EpochStakeProgress)
+entityEpochStakeProgressDecoder =
+  Entity
+    <$> idDecoder EpochStakeProgressId
+    <*> epochStakeProgressDecoder
 
 epochStakeProgressDecoder :: D.Row EpochStakeProgress
 epochStakeProgressDecoder =
   EpochStakeProgress
-    <$> idDecoder EpochStakeProgressId -- epochStakeProgressId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochStakeProgressEpochNo
+    <$> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochStakeProgressEpochNo
     <*> D.column (D.nonNullable D.bool) -- epochStakeProgressCompleted
+
+entityEpochStakeProgressEncoder :: E.Params (Entity EpochStakeProgress)
+entityEpochStakeProgressEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getEpochStakeProgressId
+    , entityVal >$< epochStakeProgressEncoder
+    ]
 
 epochStakeProgressEncoder :: E.Params EpochStakeProgress
 epochStakeProgressEncoder =
   mconcat
-    [ epochStakeProgressId >$< idEncoder getEpochStakeProgressId
-    , epochStakeProgressEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    [ epochStakeProgressEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochStakeProgressCompleted >$< E.param (E.nonNullable E.bool)
     ]
+
+epochStakeProgressBulkEncoder :: E.Params ([Word64], [Bool])
+epochStakeProgressBulkEncoder =
+  contrazip2
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ E.nonNullable E.bool)

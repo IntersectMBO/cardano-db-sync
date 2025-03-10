@@ -38,7 +38,6 @@ data NextState
   | Done
   deriving (Eq)
 
-
 runDbThread ::
   SyncEnv ->
   MetricSetters ->
@@ -76,8 +75,8 @@ runDbThread syncEnv metricsSetters queue = do
       -- Handle the result of running the actions
       case result of
         Left err -> logError tracer $ "Error: " <> show err
-        Right Continue -> processQueue  -- Continue processing
-        Right Done -> pure ()           -- Stop processing
+        Right Continue -> processQueue -- Continue processing
+        Right Done -> pure () -- Stop processing
 
     -- Handle the case where the syncing thread has restarted
     handleRestart :: TMVar (LatestPoints, CurrentTip) -> IO ()
@@ -87,7 +86,7 @@ runDbThread syncEnv metricsSetters queue = do
       currentTip <- getCurrentTipBlockNo syncEnv
       logDbState syncEnv
       atomically $ putTMVar resultVar (latestPoints, currentTip)
-      processQueue  -- Continue processing
+      processQueue -- Continue processing
 
     -- Update block and slot height metrics
     updateBlockMetrics :: IO ()
@@ -96,7 +95,6 @@ runDbThread syncEnv metricsSetters queue = do
       whenJust mBlock $ \block -> do
         setDbBlockHeight metricsSetters $ bBlockNo block
         setDbSlotHeight metricsSetters $ bSlotNo block
-
 
 -- runDbThread ::
 --   SyncEnv ->
@@ -137,7 +135,6 @@ runDbThread syncEnv metricsSetters queue = do
 --           logDbState syncEnv
 --           atomically $ putTMVar resultVar (latestPoints, currentTip)
 --           loop
-
 
 -- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.

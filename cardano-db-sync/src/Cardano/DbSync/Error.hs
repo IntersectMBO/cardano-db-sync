@@ -42,7 +42,7 @@ data SyncInvariant
 
 data SyncNodeError
   = SNErrDefault !Text
-  | SNErrDbTransaction !DB.DbError
+  | SNErrDatabase !DB.DbError
   | SNErrInvariant !Text !SyncInvariant
   | SNEErrBlockMismatch !Word64 !ByteString !ByteString
   | SNErrIgnoreShelleyInitiation
@@ -67,7 +67,7 @@ instance Show SyncNodeError where
   show =
     \case
       SNErrDefault t -> "Error SNErrDefault: " <> show t
-      SNErrDbTransaction err -> "Error SNErrDbTransaction: " <> show err
+      SNErrDatabase err -> "Error SNErrDatabase: " <> show err
       SNErrInvariant loc i -> "Error SNErrInvariant: " <> Show.show loc <> ": " <> show (renderSyncInvariant i)
       SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
