@@ -30,8 +30,7 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
-                        Cardano.Db.Schema.Variants.TxOutCore
-                        Cardano.Db.Schema.Variants.TxOutAddress
+                        Cardano.Db.Schema.Variants
 
   other-modules:        Cardano.Db.Error
                         Cardano.Db.Git.RevFromGit
@@ -64,6 +63,10 @@ library
                         Cardano.Db.Schema.Ids
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
+                        Cardano.Db.Schema.Variants.TxOutAddress
+                        Cardano.Db.Schema.Variants.TxOutCore
+                        Cardano.Db.Schema.Variants.TxOutUtxoHd
+                        Cardano.Db.Schema.Variants.TxOutUtxoHdAddress
                         Cardano.Db.Statement
                         Cardano.Db.Statement.Function.Core
                         Cardano.Db.Statement.Function.Query
@@ -93,20 +96,17 @@ library
                       , contravariant-extras
                       , cryptonite
                       , directory
-                      , esqueleto
                       , extra
                       , fast-logger
                       , filepath
                       , file-embed
                       , hasql
-                      , hasql-transaction
                       , iohk-monitoring
                       , lifted-base
                       , memory
                       , monad-control
                       , monad-logger
                       , persistent
-                      , persistent-documentation
                       , persistent-postgresql
                       , postgresql-simple
                       , process

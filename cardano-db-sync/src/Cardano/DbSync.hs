@@ -23,6 +23,18 @@ module Cardano.DbSync (
   SimplifiedOffChainPoolData (..),
   extractSyncOptions,
 ) where
+import Control.Monad.Extra (whenJust)
+import qualified Data.Strict.Maybe as Strict
+import qualified Data.Text as Text
+import Data.Version (showVersion)
+import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
+import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
+import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
+import Paths_cardano_db_sync (version)
+import System.Directory (createDirectoryIfMissing)
+import Prelude (id)
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection.Setting as HsqlSet
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
@@ -47,17 +59,6 @@ import Cardano.DbSync.Util.Constraint (queryIsJsonbInSchema)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
-import Control.Monad.Extra (whenJust)
-import qualified Data.Strict.Maybe as Strict
-import qualified Data.Text as Text
-import Data.Version (showVersion)
-import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
-import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
-import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
-import Paths_cardano_db_sync (version)
-import System.Directory (createDirectoryIfMissing)
-import Prelude (id)
-import Hasql.Connection as HC
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
@@ -113,8 +114,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     then logInfo trce "All user indexes were created"
     else logInfo trce "New user indexes were not created. They may be created later if necessary."
 
-  let setting = Db.toConnectionSetting pgConfig
-
+  let dbConnectionSetting = Db.toConnectionSetting pgConfig
 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
@@ -123,7 +123,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     metricsSetters
     trce
     iomgr
-    connectionString
+    dbConnectionSetting
     (void . runMigration)
     syncNodeConfigFromFile
     params
@@ -150,14 +150,15 @@ runSyncNode ::
   MetricSetters ->
   Trace IO Text ->
   IOManager ->
-  Setting ->
+  -- | Database connection settings
+  HsqlSet.Setting ->
   -- | run migration function
   RunMigration ->
   SyncNodeConfig ->
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr connSetting runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -168,11 +169,11 @@ runSyncNode metricsSetters trce iomgr connSetting runMigrationFnc syncNodeConfig
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
   -- Our main thread
   bracket
-    (runOrThrowIO $ HC.acquire [connSetting])
+    (runOrThrowIO $ HsqlC.acquire [dbConnSetting])
     release
-    (\connection -> do
+    (\dbConn -> do
         runOrThrowIO $ runExceptT $ do
-          let dbEnv = Db.DbEnv connection (dncEnableDbLogging syncNodeConfigFromFile)
+          let dbEnv = Db.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile)
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- queryIsJsonbInSchema dbEnv
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg

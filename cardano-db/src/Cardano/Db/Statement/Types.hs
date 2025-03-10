@@ -1,19 +1,24 @@
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Cardano.Db.Statement.Types where
 
-import GHC.Generics
+import Data.Char (isUpper, toLower)
+import Data.List (stripPrefix)
+import qualified Data.List.NonEmpty as NE
+import Data.Proxy
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Proxy
-import qualified Data.List.NonEmpty as NE
-import Data.Char (toLower, isUpper)
-import Data.Typeable (Typeable, typeRep, typeRepTyCon, tyConName)
-import Data.List (stripPrefix)
+import Data.Typeable (Typeable, tyConName, typeRep, typeRepTyCon)
+import GHC.Generics
+import qualified Hasql.Decoders as HsqlD
 
 -- | DbInfo provides automatic derivation of table and column names from Haskell types.
 -- Table names are derived from the type name converted to snake_case.
@@ -49,36 +54,51 @@ class Typeable a => DbInfo a where
   columnNames p =
     let typeName = tyConName $ typeRepTyCon $ typeRep p
         fieldNames = gRecordFieldNames (from (undefined :: a))
-    in case fieldNames of
-         [] -> error "No fields found"
-         ns -> NE.fromList $ map (fieldToColumnWithType typeName) ns
+     in case fieldNames of
+          [] -> error "No fields found"
+          ns -> NE.fromList $ map (fieldToColumnWithType typeName) ns
 
-  uniqueFields :: Proxy a -> [Text]  -- ^ Lists of column names that form unique constraints
+  uniqueFields ::
+    Proxy a ->
+    -- | Lists of column names that form unique constraints
+    [Text]
   default uniqueFields :: Proxy a -> [Text]
   uniqueFields _ = []
 
 -- | Convert a field name to a column name
 fieldToColumnWithType :: String -> String -> Text
-fieldToColumnWithType typeName field = Text.pack $ camelToSnake $
-  case stripPrefix (uncamelize typeName) field of
-    Just remaining -> case remaining of
-      (c:_) | isUpper c -> remaining
-      _otherwise -> error $ "Field name '" ++ field ++ "' does not match pattern '"
-                  ++ uncamelize typeName ++ "X...'"
-    Nothing -> error $ "Field name '" ++ field ++ "' does not start with type prefix '"
-                     ++ uncamelize typeName ++ "'"
+fieldToColumnWithType typeName field = Text.pack $
+  camelToSnake $
+    case stripPrefix (uncamelize typeName) field of
+      Just remaining -> case remaining of
+        (c : _) | isUpper c -> remaining
+        _otherwise ->
+          error $
+            "Field name '"
+              ++ field
+              ++ "' does not match pattern '"
+              ++ uncamelize typeName
+              ++ "X...'"
+      Nothing ->
+        error $
+          "Field name '"
+            ++ field
+            ++ "' does not start with type prefix '"
+            ++ uncamelize typeName
+            ++ "'"
+
 -- | Convert a string to snake case
 uncamelize :: String -> String
 uncamelize [] = []
-uncamelize (x:xs) = toLower x : xs
+uncamelize (x : xs) = toLower x : xs
 
 -- | Convert a camel case string to snake case
 camelToSnake :: String -> String
 camelToSnake [] = []
-camelToSnake (x:xs) = toLower x : go xs
+camelToSnake (x : xs) = toLower x : go xs
   where
     go [] = []
-    go (c:cs)
+    go (c : cs)
       | isUpper c = '_' : toLower c : go cs
       | otherwise = c : go cs
 
@@ -106,3 +126,33 @@ instance GRecordFieldNames (K1 i c) where
 
 data TxOutTableType = TxOutCore | TxOutVariantAddress
   deriving (Eq, Show)
+
+--------------------------------------------------------------------------------
+-- Entity
+--------------------------------------------------------------------------------
+
+data Entity record = Entity
+  { entityKey :: Key record
+  , entityVal :: record
+  }
+
+-- Type family for keys
+type family Key a = k | k -> a
+
+-- Add standalone deriving instances
+deriving instance Generic (Entity record)
+deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
+deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
+deriving instance (Show (Key record), Show record) => Show (Entity record)
+deriving instance (Read (Key record), Read record) => Read (Entity record)
+
+-- Functions to work with entities
+fromEntity :: Entity a -> a
+fromEntity = entityVal
+
+toEntity :: Key a -> a -> Entity a
+toEntity = Entity
+
+-- Decoder for Entity
+entityDecoder :: HsqlD.Row (Key a) -> HsqlD.Row a -> HsqlD.Row (Entity a)
+entityDecoder keyDec valDec = Entity <$> keyDec <*> valDec
