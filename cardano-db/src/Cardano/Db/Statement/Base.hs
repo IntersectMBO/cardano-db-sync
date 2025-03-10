@@ -10,8 +10,8 @@ import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (runDbT, mkDbTransaction, ResultType (..))
 import Cardano.Db.Statement.Function.Insert (insert, bulkInsertReturnIds, insertCheckUnique)
-import Cardano.Db.Types (DbAction, DbTransMode (..), DbWord64)
-import Cardano.Prelude (MonadIO, Word64, ByteString)
+import Cardano.Db.Types (DbAction, DbTransMode (..), DbWord64, ExtraMigration, extraDescription)
+import Cardano.Prelude (MonadIO, Word64, ByteString, textShow)
 import qualified Data.ByteString as BS
 import qualified Data.Text as Text
 
@@ -39,11 +39,11 @@ insertDatum datum = runDbT TransWrite $ mkDbTransaction "insertDatum" $
 --------------------------------------------------------------------------------
 -- | TxMetadata
 --------------------------------------------------------------------------------
-insertManyTxMetadata :: MonadIO m => [TxMetadata] -> DbAction m [Id.TxMetadataId]
-insertManyTxMetadata txMetas = runDbT TransWrite $ mkDbTransaction "insertManyTxInMetadata" $
+bulkInsertTxMetadata :: MonadIO m => [TxMetadata] -> DbAction m [Id.TxMetadataId]
+bulkInsertTxMetadata txMetas = runDbT TransWrite $ mkDbTransaction "bulkInsertTxInMetadata" $
   bulkInsertReturnIds
     extractTxMetadata
-    SCB.txMetadataEncoderMany
+    SCB.txMetadataBulkEncoder
     (HsqlD.rowList $ Id.idDecoder Id.TxMetadataId)
     txMetas
   where
@@ -74,6 +74,13 @@ insertReferenceTxIn rTxIn = runDbT TransWrite $ mkDbTransaction "insertReference
     SCB.referenceTxInEncoder
     (WithResult (HsqlD.singleRow $ Id.idDecoder Id.ReferenceTxInId))
     rTxIn
+
+insertExtraMigration :: MonadIO m => ExtraMigration -> DbAction m ()
+insertExtraMigration extraMigration = runDbT TransWrite $ mkDbTransaction "insertExtraMigration" $
+  insert
+    SCB.extraMigrationsEncoder
+    NoResult
+    (SCB.ExtraMigrations (textShow extraMigration) (Just $ extraDescription extraMigration))
 
 --------------------------------------------------------------------------------
 -- | ExtraKeyWitness
@@ -170,8 +177,8 @@ insertTxIn txIn = runDbT TransWrite $ mkDbTransaction "insertTxIn" $
     (WithResult (HsqlD.singleRow $ Id.idDecoder Id.TxInId))
     txIn
 
-insertManyTxIn :: MonadIO m => [SCB.TxIn] -> DbAction m [Id.TxInId]
-insertManyTxIn txIns = runDbT TransWrite $ mkDbTransaction "insertManyTxIn" $
+bulkInsertTxIn :: MonadIO m => [SCB.TxIn] -> DbAction m [Id.TxInId]
+bulkInsertTxIn txIns = runDbT TransWrite $ mkDbTransaction "bulkInsertTxIn" $
   bulkInsertReturnIds
     extractTxIn
     SCB.encodeTxInMany

@@ -26,8 +26,8 @@ maybeIdDecoder f = D.column (D.nullable $ f <$> D.int8)
 idEncoder :: (a -> Int64) -> E.Params a
 idEncoder f = E.param $ E.nonNullable $ f >$< E.int8
 
-idEncoderMany :: (a -> Int64) -> E.NullableOrNot E.Value  a
-idEncoderMany f = E.nonNullable $ f >$< E.int8
+idBulkEncoder :: (a -> Int64) -> E.NullableOrNot E.Value  a
+idBulkEncoder f = E.nonNullable $ f >$< E.int8
 
 maybeIdEncoder :: (a -> Int64) -> E.Params (Maybe a)
 maybeIdEncoder f = E.param $ E.nullable $ f >$< E.int8
@@ -86,10 +86,10 @@ newtype SchemaVersionId = SchemaVersionId { getSchemaVersionId :: Int64 }
 newtype MetaId = MetaId { getMetaId :: Int64 }
   deriving (Eq, Show, Ord)
 
-newtype ExtraMigrationsId = ExtraMigrationsId { getExtraMigrationsId :: Int64 }
+newtype WithdrawalId = WithdrawalId { getWithdrawalId :: Int64 }
   deriving (Eq, Show, Ord)
 
-newtype WithdrawalId = WithdrawalId { getWithdrawalId :: Int64 }
+newtype ExtraMigrationsId = ExtraMigrationsId { getExtraMigrationsId :: Int64 }
   deriving (Eq, Show, Ord)
 
 -----------------------------------------------------------------------------------------------------------------------------------

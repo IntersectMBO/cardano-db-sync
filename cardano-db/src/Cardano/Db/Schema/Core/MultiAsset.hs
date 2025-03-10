@@ -22,7 +22,7 @@ import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..))
+import Cardano.Db.Statement.Types (DbInfo(..), Key, Entity (..))
 import Cardano.Db.Types (DbInt65, dbInt65Decoder, dbInt65Encoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -35,8 +35,7 @@ Table Name: multi_asset
 Description: Contains information about multi-assets, including the policy and name of the asset.
 -}
 data MultiAsset = MultiAsset
-  { multiAssetId :: !MultiAssetId
-  , multiAssetPolicy :: !ByteString -- sqltype=hash28type
+  { multiAssetPolicy :: !ByteString -- sqltype=hash28type
   , multiAssetName :: !ByteString   -- sqltype=asset32type
   , multiAssetFingerprint :: !Text
   } deriving (Eq, Show, Generic)
@@ -44,19 +43,32 @@ data MultiAsset = MultiAsset
 instance DbInfo MultiAsset where
   uniqueFields _ = ["policy", "name"]
 
+type instance Key MultiAsset = MultiAssetId
+
+entityNameMultiAssetDecoder :: D.Row (Entity MultiAsset)
+entityNameMultiAssetDecoder =
+  Entity
+    <$> idDecoder MultiAssetId
+    <*> multiAssetDecoder
+
 multiAssetDecoder :: D.Row MultiAsset
 multiAssetDecoder =
   MultiAsset
-    <$> idDecoder MultiAssetId -- multiAssetId
-    <*> D.column (D.nonNullable D.bytea) -- multiAssetPolicy
+    <$> D.column (D.nonNullable D.bytea) -- multiAssetPolicy
     <*> D.column (D.nonNullable D.bytea) -- multiAssetName
     <*> D.column (D.nonNullable D.text) -- multiAssetFingerprint
+
+entityNameMultiAssetEncoder :: E.Params (Entity MultiAsset)
+entityNameMultiAssetEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getMultiAssetId
+    , entityVal >$< multiAssetEncoder
+    ]
 
 multiAssetEncoder :: E.Params MultiAsset
 multiAssetEncoder =
   mconcat
-    [ multiAssetId >$< idEncoder getMultiAssetId
-    , multiAssetPolicy >$< E.param (E.nonNullable E.bytea)
+    [ multiAssetPolicy >$< E.param (E.nonNullable E.bytea)
     , multiAssetName >$< E.param (E.nonNullable E.bytea)
     , multiAssetFingerprint >$< E.param (E.nonNullable E.text)
     ]
@@ -69,28 +81,40 @@ multiAssetInsertEncoder =
     , multiAssetFingerprint >$< E.param (E.nonNullable E.text)
     ]
 
-
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|
 Table Name: ma_tx_mint
 Description: Contains information about the minting of multi-assets, including the quantity of the asset and the transaction in which it was minted.
 -}
 data MaTxMint = MaTxMint
-  { maTxMintId :: !MaTxMintId
-  , maTxMintQuantity :: !DbInt65   -- sqltype=int65type
+  { maTxMintQuantity :: !DbInt65   -- sqltype=int65type
   , maTxMintIdent :: !MultiAssetId -- noreference
   , maTxMintTxId :: !TxId          -- noreference
   } deriving (Eq, Show, Generic)
 
 instance DbInfo MaTxMint
 
+type instance Key MaTxMint = MaTxMintId
+
+entityNameMaTxMintDecoder :: D.Row (Entity MaTxMint)
+entityNameMaTxMintDecoder =
+  Entity
+    <$> idDecoder MaTxMintId
+    <*> maTxMintDecoder
+
 maTxMintDecoder :: D.Row MaTxMint
 maTxMintDecoder =
   MaTxMint
-    <$> idDecoder MaTxMintId
-    <*> D.column (D.nonNullable dbInt65Decoder)
+    <$> D.column (D.nonNullable dbInt65Decoder)
     <*> idDecoder MultiAssetId
     <*> idDecoder TxId
+
+entityNameMaTxMintEncoder :: E.Params (Entity MaTxMint)
+entityNameMaTxMintEncoder =
+  mconcat
+    [ entityKey >$< idEncoder getMaTxMintId
+    , entityVal >$< maTxMintEncoder
+    ]
 
 maTxMintEncoder :: E.Params MaTxMint
 maTxMintEncoder =
@@ -100,8 +124,8 @@ maTxMintEncoder =
     , maTxMintTxId >$< idEncoder getTxId
     ]
 
-maTxMintEncoderMany :: E.Params ([DbInt65], [MultiAssetId], [TxId])
-maTxMintEncoderMany =
+maTxMintBulkEncoder :: E.Params ([DbInt65], [MultiAssetId], [TxId])
+maTxMintBulkEncoder =
   contrazip3
     (manyEncoder $ E.nonNullable dbInt65Encoder)
     (manyEncoder $ E.nonNullable $ getMultiAssetId >$< E.int8)

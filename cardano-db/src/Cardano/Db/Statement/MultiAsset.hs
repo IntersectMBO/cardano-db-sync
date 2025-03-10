@@ -19,11 +19,11 @@ insertMultiAsset multiAsset = runDbT TransWrite $ mkDbTransaction "insertMultiAs
 --------------------------------------------------------------------------------
 -- | MaTxMint
 --------------------------------------------------------------------------------
-insertManyMaTxMint :: MonadIO m => [MaTxMint] -> DbAction m [MaTxMintId]
-insertManyMaTxMint maTxMints = runDbT TransWrite $ mkDbTransaction "insertManyTxInMetadata" $
+bulkInsertMaTxMint :: MonadIO m => [MaTxMint] -> DbAction m [MaTxMintId]
+bulkInsertMaTxMint maTxMints = runDbT TransWrite $ mkDbTransaction "bulkInsertTxInMetadata" $
   bulkInsertReturnIds
     extractMaTxMint
-    maTxMintEncoderMany
+    maTxMintBulkEncoder
     (HsqlD.rowList $ idDecoder MaTxMintId)
     maTxMints
   where

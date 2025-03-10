@@ -9,7 +9,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Types (DbAction, DbTransMode (..))
 import Cardano.Prelude (MonadIO, Word64)
 import Cardano.Db.Statement.Function.Core (runDbT, mkDbTransaction, ResultType (..), WithConstraint (..))
-import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertManyUnique)
+import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, bulkInsertUnique)
 
 --------------------------------------------------------------------------------
 -- | CostModel
@@ -65,9 +65,9 @@ insertEpochState epochState = runDbT TransWrite $ mkDbTransaction "insertEpochSt
     (WithResult (HsqlD.singleRow $ Id.idDecoder Id.EpochStateId))
     epochState
 
-insertManyEpochState:: MonadIO m => [SEnP.EpochState] -> DbAction m ()
-insertManyEpochState epochStates = runDbT TransWrite $ mkDbTransaction "insertManyEpochState" $
-  insertManyUnique
+bulkInsertEpochState:: MonadIO m => [SEnP.EpochState] -> DbAction m ()
+bulkInsertEpochState epochStates = runDbT TransWrite $ mkDbTransaction "bulkInsertEpochState" $
+  bulkInsertUnique
     extractEpochState
     SEnP.epochStateManyEncoder
     NoConstraint
@@ -109,6 +109,8 @@ insertRerved reserve = runDbT TransWrite $ mkDbTransaction "insertRerved" $
 -- cost_model
 -- epoch
 -- epoch_param
+-- epoch_stake
+-- epoch_stake_progress
 -- epoch_state
 -- epoch_sync_time
 -- pot_transfer
