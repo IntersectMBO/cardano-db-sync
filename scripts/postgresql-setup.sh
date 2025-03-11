@@ -159,7 +159,7 @@ function dump_schema {
 }
 
 function create_snapshot {
-	tgz_file=$1.tgz
+	tar_file=$1.tar
 	ledger_path=$2
 	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
@@ -202,18 +202,18 @@ function create_snapshot {
 	  fi
 	fi
 	pg_dump --no-owner --schema=public --jobs="${numcores}" "${PGDATABASE}" --format=directory --file="${tmp_dir}/db/"
-	# Use plain tar here because the database dump files and the ledger state file are already gzipped. Disable Shellcheck SC2046 to avoid empty '' getting added while quoting
-	# shellcheck disable=SC2046
-	tar cvf - --directory "${tmp_dir}" $(ls "${tmp_dir}") | tee "${tgz_file}.tmp" | \
-	  sha256sum | head -c 64 | sed -e "s/$/  ${tgz_file}\n/" > "${tgz_file}.sha256sum"
-	mv "${tgz_file}.tmp" "${tgz_file}"
+	tree "${tmp_dir}"
+	# Use plain tar here because the database dump files and the ledger state file are already gzipped.
+	tar cvf - --directory "${tmp_dir}" $(ls "${tmp_dir}") | tee "/var/lib/postgresql/tmp/${tar_file}.tmp" \
+		| sha256sum | head -c 64 | sed -e "s/$/  ${tar_file}\n/" > "/var/lib/postgresql/tmp/${tar_file}.sha256sum"
+	mv "/var/lib/postgresql/tmp/${tar_file}.tmp" "/var/lib/postgresql/tmp/${tar_file}"
 	rm "${recursive}" "${force}" "${tmp_dir}"
-	if test "$(tar "${test}" --file "${tgz_file}")" ; then
+	if test "$(tar "${test}" --file "/var/lib/postgresql/tmp/${tar_file}")" ; then
 	  echo "Tar reports the snapshot file as being corrupt."
 	  echo "It is not safe to drop the database and restore using this file."
 	  exit 1
-	fi
-	echo "Created ${tgz_file} + .sha256sum"
+	  fi
+	echo "Created /var/lib/postgresql/tmp/${tar_file} + .sha256sum"
 }
 
 function restore_snapshot {
