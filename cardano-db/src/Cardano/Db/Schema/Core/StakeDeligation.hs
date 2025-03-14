@@ -4,7 +4,7 @@
 
 module Cardano.Db.Schema.Core.StakeDeligation where
 
-import Contravariant.Extras (contrazip5, contrazip2)
+import Contravariant.Extras (contrazip5, contrazip2, contrazip4)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)
@@ -392,6 +392,14 @@ epochStakeEncoder =
     , epochStakeAmount >$< dbLovelaceEncoder
     , epochStakeEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
+
+epochStakeBulkEncoder :: E.Params ([StakeAddressId], [PoolHashId], [DbLovelace], [Word64])
+epochStakeBulkEncoder =
+  contrazip4
+    (manyEncoder $ idBulkEncoder getStakeAddressId)
+    (manyEncoder $ idBulkEncoder getPoolHashId)
+    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 {-|

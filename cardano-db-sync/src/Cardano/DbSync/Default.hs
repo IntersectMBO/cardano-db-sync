@@ -52,7 +52,7 @@ insertListBlocks ::
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
 insertListBlocks synEnv blocks = do
-  DB.runDbIohkLogging (envBackend synEnv) tracer
+  DB.runDbIohkLogging (envDbEnv synEnv) tracer
     . runExceptT
     $ traverse_ (applyAndInsertBlockMaybe synEnv tracer) blocks
   where

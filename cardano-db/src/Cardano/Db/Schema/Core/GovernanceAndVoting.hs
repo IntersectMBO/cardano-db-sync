@@ -124,11 +124,11 @@ entityDrepRegistrationEncoder :: E.Params (Entity DrepRegistration)
 entityDrepRegistrationEncoder =
   mconcat
     [ entityKey >$< idEncoder getDrepRegistrationId
-    , entityVal >$< drepRegistrationInsertEncoder
+    , entityVal >$< drepRegistrationEncoder
     ]
 
-drepRegistrationInsertEncoder :: E.Params DrepRegistration
-drepRegistrationInsertEncoder =
+drepRegistrationEncoder :: E.Params DrepRegistration
+drepRegistrationEncoder =
   mconcat
     [ drepRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , drepRegistrationDeposit >$< E.param (E.nullable E.int8)

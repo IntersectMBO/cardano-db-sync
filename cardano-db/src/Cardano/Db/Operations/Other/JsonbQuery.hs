@@ -67,7 +67,7 @@ queryJsonbInSchemaExists :: AsDbError e => HsqlC.Connection -> ExceptT e IO Bool
 queryJsonbInSchemaExists conn = do
   result <- liftIO $ HsqlS.run (HsqlS.statement () jsonbSchemaStatement) conn
   case result of
-    Left err -> throwError $ toDbError $ QueryError "queryJsonbInSchemaExists" mkCallSite err
+    Left err -> throwError $ toDbError $ DbError mkCallSite "queryJsonbInSchemaExists" err
     Right countRes -> pure $ countRes == 1
   where
     jsonbSchemaStatement :: HsqlS.Statement () Int64

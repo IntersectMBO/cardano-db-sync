@@ -124,7 +124,7 @@ getIsConsumedFixed env =
   where
     txOutTableType = getTxOutTableType env
     pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envBackend env
+    backend = envDbEnv env
 
 noneFixed :: FixesRan -> Bool
 noneFixed NoneFixRan = True
@@ -197,7 +197,7 @@ runRemoveJsonbFromSchema
   => SyncEnv
   -> DbAction e m ()
 runRemoveJsonbFromSchema syncEnv = do
-  DB.runDbTx DB.Write transx
+  DB.runDbT DB.Write transx
   where
     dbEnv = envDbEnv syncEnv
     transx = mkDbTransaction "runRemoveJsonbFromSchema" mkCallSite (DB.disableJsonbInSchema (dbConnection dbEnv))
@@ -310,12 +310,12 @@ getDbLatestBlockInfo backend = do
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   case mblk of
     Nothing -> logInfo tracer "Database is empty"
     Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
@@ -334,7 +334,7 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  maybeTip <- getDbLatestBlockInfo (envDbEnv env)
   case maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
@@ -487,7 +487,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
+      lastPoints <- DB.runDbIohkNoLogging (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -499,7 +499,7 @@ verifySnapshotPoint env snapPoints =
   where
     validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
     validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
+      hashes <- getSlotHash (envDbEnv env) (lsfSlotNo lsf)
       let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
       case valid of
         Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
@@ -508,7 +508,7 @@ verifySnapshotPoint env snapPoints =
       case pnt of
         GenesisPoint -> pure Nothing
         BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envBackend env) slotNo
+          hashes <- getSlotHash (envDbEnv env) slotNo
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
