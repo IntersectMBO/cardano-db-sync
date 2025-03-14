@@ -333,7 +333,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
     Just newEpoch
       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
       , newEpochNo > 0
-      , isCons || (newEpochNo `mod` 10 == 0) || newEpochNo >= 503 ->
+      , isCons || (newEpochNo `mod` 10 == 0) || newEpochNo >= 530 ->
           do
             -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
             liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
@@ -480,10 +480,10 @@ cleanupLedgerStateFiles env slotNo = do
   let (epochBoundary, valid, invalid) = foldr groupFiles ([], [], []) files
   -- Remove invalid (ie SlotNo >= current) ledger state files (occurs on rollback).
   deleteAndLogFiles env "invalid" invalid
-  -- Remove all but 6 most recent state files.
-  deleteAndLogStateFile env "old" (List.drop 3 valid)
-  -- Remove all but 6 most recent epoch boundary state files.
-  deleteAndLogStateFile env "old epoch boundary" (List.drop 6 epochBoundary)
+  -- Remove all but 2 most recent state files.
+  deleteAndLogStateFile env "old" (List.drop 2 valid)
+  -- Remove all but 3 most recent epoch boundary state files.
+  deleteAndLogStateFile env "old epoch boundary" (List.drop 3 epochBoundary)
   where
     groupFiles ::
       LedgerStateFile ->

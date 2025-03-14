@@ -88,10 +88,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
     if stage4orNewStage3
       then logWarning trce $ Db.renderMigrationValidateError unknown
-      else do
-        let msg = Db.renderMigrationValidateError unknown
-        logError trce msg
-        throwIO unknown
+      else logError trce $ Db.renderMigrationValidateError unknown
 
   logInfo trce "Schema migration files validated"
 
