@@ -37,13 +37,13 @@ constraintNameReward = ConstraintNameDB "unique_reward"
 
 -- We manually create unique constraints to improve insert speeds when syncing
 -- This function checks if those constraints have already been created
-dbConstraintNamesExists :: MonadIO m => SqlBackend -> m ManualDbConstraints
-dbConstraintNamesExists sqlBackend = do
+dbConstraintNamesExists :: MonadIO m => DB.DbEnv -> m ManualDbConstraints
+dbConstraintNamesExists dbEnv = do
   runReaderT queryRewardAndEpochStakeConstraints sqlBackend
 
-queryIsJsonbInSchema :: MonadIO m => SqlBackend -> m Bool
-queryIsJsonbInSchema sqlBackend = do
-  runReaderT DB.queryJsonbInSchemaExists sqlBackend
+queryIsJsonbInSchema :: MonadIO m => DB.DbEnv -> m Bool
+queryIsJsonbInSchema dbEnv = do
+  runReaderT DB.queryJsonbInSchemaExists dbEnv
 
 queryRewardAndEpochStakeConstraints ::
   MonadIO m =>

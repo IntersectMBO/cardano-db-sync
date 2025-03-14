@@ -7,97 +7,97 @@
 {-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Operations.Insert (
-  insertAdaPots,
-  insertBlock,
-  insertCollateralTxIn,
-  insertReferenceTxIn,
-  insertDelegation,
-  insertEpoch,
-  insertEpochParam,
-  insertEpochSyncTime,
-  insertExtraKeyWitness,
-  insertManyEpochStakes,
-  insertManyRewards,
-  insertManyRewardRests,
-  insertManyDrepDistr,
-  insertManyTxIn,
-  insertMaTxMint,
-  insertMeta,
-  insertMultiAssetUnchecked,
-  insertParamProposal,
-  insertPotTransfer,
-  insertPoolHash,
-  insertPoolMetadataRef,
-  insertPoolOwner,
-  insertPoolRelay,
-  insertPoolRetire,
-  insertPoolUpdate,
-  insertReserve,
-  insertScript,
-  insertSlotLeader,
-  insertStakeAddress,
-  insertStakeDeregistration,
-  insertStakeRegistration,
-  insertTreasury,
-  insertTx,
-  insertTxCBOR,
-  insertTxIn,
-  insertManyTxMint,
-  insertManyTxMetadata,
-  insertWithdrawal,
-  insertRedeemer,
-  insertCostModel,
-  insertDatum,
-  insertRedeemerData,
-  insertReverseIndex,
-  insertCheckOffChainPoolData,
-  insertCheckOffChainPoolFetchError,
-  insertOffChainVoteData,
-  insertOffChainVoteGovActionData,
-  insertOffChainVoteDrepData,
-  insertOffChainVoteAuthors,
-  insertOffChainVoteReference,
-  insertOffChainVoteExternalUpdate,
-  insertOffChainVoteFetchError,
-  insertReservedPoolTicker,
-  insertDelistedPool,
-  insertExtraMigration,
-  insertEpochStakeProgress,
-  updateSetComplete,
-  updateGovActionEnacted,
-  updateGovActionRatified,
-  updateGovActionDropped,
-  updateGovActionExpired,
-  setNullEnacted,
-  setNullRatified,
-  setNullExpired,
-  setNullDropped,
-  replaceAdaPots,
-  insertAnchor,
-  insertConstitution,
-  insertGovActionProposal,
-  insertTreasuryWithdrawal,
-  insertCommittee,
-  insertCommitteeMember,
-  insertVotingProcedure,
-  insertDrepHash,
-  insertCommitteeHash,
-  insertDelegationVote,
-  insertCommitteeRegistration,
-  insertCommitteeDeRegistration,
-  insertDrepRegistration,
-  insertEpochState,
-  insertManyPoolStat,
-  insertAlwaysAbstainDrep,
-  insertAlwaysNoConfidence,
-  insertUnchecked,
-  insertMany',
+  -- insertAdaPots,
+  -- insertBlock,
+  -- insertCollateralTxIn,
+  -- insertReferenceTxIn,
+  -- insertDelegation,
+  -- insertEpoch,
+  -- insertEpochParam,
+  -- insertEpochSyncTime,
+  -- insertExtraKeyWitness,
+--  insertManyEpochStakes,
+--  insertManyRewards,
+--  insertManyRewardRests,
+--  insertManyDrepDistr,
+--  insertManyTxIn,
+  -- insertMaTxMint,
+  -- insertMeta,
+  -- insertMultiAssetUnchecked,
+  -- insertParamProposal,
+  -- insertPotTransfer,
+  -- insertPoolHash,
+  -- insertPoolMetadataRef,
+  -- insertPoolOwner,
+  -- insertPoolRelay,
+  -- insertPoolRetire,
+  -- insertPoolUpdate,
+  -- insertReserve,
+  -- insertScript,
+  -- insertSlotLeader,
+  -- insertStakeAddress,
+  -- insertStakeDeregistration,
+  -- insertStakeRegistration,
+  -- insertTreasury,
+  -- insertTx,
+  -- insertTxCBOR,
+  -- insertTxIn,
+  -- insertManyTxMint,
+  -- insertManyTxMetadata,
+  -- insertWithdrawal,
+  -- insertRedeemer,
+  -- insertCostModel,
+  -- insertDatum,
+  -- insertRedeemerData,
+  -- insertReverseIndex,
+  -- insertCheckOffChainPoolData,
+  -- insertCheckOffChainPoolFetchError,
+  -- insertOffChainVoteData,
+  -- insertOffChainVoteGovActionData,
+  -- insertOffChainVoteDrepData,
+  -- insertManyOffChainVoteAuthors,
+  -- insertManyOffChainVoteReference,
+  -- insertOffChainVoteExternalUpdate,
+  -- insertOffChainVoteFetchError,
+  -- insertReservedPoolTicker,
+  -- insertDelistedPool,
+  -- insertExtraMigration,
+  -- insertEpochStakeProgress,
+  -- updateSetComplete,
+  -- updateGovActionEnacted,
+  -- updateGovActionRatified,
+  -- updateGovActionDropped,
+  -- updateGovActionExpired,
+  -- setNullEnacted,
+  -- setNullRatified,
+  -- setNullExpired,
+  -- setNullDropped,
+  -- replaceAdaPots,
+  -- insertAnchor,
+  -- insertConstitution,
+  -- insertGovActionProposal,
+  -- insertTreasuryWithdrawal,
+  -- insertCommittee,
+  -- insertCommitteeMember,
+  -- insertVotingProcedure,
+  -- insertDrepHash,
+  -- insertCommitteeHash,
+  -- insertDelegationVote,
+  -- insertCommitteeRegistration,
+  -- insertCommitteeDeRegistration,
+  -- insertDrepRegistration,
+  -- insertEpochState,
+  -- insertManyPoolStat,
+  -- insertDrepHashAlwaysAbstain,
+  -- insertAlwaysNoConfidence,
+  -- insertUnchecked,
+  -- insertMany',
   -- Export mainly for testing.
-  insertBlockChecked,
+  -- insertBlockChecked,
 ) where
 
 import Cardano.Db.Operations.Query
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Core
 import Cardano.Db.Types
 import Cardano.Prelude (textShow)
 import Control.Exception.Lifted (Exception, handle, throwIO)
@@ -151,6 +151,9 @@ import Database.Persist.Types (
   entityKey,
  )
 import Database.PostgreSQL.Simple (SqlError)
+import Hasql.Statement (Statement)
+import qualified Hasql.Transaction as Transactio
+import qualified Hasql.Transaction.Sessions as Transaction
 
 -- The original naive way of inserting rows into Postgres was:
 --
@@ -167,33 +170,6 @@ import Database.PostgreSQL.Simple (SqlError)
 --
 -- Instead we use `insertUnchecked` for tables where there is no uniqueness constraints
 -- and `insertChecked` for tables where the uniqueness constraint might hit.
-
-insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
-insertAdaPots = insertUnchecked "AdaPots"
-
-insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlock = insertUnchecked "Block"
-
-insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
-insertCollateralTxIn = insertUnchecked "CollateralTxIn"
-
-insertReferenceTxIn :: (MonadBaseControl IO m, MonadIO m) => ReferenceTxIn -> ReaderT SqlBackend m ReferenceTxInId
-insertReferenceTxIn = insertUnchecked "ReferenceTxIn"
-
-insertDelegation :: (MonadBaseControl IO m, MonadIO m) => Delegation -> ReaderT SqlBackend m DelegationId
-insertDelegation = insertUnchecked "Delegation"
-
-insertEpoch :: (MonadBaseControl IO m, MonadIO m) => Epoch -> ReaderT SqlBackend m EpochId
-insertEpoch = insertCheckUnique "Epoch"
-
-insertEpochParam :: (MonadBaseControl IO m, MonadIO m) => EpochParam -> ReaderT SqlBackend m EpochParamId
-insertEpochParam = insertUnchecked "EpochParam"
-
-insertEpochSyncTime :: (MonadBaseControl IO m, MonadIO m) => EpochSyncTime -> ReaderT SqlBackend m EpochSyncTimeId
-insertEpochSyncTime = insertReplace "EpochSyncTime"
-
-insertExtraKeyWitness :: (MonadBaseControl IO m, MonadIO m) => ExtraKeyWitness -> ReaderT SqlBackend m ExtraKeyWitnessId
-insertExtraKeyWitness = insertUnchecked "ExtraKeyWitness"
 
 insertManyEpochStakes ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -213,11 +189,11 @@ insertManyRewards ::
   ReaderT SqlBackend m ()
 insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
-insertManyRewardRests ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  [RewardRest] ->
-  ReaderT SqlBackend m ()
-insertManyRewardRests = insertManyUnique "Many Rewards Rest" Nothing
+-- insertManyRewardRests ::
+--   (MonadBaseControl IO m, MonadIO m) =>
+--   [RewardRest] ->
+--   ReaderT SqlBackend m ()
+-- insertManyRewardRests = insertManyUnique "Many Rewards Rest" Nothing
 
 insertManyDrepDistr ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -225,187 +201,9 @@ insertManyDrepDistr ::
   ReaderT SqlBackend m ()
 insertManyDrepDistr = insertManyCheckUnique "Many DrepDistr"
 
-insertManyTxIn :: (MonadBaseControl IO m, MonadIO m) => [TxIn] -> ReaderT SqlBackend m [TxInId]
-insertManyTxIn = insertMany' "Many TxIn"
-
-insertMaTxMint :: (MonadBaseControl IO m, MonadIO m) => MaTxMint -> ReaderT SqlBackend m MaTxMintId
-insertMaTxMint = insertUnchecked "insertMaTxMint"
-
-insertMeta :: (MonadBaseControl IO m, MonadIO m) => Meta -> ReaderT SqlBackend m MetaId
-insertMeta = insertCheckUnique "Meta"
-
-insertMultiAssetUnchecked :: (MonadBaseControl IO m, MonadIO m) => MultiAsset -> ReaderT SqlBackend m MultiAssetId
-insertMultiAssetUnchecked = insertUnchecked "MultiAsset"
-
-insertParamProposal :: (MonadBaseControl IO m, MonadIO m) => ParamProposal -> ReaderT SqlBackend m ParamProposalId
-insertParamProposal = insertUnchecked "ParamProposal"
-
-insertPotTransfer :: (MonadBaseControl IO m, MonadIO m) => PotTransfer -> ReaderT SqlBackend m PotTransferId
-insertPotTransfer = insertUnchecked "PotTransfer"
-
-insertPoolHash :: (MonadBaseControl IO m, MonadIO m) => PoolHash -> ReaderT SqlBackend m PoolHashId
-insertPoolHash = insertCheckUnique "PoolHash"
-
-insertPoolMetadataRef :: (MonadBaseControl IO m, MonadIO m) => PoolMetadataRef -> ReaderT SqlBackend m PoolMetadataRefId
-insertPoolMetadataRef = insertUnchecked "PoolMetadataRef"
-
-insertPoolOwner :: (MonadBaseControl IO m, MonadIO m) => PoolOwner -> ReaderT SqlBackend m PoolOwnerId
-insertPoolOwner = insertUnchecked "PoolOwner"
-
-insertPoolRelay :: (MonadBaseControl IO m, MonadIO m) => PoolRelay -> ReaderT SqlBackend m PoolRelayId
-insertPoolRelay = insertUnchecked "PoolRelay"
-
-insertPoolRetire :: (MonadBaseControl IO m, MonadIO m) => PoolRetire -> ReaderT SqlBackend m PoolRetireId
-insertPoolRetire = insertUnchecked "PoolRetire"
-
-insertPoolUpdate :: (MonadBaseControl IO m, MonadIO m) => PoolUpdate -> ReaderT SqlBackend m PoolUpdateId
-insertPoolUpdate = insertUnchecked "PoolUpdate"
-
-insertReserve :: (MonadBaseControl IO m, MonadIO m) => Reserve -> ReaderT SqlBackend m ReserveId
-insertReserve = insertUnchecked "Reserve"
-
-insertScript :: (MonadBaseControl IO m, MonadIO m) => Script -> ReaderT SqlBackend m ScriptId
-insertScript = insertCheckUnique "insertScript"
-
-insertSlotLeader :: (MonadBaseControl IO m, MonadIO m) => SlotLeader -> ReaderT SqlBackend m SlotLeaderId
-insertSlotLeader = insertCheckUnique "SlotLeader"
-
-insertStakeAddress :: (MonadBaseControl IO m, MonadIO m) => StakeAddress -> ReaderT SqlBackend m StakeAddressId
-insertStakeAddress = insertCheckUnique "StakeAddress"
-
-insertStakeDeregistration :: (MonadBaseControl IO m, MonadIO m) => StakeDeregistration -> ReaderT SqlBackend m StakeDeregistrationId
-insertStakeDeregistration = insertUnchecked "StakeDeregistration"
-
-insertStakeRegistration :: (MonadBaseControl IO m, MonadIO m) => StakeRegistration -> ReaderT SqlBackend m StakeRegistrationId
-insertStakeRegistration = insertUnchecked "StakeRegistration"
-
-insertTreasury :: (MonadBaseControl IO m, MonadIO m) => Treasury -> ReaderT SqlBackend m TreasuryId
-insertTreasury = insertUnchecked "Treasury"
-
-insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
-insertTx tx = insertUnchecked ("Tx: " ++ show (BS.length (txHash tx))) tx
-
-insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
-insertTxIn = insertUnchecked "TxIn"
-
-insertManyTxMetadata :: (MonadBaseControl IO m, MonadIO m) => [TxMetadata] -> ReaderT SqlBackend m [TxMetadataId]
-insertManyTxMetadata = insertMany' "TxMetadata"
-
-insertManyTxMint :: (MonadBaseControl IO m, MonadIO m) => [MaTxMint] -> ReaderT SqlBackend m [MaTxMintId]
-insertManyTxMint = insertMany' "TxMint"
-
-insertTxCBOR :: (MonadBaseControl IO m, MonadIO m) => TxCbor -> ReaderT SqlBackend m TxCborId
-insertTxCBOR = insertUnchecked "TxCBOR"
-
-insertWithdrawal :: (MonadBaseControl IO m, MonadIO m) => Withdrawal -> ReaderT SqlBackend m WithdrawalId
-insertWithdrawal = insertUnchecked "Withdrawal"
-
-insertRedeemer :: (MonadBaseControl IO m, MonadIO m) => Redeemer -> ReaderT SqlBackend m RedeemerId
-insertRedeemer = insertUnchecked "Redeemer"
-
-insertCostModel :: (MonadBaseControl IO m, MonadIO m) => CostModel -> ReaderT SqlBackend m CostModelId
-insertCostModel = insertCheckUnique "CostModel"
-
-insertDatum :: (MonadBaseControl IO m, MonadIO m) => Datum -> ReaderT SqlBackend m DatumId
-insertDatum = insertCheckUnique "Datum"
-
-insertRedeemerData :: (MonadBaseControl IO m, MonadIO m) => RedeemerData -> ReaderT SqlBackend m RedeemerDataId
-insertRedeemerData = insertCheckUnique "RedeemerData"
-
-insertReverseIndex :: (MonadBaseControl IO m, MonadIO m) => ReverseIndex -> ReaderT SqlBackend m ReverseIndexId
-insertReverseIndex = insertUnchecked "ReverseIndex"
-
-insertCheckOffChainPoolData :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolData -> ReaderT SqlBackend m ()
-insertCheckOffChainPoolData pod = do
-  foundPool <- existsPoolHashId (offChainPoolDataPoolId pod)
-  foundMeta <- existsPoolMetadataRefId (offChainPoolDataPmrId pod)
-  when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolData" pod
-
-insertCheckOffChainPoolFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolFetchError -> ReaderT SqlBackend m ()
-insertCheckOffChainPoolFetchError pofe = do
-  foundPool <- existsPoolHashId (offChainPoolFetchErrorPoolId pofe)
-  foundMeta <- existsPoolMetadataRefId (offChainPoolFetchErrorPmrId pofe)
-  when (foundPool && foundMeta) . void $ insertCheckUnique "OffChainPoolFetchError" pofe
-
-insertOffChainVoteData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteData -> ReaderT SqlBackend m (Maybe OffChainVoteDataId)
-insertOffChainVoteData ocvd = do
-  foundVotingAnchor <- existsVotingAnchorId (offChainVoteDataVotingAnchorId ocvd)
-  if foundVotingAnchor
-    then Just <$> insertCheckUnique "OffChainVoteData" ocvd
-    else pure Nothing
-
-insertOffChainVoteGovActionData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteGovActionData -> ReaderT SqlBackend m OffChainVoteGovActionDataId
-insertOffChainVoteGovActionData = insertUnchecked "OffChainVoteGovActionData"
-
-insertOffChainVoteDrepData :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteDrepData -> ReaderT SqlBackend m OffChainVoteDrepDataId
-insertOffChainVoteDrepData = insertUnchecked "OffChainVoteDrepData"
-
-insertOffChainVoteAuthors :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteAuthor] -> ReaderT SqlBackend m ()
-insertOffChainVoteAuthors = void . insertMany' "OffChainVoteAuthor"
-
-insertOffChainVoteReference :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteReference] -> ReaderT SqlBackend m ()
-insertOffChainVoteReference = void . insertMany' "OffChainVoteReference"
-
-insertOffChainVoteExternalUpdate :: (MonadBaseControl IO m, MonadIO m) => [OffChainVoteExternalUpdate] -> ReaderT SqlBackend m ()
-insertOffChainVoteExternalUpdate = void . insertMany' "OffChainVoteExternalUpdate"
-
-insertOffChainVoteFetchError :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteFetchError -> ReaderT SqlBackend m ()
-insertOffChainVoteFetchError ocvfe = do
-  foundVotingAnchor <- existsVotingAnchorId (offChainVoteFetchErrorVotingAnchorId ocvfe)
-  when foundVotingAnchor . void $ insertCheckUnique "OffChainVoteFetchError" ocvfe
-
-insertReservedPoolTicker :: (MonadBaseControl IO m, MonadIO m) => ReservedPoolTicker -> ReaderT SqlBackend m (Maybe ReservedPoolTickerId)
-insertReservedPoolTicker ticker = do
-  isUnique <- checkUnique ticker
-  case isUnique of
-    Nothing -> Just <$> insertUnchecked "ReservedPoolTicker" ticker
-    Just _key -> pure Nothing
-
-insertDelistedPool :: (MonadBaseControl IO m, MonadIO m) => DelistedPool -> ReaderT SqlBackend m DelistedPoolId
-insertDelistedPool = insertCheckUnique "DelistedPool"
-
-insertExtraMigration :: (MonadBaseControl IO m, MonadIO m) => ExtraMigration -> ReaderT SqlBackend m ()
-insertExtraMigration token = void . insert $ ExtraMigrations (textShow token) (Just $ extraDescription token)
-
-insertEpochStakeProgress :: (MonadBaseControl IO m, MonadIO m) => [EpochStakeProgress] -> ReaderT SqlBackend m ()
-insertEpochStakeProgress =
-  insertManyCheckUnique "Many EpochStakeProgress"
-
 updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
 updateSetComplete epoch = do
   upsertWhere (EpochStakeProgress epoch True) [EpochStakeProgressCompleted Database.Persist.=. True] [EpochStakeProgressEpochNo Database.Persist.==. epoch]
-
-updateGovActionEnacted :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m Int64
-updateGovActionEnacted gaid eNo =
-  updateWhereCount [GovActionProposalId ==. gaid, GovActionProposalEnactedEpoch ==. Nothing] [GovActionProposalEnactedEpoch =. Just eNo]
-
-updateGovActionRatified :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
-updateGovActionRatified gaid eNo =
-  updateWhere [GovActionProposalId ==. gaid, GovActionProposalRatifiedEpoch ==. Nothing] [GovActionProposalRatifiedEpoch =. Just eNo]
-
-updateGovActionDropped :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
-updateGovActionDropped gaid eNo =
-  updateWhere [GovActionProposalId ==. gaid, GovActionProposalDroppedEpoch ==. Nothing] [GovActionProposalDroppedEpoch =. Just eNo]
-
-updateGovActionExpired :: MonadIO m => GovActionProposalId -> Word64 -> ReaderT SqlBackend m ()
-updateGovActionExpired gaid eNo =
-  updateWhere [GovActionProposalId ==. gaid, GovActionProposalExpiredEpoch ==. Nothing] [GovActionProposalExpiredEpoch =. Just eNo]
-
-setNullEnacted :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
-setNullEnacted eNo =
-  updateWhereCount [GovActionProposalEnactedEpoch !=. Nothing, GovActionProposalEnactedEpoch >. Just eNo] [GovActionProposalEnactedEpoch =. Nothing]
-
-setNullRatified :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
-setNullRatified eNo =
-  updateWhereCount [GovActionProposalRatifiedEpoch !=. Nothing, GovActionProposalRatifiedEpoch >. Just eNo] [GovActionProposalRatifiedEpoch =. Nothing]
-
-setNullExpired :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
-setNullExpired eNo =
-  updateWhereCount [GovActionProposalExpiredEpoch !=. Nothing, GovActionProposalExpiredEpoch >. Just eNo] [GovActionProposalExpiredEpoch =. Nothing]
-
-setNullDropped :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
-setNullDropped eNo =
-  updateWhereCount [GovActionProposalDroppedEpoch !=. Nothing, GovActionProposalDroppedEpoch >. Just eNo] [GovActionProposalDroppedEpoch =. Nothing]
 
 replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
 replaceAdaPots blockId adapots = do
@@ -418,77 +216,6 @@ replaceAdaPots blockId adapots = do
     Just adaPotsDB -> do
       replace (entityKey adaPotsDB) adapots
       pure True
-
-insertAnchor :: (MonadBaseControl IO m, MonadIO m) => VotingAnchor -> ReaderT SqlBackend m VotingAnchorId
-insertAnchor = insertCheckUnique "VotingAnchor"
-
-insertConstitution :: (MonadBaseControl IO m, MonadIO m) => Constitution -> ReaderT SqlBackend m ConstitutionId
-insertConstitution = insertUnchecked "Constitution"
-
-insertGovActionProposal :: (MonadBaseControl IO m, MonadIO m) => GovActionProposal -> ReaderT SqlBackend m GovActionProposalId
-insertGovActionProposal = insertUnchecked "GovActionProposal"
-
-insertTreasuryWithdrawal :: (MonadBaseControl IO m, MonadIO m) => TreasuryWithdrawal -> ReaderT SqlBackend m TreasuryWithdrawalId
-insertTreasuryWithdrawal = insertUnchecked "TreasuryWithdrawal"
-
-insertCommittee :: (MonadBaseControl IO m, MonadIO m) => Committee -> ReaderT SqlBackend m CommitteeId
-insertCommittee = insertUnchecked "Committee"
-
-insertCommitteeMember :: (MonadBaseControl IO m, MonadIO m) => CommitteeMember -> ReaderT SqlBackend m CommitteeMemberId
-insertCommitteeMember = insertUnchecked "CommitteeMember"
-
-insertVotingProcedure :: (MonadBaseControl IO m, MonadIO m) => VotingProcedure -> ReaderT SqlBackend m VotingProcedureId
-insertVotingProcedure = insertUnchecked "VotingProcedure"
-
-insertDrepHash :: (MonadBaseControl IO m, MonadIO m) => DrepHash -> ReaderT SqlBackend m DrepHashId
-insertDrepHash = insertCheckUnique "DrepHash"
-
-insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => CommitteeHash -> ReaderT SqlBackend m CommitteeHashId
-insertCommitteeHash = insertCheckUnique "CommitteeHash"
-
-insertDelegationVote :: (MonadBaseControl IO m, MonadIO m) => DelegationVote -> ReaderT SqlBackend m DelegationVoteId
-insertDelegationVote = insertUnchecked "DelegationVote"
-
-insertCommitteeRegistration :: (MonadBaseControl IO m, MonadIO m) => CommitteeRegistration -> ReaderT SqlBackend m CommitteeRegistrationId
-insertCommitteeRegistration = insertUnchecked "CommitteeRegistration"
-
-insertCommitteeDeRegistration :: (MonadBaseControl IO m, MonadIO m) => CommitteeDeRegistration -> ReaderT SqlBackend m CommitteeDeRegistrationId
-insertCommitteeDeRegistration = insertUnchecked "CommitteeDeRegistration"
-
-insertDrepRegistration :: (MonadBaseControl IO m, MonadIO m) => DrepRegistration -> ReaderT SqlBackend m DrepRegistrationId
-insertDrepRegistration = insertUnchecked "DrepRegistration"
-
-insertEpochState :: (MonadBaseControl IO m, MonadIO m) => EpochState -> ReaderT SqlBackend m EpochStateId
-insertEpochState = insertUnchecked "EpochState"
-
-insertManyPoolStat :: (MonadBaseControl IO m, MonadIO m) => [PoolStat] -> ReaderT SqlBackend m ()
-insertManyPoolStat = void . insertMany' "EpochState"
-
-insertAlwaysAbstainDrep :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m DrepHashId
-insertAlwaysAbstainDrep = do
-  qr <- queryDrepHashAlwaysAbstain
-  maybe ins pure qr
-  where
-    ins =
-      insertUnchecked "DrepHashAlwaysAbstain" $
-        DrepHash
-          { drepHashRaw = Nothing
-          , drepHashView = hardcodedAlwaysAbstain
-          , drepHashHasScript = False
-          }
-
-insertAlwaysNoConfidence :: (MonadBaseControl IO m, MonadIO m) => ReaderT SqlBackend m DrepHashId
-insertAlwaysNoConfidence = do
-  qr <- queryDrepHashAlwaysNoConfidence
-  maybe ins pure qr
-  where
-    ins =
-      insertUnchecked "DrepHashAlwaysNoConfidence" $
-        DrepHash
-          { drepHashRaw = Nothing
-          , drepHashView = hardcodedAlwaysNoConfidence
-          , drepHashHasScript = False
-          }
 
 --------------------------------------------------------------------------------
 -- Custom insert functions
@@ -586,18 +313,18 @@ insertManyWithManualUnique str contraintExists constraintName =
   where
     mConstraintName = if contraintExists then Just constraintName else Nothing
 
-insertManyCheckUnique ::
-  forall m record.
-  ( MonadBaseControl IO m
-  , MonadIO m
-  , OnlyOneUniqueKey record
-  ) =>
-  String ->
-  [record] ->
-  ReaderT SqlBackend m ()
-insertManyCheckUnique vtype records = do
-  let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
-  insertManyUnique vtype (Just constraintName) records
+-- insertManyCheckUnique ::
+--   forall m record.
+--   ( MonadBaseControl IO m
+--   , MonadIO m
+--   , OnlyOneUniqueKey record
+--   ) =>
+--   String ->
+--   [record] ->
+--   ReaderT SqlBackend m ()
+-- insertManyCheckUnique vtype records = do
+--   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
+--   insertManyUnique vtype (Just constraintName) records
 
 -- Insert, getting PostgreSQL to check the uniqueness constaint. If it is violated,
 -- simply returns the Key, without changing anything.

@@ -105,7 +105,7 @@ module Cardano.Db.Operations.Query (
 
 import Cardano.Db.Error
 import Cardano.Db.Operations.QueryHelper (defaultUTCTime, isJust, maybeToEither, unValue2, unValue3, unValue5, unValueSumAda)
-import Cardano.Db.Schema.BaseSchema
+import Cardano.Db.Schema.Core
 import Cardano.Db.Types
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
 import Cardano.Ledger.Credential (Ptr (..))
@@ -650,14 +650,6 @@ existsVotingAnchorId vaId = do
     limit 1
     pure (votingAnchor ^. VotingAnchorId)
   pure $ not (null res)
-
-queryAdaPotsId :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe (Entity AdaPots))
-queryAdaPotsId blkId = do
-  res <- select $ do
-    adaPots <- from $ table @AdaPots
-    where_ (adaPots ^. AdaPotsBlockId ==. val blkId)
-    pure adaPots
-  pure $ listToMaybe res
 
 -- | Get the current block height.
 queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
