@@ -298,8 +298,8 @@ txInEncoder =
     , txInRedeemerId >$< maybeIdEncoder getRedeemerId
     ]
 
-encodeTxInMany :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
-encodeTxInMany = contrazip4
+encodeTxInBulk :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
+encodeTxInBulk = contrazip4
   (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
   (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
   (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)

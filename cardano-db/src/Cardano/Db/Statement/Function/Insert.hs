@@ -7,8 +7,9 @@
 module Cardano.Db.Statement.Function.Insert
   (insert,
     insertCheckUnique,
-    bulkInsertNoReturn,
-    bulkInsertReturnIds,
+    bulkInsert,
+    -- bulkInsertNoReturn,
+    -- bulkInsertReturnIds,
   )
 where
 
@@ -33,7 +34,7 @@ import Cardano.Db.Statement.Function.Core (ResultType(..), ResultTypeBulk (..))
 insert
   :: forall a c r. (DbInfo a)
   => HsqlE.Params a              -- Encoder for record (without ID)
-  -> ResultType (Entity a) r     -- Whether to return Entity and decoder
+  -> ResultType (Entity c) r     -- Whether to return Entity and decoder
   -> a                           -- Record to insert
   -> HsqlT.Transaction r
 insert encoder resultType record =
@@ -41,13 +42,13 @@ insert encoder resultType record =
   where
     (decoder, returnClause) = case resultType of
       NoResult -> (HsqlD.noResult, "")
-      WithResult dec -> (dec, "RETURNING id, " <> columns)
+      WithResult dec -> (dec, "RETURNING id")
 
     table = tableName (Proxy @a)
-    colsNoId = NE.fromList $ NE.drop 1 (columnNames (Proxy @a))
-    columns = Text.intercalate ", " (NE.toList colsNoId)
+    colNames = columnNames (Proxy @a)
+    columns = Text.intercalate ", " (NE.toList colNames)
 
-    values = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+    values = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colNames]
 
     sql = TextEnc.encodeUtf8 $ Text.concat
       [ "INSERT INTO " <> table
@@ -92,9 +93,9 @@ insert encoder resultType record =
 -- * @record@: The record to insert.
 insertCheckUnique
   :: forall a c r. (DbInfo a)
-  => HsqlE.Params a              -- Encoder
-  -> ResultType c r             -- Whether to return a result and decoder
-  -> a                          -- Record
+  => HsqlE.Params a           -- Encoder
+  -> ResultType (Entity c) r  -- Whether to return a result and decoder
+  -> a                        -- Record
   -> HsqlT.Transaction r
 insertCheckUnique encoder resultType record =
   case validateUniqueConstraints (Proxy @a) of
@@ -107,41 +108,40 @@ insertCheckUnique encoder resultType record =
       WithResult dec  -> (dec, "RETURNING id")
 
     table = tableName (Proxy @a)
-    cols = columnNames (Proxy @a)
+    colNames = columnNames (Proxy @a)
     uniqueCols = uniqueFields (Proxy @a)
 
     -- Drop the ID column for value placeholders
-    colsNoId = NE.fromList $ NE.drop 1 cols
-    dummyUpdateField = NE.head cols
-    placeholders = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+    dummyUpdateField = NE.head colNames
+    placeholders = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colNames]
 
     sql = TextEnc.encodeUtf8 $ Text.concat
       [ "INSERT INTO " <> table
-      , " (" <> Text.intercalate ", " (NE.toList cols) <> ")"
+      , " (" <> Text.intercalate ", " (NE.toList colNames) <> ")"
       , " VALUES (" <> placeholders <> ")"
       , " ON CONFLICT (" <> Text.intercalate ", " uniqueCols <> ")"
       , " DO UPDATE SET " <> dummyUpdateField <> " = EXCLUDED." <> dummyUpdateField
       , returnClause
       ]
 
--- | Inserts multiple records into a table in a single transaction using UNNEST and discards the generated IDs.
-bulkInsertNoReturn
-  :: forall a b. (DbInfo a)
-  => ([a] -> b)                 -- Field extractor (e.g., to tuple)
-  -> HsqlE.Params b             -- Bulk encoder
-  -> [a]                        -- Records
-  -> HsqlT.Transaction ()
-bulkInsertNoReturn extract enc = bulkInsert extract enc NoResultBulk
+-- -- | Inserts multiple records into a table in a single transaction using UNNEST and discards the generated IDs.
+-- bulkInsertNoReturn
+--   :: forall a b. (DbInfo a)
+--   => ([a] -> b)                 -- Field extractor (e.g., to tuple)
+--   -> HsqlE.Params b             -- Bulk encoder
+--   -> [a]                        -- Records
+--   -> HsqlT.Transaction ()
+-- bulkInsertNoReturn extract enc = bulkInsert extract enc NoResultBulk
 
--- | Inserts multiple records into a table in a single transaction using UNNEST and returns the generated IDs.
-bulkInsertReturnIds
-  :: forall a b c. (DbInfo a)
-  => ([a] -> b)                 -- Field extractor (e.g., to tuple)
-  -> HsqlE.Params b             -- Bulk Encoder
-  -> HsqlD.Result [c]           -- Bulk decoder
-  -> [a]                        -- Records
-  -> HsqlT.Transaction [c]
-bulkInsertReturnIds extract enc dec = bulkInsert extract enc (WithResultBulk dec)
+-- -- | Inserts multiple records into a table in a single transaction using UNNEST and returns the generated IDs.
+-- bulkInsertReturnIds
+--   :: forall a b c r. (DbInfo a)
+--   => ([a] -> b)                   -- Field extractor (e.g., to tuple)
+--   -> HsqlE.Params b               -- Bulk Encoder
+--   -> ResultTypeBulk (Entity c) r  -- Bulk decoder
+--   -> [a]                          -- Records
+--   -> HsqlT.Transaction [c]
+-- bulkInsertReturnIds extract enc dec = bulkInsert extract enc dec
 
 -- | Inserts multiple records into a table in a single transaction using UNNEST.
 --
@@ -151,10 +151,10 @@ bulkInsertReturnIds extract enc dec = bulkInsert extract enc (WithResultBulk dec
 -- This will automatically handle unique constraints, if they are present.
 bulkInsert
   :: forall a b c r. (DbInfo a)
-  => ([a] -> b)                 -- Field extractor (e.g., to tuple)
-  -> HsqlE.Params b             -- Encoder
-  -> ResultTypeBulk c r         -- Whether to return a result and decoder
-  -> [a]                        -- Records
+  => ([a] -> b)                  -- Field extractor (e.g., to tuple)
+  -> HsqlE.Params b              -- Encoder
+  -> ResultTypeBulk (Entity c) r -- Whether to return a result and decoder
+  -> [a]                         -- Records
   -> HsqlT.Transaction r
 bulkInsert extract enc returnIds xs =
     case validateUniqueConstraints (Proxy @a) of
@@ -164,10 +164,9 @@ bulkInsert extract enc returnIds xs =
       where
         params = extract xs
         table = tableName (Proxy @a)
-        cols = NE.toList $ columnNames (Proxy @a)
-        colsNoId = drop 1 cols
+        colNames = NE.toList $ columnNames (Proxy @a)
 
-        unnestVals = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colsNoId]
+        unnestVals = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colNames]
 
         conflictClause :: [Text.Text] -> Text.Text
         conflictClause [] = ""
@@ -179,7 +178,7 @@ bulkInsert extract enc returnIds xs =
 
         sql = TextEnc.encodeUtf8 $ Text.concat
           ["INSERT INTO " <> table
-          , " (" <> Text.intercalate ", " colsNoId <> ") "
+          , " (" <> Text.intercalate ", " colNames <> ") "
           , " SELECT * FROM UNNEST ("
           , unnestVals <> " ) "
           , conflictClause uniques

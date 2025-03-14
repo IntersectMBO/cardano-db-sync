@@ -3,10 +3,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 
 module Cardano.Db.Statement.Types where
 
@@ -124,7 +124,7 @@ data Entity record =
     }
 
 -- Type family for keys
-type family Key a
+type family Key a = k | k -> a
 
 -- Add standalone deriving instances
 deriving instance Generic (Entity record)

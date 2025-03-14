@@ -1,9 +1,10 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Statement.Function.Query where
 
@@ -15,8 +16,10 @@ import qualified Hasql.Transaction as HsqlT
 import qualified Data.Text.Encoding as TextEnc
 
 import Cardano.Db.Statement.Function.Core (ResultType (..))
-import Cardano.Db.Statement.Types (DbInfo (..))
-import Cardano.Prelude (Proxy(..))
+import Cardano.Db.Statement.Types (DbInfo (..), Key)
+import Cardano.Prelude (Proxy(..), MonadIO)
+import qualified Data.List.NonEmpty as NE
+import Data.Functor.Contravariant (Contravariant (..))
 
 -- | Checks if a record with a specific ID exists in a table.
 --
@@ -33,7 +36,7 @@ import Cardano.Prelude (Proxy(..))
 --     votingAnchorId
 -- @
 queryIdExists
-  :: forall a b r. (DbInfo a)
+  :: forall a b r. (DbInfo a, Key a ~ b)
   => HsqlE.Params b   -- Encoder for the ID value
   -> ResultType Bool r -- Decoder for the boolean result
   -> b                -- ID value to check
@@ -50,4 +53,31 @@ queryIdExists encoder resultType idVal =
     sql = TextEnc.encodeUtf8 $ Text.concat
       [ "SELECT EXISTS (SELECT 1 FROM " <> table
       , " WHERE id = $1)"
+      ]
+
+replace
+  :: forall a. (DbInfo a)
+  => Key a                       -- ^ Key for the record to replace
+  -> HsqlE.Params (Key a)        -- ^ Key encoder
+  -> HsqlE.Params a              -- ^ Record encoder
+  -> a                           -- ^ New record value
+  -> HsqlT.Transaction ()        -- Changed return type to ()
+replace key keyEnc recordEnc record =
+  HsqlT.statement (key, record) $ HsqlS.Statement sql encoder HsqlD.noResult True
+  where
+    table = tableName (Proxy @a)
+    colsNames = NE.toList $ columnNames (Proxy @a)
+
+    setClause = Text.intercalate ", " $
+      zipWith (\col idx -> col <> " = $" <> Text.pack (show idx))
+              colsNames
+              [2..(length colsNames + 1)]
+
+    -- Fix: create a combined encoder for the (key, record) tuple
+    encoder = contramap fst keyEnc <> contramap snd recordEnc
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "UPDATE " <> table
+      , " SET " <> setClause
+      , " WHERE id = $1"
       ]
