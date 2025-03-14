@@ -41,7 +41,7 @@ import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
 import Cardano.Db.Statement.Types (DbInfo(..), Entity (..), Key)
-import Contravariant.Extras (contrazip5)
+import Contravariant.Extras (contrazip4)
 import Cardano.Db.Statement.Function.Core (manyEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -354,9 +354,8 @@ epochStateEncoder =
     , epochStateEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
-epochStateManyEncoder :: E.Params ([EpochStateId], [Maybe CommitteeId], [Maybe GovActionProposalId], [Maybe ConstitutionId], [Word64])
-epochStateManyEncoder =contrazip5
-  (manyEncoder $ E.nonNullable $ getEpochStateId >$< E.int8)
+epochStateBulkEncoder :: E.Params ([Maybe CommitteeId], [Maybe GovActionProposalId], [Maybe ConstitutionId], [Word64])
+epochStateBulkEncoder = contrazip4
   (manyEncoder $ E.nullable $ getCommitteeId >$< E.int8)
   (manyEncoder $ E.nullable $ getGovActionProposalId >$< E.int8)
   (manyEncoder $ E.nullable $ getConstitutionId >$< E.int8)

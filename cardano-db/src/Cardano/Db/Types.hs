@@ -1,4 +1,3 @@
-{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -8,7 +7,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Types (
   DbAction (..),
@@ -145,7 +143,7 @@ data DbTransMode = TransWrite | TransReadOnly
 data DbEnv = DbEnv
   { dbConnection :: !HsqlC.Connection
   , dbEnableLogging :: !Bool
-  , dbTracer :: !(Trace IO Text)
+  , dbTracer :: !(Maybe (Trace IO Text))
   }
 
 -- | Transaction wrapper for debuging/logging.
