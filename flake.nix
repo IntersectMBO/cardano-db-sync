@@ -411,7 +411,7 @@
               in
                 nixpkgs.runCommand name env
                   ''
-                    mkdir -p $out release
+                    mkdir -p $out release/bin
                     cd release
 
                     # Copy exes to intermediate dir
@@ -420,7 +420,16 @@
                       --remove-destination \
                       --verbose \
                       ${lib.concatMapStringsSep " " (exe: "${exe}/bin/*") exes} \
-                       ./
+                       ./bin
+
+                    # Copy magrations to intermediate dir
+                    cp \
+                      --no-clobber \
+                      --remove-destination \
+                      --verbose \
+                      --recursive \
+                      ${./schema} \
+                      ./schema
 
                     # Rewrite libs on macos (from iohk-utils)
                     ${lib.optionalString
