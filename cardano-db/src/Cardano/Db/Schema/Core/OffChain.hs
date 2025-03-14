@@ -352,9 +352,9 @@ offChainVoteAuthorEncoder =
     , offChainVoteAuthorWarning >$< E.param (E.nullable E.text)
     ]
 
-offChainVoteAuthorManyEncoder
+offChainVoteAuthorBulkEncoder
   :: E.Params ([OffChainVoteDataId], [Maybe Text], [Text], [Text], [Text], [Maybe Text])
-offChainVoteAuthorManyEncoder =
+offChainVoteAuthorBulkEncoder =
   contrazip6
     (manyEncoder $ idBulkEncoder getOffChainVoteDataId)
     (manyEncoder $ E.nullable E.text)
@@ -412,8 +412,8 @@ offChainVoteReferenceEncoder =
     , offChainVoteReferenceHashAlgorithm >$< E.param (E.nullable E.text)
     ]
 
-offChainVoteReferenceManyEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text], [Maybe Text], [Maybe Text])
-offChainVoteReferenceManyEncoder =
+offChainVoteReferenceBulkEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text], [Maybe Text], [Maybe Text])
+offChainVoteReferenceBulkEncoder =
   contrazip5
     (manyEncoder $ idBulkEncoder getOffChainVoteDataId)
     (manyEncoder $ E.nonNullable E.text)

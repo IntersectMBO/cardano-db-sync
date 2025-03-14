@@ -11,21 +11,25 @@ import Cardano.Db (DbWord64)
 -- | DelistedPool
 --------------------------------------------------------------------------------
 insertDelistedPool :: MonadIO m => SP.DelistedPool -> DbAction m Id.DelistedPoolId
-insertDelistedPool delistedPool = runDbT TransWrite $ mkDbTransaction "insertDelistedPool" $
-  insert
-    delistedPoolEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.DelistedPoolId))
-    delistedPool
+insertDelistedPool delistedPool =
+  runDbT TransWrite $ mkDbTransaction "insertDelistedPool" $ do
+    entity <- insert
+      delistedPoolEncoder
+      (WithResult $ HsqlD.singleRow SP.entityDelistedPoolDecoder)
+      delistedPool
+    pure (entityKey entity)
 
 --------------------------------------------------------------------------------
 -- | PoolHash
 --------------------------------------------------------------------------------
 insertPoolHash :: MonadIO m => SP.PoolHash -> DbAction m Id.PoolHashId
-insertPoolHash poolHash = runDbT TransWrite $ mkDbTransaction "insertPoolHash" $
-  insert
-    poolHashEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolHashId))
-    poolHash
+insertPoolHash poolHash =
+  runDbT TransWrite $ mkDbTransaction "insertPoolHash" $ do
+    entity <- insert
+      poolHashEncoder
+      (WithResult $ HsqlD.singleRow SP.entityPoolHashDecoder)
+      poolHash
+    pure (entityKey entity)
 
 queryPoolHashIdExists :: MonadIO m => Id.PoolHashId -> DbAction m Bool
 queryPoolHashIdExists poolHashId = runDbT TransReadOnly $ mkDbTransaction "queryPoolHashIdExists" $
@@ -44,11 +48,13 @@ queryPoolHashIdExists poolHashId = runDbT TransReadOnly $ mkDbTransaction "query
 -- | PoolMetadataRef
 --------------------------------------------------------------------------------
 insertPoolMetadataRef :: MonadIO m => SP.PoolMetadataRef -> DbAction m Id.PoolMetadataRefId
-insertPoolMetadataRef poolMetadataRef = runDbT TransWrite $ mkDbTransaction "insertPoolMetadataRef" $
-  insert
-    poolMetadataRefEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolMetadataRefId))
-    poolMetadataRef
+insertPoolMetadataRef poolMetadataRef =
+  runDbT TransWrite $ mkDbTransaction "insertPoolMetadataRef" $ do
+    entity <- insert
+      poolMetadataRefEncoder
+      (WithResult $ HsqlD.singleRow SP.entityPoolMetadataRefDecoder)
+      poolMetadataRef
+    pure (entityKey entity)
 
 queryPoolMetadataRefIdExists :: MonadIO m => Id.PoolMetadataRefId -> DbAction m Bool
 queryPoolMetadataRefIdExists poolMetadataRefId = runDbT TransReadOnly $ mkDbTransaction "queryPoolMetadataRefIdExists" $
@@ -58,31 +64,37 @@ queryPoolMetadataRefIdExists poolMetadataRefId = runDbT TransReadOnly $ mkDbTran
     poolMetadataRefId
 
 insertPoolOwner :: MonadIO m => SP.PoolOwner -> DbAction m Id.PoolOwnerId
-insertPoolOwner poolOwner = runDbT TransWrite $ mkDbTransaction "insertPoolOwner" $
-  insert
-    poolOwnerEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolOwnerId))
-    poolOwner
+insertPoolOwner poolOwner =
+  runDbT TransWrite $ mkDbTransaction "insertPoolOwner" $ do
+    entity <- insert
+      poolOwnerEncoder
+      (WithResult $ HsqlD.singleRow SP.entityPoolOwnerDecoder)
+      poolOwner
+    pure (entityKey entity)
 
 insertPoolRelay :: MonadIO m => SP.PoolRelay -> DbAction m Id.PoolRelayId
-insertPoolRelay poolRelay = runDbT TransWrite $ mkDbTransaction "insertPoolRelay" $
-  insert
-    poolRelayEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolRelayId))
-    poolRelay
+insertPoolRelay poolRelay =
+  runDbT TransWrite $ mkDbTransaction "insertPoolRelay" $ do
+    entity <- insert
+      poolRelayEncoder
+      (WithResult $ HsqlD.singleRow SP.entityPoolRelayDecoder)
+      poolRelay
+    pure (entityKey entity)
 
 insertPoolRetire :: MonadIO m => SP.PoolRetire -> DbAction m Id.PoolRetireId
-insertPoolRetire poolRetire = runDbT TransWrite $ mkDbTransaction "insertPoolRetire" $
-  insert
-    poolRetireEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolRetireId))
-    poolRetire
+insertPoolRetire poolRetire =
+  runDbT TransWrite $ mkDbTransaction "insertPoolRetire" $ do
+    entity <- insert
+      poolRetireEncoder
+      (WithResult $ HsqlD.singleRow SP.entityPoolRetireDecoder)
+      poolRetire
+    pure (entityKey entity)
 
 bulkInsertPoolStat :: MonadIO m => [SP.PoolStat] -> DbAction m ()
 bulkInsertPoolStat poolStats = runDbT TransWrite $ mkDbTransaction "bulkInsertPoolStat" $
-  bulkInsertNoReturn
+  bulkInsert
     extractPoolStat
-    encodePoolStatMany
+    NoResult
     poolStats
   where
     extractPoolStat :: [PoolStat] -> ([Id.PoolHashId], [Word32], [DbWord64], [DbWord64], [DbWord64], [DbWord64])
@@ -96,18 +108,22 @@ bulkInsertPoolStat poolStats = runDbT TransWrite $ mkDbTransaction "bulkInsertPo
         )
 
 insertPoolUpdate :: MonadIO m => SP.PoolUpdate -> DbAction m Id.PoolUpdateId
-insertPoolUpdate poolUpdate = runDbT TransWrite $ mkDbTransaction "insertPoolUpdate" $
-  insert
-    poolUpdateEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.PoolUpdateId))
-    poolUpdate
+insertPoolUpdate poolUpdate =
+  runDbT TransWrite $ mkDbTransaction "insertPoolUpdate" $ do
+    entity <- insert
+      poolUpdateEncoder
+      (WithResult $ HsqlD.singleRow SP.entityPoolUpdateDecoder)
+      poolUpdate
+    pure (entityKey entity)
 
 insertReservedPoolTicker :: MonadIO m => SP.ReservedPoolTicker -> DbAction m (maybe Id.ReservedPoolTickerId)
-insertReservedPoolTicker reservedPool = runDbT TransWrite $ mkDbTransaction "insertReservedPoolTicker" $
-  insertCheckUnique
-    reservedPoolTickerEncoder
-    (WithResult (HsqlD.singleRow $ Id.maybeIdDecoder Id.ReservedPoolTickerId))
-    reservedPool
+insertReservedPoolTicker reservedPool =
+  runDbT TransWrite $ mkDbTransaction "insertReservedPoolTicker" $ do
+    entity <- insertCheckUnique
+      reservedPoolTickerEncoder
+      (WithResult $ HsqlD.singleRow SP.entityReservedPoolTickerDecoder)
+      reservedPool
+    pure (entityKey entity)
 
 
 -- These tables manage stake pool-related data, including pool registration, updates, and retirements.

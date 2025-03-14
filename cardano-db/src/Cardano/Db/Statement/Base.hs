@@ -1,79 +1,110 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module Cardano.Db.Statement.Base where
 
-import Data.Text (Text)
-import qualified Hasql.Decoders as HsqlD
-
-import Cardano.Db.Schema.Core (Block(..), TxMetadata(..))
-import qualified Cardano.Db.Schema.Core.Base as SCB
-import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (runDbT, mkDbTransaction, ResultType (..))
-import Cardano.Db.Statement.Function.Insert (insert, bulkInsertReturnIds, insertCheckUnique)
-import Cardano.Db.Types (DbAction, DbTransMode (..), DbWord64, ExtraMigration, extraDescription)
-import Cardano.Prelude (MonadIO, Word64, ByteString, textShow)
 import qualified Data.ByteString as BS
 import qualified Data.Text as Text
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Statement as HsqlS
+import qualified Hasql.Transaction as HsqlT
+
+import qualified Cardano.Db.Schema.Core.Base as SCB
+import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Statement.Function.Core (runDbT, mkDbTransaction, ResultType (..), ResultTypeBulk (..))
+import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, bulkInsert)
+import Cardano.Db.Statement.Types (Entity (..))
+import Cardano.Db.Types (DbAction, DbTransMode (..), DbWord64, ExtraMigration, extraDescription)
+import Cardano.Prelude (MonadIO, Word64, ByteString, textShow, MonadError (..))
+import Cardano.Db.Error (DbError(..))
 
 --------------------------------------------------------------------------------
 -- | Block
 --------------------------------------------------------------------------------
-insertBlock :: MonadIO m => Block -> DbAction m Id.BlockId
+
+-- | INSERT
+insertBlock :: MonadIO m => SCB.Block -> DbAction m Id.BlockId
 insertBlock block =
-  runDbT TransWrite $ mkDbTransaction "insertBlock" $
-    insert
+  runDbT TransWrite $ mkDbTransaction "insertBlock" $ do
+    entity <- insert
       SCB.blockEncoder
-      (WithResult (HsqlD.singleRow $ Id.idDecoder Id.BlockId))
+      (WithResult (HsqlD.singleRow SCB.entityBlockDecoder))
       block
+    pure $ entityKey entity
+
+-- | QUERY
+queryBlockHashBlockNo :: MonadIO m => ByteString -> DbAction m (Maybe Word64)
+queryBlockHashBlockNo hash = runDbT TransReadOnly $ mkDbTransaction "queryBlockHashBlockNo" $ do
+  result <- HsqlT.statement hash $ HsqlS.Statement sql hashEncoder blockNoDecoder True
+  case result of
+    [] -> pure Nothing
+    [blockNo] -> pure (Just blockNo)
+    _otherwise -> throwError $ DbLookupError mkCallSite "Multiple blocks found with same hash: " (BlockHashContext hash)
+  where
+    table = tableName (Proxy @SCB.Block)
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT block_no FROM " <> table <> " WHERE hash = $1" ]
+
+    hashEncoder = E.param (E.nonNullable E.bytea)
+    blockNoDecoder = HsqlD.rowList (D.column (D.nullable $ fromIntegral <$> D.int8))
 
 --------------------------------------------------------------------------------
 -- | Datum
 --------------------------------------------------------------------------------
 insertDatum :: MonadIO m => SCB.Datum -> DbAction m Id.DatumId
-insertDatum datum = runDbT TransWrite $ mkDbTransaction "insertDatum" $
-  insert
-    SCB.datumEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.DatumId))
-    datum
+insertDatum datum =
+  runDbT TransWrite $ mkDbTransaction "insertDatum" $ do
+    entity <- insert
+      SCB.datumEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityDatumDecoder)
+      datum
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | TxMetadata
 --------------------------------------------------------------------------------
-bulkInsertTxMetadata :: MonadIO m => [TxMetadata] -> DbAction m [Id.TxMetadataId]
-bulkInsertTxMetadata txMetas = runDbT TransWrite $ mkDbTransaction "bulkInsertTxInMetadata" $
-  bulkInsertReturnIds
+bulkInsertTxMetadata :: MonadIO m => [SCB.TxMetadata] -> DbAction m [Id.TxMetadataId]
+bulkInsertTxMetadata txMetas = runDbT TransWrite $ mkDbTransaction "bulkInsertTxInMetadata" $ do
+  entity <- bulkInsert
     extractTxMetadata
     SCB.txMetadataBulkEncoder
-    (HsqlD.rowList $ Id.idDecoder Id.TxMetadataId)
+    (WithResultBulk (HsqlD.rowList SCB.entityTxMetadataDecoder))
     txMetas
+  pure $ map entityKey entity
   where
-    extractTxMetadata :: [TxMetadata] -> ([DbWord64], [Maybe Text], [ByteString], [Id.TxId])
+    extractTxMetadata :: [SCB.TxMetadata] -> ([DbWord64], [Maybe Text.Text], [ByteString], [Id.TxId])
     extractTxMetadata xs =
-      ( map txMetadataKey xs
-      , map txMetadataJson xs
-      , map txMetadataBytes xs
-      , map txMetadataTxId xs
+      ( map SCB.txMetadataKey xs
+      , map SCB.txMetadataJson xs
+      , map SCB.txMetadataBytes xs
+      , map SCB.txMetadataTxId xs
       )
 
 --------------------------------------------------------------------------------
 -- | CollateralTxIn
 --------------------------------------------------------------------------------
 insertCollateralTxIn :: MonadIO m => SCB.CollateralTxIn -> DbAction m Id.CollateralTxInId
-insertCollateralTxIn cTxIn = runDbT TransWrite $ mkDbTransaction "insertCollateralTxIn" $
-  insert
-    SCB.collateralTxInEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.CollateralTxInId))
-    cTxIn
+insertCollateralTxIn cTxIn =
+  runDbT TransWrite $ mkDbTransaction "insertCollateralTxIn" $ do
+    entity <- insert
+      SCB.collateralTxInEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityCollateralTxInDecoder)
+      cTxIn
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | ReferenceTxIn
 --------------------------------------------------------------------------------
 insertReferenceTxIn :: MonadIO m => SCB.ReferenceTxIn -> DbAction m Id.ReferenceTxInId
-insertReferenceTxIn rTxIn = runDbT TransWrite $ mkDbTransaction "insertReferenceTxIn" $
-  insert
-    SCB.referenceTxInEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.ReferenceTxInId))
-    rTxIn
+insertReferenceTxIn rTxIn =
+  runDbT TransWrite $ mkDbTransaction "insertReferenceTxIn" $ do
+    entity <- insert
+      SCB.referenceTxInEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityReferenceTxInDecoder)
+      rTxIn
+    pure $ entityKey entity
 
 insertExtraMigration :: MonadIO m => ExtraMigration -> DbAction m ()
 insertExtraMigration extraMigration = runDbT TransWrite $ mkDbTransaction "insertExtraMigration" $
@@ -86,104 +117,123 @@ insertExtraMigration extraMigration = runDbT TransWrite $ mkDbTransaction "inser
 -- | ExtraKeyWitness
 --------------------------------------------------------------------------------
 insertExtraKeyWitness :: MonadIO m => SCB.ExtraKeyWitness -> DbAction m Id.ExtraKeyWitnessId
-insertExtraKeyWitness eKeyWitness = runDbT TransWrite $ mkDbTransaction "insertExtraKeyWitness" $
-  insert
-    SCB.extraKeyWitnessEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.ExtraKeyWitnessId))
-    eKeyWitness
+insertExtraKeyWitness eKeyWitness =
+  runDbT TransWrite $ mkDbTransaction "insertExtraKeyWitness" $ do
+    entity <- insert
+      SCB.extraKeyWitnessEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityExtraKeyWitnessDecoder)
+      eKeyWitness
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | Meta
 --------------------------------------------------------------------------------
 insertMeta :: MonadIO m => SCB.Meta -> DbAction m Id.MetaId
-insertMeta meta = runDbT TransWrite $ mkDbTransaction "insertMeta" $
-  insertCheckUnique
+insertMeta meta = runDbT TransWrite $ mkDbTransaction "insertMeta" $ do
+  entity <- insertCheckUnique
     SCB.metaEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.MetaId))
+    (WithResult (HsqlD.singleRow SCB.entityMetaDecoder))
     meta
+  pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | Redeemer
 --------------------------------------------------------------------------------
 insertRedeemer :: MonadIO m => SCB.Redeemer -> DbAction m Id.RedeemerId
-insertRedeemer redeemer = runDbT TransWrite $ mkDbTransaction "insertRedeemer" $
-  insert
-    SCB.redeemerEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.RedeemerId))
-    redeemer
+insertRedeemer redeemer =
+  runDbT TransWrite $ mkDbTransaction "insertRedeemer" $ do
+    entity <- insert
+      SCB.redeemerEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityRedeemerDecoder)
+      redeemer
+    pure $ entityKey entity
 
 insertRedeemerData :: MonadIO m => SCB.RedeemerData -> DbAction m Id.RedeemerDataId
-insertRedeemerData redeemerData = runDbT TransWrite $ mkDbTransaction "insertRedeemerData" $
-  insert
-    SCB.redeemerDataEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.RedeemerDataId))
-    redeemerData
+insertRedeemerData redeemerData =
+  runDbT TransWrite $ mkDbTransaction "insertRedeemerData" $ do
+    entity <- insert
+      SCB.redeemerDataEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityRedeemerDataDecoder)
+      redeemerData
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | ReverseIndex
 --------------------------------------------------------------------------------
 insertReverseIndex :: MonadIO m => SCB.ReverseIndex -> DbAction m Id.ReverseIndexId
-insertReverseIndex reverseIndex = runDbT TransWrite $ mkDbTransaction "insertReverseIndex" $
-  insert
+insertReverseIndex reverseIndex =
+  runDbT TransWrite $ mkDbTransaction "insertReverseIndex" $ do
+  entity <- insert
     SCB.reverseIndexEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.ReverseIndexId))
+    (WithResult $ HsqlD.singleRow SCB.entityReverseIndexDecoder)
     reverseIndex
+  pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | Script
 --------------------------------------------------------------------------------
 insertScript :: MonadIO m => SCB.Script -> DbAction m Id.ScriptId
-insertScript script = runDbT TransWrite $ mkDbTransaction "insertScript" $
-  insertCheckUnique
-    SCB.scriptEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.ScriptId))
-    script
+insertScript script =
+  runDbT TransWrite $ mkDbTransaction "insertScript" $ do
+    entity <- insertCheckUnique
+      SCB.scriptEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityScriptDecoder)
+      script
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | SlotLeader
 --------------------------------------------------------------------------------
 insertSlotLeader :: MonadIO m => SCB.SlotLeader -> DbAction m Id.SlotLeaderId
-insertSlotLeader slotLeader = runDbT TransWrite $ mkDbTransaction "insertSlotLeader" $
-  insertCheckUnique
+insertSlotLeader slotLeader = runDbT TransWrite $ mkDbTransaction "insertSlotLeader" $ do
+  entity <- insertCheckUnique
     SCB.slotLeaderEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.SlotLeaderId))
+    (WithResult $ HsqlD.singleRow SCB.entitySlotLeaderDecoder)
     slotLeader
+  pure $ entityKey entity
 
 
 insertTxCbor :: MonadIO m => SCB.TxCbor -> DbAction m Id.TxCborId
-insertTxCbor txCBOR = runDbT TransWrite $ mkDbTransaction "insertTxCBOR" $
-  insert
-    SCB.txCborEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.TxCborId))
-    txCBOR
+insertTxCbor txCBOR =
+  runDbT TransWrite $ mkDbTransaction "insertTxCBOR" $ do
+    entity <- insert
+      SCB.txCborEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityTxCborDecoder)
+      txCBOR
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | Tx
 --------------------------------------------------------------------------------
 insertTx :: MonadIO m => SCB.Tx -> DbAction m Id.TxId
-insertTx tx = runDbT TransWrite $ mkDbTransaction ("insertTx: " <> Text.pack (show $ BS.length $ SCB.txHash tx)) $
-  insert
-    SCB.txEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.TxId))
-    tx
+insertTx tx =
+  runDbT TransWrite $ mkDbTransaction ("insertTx: " <> Text.pack (show $ BS.length $ SCB.txHash tx)) $ do
+    entity <- insert
+      SCB.txEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityTxDecoder)
+      tx
+    pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- | TxIn
 --------------------------------------------------------------------------------
 insertTxIn :: MonadIO m => SCB.TxIn -> DbAction m Id.TxInId
-insertTxIn txIn = runDbT TransWrite $ mkDbTransaction "insertTxIn" $
-  insert
-    SCB.txInEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.TxInId))
-    txIn
+insertTxIn txIn =
+  runDbT TransWrite $ mkDbTransaction "insertTxIn" $ do
+    entity <- insert
+      SCB.txInEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityTxInDecoder)
+      txIn
+    pure $ entityKey entity
 
 bulkInsertTxIn :: MonadIO m => [SCB.TxIn] -> DbAction m [Id.TxInId]
-bulkInsertTxIn txIns = runDbT TransWrite $ mkDbTransaction "bulkInsertTxIn" $
-  bulkInsertReturnIds
+bulkInsertTxIn txIns = runDbT TransWrite $ mkDbTransaction "bulkInsertTxIn" $ do
+  entity <- bulkInsert
     extractTxIn
-    SCB.encodeTxInMany
-    (HsqlD.rowList $ Id.idDecoder Id.TxInId)
+    SCB.encodeTxInBulk
+    (WithResultBulk $ HsqlD.rowList SCB.entityTxInDecoder)
     txIns
+  pure $ map entityKey entity
   where
     extractTxIn :: [SCB.TxIn] -> ([Id.TxId], [Id.TxId], [Word64], [Maybe Id.RedeemerId])
     extractTxIn xs =
@@ -197,11 +247,13 @@ bulkInsertTxIn txIns = runDbT TransWrite $ mkDbTransaction "bulkInsertTxIn" $
 -- | Withdrawal
 --------------------------------------------------------------------------------
 insertWithdrawal :: MonadIO m => SCB.Withdrawal -> DbAction m Id.WithdrawalId
-insertWithdrawal withdrawal = runDbT TransWrite $ mkDbTransaction "insertWithdrawal" $
-  insert
-    SCB.withdrawalEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.WithdrawalId))
-    withdrawal
+insertWithdrawal withdrawal =
+  runDbT TransWrite $ mkDbTransaction "insertWithdrawal" $ do
+    entity <- insert
+      SCB.withdrawalEncoder
+      (WithResult $ HsqlD.singleRow SCB.entityWithdrawalDecoder)
+      withdrawal
+    pure $ entityKey entity
 
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 

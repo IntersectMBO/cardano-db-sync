@@ -42,7 +42,7 @@ bulkInsertOffChainVoteAuthors offChainVoteAuthors =
   runDbT TransWrite $ mkDbTransaction "bulkInsertOffChainVoteAuthors" $
     bulkInsertNoReturn
       extractOffChainVoteAuthor
-      SO.offChainVoteAuthorManyEncoder
+      SO.offChainVoteAuthorBulkEncoder
       offChainVoteAuthors
   where
     extractOffChainVoteAuthor
@@ -71,12 +71,12 @@ insertOffChainVoteData offChainVoteData = do
 
 insertOffChainVoteDrepData :: MonadIO m => SO.OffChainVoteDrepData -> DbAction m Id.OffChainVoteDataId
 insertOffChainVoteDrepData drepData =
-  runDbT TransWrite $ mkDbTransaction "insertOffChainVoteDrepData" $
-    insert
+  runDbT TransWrite $ mkDbTransaction "insertOffChainVoteDrepData" $ do
+    entity <- insert
       SO.offChainVoteDrepDataEncoder
-      (WithResult (HsqlD.singleRow $ Id.idDecoder Id.OffChainVoteDataId))
+      (WithResult $ HsqlD.singleRow SO.entityOffChainVoteData)
       drepData
-
+    pure (entityKey entity)
 --------------------------------------------------------------------------------
 -- | OffChainVoteExternalUpdate
 --------------------------------------------------------------------------------
@@ -100,8 +100,8 @@ insertOffChainVoteFetchError offChainVoteFetchError = do
   foundVotingAnchor <-
     queryVotingAnchorIdExists (SO.offChainVoteFetchErrorVotingAnchorId offChainVoteFetchError)
   when foundVotingAnchor $ do
-    runDbT TransWrite $ mkDbTransaction "insertOffChainVoteError" $
-      insert
+    runDbT TransWrite $ mkDbTransaction "insertOffChainVoteError" $ do
+      void $ insert
         SO.offChainVoteFetchErrorEncoder
         NoResult
         offChainVoteFetchError
@@ -110,11 +110,13 @@ insertOffChainVoteFetchError offChainVoteFetchError = do
 -- | OffChainVoteGovActionData
 --------------------------------------------------------------------------------
 insertOffChainVoteGovActionData :: MonadIO m => SO.OffChainVoteGovActionData -> DbAction m Id.OffChainVoteGovActionDataId
-insertOffChainVoteGovActionData offChainVoteGovActionData = runDbT TransWrite $ mkDbTransaction "insertOffChainVoteGovActionData" $
-  insert
-    SO.offChainVoteGovActionDataEncoder
-    (WithResult (HsqlD.singleRow $ Id.idDecoder Id.OffChainVoteGovActionDataId))
-    offChainVoteGovActionData
+insertOffChainVoteGovActionData offChainVoteGovActionData =
+  runDbT TransWrite $ mkDbTransaction "insertOffChainVoteGovActionData" $ do
+    entity <- insert
+      SO.offChainVoteGovActionDataEncoder
+      (WithResult $ HsqlD.singleRow SO.entityOffChainVoteGovActionData)
+      offChainVoteGovActionData
+    pure (entityKey entity)
 
 --------------------------------------------------------------------------------
 -- | OffChainVoteReference
@@ -124,7 +126,7 @@ bulkInsertOffChainVoteReferences offChainVoteReferences =
   runDbT TransWrite $ mkDbTransaction "bulkInsertOffChainVoteReferences" $
     bulkInsertNoReturn
       extractOffChainVoteReference
-      SO.offChainVoteReferenceManyEncoder
+      SO.offChainVoteReferenceBulkEncoder
       offChainVoteReferences
   where
     extractOffChainVoteReference :: [SO.OffChainVoteReference] -> ([Id.OffChainVoteDataId], [Text], [Text], [Maybe Text], [Maybe Text])
