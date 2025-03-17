@@ -249,7 +249,7 @@ docker run \
 Building Docker images is done with [Nix](https://nixos.org/) and requires Linux:
 
 ```bash
-nix build .#cardano-db-sync-docker
+nix build ./cardano-db-sync-docker
 ```
 
 This will generate a `tar.gz` file linked to `./result` that can be loaded into docker and
