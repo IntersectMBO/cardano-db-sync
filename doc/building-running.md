@@ -111,7 +111,7 @@ when running cabal build
 
 **Build the Project**: Build the cardano-db-sync project using Nix
 ```sh
-nix build -v .#cardano-db-sync -o db-sync-node
+nix build -v ./cardano-db-sync -o db-sync-node
 ```
 
 Set up the PostgreSQL database using the provided script with the configuration in `config/pgpass-mainnet`
