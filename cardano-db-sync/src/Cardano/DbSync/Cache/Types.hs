@@ -52,7 +52,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
--- | We use a stable cache for entries that are expected to be reused frequentyl.
+-- | We use a stable cache for entries that are expected to be reused frequently.
 -- These are stake addresses that have rewards, delegations etc.
 -- They are never removed unless manually eg when it's deregistered
 -- The LRU cache is much smaller for the rest stake addresses.

@@ -137,7 +137,7 @@ logException tracer txt action =
       logError tracer $ txt <> textShow e
       throwIO e
 
--- | Eequired for testing or when disabling the metrics.
+-- | Required for testing or when disabling the metrics.
 nullMetricSetters :: MetricSetters
 nullMetricSetters =
   MetricSetters

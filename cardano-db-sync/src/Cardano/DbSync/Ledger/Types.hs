@@ -27,6 +27,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Credential (Credential (..))
+import qualified Cardano.Ledger.EpochBoundary as Ledger
 import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState ())
 import Cardano.Prelude hiding (atomically)
@@ -72,6 +73,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leEpochStakeChans :: EpochStakeChannels
   }
 
 data CardanoLedgerState = CardanoLedgerState
@@ -140,7 +142,6 @@ data ApplyResult = ApplyResult
   , apOldLedger :: !(Strict.Maybe CardanoLedgerState)
   , apDeposits :: !(Strict.Maybe Generic.Deposits) -- The current required deposits
   , apSlotDetails :: !SlotDetails
-  , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
   , apGovActionState :: !(Maybe (ConwayGovState StandardConway))
   , apDepositsMap :: !DepositsMap
@@ -156,7 +157,6 @@ defaultApplyResult slotDetails =
     , apOldLedger = Strict.Nothing
     , apDeposits = Strict.Nothing
     , apSlotDetails = slotDetails
-    , apStakeSlice = Generic.NoSlices
     , apEvents = []
     , apGovActionState = Nothing
     , apDepositsMap = emptyDepositsMap
@@ -195,6 +195,18 @@ instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState wh
   getAnchorMeasure _ = getTipSlot . clsState
 
 data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
+
+data EpochStakeDBAction = EpochStakeDBAction
+  { esaEpochNo :: EpochNo
+  , esaSnapShot :: Ledger.SnapShot StandardCrypto
+  , esaCheckFirst :: Bool -- Check if the data is already there before inserting
+  }
+
+data EpochState = Running | Done
+data EpochStakeChannels = EpochStakeChannels
+  { estakeQueue :: TBQueue EpochStakeDBAction
+  , epochResult :: StrictTVar IO (Maybe (EpochNo, EpochState))
+  }
 
 -- | Per-era pure getters and setters on @NewEpochState@. Note this is a bit of an abuse
 -- of the cardano-ledger/ouroboros-consensus public APIs, because ledger state is not

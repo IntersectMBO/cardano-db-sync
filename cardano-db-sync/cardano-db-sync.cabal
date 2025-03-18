@@ -45,6 +45,7 @@ library
                         Cardano.DbSync.Api
                         Cardano.DbSync.Api.Ledger
                         Cardano.DbSync.Api.Types
+                        Cardano.DbSync.Ledger.Async
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron
@@ -130,6 +131,7 @@ library
                         Cardano.DbSync.LocalStateQuery
                         Cardano.DbSync.StateQuery
                         Cardano.DbSync.Sync
+                        Cardano.DbSync.Threads
                         Cardano.DbSync.Tracing.ToObjectOrphans
                         Cardano.DbSync.Types
 

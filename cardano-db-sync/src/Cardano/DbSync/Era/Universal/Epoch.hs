@@ -15,6 +15,7 @@ module Cardano.DbSync.Era.Universal.Epoch (
   insertRewards,
   hasNewEpochEvent,
   hasEpochStartEvent,
+  insertEpochStake,
   insertRewardRests,
   insertProposalRefunds,
   insertPoolDepositRefunds,
@@ -200,7 +201,7 @@ insertStakeSlice ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeSlice _ Generic.NoSlices = pure ()
 insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
-  insertEpochStake syncEnv network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
+  insertEpochStake syncEnv (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
   when finalSlice $ do
     lift $ DB.updateSetComplete $ unEpochNo $ Generic.sliceEpochNo slice
     size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)
@@ -211,17 +212,14 @@ insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    network :: Network
-    network = getNetwork syncEnv
-
+-- This is used by the epoch stake thread.
 insertEpochStake ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Network ->
   EpochNo ->
   [(StakeCred, (Shelley.Coin, PoolKeyHash))] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertEpochStake syncEnv nw epochNo stakeChunk = do
+insertEpochStake syncEnv epochNo stakeChunk = do
   let cache = envCache syncEnv
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbStakes <- mapM (mkStake cache) stakeChunk
@@ -235,8 +233,9 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
       ExceptT SyncNodeError (ReaderT SqlBackend m) DB.EpochStake
     mkStake cache (saddr, (coin, pool)) = do
-      saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
-      poolId <- lift $ queryPoolKeyOrInsert "insertEpochStake" trce cache UpdateCache (ioShelley iopts) pool
+      -- TODO check that not updating the cache here is not an issue.
+      saId <- lift $ queryOrInsertStakeAddress trce cache DoNotUpdateCache network saddr
+      poolId <- lift $ queryPoolKeyOrInsert "insertEpochStake" trce cache DoNotUpdateCache (ioShelley iopts) pool
       pure $
         DB.EpochStake
           { DB.epochStakeAddrId = saId
@@ -247,6 +246,7 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
 
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
+    network = getNetwork syncEnv
 
 insertRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
