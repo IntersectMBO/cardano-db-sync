@@ -98,6 +98,7 @@ import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
+import qualified Hasql.Connection as HqlC
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -123,7 +124,7 @@ getIsConsumedFixed env =
   where
     txOutTableType = getTxOutTableType env
     pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envBackend env
+    backend = envDbEnv env
 
 noneFixed :: FixesRan -> Bool
 noneFixed NoneFixRan = True
@@ -180,7 +181,7 @@ runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutTableType = getTxOutTableType syncEnv
   logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
-  DB.runDbIohkNoLogging (envBackend syncEnv) $
+  DB.runDbIohkNoLogging (envDbEnv syncEnv) $
     DB.runExtraMigrations
       (getTrace syncEnv)
       txOutTableType
@@ -189,11 +190,17 @@ runExtraMigrationsMaybe syncEnv = do
 
 runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.enableJsonbInSchema
+  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
 
-runRemoveJsonbFromSchema :: SyncEnv -> IO ()
-runRemoveJsonbFromSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.disableJsonbInSchema
+runRemoveJsonbFromSchema
+  :: (MonadIO m, AsDbError e)
+  => SyncEnv
+  -> DbAction e m ()
+runRemoveJsonbFromSchema syncEnv = do
+  DB.runDbT DB.Write transx
+  where
+    dbEnv = envDbEnv syncEnv
+    transx = mkDbTransaction "runRemoveJsonbFromSchema" mkCallSite (DB.disableJsonbInSchema (dbConnection dbEnv))
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -303,12 +310,12 @@ getDbLatestBlockInfo backend = do
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   case mblk of
     Nothing -> logInfo tracer "Database is empty"
     Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
@@ -327,14 +334,66 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  maybeTip <- getDbLatestBlockInfo (envDbEnv env)
   case maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
+mkSyncEnvFromConfig ::
+  Trace IO Text ->
+  Db.DbEnv ->
+  ConnectionString ->
+  SyncOptions ->
+  GenesisConfig ->
+  SyncNodeConfig ->
+  SyncNodeParams ->
+  -- | migrations were ran on startup
+  Bool ->
+  -- | run migration function
+  RunMigration ->
+  IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce dbEnv connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
+  case genCfg of
+    GenesisCardano _ bCfg sCfg _ _
+      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
+              [ "ProtocolMagicId "
+              , textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              , " /= "
+              , textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+              ]
+      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
+              [ "SystemStart "
+              , textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              , " /= "
+              , textShow (Shelley.sgSystemStart $ scConfig sCfg)
+              ]
+      | otherwise ->
+          Right
+            <$> mkSyncEnv
+              trce
+              dbEnv
+              connectionString
+              syncOptions
+              (fst $ mkProtocolInfoCardano genCfg [])
+              (Shelley.sgNetworkId $ scConfig sCfg)
+              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              syncNodeConfigFromFile
+              syncNodeParams
+              ranMigration
+              runMigrationFnc
+
 mkSyncEnv ::
   Trace IO Text ->
-  SqlBackend ->
+  Db.DbEnv ->
   ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -346,7 +405,7 @@ mkSyncEnv ::
   Bool ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
+mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -394,7 +453,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
   pure $
     SyncEnv
-      { envBackend = backend
+      { envDbEnv = dbEnv
       , envBootstrap = bootstrapVar
       , envCache = cache
       , envConnectionString = connectionString
@@ -419,58 +478,6 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
 
-mkSyncEnvFromConfig ::
-  Trace IO Text ->
-  SqlBackend ->
-  ConnectionString ->
-  SyncOptions ->
-  GenesisConfig ->
-  SyncNodeConfig ->
-  SyncNodeParams ->
-  -- | migrations were ran on startup
-  Bool ->
-  -- | run migration function
-  RunMigration ->
-  IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams ranMigration runMigrationFnc =
-  case genCfg of
-    GenesisCardano _ bCfg sCfg _ _
-      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure
-            . Left
-            . SNErrCardanoConfig
-            $ mconcat
-              [ "ProtocolMagicId "
-              , textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              , " /= "
-              , textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-              ]
-      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure
-            . Left
-            . SNErrCardanoConfig
-            $ mconcat
-              [ "SystemStart "
-              , textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              , " /= "
-              , textShow (Shelley.sgSystemStart $ scConfig sCfg)
-              ]
-      | otherwise ->
-          Right
-            <$> mkSyncEnv
-              trce
-              backend
-              connectionString
-              syncOptions
-              (fst $ mkProtocolInfoCardano genCfg [])
-              (Shelley.sgNetworkId $ scConfig sCfg)
-              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              syncNodeConfigFromFile
-              syncNodeParams
-              ranMigration
-              runMigrationFnc
-
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
 getLatestPoints env = do
@@ -480,7 +487,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
+      lastPoints <- DB.runDbIohkNoLogging (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -492,7 +499,7 @@ verifySnapshotPoint env snapPoints =
   where
     validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
     validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
+      hashes <- getSlotHash (envDbEnv env) (lsfSlotNo lsf)
       let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
       case valid of
         Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
@@ -501,7 +508,7 @@ verifySnapshotPoint env snapPoints =
       case pnt of
         GenesisPoint -> pure Nothing
         BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envBackend env) slotNo
+          hashes <- getSlotHash (envDbEnv env) slotNo
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)

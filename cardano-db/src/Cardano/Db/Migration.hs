@@ -32,9 +32,8 @@ import Cardano.Db.Operations.Query
 import Cardano.Db.Operations.Types (TxOutTableType (..))
 import Cardano.Db.PGConfig
 import Cardano.Db.Run
-import Cardano.Db.Schema.BaseSchema
-import Cardano.Db.Schema.Core.TxOut (migrateCoreTxOutCardanoDb)
-import Cardano.Db.Schema.Variant.TxOut (migrateVariantAddressCardanoDb)
+import Cardano.Db.Schema.Core
+import Cardano.Db.Schema.Variants.TxOutCore (migrateCoreTxOutCardanoDb, migrateVariantAddressCardanoDb)
 import Cardano.Prelude (Typeable, textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra

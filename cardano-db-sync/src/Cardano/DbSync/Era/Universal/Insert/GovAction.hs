@@ -335,7 +335,7 @@ insertCommitteeHash cred = do
 insertDrep :: (MonadBaseControl IO m, MonadIO m) => DRep StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
 insertDrep = \case
   DRepCredential cred -> insertCredDrepHash cred
-  DRepAlwaysAbstain -> DB.insertAlwaysAbstainDrep
+  DRepAlwaysAbstain -> DB.insertDrepHashAlwaysAbstain
   DRepAlwaysNoConfidence -> DB.insertAlwaysNoConfidence
 
 insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'DRepRole StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId

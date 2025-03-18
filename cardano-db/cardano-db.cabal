@@ -30,8 +30,8 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
-                        Cardano.Db.Schema.Core.TxOut
-                        Cardano.Db.Schema.Variant.TxOut
+                        Cardano.Db.Schema.Variants.TxOutCore
+                        Cardano.Db.Schema.Variants.TxOutAddress
                         Cardano.Db.Version.V13_0
 
   other-modules:        Cardano.Db.Error
@@ -54,9 +54,29 @@ library
                         Cardano.Db.Operations.TxOut.TxOutQuery
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
-                        Cardano.Db.Schema.BaseSchema
+                        Cardano.Db.Schema.Core
+                        Cardano.Db.Schema.Core.Base
+                        Cardano.Db.Schema.Core.EpochAndProtocol
+                        Cardano.Db.Schema.Core.GovernanceAndVoting
+                        Cardano.Db.Schema.Core.MultiAsset
+                        Cardano.Db.Schema.Core.OffChain
+                        Cardano.Db.Schema.Core.Pool
+                        Cardano.Db.Schema.Core.StakeDeligation
+                        Cardano.Db.Schema.Ids
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
+                        Cardano.Db.Statement
+                        Cardano.Db.Statement.Function.Core
+                        Cardano.Db.Statement.Function.Query
+                        Cardano.Db.Statement.Function.Insert
+                        Cardano.Db.Statement.Base
+                        Cardano.Db.Statement.EpochAndProtocol
+                        Cardano.Db.Statement.GovernanceAndVoting
+                        Cardano.Db.Statement.MultiAsset
+                        Cardano.Db.Statement.OffChain
+                        Cardano.Db.Statement.Pool
+                        Cardano.Db.Statement.StakeDeligation
+                        Cardano.Db.Statement.Types
                         Cardano.Db.Types
                         Cardano.Db.Version.V13_0.Query
                         Cardano.Db.Version.V13_0.Schema
@@ -73,6 +93,7 @@ library
                       , containers
                       , conduit-extra
                       , contra-tracer
+                      , contravariant-extras
                       , cryptonite
                       , directory
                       , esqueleto
@@ -80,6 +101,8 @@ library
                       , fast-logger
                       , filepath
                       , file-embed
+                      , hasql
+                      , hasql-transaction
                       , iohk-monitoring
                       , lifted-base
                       , memory

@@ -29,9 +29,9 @@ import Cardano.Db.Operations.Other.ConsumedTxOut (querySetNullTxOut)
 import Cardano.Db.Operations.Other.MinId (MinIds (..), MinIdsWrapper (..), completeMinId, textToMinIds)
 import Cardano.Db.Operations.Query
 import Cardano.Db.Operations.Types (TxOutTableType (..))
-import Cardano.Db.Schema.BaseSchema
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import Cardano.Db.Schema.Core
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.Prelude (Int64)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
@@ -187,7 +187,7 @@ deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
   pure (sum $ map snd blockLogs, initialLogs <> blockLogs <> offChainLogs <> afterTxIdLogs)
 
 deleteTablesAfterTxId ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   Maybe TxId ->
   MinIdsWrapper ->
