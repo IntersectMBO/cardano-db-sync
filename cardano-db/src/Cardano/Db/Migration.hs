@@ -35,7 +35,7 @@ import Cardano.Db.Run
 import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Schema.Core.TxOut (migrateCoreTxOutCardanoDb)
 import Cardano.Db.Schema.Variant.TxOut (migrateVariantAddressCardanoDb)
-import Cardano.Prelude (Typeable, textShow)
+import Cardano.Prelude (textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -97,7 +97,7 @@ data MigrationValidateError = UnknownMigrationsFound
   { missingMigrations :: [MigrationValidate]
   , extraMigrations :: [MigrationValidate]
   }
-  deriving (Eq, Show, Typeable)
+  deriving (Eq, Show)
 
 instance Exception MigrationValidateError
 
