@@ -53,6 +53,7 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
 import Prelude (fail, id)
+import qualified Cardano.Ledger.EpochBoundary as Ledger
 
 --------------------------------------------------------------------------
 -- Ledger Types
@@ -72,6 +73,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leStakeChans :: StakeChannels
   }
 
 data CardanoLedgerState = CardanoLedgerState
@@ -140,7 +142,6 @@ data ApplyResult = ApplyResult
   , apOldLedger :: !(Strict.Maybe CardanoLedgerState)
   , apDeposits :: !(Strict.Maybe Generic.Deposits) -- The current required deposits
   , apSlotDetails :: !SlotDetails
-  , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
   , apGovActionState :: !(Maybe (ConwayGovState StandardConway))
   , apDepositsMap :: !DepositsMap
@@ -156,7 +157,6 @@ defaultApplyResult slotDetails =
     , apOldLedger = Strict.Nothing
     , apDeposits = Strict.Nothing
     , apSlotDetails = slotDetails
-    , apStakeSlice = Generic.NoSlices
     , apEvents = []
     , apGovActionState = Nothing
     , apDepositsMap = emptyDepositsMap
@@ -195,6 +195,19 @@ instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState wh
   getAnchorMeasure _ = getTipSlot . clsState
 
 data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
+
+data StakeDBAction =
+  StakeDBAction
+  { sdbaEpochNo :: EpochNo
+  , sdbaSnapShot :: Ledger.SnapShot StandardCrypto
+  , sdbaCheckFirst :: Bool -- Check if the data is already there before inserting
+  }
+
+data EpochState = Running | Done
+data StakeChannels = StakeChannels
+  { stakeQueue :: TBQueue StakeDBAction
+  , epochResult :: StrictTVar IO (Maybe (EpochNo, EpochState))
+  }
 
 -- | Per-era pure getters and setters on @NewEpochState@. Note this is a bit of an abuse
 -- of the cardano-ledger/ouroboros-consensus public APIs, because ledger state is not

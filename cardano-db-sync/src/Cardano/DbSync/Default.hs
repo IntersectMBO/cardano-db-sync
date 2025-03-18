@@ -144,7 +144,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           isMember
           applyResult
 
-  -- Here we insert the block and it's txs, but in adition we also cache some values which we later
+  -- Here we insert the block and it's txs, but in addition we also cache some values which we later
   -- use when updating the Epoch, thus saving us having to recalulating them later.
   case cblk of
     BlockByron blk ->

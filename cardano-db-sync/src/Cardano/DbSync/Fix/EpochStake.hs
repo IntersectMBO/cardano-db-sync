@@ -29,7 +29,7 @@ migrateStakeDistr env mcls =
       ems <- lift DB.queryAllExtraMigrations
       runWhen (not $ DB.isStakeDistrComplete ems) $ do
         liftIO $ logInfo trce "Starting Stake Distribution migration on table epoch_stake"
-        let stakeSlice = getStakeSlice lenv cls True
+        let stakeSlice = undefined -- TODO remove altogether
         case stakeSlice of
           NoSlices ->
             liftIO $ logInsert 0

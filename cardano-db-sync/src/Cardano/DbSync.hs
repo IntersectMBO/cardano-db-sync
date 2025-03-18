@@ -210,6 +210,7 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
               id
               [ runDbThread syncEnv metricsSetters threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runStakeThread syncEnv
               , runFetchOffChainPoolThread syncEnv
               , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)

@@ -32,7 +32,6 @@ module Cardano.DbSync.Ledger.State (
   hashToAnnotation,
   getHeaderHash,
   runLedgerStateWriteThread,
-  getStakeSlice,
   getSliceMeta,
   findProposedCommittee,
 ) where
@@ -75,7 +74,7 @@ import qualified Control.Exception as Exception
 import qualified Data.ByteString.Base16 as Base16
 
 import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), SyncOptions (..))
-import Cardano.DbSync.Error (SyncNodeError (..), fromEitherSTM)
+import Cardano.DbSync.Error (SyncNodeError (..), throwLeftIO)
 import Cardano.Ledger.BaseTypes (StrictMaybe)
 import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
@@ -133,6 +132,7 @@ import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
 import Prelude (String, id)
+import Cardano.DbSync.Ledger.Async
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -175,6 +175,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
   svar <- newTVarIO Strict.Nothing
   intervar <- newTVarIO Strict.Nothing
   swQueue <- newTBQueueIO 5 -- Should be relatively shallow.
+  stakeChans <- newStakeChannels
   pure
     HasLedgerEnv
       { leTrace = trce
@@ -190,6 +191,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leInterpreter = intervar
       , leStateVar = svar
       , leStateWriteQueue = swQueue
+      , leStakeChans = stakeChans
       }
 
 initCardanoLedgerState :: Consensus.ProtocolInfo CardanoBlock -> CardanoLedgerState
@@ -226,37 +228,36 @@ applyBlockAndSnapshot ledgerEnv blk isCons = do
 applyBlock :: HasLedgerEnv -> CardanoBlock -> IO (CardanoLedgerState, ApplyResult)
 applyBlock env blk = do
   time <- getCurrentTime
-  atomically $ do
-    !ledgerDB <- readStateUnsafe env
-    let oldState = ledgerDbCurrent ledgerDB
-    !result <- fromEitherSTM $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
-    let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (lrEvents result)
-    let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
-    let !newLedgerState = finaliseDrepDistr (lrResult result)
-    !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
-    let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
-    let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
-    let !ledgerDB' = pushLedgerDB ledgerDB newState
-    writeTVar (leStateVar env) (Strict.Just ledgerDB')
-    let !appResult =
-          if leUseLedger env
-            then
-              ApplyResult
-                { apPrices = getPrices newState
-                , apGovExpiresAfter = getGovExpiration newState
-                , apPoolsRegistered = getRegisteredPools oldState
-                , apNewEpoch = maybeToStrict newEpoch
-                , apOldLedger = Strict.Just oldState
-                , apDeposits = maybeToStrict $ Generic.getDeposits newLedgerState
-                , apSlotDetails = details
-                , apStakeSlice = getStakeSlice env newState False
-                , apEvents = ledgerEvents
-                , apGovActionState = getGovState newLedgerState
-                , apDepositsMap = DepositsMap deposits
-                }
+  !ledgerDB <- atomically $ readStateUnsafe env
+  let oldState = ledgerDbCurrent ledgerDB
+  !result <- throwLeftIO $ tickThenReapplyCheckHash (ExtLedgerCfg (getTopLevelconfigHasLedger env)) blk (clsState oldState)
+  let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (lrEvents result)
+  let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
+  let !newLedgerState = finaliseDrepDistr (lrResult result)
+  !details <- atomically $ getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
+  !newEpoch <- throwLeftIO $ mkOnNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
+  let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
+  let !newState = CardanoLedgerState newLedgerState newEpochBlockNo
+  asyncWriteStakeSnapShot env oldState newState
+  let !ledgerDB' = pushLedgerDB ledgerDB newState
+  atomically $ writeTVar (leStateVar env) (Strict.Just ledgerDB')
+  let !appResult =
+        if leUseLedger env
+          then
+            ApplyResult
+              { apPrices = getPrices newState
+              , apGovExpiresAfter = getGovExpiration newState
+              , apPoolsRegistered = getRegisteredPools oldState
+              , apNewEpoch = maybeToStrict newEpoch
+              , apOldLedger = Strict.Just oldState
+              , apDeposits = maybeToStrict $ Generic.getDeposits newLedgerState
+              , apSlotDetails = details
+              , apEvents = ledgerEvents
+              , apGovActionState = getGovState newLedgerState
+              , apDepositsMap = DepositsMap deposits
+              }
             else defaultApplyResult details
-    pure (oldState, appResult)
+  pure (oldState, appResult)
   where
     mkOnNewEpoch :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock -> Maybe AdaPots -> Either SyncNodeError (Maybe Generic.NewEpoch)
     mkOnNewEpoch oldState newState mPots = do
@@ -305,16 +306,19 @@ getGovState ls = case ledgerState ls of
     Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
   _ -> Nothing
 
-getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes
-getStakeSlice env cls isMigration =
-  case clsEpochBlockNo cls of
-    EpochBlockNo n ->
-      Generic.getStakeSlice
-        (leProtocolInfo env)
-        n
-        (clsState cls)
-        isMigration
-    _ -> Generic.NoSlices
+asyncWriteStakeSnapShot :: HasLedgerEnv -> CardanoLedgerState -> CardanoLedgerState -> IO ()
+asyncWriteStakeSnapShot env oldState newState =
+  case clsEpochBlockNo newState of
+    -- start inserting after the 3rd block. This limits the chances that due to an epoch boundary
+    -- rollback we will have to delete the snapshot.
+    EpochBlockNo n | n == 2,
+      Just (snapshot, epoch) <- Generic.getSnapShot (clsState newState) -> do
+        atomically $ writeStakeAction (leStakeChans env) epoch snapshot False
+    -- on the next epoch boundary makes sure that the epoch stake thread has finished.
+    EpochBlockNo n | n == 0,
+      Just (snapshot, epoch) <- Generic.getSnapShot (clsState oldState) -> do
+        ensureEpochDone (leStakeChans env) epoch snapshot
+    _ -> pure ()
 
 getSliceMeta :: Generic.StakeSliceRes -> Maybe (Bool, EpochNo)
 getSliceMeta (Generic.Slice (Generic.StakeSlice epochNo _) isFinal) = Just (isFinal, epochNo)
