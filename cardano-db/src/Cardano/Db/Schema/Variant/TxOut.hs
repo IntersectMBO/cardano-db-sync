@@ -39,7 +39,7 @@ share
 ----------------------------------------------
   TxOut
     addressId           AddressId           noreference
-    consumedByTxId      TxId Maybe          noreference
+    consumedByTxId      TxId Maybe          noreference default=null
     dataHash            ByteString Maybe    sqltype=hash32type
     index               Word64              sqltype=txindex
     inlineDatumId       DatumId Maybe       noreference
