@@ -119,11 +119,6 @@ library
 
                         Cardano.DbSync.Rollback
 
-                        Cardano.DbSync.Fix.ConsumedBy
-                        Cardano.DbSync.Fix.EpochStake
-                        Cardano.DbSync.Fix.PlutusDataBytes
-                        Cardano.DbSync.Fix.PlutusScripts
-
                         -- OffChain
                         Cardano.DbSync.OffChain
                         Cardano.DbSync.OffChain.FetchQueue

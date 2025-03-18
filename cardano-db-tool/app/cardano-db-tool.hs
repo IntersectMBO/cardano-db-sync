@@ -37,7 +37,7 @@ data Command
   = CmdCreateMigration !MigrationDir !TxOutTableType
   | CmdReport !Report !TxOutTableType
   | CmdRollback !SlotNo !TxOutTableType
-  | CmdRunMigrations !MigrationDir !Bool !Bool !(Maybe LogFileDir) !TxOutTableType
+  | CmdRunMigrations !MigrationDir !Bool !(Maybe LogFileDir) !TxOutTableType
   | CmdTxOutMigration !TxOutTableType
   | CmdUtxoSetAtBlock !Word64 !TxOutTableType
   | CmdPrepareSnapshot !PrepareSnapshotArgs
@@ -51,7 +51,7 @@ runCommand cmd =
     CmdCreateMigration mdir txOutAddressType -> runCreateMigration mdir txOutAddressType
     CmdReport report txOutAddressType -> runReport report txOutAddressType
     CmdRollback slotNo txOutAddressType -> runRollback slotNo txOutAddressType
-    CmdRunMigrations mdir forceIndexes mockFix mldir txOutTabletype -> do
+    CmdRunMigrations mdir forceIndexes mldir txOutTabletype -> do
       pgConfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
       unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial txOutTabletype
       unless (null unofficial) $
@@ -60,9 +60,6 @@ runCommand cmd =
       when forceIndexes $
         void $
           runMigrations pgConfig False mdir mldir Indexes txOutTabletype
-      when mockFix $
-        void $
-          runMigrations pgConfig False mdir mldir Fix txOutTabletype
     CmdTxOutMigration txOutTableType -> do
       runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool txOutTableType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
@@ -170,7 +167,6 @@ pCommand =
       CmdRunMigrations
         <$> pMigrationDir
         <*> pForceIndexes
-        <*> pMockFix
         <*> optional pLogFileDir
         <*> pTxOutTableType
 
@@ -228,20 +224,6 @@ pForceIndexes =
               [ "Forces the creation of all indexes."
               , " Normally they are created by db-sync when it reaches"
               , " the tip of the chain."
-              ]
-          )
-    )
-
-pMockFix :: Parser Bool
-pMockFix =
-  Opt.flag
-    False
-    True
-    ( Opt.long "mock-fix"
-        <> Opt.help
-          ( mconcat
-              [ "Mocks the execution of the fix chainsync procedure"
-              , " By using this flag, db-sync later won't run the fixing procedures."
               ]
           )
     )

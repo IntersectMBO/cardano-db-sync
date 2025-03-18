@@ -130,33 +130,21 @@ test-suite cardano-chain-gen
   other-modules:        Test.Cardano.Db.Mock.Config
                         Test.Cardano.Db.Mock.Examples
                         Test.Cardano.Db.Mock.Property.Property
+                        Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Unit.Alonzo
                         Test.Cardano.Db.Mock.Unit.Alonzo.Config
-                        Test.Cardano.Db.Mock.Unit.Alonzo.Plutus
-                        Test.Cardano.Db.Mock.Unit.Alonzo.PoolAndSmash
-                        Test.Cardano.Db.Mock.Unit.Alonzo.Reward
                         Test.Cardano.Db.Mock.Unit.Alonzo.Simple
-                        Test.Cardano.Db.Mock.Unit.Alonzo.Stake
                         Test.Cardano.Db.Mock.Unit.Alonzo.Tx
                         Test.Cardano.Db.Mock.Unit.Babbage
-                        Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.ConfigFile
-                        Test.Cardano.Db.Mock.Unit.Babbage.CommandLineArg.EpochDisabled
-                        Test.Cardano.Db.Mock.Unit.Babbage.Config.MigrateConsumedPruneTxOut
-                        Test.Cardano.Db.Mock.Unit.Babbage.Config.Parse
-                        Test.Cardano.Db.Mock.Unit.Babbage.InlineAndReference
-                        Test.Cardano.Db.Mock.Unit.Babbage.Other
-                        Test.Cardano.Db.Mock.Unit.Babbage.Plutus
                         Test.Cardano.Db.Mock.Unit.Babbage.Reward
-                        Test.Cardano.Db.Mock.Unit.Babbage.Rollback
                         Test.Cardano.Db.Mock.Unit.Babbage.Simple
-                        Test.Cardano.Db.Mock.Unit.Babbage.Stake
                         Test.Cardano.Db.Mock.Unit.Babbage.Tx
                         Test.Cardano.Db.Mock.Unit.Conway
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile
                         Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled
                         Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema
-                        Test.Cardano.Db.Mock.Unit.Conway.Config.Parse
                         Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut
+                        Test.Cardano.Db.Mock.Unit.Conway.Config.Parse
                         Test.Cardano.Db.Mock.Unit.Conway.Governance
                         Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference
                         Test.Cardano.Db.Mock.Unit.Conway.Other
@@ -166,7 +154,6 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Conway.Simple
                         Test.Cardano.Db.Mock.Unit.Conway.Stake
                         Test.Cardano.Db.Mock.Unit.Conway.Tx
-                        Test.Cardano.Db.Mock.UnifiedApi
                         Test.Cardano.Db.Mock.Validate
 
   build-depends:        aeson

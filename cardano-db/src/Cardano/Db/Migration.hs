@@ -101,7 +101,7 @@ data MigrationValidateError = UnknownMigrationsFound
 
 instance Exception MigrationValidateError
 
-data MigrationToRun = Initial | Full | Fix | Indexes
+data MigrationToRun = Initial | Full | Indexes
   deriving (Show, Eq)
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
@@ -144,11 +144,9 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
     filterMigrations scripts = case mToRun of
       Full -> pure (filter filterIndexesFull scripts, True)
       Initial -> pure (filter filterInitial scripts, True)
-      Fix -> pure (filter filterFix scripts, False)
       Indexes -> do
         pure (filter filterIndexes scripts, False)
 
-    filterFix (mv, _) = mvStage mv == 2 && mvVersion mv > hardCoded3_0
     filterIndexesFull (mv, _) = do
       case txOutTableType of
         TxOutCore -> True
@@ -158,9 +156,6 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
       case txOutTableType of
         TxOutCore -> mvStage mv == 4
         TxOutVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
-
-hardCoded3_0 :: Int
-hardCoded3_0 = 19
 
 -- Build hash for each file found in a directory.
 validateMigrations :: MigrationDir -> [(Text, Text)] -> IO (Maybe (MigrationValidateError, Bool))
