@@ -33,7 +33,6 @@ import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..),
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
@@ -41,7 +40,9 @@ import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
-import Cardano.DbSync.Threads
+import Cardano.DbSync.Threads.Database
+import Cardano.DbSync.Threads.EpochStake
+import Cardano.DbSync.Threads.Stake
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Constraint (queryIsJsonbInSchema)

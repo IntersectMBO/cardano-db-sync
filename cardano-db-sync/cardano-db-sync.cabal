@@ -54,7 +54,6 @@ library
                         Cardano.DbSync.Config.Node
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
-                        Cardano.DbSync.Database
                         Cardano.DbSync.DbAction
                         Cardano.DbSync.Error
 
@@ -110,6 +109,7 @@ library
 
                         Cardano.DbSync.Metrics
 
+                        Cardano.DbSync.Block
                         Cardano.DbSync.Cache
                         Cardano.DbSync.Cache.Epoch
                         Cardano.DbSync.Cache.FIFO
@@ -117,7 +117,6 @@ library
                         Cardano.DbSync.Cache.Stake
                         Cardano.DbSync.Cache.Types
                         Cardano.DbSync.Cache.Util
-                        Cardano.DbSync.Default
                         Cardano.DbSync.Epoch
 
                         Cardano.DbSync.Rollback
@@ -133,7 +132,9 @@ library
                         Cardano.DbSync.LocalStateQuery
                         Cardano.DbSync.StateQuery
                         Cardano.DbSync.Sync
-                        Cardano.DbSync.Threads
+                        Cardano.DbSync.Threads.Database
+                        Cardano.DbSync.Threads.EpochStake
+                        Cardano.DbSync.Threads.Stake
                         Cardano.DbSync.Tracing.ToObjectOrphans
                         Cardano.DbSync.Types
 

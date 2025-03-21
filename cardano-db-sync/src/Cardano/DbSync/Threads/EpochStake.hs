@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.DbSync.Threads where
+module Cardano.DbSync.Threads.EpochStake where
 
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
@@ -20,8 +20,6 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Database.Persist.Postgresql (IsolationLevel (..), runSqlConnWithIsolation, withPostgresqlConn)
-
-import Cardano.DbSync.Cache.Types
 
 runEpochStakeThread ::
   SyncEnv ->
@@ -55,30 +53,4 @@ runESLoop syncEnv lenv =
       liftIO $ atomically $ writeTVar (epochResult estakeChan) $ Just (epoch, Done)
 
     estakeChan = leEpochStakeChans lenv
-    trce = getTrace syncEnv
-
-runStakeThread :: SyncEnv -> IO ()
-runStakeThread syncEnv = do
-  logInfo trce "Running Event thread"
-  logException trce "runEpochStakeThread: " (runStakeLoop syncEnv)
-  logInfo trce "Shutting Event thread"
-  where
-    trce = getTrace syncEnv
-
-runStakeLoop :: SyncEnv -> IO ()
-runStakeLoop syncEnv =
-  DB.runIohkLogging trce $
-    withPostgresqlConn (envConnectionString syncEnv) actionDB
-  where
-    actionDB backend = runSqlConnWithIsolation (forever loopAction) backend Serializable
-
-    loopAction = do
-      action <- liftIO $ atomically $ TBQ.readTBQueue (scPriorityQueue stakeChan)
-      case action of
-        QueryInsertStake _sk _ca _resVar -> undefined
-        CacheStake _ _ _ -> pure ()
-        BulkPrefetch _ -> pure ()
-        CommitStake -> DB.transactionCommit
-
-    stakeChan = envStakeChans syncEnv
     trce = getTrace syncEnv

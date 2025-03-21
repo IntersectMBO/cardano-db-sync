@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Database (
+module Cardano.DbSync.Threads.Database (
   DbAction (..),
   ThreadChannels,
   lengthDbActionQueue,
@@ -15,7 +15,7 @@ import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.DbAction
-import Cardano.DbSync.Default
+import Cardano.DbSync.Block
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
