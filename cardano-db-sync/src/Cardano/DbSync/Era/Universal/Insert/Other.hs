@@ -12,7 +12,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
   insertDatum,
   insertWithdrawals,
   insertRedeemerData,
-  insertStakeAddressRefIfMissing,
+  queryOrInsertStakeRef,
   insertMultiAsset,
   insertScript,
   insertExtraKeyWitness,
@@ -22,7 +22,7 @@ import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (SyncEnv)
-import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
+import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -127,15 +127,14 @@ insertDatum tracer cache txId txd = do
 
 insertWithdrawals ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertWithdrawals tracer cache txId redeemers txWdrl = do
+insertWithdrawals syncEnv txId redeemers txWdrl = do
   addrId <-
-    lift $ queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
+    lift $ queryOrInsertRewardAccount syncEnv UpdateCache $ Generic.txwRewardAccount txWdrl
   void . lift . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -146,19 +145,18 @@ insertWithdrawals tracer cache txId redeemers txWdrl = do
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
 -- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
-insertStakeAddressRefIfMissing ::
+queryOrInsertStakeRef ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   Ledger.Addr StandardCrypto ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing trce cache addr =
+queryOrInsertStakeRef syncEnv addr =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress trce cache UpdateCache nw cred
+          Just <$> queryOrInsertRewardAccount syncEnv UpdateCache (Ledger.RewardAccount nw cred)
         Ledger.StakeRefPtr ptr -> do
           DB.queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing

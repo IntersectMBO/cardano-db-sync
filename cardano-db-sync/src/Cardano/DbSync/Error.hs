@@ -10,10 +10,9 @@ module Cardano.DbSync.Error (
   annotateInvariantTx,
   bsBase16Encode,
   dbSyncNodeError,
-  dbSyncInvariant,
   renderSyncInvariant,
   runOrThrowIO,
-  fromEitherSTM,
+  throwLeftIO,
   logAndThrowIO,
   shouldAbortOnPanic,
   hasAbortOnPanicEnv,
@@ -154,9 +153,6 @@ annotateInvariantTx tx ei =
 dbSyncNodeError :: (Monad m) => Text -> ExceptT SyncNodeError m a
 dbSyncNodeError = left . SNErrDefault
 
-dbSyncInvariant :: (Monad m) => Text -> SyncInvariant -> ExceptT SyncNodeError m a
-dbSyncInvariant loc = left . SNErrInvariant loc
-
 renderSyncInvariant :: SyncInvariant -> Text
 renderSyncInvariant ei =
   case ei of
@@ -174,8 +170,8 @@ renderSyncInvariant ei =
         , textShow tx
         ]
 
-fromEitherSTM :: (Exception e) => Either e a -> STM a
-fromEitherSTM = either throwSTM return
+throwLeftIO :: Exception e => Either e a -> IO a
+throwLeftIO = either throwIO pure
 
 bsBase16Encode :: ByteString -> Text
 bsBase16Encode bs =

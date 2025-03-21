@@ -35,7 +35,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import Cardano.DbSync.Types (DataHash)
+import Cardano.DbSync.Types (DataHash, RewAccount)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Alonzo.Scripts (AsIx (..), ExUnits (..), PlutusPurpose, txscriptfee, unPlutusBinary)
@@ -199,7 +199,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
     txBody :: Core.TxBody era
     txBody = tx ^. Core.bodyTxL
 
-    withdrawalsNoRedeemers :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
+    withdrawalsNoRedeemers :: Map RewAccount TxWithdrawal
     withdrawalsNoRedeemers =
       Map.mapWithKey (curry mkTxWithdrawal) $
         Shelley.unWithdrawals $
@@ -274,7 +274,7 @@ handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
     let gtxIn' = gtxIn {txInRedeemerIndex = Just rdmrIx}
      in (mps {rmInps = Map.insert txIn gtxIn' (rmInps mps)}, Just (Left gtxIn'))
 
-handleRewardPtr :: Word64 -> Shelley.RewardAccount StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+handleRewardPtr :: Word64 -> RewAccount -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleRewardPtr rdmrIx rwdAcnt mps = case Map.lookup rwdAcnt (rmWdrl mps) of
   Nothing -> (mps, Nothing)
   Just wdrl ->
@@ -289,7 +289,7 @@ handleCertPtr rdmrIx dcert mps =
     f x = x
 
 data RedeemerMaps = RedeemerMaps
-  { rmWdrl :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
+  { rmWdrl :: Map RewAccount TxWithdrawal
   , rmCerts :: [(Cert, TxCertificate)]
   , rmInps :: Map (Ledger.TxIn StandardCrypto) TxIn
   }
@@ -373,7 +373,7 @@ extraKeyWits txBody =
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
       txBody ^. Alonzo.reqSignerHashesTxBodyL
 
-scriptHashAcnt :: Shelley.RewardAccount StandardCrypto -> Maybe ByteString
+scriptHashAcnt :: RewAccount -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.raCredential rewardAddr
 
 scriptHashCert :: Cert -> Maybe ByteString

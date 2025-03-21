@@ -152,8 +152,6 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     whenStrictJust (apNewEpoch applyResult) $ \newEpoch -> do
       insertOnNewEpoch syncEnv blkId (Generic.blkSlotNo blk) epochNo newEpoch
 
-    insertStakeSlice syncEnv $ apStakeSlice applyResult
-
     when (ioGov iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
       . lift
       $ insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)

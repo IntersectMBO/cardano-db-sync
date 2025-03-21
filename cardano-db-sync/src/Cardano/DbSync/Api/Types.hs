@@ -13,7 +13,7 @@ module Cardano.DbSync.Api.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (CacheStatus)
+import Cardano.DbSync.Cache.Types (CacheStatus, StakeChannels)
 import Cardano.DbSync.Config.Types (SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
@@ -48,6 +48,7 @@ data SyncEnv = SyncEnv
   , envBootstrap :: !(StrictTVar IO Bool)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
+  , envStakeChans :: !StakeChannels
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
   , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainPoolWorkQueue)
   , envOffChainVoteResultQueue :: !(StrictTBQueue IO OffChainVoteResult)

@@ -12,7 +12,6 @@ module Cardano.DbSync.Api (
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
-  getIsConsumedFixed,
   getDisableInOutState,
   getRanIndexes,
   runIndexMigrations,
@@ -51,7 +50,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
+import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, newStakeChannels, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
@@ -110,16 +109,6 @@ isConsistent env = do
     Consistent -> pure True
     _ -> pure False
 
-getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
-getIsConsumedFixed env =
-  case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutTableType)
-    _ -> pure Nothing
-  where
-    txOutTableType = getTxOutTableType env
-    pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envBackend env
-
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
   bst <- readTVarIO $ envBootstrap syncEnv
@@ -176,11 +165,12 @@ getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 getPruneInterval :: SyncEnv -> Word64
 getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
-whenConsumeOrPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
-whenConsumeOrPruneTxOut env =
-  when (DB.pcmConsumedTxOut $ getPruneConsume env)
+whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenConsumeOrPruneTxOut syncEnv action = do
+  disInOut <- liftIO $ getDisableInOutState syncEnv
+  when (not disInOut && DB.pcmConsumedTxOut (getPruneConsume syncEnv)) action
 
-whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
+whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
   when (DB.pcmPruneTxOut $ getPruneConsume env)
 
@@ -339,6 +329,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
+  cChans <- newStakeChannels
   opwq <- newTBQueueIO 1000
   oprq <- newTBQueueIO 1000
   oawq <- newTBQueueIO 1000
@@ -378,6 +369,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envIndexes = indexesVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
+      , envStakeChans = cChans
       , envOffChainPoolResultQueue = oprq
       , envOffChainPoolWorkQueue = opwq
       , envOffChainVoteResultQueue = oarq
