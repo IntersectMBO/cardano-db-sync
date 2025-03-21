@@ -16,11 +16,14 @@ module Cardano.DbSync.Cache.Types (
   EpochBlockDiff (..),
   StakeCache (..),
   StakePoolCache,
+  StakeDBAction (..),
+  StakeChannels (..),
 
   -- * Inits
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
+  newStakeChannels,
 
   -- * Utils
   shouldCache,
@@ -36,15 +39,18 @@ import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Types (DataHash, PoolKeyHash, StakeCred)
+import Cardano.DbSync.Types (CardanoBlock, DataHash, PoolKeyHash, RewAccount, StakeCred)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTMVar,
   StrictTVar,
   newTVarIO,
   readTVarIO,
  )
+import Control.Concurrent.STM.TBQueue (TBQueue)
+import qualified Control.Concurrent.STM.TBQueue as TBQ
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (UTCTime)
 import Data.WideWord.Word128 (Word128)
@@ -217,8 +223,8 @@ textShowStats (ActiveCache ic) = do
 useNoCache :: CacheStatus
 useNoCache = NoCache
 
-newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
-newEmptyCache CacheCapacity {..} = liftIO $ do
+newEmptyCache :: CacheCapacity -> IO CacheStatus
+newEmptyCache CacheCapacity {..} = do
   cIsCacheOptimised <- newTVarIO False
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
@@ -255,3 +261,22 @@ shouldCache = \case
   UpdateCache -> True
   UpdateCacheStrong -> True
   _ -> False
+
+data StakeDBAction
+  = QueryInsertStake RewAccount CacheAction (StrictTMVar IO DB.StakeAddressId)
+  | CacheStake RewAccount DB.StakeAddressId Bool
+  | BulkPrefetch CardanoBlock
+  | CommitStake
+
+data StakeChannels = StakeChannels
+  { scPriorityQueue :: TBQueue StakeDBAction
+  , scSecondaryQueue :: TBQueue StakeDBAction
+  }
+
+newStakeChannels :: IO StakeChannels
+newStakeChannels =
+  -- This may never be more than 1. But let's keep it a queue for extensibility shake.
+  -- This may allow us to parallelize the events workload even further
+  StakeChannels
+    <$> TBQ.newTBQueueIO 100
+    <*> TBQ.newTBQueueIO 100

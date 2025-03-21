@@ -25,7 +25,7 @@ ensureEpochDone sQueue epoch snapshot = atomically $ do
     Just lastEpochDone | lastEpochDone == epoch -> pure ()
     _ -> do
       -- If last is not already there, put it to list and wait again
-      writeStakeAction sQueue epoch snapshot True
+      writeEpochStakeAction sQueue epoch snapshot True
       retry
 
 -- To be used by the main thread
@@ -38,7 +38,7 @@ waitFinished sQueue = do
     Nothing -> pure Nothing -- This will happen after a restart
 
 -- To be used by the main thread
-writeStakeAction :: EpochStakeChannels -> EpochNo -> Ledger.SnapShot StandardCrypto -> Bool -> STM IO ()
-writeStakeAction sQueue epoch snapShot checkFirst = do
+writeEpochStakeAction :: EpochStakeChannels -> EpochNo -> Ledger.SnapShot StandardCrypto -> Bool -> STM IO ()
+writeEpochStakeAction sQueue epoch snapShot checkFirst = do
   TBQ.writeTBQueue (estakeQueue sQueue) $ EpochStakeDBAction epoch snapShot checkFirst
   writeTVar (epochResult sQueue) $ Just (epoch, Running)

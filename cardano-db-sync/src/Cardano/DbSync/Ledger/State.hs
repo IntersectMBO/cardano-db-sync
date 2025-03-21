@@ -314,7 +314,7 @@ asyncWriteStakeSnapShot env oldState newState =
     EpochBlockNo n
       | n == 2
       , Just (snapshot, epoch) <- Generic.getSnapShot (clsState newState) -> do
-          atomically $ writeStakeAction (leEpochStakeChans env) epoch snapshot False
+          atomically $ writeEpochStakeAction (leEpochStakeChans env) epoch snapshot False
     -- on the next epoch boundary makes sure that the epoch stake thread has finished.
     EpochBlockNo n
       | n == 0

@@ -26,7 +26,6 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Ledger.Address (RewardAccount)
 import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
@@ -83,8 +82,8 @@ data LedgerEvent
 data GovActionRefunded = GovActionRefunded
   { garGovActionId :: GovActionId StandardCrypto
   , garDeposit :: Coin
-  , garReturnAddr :: RewardAccount StandardCrypto
-  , garMTreasury :: Maybe (Map (RewardAccount StandardCrypto) Coin)
+  , garReturnAddr :: RewAccount
+  , garMTreasury :: Maybe (Map RewAccount Coin)
   }
   deriving (Eq)
 

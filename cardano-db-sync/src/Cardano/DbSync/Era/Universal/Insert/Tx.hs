@@ -38,8 +38,8 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertMultiAsset,
   insertRedeemer,
   insertScript,
-  insertStakeAddressRefIfMissing,
   insertWithdrawals,
+  queryOrInsertStakeRef,
  )
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
@@ -138,7 +138,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
   if not (Generic.txValidContract tx)
     then do
-      !txOutsGrouped <- mapM (insertTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- whenFalseMempty disInOut $ mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
@@ -147,7 +147,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
-      !txOutsGrouped <- mapM (insertTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- whenFalseMempty disInOut $ mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
 
       !redeemers <-
         Map.fromList
@@ -157,9 +157,9 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
-        mapM_ (insertCollateralTxIn syncEnv tracer txId) (Generic.txCollateralInputs tx)
-        mapM_ (insertReferenceTxIn syncEnv tracer txId) (Generic.txReferenceInputs tx)
-        mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
+        mapM_ (insertCollateralTxIn syncEnv txId) (Generic.txCollateralInputs tx)
+        mapM_ (insertReferenceTxIn syncEnv txId) (Generic.txReferenceInputs tx)
+        mapM_ (insertCollateralTxOut syncEnv iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
         whenFalseMempty (ioMetadata iopts) $
@@ -172,7 +172,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         (insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers)
         $ Generic.txCertificates tx
       when (ioShelley iopts) $
-        mapM_ (insertWithdrawals tracer cache txId redeemers) $
+        mapM_ (insertWithdrawals syncEnv txId redeemers) $
           Generic.txWithdrawals tx
       when (ioShelley iopts) $
         mapM_ (lift . insertParamProposal blkId txId) $
@@ -192,8 +192,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (insertGovActionProposal tracer cache blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
-        mapM_ (insertVotingProcedures tracer cache blkId txId) (Generic.txVotingProcedure tx)
+        mapM_ (insertGovActionProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
@@ -208,14 +208,13 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 --------------------------------------------------------------------------------------
 insertTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
-  mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
+insertTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
+  mSaId <- lift $ queryOrInsertStakeRef syncEnv addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
@@ -283,6 +282,9 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         , V.txOutValue = Generic.coinToDbLovelace value
         , V.txOutStakeAddressId = mSaId
         }
+
+    tracer = getTrace syncEnv
+    cache = envCache syncEnv
 
 insertTxMetadata ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -395,14 +397,13 @@ insertMaTxOuts _tracer cache maMap =
 --------------------------------------------------------------------------------------
 insertCollateralTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
-  mSaId <- lift $ insertStakeAddressRefIfMissing tracer cache addr
+insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
+  mSaId <- lift $ queryOrInsertStakeRef syncEnv addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
@@ -460,14 +461,16 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
+    tracer = getTrace syncEnv
+    cache = envCache syncEnv
+
 insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Trace IO Text ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertCollateralTxIn syncEnv _tracer txInId txIn = do
+insertCollateralTxIn syncEnv txInId txIn = do
   let txId = txInTxId txIn
   txOutId <- liftLookupFail "insertCollateralTxIn" $ queryTxIdWithCache (envCache syncEnv) txId
   void
@@ -482,11 +485,10 @@ insertCollateralTxIn syncEnv _tracer txInId txIn = do
 insertReferenceTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  Trace IO Text ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertReferenceTxIn syncEnv _tracer txInId txIn = do
+insertReferenceTxIn syncEnv txInId txIn = do
   let txId = txInTxId txIn
   txOutId <- liftLookupFail "insertReferenceTxIn" $ queryTxIdWithCache (envCache syncEnv) txId
   void

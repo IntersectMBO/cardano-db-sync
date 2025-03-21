@@ -114,7 +114,9 @@ library
                         Cardano.DbSync.Cache.Epoch
                         Cardano.DbSync.Cache.FIFO
                         Cardano.DbSync.Cache.LRU
+                        Cardano.DbSync.Cache.Stake
                         Cardano.DbSync.Cache.Types
+                        Cardano.DbSync.Cache.Util
                         Cardano.DbSync.Default
                         Cardano.DbSync.Epoch
 

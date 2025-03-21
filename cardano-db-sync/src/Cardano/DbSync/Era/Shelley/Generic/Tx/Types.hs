@@ -43,7 +43,6 @@ import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 import Cardano.Ledger.Core (TxBody)
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
@@ -94,7 +93,7 @@ data TxCertificate = TxCertificate
 
 data TxWithdrawal = TxWithdrawal
   { txwRedeemerIndex :: !(Maybe Word64)
-  , txwRewardAccount :: !(Shelley.RewardAccount StandardCrypto)
+  , txwRewardAccount :: !RewAccount
   , txwAmount :: !Coin
   }
 

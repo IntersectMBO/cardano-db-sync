@@ -164,8 +164,6 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
-  let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-
   Db.runIohkLogging trce $
     withPostgresqlConn dbConnString $
       \backend -> liftIO $ do
@@ -208,6 +206,7 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
               [ runDbThread syncEnv metricsSetters threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
               , runEpochStakeThread syncEnv
+              , runStakeThread syncEnv
               , runFetchOffChainPoolThread syncEnv
               , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
@@ -220,6 +219,8 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
         _other -> False
     removeJsonbFromSchemaConfig = ioRemoveJsonbFromSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
+
+    useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
 
 logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
 logProtocolMagicId tracer pm =

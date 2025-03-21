@@ -21,6 +21,8 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Database.Persist.Postgresql (IsolationLevel (..), runSqlConnWithIsolation, withPostgresqlConn)
 
+import Cardano.DbSync.Cache.Types
+
 runEpochStakeThread ::
   SyncEnv ->
   IO ()
@@ -29,13 +31,13 @@ runEpochStakeThread syncEnv =
     NoLedger _ -> pure ()
     HasLedger le -> do
       logInfo trce "Running Event thread"
-      logException trce "runEpochStakeThread: " (runStakeLoop syncEnv le)
+      logException trce "runEpochStakeThread: " (runESLoop syncEnv le)
       logInfo trce "Shutting Event thread"
   where
     trce = getTrace syncEnv
 
-runStakeLoop :: SyncEnv -> HasLedgerEnv -> IO ()
-runStakeLoop syncEnv lenv =
+runESLoop :: SyncEnv -> HasLedgerEnv -> IO ()
+runESLoop syncEnv lenv =
   DB.runIohkLogging trce $
     withPostgresqlConn (envConnectionString syncEnv) loop
   where
@@ -44,13 +46,39 @@ runStakeLoop syncEnv lenv =
       loop backend
 
     loopAction = do
-      EpochStakeDBAction epoch snapShot shouldCheck <- liftIO $ atomically $ TBQ.readTBQueue (estakeQueue stakeChan)
+      EpochStakeDBAction epoch snapShot shouldCheck <- liftIO $ atomically $ TBQ.readTBQueue (estakeQueue estakeChan)
       if shouldCheck
         then do
           stakeExists <- lift $ DB.queryEpochStakeExists (unEpochNo epoch)
           unless stakeExists $ insertEpochStake syncEnv epoch (snapShotToList snapShot)
         else insertEpochStake syncEnv epoch (snapShotToList snapShot)
-      liftIO $ atomically $ writeTVar (epochResult stakeChan) $ Just (epoch, Done)
+      liftIO $ atomically $ writeTVar (epochResult estakeChan) $ Just (epoch, Done)
 
-    stakeChan = leEpochStakeChans lenv
+    estakeChan = leEpochStakeChans lenv
+    trce = getTrace syncEnv
+
+runStakeThread :: SyncEnv -> IO ()
+runStakeThread syncEnv = do
+  logInfo trce "Running Event thread"
+  logException trce "runEpochStakeThread: " (runStakeLoop syncEnv)
+  logInfo trce "Shutting Event thread"
+  where
+    trce = getTrace syncEnv
+
+runStakeLoop :: SyncEnv -> IO ()
+runStakeLoop syncEnv =
+  DB.runIohkLogging trce $
+    withPostgresqlConn (envConnectionString syncEnv) actionDB
+  where
+    actionDB backend = runSqlConnWithIsolation (forever loopAction) backend Serializable
+
+    loopAction = do
+      action <- liftIO $ atomically $ TBQ.readTBQueue (scPriorityQueue stakeChan)
+      case action of
+        QueryInsertStake _sk _ca _resVar -> undefined
+        CacheStake _ _ _ -> pure ()
+        BulkPrefetch _ -> pure ()
+        CommitStake -> DB.transactionCommit
+
+    stakeChan = envStakeChans syncEnv
     trce = getTrace syncEnv
