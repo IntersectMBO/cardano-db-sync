@@ -3,8 +3,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Api (
@@ -29,20 +27,12 @@ module Cardano.DbSync.Api (
   getSkipTxIn,
   getPrunes,
   mkSyncEnvFromConfig,
-  verifySnapshotPoint,
   getInsertOptions,
   getTrace,
   getTopLevelConfig,
   getNetwork,
   hasLedgerState,
-  getLatestPoints,
-  getSlotHash,
-  getDbLatestBlockInfo,
-  getDbTipBlockNo,
-  getCurrentTipBlockNo,
   generateNewEpochEvents,
-  logDbState,
-  convertToPoint,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -56,13 +46,8 @@ import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
-import Cardano.DbSync.Ledger.State (
-  getHeaderHash,
-  hashToAnnotation,
-  listKnownSnapshots,
-  mkHasLedgerEnv,
- )
-import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), SnapshotPoint (..))
+import Cardano.DbSync.Ledger.State (mkHasLedgerEnv)
+import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -70,7 +55,7 @@ import Cardano.DbSync.Util.Constraint (dbConstraintNamesExists)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
   newTBQueueIO,
   newTVarIO,
@@ -78,20 +63,17 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVarIO,
   writeTVar,
  )
-import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
+import Ouroboros.Consensus.Block.Abstract (BlockProtocol)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
-import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
-import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -243,59 +225,11 @@ getNetwork sEnv =
 getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
-getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
-
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
   case envLedgerEnv syncEnv of
     HasLedger _ -> True
     NoLedger _ -> False
-
-getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
-getDbLatestBlockInfo backend = do
-  runMaybeT $ do
-    block <- MaybeT $ DB.runDbIohkNoLogging backend DB.queryLatestBlock
-    -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
-    -- era, but we need to make the types match, hence `fromMaybe`.
-    pure $
-      TipInfo
-        { bHash = DB.blockHash block
-        , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
-        , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
-        , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
-        }
-
-getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
-getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
-  pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
-
-logDbState :: SyncEnv -> IO ()
-logDbState env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
-  case mblk of
-    Nothing -> logInfo tracer "Database is empty"
-    Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
-  where
-    showTip :: TipInfo -> Text
-    showTip tipInfo =
-      mconcat
-        [ "slot "
-        , textShow (unSlotNo $ bSlotNo tipInfo)
-        , ", block "
-        , textShow (unBlockNo $ bBlockNo tipInfo)
-        ]
-
-    tracer :: Trace IO Text
-    tracer = getTrace env
-
-getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
-getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
-  case maybeTip of
-    Just tip -> pure $ At (bBlockNo tip)
-    Nothing -> pure Origin
 
 mkSyncEnv ::
   Trace IO Text ->
@@ -431,52 +365,6 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
               syncNodeConfigFromFile
               syncNodeParams
               runMigrationFnc
-
--- | 'True' is for in memory points and 'False' for on disk
-getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
-getLatestPoints env = do
-  case envLedgerEnv env of
-    HasLedger hasLedgerEnv -> do
-      snapshotPoints <- listKnownSnapshots hasLedgerEnv
-      verifySnapshotPoint env snapshotPoints
-    NoLedger _ -> do
-      -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
-      pure $ mapMaybe convert lastPoints
-  where
-    convert (Nothing, _) = Nothing
-    convert (Just slot, bs) = convertToDiskPoint (SlotNo slot) bs
-
-verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
-verifySnapshotPoint env snapPoints =
-  catMaybes <$> mapM validLedgerFileToPoint snapPoints
-  where
-    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
-    validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
-      let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
-      case valid of
-        Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
-        _ -> pure Nothing
-    validLedgerFileToPoint (InMemory pnt) = do
-      case pnt of
-        GenesisPoint -> pure Nothing
-        BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envBackend env) slotNo
-          let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
-          case valid of
-            Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
-            _ -> pure Nothing
-
-convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
-convertToDiskPoint slot hashBlob = (,False) <$> convertToPoint slot hashBlob
-
-convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
-convertToPoint slot hashBlob =
-  Point . Point.block slot <$> convertHashBlob hashBlob
-  where
-    convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
-    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
 
 getSecurityParam :: SyncEnv -> Word64
 getSecurityParam syncEnv =

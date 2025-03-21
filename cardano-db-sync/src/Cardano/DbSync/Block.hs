@@ -7,7 +7,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
-module Cardano.DbSync.Default (
+module Cardano.DbSync.Block (
   insertListBlocks,
 ) where
 
@@ -82,8 +82,8 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
               , ". Time to restore consistency."
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
-          insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
+          insertBlock syncEnv cblk applyRes True tookSnapshot
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced

@@ -29,6 +29,21 @@ import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
 import Database.Persist.Postgresql (SqlBackend)
 
+-- | TO be called only by the stake thread
+resolveInsertRewardAccount ::
+  forall m.
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  CacheAction ->
+  RewAccount ->
+  ReaderT SqlBackend m DB.StakeAddressId
+resolveInsertRewardAccount syncEnv cacheUA ra = do
+  eiStakeId <- queryStakeAddrWithCacheRetBs syncEnv cacheUA False ra -- read only
+  case eiStakeId of
+    Right stakeId -> pure stakeId
+    Left (_, bs) -> insertStakeAddress ra (Just bs)
+
+-- | TO be called only by the stake thread
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
