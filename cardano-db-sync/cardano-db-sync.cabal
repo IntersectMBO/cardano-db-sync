@@ -135,6 +135,7 @@ library
                         Cardano.DbSync.Threads.Database
                         Cardano.DbSync.Threads.EpochStake
                         Cardano.DbSync.Threads.Stake
+                        Cardano.DbSync.Threads.TxInResolve
                         Cardano.DbSync.Tracing.ToObjectOrphans
                         Cardano.DbSync.Types
 

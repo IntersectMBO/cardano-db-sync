@@ -1,6 +1,5 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Api.Types (
   SyncEnv (..),
@@ -10,27 +9,31 @@ module Cardano.DbSync.Api.Types (
   RunMigration,
   ConsistentLevel (..),
   CurrentEpochNo (..),
+  Prefetch (..),
+  PrefetchTxId (..),
+  newPrefetch,
 ) where
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (CacheStatus, StakeChannels)
 import Cardano.DbSync.Config.Types (SyncNodeConfig)
+import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Types as Generic
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
+  CardanoBlock,
   OffChainPoolResult,
   OffChainPoolWorkQueue,
   OffChainVoteResult,
   OffChainVoteWorkQueue,
  )
-import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
-import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
- )
+import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, newTBQueueIO, newTVarIO)
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
+import Data.Map (Map)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime)
+import Data.Word (Word64)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -38,6 +41,7 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 
 data SyncEnv = SyncEnv
   { envBackend :: !SqlBackend
+  , envPrefetch :: !Prefetch
   , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
@@ -101,3 +105,16 @@ data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
 newtype CurrentEpochNo = CurrentEpochNo
   { cenEpochNo :: Strict.Maybe EpochNo
   }
+
+data PrefetchTxId = PrefetchTxIdBlock CardanoBlock | PrefetchTxIdBlocks [CardanoBlock]
+
+data Prefetch = Prefetch
+  { pTxInQueue :: StrictTBQueue IO PrefetchTxId
+  , pTxIn :: StrictTVar IO (Map Generic.TxInKey (Maybe (DB.TxId, Either Generic.TxInKey DB.TxOutIdW, Maybe DB.DbLovelace)))
+  }
+
+newPrefetch :: IO Prefetch
+newPrefetch =
+  Prefetch
+    <$> newTBQueueIO 1000
+    <*> newTVarIO mempty

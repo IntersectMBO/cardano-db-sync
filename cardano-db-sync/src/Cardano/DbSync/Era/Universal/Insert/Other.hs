@@ -77,7 +77,7 @@ insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
         (True, _) -> pure Nothing
         (_, Nothing) -> pure Nothing
         (_, Just (Right bs)) -> pure $ Just bs
-        (_, Just (Left txIn)) -> resolveScriptHash syncEnv groupedOutputs txIn
+        (_, Just (Left txIn)) -> resolveScriptHash syncEnv groupedOutputs (Generic.txInKey txIn)
 
 insertRedeemerData ::
   (MonadBaseControl IO m, MonadIO m) =>

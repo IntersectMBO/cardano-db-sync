@@ -32,6 +32,7 @@ module Cardano.DbSync.Api (
   getTopLevelConfig,
   getNetwork,
   hasLedgerState,
+  writePrefetch,
   generateNewEpochEvents,
 ) where
 
@@ -63,6 +64,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVarIO,
   writeTVar,
  )
+import qualified Control.Concurrent.Class.MonadSTM.Strict.TBQueue as TBQ
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
@@ -231,6 +233,12 @@ hasLedgerState syncEnv =
     HasLedger _ -> True
     NoLedger _ -> False
 
+writePrefetch :: SyncEnv -> CardanoBlock -> IO ()
+writePrefetch syncEnv cblock = do
+  atomically $
+    TBQ.writeTBQueue (pTxInQueue $ envPrefetch syncEnv) $
+      PrefetchTxIdBlock cblock
+
 mkSyncEnv ::
   Trace IO Text ->
   SqlBackend ->
@@ -258,6 +266,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
             , cacheCapacityTx = 100000
             }
       else pure useNoCache
+  prefetch <- newPrefetch
   consistentLevelVar <- newTVarIO Unchecked
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
   bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
@@ -295,6 +304,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       { envBackend = backend
       , envBootstrap = bootstrapVar
       , envCache = cache
+      , envPrefetch = prefetch
       , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
       , envDbConstraints = dbCNamesVar

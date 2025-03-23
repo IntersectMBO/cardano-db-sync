@@ -24,7 +24,7 @@ import Cardano.DbSync.Cache (insertAddressUsingCache, queryTxIdWithCache, tryUpd
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxInKey (..))
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertCertificate)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (
   insertGovActionProposal,
@@ -82,18 +82,18 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
       !treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
-      hasConsumed = getHasConsumedOrPruneTxOut syncEnv
       txIn = Generic.txInputs tx
+      resolveTxIn needsVals = resolveTxInputsMain syncEnv needsVals (Just (fst <$> groupedTxOut grouped))
   disInOut <- liftIO $ getDisableInOutState syncEnv
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
   -- In these cases we can avoid expensive queries.
   (resolvedInputs, fees', deposits) <- case (disInOut, mdeposits, unCoin <$> Generic.txFees tx) of
     (True, _, _) -> pure ([], 0, unCoin <$> mdeposits)
     (_, Just deposits, Just fees) -> do
-      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
+      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxIn False) txIn
       pure (resolvedInputs, fees, Just (unCoin deposits))
     (_, Nothing, Just fees) -> do
-      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
+      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxIn False) txIn
       if any isNothing amounts
         then pure (resolvedInputs, fees, Nothing)
         else
@@ -101,7 +101,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
            in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
     (_, _, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
-      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed True (fst <$> groupedTxOut grouped)) txIn
+      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxIn True) txIn
       let !inSum = sum $ map unDbLovelace $ catMaybes amounts
           !diffSum = if inSum >= outSum then inSum - outSum else 0
           !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
@@ -157,8 +157,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       when (ioPlutusExtra iopts) $ do
         mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
-        mapM_ (insertCollateralTxIn syncEnv txId) (Generic.txCollateralInputs tx)
-        mapM_ (insertReferenceTxIn syncEnv txId) (Generic.txReferenceInputs tx)
+        mapM_ (insertCollateralTxIn syncEnv txId) (Generic.txInKey <$> Generic.txCollateralInputs tx)
+        mapM_ (insertReferenceTxIn syncEnv txId) (Generic.txInKey <$> Generic.txReferenceInputs tx)
         mapM_ (insertCollateralTxOut syncEnv iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
@@ -468,7 +468,7 @@ insertCollateralTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   DB.TxId ->
-  Generic.TxIn ->
+  Generic.TxInKey ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertCollateralTxIn syncEnv txInId txIn = do
   let txId = txInTxId txIn
@@ -486,7 +486,7 @@ insertReferenceTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   DB.TxId ->
-  Generic.TxIn ->
+  Generic.TxInKey ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertReferenceTxIn syncEnv txInId txIn = do
   let txId = txInTxId txIn
@@ -506,7 +506,7 @@ insertReferenceTxIn syncEnv txInId txIn = do
 prepareTxIn ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
-  (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW) ->
+  (Generic.TxIn, DB.TxId, Either Generic.TxInKey DB.TxOutIdW) ->
   ExtendedTxIn
 prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
   ExtendedTxIn
@@ -518,6 +518,6 @@ prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
       DB.TxIn
         { DB.txInTxInId = txInId
         , DB.txInTxOutId = txOutId
-        , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex txIn
+        , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex (Generic.txInKey txIn)
         , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
         }

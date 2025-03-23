@@ -64,6 +64,7 @@ applyAndInsertBlockMaybe ::
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do
   bl <- liftIO $ isConsistent syncEnv
+  when bl $ liftIO $ writePrefetch syncEnv cblk
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
@@ -83,6 +84,7 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
           liftIO $ setConsistentLevel syncEnv Consistent
+          when bl $ liftIO $ writePrefetch syncEnv cblk
           insertBlock syncEnv cblk applyRes True tookSnapshot
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots

@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
+  TxInKey (..),
   TxOut (..),
   TxRedeemer (..),
   TxScript (..),
@@ -97,9 +98,14 @@ data TxWithdrawal = TxWithdrawal
   , txwAmount :: !Coin
   }
 
+data TxInKey = TxInKey
+  { txInTxId :: !(Ledger.TxId StandardCrypto)
+  , txInIndex :: !Word64
+  }
+  deriving (Eq, Show, Ord)
+
 data TxIn = TxIn
-  { txInIndex :: !Word64
-  , txInTxId :: !(Ledger.TxId StandardCrypto)
+  { txInKey :: !TxInKey
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
   }
   deriving (Show)
@@ -174,7 +180,7 @@ getMaybeDatumHash (Just hsh) = DatumHash hsh
 sumTxOutCoin :: [TxOut] -> Coin
 sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)
 
-toTxHash :: TxIn -> ByteString
+toTxHash :: TxInKey -> ByteString
 toTxHash = unTxHash . txInTxId
 
 class AlonzoEraTxBody era => DBScriptPurpose era where

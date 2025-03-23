@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   getTxSize,
   mkTxIn,
   fromTxIn,
+  toTxInKey,
   mkTxOut,
   mkTxWithdrawals,
   mkTxWithdrawal,
@@ -123,12 +124,14 @@ mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBody
         , txOutDatum = NoDatum -- Shelley does not support plutus data
         }
 
+toTxInKey :: Ledger.TxIn StandardCrypto -> TxInKey
+toTxInKey (Ledger.TxIn txId (TxIx w64)) = TxInKey txId w64
+
 fromTxIn :: Ledger.TxIn StandardCrypto -> TxIn
-fromTxIn (Ledger.TxIn (Ledger.TxId txid) (TxIx w64)) =
+fromTxIn txIn =
   TxIn
-    { txInIndex = w64
+    { txInKey = toTxInKey txIn
     , txInRedeemerIndex = Nothing
-    , txInTxId = Ledger.TxId txid
     }
 
 txHashId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> ByteString
