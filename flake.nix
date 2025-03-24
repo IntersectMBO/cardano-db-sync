@@ -59,22 +59,18 @@
                   inherit (project.hsPkgs.cardano-cli.components.exes) cardano-cli;
                 })
 
-                (final: prev:
-                  let
-                    profiled = builtins.mapAttrs (_: setGitRev) project.profiled.exes;
-                    exes = builtins.mapAttrs (_: setGitRev) project.exes;
-                  in {
-                    # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
-                    # expects these to be here
-                    inherit (exes)
-                      cardano-db-sync
-                      cardano-db-tool
-                      cardano-smash-server;
+                (final: prev: {
+                  # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
+                  # expects these to be here
+                  inherit (exes)
+                    cardano-db-sync
+                    cardano-db-tool
+                    cardano-smash-server;
 
-                    cardano-db-sync-profiled = profiled.cardano-db-sync;
-                    cardano-smash-server-profiled = profiled.cardano-smash-server;
+                  cardano-db-sync-profiled = profiledExes.cardano-db-sync;
+                  cardano-smash-server-profiled = profiledExes.cardano-smash-server;
 
-                    schema = ./schema;
+                  schema = ./schema;
                   })
 
                 (final: prev: {
@@ -111,7 +107,6 @@
               ];
           };
 
-          setGitRev = nixpkgs.setGitRev (self.rev or "dirty");
 
           # Set up and start Postgres before running database tests
           preCheck = ''
@@ -387,6 +382,17 @@
             })
           ];
 
+          setGitRev = nixpkgs.setGitRev (self.rev or "dirty");
+
+          setGitRevs = exes: 
+            with nixpkgs.lib; pipe exes [
+              (filterAttrs (_: isDerivation))
+              (mapAttrs (_: setGitRev))
+            ];
+
+          exes = setGitRevs project.exes;
+          profiledExes = setGitRevs project.profiled.exes;
+
           staticChecks =
             let
               inherit (project.args) src compiler-nix-name;
@@ -402,10 +408,7 @@
           let
             mkDist = platform: project:
               let
-                exes = with lib; pipe project.exes [
-                  (collect isDerivation)
-                  (map setGitRev)
-                ];
+                exeVals = builtins.attrValues exes;
                 name = "cardano-db-sync-${version}-${platform}";
                 version = project.exes.cardano-db-sync.identifier.version;
                 env = {
@@ -422,7 +425,7 @@
                       --no-clobber \
                       --remove-destination \
                       --verbose \
-                      ${lib.concatMapStringsSep " " (exe: "${exe}/bin/*") exes} \
+                      ${lib.concatMapStringsSep " " (exe: "${exe}/bin/*") exeVals} \
                        ./bin
 
                     # Copy magrations to intermediate dir
@@ -439,7 +442,7 @@
                        (platform == "macos")
                        (lib.concatMapStrings
                          (exe: "rewrite-libs . ${exe}/bin/*")
-                         exes)}
+                         exeVals)}
 
                     # Package distribution
                     dist_file=${name}.tar.gz
@@ -487,8 +490,6 @@
               else
                 drv;
 
-            setGitRev = nixpkgs.setGitRev (self.rev or "dirty");
-
           in rec {
             checks = staticChecks;
 
@@ -518,7 +519,7 @@
                 cardano-smash-server-docker
                 project;
 
-              default = setGitRev flake.packages."cardano-db-sync:exe:cardano-db-sync";
+              default = exes.cardano-db-sync;
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
