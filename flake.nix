@@ -61,11 +61,12 @@
 
                 (final: prev:
                   let
-                    profiled = project.profiled.exes;
+                    profiled = builtins.mapAttrs (_: setGitRev) project.profiled.exes;
+                    exes = builtins.mapAttrs (_: setGitRev) project.exes;
                   in {
                     # The cardano-db-sync NixOS module (nix/nixos/cardano-db-sync-service.nix)
                     # expects these to be here
-                    inherit (project.exes)
+                    inherit (exes)
                       cardano-db-sync
                       cardano-db-tool
                       cardano-smash-server;
@@ -109,6 +110,8 @@
                 })
               ];
           };
+
+          setGitRev = nixpkgs.setGitRev (self.rev or "dirty");
 
           # Set up and start Postgres before running database tests
           preCheck = ''
@@ -515,7 +518,7 @@
                 cardano-smash-server-docker
                 project;
 
-              default = flake.packages."cardano-db-sync:exe:cardano-db-sync";
+              default = setGitRev flake.packages."cardano-db-sync:exe:cardano-db-sync";
             } // lib.optionalAttrs (system == "x86_64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
