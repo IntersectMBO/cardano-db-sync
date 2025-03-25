@@ -25,7 +25,6 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text.Encoding as Text
 import qualified Hasql.Session as HsqlS
 
-
 class AsDbError e where
   toDbError :: DbError -> e
   fromDbError :: e -> Maybe DbError
@@ -62,6 +61,12 @@ data LookupContext
   deriving (Show, Eq, Generic)
 
 instance Exception LookupContext
+
+-- catchDbError :: String -> HsqlT.Transaction a -> HsqlT.Transaction a
+-- catchDbError context action =
+--   action `catch` \e ->
+--     throwError $ DbError $ context ++ ": " ++ show e
+
 
 -- instance Show LookupFail where
 --   show =

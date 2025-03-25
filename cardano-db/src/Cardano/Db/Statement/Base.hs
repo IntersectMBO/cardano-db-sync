@@ -50,6 +50,21 @@ queryBlockHashBlockNo hash = runDbT TransReadOnly $ mkDbTransaction "queryBlockH
     hashEncoder = E.param (E.nonNullable E.bytea)
     blockNoDecoder = HsqlD.rowList (D.column (D.nullable $ fromIntegral <$> D.int8))
 
+
+queryBlockCount :: MonadIO m => DbAction m Word64
+queryBlockCount = runDbT TransReadOnly $ mkDbTransaction "queryBlockCount" $ do
+  result <- HsqlT.statement () $ HsqlS.Statement sql HsqlE.unit blockCountDecoder True
+  case result of
+    [blockCount] -> pure blockCount
+    _otherwise -> throwError $ DbLookupError mkCallSite "Multiple blocks found with same hash: " (BlockHashContext hash)
+  where
+    table = tableName (Proxy @SCB.Block)
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT COUNT(*) FROM " <> table ]
+
+    blockCountDecoder = HsqlD.singleRow (D.column (D.nonNullable $ fromIntegral <$> D.int8))
+
 --------------------------------------------------------------------------------
 -- | Datum
 --------------------------------------------------------------------------------

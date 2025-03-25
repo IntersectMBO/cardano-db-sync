@@ -146,6 +146,22 @@ insertDrepHashAlwaysAbstain = do
           }
       pure (entityKey entity)
 
+insertDrepHashAlwaysNoConfidence :: MonadIO m => DbAction m Id.DrepHashId
+insertDrepHashAlwaysNoConfidence = do
+  qr <- queryDrepHashAlwaysNoConfidence
+  maybe ins pure qr
+  where
+    ins = runDbT TransWrite $ mkDbTransaction "insertDrepHashAlwaysNoConfidence" $ do
+      entity <- insert
+        SGV.drepHashEncoder
+        (WithResult (HsqlD.singleRow SGV.entityDrepHashDecoder))
+        SGV.DrepHash
+          { SGV.drepHashRaw = Nothing
+          , SGV.drepHashView = hardcodedAlwaysNoConfidence
+          , SGV.drepHashHasScript = False
+          }
+      pure (entityKey entity)
+
 insertDrepRegistration :: MonadIO m => SGV.DrepRegistration -> DbAction m Id.DrepRegistrationId
 insertDrepRegistration drepRegistration =
   runDbT TransWrite $ mkDbTransaction "insertDrepRegistration" $ do

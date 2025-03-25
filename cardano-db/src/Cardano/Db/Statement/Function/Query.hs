@@ -1,9 +1,10 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Db.Statement.Function.Query where
 
@@ -16,7 +17,7 @@ import qualified Data.Text.Encoding as TextEnc
 
 import Cardano.Db.Statement.Function.Core (ResultType (..))
 import Cardano.Db.Statement.Types (DbInfo (..), Key)
-import Cardano.Prelude (Proxy(..))
+import Cardano.Prelude (Proxy(..), MonadIO)
 import qualified Data.List.NonEmpty as NE
 import Data.Functor.Contravariant (Contravariant (..))
 
@@ -35,7 +36,7 @@ import Data.Functor.Contravariant (Contravariant (..))
 --     votingAnchorId
 -- @
 queryIdExists
-  :: forall a b r. (DbInfo a)
+  :: forall a b r. (DbInfo a, Key a ~ b)
   => HsqlE.Params b   -- Encoder for the ID value
   -> ResultType Bool r -- Decoder for the boolean result
   -> b                -- ID value to check

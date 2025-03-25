@@ -8,7 +8,7 @@ import qualified Hasql.Decoders as HsqlD
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEnP
 import qualified Cardano.Db.Schema.Core.StakeDeligation as SSD
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Types (DbAction (..), DbTransMode (..))
+import Cardano.Db.Types (DbAction (..), DbTransMode (..), DbLovelace)
 import Cardano.Prelude (MonadIO (..), Word64, void, Proxy (..), MonadError (..))
 import Cardano.Db.Statement.Function.Core (runDbT, mkDbTransaction, ResultType (..), ResultTypeBulk (..))
 import Cardano.Db.Statement.Function.Insert (insert, bulkInsert)
@@ -74,11 +74,6 @@ queryAdaPotsWithIdTx blockId =
       , " WHERE block_id = $1"
       ]
 
-catchDbError :: String -> HsqlT.Transaction a -> HsqlT.Transaction a
-catchDbError context action =
-  action `catch` \e ->
-    throwError $ DbError $ context ++ ": " ++ show e
-
 --------------------------------------------------------------------------------
 -- | Epoch
 --------------------------------------------------------------------------------
@@ -121,10 +116,10 @@ bulkInsertEpochStake epochStakes = runDbT TransWrite $ mkDbTransaction "bulkInse
     NoResultBulk
     epochStakes
   where
-    extractEpochStake :: [SSD.EpochStake] -> ([Maybe Id.StakeAddressId], [Maybe Id.EpochId], [Word64], [Word64])
+    extractEpochStake :: [SSD.EpochStake] -> ([Id.StakeAddressId], [Id.PoolHashId], [DbLovelace], [Word64])
     extractEpochStake xs =
-        ( map Id.epochStakeAddrId xs
-        , map SSD.epochStakeEpochId xs
+        ( map SSD.epochStakeAddrId xs
+        , map SSD.epochStakePoolId xs
         , map SSD.epochStakeAmount xs
         , map SSD.epochStakeEpochNo xs
         )
