@@ -171,23 +171,23 @@ import qualified Hasql.Transaction.Sessions as Transaction
 -- Instead we use `insertUnchecked` for tables where there is no uniqueness constraints
 -- and `insertChecked` for tables where the uniqueness constraint might hit.
 
-insertManyEpochStakes ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  -- | Does constraint already exists
-  Bool ->
-  ConstraintNameDB ->
-  [EpochStake] ->
-  ReaderT SqlBackend m ()
-insertManyEpochStakes = insertManyWithManualUnique "Many EpochStake"
+-- insertManyEpochStakes ::
+--   (MonadBaseControl IO m, MonadIO m) =>
+--   -- | Does constraint already exists
+--   Bool ->
+--   ConstraintNameDB ->
+--   [EpochStake] ->
+--   ReaderT SqlBackend m ()
+-- insertManyEpochStakes = insertManyWithManualUnique "Many EpochStake"
 
-insertManyRewards ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  -- | Does constraint already exists
-  Bool ->
-  ConstraintNameDB ->
-  [Reward] ->
-  ReaderT SqlBackend m ()
-insertManyRewards = insertManyWithManualUnique "Many Rewards"
+-- insertManyRewards ::
+--   (MonadBaseControl IO m, MonadIO m) =>
+--   -- | Does constraint already exists
+--   Bool ->
+--   ConstraintNameDB ->
+--   [Reward] ->
+--   ReaderT SqlBackend m ()
+-- insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
 -- insertManyRewardRests ::
 --   (MonadBaseControl IO m, MonadIO m) =>

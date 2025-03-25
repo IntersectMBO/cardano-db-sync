@@ -44,6 +44,26 @@ bulkInsertEpochStakeProgress esps =
         )
 
 --------------------------------------------------------------------------------
+-- | Reward
+--------------------------------------------------------------------------------
+
+bulkInsertRewards :: MonadIO m => [Reward] -> DbAction m ()
+bulkInsertRewards rewards =
+  runDbT TransWrite $ mkDbTransaction "bulkInsertRewards" $
+    bulkInsertNoReturn
+      extractReward
+      rewardBulkEncoder
+      rewards
+  where
+    extractReward :: [Reward] -> ([Id.StakeAddressId], [RewardSource], [DbLovelace], [Word64])
+    extractReward xs =
+        ( map rewardAddrId xs
+        , map rewardType xs
+        , map rewardAmount xs
+        , map rewardEarnedEpoch xs
+        )
+
+--------------------------------------------------------------------------------
 -- | RewardRest
 --------------------------------------------------------------------------------
 bulkInsertRewardRests :: MonadIO m => [RewardRest] -> DbAction m ()
