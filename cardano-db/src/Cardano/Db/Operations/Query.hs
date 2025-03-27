@@ -39,6 +39,7 @@ module Cardano.Db.Operations.Query (
   queryTxId,
   queryEpochFromNum,
   queryEpochStakeCount,
+  queryEpochStakeExists,
   queryForEpochId,
   queryLatestEpoch,
   queryMinRefId,
@@ -573,6 +574,15 @@ queryEpochStakeCount epoch = do
     where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+queryEpochStakeExists :: MonadIO m => Word64 -> ReaderT SqlBackend m Bool
+queryEpochStakeExists epoch = do
+  res <- select $ do
+    epochStake <- from $ table @EpochStake
+    where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
+    limit 1
+    pure (epochStake ^. EpochStakeId)
+  pure $ not (null res)
 
 queryMinRefId ::
   forall m field record.

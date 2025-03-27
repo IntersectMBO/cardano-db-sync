@@ -1,9 +1,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Database (
+module Cardano.DbSync.Threads.Database (
   DbAction (..),
   ThreadChannels,
   lengthDbActionQueue,
@@ -11,27 +13,32 @@ module Cardano.DbSync.Database (
   runDbThread,
 ) where
 
-import Cardano.BM.Trace (logDebug, logError, logInfo)
+import Cardano.BM.Trace (logError, logInfo)
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Block
 import Cardano.DbSync.DbAction
-import Cardano.DbSync.Default
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
-import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
+import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), LedgerStateFile (..), SnapshotPoint (..))
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude hiding (atomically)
-import Cardano.Slotting.Slot (WithOrigin (..))
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
 import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Extra (newExceptT)
+import Control.Monad.Trans.Maybe (MaybeT (..))
+import Database.Persist.Sql (SqlBackend)
+import Ouroboros.Consensus.Block.Abstract (HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 import Ouroboros.Consensus.Ledger.Extended
-import Ouroboros.Network.Block (BlockNo, Point (..))
+import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
+import qualified Ouroboros.Network.Point as Point
 
 data NextState
   = Continue
@@ -51,9 +58,6 @@ runDbThread syncEnv metricsSetters queue = do
     trce = getTrace syncEnv
     loop = do
       xs <- blockingFlushDbActionQueue queue
-
-      when (length xs > 1) $ do
-        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
 
       case hasRestart xs of
         Nothing -> do
@@ -153,7 +157,7 @@ validateConsistentLevel syncEnv stPoint = do
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
-      logAndThrowIO tracer $
+      logAndThrowIO trce $
         SNErrDatabaseValConstLevel $
           "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
@@ -165,11 +169,11 @@ validateConsistentLevel syncEnv stPoint = do
     compareTips (Point (At blk)) (Just tip) DBAheadOfLedger
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
-      logAndThrowIO tracer $
+      logAndThrowIO trce $
         SNErrDatabaseValConstLevel $
           "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
-    tracer = getTrace syncEnv
+    trce = getTrace syncEnv
     showContext dbTip cLevel =
       mconcat
         [ "Ledger state point is "
@@ -193,3 +197,96 @@ hasRestart = go
     go [] = Nothing
     go (DbRestartState mvar : _) = Just mvar
     go (_ : rest) = go rest
+
+-- | 'True' is for in memory points and 'False' for on disk
+getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
+getLatestPoints env = do
+  case envLedgerEnv env of
+    HasLedger hasLedgerEnv -> do
+      snapshotPoints <- listKnownSnapshots hasLedgerEnv
+      verifySnapshotPoint env snapshotPoints
+    NoLedger _ -> do
+      -- Brings the 5 latest.
+      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
+      pure $ mapMaybe convert lastPoints
+  where
+    convert (Nothing, _) = Nothing
+    convert (Just slot, bs) = convertToDiskPoint (SlotNo slot) bs
+
+verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
+verifySnapshotPoint env snapPoints =
+  catMaybes <$> mapM validLedgerFileToPoint snapPoints
+  where
+    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
+    validLedgerFileToPoint (OnDisk lsf) = do
+      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
+      let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
+      case valid of
+        Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
+        _ -> pure Nothing
+    validLedgerFileToPoint (InMemory pnt) = do
+      case pnt of
+        GenesisPoint -> pure Nothing
+        BlockPoint slotNo hsh -> do
+          hashes <- getSlotHash (envBackend env) slotNo
+          let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
+          case valid of
+            Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
+            _ -> pure Nothing
+
+convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
+convertToDiskPoint slot hashBlob = (,False) <$> convertToPoint slot hashBlob
+
+convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
+convertToPoint slot hashBlob =
+  Point . Point.block slot <$> convertHashBlob hashBlob
+  where
+    convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
+    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
+
+getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
+getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
+
+getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
+getDbLatestBlockInfo backend = do
+  runMaybeT $ do
+    block <- MaybeT $ DB.runDbIohkNoLogging backend DB.queryLatestBlock
+    -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
+    -- era, but we need to make the types match, hence `fromMaybe`.
+    pure $
+      TipInfo
+        { bHash = DB.blockHash block
+        , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
+        , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
+        , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
+        }
+
+getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
+getDbTipBlockNo env = do
+  mblk <- getDbLatestBlockInfo (envBackend env)
+  pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
+
+logDbState :: SyncEnv -> IO ()
+logDbState env = do
+  mblk <- getDbLatestBlockInfo (envBackend env)
+  case mblk of
+    Nothing -> logInfo trce "Database is empty"
+    Just tip -> logInfo trce $ mconcat ["Database tip is at ", showTip tip]
+  where
+    showTip :: TipInfo -> Text
+    showTip tipInfo =
+      mconcat
+        [ "slot "
+        , textShow (unSlotNo $ bSlotNo tipInfo)
+        , ", block "
+        , textShow (unBlockNo $ bBlockNo tipInfo)
+        ]
+
+    trce = getTrace env
+
+getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
+getCurrentTipBlockNo env = do
+  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  case maybeTip of
+    Just tip -> pure $ At (bBlockNo tip)
+    Nothing -> pure Origin

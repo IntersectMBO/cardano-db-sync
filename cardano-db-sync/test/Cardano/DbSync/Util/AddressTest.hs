@@ -4,6 +4,7 @@
 module Cardano.DbSync.Util.AddressTest (tests) where
 
 import Cardano.Binary (FromCBOR (..), unsafeDeserialize')
+import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Address
 import Cardano.Ledger.Address (Addr (..), BootstrapAddress (..), RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network (..))
@@ -218,7 +219,7 @@ genByronAddress = arbitrary
 genShelleyAddress :: Gen (Addr StandardCrypto)
 genShelleyAddress = Addr <$> arbitrary <*> arbitrary <*> arbitrary
 
-genRewardAccount :: Gen (RewardAccount StandardCrypto)
+genRewardAccount :: Gen RewAccount
 genRewardAccount = arbitrary
 
 deserialiseBase16 :: FromCBOR a => Text -> a

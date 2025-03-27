@@ -7,7 +7,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
-module Cardano.DbSync.Default (
+module Cardano.DbSync.Block (
   insertListBlocks,
 ) where
 
@@ -64,6 +64,7 @@ applyAndInsertBlockMaybe ::
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do
   bl <- liftIO $ isConsistent syncEnv
+  when bl $ liftIO $ writePrefetch syncEnv cblk
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
@@ -82,8 +83,9 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
               , ". Time to restore consistency."
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
-          insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
+          when bl $ liftIO $ writePrefetch syncEnv cblk
+          insertBlock syncEnv cblk applyRes True tookSnapshot
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
           replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
@@ -142,7 +144,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           isMember
           applyResult
 
-  -- Here we insert the block and it's txs, but in adition we also cache some values which we later
+  -- Here we insert the block and it's txs, but in addition we also cache some values which we later
   -- use when updating the Epoch, thus saving us having to recalulating them later.
   case cblk of
     BlockByron blk ->
