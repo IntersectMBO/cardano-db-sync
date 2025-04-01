@@ -15,16 +15,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: sudo apt-get -y install libtinfo5
-
       - name: Set up HLint
-        uses: rwe/actions-hlint-setup@v1
+        uses: rwe/actions-hlint-setup@v1.0.3
         with:
           version: "3.2.7"
 
       - name: Run HLint
-        uses: rwe/actions-hlint-run@v2
+        uses: rwe/actions-hlint-run@v2.0.1
         with:
           path: "."
           fail-on: error
