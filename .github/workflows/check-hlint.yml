@@ -26,4 +26,7 @@ jobs:
           path: "."
           fail-on: error
 
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
 
