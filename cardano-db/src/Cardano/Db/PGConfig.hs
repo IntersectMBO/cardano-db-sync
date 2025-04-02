@@ -16,21 +16,20 @@ module Cardano.Db.PGConfig (
   toConnectionSetting,
 ) where
 
+import Cardano.Prelude (decodeUtf8)
 import Control.Exception (IOException)
 import qualified Control.Exception as Exception
+import Control.Monad.Extra (unless)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
-import System.Environment (lookupEnv, setEnv)
-import System.Posix.User (getEffectiveUserName)
+import qualified Data.Text.Read as Text (decimal)
+import Data.Word (Word16)
+import qualified Hasql.Connection.Setting as HsqlS
 import qualified Hasql.Connection.Setting.Connection as HsqlC
 import qualified Hasql.Connection.Setting.Connection.Param as HsqlP
-import qualified Hasql.Connection.Setting as HsqlS
-import Cardano.Prelude (decodeUtf8)
-import Data.Word (Word16)
-import qualified Data.Text.Read as Text (decimal)
-import Control.Monad.Extra (unless)
-
+import System.Environment (lookupEnv, setEnv)
+import System.Posix.User (getEffectiveUserName)
 
 data PGPassSource
   = PGPassDefaultEnv
@@ -57,7 +56,7 @@ toConnectionSetting pgc = do
   -- Convert the port from Text to Word16
   portWord16 <- textToWord16 (pgcPort pgc)
   -- Build the connection settings
-  pure $ HsqlS.connection (HsqlC.params [host, port portWord16 , user, dbname, password])
+  pure $ HsqlS.connection (HsqlC.params [host, port portWord16, user, dbname, password])
   where
     host = HsqlP.host (pgcHost pgc)
     port = HsqlP.port
@@ -74,10 +73,12 @@ textToWord16 portText =
     Right (portInt, remainder) -> do
       -- Check for leftover characters (e.g., "123abc" is invalid)
       unless (Text.null remainder) $
-        Left $ "Invalid port: '" <> Text.unpack portText <> "'. Contains non-numeric characters."
+        Left $
+          "Invalid port: '" <> Text.unpack portText <> "'. Contains non-numeric characters."
       -- Check if the port is within the valid Word16 range (0-65535)
       unless (portInt >= (0 :: Integer) && portInt <= 65535) $
-        Left $ "Invalid port: '" <> Text.unpack portText <> "'. Port must be between 0 and 65535."
+        Left $
+          "Invalid port: '" <> Text.unpack portText <> "'. Port must be between 0 and 65535."
       -- Convert to Word16
       Right (fromIntegral portInt)
 
@@ -117,13 +118,14 @@ parsePGConfig :: ByteString -> IO (Either PGPassError PGConfig)
 parsePGConfig bs =
   case BS.split ':' bs of
     [h, pt, d, u, pwd] ->
-      replaceUser (PGConfig
-                    (decodeUtf8 h)
-                    (decodeUtf8 pt)
-                    (decodeUtf8 d)
-                    (decodeUtf8 u)
-                    (decodeUtf8 pwd)
-                  )
+      replaceUser
+        ( PGConfig
+            (decodeUtf8 h)
+            (decodeUtf8 pt)
+            (decodeUtf8 d)
+            (decodeUtf8 u)
+            (decodeUtf8 pwd)
+        )
     _otherwise -> pure $ Left (FailedToParsePGPassConfig bs)
   where
     replaceUser :: PGConfig -> IO (Either PGPassError PGConfig)

@@ -6,13 +6,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.OffChain where
 
-import Contravariant.Extras (contrazip5, contrazip6, contrazip3)
+import Contravariant.Extras (contrazip3, contrazip5, contrazip6)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)
@@ -24,29 +24,29 @@ import Hasql.Encoders as E
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..), Key, Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- OFFCHAIN
 -- These tables manage off-chain data, including pool and vote data.
 ----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_pool_data
-Description:
--}
-data OffChainPoolData = OffChainPoolData
-  { offChainPoolDataPoolId :: !PoolHashId           -- noreference
-  , offChainPoolDataTickerName :: !Text
-  , offChainPoolDataHash :: !ByteString             -- sqltype=hash32type
-  , offChainPoolDataJson :: !Text                   -- sqltype=jsonb
-  , offChainPoolDataBytes :: !ByteString            -- sqltype=bytea
-  , offChainPoolDataPmrId :: !PoolMetadataRefId     -- noreference
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo OffChainPoolData where
-  uniqueFields _ = ["pool_id", "prm_id"]
+-- |
+-- Table Name: off_chain_pool_data
+-- Description:
+data OffChainPoolData = OffChainPoolData
+  { offChainPoolDataPoolId :: !PoolHashId -- noreference
+  , offChainPoolDataTickerName :: !Text
+  , offChainPoolDataHash :: !ByteString -- sqltype=hash32type
+  , offChainPoolDataJson :: !Text -- sqltype=jsonb
+  , offChainPoolDataBytes :: !ByteString -- sqltype=bytea
+  , offChainPoolDataPmrId :: !PoolMetadataRefId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainPoolData = OffChainPoolDataId
+instance DbInfo OffChainPoolData where
+  uniqueFields _ = ["pool_id", "prm_id"]
 
 entityNameOffChainPoolDataDecoder :: D.Row (Entity OffChainPoolData)
 entityNameOffChainPoolDataDecoder =
@@ -83,24 +83,25 @@ offChainPoolDataEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_pool_fetch_error
-Description:
--}
+
+-- |
+-- Table Name: off_chain_pool_fetch_error
+-- Description:
+
 -- The pool metadata fetch error. We duplicate the poolId for easy access.
 -- TODO(KS): Debatable whether we need to persist this between migrations!
 data OffChainPoolFetchError = OffChainPoolFetchError
-  { offChainPoolFetchErrorPoolId :: !PoolHashId              -- noreference
-  , offChainPoolFetchErrorFetchTime :: !UTCTime              -- sqltype=timestamp
-  , offChainPoolFetchErrorPmrId :: !PoolMetadataRefId        -- noreference
+  { offChainPoolFetchErrorPoolId :: !PoolHashId -- noreference
+  , offChainPoolFetchErrorFetchTime :: !UTCTime -- sqltype=timestamp
+  , offChainPoolFetchErrorPmrId :: !PoolMetadataRefId -- noreference
   , offChainPoolFetchErrorFetchError :: !Text
-  , offChainPoolFetchErrorRetryCount :: !Word                -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainPoolFetchError where
-  uniqueFields _ = ["pool_id", "fetch_time", "retry_count"]
+  , offChainPoolFetchErrorRetryCount :: !Word -- sqltype=word31type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainPoolFetchError = OffChainPoolFetchErrorId
+instance DbInfo OffChainPoolFetchError where
+  uniqueFields _ = ["pool_id", "fetch_time", "retry_count"]
 
 entityNameOffChainPoolFetchErrorDecoder :: D.Row (Entity OffChainPoolFetchError)
 entityNameOffChainPoolFetchErrorDecoder =
@@ -135,25 +136,25 @@ offChainPoolFetchErrorEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_data
-Description:
--}
+
+-- |
+-- Table Name: off_chain_vote_data
+-- Description:
 data OffChainVoteData = OffChainVoteData
-  { offChainVoteDataVotingAnchorId :: !VotingAnchorId         -- noreference
+  { offChainVoteDataVotingAnchorId :: !VotingAnchorId -- noreference
   , offChainVoteDataHash :: !ByteString
   , offChainVoteDataLanguage :: !Text
   , offChainVoteDataComment :: !(Maybe Text)
-  , offChainVoteDataJson :: !Text                             -- sqltype=jsonb
-  , offChainVoteDataBytes :: !ByteString                      -- sqltype=bytea
+  , offChainVoteDataJson :: !Text -- sqltype=jsonb
+  , offChainVoteDataBytes :: !ByteString -- sqltype=bytea
   , offChainVoteDataWarning :: !(Maybe Text)
   , offChainVoteDataIsValid :: !(Maybe Bool)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainVoteData where
-  uniqueFields _ = ["hash", "voting_anchor_id"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteData = OffChainVoteDataId
+instance DbInfo OffChainVoteData where
+  uniqueFields _ = ["hash", "voting_anchor_id"]
 
 entityNameOffChainVoteDataDecoder :: D.Row (Entity OffChainVoteData)
 entityNameOffChainVoteDataDecoder =
@@ -194,21 +195,21 @@ offChainVoteDataEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_gov_action_data
-Description:
--}
+
+-- |
+-- Table Name: off_chain_vote_gov_action_data
+-- Description:
 data OffChainVoteGovActionData = OffChainVoteGovActionData
   { offChainVoteGovActionDataOffChainVoteDataId :: !OffChainVoteDataId -- noreference
   , offChainVoteGovActionDataTitle :: !Text
   , offChainVoteGovActionDataAbstract :: !Text
   , offChainVoteGovActionDataMotivation :: !Text
   , offChainVoteGovActionDataRationale :: !Text
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainVoteGovActionData
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteGovActionData = OffChainVoteGovActionDataId
+instance DbInfo OffChainVoteGovActionData
 
 entityNameOffChainVoteGovActionDataDecoder :: D.Row (Entity OffChainVoteGovActionData)
 entityNameOffChainVoteGovActionDataDecoder =
@@ -243,10 +244,10 @@ offChainVoteGovActionDataEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_drep_data
-Description:
--}
+
+-- |
+-- Table Name: off_chain_vote_drep_data
+-- Description:
 data OffChainVoteDrepData = OffChainVoteDrepData
   { offChainVoteDrepDataOffChainVoteDataId :: !OffChainVoteDataId -- noreference
   , offChainVoteDrepDataPaymentAddress :: !(Maybe Text)
@@ -256,11 +257,11 @@ data OffChainVoteDrepData = OffChainVoteDrepData
   , offChainVoteDrepDataQualifications :: !(Maybe Text)
   , offChainVoteDrepDataImageUrl :: !(Maybe Text)
   , offChainVoteDrepDataImageHash :: !(Maybe Text)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainVoteDrepData
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteDrepData = OffChainVoteDrepDataId
+instance DbInfo OffChainVoteDrepData
 
 entityNameOffChainVoteDrepDataDecoder :: D.Row (Entity OffChainVoteDrepData)
 entityNameOffChainVoteDrepDataDecoder =
@@ -301,10 +302,10 @@ offChainVoteDrepDataEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_author
-Description:
--}
+
+-- |
+-- Table Name: off_chain_vote_author
+-- Description:
 data OffChainVoteAuthor = OffChainVoteAuthor
   { offChainVoteAuthorOffChainVoteDataId :: !OffChainVoteDataId -- noreference
   , offChainVoteAuthorName :: !(Maybe Text)
@@ -312,11 +313,11 @@ data OffChainVoteAuthor = OffChainVoteAuthor
   , offChainVoteAuthorPublicKey :: !Text
   , offChainVoteAuthorSignature :: !Text
   , offChainVoteAuthorWarning :: !(Maybe Text)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainVoteAuthor
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteAuthor = OffChainVoteAuthorId
+instance DbInfo OffChainVoteAuthor
 
 entityNameOffChainVoteAuthorDecoder :: D.Row (Entity OffChainVoteAuthor)
 entityNameOffChainVoteAuthorDecoder =
@@ -352,8 +353,8 @@ offChainVoteAuthorEncoder =
     , offChainVoteAuthorWarning >$< E.param (E.nullable E.text)
     ]
 
-offChainVoteAuthorBulkEncoder
-  :: E.Params ([OffChainVoteDataId], [Maybe Text], [Text], [Text], [Text], [Maybe Text])
+offChainVoteAuthorBulkEncoder ::
+  E.Params ([OffChainVoteDataId], [Maybe Text], [Text], [Text], [Text], [Maybe Text])
 offChainVoteAuthorBulkEncoder =
   contrazip6
     (manyEncoder $ idBulkEncoder getOffChainVoteDataId)
@@ -364,21 +365,21 @@ offChainVoteAuthorBulkEncoder =
     (manyEncoder $ E.nullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_reference
-Description:
--}
+
+-- |
+-- Table Name: off_chain_vote_reference
+-- Description:
 data OffChainVoteReference = OffChainVoteReference
   { offChainVoteReferenceOffChainVoteDataId :: !OffChainVoteDataId -- noreference
   , offChainVoteReferenceLabel :: !Text
   , offChainVoteReferenceUri :: !Text
   , offChainVoteReferenceHashDigest :: !(Maybe Text)
   , offChainVoteReferenceHashAlgorithm :: !(Maybe Text)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainVoteReference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteReference = OffChainVoteReferenceId
+instance DbInfo OffChainVoteReference
 
 entityNameOffChainVoteReferenceDecoder :: D.Row (Entity OffChainVoteReference)
 entityNameOffChainVoteReferenceDecoder =
@@ -422,19 +423,19 @@ offChainVoteReferenceBulkEncoder =
     (manyEncoder $ E.nullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_external_update
-Description:
--}
+
+-- |
+-- Table Name: off_chain_vote_external_update
+-- Description:
 data OffChainVoteExternalUpdate = OffChainVoteExternalUpdate
   { offChainVoteExternalUpdateOffChainVoteDataId :: !OffChainVoteDataId -- noreference
   , offChainVoteExternalUpdateTitle :: !Text
   , offChainVoteExternalUpdateUri :: !Text
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo OffChainVoteExternalUpdate
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteExternalUpdate = OffChainVoteExternalUpdateId
+instance DbInfo OffChainVoteExternalUpdate
 
 entityNameOffChainVoteExternalUpdateDecoder :: D.Row (Entity OffChainVoteExternalUpdate)
 entityNameOffChainVoteExternalUpdateDecoder =
@@ -472,21 +473,21 @@ offChainVoteExternalUpdatesEncoder =
     (manyEncoder $ E.nonNullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: off_chain_vote_fetch_error
-Description:
--}
-data OffChainVoteFetchError = OffChainVoteFetchError
-  { offChainVoteFetchErrorVotingAnchorId :: !VotingAnchorId        -- noreference
-  , offChainVoteFetchErrorFetchError :: !Text
-  , offChainVoteFetchErrorFetchTime :: !UTCTime                    -- sqltype=timestamp
-  , offChainVoteFetchErrorRetryCount :: !Word                      -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo OffChainVoteFetchError where
-  uniqueFields _ = ["voting_anchor_id", "retry_count"]
+-- |
+-- Table Name: off_chain_vote_fetch_error
+-- Description:
+data OffChainVoteFetchError = OffChainVoteFetchError
+  { offChainVoteFetchErrorVotingAnchorId :: !VotingAnchorId -- noreference
+  , offChainVoteFetchErrorFetchError :: !Text
+  , offChainVoteFetchErrorFetchTime :: !UTCTime -- sqltype=timestamp
+  , offChainVoteFetchErrorRetryCount :: !Word -- sqltype=word31type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteFetchError = OffChainVoteFetchErrorId
+instance DbInfo OffChainVoteFetchError where
+  uniqueFields _ = ["voting_anchor_id", "retry_count"]
 
 entityNameOffChainVoteFetchErrorDecoder :: D.Row (Entity OffChainVoteFetchError)
 entityNameOffChainVoteFetchErrorDecoder =

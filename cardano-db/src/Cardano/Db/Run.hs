@@ -29,6 +29,8 @@ import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Trace (Trace)
 import Cardano.Db.Error (DbError, runOrThrowIO)
 import Cardano.Db.PGConfig
+import qualified Cardano.Db.Types as DB
+import Cardano.Prelude (Exception, ReaderT (..), bracket, lift, runExceptT, throwIO)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (
   LogLevel (..),
@@ -57,14 +59,11 @@ import Database.Persist.Sql (
   runSqlPoolWithIsolation,
   transactionSaveWithIsolation,
  )
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection.Setting as HsqlC
 import Language.Haskell.TH.Syntax (Loc)
 import System.IO (Handle)
 import System.Log.FastLogger (LogStr, fromLogStr)
-import qualified Cardano.Db.Types as DB
-import Cardano.Prelude (runExceptT, ReaderT (..), lift, throwIO, bracket, Exception)
-import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Connection.Setting as HsqlC
-
 
 -- | Run a DB action logging via the provided Handle.
 -- runDbHandleLogger :: Handle -> PGPassSource -> ReaderT SqlBackend (LoggingT IO) a -> IO a
@@ -95,12 +94,12 @@ runDbHandleLogger logHandle source action = do
   bracket
     (acquireConnection [connSetting])
     HsqlC.release
-    (\connection -> do
-      let dbEnv = DB.DbEnv connection True Nothing  -- No tracer needed
-      runHandleLoggerT $
-        runReaderT (runExceptT (DB.runDbAction action)) dbEnv >>= \case
-          Left err -> liftIO $ throwIO err
-          Right result -> pure result
+    ( \connection -> do
+        let dbEnv = DB.DbEnv connection True Nothing -- No tracer needed
+        runHandleLoggerT $
+          runReaderT (runExceptT (DB.runDbAction action)) dbEnv >>= \case
+            Left err -> liftIO $ throwIO err
+            Right result -> pure result
     )
   where
     runHandleLoggerT :: LoggingT m a -> m a
@@ -130,12 +129,12 @@ runWithConnectionNoLogging source action = do
   bracket
     (acquireConnection [connSetting])
     HsqlC.release
-    (\connection -> do
-      let dbEnv = DB.DbEnv connection False Nothing
-      runNoLoggingT $
-        runReaderT (runExceptT (DB.runDbAction action)) dbEnv >>= \case
-          Left err -> liftIO $ throwIO err
-          Right result -> pure result
+    ( \connection -> do
+        let dbEnv = DB.DbEnv connection False Nothing
+        runNoLoggingT $
+          runReaderT (runExceptT (DB.runDbAction action)) dbEnv >>= \case
+            Left err -> liftIO $ throwIO err
+            Right result -> pure result
     )
 
 -- runWithConnectionNoLogging ::
@@ -151,7 +150,6 @@ runWithConnectionNoLogging source action = do
 -- runDbIohkLogging :: forall m a. MonadUnliftIO m => Trace IO Text -> DB.DbEnv -> DB.DbAction m a -> m (Either DbError a)
 -- runDbIohkLogging tracer dbEnv action = do
 --   runIohkLogging tracer $ runReaderT (runExceptT (DB.runDbAction action)) dbEnv
-
 runDbIohkLogging ::
   MonadUnliftIO m =>
   Trace IO Text ->
@@ -160,7 +158,8 @@ runDbIohkLogging ::
   m (Either DbError a)
 runDbIohkLogging tracer dbEnv action =
   runIohkLogging tracer $
-    lift $ runReaderT (runExceptT (DB.runDbAction action)) dbEnv
+    lift $
+      runReaderT (runExceptT (DB.runDbAction action)) dbEnv
 
 -- | Run a DB action using a Pool via iohk-monitoring-framework.
 runPoolDbIohkLogging :: MonadUnliftIO m => Pool SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
@@ -228,7 +227,7 @@ runDbNoLogging ::
 runDbNoLogging source action = do
   pgconfig <- liftIO $ runOrThrowIO (readPGPass source)
   connSetting <- liftIO $ case toConnectionSetting pgconfig of
-    Left err -> error err  -- or use a more appropriate error handling
+    Left err -> error err -- or use a more appropriate error handling
     Right setting -> pure setting
 
   connection <- liftIO $ acquireConnection [connSetting]
@@ -238,7 +237,7 @@ runDbNoLogging source action = do
   liftIO $ HsqlC.release connection
 
   case result of
-    Left err -> error (show err)  -- or use a more appropriate error handling
+    Left err -> error (show err) -- or use a more appropriate error handling
     Right val -> pure val
 
 transactionCommit :: MonadIO m => ReaderT SqlBackend m ()
@@ -247,8 +246,8 @@ transactionCommit = transactionSaveWithIsolation Serializable
 -- data HsqlConnectionException = HsqlConnectionException (Maybe BS.ByteString)
 --   deriving (Show)
 
-newtype HsqlConnectionException =
-  HsqlConnectionException (Maybe BS.ByteString)
+newtype HsqlConnectionException
+  = HsqlConnectionException (Maybe BS.ByteString)
   deriving (Show)
 
 instance Exception HsqlConnectionException
