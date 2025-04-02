@@ -1,72 +1,76 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.Db.Error (
-  AsDbError (..),
+  -- AsDbError (..),
   CallSite (..),
   DbError (..),
   runOrThrowIODb,
   runOrThrowIO,
   logAndThrowIO,
-  base16encode
+  base16encode,
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
-import Cardano.Db.Schema.Ids
-import Cardano.Prelude (throwIO, MonadIO)
+import Cardano.Prelude (MonadIO, throwIO)
 import Control.Exception (Exception)
+import qualified Data.ByteString.Base16 as Base16
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
-import Data.Word (Word16, Word64)
-import GHC.Generics (Generic)
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Text.Encoding as Text
-import qualified Hasql.Session as HsqlS
 
-class AsDbError e where
-  toDbError :: DbError -> e
-  fromDbError :: e -> Maybe DbError
+import qualified Hasql.Session as HsqlSes
 
-data DbError
-  = DbError !CallSite !Text !HsqlS.SessionError
-  | DbLookupError !CallSite !Text !LookupContext
+data DbError = DbError
+  { dbErrorCallSite :: !CallSite
+  , dbErrorMessage :: !Text
+  , dbErrorCause :: !(Maybe HsqlSes.SessionError) -- Now a Maybe
+  }
   deriving (Show, Eq)
 
 instance Exception DbError
+
+-- class AsDbError e where
+--   toDbError :: DbError -> e
+--   fromDbError :: e -> Maybe DbError
+
+-- data DbError
+--   = DbError !CallSite !Text !HsqlS.SessionError
+--   | DbLookupError !CallSite !Text !LookupContext
+--   deriving (Show, Eq)
+
+-- instance Exception DbError
 
 data CallSite = CallSite
   { csModule :: !Text
   , csFile :: !Text
   , csLine :: !Int
-  } deriving (Show, Eq)
+  }
+  deriving (Show, Eq)
 
-data LookupContext
-  = BlockHashContext !ByteString
-  | BlockIdContext !Word64
-  | MessageContext !Text
-  | TxHashContext !ByteString
-  | TxOutPairContext !ByteString !Word16
-  | EpochNoContext !Word64
-  | SlotNoContext !Word64
-  | GovActionPairContext !TxId !Word64
-  | MetaEmptyContext
-  | MetaMultipleRowsContext
-  | MultipleGenesisContext
-  | ExtraMigrationContext !String
-  | PruneConsumedContext !String
-  | RJsonbInSchemaContext !String
-  | TxOutVariantContext !String
-  deriving (Show, Eq, Generic)
+-- data LookupContext
+--   = BlockHashContext !ByteString
+--   | BlockIdContext !Word64
+--   | MessageContext !Text
+--   | TxHashContext !ByteString
+--   | TxOutPairContext !ByteString !Word16
+--   | EpochNoContext !Word64
+--   | SlotNoContext !Word64
+--   | GovActionPairContext !TxId !Word64
+--   | MetaEmptyContext
+--   | MetaMultipleRowsContext
+--   | MultipleGenesisContext
+--   | ExtraMigrationContext !String
+--   | PruneConsumedContext !String
+--   | RJsonbInSchemaContext !String
+--   | TxOutVariantContext !String
+--   deriving (Show, Eq, Generic)
 
-instance Exception LookupContext
+-- instance Exception LookupContext
 
 -- catchDbError :: String -> HsqlT.Transaction a -> HsqlT.Transaction a
 -- catchDbError context action =
 --   action `catch` \e ->
 --     throwError $ DbError $ context ++ ": " ++ show e
-
 
 -- instance Show LookupFail where
 --   show =

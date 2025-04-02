@@ -14,51 +14,51 @@ import Hasql.Decoders as D
 import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Statement.Types (DbInfo (..), Key, Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
+  AnchorType,
   DbLovelace,
+  DbWord64,
   GovActionType,
-  VoterRole,
   Vote,
   VoteUrl,
-  AnchorType,
-  DbWord64,
+  VoterRole,
+  anchorTypeDecoder,
+  anchorTypeEncoder,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
-  maybeDbWord64Encoder,
-  maybeDbLovelaceEncoder,
   govActionTypeDecoder,
   govActionTypeEncoder,
-  voterRoleDecoder,
+  maybeDbLovelaceDecoder,
+  maybeDbLovelaceEncoder,
+  maybeDbWord64Decoder,
+  maybeDbWord64Encoder,
   voteDecoder,
-  voterRoleEncoder,
   voteEncoder,
   voteUrlDecoder,
-  anchorTypeDecoder,
   voteUrlEncoder,
-  anchorTypeEncoder,
-  maybeDbWord64Decoder,
-  maybeDbLovelaceDecoder
-  )
+  voterRoleDecoder,
+  voterRoleEncoder,
+ )
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- GOVERNANCE AND VOTING
 -- These tables manage governance-related data, including DReps, committees, and voting procedures.
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: drep_hash
-Description: Stores hashes of DRep (Decentralized Reputation) records, which are used in governance processes.
--}
+
+-- |
+-- Table Name: drep_hash
+-- Description: Stores hashes of DRep (Decentralized Reputation) records, which are used in governance processes.
 data DrepHash = DrepHash
   { drepHashRaw :: !(Maybe ByteString) -- sqltype=hash28type
   , drepHashView :: !Text
   , drepHashHasScript :: !Bool
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo DrepHash where
-  uniqueFields _ = ["raw", "has_script"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key DrepHash = DrepHashId
+instance DbInfo DrepHash where
+  uniqueFields _ = ["raw", "has_script"]
 
 entityDrepHashDecoder :: D.Row (Entity DrepHash)
 entityDrepHashDecoder =
@@ -89,21 +89,21 @@ drepHashEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: drep_registration
-Description: Contains details about the registration of DReps, including their public keys and other identifying information.
--}
+
+-- |
+-- Table Name: drep_registration
+-- Description: Contains details about the registration of DReps, including their public keys and other identifying information.
 data DrepRegistration = DrepRegistration
-  { drepRegistrationTxId :: !TxId          -- noreference
+  { drepRegistrationTxId :: !TxId -- noreference
   , drepRegistrationCertIndex :: !Word16
   , drepRegistrationDeposit :: !(Maybe Int64)
-  , drepRegistrationDrepHashId :: !DrepHashId   -- noreference
+  , drepRegistrationDrepHashId :: !DrepHashId -- noreference
   , drepRegistrationVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo DrepRegistration
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key DrepRegistration = DrepRegistrationId
+instance DbInfo DrepRegistration
 
 entityDrepRegistrationDecoder :: D.Row (Entity DrepRegistration)
 entityDrepRegistrationDecoder =
@@ -137,21 +137,21 @@ drepRegistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: drep_distr
-Description: Contains information about the distribution of DRep tokens, including the amount distributed and the epoch in which the distribution occurred.
--}
-data DrepDistr = DrepDistr
-  { drepDistrHashId :: !DrepHashId         -- noreference
-  , drepDistrAmount :: !Word64
-  , drepDistrEpochNo :: !Word64            -- sqltype=word31type
-  , drepDistrActiveUntil :: !(Maybe Word64)  -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo DrepDistr where
-  uniqueFields _ = ["hash_id", "epoch_no"]
+-- |
+-- Table Name: drep_distr
+-- Description: Contains information about the distribution of DRep tokens, including the amount distributed and the epoch in which the distribution occurred.
+data DrepDistr = DrepDistr
+  { drepDistrHashId :: !DrepHashId -- noreference
+  , drepDistrAmount :: !Word64
+  , drepDistrEpochNo :: !Word64 -- sqltype=word31type
+  , drepDistrActiveUntil :: !(Maybe Word64) -- sqltype=word31type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key DrepDistr = DrepDistrId
+instance DbInfo DrepDistr where
+  uniqueFields _ = ["hash_id", "epoch_no"]
 
 entityDrepDistrDecoder :: D.Row (Entity DrepDistr)
 entityDrepDistrDecoder =
@@ -184,21 +184,21 @@ drepDistrEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: delegation_vote
-Description: Tracks votes cast by stakeholders to delegate their voting rights to other entities within the governance framework.
--}
+
+-- |
+-- Table Name: delegation_vote
+-- Description: Tracks votes cast by stakeholders to delegate their voting rights to other entities within the governance framework.
 data DelegationVote = DelegationVote
   { delegationVoteAddrId :: !StakeAddressId -- noreference
   , delegationVoteCertIndex :: !Word16
   , delegationVoteDrepHashId :: !DrepHashId -- noreference
-  , delegationVoteTxId :: !TxId             -- noreference
+  , delegationVoteTxId :: !TxId -- noreference
   , delegationVoteRedeemerId :: !(Maybe RedeemerId) -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo DelegationVote
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key DelegationVote = DelegationVoteId
+instance DbInfo DelegationVote
 
 entityDelegationVoteDecoder :: D.Row (Entity DelegationVote)
 entityDelegationVoteDecoder =
@@ -233,30 +233,30 @@ delegationVoteEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: gov_action_proposal
-Description: Contains proposals for governance actions, including the type of action, the amount of the deposit, and the expiration date.
--}
+
+-- |
+-- Table Name: gov_action_proposal
+-- Description: Contains proposals for governance actions, including the type of action, the amount of the deposit, and the expiration date.
 data GovActionProposal = GovActionProposal
-  { govActionProposalTxId :: !TxId           -- noreference
+  { govActionProposalTxId :: !TxId -- noreference
   , govActionProposalIndex :: !Word64
   , govActionProposalPrevGovActionProposal :: !(Maybe GovActionProposalId) -- noreference
-  , govActionProposalDeposit :: !DbLovelace  -- sqltype=lovelace
+  , govActionProposalDeposit :: !DbLovelace -- sqltype=lovelace
   , govActionProposalReturnAddress :: !StakeAddressId -- noreference
-  , govActionProposalExpiration :: !(Maybe Word64)  -- sqltype=word31type
+  , govActionProposalExpiration :: !(Maybe Word64) -- sqltype=word31type
   , govActionProposalVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
-  , govActionProposalType :: !GovActionType   -- sqltype=govactiontype
-  , govActionProposalDescription :: !Text     -- sqltype=jsonb
+  , govActionProposalType :: !GovActionType -- sqltype=govactiontype
+  , govActionProposalDescription :: !Text -- sqltype=jsonb
   , govActionProposalParamProposal :: !(Maybe ParamProposalId) -- noreference
-  , govActionProposalRatifiedEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalEnactedEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalDroppedEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  , govActionProposalExpiredEpoch :: !(Maybe Word64)  -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo GovActionProposal
+  , govActionProposalRatifiedEpoch :: !(Maybe Word64) -- sqltype=word31type
+  , govActionProposalEnactedEpoch :: !(Maybe Word64) -- sqltype=word31type
+  , govActionProposalDroppedEpoch :: !(Maybe Word64) -- sqltype=word31type
+  , govActionProposalExpiredEpoch :: !(Maybe Word64) -- sqltype=word31type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key GovActionProposal = GovActionProposalId
+instance DbInfo GovActionProposal
 
 entityGovActionProposalDecoder :: D.Row (Entity GovActionProposal)
 entityGovActionProposalDecoder =
@@ -309,26 +309,26 @@ govActionProposalEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: voting_procedure
-Description: Defines the procedures and rules governing the voting process, including quorum requirements and tallying mechanisms.
--}
+
+-- |
+-- Table Name: voting_procedure
+-- Description: Defines the procedures and rules governing the voting process, including quorum requirements and tallying mechanisms.
 data VotingProcedure = VotingProcedure
-  { votingProcedureTxId :: !TxId                    -- noreference
+  { votingProcedureTxId :: !TxId -- noreference
   , votingProcedureIndex :: !Word16
   , votingProcedureGovActionProposalId :: !GovActionProposalId -- noreference
-  , votingProcedureVoterRole :: !VoterRole           -- sqltype=voterrole
-  , votingProcedureDrepVoter :: !(Maybe DrepHashId)    -- noreference
-  , votingProcedurePoolVoter :: !(Maybe PoolHashId)    -- noreference
-  , votingProcedureVote :: !Vote                     -- sqltype=vote
+  , votingProcedureVoterRole :: !VoterRole -- sqltype=voterrole
+  , votingProcedureDrepVoter :: !(Maybe DrepHashId) -- noreference
+  , votingProcedurePoolVoter :: !(Maybe PoolHashId) -- noreference
+  , votingProcedureVote :: !Vote -- sqltype=vote
   , votingProcedureVotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
   , votingProcedureCommitteeVoter :: !(Maybe CommitteeHashId) -- noreference
-  , votingProcedureInvalid :: !(Maybe EventInfoId)    -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo VotingProcedure
+  , votingProcedureInvalid :: !(Maybe EventInfoId) -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key VotingProcedure = VotingProcedureId
+instance DbInfo VotingProcedure
 
 entityVotingProcedureDecoder :: D.Row (Entity VotingProcedure)
 entityVotingProcedureDecoder =
@@ -373,21 +373,21 @@ votingProcedureEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: voting_anchor
-Description: Acts as an anchor point for votes, ensuring they are securely recorded and linked to specific proposals.
--}
-data VotingAnchor = VotingAnchor
-  { votingAnchorUrl :: !VoteUrl           -- sqltype=varchar
-  , votingAnchorDataHash :: !ByteString
-  , votingAnchorType :: !AnchorType       -- sqltype=anchorType
-  , votingAnchorBlockId :: !BlockId       -- noreference
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo VotingAnchor where
-  uniqueFields _ = ["data_hash", "url", "type"]
+-- |
+-- Table Name: voting_anchor
+-- Description: Acts as an anchor point for votes, ensuring they are securely recorded and linked to specific proposals.
+data VotingAnchor = VotingAnchor
+  { votingAnchorUrl :: !VoteUrl -- sqltype=varchar
+  , votingAnchorDataHash :: !ByteString
+  , votingAnchorType :: !AnchorType -- sqltype=anchorType
+  , votingAnchorBlockId :: !BlockId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key VotingAnchor = VotingAnchorId
+instance DbInfo VotingAnchor where
+  uniqueFields _ = ["data_hash", "url", "type"]
 
 entityVotingAnchorDecoder :: D.Row (Entity VotingAnchor)
 entityVotingAnchorDecoder =
@@ -420,19 +420,19 @@ votingAnchorEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: constitution
-Description: Holds the on-chain constitution, which defines the rules and principles of the blockchain's governance system.
--}
+
+-- |
+-- Table Name: constitution
+-- Description: Holds the on-chain constitution, which defines the rules and principles of the blockchain's governance system.
 data Constitution = Constitution
   { constitutionGovActionProposalId :: !(Maybe GovActionProposalId) -- noreference
-  , constitutionVotingAnchorId :: !VotingAnchorId                -- noreference
-  , constitutionScriptHash :: !(Maybe ByteString)                  -- sqltype=hash28type
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo Constitution
+  , constitutionVotingAnchorId :: !VotingAnchorId -- noreference
+  , constitutionScriptHash :: !(Maybe ByteString) -- sqltype=hash28type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Constitution = ConstitutionId
+instance DbInfo Constitution
 
 entityConstitutionDecoder :: D.Row (Entity Constitution)
 entityConstitutionDecoder =
@@ -463,19 +463,19 @@ constitutionEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: committee
-Description: Contains information about the committee, including the quorum requirements and the proposal being considered.
--}
+
+-- |
+-- Table Name: committee
+-- Description: Contains information about the committee, including the quorum requirements and the proposal being considered.
 data Committee = Committee
   { committeeGovActionProposalId :: !(Maybe GovActionProposalId) -- noreference
   , committeeQuorumNumerator :: !Word64
   , committeeQuorumDenominator :: !Word64
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo Committee
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Committee = CommitteeId
+instance DbInfo Committee
 
 entityCommitteeDecoder :: D.Row (Entity Committee)
 entityCommitteeDecoder =
@@ -506,19 +506,19 @@ committeeEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: committee_hash
-Description: Stores hashes of committee records, which are used in governance processes.
--}
-data CommitteeHash = CommitteeHash
-  { committeeHashRaw :: !ByteString    -- sqltype=hash28type
-  , committeeHashHasScript :: !Bool
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo CommitteeHash where
-  uniqueFields _ = ["raw", "has_script"]
+-- |
+-- Table Name: committee_hash
+-- Description: Stores hashes of committee records, which are used in governance processes.
+data CommitteeHash = CommitteeHash
+  { committeeHashRaw :: !ByteString -- sqltype=hash28type
+  , committeeHashHasScript :: !Bool
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key CommitteeHash = CommitteeHashId
+instance DbInfo CommitteeHash where
+  uniqueFields _ = ["raw", "has_script"]
 
 entityCommitteeHashDecoder :: D.Row (Entity CommitteeHash)
 entityCommitteeHashDecoder =
@@ -547,19 +547,19 @@ committeeHashEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: committeemember
-Description: Contains information about committee members.
--}
-data CommitteeMember = CommitteeMember
-  { committeeMemberCommitteeId :: !CommitteeId          -- OnDeleteCascade -- here intentionally we use foreign keys
-  , committeeMemberCommitteeHashId :: !CommitteeHashId  -- noreference
-  , committeeMemberExpirationEpoch :: !Word64           -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo CommitteeMember
+-- |
+-- Table Name: committeemember
+-- Description: Contains information about committee members.
+data CommitteeMember = CommitteeMember
+  { committeeMemberCommitteeId :: !CommitteeId -- OnDeleteCascade -- here intentionally we use foreign keys
+  , committeeMemberCommitteeHashId :: !CommitteeHashId -- noreference
+  , committeeMemberExpirationEpoch :: !Word64 -- sqltype=word31type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key CommitteeMember = CommitteeMemberId
+instance DbInfo CommitteeMember
 
 entityCommitteeMemberDecoder :: D.Row (Entity CommitteeMember)
 entityCommitteeMemberDecoder =
@@ -590,20 +590,20 @@ committeeMemberEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: committeeregistration
-Description: Contains information about the registration of committee members, including their public keys and other identifying information.
--}
+
+-- |
+-- Table Name: committeeregistration
+-- Description: Contains information about the registration of committee members, including their public keys and other identifying information.
 data CommitteeRegistration = CommitteeRegistration
   { committeeRegistrationTxId :: !TxId -- noreference
   , committeeRegistrationCertIndex :: !Word16
   , committeeRegistrationColdKeyId :: !CommitteeHashId -- noreference
-  , committeeRegistrationHotKeyId :: !CommitteeHashId  -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo CommitteeRegistration
+  , committeeRegistrationHotKeyId :: !CommitteeHashId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key CommitteeRegistration = CommitteeRegistrationId
+instance DbInfo CommitteeRegistration
 
 entityCommitteeRegistrationDecoder :: D.Row (Entity CommitteeRegistration)
 entityCommitteeRegistrationDecoder =
@@ -636,20 +636,20 @@ committeeRegistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: committeede_registration
-Description: Contains information about the deregistration of committee members, including their public keys and other identifying information.
--}
+
+-- |
+-- Table Name: committeede_registration
+-- Description: Contains information about the deregistration of committee members, including their public keys and other identifying information.
 data CommitteeDeRegistration = CommitteeDeRegistration
   { committeeDeRegistration_TxId :: !TxId -- noreference
   , committeeDeRegistration_CertIndex :: !Word16
   , committeeDeRegistration_VotingAnchorId :: !(Maybe VotingAnchorId) -- noreference
   , committeeDeRegistration_ColdKeyId :: !CommitteeHashId -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo CommitteeDeRegistration
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key CommitteeDeRegistration = CommitteeDeRegistrationId
+instance DbInfo CommitteeDeRegistration
 
 entityCommitteeDeRegistrationDecoder :: D.Row (Entity CommitteeDeRegistration)
 entityCommitteeDeRegistrationDecoder =
@@ -681,51 +681,47 @@ committeeDeRegistrationEncoder =
     , committeeDeRegistration_ColdKeyId >$< idEncoder getCommitteeHashId
     ]
 
-{-|
-Table Name: param_proposal
-Description: Contains proposals for changes to the protocol parameters, including the proposed values and the expiration date.
--}
+-- |
+-- Table Name: param_proposal
+-- Description: Contains proposals for changes to the protocol parameters, including the proposed values and the expiration date.
 data ParamProposal = ParamProposal
-  { paramProposalEpochNo :: !(Maybe Word64)                -- sqltype=word31type
-  , paramProposalKey :: !(Maybe ByteString)                -- sqltype=hash28type
-  , paramProposalMinFeeA :: !(Maybe DbWord64)              -- sqltype=word64type
-  , paramProposalMinFeeB :: !(Maybe DbWord64)              -- sqltype=word64type
-  , paramProposalMaxBlockSize :: !(Maybe DbWord64)         -- sqltype=word64type
-  , paramProposalMaxTxSize :: !(Maybe DbWord64)            -- sqltype=word64type
-  , paramProposalMaxBhSize :: !(Maybe DbWord64)            -- sqltype=word64type
-  , paramProposalKeyDeposit :: !(Maybe DbLovelace)         -- sqltype=lovelace
-  , paramProposalPoolDeposit :: !(Maybe DbLovelace)        -- sqltype=lovelace
-  , paramProposalMaxEpoch :: !(Maybe DbWord64)             -- sqltype=word64type
-  , paramProposalOptimalPoolCount :: !(Maybe DbWord64)     -- sqltype=word64type
+  { paramProposalEpochNo :: !(Maybe Word64) -- sqltype=word31type
+  , paramProposalKey :: !(Maybe ByteString) -- sqltype=hash28type
+  , paramProposalMinFeeA :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMinFeeB :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxBlockSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxTxSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxBhSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalKeyDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , paramProposalPoolDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , paramProposalMaxEpoch :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalOptimalPoolCount :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalInfluence :: !(Maybe Double)
   , paramProposalMonetaryExpandRate :: !(Maybe Double)
   , paramProposalTreasuryGrowthRate :: !(Maybe Double)
   , paramProposalDecentralisation :: !(Maybe Double)
-  , paramProposalEntropy :: !(Maybe ByteString)            -- sqltype=hash32type
-  , paramProposalProtocolMajor :: !(Maybe Word16)          -- sqltype=word31type
-  , paramProposalProtocolMinor :: !(Maybe Word16)          -- sqltype=word31type
-  , paramProposalMinUtxoValue :: !(Maybe DbLovelace)       -- sqltype=lovelace
-  , paramProposalMinPoolCost :: !(Maybe DbLovelace)        -- sqltype=lovelace
-
-  , paramProposalCostModelId :: !(Maybe CostModelId)       -- noreference
+  , paramProposalEntropy :: !(Maybe ByteString) -- sqltype=hash32type
+  , paramProposalProtocolMajor :: !(Maybe Word16) -- sqltype=word31type
+  , paramProposalProtocolMinor :: !(Maybe Word16) -- sqltype=word31type
+  , paramProposalMinUtxoValue :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , paramProposalMinPoolCost :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , paramProposalCostModelId :: !(Maybe CostModelId) -- noreference
   , paramProposalPriceMem :: !(Maybe Double)
   , paramProposalPriceStep :: !(Maybe Double)
-  , paramProposalMaxTxExMem :: !(Maybe DbWord64)           -- sqltype=word64type
-  , paramProposalMaxTxExSteps :: !(Maybe DbWord64)         -- sqltype=word64type
-  , paramProposalMaxBlockExMem :: !(Maybe DbWord64)        -- sqltype=word64type
-  , paramProposalMaxBlockExSteps :: !(Maybe DbWord64)      -- sqltype=word64type
-  , paramProposalMaxValSize :: !(Maybe DbWord64)           -- sqltype=word64type
-  , paramProposalCollateralPercent :: !(Maybe Word16)      -- sqltype=word31type
-  , paramProposalMaxCollateralInputs :: !(Maybe Word16)    -- sqltype=word31type
-  , paramProposalRegisteredTxId :: !TxId                   -- noreference
-  , paramProposalCoinsPerUtxoSize :: !(Maybe DbLovelace)   -- sqltype=lovelace
-
+  , paramProposalMaxTxExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxTxExSteps :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxBlockExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxBlockExSteps :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxValSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalCollateralPercent :: !(Maybe Word16) -- sqltype=word31type
+  , paramProposalMaxCollateralInputs :: !(Maybe Word16) -- sqltype=word31type
+  , paramProposalRegisteredTxId :: !TxId -- noreference
+  , paramProposalCoinsPerUtxoSize :: !(Maybe DbLovelace) -- sqltype=lovelace
   , paramProposalPvtMotionNoConfidence :: !(Maybe Double)
   , paramProposalPvtCommitteeNormal :: !(Maybe Double)
   , paramProposalPvtCommitteeNoConfidence :: !(Maybe Double)
   , paramProposalPvtHardForkInitiation :: !(Maybe Double)
   , paramProposalPvtppSecurityGroup :: !(Maybe Double)
-
   , paramProposalDvtMotionNoConfidence :: !(Maybe Double)
   , paramProposalDvtCommitteeNormal :: !(Maybe Double)
   , paramProposalDvtCommitteeNoConfidence :: !(Maybe Double)
@@ -736,21 +732,18 @@ data ParamProposal = ParamProposal
   , paramProposalDvtPPTechnicalGroup :: !(Maybe Double)
   , paramProposalDvtPPGovGroup :: !(Maybe Double)
   , paramProposalDvtTreasuryWithdrawal :: !(Maybe Double)
-
-  , paramProposalCommitteeMinSize :: !(Maybe DbWord64)     -- sqltype=word64type
+  , paramProposalCommitteeMinSize :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalCommitteeMaxTermLength :: !(Maybe DbWord64) --
-  , paramProposalGovActionLifetime :: !(Maybe DbWord64)    -- sqltype=word64type
-  , paramProposalGovActionDeposit :: !(Maybe DbWord64)     -- sqltype=word64type
-  , paramProposalDrepDeposit :: !(Maybe DbWord64)          -- sqltype=word64type
-  , paramProposalDrepActivity :: !(Maybe DbWord64)         -- sqltype=word64type
+  , paramProposalGovActionLifetime :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalGovActionDeposit :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalDrepDeposit :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalMinFeeRefScriptCostPerByte :: !(Maybe Double)
-
-  } deriving (Show, Eq, Generic)
-
-
-instance DbInfo ParamProposal
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key ParamProposal = ParamProposalId
+instance DbInfo ParamProposal
 
 entityParamProposalDecoder :: D.Row (Entity ParamProposal)
 entityParamProposalDecoder =
@@ -883,19 +876,19 @@ paramProposalEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: treasury_withdrawal
-Description:
--}
+
+-- |
+-- Table Name: treasury_withdrawal
+-- Description:
 data TreasuryWithdrawal = TreasuryWithdrawal
   { treasuryWithdrawalGovActionProposalId :: !GovActionProposalId -- noreference
-  , treasuryWithdrawalStakeAddressId :: !StakeAddressId          -- noreference
-  , treasuryWithdrawalAmount :: !DbLovelace                      -- sqltype=lovelace
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo TreasuryWithdrawal
+  , treasuryWithdrawalStakeAddressId :: !StakeAddressId -- noreference
+  , treasuryWithdrawalAmount :: !DbLovelace -- sqltype=lovelace
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key TreasuryWithdrawal = TreasuryWithdrawalId
+instance DbInfo TreasuryWithdrawal
 
 entityTreasuryWithdrawalDecoder :: D.Row (Entity TreasuryWithdrawal)
 entityTreasuryWithdrawalDecoder =
@@ -926,20 +919,20 @@ treasuryWithdrawalEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: event_info
-Description: Contains information about events, including the epoch in which they occurred and the type of event.
--}
+
+-- |
+-- Table Name: event_info
+-- Description: Contains information about events, including the epoch in which they occurred and the type of event.
 data EventInfo = EventInfo
-  { eventInfoTxId :: !(Maybe TxId)           -- noreference
-  , eventInfoEpoch :: !Word64              -- sqltype=word31type
+  { eventInfoTxId :: !(Maybe TxId) -- noreference
+  , eventInfoEpoch :: !Word64 -- sqltype=word31type
   , eventInfoType :: !Text
   , eventInfoExplanation :: !(Maybe Text)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo EventInfo
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key EventInfo = EventInfoId
+instance DbInfo EventInfo
 
 entityEventInfoDecoder :: D.Row (Entity EventInfo)
 entityEventInfoDecoder =

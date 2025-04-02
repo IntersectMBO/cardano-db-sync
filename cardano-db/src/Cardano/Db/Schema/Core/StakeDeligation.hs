@@ -4,7 +4,7 @@
 
 module Cardano.Db.Schema.Core.StakeDeligation where
 
-import Contravariant.Extras (contrazip5, contrazip2, contrazip4, contrazip6)
+import Contravariant.Extras (contrazip2, contrazip4, contrazip5, contrazip6)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)
@@ -16,37 +16,38 @@ import Hasql.Encoders as E
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..), Key, Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
-  DbLovelace(..),
+  DbLovelace (..),
   RewardSource,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
   maybeDbLovelaceDecoder,
   maybeDbLovelaceEncoder,
   rewardSourceDecoder,
-  dbLovelaceEncoder,
   rewardSourceEncoder,
  )
 
 -----------------------------------------------------------------------------------------------------------------------------------
+
 -- | STAKE DELEGATION
 -- | These tables handle stake addresses, delegation, and reward
+
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: stake_address
-Description: Contains information about stakeholder addresses.
--}
-data StakeAddress = StakeAddress  -- Can be an address of a script hash
-  { stakeAddressHashRaw :: !ByteString        -- sqltype=addr29type
+
+-- |
+-- Table Name: stake_address
+-- Description: Contains information about stakeholder addresses.
+data StakeAddress = StakeAddress -- Can be an address of a script hash
+  { stakeAddressHashRaw :: !ByteString -- sqltype=addr29type
   , stakeAddressView :: !Text
   , stakeAddressScriptHash :: !(Maybe ByteString) -- sqltype=hash28type
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo StakeAddress where
-  uniqueFields _ = ["hash_raw"]
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key StakeAddress = StakeAddressId
+instance DbInfo StakeAddress where
+  uniqueFields _ = ["hash_raw"]
 
 entityStakeAddressDecoder :: D.Row (Entity StakeAddress)
 entityStakeAddressDecoder =
@@ -77,21 +78,21 @@ stakeAddressEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: stake_registration
-Description: Contains information about stakeholder registrations.
--}
-data StakeRegistration = StakeRegistration
-  { stakeRegistrationAddrId :: !StakeAddressId  -- noreference
-  , stakeRegistrationCertIndex :: !Word16
-  , stakeRegistrationEpochNo :: !Word64         -- sqltype=word31type
-  , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
-  , stakeRegistrationTxId :: !TxId              -- noreference
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo StakeRegistration
+-- |
+-- Table Name: stake_registration
+-- Description: Contains information about stakeholder registrations.
+data StakeRegistration = StakeRegistration
+  { stakeRegistrationAddrId :: !StakeAddressId -- noreference
+  , stakeRegistrationCertIndex :: !Word16
+  , stakeRegistrationEpochNo :: !Word64 -- sqltype=word31type
+  , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , stakeRegistrationTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key StakeRegistration = StakeRegistrationId
+instance DbInfo StakeRegistration
 
 entityStakeRegistrationDecoder :: D.Row (Entity StakeRegistration)
 entityStakeRegistrationDecoder =
@@ -126,22 +127,23 @@ stakeRegistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: stake_deregistration
-Description: Contains information about stakeholder deregistrations.
--}
+
+-- |
+-- Table Name: stake_deregistration
+-- Description: Contains information about stakeholder deregistrations.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data StakeDeregistration = StakeDeregistration
   { stakeDeregistrationAddrId :: !StakeAddressId -- noreference
   , stakeDeregistrationCertIndex :: !Word16
-  , stakeDeregistrationEpochNo :: !Word64       -- sqltype=word31type
-  , stakeDeregistrationTxId :: !TxId            -- noreference
+  , stakeDeregistrationEpochNo :: !Word64 -- sqltype=word31type
+  , stakeDeregistrationTxId :: !TxId -- noreference
   , stakeDeregistrationRedeemerId :: !(Maybe RedeemerId) -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo StakeDeregistration
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key StakeDeregistration = StakeDeregistrationId
+instance DbInfo StakeDeregistration
 
 entityStakeDeregistrationDecoder :: D.Row (Entity StakeDeregistration)
 entityStakeDeregistrationDecoder =
@@ -176,24 +178,25 @@ stakeDeregistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: delegation
-Description:Contains information about stakeholder delegations, including the stakeholder's address and the pool to which they are delegating.
--}
+
+-- |
+-- Table Name: delegation
+-- Description:Contains information about stakeholder delegations, including the stakeholder's address and the pool to which they are delegating.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Delegation = Delegation
-  { delegationAddrId :: !StakeAddressId         -- noreference
+  { delegationAddrId :: !StakeAddressId -- noreference
   , delegationCertIndex :: !Word16
-  , delegationPoolHashId :: !PoolHashId         -- noreference
+  , delegationPoolHashId :: !PoolHashId -- noreference
   , delegationActiveEpochNo :: !Word64
-  , delegationTxId :: !TxId                     -- noreference
-  , delegationSlotNo :: !Word64                 -- sqltype=word63type
-  , delegationRedeemerId :: !(Maybe RedeemerId)   -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo Delegation
+  , delegationTxId :: !TxId -- noreference
+  , delegationSlotNo :: !Word64 -- sqltype=word63type
+  , delegationRedeemerId :: !(Maybe RedeemerId) -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Delegation = DelegationId
+instance DbInfo Delegation
 
 entityDelegationDecoder :: D.Row (Entity Delegation)
 entityDelegationDecoder =
@@ -232,26 +235,27 @@ delegationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reward
-Description: Reward, Stake and Treasury need to be obtained from the ledger state.
-  The reward for each stake address and. This is not a balance, but a reward amount and the
-  epoch in which the reward was earned.
-  This table should never get rolled back.
--}
+
+-- |
+-- Table Name: reward
+-- Description: Reward, Stake and Treasury need to be obtained from the ledger state.
+--   The reward for each stake address and. This is not a balance, but a reward amount and the
+--   epoch in which the reward was earned.
+--   This table should never get rolled back.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Reward = Reward
-  { rewardAddrId :: !StakeAddressId   -- noreference
-  , rewardType :: !RewardSource       -- sqltype=rewardtype
-  , rewardAmount :: !DbLovelace       -- sqltype=lovelace
-  , rewardEarnedEpoch :: !Word64      -- generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
+  { rewardAddrId :: !StakeAddressId -- noreference
+  , rewardType :: !RewardSource -- sqltype=rewardtype
+  , rewardAmount :: !DbLovelace -- sqltype=lovelace
+  , rewardEarnedEpoch :: !Word64 -- generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
   , rewardSpendableEpoch :: !Word64
-  , rewardPoolId :: !PoolHashId       -- noreference
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo Reward
+  , rewardPoolId :: !PoolHashId -- noreference
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key Reward = RewardId
+instance DbInfo Reward
 
 entityRewardDecoder :: D.Row (Entity Reward)
 entityRewardDecoder =
@@ -298,21 +302,22 @@ rewardBulkEncoder =
     (manyEncoder $ idBulkEncoder getPoolHashId)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reward_rest
-Description: Contains information about the remaining reward for each stakeholder.
--}
+
+-- |
+-- Table Name: reward_rest
+-- Description: Contains information about the remaining reward for each stakeholder.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data RewardRest = RewardRest
-  { rewardRestType :: !RewardSource     -- sqltype=rewardtype
-  , rewardRestAmount :: !DbLovelace     -- sqltype=lovelace
-  , rewardRestEarnedEpoch :: !Word64    -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
+  { rewardRestType :: !RewardSource -- sqltype=rewardtype
+  , rewardRestAmount :: !DbLovelace -- sqltype=lovelace
+  , rewardRestEarnedEpoch :: !Word64 -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
   , rewardRestSpendableEpoch :: !Word64
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo RewardRest
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key RewardRest = RewardRestId
+instance DbInfo RewardRest
 
 entityRewardRestDecoder :: D.Row (Entity RewardRest)
 entityRewardRestDecoder =
@@ -354,24 +359,26 @@ rewardRestBulkEncoder =
     (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epoch_stake
-Description: Contains information about the stake of each stakeholder in each epoch.
-  This table should never get rolled back
--}
+
+-- |
+-- Table Name: epoch_stake
+-- Description: Contains information about the stake of each stakeholder in each epoch.
+--   This table should never get rolled back
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data EpochStake = EpochStake
   { epochStakeAddrId :: !StakeAddressId -- noreference
-  , epochStakePoolId :: !PoolHashId     -- noreference
-  , epochStakeAmount :: !DbLovelace     -- sqltype=lovelace
-  , epochStakeEpochNo :: !Word64        -- sqltype=word31type
-  } deriving (Show, Eq, Generic)
+  , epochStakePoolId :: !PoolHashId -- noreference
+  , epochStakeAmount :: !DbLovelace -- sqltype=lovelace
+  , epochStakeEpochNo :: !Word64 -- sqltype=word31type
+  }
+  deriving (Show, Eq, Generic)
+
 -- similar scenario as in Reward the constraint that was here is now set manually in
 -- `applyAndInsertBlockMaybe` at a more optimal time.
 
-instance DbInfo EpochStake
-
 type instance Key EpochStake = EpochStakeId
+instance DbInfo EpochStake
 
 entityEpochStakeDecoder :: D.Row (Entity EpochStake)
 entityEpochStakeDecoder =
@@ -412,20 +419,21 @@ epochStakeBulkEncoder =
     (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epoch_stake_progress
-Description: Contains information about the progress of the epoch stake calculation.
--}
+
+-- |
+-- Table Name: epoch_stake_progress
+-- Description: Contains information about the progress of the epoch stake calculation.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data EpochStakeProgress = EpochStakeProgress
-  { epochStakeProgressEpochNo :: !Word64  -- sqltype=word31type
+  { epochStakeProgressEpochNo :: !Word64 -- sqltype=word31type
   , epochStakeProgressCompleted :: !Bool
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo EpochStakeProgress where
-  uniqueFields _ = ["epoch_no"]
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key EpochStakeProgress = EpochStakeProgressId
+instance DbInfo EpochStakeProgress where
+  uniqueFields _ = ["epoch_no"]
 
 entityEpochStakeProgressDecoder :: D.Row (Entity EpochStakeProgress)
 entityEpochStakeProgressDecoder =

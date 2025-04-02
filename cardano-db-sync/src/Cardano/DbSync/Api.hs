@@ -84,6 +84,7 @@ import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
 import Database.Persist.Postgresql (ConnectionString)
 import Database.Persist.Sql (SqlBackend)
+import qualified Hasql.Connection as HqlC
 import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
@@ -93,7 +94,6 @@ import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 import qualified Ouroboros.Network.Point as Point
-import qualified Hasql.Connection as HqlC
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -167,10 +167,10 @@ runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
   void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
 
-runRemoveJsonbFromSchema
-  :: (MonadIO m, AsDbError e)
-  => SyncEnv
-  -> DbAction e m ()
+runRemoveJsonbFromSchema ::
+  (MonadIO m, AsDbError e) =>
+  SyncEnv ->
+  DbAction e m ()
 runRemoveJsonbFromSchema syncEnv = do
   DB.runDbT DB.Write transx
   where
@@ -379,11 +379,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-<<<<<<< HEAD
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
-=======
-mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
->>>>>>> 29841e49 (more functionality)
+mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions

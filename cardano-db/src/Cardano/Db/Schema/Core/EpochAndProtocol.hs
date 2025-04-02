@@ -12,11 +12,11 @@
 
 module Cardano.Db.Schema.Core.EpochAndProtocol where
 
-import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Ids
+import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Types (
   DbInt65,
-  DbLovelace(..),
+  DbLovelace (..),
   DbWord64,
   SyncState,
   dbInt65Decoder,
@@ -29,50 +29,50 @@ import Cardano.Db.Types (
   syncStateEncoder,
   word128Decoder,
   word128Encoder,
-  )
+ )
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Data.WideWord.Word128 (Word128)
 import Data.Word (Word16, Word64)
-import Data.Functor.Contravariant
 import GHC.Generics (Generic)
 
+import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
+import Contravariant.Extras (contrazip4)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
-import Cardano.Db.Statement.Types (DbInfo(..), Entity (..), Key)
-import Contravariant.Extras (contrazip4)
-import Cardano.Db.Statement.Function.Core (manyEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- EPOCH AND PROTOCOL PARAMETER
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epoch
-Description: The Epoch table is an aggregation of data in the 'Block' table, but is kept in this form
-  because having it as a 'VIEW' is incredibly slow and inefficient.
-  The 'outsum' type in the PostgreSQL world is 'bigint >= 0' so it will error out if an
-  overflow (sum of tx outputs in an epoch) is detected. 'maxBound :: !Int` is big enough to
-  hold 204 times the total Lovelace distribution. The chance of that much being transacted
-  in a single epoch is relatively low.
--}
-data Epoch = Epoch
-  { epochOutSum :: !Word128          -- sqltype=word128type
-  , epochFees :: !DbLovelace         -- sqltype=lovelace
-  , epochTxCount :: !Word64          -- sqltype=word31type
-  , epochBlkCount :: !Word64         -- sqltype=word31type
-  , epochNo :: !Word64               -- sqltype=word31type
-  , epochStartTime :: !UTCTime       -- sqltype=timestamp
-  , epochEndTime :: !UTCTime         -- sqltype=timestamp
-  } deriving (Eq, Show, Generic)
 
+-- |
+-- Table Name: epoch
+-- Description: The Epoch table is an aggregation of data in the 'Block' table, but is kept in this form
+--   because having it as a 'VIEW' is incredibly slow and inefficient.
+--   The 'outsum' type in the PostgreSQL world is 'bigint >= 0' so it will error out if an
+--   overflow (sum of tx outputs in an epoch) is detected. 'maxBound :: !Int` is big enough to
+--   hold 204 times the total Lovelace distribution. The chance of that much being transacted
+--   in a single epoch is relatively low.
+data Epoch = Epoch
+  { epochOutSum :: !Word128 -- sqltype=word128type
+  , epochFees :: !DbLovelace -- sqltype=lovelace
+  , epochTxCount :: !Word64 -- sqltype=word31type
+  , epochBlkCount :: !Word64 -- sqltype=word31type
+  , epochNo :: !Word64 -- sqltype=word31type
+  , epochStartTime :: !UTCTime -- sqltype=timestamp
+  , epochEndTime :: !UTCTime -- sqltype=timestamp
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key Epoch = EpochId
 instance DbInfo Epoch where
   uniqueFields _ = ["no"]
 
-type instance Key Epoch = EpochId
-
-entityEpochDecoder:: D.Row (Entity Epoch)
+entityEpochDecoder :: D.Row (Entity Epoch)
 entityEpochDecoder =
   Entity
     <$> idDecoder EpochId
@@ -109,51 +109,48 @@ epochEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epochparam
-Description: Stores parameters relevant to each epoch, such as the number of slots per epoch or the block size limit.
--}
+
+-- |
+-- Table Name: epochparam
+-- Description: Stores parameters relevant to each epoch, such as the number of slots per epoch or the block size limit.
 data EpochParam = EpochParam
-  { epochParamEpochNo :: !Word64               -- sqltype=word31type
-  , epochParamMinFeeA :: !Word64               -- sqltype=word31type
-  , epochParamMinFeeB :: !Word64               -- sqltype=word31type
-  , epochParamMaxBlockSize :: !Word64          -- sqltype=word31type
-  , epochParamMaxTxSize :: !Word64             -- sqltype=word31type
-  , epochParamMaxBhSize :: !Word64             -- sqltype=word31type
-  , epochParamKeyDeposit :: !DbLovelace        -- sqltype=lovelace
-  , epochParamPoolDeposit :: !DbLovelace       -- sqltype=lovelace
-  , epochParamMaxEpoch :: !Word64              -- sqltype=word31type
-  , epochParamOptimalPoolCount :: !Word64      -- sqltype=word31type
+  { epochParamEpochNo :: !Word64 -- sqltype=word31type
+  , epochParamMinFeeA :: !Word64 -- sqltype=word31type
+  , epochParamMinFeeB :: !Word64 -- sqltype=word31type
+  , epochParamMaxBlockSize :: !Word64 -- sqltype=word31type
+  , epochParamMaxTxSize :: !Word64 -- sqltype=word31type
+  , epochParamMaxBhSize :: !Word64 -- sqltype=word31type
+  , epochParamKeyDeposit :: !DbLovelace -- sqltype=lovelace
+  , epochParamPoolDeposit :: !DbLovelace -- sqltype=lovelace
+  , epochParamMaxEpoch :: !Word64 -- sqltype=word31type
+  , epochParamOptimalPoolCount :: !Word64 -- sqltype=word31type
   , epochParamInfluence :: !Double
   , epochParamMonetaryExpandRate :: !Double
   , epochParamTreasuryGrowthRate :: !Double
   , epochParamDecentralisation :: !Double
-  , epochParamProtocolMajor :: !Word16         -- sqltype=word31type
-  , epochParamProtocolMinor :: !Word16         -- sqltype=word31type
-  , epochParamMinUtxoValue :: !DbLovelace      -- sqltype=lovelace
-  , epochParamMinPoolCost :: !DbLovelace       -- sqltype=lovelace
-
-  , epochParamNonce :: !(Maybe ByteString)       -- sqltype=hash32type
-
+  , epochParamProtocolMajor :: !Word16 -- sqltype=word31type
+  , epochParamProtocolMinor :: !Word16 -- sqltype=word31type
+  , epochParamMinUtxoValue :: !DbLovelace -- sqltype=lovelace
+  , epochParamMinPoolCost :: !DbLovelace -- sqltype=lovelace
+  , epochParamNonce :: !(Maybe ByteString) -- sqltype=hash32type
   , epochParamCoinsPerUtxoSize :: !(Maybe DbLovelace) -- sqltype=lovelace
-  , epochParamCostModelId :: !(Maybe CostModelId)   -- noreference
+  , epochParamCostModelId :: !(Maybe CostModelId) -- noreference
   , epochParamPriceMem :: !(Maybe Double)
   , epochParamPriceStep :: !(Maybe Double)
-  , epochParamMaxTxExMem :: !(Maybe DbWord64)    -- sqltype=word64type
-  , epochParamMaxTxExSteps :: !(Maybe DbWord64)  -- sqltype=word64type
+  , epochParamMaxTxExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamMaxTxExSteps :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamMaxBlockExMem :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamMaxBlockExSteps :: !(Maybe DbWord64) -- sqltype=word64type
-  , epochParamMaxValSize :: !(Maybe DbWord64)    -- sqltype=word64type
+  , epochParamMaxValSize :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamCollateralPercent :: !(Maybe Word16) -- sqltype=word31type
   , epochParamMaxCollateralInputs :: !(Maybe Word16) -- sqltype=word31type
-  , epochParamBlockId :: !BlockId                 -- noreference -- The first block where these parameters are valid.
+  , epochParamBlockId :: !BlockId -- noreference -- The first block where these parameters are valid.
   , epochParamExtraEntropy :: !(Maybe ByteString) -- sqltype=hash32type
   , epochParamPvtMotionNoConfidence :: !(Maybe Double)
   , epochParamPvtCommitteeNormal :: !(Maybe Double)
   , epochParamPvtCommitteeNoConfidence :: !(Maybe Double)
   , epochParamPvtHardForkInitiation :: !(Maybe Double)
   , epochParamPvtppSecurityGroup :: !(Maybe Double)
-
   , epochParamDvtMotionNoConfidence :: !(Maybe Double)
   , epochParamDvtCommitteeNormal :: !(Maybe Double)
   , epochParamDvtCommitteeNoConfidence :: !(Maybe Double)
@@ -164,19 +161,18 @@ data EpochParam = EpochParam
   , epochParamDvtPPTechnicalGroup :: !(Maybe Double)
   , epochParamDvtPPGovGroup :: !(Maybe Double)
   , epochParamDvtTreasuryWithdrawal :: !(Maybe Double)
-
   , epochParamCommitteeMinSize :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamCommitteeMaxTermLength :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamGovActionLifetime :: !(Maybe DbWord64) -- sqltype=word64type
-  , epochParamGovActionDeposit :: !(Maybe DbWord64)  -- sqltype=word64type
-  , epochParamDrepDeposit :: !(Maybe DbWord64)       -- sqltype=word64type
-  , epochParamDrepActivity :: !(Maybe DbWord64)      -- sqltype=word64type
+  , epochParamGovActionDeposit :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamDrepDeposit :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamMinFeeRefScriptCostPerByte :: !(Maybe Double)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo EpochParam
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key EpochParam = EpochParamId
+instance DbInfo EpochParam
 
 entityEpochParamDecoder :: D.Row (Entity EpochParam)
 entityEpochParamDecoder =
@@ -309,20 +305,20 @@ epochParamEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epochstate
-Description: Contains the state of the blockchain at the end of each epoch, including the committee, constitution, and no-confidence votes.
--}
-data EpochState = EpochState
-  { epochStateCommitteeId :: !(Maybe CommitteeId)         -- noreference
-  , epochStateNoConfidenceId :: !(Maybe GovActionProposalId) -- noreference
-  , epochStateConstitutionId :: !(Maybe ConstitutionId)   -- noreference
-  , epochStateEpochNo :: !Word64                        -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo EpochState
+-- |
+-- Table Name: epochstate
+-- Description: Contains the state of the blockchain at the end of each epoch, including the committee, constitution, and no-confidence votes.
+data EpochState = EpochState
+  { epochStateCommitteeId :: !(Maybe CommitteeId) -- noreference
+  , epochStateNoConfidenceId :: !(Maybe GovActionProposalId) -- noreference
+  , epochStateConstitutionId :: !(Maybe ConstitutionId) -- noreference
+  , epochStateEpochNo :: !Word64 -- sqltype=word31type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key EpochState = EpochStateId
+instance DbInfo EpochState
 
 entityEpochStateDecoder :: D.Row (Entity EpochState)
 entityEpochStateDecoder =
@@ -355,26 +351,28 @@ epochStateEncoder =
     ]
 
 epochStateBulkEncoder :: E.Params ([Maybe CommitteeId], [Maybe GovActionProposalId], [Maybe ConstitutionId], [Word64])
-epochStateBulkEncoder = contrazip4
-  (manyEncoder $ E.nullable $ getCommitteeId >$< E.int8)
-  (manyEncoder $ E.nullable $ getGovActionProposalId >$< E.int8)
-  (manyEncoder $ E.nullable $ getConstitutionId >$< E.int8)
-  (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
------------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: epochsync_time
-Description: Tracks synchronization times for epochs, ensuring nodes are in consensus regarding the current state.
--}
-data EpochSyncTime = EpochSyncTime
-  { epochSyncTimeNo :: !Word64         -- sqltype=word31type
-  , epochSyncTimeSeconds :: !Word64    -- sqltype=word63type
-  , epochSyncTimeState :: !SyncState   -- sqltype=syncstatetype
-  } deriving (Show, Eq, Generic)
+epochStateBulkEncoder =
+  contrazip4
+    (manyEncoder $ E.nullable $ getCommitteeId >$< E.int8)
+    (manyEncoder $ E.nullable $ getGovActionProposalId >$< E.int8)
+    (manyEncoder $ E.nullable $ getConstitutionId >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
-instance DbInfo EpochSyncTime where
-  uniqueFields _ = ["no"]
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- Table Name: epochsync_time
+-- Description: Tracks synchronization times for epochs, ensuring nodes are in consensus regarding the current state.
+data EpochSyncTime = EpochSyncTime
+  { epochSyncTimeNo :: !Word64 -- sqltype=word31type
+  , epochSyncTimeSeconds :: !Word64 -- sqltype=word63type
+  , epochSyncTimeState :: !SyncState -- sqltype=syncstatetype
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key EpochSyncTime = EpochSyncTimeId
+instance DbInfo EpochSyncTime where
+  uniqueFields _ = ["no"]
 
 entityEpochSyncTimeDecoder :: D.Row (Entity EpochSyncTime)
 entityEpochSyncTimeDecoder =
@@ -405,30 +403,30 @@ epochSyncTimeEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: ada_pots
-Description: A table with all the different types of total balances.
-  This is only populated for the Shelley and later eras, and only on epoch boundaries.
-  The treasury and rewards fields will be correct for the whole epoch, but all other
-  fields change block by block.
--}
+
+-- |
+-- Table Name: ada_pots
+-- Description: A table with all the different types of total balances.
+--   This is only populated for the Shelley and later eras, and only on epoch boundaries.
+--   The treasury and rewards fields will be correct for the whole epoch, but all other
+--   fields change block by block.
 data AdaPots = AdaPots
-  { adaPotsSlotNo :: !Word64         -- sqltype=word63type
-  , adaPotsEpochNo :: !Word64        -- sqltype=word31type
-  , adaPotsTreasury :: !DbLovelace   -- sqltype=lovelace
-  , adaPotsReserves :: !DbLovelace   -- sqltype=lovelace
-  , adaPotsRewards :: !DbLovelace    -- sqltype=lovelace
-  , adaPotsUtxo :: !DbLovelace       -- sqltype=lovelace
+  { adaPotsSlotNo :: !Word64 -- sqltype=word63type
+  , adaPotsEpochNo :: !Word64 -- sqltype=word31type
+  , adaPotsTreasury :: !DbLovelace -- sqltype=lovelace
+  , adaPotsReserves :: !DbLovelace -- sqltype=lovelace
+  , adaPotsRewards :: !DbLovelace -- sqltype=lovelace
+  , adaPotsUtxo :: !DbLovelace -- sqltype=lovelace
   , adaPotsDepositsStake :: !DbLovelace -- sqltype=lovelace
-  , adaPotsFees :: !DbLovelace       -- sqltype=lovelace
-  , adaPotsBlockId :: !BlockId       -- noreference
+  , adaPotsFees :: !DbLovelace -- sqltype=lovelace
+  , adaPotsBlockId :: !BlockId -- noreference
   , adaPotsDepositsDrep :: !DbLovelace -- sqltype=lovelace
   , adaPotsDepositsProposal :: !DbLovelace -- sqltype=lovelace
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo AdaPots
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key AdaPots = AdaPotsId
+instance DbInfo AdaPots
 
 entityAdaPotsDecoder :: D.Row (Entity AdaPots)
 entityAdaPotsDecoder =
@@ -475,19 +473,19 @@ adaPotsEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: pot_transfer
-Description: Records transfers between different pots (e.g., from the rewards pot to the treasury pot).
--}
+
+-- |
+-- Table Name: pot_transfer
+-- Description: Records transfers between different pots (e.g., from the rewards pot to the treasury pot).
 data PotTransfer = PotTransfer
   { potTransferCertIndex :: !Word16
-  , potTransferTreasury :: !DbInt65    -- sqltype=int65type
-  , potTransferReserves :: !DbInt65    -- sqltype=int65type
-  , potTransferTxId :: !TxId           -- noreference
-  } deriving (Show, Eq, Generic)
+  , potTransferTreasury :: !DbInt65 -- sqltype=int65type
+  , potTransferReserves :: !DbInt65 -- sqltype=int65type
+  , potTransferTxId :: !TxId -- noreference
+  }
+  deriving (Show, Eq, Generic)
 
 instance DbInfo PotTransfer
-
 type instance Key PotTransfer = PotTransferId
 
 entityPotTransferDecoder :: D.Row (Entity PotTransfer)
@@ -521,19 +519,19 @@ potTransferEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: treasury
-Description: Holds funds allocated to the treasury, which can be used for network upgrades or other community initiatives.
--}
+
+-- |
+-- Table Name: treasury
+-- Description: Holds funds allocated to the treasury, which can be used for network upgrades or other community initiatives.
 data Treasury = Treasury
   { treasuryAddrId :: !StakeAddressId -- noreference
   , treasuryCertIndex :: !Word16
-  , treasuryAmount :: !DbInt65        -- sqltype=int65type
-  , treasuryTxId :: !TxId             -- noreference
-  } deriving (Show, Eq, Generic)
+  , treasuryAmount :: !DbInt65 -- sqltype=int65type
+  , treasuryTxId :: !TxId -- noreference
+  }
+  deriving (Show, Eq, Generic)
 
 instance DbInfo Treasury
-
 type instance Key Treasury = TreasuryId
 
 entityTreasuryDecoder :: D.Row (Entity Treasury)
@@ -567,20 +565,20 @@ treasuryEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reserve
-Description: Stores reserves set aside by the protocol to stabilize the cryptocurrency's value or fund future activities.
--}
-data Reserve = Reserve
-  { reserveAddrId :: !StakeAddressId  -- noreference
-  , reserveCertIndex :: !Word16
-  , reserveAmount :: !DbInt65         -- sqltype=int65type
-  , reserveTxId :: !TxId              -- noreference
-  } deriving (Show, Eq, Generic)
 
-instance DbInfo Reserve
+-- |
+-- Table Name: reserve
+-- Description: Stores reserves set aside by the protocol to stabilize the cryptocurrency's value or fund future activities.
+data Reserve = Reserve
+  { reserveAddrId :: !StakeAddressId -- noreference
+  , reserveCertIndex :: !Word16
+  , reserveAmount :: !DbInt65 -- sqltype=int65type
+  , reserveTxId :: !TxId -- noreference
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key Reserve = ReserveId
+instance DbInfo Reserve
 
 entityReserveDecoder :: D.Row (Entity Reserve)
 entityReserveDecoder =
@@ -613,19 +611,19 @@ reserveEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: cost_model
-Description: Defines the cost model used for estimating transaction fees, ensuring efficient resource allocation on the network.
--}
-data CostModel = CostModel
-  { costModelCosts :: !Text         -- sqltype=jsonb
-  , costModelHash :: !ByteString    -- sqltype=hash32type
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo CostModel where
-  uniqueFields _ = ["hash"]
+-- |
+-- Table Name: cost_model
+-- Description: Defines the cost model used for estimating transaction fees, ensuring efficient resource allocation on the network.
+data CostModel = CostModel
+  { costModelCosts :: !Text -- sqltype=jsonb
+  , costModelHash :: !ByteString -- sqltype=hash32type
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key CostModel = CostModelId
+instance DbInfo CostModel where
+  uniqueFields _ = ["hash"]
 
 entityCostModelDecoder :: D.Row (Entity CostModel)
 entityCostModelDecoder =

@@ -1,6 +1,14 @@
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Cardano.Db.Schema.Core.Base where
 
@@ -15,24 +23,25 @@ import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
 
+-- import Cardano.Db.Schema.Orphans ()
+
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..), Key, Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
-  DbLovelace(..),
-  DbWord64(..),
+  DbLovelace (..),
+  DbWord64 (..),
   ScriptPurpose,
   ScriptType,
+  dbLovelaceDecoder,
+  dbLovelaceEncoder,
+  maybeDbWord64Decoder,
+  maybeDbWord64Encoder,
   scriptPurposeDecoder,
   scriptPurposeEncoder,
-  scriptTypeEncoder,
   scriptTypeDecoder,
-  dbLovelaceDecoder,
-  maybeDbWord64Decoder,
-  dbLovelaceEncoder,
-  maybeDbWord64Encoder
-  )
+  scriptTypeEncoder,
+ )
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
@@ -44,21 +53,21 @@ import Cardano.Db.Types (
 -- BASE TABLES
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: block
-Description: Stores information about individual blocks in the blockchain, including their hash, size,
-  and the transactions they contain.
--}
+
+-- |
+-- Table Name: block
+-- Description: Stores information about individual blocks in the blockchain, including their hash, size,
+--   and the transactions they contain.
 data Block = Block
   { blockHash :: !ByteString -- sqltype=hash32type
   , blockEpochNo :: !(Maybe Word64) -- sqltype=word31type
   , blockSlotNo :: !(Maybe Word64) -- sqltype=word63type
   , blockEpochSlotNo :: !(Maybe Word64) -- sqltype=word31type
   , blockBlockNo :: !(Maybe Word64) -- sqltype=word31type
-  , blockPreviousId :: !(Maybe Int)  -- noreference
-  , blockSlotLeaderId :: !SlotLeaderId  -- noreference
+  , blockPreviousId :: !(Maybe Int) -- noreference
+  , blockSlotLeaderId :: !SlotLeaderId -- noreference
   , blockSize :: !Word64 -- sqltype=word31type
-  , blockTime :: !UTCTime  -- sqltype=timestamp
+  , blockTime :: !UTCTime -- sqltype=timestamp
   , blockTxCount :: !Word64
   , blockProtoMajor :: !Word16 -- sqltype=word31type
   , blockProtoMinor :: !Word16 -- sqltype=word31type
@@ -66,12 +75,12 @@ data Block = Block
   , blockVrfKey :: !(Maybe Text)
   , blockOpCert :: !(Maybe ByteString) -- sqltype=hash32type
   , blockOpCertCounter :: !(Maybe Word64) -- sqltype=hash63type
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo Block where
-  uniqueFields _ = ["hash"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Block = BlockId
+instance DbInfo Block where
+  uniqueFields _ = ["hash"]
 
 entityBlockDecoder :: D.Row (Entity Block)
 entityBlockDecoder =
@@ -125,10 +134,10 @@ blockEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: tx
-Description: Contains data related to transactions, such as transaction ID, inputs, outputs, and metadata
--}
+
+-- |
+-- Table Name: tx
+-- Description: Contains data related to transactions, such as transaction ID, inputs, outputs, and metadata
 data Tx = Tx
   { txHash :: !ByteString -- sqltype=hash32type
   , txBlockId :: !BlockId -- noreference -- This type is the primary key for the 'block' table.
@@ -137,20 +146,20 @@ data Tx = Tx
   , txFee :: !DbLovelace -- sqltype=lovelace
   , txDeposit :: !(Maybe Int64) -- Needs to allow negaitve values.
   , txSize :: !Word64 -- sqltype=word31type
-    -- New for Allega
+  -- New for Allega
   , txInvalidBefore :: !(Maybe DbWord64) -- sqltype=word64type
   , txInvalidHereafter :: !(Maybe DbWord64) -- sqltype=word64type
-    -- New for Alonzo
+  -- New for Alonzo
   , txValidContract :: !Bool -- False if the contract is invalid, True otherwise.
   , txScriptSize :: !Word64 -- sqltype=word31type
-    -- New for Conway
+  -- New for Conway
   , txTreasuryDonation :: !DbLovelace -- sqltype=lovelace default=0
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo Tx where
-  uniqueFields _ = ["hash"]
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key Tx = TxId
+instance DbInfo Tx where
+  uniqueFields _ = ["hash"]
 
 entityTxDecoder :: D.Row (Entity Tx)
 entityTxDecoder =
@@ -199,20 +208,20 @@ txEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: txmetadata
-Description: Contains metadata associated with transactions, such as metadata ID, key, and date.
--}
-data TxMetadata = TxMetadata
-  { txMetadataKey :: !DbWord64           -- sqltype=word64type
-  , txMetadataJson :: !(Maybe Text)        -- sqltype=jsonb
-  , txMetadataBytes :: !ByteString       -- sqltype=bytea
-  , txMetadataTxId :: !TxId              -- noreference
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo TxMetadata
+-- |
+-- Table Name: txmetadata
+-- Description: Contains metadata associated with transactions, such as metadata ID, key, and date.
+data TxMetadata = TxMetadata
+  { txMetadataKey :: !DbWord64 -- sqltype=word64type
+  , txMetadataJson :: !(Maybe Text) -- sqltype=jsonb
+  , txMetadataBytes :: !ByteString -- sqltype=bytea
+  , txMetadataTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key TxMetadata = TxMetadataId
+instance DbInfo TxMetadata
 
 entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
 entityTxMetadataDecoder =
@@ -253,20 +262,20 @@ txMetadataBulkEncoder =
     (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: txin
-Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
--}
+
+-- |
+-- Table Name: txin
+-- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
 data TxIn = TxIn
   { txInTxInId :: !TxId -- The transaction where this is used as an input.
   , txInTxOutId :: !TxId -- The transaction where this was created as an output.
   , txInTxOutIndex :: !Word64 -- sqltype=txindex
   , txInRedeemerId :: !(Maybe RedeemerId)
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo TxIn
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key TxIn = TxInId
+instance DbInfo TxIn
 
 entityTxInDecoder :: D.Row (Entity TxIn)
 entityTxInDecoder =
@@ -299,26 +308,27 @@ txInEncoder =
     ]
 
 encodeTxInBulk :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
-encodeTxInBulk = contrazip4
-  (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
-  (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
-  (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-  (manyEncoder $ E.nullable $ getRedeemerId >$< E.int8)
+encodeTxInBulk =
+  contrazip4
+    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (manyEncoder $ E.nullable $ getRedeemerId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: collateral_txin
-Description:
--}
-data CollateralTxIn = CollateralTxIn
-  { collateralTxInTxInId :: !TxId         -- noreference -- The transaction where this is used as an input.
-  , collateralTxInTxOutId :: !TxId        -- noreference -- The transaction where this was created as an output.
-  , collateralTxInTxOutIndex :: !Word64   -- sqltype=txindex
-  } deriving (Show, Eq, Generic)
 
-instance DbInfo CollateralTxIn
+-- |
+-- Table Name: collateral_txin
+-- Description:
+data CollateralTxIn = CollateralTxIn
+  { collateralTxInTxInId :: !TxId -- noreference -- The transaction where this is used as an input.
+  , collateralTxInTxOutId :: !TxId -- noreference -- The transaction where this was created as an output.
+  , collateralTxInTxOutIndex :: !Word64 -- sqltype=txindex
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key CollateralTxIn = CollateralTxInId
+instance DbInfo CollateralTxIn
 
 entityCollateralTxInDecoder :: D.Row (Entity CollateralTxIn)
 entityCollateralTxInDecoder =
@@ -349,19 +359,19 @@ collateralTxInEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reference_txin
-Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
--}
-data ReferenceTxIn = ReferenceTxIn
-  { referenceTxInTxInId :: !TxId        -- noreference -- The transaction where this is used as an input.
-  , referenceTxInTxOutId :: !TxId       -- noreference -- The transaction where this was created as an output.
-  , referenceTxInTxOutIndex :: !Word64  -- sqltype=txindex
-  } deriving (Show, Eq, Generic)
 
-instance DbInfo ReferenceTxIn
+-- |
+-- Table Name: reference_txin
+-- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
+data ReferenceTxIn = ReferenceTxIn
+  { referenceTxInTxInId :: !TxId -- noreference -- The transaction where this is used as an input.
+  , referenceTxInTxOutId :: !TxId -- noreference -- The transaction where this was created as an output.
+  , referenceTxInTxOutIndex :: !Word64 -- sqltype=txindex
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key ReferenceTxIn = ReferenceTxInId
+instance DbInfo ReferenceTxIn
 
 entityReferenceTxInDecoder :: D.Row (Entity ReferenceTxIn)
 entityReferenceTxInDecoder =
@@ -392,18 +402,18 @@ referenceTxInEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: reverse_index
-Description: Provides a reverse lookup mechanism for transaction inputs, allowing efficient querying of the origin of funds.
--}
-data ReverseIndex = ReverseIndex
-  { reverseIndexBlockId :: !BlockId   -- noreference
-  , reverseIndexMinIds :: !Text
-  } deriving (Show, Eq, Generic)
 
-instance DbInfo ReverseIndex
+-- |
+-- Table Name: reverse_index
+-- Description: Provides a reverse lookup mechanism for transaction inputs, allowing efficient querying of the origin of funds.
+data ReverseIndex = ReverseIndex
+  { reverseIndexBlockId :: !BlockId -- noreference
+  , reverseIndexMinIds :: !Text
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key ReverseIndex = ReverseIndexId
+instance DbInfo ReverseIndex
 
 entityReverseIndexDecoder :: D.Row (Entity ReverseIndex)
 entityReverseIndexDecoder =
@@ -432,19 +442,19 @@ reverseIndexEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: txcbor
-Description: Stores the raw CBOR (Concise Binary Object Representation) encoding of transactions, useful for validation
-  and serialization purposes.
--}
-data TxCbor = TxCbor
-  { txCborTxId :: !TxId           -- noreference
-  , txCborBytes :: !ByteString    -- sqltype=bytea
-  } deriving (Show, Eq, Generic)
 
-instance DbInfo TxCbor
+-- |
+-- Table Name: txcbor
+-- Description: Stores the raw CBOR (Concise Binary Object Representation) encoding of transactions, useful for validation
+--   and serialization purposes.
+data TxCbor = TxCbor
+  { txCborTxId :: !TxId -- noreference
+  , txCborBytes :: !ByteString -- sqltype=bytea
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key TxCbor = TxCborId
+instance DbInfo TxCbor
 
 entityTxCborDecoder :: D.Row (Entity TxCbor)
 entityTxCborDecoder =
@@ -473,21 +483,21 @@ txCborEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: datum
-Description: Contains the data associated with a transaction output, which can be used as input for a script.
--}
-data Datum = Datum
-  { datumHash :: !ByteString      -- sqltype=hash32type
-  , datumTxId :: !TxId            -- noreference
-  , datumValue :: !(Maybe Text)     -- sqltype=jsonb
-  , datumBytes :: !ByteString     -- sqltype=bytea
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo Datum where
-  uniqueFields _ = ["hash"]
+-- |
+-- Table Name: datum
+-- Description: Contains the data associated with a transaction output, which can be used as input for a script.
+data Datum = Datum
+  { datumHash :: !ByteString -- sqltype=hash32type
+  , datumTxId :: !TxId -- noreference
+  , datumValue :: !(Maybe Text) -- sqltype=jsonb
+  , datumBytes :: !ByteString -- sqltype=bytea
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Datum = DatumId
+instance DbInfo Datum where
+  uniqueFields _ = ["hash"]
 
 entityDatumDecoder :: D.Row (Entity Datum)
 entityDatumDecoder =
@@ -520,23 +530,23 @@ datumEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: script
-Description: Contains the script associated with a transaction output, which can be used as input for a script.
--}
+
+-- |
+-- Table Name: script
+-- Description: Contains the script associated with a transaction output, which can be used as input for a script.
 data Script = Script
-  { scriptTxId :: !TxId           -- noreference
-  , scriptHash :: !ByteString     -- sqltype=hash28type
-  , scriptType :: !ScriptType     -- sqltype=scripttype
-  , scriptJson :: !(Maybe Text)     -- sqltype=jsonb
+  { scriptTxId :: !TxId -- noreference
+  , scriptHash :: !ByteString -- sqltype=hash28type
+  , scriptType :: !ScriptType -- sqltype=scripttype
+  , scriptJson :: !(Maybe Text) -- sqltype=jsonb
   , scriptBytes :: !(Maybe ByteString) -- sqltype=bytea
   , scriptSerialisedSize :: !(Maybe Word64) -- sqltype=word31type
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo Script where
-  uniqueFields _ = ["hash"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Script = ScriptId
+instance DbInfo Script where
+  uniqueFields _ = ["hash"]
 
 entityScriptDecoder :: D.Row (Entity Script)
 entityScriptDecoder =
@@ -573,27 +583,30 @@ scriptEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: redeemer
-Description: Holds the redeemer data used to satisfy script conditions during transaction processing.
--}
+
+-- |
+-- Table Name: redeemer
+-- Description: Holds the redeemer data used to satisfy script conditions during transaction processing.
+
 -- Unit step is in picosends, and `maxBound :: !Int64` picoseconds is over 100 days, so using
 -- Word64/word63type is safe here. Similarly, `maxBound :: !Int64` if unit step would be an
--- *enormous* amount a memory which would cost a fortune.
-data Redeemer = Redeemer
-  { redeemerTxId :: !TxId                     -- noreference
-  , redeemerUnitMem :: !Word64                -- sqltype=word63type
-  , redeemerUnitSteps :: !Word64              -- sqltype=word63type
-  , redeemerFee :: !(Maybe DbLovelace)          -- sqltype=lovelace
-  , redeemerPurpose :: !ScriptPurpose         -- sqltype=scriptpurposetype
-  , redeemerIndex :: !Word64                  -- sqltype=word31type
-  , redeemerScriptHash :: !(Maybe ByteString)   -- sqltype=hash28type
-  , redeemerRedeemerDataId :: !RedeemerDataId -- noreference
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo Redeemer
+-- * enormous* amount a memory which would cost a fortune.
+
+data Redeemer = Redeemer
+  { redeemerTxId :: !TxId -- noreference
+  , redeemerUnitMem :: !Word64 -- sqltype=word63type
+  , redeemerUnitSteps :: !Word64 -- sqltype=word63type
+  , redeemerFee :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , redeemerPurpose :: !ScriptPurpose -- sqltype=scriptpurposetype
+  , redeemerIndex :: !Word64 -- sqltype=word31type
+  , redeemerScriptHash :: !(Maybe ByteString) -- sqltype=hash28type
+  , redeemerRedeemerDataId :: !RedeemerDataId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Redeemer = RedeemerId
+instance DbInfo Redeemer
 
 entityRedeemerDecoder :: D.Row (Entity Redeemer)
 entityRedeemerDecoder =
@@ -634,21 +647,21 @@ redeemerEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: redeemer_data
-Description: Additional details about the redeemer, including its type and any associated metadata.
--}
+
+-- |
+-- Table Name: redeemer_data
+-- Description: Additional details about the redeemer, including its type and any associated metadata.
 data RedeemerData = RedeemerData
-  { redeemerDataHash :: !ByteString  -- sqltype=hash32type
-  , redeemerDataTxId :: !TxId        -- noreference
+  { redeemerDataHash :: !ByteString -- sqltype=hash32type
+  , redeemerDataTxId :: !TxId -- noreference
   , redeemerDataValue :: !(Maybe Text) -- sqltype=jsonb
   , redeemerDataBytes :: !ByteString -- sqltype=bytea
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo RedeemerData where
-  uniqueFields _ = ["hash"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key RedeemerData = RedeemerDataId
+instance DbInfo RedeemerData where
+  uniqueFields _ = ["hash"]
 
 entityRedeemerDataDecoder :: D.Row (Entity RedeemerData)
 entityRedeemerDataDecoder =
@@ -681,18 +694,18 @@ redeemerDataEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: extra_key_witness
-Description: Contains additional key witnesses for transactions, which are used to validate the transaction's signature.
--}
+
+-- |
+-- Table Name: extra_key_witness
+-- Description: Contains additional key witnesses for transactions, which are used to validate the transaction's signature.
 data ExtraKeyWitness = ExtraKeyWitness
   { extraKeyWitnessHash :: !ByteString -- sqltype=hash28type
-  , extraKeyWitnessTxId :: !TxId       -- noreference
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo ExtraKeyWitness
+  , extraKeyWitnessTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key ExtraKeyWitness = ExtraKeyWitnessId
+instance DbInfo ExtraKeyWitness
 
 entityExtraKeyWitnessDecoder :: D.Row (Entity ExtraKeyWitness)
 entityExtraKeyWitnessDecoder =
@@ -721,20 +734,20 @@ extraKeyWitnessEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: slot_leader
-Description:Contains information about the slot leader for a given block, including the slot leader's ID, hash, and description.
--}
+
+-- |
+-- Table Name: slot_leader
+-- Description:Contains information about the slot leader for a given block, including the slot leader's ID, hash, and description.
 data SlotLeader = SlotLeader
   { slotLeaderHash :: !ByteString -- sqltype=hash28type
-  , slotLeaderPoolHashId :: !(Maybe Int)  -- This will be non-null when a block is mined by a pool
+  , slotLeaderPoolHashId :: !(Maybe Int) -- This will be non-null when a block is mined by a pool
   , slotLeaderDescription :: !Text -- Description of the Slots leader
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo SlotLeader where
-  uniqueFields _ = ["hash"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key SlotLeader = SlotLeaderId
+instance DbInfo SlotLeader where
+  uniqueFields _ = ["hash"]
 
 entitySlotLeaderDecoder :: D.Row (Entity SlotLeader)
 entitySlotLeaderDecoder =
@@ -770,10 +783,11 @@ slotLeaderEncoder =
 -----------------------------------------------------------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: schema_version
-Description: A table for schema versioning.
--}
+
+-- |
+-- Table Name: schema_version
+-- Description: A table for schema versioning.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Schema versioning has three stages to best allow handling of schema migrations.
 --    Stage 1: Set up PostgreSQL data types (using SQL 'DOMAIN' statements).
@@ -784,11 +798,11 @@ data SchemaVersion = SchemaVersion
   { schemaVersionStageOne :: !Int
   , schemaVersionStageTwo :: !Int
   , schemaVersionStageThree :: !Int
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo SchemaVersion
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key SchemaVersion = SchemaVersionId
+instance DbInfo SchemaVersion
 
 entitySchemaVersionDecoder :: D.Row (Entity SchemaVersion)
 entitySchemaVersionDecoder =
@@ -819,21 +833,22 @@ schemaVersionEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: meta
-Description: A table containing metadata about the chain. There will probably only ever be one value in this table
--}
+
+-- |
+-- Table Name: meta
+-- Description: A table containing metadata about the chain. There will probably only ever be one value in this table
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Meta = Meta
-  { metaStartTime :: !UTCTime       -- sqltype=timestamp
+  { metaStartTime :: !UTCTime -- sqltype=timestamp
   , metaNetworkName :: !Text
   , metaVersion :: !Text
-  } deriving (Show, Eq, Generic)
-
-instance DbInfo Meta where
-  uniqueFields _ = ["start_time"]
+  }
+  deriving (Show, Eq, Generic)
 
 type instance Key Meta = MetaId
+instance DbInfo Meta where
+  uniqueFields _ = ["start_time"]
 
 entityMetaDecoder :: D.Row (Entity Meta)
 entityMetaDecoder =
@@ -864,21 +879,22 @@ metaEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: migration
-Description: A table containing information about migrations.
--}
+
+-- |
+-- Table Name: migration
+-- Description: A table containing information about migrations.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data Withdrawal = Withdrawal
   { withdrawalAddrId :: !StakeAddressId
   , withdrawalAmount :: !DbLovelace
   , withdrawalRedeemerId :: !(Maybe RedeemerId)
   , withdrawalTxId :: !TxId
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo Withdrawal
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key Withdrawal = WithdrawalId
+instance DbInfo Withdrawal
 
 entityWithdrawalDecoder :: D.Row (Entity Withdrawal)
 entityWithdrawalDecoder =
@@ -911,19 +927,20 @@ withdrawalEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: extra_migrations
-Description: = A table containing information about extra migrations.
--}
+
+-- |
+-- Table Name: extra_migrations
+-- Description: = A table containing information about extra migrations.
+
 -----------------------------------------------------------------------------------------------------------------------------------
 data ExtraMigrations = ExtraMigrations
   { extraMigrationsToken :: !Text
   , extraMigrationsDescription :: !(Maybe Text)
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo ExtraMigrations
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key ExtraMigrations = ExtraMigrationsId
+instance DbInfo ExtraMigrations
 
 entityExtraMigrationsDecoder :: D.Row (Entity ExtraMigrations)
 entityExtraMigrationsDecoder =
