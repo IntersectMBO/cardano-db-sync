@@ -99,7 +99,6 @@ library
                       , filepath
                       , file-embed
                       , hasql
-                      , hasql-transaction
                       , iohk-monitoring
                       , lifted-base
                       , memory

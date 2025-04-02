@@ -6,9 +6,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Schema.Core.MultiAsset where
 
@@ -22,7 +22,7 @@ import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Statement.Function.Core (manyEncoder)
-import Cardano.Db.Statement.Types (DbInfo(..), Key, Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (DbInt65, dbInt65Decoder, dbInt65Encoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -30,20 +30,19 @@ import Cardano.Db.Types (DbInt65, dbInt65Decoder, dbInt65Encoder)
 -- These tables manage governance-related data, including DReps, committees, and voting procedures.
 -----------------------------------------------------------------------------------------------------------------------------------
 
-{-|
-Table Name: multi_asset
-Description: Contains information about multi-assets, including the policy and name of the asset.
--}
+-- |
+-- Table Name: multi_asset
+-- Description: Contains information about multi-assets, including the policy and name of the asset.
 data MultiAsset = MultiAsset
   { multiAssetPolicy :: !ByteString -- sqltype=hash28type
-  , multiAssetName :: !ByteString   -- sqltype=asset32type
+  , multiAssetName :: !ByteString -- sqltype=asset32type
   , multiAssetFingerprint :: !Text
-  } deriving (Eq, Show, Generic)
-
-instance DbInfo MultiAsset where
-  uniqueFields _ = ["policy", "name"]
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key MultiAsset = MultiAssetId
+instance DbInfo MultiAsset where
+  uniqueFields _ = ["policy", "name"]
 
 entityNameMultiAssetDecoder :: D.Row (Entity MultiAsset)
 entityNameMultiAssetDecoder =
@@ -82,19 +81,19 @@ multiAssetInsertEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-{-|
-Table Name: ma_tx_mint
-Description: Contains information about the minting of multi-assets, including the quantity of the asset and the transaction in which it was minted.
--}
-data MaTxMint = MaTxMint
-  { maTxMintQuantity :: !DbInt65   -- sqltype=int65type
-  , maTxMintIdent :: !MultiAssetId -- noreference
-  , maTxMintTxId :: !TxId          -- noreference
-  } deriving (Eq, Show, Generic)
 
-instance DbInfo MaTxMint
+-- |
+-- Table Name: ma_tx_mint
+-- Description: Contains information about the minting of multi-assets, including the quantity of the asset and the transaction in which it was minted.
+data MaTxMint = MaTxMint
+  { maTxMintQuantity :: !DbInt65 -- sqltype=int65type
+  , maTxMintIdent :: !MultiAssetId -- noreference
+  , maTxMintTxId :: !TxId -- noreference
+  }
+  deriving (Eq, Show, Generic)
 
 type instance Key MaTxMint = MaTxMintId
+instance DbInfo MaTxMint
 
 entityNameMaTxMintDecoder :: D.Row (Entity MaTxMint)
 entityNameMaTxMintDecoder =

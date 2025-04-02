@@ -2,15 +2,15 @@
 
 module Cardano.Db.Schema.Variants.TxOutAddress where
 
-import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceEncoder, dbLovelaceDecoder)
+import Cardano.Db.Schema.Ids
+import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder)
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
 import Data.Word (Word64)
-import Cardano.Db.Schema.Ids
+import GHC.Generics (Generic)
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
-import GHC.Generics (Generic)
-import Data.Functor.Contravariant ((>$<))
 
 -----------------------------------------------------------------------------------------------
 -- TxOutAddress
@@ -131,6 +131,7 @@ maTxOutAddressEncoder =
     , maTxOutAddressQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , maTxOutAddressTxOutAddressId >$< idEncoder getTxOutAddressId
     ]
+
 -----------------------------------------------------------------------------------------------
 -- Address
 -----------------------------------------------------------------------------------------------
@@ -214,7 +215,8 @@ addressEncoder =
 --     quantity            DbWord64            sqltype=word64type
 --     txOutAddressId             TxOutAddressId             noreference
 --     deriving Show
--- |]
+
+-- | ]
 
 -- schemaDocsTxOutAddress :: [EntityDef]
 -- schemaDocsTxOutAddress =

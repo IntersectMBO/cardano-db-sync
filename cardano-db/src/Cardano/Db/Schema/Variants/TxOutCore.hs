@@ -2,15 +2,15 @@
 
 module Cardano.Db.Schema.Variants.TxOutCore where
 
+import Cardano.Db.Schema.Ids
 import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder)
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
-import Cardano.Db.Schema.Ids
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
-import Data.Functor.Contravariant ((>$<))
 
 -----------------------------------------------------------------------------------------------
 -- TxOut
@@ -144,8 +144,6 @@ maTxOutCoreEncoder =
     , maTxOutCoreTxOutId >$< idEncoder getTxOutCoreId
     ]
 
-
-
 -- share
 --   [ mkPersist sqlSettings
 --   , mkMigrate "migrateCoreTxOutCardanoDb"
@@ -196,7 +194,7 @@ maTxOutCoreEncoder =
 --     txOutCoreId             TxOutId             noreference
 --     deriving Show
 
--- |]
+-- | ]
 
 -- schemaDocsTxOutCore :: [EntityDef]
 -- schemaDocsTxOutCore =
