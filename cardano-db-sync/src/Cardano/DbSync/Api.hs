@@ -379,11 +379,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-<<<<<<< HEAD
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
-=======
-mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP ranMigrations runMigrationFnc = do
->>>>>>> 29841e49 (more functionality)
+mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
