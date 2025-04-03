@@ -23,6 +23,18 @@ module Cardano.DbSync (
   SimplifiedOffChainPoolData (..),
   extractSyncOptions,
 ) where
+import Control.Monad.Extra (whenJust)
+import qualified Data.Strict.Maybe as Strict
+import qualified Data.Text as Text
+import Data.Version (showVersion)
+import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
+import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
+import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
+import Paths_cardano_db_sync (version)
+import System.Directory (createDirectoryIfMissing)
+import Prelude (id)
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection.Setting as HsqlSet
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
@@ -47,17 +59,6 @@ import Cardano.DbSync.Util.Constraint (queryIsJsonbInSchema)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
-import Control.Monad.Extra (whenJust)
-import qualified Data.Strict.Maybe as Strict
-import qualified Data.Text as Text
-import Data.Version (showVersion)
-import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
-import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
-import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
-import Paths_cardano_db_sync (version)
-import System.Directory (createDirectoryIfMissing)
-import Prelude (id)
-import qualified Hasql.Connection as HsqlC
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
@@ -150,14 +151,14 @@ runSyncNode ::
   Trace IO Text ->
   IOManager ->
   -- | Database connection settings
-  Setting ->
+  HsqlSet.Setting ->
   -- | run migration function
   RunMigration ->
   SyncNodeConfig ->
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr connSetting runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)

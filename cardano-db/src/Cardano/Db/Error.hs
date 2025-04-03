@@ -25,6 +25,9 @@ data DbError = DbError
   , dbErrorMessage :: !Text
   , dbErrorCause :: !(Maybe HsqlSes.SessionError) -- Now a Maybe
   }
+  deriving (Show, Eq)
+
+instance Exception DbError
 
 -- class AsDbError e where
 --   toDbError :: DbError -> e

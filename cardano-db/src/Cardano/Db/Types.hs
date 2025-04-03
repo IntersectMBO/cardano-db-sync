@@ -121,7 +121,7 @@ import qualified Data.Text as Text
 import Data.WideWord (Word128 (..))
 import Data.Word (Word16, Word64)
 import GHC.Generics
-import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import Quiet (Quiet (..))
@@ -143,7 +143,7 @@ data DbCallInfo = DbCallInfo
   }
 
 data DbEnv = DbEnv
-  { dbConnection :: !HsqlC.Connection
+  { dbConnection :: !HsqlCon.Connection
   , dbEnableLogging :: !Bool
   , dbTracer :: !(Maybe (Trace IO Text))
   }

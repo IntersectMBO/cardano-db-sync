@@ -25,9 +25,9 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Read as Text (decimal)
 import Data.Word (Word16)
-import qualified Hasql.Connection.Setting as HsqlS
-import qualified Hasql.Connection.Setting.Connection as HsqlC
-import qualified Hasql.Connection.Setting.Connection.Param as HsqlP
+import qualified Hasql.Connection.Setting as HsqlSet
+import qualified Hasql.Connection.Setting.Connection as HsqlSetC
+import qualified Hasql.Connection.Setting.Connection.Param as HsqlSetP
 import System.Environment (lookupEnv, setEnv)
 import System.Posix.User (getEffectiveUserName)
 
@@ -51,18 +51,18 @@ newtype PGPassFile
   = PGPassFile FilePath
 
 -- | Convert PGConfig to Hasql connection settings, or return an error message.
-toConnectionSetting :: PGConfig -> Either String HsqlS.Setting
+toConnectionSetting :: PGConfig -> Either String HsqlSet.Setting
 toConnectionSetting pgc = do
   -- Convert the port from Text to Word16
   portWord16 <- textToWord16 (pgcPort pgc)
   -- Build the connection settings
-  pure $ HsqlS.connection (HsqlC.params [host, port portWord16, user, dbname, password])
+  pure $ HsqlSet.connection (HsqlSetC.params [host, port portWord16, user, dbname, password])
   where
-    host = HsqlP.host (pgcHost pgc)
-    port = HsqlP.port
-    user = HsqlP.user (pgcUser pgc)
-    dbname = HsqlP.dbname (pgcDbname pgc)
-    password = HsqlP.password (pgcPassword pgc)
+    host = HsqlSetP.host (pgcHost pgc)
+    port = HsqlSetP.port
+    user = HsqlSetP.user (pgcUser pgc)
+    dbname = HsqlSetP.dbname (pgcDbname pgc)
+    password = HsqlSetP.password (pgcPassword pgc)
 
 -- | Convert a Text port to Word16, or return an error message.
 textToWord16 :: Text.Text -> Either String Word16
