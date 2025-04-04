@@ -65,6 +65,7 @@ insertBlockUniversal ::
   ApplyResult ->
   ReaderT SqlBackend m (Either SyncNodeError ())
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
+  let blkId = DB.BlockKey $ fromIntegral $ unBlockNo (Generic.blkBlockNo blk)
   -- if we're syncing within 2 mins of the tip, we optimise the caches.
   when (isSyncedWithintwoMinutes details) $ optimiseCaches cache
   runExceptT $ do
@@ -75,8 +76,8 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     let epochNo = sdEpochNo details
 
     slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
-    blkId <-
-      lift . insertBlockAndCache cache $
+    lift $
+      insertBlockAndCache cache blkId $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo

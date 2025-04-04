@@ -43,7 +43,6 @@ import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.Ledger.Mary.Value
-import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -335,7 +334,7 @@ queryPrevBlockWithCache msg cache hsh =
 queryTxIdWithCache ::
   MonadIO m =>
   CacheStatus ->
-  Ledger.TxId StandardCrypto ->
+  TxIdLedger ->
   ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
 queryTxIdWithCache cache txIdLedger = do
   case cache of
@@ -370,7 +369,7 @@ queryTxIdWithCache cache txIdLedger = do
 tryUpdateCacheTx ::
   MonadIO m =>
   CacheStatus ->
-  Ledger.TxId StandardCrypto ->
+  TxIdLedger ->
   DB.TxId ->
   m ()
 tryUpdateCacheTx (ActiveCache ci) ledgerTxId txId =
@@ -380,20 +379,19 @@ tryUpdateCacheTx _ _ _ = pure ()
 insertBlockAndCache ::
   (MonadIO m, MonadBaseControl IO m) =>
   CacheStatus ->
+  DB.BlockId ->
   DB.Block ->
-  ReaderT SqlBackend m DB.BlockId
-insertBlockAndCache cache block =
+  ReaderT SqlBackend m ()
+insertBlockAndCache cache k block =
   case cache of
     NoCache -> insBlck
     ActiveCache ci ->
       withCacheOptimisationCheck ci insBlck $ do
-        bid <- insBlck
-        liftIO $ do
-          missPrevBlock (cStats ci)
-          atomically $ writeTVar (cPrevBlock ci) $ Just (bid, DB.blockHash block)
-        pure bid
+        insBlck
+        liftIO $
+          atomically $ writeTVar (cPrevBlock ci) $ Just (k, DB.blockHash block)
   where
-    insBlck = DB.insertBlock block
+    insBlck = DB.insertBlock k block
 
 queryDatum ::
   MonadIO m =>

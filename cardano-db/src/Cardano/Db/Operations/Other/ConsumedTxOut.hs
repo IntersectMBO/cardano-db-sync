@@ -239,6 +239,9 @@ updateListTxOutConsumedByTxId ls = do
         CTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Just txId]
         VTxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Just txId]
 
+updateListTxOutConsumedByTxId' :: [((TxId, Word64), TxId)] -> ReaderT SqlBackend m ()
+updateListTxOutConsumedByTxId' _ls = undefined
+
 migrateTxOut ::
   ( MonadBaseControl IO m
   , MonadIO m

@@ -28,7 +28,7 @@ import Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
 import Cardano.Client.Subscription (subscribe)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.LocalStateQuery
@@ -201,7 +201,6 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
       MiniProtocolCb $ \_ctx channel ->
         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
           logInfo tracer "Starting ChainSync client"
-          setConsistentLevel syncEnv Unchecked
 
           (latestPoints, currentTip) <- waitRestartState tc
           let (inMemory, onDisk) = List.span snd latestPoints

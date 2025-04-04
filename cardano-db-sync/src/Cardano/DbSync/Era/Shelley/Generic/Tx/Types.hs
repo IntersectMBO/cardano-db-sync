@@ -45,14 +45,13 @@ import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 import Cardano.Ledger.Core (TxBody)
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import Cardano.Ledger.Shelley.TxCert
-import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
 
 data Tx = Tx
   { txHash :: !ByteString
-  , txLedgerTxId :: !(Ledger.TxId StandardCrypto)
+  , txLedgerTxId :: !TxIdLedger
   , txBlockIndex :: !Word64
   , txCBOR :: ByteString
   , txSize :: !Word64
@@ -99,7 +98,7 @@ data TxWithdrawal = TxWithdrawal
   }
 
 data TxInKey = TxInKey
-  { txInTxId :: !(Ledger.TxId StandardCrypto)
+  { txInTxId :: !TxIdLedger
   , txInIndex :: !Word64
   }
   deriving (Eq, Show, Ord)

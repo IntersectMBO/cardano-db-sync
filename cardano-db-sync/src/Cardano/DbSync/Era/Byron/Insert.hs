@@ -82,6 +82,7 @@ insertABOBBoundary syncEnv blk details = do
       cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
+  let blkId = DB.BlockKey $ 1 + DB.unBlockKey pbid
   let epochNo = unEpochNo $ sdEpochNo details
   slid <-
     lift . DB.insertSlotLeader $
@@ -90,8 +91,8 @@ insertABOBBoundary syncEnv blk details = do
         , DB.slotLeaderPoolHashId = Nothing
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
-  blkId <-
-    lift . insertBlockAndCache cache $
+  lift $
+    insertBlockAndCache cache blkId $
       DB.Block
         { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
         , DB.blockEpochNo = Just epochNo
@@ -146,10 +147,11 @@ insertABlock ::
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertABlock syncEnv firstBlockOfEpoch blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
+  let blkId = DB.BlockKey $ 1 + DB.unBlockKey pbid
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
-  blkId <-
-    lift . insertBlockAndCache cache $
+  lift $
+    insertBlockAndCache cache blkId $
       DB.Block
         { DB.blockHash = Byron.blockHash blk
         , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -238,11 +240,12 @@ insertByronTx ::
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
 insertByronTx syncEnv blkId tx blockIndex = do
+  let txId = DB.TxKey $ DB.unBlockKey blkId
   disInOut <- liftIO $ getDisableInOutState syncEnv
   if disInOut
     then do
-      txId <-
-        lift . DB.insertTx $
+      lift $
+        DB.insertTx txId $
           DB.Tx
             { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
             , DB.txBlockId = blkId
@@ -282,10 +285,11 @@ insertByronTx' ::
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
+  let txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
   resolvedInputs <- mapM (resolveTxInputs txOutTableType) (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
-  txId <-
-    lift . DB.insertTx $
+  lift $
+    DB.insertTx txId $
       DB.Tx
         { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
         , DB.txBlockId = blkId

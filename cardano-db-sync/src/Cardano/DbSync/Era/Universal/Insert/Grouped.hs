@@ -11,6 +11,7 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   ExtendedTxOut (..),
   insertBlockGroupedData,
   insertReverseIndex,
+  prepareResolveTxInputs,
   resolveTxInputsMain,
   resolveTxInputs,
   resolveTxInputsPrefetch,
@@ -38,6 +39,7 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend)
+import Cardano.DbSync.Types
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -223,6 +225,20 @@ resolveTxInputsMain syncEnv needsValue mGroupedOutputs txIn = do
     addTxIn (a, b, c) = (txIn, a, b, c)
     txIn' = Generic.txInKey txIn
     trce = getTrace syncEnv
+
+prepareResolveTxInputs ::
+  MonadIO m =>
+  SyncEnv ->
+  [(TxIdLedger, DB.TxId)] ->
+  Generic.TxInKey ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxId
+prepareResolveTxInputs syncEnv txHashes txIn = liftLookupFail ("prepareResolveTxInputs: " <> textShow txIn) $ do
+  eiTxId <- queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
+  case eiTxId of
+    Right _ -> pure eiTxId
+    Left err -> case List.lookup (Generic.txInTxId txIn) txHashes of
+      Just txId -> pure $ Right txId
+      Nothing -> pure $ Left err
 
 -- | Concurrency Warning: This code may run by many threads concurrently.
 -- If we can't resolve from the db, we fall back to the provided outputs

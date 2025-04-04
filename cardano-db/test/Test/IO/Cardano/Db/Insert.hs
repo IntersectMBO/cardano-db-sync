@@ -6,7 +6,6 @@ module Test.IO.Cardano.Db.Insert (
 ) where
 
 import Cardano.Db
-import Control.Monad (void)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import Data.Time.Clock
@@ -19,44 +18,30 @@ tests :: TestTree
 tests =
   testGroup
     "Insert"
-    [ testCase "Insert zeroth block" insertZeroTest
-    , testCase "Insert first block" insertFirstTest
+    [ testCase "Insert 2 blocks" insertTwoBlocks
     , testCase "Insert twice" insertTwice
     , testCase "Insert foreign key missing" insertForeignKeyMissing
     ]
 
-insertZeroTest :: IO ()
-insertZeroTest =
-  runDbNoLoggingEnv $ do
-    deleteAllBlocks
-    -- Delete the blocks if they exist.
-    slid <- insertSlotLeader testSlotLeader
-    void $ deleteBlock TxOutCore (blockOne slid)
-    void $ deleteBlock TxOutCore (blockZero slid)
-    -- Insert the same block twice. The first should be successful (resulting
-    -- in a 'Right') and the second should return the same value in a 'Left'.
-    bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked (blockZero slid)
-    assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
-
-insertFirstTest :: IO ()
-insertFirstTest =
+insertTwoBlocks :: IO ()
+insertTwoBlocks =
   runDbNoLoggingEnv $ do
     deleteAllBlocks
     -- Delete the block if it exists.
     slid <- insertSlotLeader testSlotLeader
-    void $ deleteBlock TxOutCore (blockOne slid)
     -- Insert the same block twice.
-    bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked $ (\b -> b {blockPreviousId = Just bid0}) (blockOne slid)
-    assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
+    let bid0 = BlockKey 0
+    insertBlock bid0 (blockZero slid)
+    let bid1 = BlockKey 1
+    insertBlock bid1 $ (\b -> b {blockPreviousId = Just bid0}) (blockOne slid)
 
 insertTwice :: IO ()
 insertTwice =
   runDbNoLoggingEnv $ do
     deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
-    bid <- insertBlockChecked (blockZero slid)
+    let bid = BlockKey 0
+    insertBlock bid (blockZero slid)
     let adaPots = adaPotsZero bid
     _ <- insertAdaPots adaPots
     Just pots0 <- queryAdaPots bid
@@ -73,8 +58,10 @@ insertForeignKeyMissing = do
   runDbNoLoggingEnv $ do
     deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
-    bid <- insertBlockChecked (blockZero slid)
-    txid <- insertTx (txZero bid)
+    let bid = BlockKey 0
+    insertBlock bid (blockZero slid)
+    let txid = toTxId bid 0
+    insertTx txid (txZero bid)
     phid <- insertPoolHash poolHash0
     pmrid <- insertPoolMetadataRef $ poolMetadataRef txid phid
     let fe = offChainPoolFetchError phid pmrid time

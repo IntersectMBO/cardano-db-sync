@@ -21,11 +21,11 @@ import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxBody
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
+import Cardano.DbSync.Types
 
 fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
@@ -77,7 +77,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     txBody :: Core.TxBody StandardConway
     txBody = tx ^. Core.bodyTxL
 
-    txId :: TxId StandardCrypto
+    txId :: TxIdLedger
     txId = mkTxId tx
 
     outputs :: [TxOut]

@@ -36,7 +36,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Script (fromMultiSig)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
-import Cardano.DbSync.Types (RewAccount)
+import Cardano.DbSync.Types (RewAccount, TxIdLedger)
 import Cardano.Ledger.BaseTypes (TxIx (..), strictMaybeToMaybe)
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
@@ -140,7 +140,7 @@ txHashId = safeHashToByteString . txSafeHash
 txSafeHash :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> Ledger.SafeHash StandardCrypto Core.EraIndependentTxBody
 txSafeHash tx = Ledger.hashAnnotated (tx ^. Core.bodyTxL)
 
-mkTxId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> Ledger.TxId StandardCrypto
+mkTxId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> TxIdLedger
 mkTxId = Ledger.TxId . txSafeHash
 
 txHashFromSafe :: Ledger.SafeHash StandardCrypto Core.EraIndependentTxBody -> ByteString

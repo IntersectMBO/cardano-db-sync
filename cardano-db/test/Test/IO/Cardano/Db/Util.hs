@@ -73,11 +73,11 @@ mkTxHash :: BlockId -> Word64 -> ByteString
 mkTxHash blk tx =
   BS.pack (take 32 $ printf "block #%d, tx #%d" (unBlockId blk) tx ++ replicate 32 ' ')
 
-mkTxs :: BlockId -> Word -> [Tx]
+mkTxs :: BlockId -> Word -> [(TxId, Tx)]
 mkTxs blkId count =
   take (fromIntegral count) $ map create [0 ..]
   where
-    create w =
+    create w = (toTxId blkId w,
       Tx
         { txHash = mkTxHash blkId w
         , txBlockId = blkId
@@ -91,7 +91,7 @@ mkTxs blkId count =
         , txValidContract = True
         , txScriptSize = 0
         , txTreasuryDonation = DbLovelace 0
-        }
+        })
 
 testSlotLeader :: SlotLeader
 testSlotLeader =

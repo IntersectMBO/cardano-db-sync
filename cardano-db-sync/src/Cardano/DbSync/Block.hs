@@ -21,7 +21,6 @@ import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal)
 import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent, hasNewEpochEvent)
-import Cardano.DbSync.Era.Universal.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
@@ -32,10 +31,9 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Node.Configuration.Logging (Trace)
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
+import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Logger (LoggingT)
 import Control.Monad.Trans.Except.Extra (newExceptT)
 import qualified Data.ByteString.Short as SBS
@@ -86,11 +84,6 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
           liftIO $ setConsistentLevel syncEnv Consistent
           when bl $ liftIO $ writePrefetch syncEnv cblk
           insertBlock syncEnv cblk applyRes True tookSnapshot
-        Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
-          replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
-          if replaced
-            then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
-            else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
         Right _
           | Just epochNo <- getNewEpoch applyRes ->
               liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
@@ -103,12 +96,6 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
         NoLedger nle -> do
           slotDetails <- getSlotDetailsNode nle (cardanoBlockSlotNo cblk)
           pure (defaultApplyResult slotDetails, False)
-
-    getAdaPots :: ApplyResult -> Maybe (Shelley.AdaPots, SlotNo, EpochNo)
-    getAdaPots appRes = do
-      newEpoch <- maybeFromStrict $ apNewEpoch appRes
-      adaPots <- maybeFromStrict $ Generic.neAdaPots newEpoch
-      pure (adaPots, sdSlotNo $ apSlotDetails appRes, sdEpochNo $ apSlotDetails appRes)
 
     getNewEpoch :: ApplyResult -> Maybe EpochNo
     getNewEpoch appRes =

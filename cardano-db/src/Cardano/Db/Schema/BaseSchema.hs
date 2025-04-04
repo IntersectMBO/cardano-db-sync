@@ -95,6 +95,7 @@ share
   -- All NULL-able fields other than 'epochNo' are NULL for EBBs, whereas 'epochNo' is
   -- only NULL for the genesis block.
   Block
+    Id                  Int64               sqltype=bigint Primary
     hash                ByteString          sqltype=hash32type
     epochNo             Word64 Maybe        sqltype=word31type
     slotNo              Word64 Maybe        sqltype=word63type
@@ -114,6 +115,7 @@ share
     UniqueBlock         hash
 
   Tx
+    Id                  Int64               sqltype=bigint Primary -- generated="block_id * 1000 + block_index"
     hash                ByteString          sqltype=hash32type
     blockId             BlockId             noreference     -- This type is the primary key for the 'block' table.
     blockIndex          Word64              sqltype=word31type    -- The index of this transaction within the block.

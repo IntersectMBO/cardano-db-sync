@@ -60,10 +60,63 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Cardano.DbSync.Types
 
 --------------------------------------------------------------------------------------
 -- INSERT TX
 --------------------------------------------------------------------------------------
+
+_prepareTx ::
+  MonadIO m =>
+  SyncEnv ->
+  DB.BlockId ->
+  Word64 ->
+  Generic.Tx ->
+  m DB.Tx
+_prepareTx syncEnv blkId blockIndex tx = do
+  disInOut <- liftIO $ getDisableInOutState syncEnv
+  let fees = case (unCoin <$> Generic.txFees tx, disInOut) of
+        (_, True) -> 0
+        (Nothing,_) -> 0
+        (Just fees', _) -> fromIntegral fees'
+  pure DB.Tx
+        { DB.txHash = txHash
+        , DB.txBlockId = blkId
+        , DB.txBlockIndex = blockIndex
+        , DB.txOutSum = DB.DbLovelace outSum
+        , DB.txFee = DB.DbLovelace fees -- may be wrong if txValidContract is False or outsputs are disabled
+        , DB.txDeposit = Nothing -- leaving this Nothing for now
+        , DB.txSize = Generic.txSize tx
+        , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
+        , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
+        , DB.txValidContract = Generic.txValidContract tx
+        , DB.txScriptSize = sum $ Generic.txScriptSizes tx
+        , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
+        }
+  where
+    txHash = Generic.txHash tx
+    outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
+    treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
+
+_prepareTxIn ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  [(TxIdLedger, DB.TxId)] ->
+  DB.TxId ->
+  Generic.TxIn ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxIn
+_prepareTxIn syncEnv txHashes txId txIn = do
+    txOutTxId <- prepareResolveTxInputs syncEnv txHashes txInKey
+    pure $
+      DB.TxIn
+        { DB.txInTxInId = txId
+        , DB.txInTxOutId = txOutTxId
+        , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex (Generic.txInKey txIn)
+        , DB.txInRedeemerId = Nothing -- Remove or fix later https://github.com/IntersectMBO/cardano-db-sync/issues/1746
+        }
+  where
+    txInKey = Generic.txInKey txIn
+
 insertTx ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
@@ -77,6 +130,7 @@ insertTx ::
   BlockGroupedData ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
 insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped = do
+  let txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
   let !txHash = Generic.txHash tx
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
@@ -108,9 +162,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       pure (resolvedInsFull, fromIntegral fees, Just 0)
   let fees = fromIntegral fees'
   -- Insert transaction and get txId from the DB.
-  !txId <-
-    lift
-      . DB.insertTx
+  lift $
+    DB.insertTx txId
       $ DB.Tx
         { DB.txHash = txHash
         , DB.txBlockId = blkId
@@ -140,7 +193,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     then do
       !txOutsGrouped <- whenFalseMempty disInOut $ mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
 
-      let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
+      let !txIns = map (prepareExtendedTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
       -- Same happens bellow on last line of this function.
       pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
@@ -163,7 +216,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       txMetadata <-
         whenFalseMempty (ioMetadata iopts) $
-          insertTxMetadata
+          prepareTxMetadata
             tracer
             txId
             iopts
@@ -180,7 +233,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       maTxMint <-
         whenFalseMempty (ioMultiAssets iopts) $
-          insertMaTxMint tracer cache txId $
+          prepareMaTxMint tracer cache txId $
             Generic.txMint tx
 
       when (ioPlutusExtra iopts) $
@@ -195,7 +248,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertGovActionProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
 
-      let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
+      let !txIns = map (prepareExtendedTxIn txId redeemers) resolvedInputs
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
   where
     tracer = getTrace syncEnv
@@ -286,22 +339,22 @@ insertTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap m
     tracer = getTrace syncEnv
     cache = envCache syncEnv
 
-insertTxMetadata ::
-  (MonadBaseControl IO m, MonadIO m) =>
+prepareTxMetadata ::
+  MonadIO m =>
   Trace IO Text ->
   DB.TxId ->
   InsertOptions ->
   Maybe (Map Word64 TxMetadataValue) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.TxMetadata]
-insertTxMetadata tracer txId inOpts mmetadata = do
+  m [DB.TxMetadata]
+prepareTxMetadata tracer txId inOpts mmetadata = do
   case mmetadata of
     Nothing -> pure []
     Just metadata -> mapMaybeM prepare $ Map.toList metadata
   where
     prepare ::
-      (MonadBaseControl IO m, MonadIO m) =>
+      MonadIO m =>
       (Word64, TxMetadataValue) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
+      m (Maybe DB.TxMetadata)
     prepare (key, md) = do
       case ioKeepMetadataNames inOpts of
         Strict.Just metadataNames -> do
@@ -313,9 +366,9 @@ insertTxMetadata tracer txId inOpts mmetadata = do
         Strict.Nothing -> mkDbTxMetadata (key, md)
 
     mkDbTxMetadata ::
-      (MonadBaseControl IO m, MonadIO m) =>
+      MonadIO m =>
       (Word64, TxMetadataValue) ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) (Maybe DB.TxMetadata)
+      m (Maybe DB.TxMetadata)
     mkDbTxMetadata (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
@@ -332,14 +385,14 @@ insertTxMetadata tracer txId inOpts mmetadata = do
 --------------------------------------------------------------------------------------
 -- INSERT MULTI ASSET
 --------------------------------------------------------------------------------------
-insertMaTxMint ::
+prepareMaTxMint ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   CacheStatus ->
   DB.TxId ->
   MultiAsset StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
-insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
+prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
   concatMapM (lift . prepareOuter) $ Map.toList mintMap
   where
     prepareOuter ::
@@ -503,12 +556,12 @@ insertReferenceTxIn syncEnv txInId txIn = do
 --------------------------------------------------------------------------------------
 -- Prepare TX-IN
 --------------------------------------------------------------------------------------
-prepareTxIn ::
+prepareExtendedTxIn ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
   (Generic.TxIn, DB.TxId, Either Generic.TxInKey DB.TxOutIdW) ->
   ExtendedTxIn
-prepareTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
+prepareExtendedTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
   ExtendedTxIn
     { etiTxIn = txInDB
     , etiTxOutId = mTxOutId

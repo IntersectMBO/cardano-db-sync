@@ -39,9 +39,8 @@ import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Types (CardanoBlock, DataHash, PoolKeyHash, RewAccount, StakeCred)
+import Cardano.DbSync.Types (CardanoBlock, DataHash, PoolKeyHash, RewAccount, StakeCred, TxIdLedger)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
-import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTMVar,
@@ -90,7 +89,7 @@ data CacheInternal = CacheInternal
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString V.AddressId))
-  , cTxIds :: !(StrictTVar IO (FIFOCache (Ledger.TxId StandardCrypto) DB.TxId))
+  , cTxIds :: !(StrictTVar IO (FIFOCache TxIdLedger DB.TxId))
   }
 
 data CacheStatistics = CacheStatistics

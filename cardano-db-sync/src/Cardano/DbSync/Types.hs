@@ -9,6 +9,7 @@ module Cardano.DbSync.Types (
   BlockEra (..),
   CardanoBlock,
   CardanoPoint,
+  TxIdLedger,
   StakeCred,
   RewAccount,
   PoolKeyHash,
@@ -70,6 +71,7 @@ import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.Protocol.TPraos ()
 import Ouroboros.Network.Block (BlockNo, Point)
+import qualified Cardano.Ledger.TxIn as Ledger
 
 type TPraosStandard = TPraos StandardCrypto
 
@@ -81,6 +83,8 @@ type CardanoInterpreter =
   History.Interpreter (Cardano.CardanoEras StandardCrypto)
 
 type CardanoPoint = Point CardanoBlock
+
+type TxIdLedger = Ledger.TxId StandardCrypto
 
 type StakeCred = Ledger.StakeCredential StandardCrypto
 
