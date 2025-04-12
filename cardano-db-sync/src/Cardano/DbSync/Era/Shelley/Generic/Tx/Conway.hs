@@ -14,6 +14,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage as Babbage
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
@@ -25,7 +26,6 @@ import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
-import Cardano.DbSync.Types
 
 fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =

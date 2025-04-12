@@ -32,7 +32,6 @@ import Cardano.DbSync.Cache (
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util

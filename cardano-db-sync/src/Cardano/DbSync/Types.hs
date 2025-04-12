@@ -59,6 +59,7 @@ import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
 
 import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude hiding (Meta, show)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import qualified Data.Text as Text
@@ -71,7 +72,6 @@ import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.Protocol.TPraos ()
 import Ouroboros.Network.Block (BlockNo, Point)
-import qualified Cardano.Ledger.TxIn as Ledger
 
 type TPraosStandard = TPraos StandardCrypto
 

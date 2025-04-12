@@ -67,7 +67,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import qualified Control.Concurrent.Class.MonadSTM.Strict.TBQueue as TBQ
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
-import Database.Persist.Postgresql (ConnectionString)
+import Database.Persist.Postgresql (ConnectionString, createPostgresqlPool)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Abstract (BlockProtocol)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -279,6 +279,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   oarq <- newTBQueueIO 1000
   epochVar <- newTVarIO initCurrentEpochNo
   epochSyncTime <- newTVarIO =<< getCurrentTime
+  pool <- DB.runIohkLogging trce $ createPostgresqlPool connectionString 5 -- TODO make configurable
   ledgerEnvType <-
     case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
       (Just dir, True) ->
@@ -302,6 +303,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   pure $
     SyncEnv
       { envBackend = backend
+      , envPool = pool
       , envBootstrap = bootstrapVar
       , envCache = cache
       , envPrefetch = prefetch

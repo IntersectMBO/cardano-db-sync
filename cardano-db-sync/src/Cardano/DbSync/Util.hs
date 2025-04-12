@@ -31,6 +31,7 @@ module Cardano.DbSync.Util (
   third,
   thrd3,
   forth4,
+  uncurry3,
   splitLast,
   traverseMEither,
   whenStrictJust,
@@ -41,9 +42,13 @@ module Cardano.DbSync.Util (
   whenRight,
   whenFalseEmpty,
   whenFalseMempty,
+  whenTrueMempty,
+  containsUnicodeNul,
+  safeDecodeUtf8,
+  safeDecodeToJson,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo)
+import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import Cardano.Db (RewardSource (..))
 import Cardano.DbSync.Config.Types ()
 import Cardano.DbSync.Types
@@ -56,11 +61,13 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Encoding.Error as Text
 import qualified Data.Time.Clock as Time
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import Ouroboros.Consensus.Protocol.Praos ()
@@ -214,6 +221,9 @@ thrd3 (_, _, c, _) = c
 forth4 :: (a, b, c, d) -> d
 forth4 (_, _, _, d) = d
 
+uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
+uncurry3 f (a, b, c) = f a b c
+
 splitLast :: [(a, b, c, d)] -> ([(a, b, c)], [d])
 splitLast = unzip . fmap (\(a, b, c, d) -> ((a, b, c), d))
 
@@ -233,3 +243,36 @@ whenFalseEmpty flag a mkAs =
 whenFalseMempty :: (Monoid a, Applicative m) => Bool -> m a -> m a
 whenFalseMempty flag mkAs =
   if flag then mkAs else pure mempty
+
+whenTrueMempty :: (Monoid a, Applicative m) => Bool -> m a -> m a
+whenTrueMempty flag mkAs =
+  if flag then pure mempty else mkAs
+
+safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
+safeDecodeUtf8 bs
+  | BS.any isNullChar bs = pure $ Left (Text.DecodeError (BS.unpack bs) (Just 0))
+  | otherwise = try $ evaluate (Text.decodeUtf8With Text.strictDecode bs)
+  where
+    isNullChar :: Char -> Bool
+    isNullChar ch = ord ch == 0
+
+containsUnicodeNul :: Text -> Bool
+containsUnicodeNul = Text.isInfixOf "\\u000"
+
+safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
+safeDecodeToJson tracer tracePrefix jsonBs = do
+  ejson <- liftIO $ safeDecodeUtf8 jsonBs
+  case ejson of
+    Left err -> do
+      liftIO . logWarning tracer $
+        mconcat
+          [tracePrefix, ": Could not decode to UTF8: ", textShow err]
+      -- We have to insert
+      pure Nothing
+    Right json ->
+      -- See https://github.com/IntersectMBO/cardano-db-sync/issues/297
+      if containsUnicodeNul json
+        then do
+          liftIO $ logWarning tracer $ tracePrefix <> "was recorded as null, due to a Unicode NUL character found when trying to parse the json."
+          pure Nothing
+        else pure $ Just json

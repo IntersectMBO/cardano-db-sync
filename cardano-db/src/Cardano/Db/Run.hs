@@ -7,7 +7,10 @@ module Cardano.Db.Run (
   getBackendGhci,
   ghciDebugQuery,
   runDbHandleLogger,
+  runDbLogging,
+  runDbLoggingExceptT,
   runDbIohkLogging,
+  runDbIohkLoggingExceptT,
   runDbIohkNoLogging,
   runDbNoLogging,
   runDbNoLoggingEnv,
@@ -44,7 +47,8 @@ import Control.Monad.Logger (
   runStdoutLoggingT,
  )
 import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Reader (ReaderT)
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
 import Control.Monad.Trans.Resource (MonadUnliftIO)
 import Control.Tracer (traceWith)
 import qualified Data.ByteString.Char8 as BS
@@ -113,10 +117,25 @@ runWithConnectionNoLogging source dbAction = do
     $ \backend ->
       runSqlConnWithIsolation dbAction backend Serializable
 
+-- | Use an existing connection to run queries without using a transactions
+runDbLogging :: SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
+runDbLogging backend tracer dbAction = do
+  runIohkLogging tracer $ runReaderT dbAction backend
+
+-- | Use an existing connection to run queries without using a transactions
+runDbLoggingExceptT :: SqlBackend -> Trace IO Text -> ExceptT e (ReaderT SqlBackend (LoggingT m)) b -> ExceptT e m b
+runDbLoggingExceptT backend tracer dbAction = do
+  ExceptT $ runIohkLogging tracer $ runReaderT (runExceptT dbAction) backend
+
 -- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkLogging :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b
 runDbIohkLogging backend tracer dbAction = do
   runIohkLogging tracer $ runSqlConnWithIsolation dbAction backend Serializable
+
+-- | Run a DB action logging via iohk-monitoring-framework.
+runDbIohkLoggingExceptT :: MonadUnliftIO m => SqlBackend -> Trace IO Text -> ExceptT e (ReaderT SqlBackend (LoggingT m)) b -> ExceptT e m b
+runDbIohkLoggingExceptT backend tracer dbAction = do
+  ExceptT $ runIohkLogging tracer $ runSqlConnWithIsolation (runExceptT dbAction) backend Serializable
 
 -- | Run a DB action using a Pool via iohk-monitoring-framework.
 runPoolDbIohkLogging :: MonadUnliftIO m => Pool SqlBackend -> Trace IO Text -> ReaderT SqlBackend (LoggingT m) b -> m b

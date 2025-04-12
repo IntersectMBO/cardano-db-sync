@@ -48,20 +48,20 @@ initialSupplyTest =
     insertBlock bid1 (mkBlock 1 slid)
     let tx1Id = toTxId bid1 0
     insertTx tx1Id $
-        Tx
-          { txHash = mkTxHash bid1 1
-          , txBlockId = bid1
-          , txBlockIndex = 0
-          , txOutSum = DbLovelace 500000000
-          , txFee = DbLovelace 100
-          , txDeposit = Just 0
-          , txSize = 123
-          , txInvalidHereafter = Nothing
-          , txInvalidBefore = Nothing
-          , txValidContract = True
-          , txScriptSize = 0
-          , txTreasuryDonation = DbLovelace 0
-          }
+      Tx
+        { txHash = mkTxHash bid1 1
+        , txBlockId = bid1
+        , txBlockIndex = 0
+        , txOutSum = DbLovelace 500000000
+        , txFee = DbLovelace 100
+        , txDeposit = Just 0
+        , txSize = 123
+        , txInvalidHereafter = Nothing
+        , txInvalidBefore = Nothing
+        , txValidContract = True
+        , txScriptSize = 0
+        , txTreasuryDonation = DbLovelace 0
+        }
     _ <- insertTxIn (TxIn tx1Id (fst $ head tx0s) 0 Nothing)
     let addr = mkAddressHash bid1 tx1Id
     _ <-

@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Cache (
@@ -39,7 +38,6 @@ import Cardano.DbSync.Cache.Stake as X
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
 import Cardano.DbSync.Cache.Util
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.Ledger.Mary.Value
@@ -389,7 +387,9 @@ insertBlockAndCache cache k block =
       withCacheOptimisationCheck ci insBlck $ do
         insBlck
         liftIO $
-          atomically $ writeTVar (cPrevBlock ci) $ Just (k, DB.blockHash block)
+          atomically $
+            writeTVar (cPrevBlock ci) $
+              Just (k, DB.blockHash block)
   where
     insBlck = DB.insertBlock k block
 

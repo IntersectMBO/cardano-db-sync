@@ -39,6 +39,7 @@ import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
+import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.

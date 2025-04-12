@@ -119,7 +119,7 @@ runActions syncEnv actions = do
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbAction Continue ys
         (ys, zs) -> do
-          newExceptT $ insertListBlocks syncEnv ys
+          insertListBlocks syncEnv ys
           if null zs
             then pure Continue
             else dbAction Continue zs

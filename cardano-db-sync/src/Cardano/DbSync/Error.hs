@@ -10,6 +10,7 @@ module Cardano.DbSync.Error (
   annotateInvariantTx,
   bsBase16Encode,
   dbSyncNodeError,
+  liftLookupFail,
   renderSyncInvariant,
   runOrThrowIO,
   throwLeftIO,
@@ -23,9 +24,12 @@ import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import Cardano.DbSync.Util
+
+-- import Cardano.DbSync.Util
+
+import qualified Cardano.Db as DB
 import Cardano.Prelude
-import Control.Monad.Trans.Except.Extra (left)
+import Control.Monad.Trans.Except.Extra (firstExceptT, left, newExceptT)
 import qualified Data.ByteString.Base16 as Base16
 import Data.String (String)
 import qualified Data.Text as Text
@@ -152,6 +156,10 @@ annotateInvariantTx tx ei =
 
 dbSyncNodeError :: (Monad m) => Text -> ExceptT SyncNodeError m a
 dbSyncNodeError = left . SNErrDefault
+
+liftLookupFail :: Monad m => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
+liftLookupFail loc =
+  firstExceptT (\lf -> SNErrDefault $ mconcat [loc, " ", show lf]) . newExceptT
 
 renderSyncInvariant :: SyncInvariant -> Text
 renderSyncInvariant ei =

@@ -9,12 +9,13 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Insert.Tx (
-  insertTx,
-  insertTxOut,
+  prepareTxGrouped,
+  insertTxRest,
+  prepareTxOut,
 ) where
 
 import Cardano.BM.Trace (Trace)
-import Cardano.Db (DbLovelace (..), DbWord64 (..))
+import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
@@ -41,10 +42,9 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertWithdrawals,
   queryOrInsertStakeRef,
  )
-import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
-import Cardano.DbSync.Era.Util (liftLookupFail, safeDecodeToJson)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
+import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt)
+import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 import qualified Cardano.Ledger.Address as Ledger
@@ -57,128 +57,114 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
-import Cardano.DbSync.Types
 
 --------------------------------------------------------------------------------------
 -- INSERT TX
 --------------------------------------------------------------------------------------
 
-_prepareTx ::
+prepareTxGrouped ::
+  (MonadIO m, MonadBaseControl IO m) =>
+  SyncEnv ->
+  [(TxIdLedger, DB.TxId)] ->
+  DB.BlockId ->
+  Generic.Tx ->
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ((DB.TxId, DB.Tx, Generic.Tx), BlockGroupedData)
+prepareTxGrouped syncEnv txHashes blkId tx = do
+  disInOut <- liftIO $ getDisableInOutState syncEnv
+  txDb <- lift $ prepareTx syncEnv blkId tx
+  txIns <- whenTrueMempty disInOut $ mapM (prepareTxIn syncEnv txHashes txId) (Generic.txInputs tx)
+  txOuts <- whenTrueMempty disInOut $ mapM (prepareTxOut syncEnv iopts (txId, Generic.txHash tx)) (Generic.txOutputs tx)
+  txMetadata <-
+    whenFalseMempty (ioMetadata iopts && Generic.txValidContract tx) $
+      prepareTxMetadata
+        tracer
+        txId
+        iopts
+        (Generic.txMetadata tx)
+  maTxMint <-
+    whenFalseMempty (ioMultiAssets iopts && Generic.txValidContract tx) $
+      prepareMaTxMint tracer cache txId $
+        Generic.txMint tx
+  pure ((txId, txDb, tx), BlockGroupedData txIns txOuts txMetadata maTxMint 0 outSum)
+  where
+    blockIndex = Generic.txBlockIndex tx
+    txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
+    tracer = getTrace syncEnv
+    cache = envCache syncEnv
+    iopts = getInsertOptions syncEnv
+    outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
+
+prepareTx ::
   MonadIO m =>
   SyncEnv ->
   DB.BlockId ->
-  Word64 ->
   Generic.Tx ->
   m DB.Tx
-_prepareTx syncEnv blkId blockIndex tx = do
+prepareTx syncEnv blkId tx = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
   let fees = case (unCoin <$> Generic.txFees tx, disInOut) of
         (_, True) -> 0
-        (Nothing,_) -> 0
+        (Nothing, _) -> 0
         (Just fees', _) -> fromIntegral fees'
-  pure DB.Tx
-        { DB.txHash = txHash
-        , DB.txBlockId = blkId
-        , DB.txBlockIndex = blockIndex
-        , DB.txOutSum = DB.DbLovelace outSum
-        , DB.txFee = DB.DbLovelace fees -- may be wrong if txValidContract is False or outsputs are disabled
-        , DB.txDeposit = Nothing -- leaving this Nothing for now
-        , DB.txSize = Generic.txSize tx
-        , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
-        , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
-        , DB.txValidContract = Generic.txValidContract tx
-        , DB.txScriptSize = sum $ Generic.txScriptSizes tx
-        , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
-        }
+  pure
+    DB.Tx
+      { DB.txHash = txHash
+      , DB.txBlockId = blkId
+      , DB.txBlockIndex = Generic.txBlockIndex tx
+      , DB.txOutSum = DB.DbLovelace outSum
+      , DB.txFee = DB.DbLovelace fees -- may be wrong if txValidContract is False or outsputs are disabled
+      , DB.txDeposit = Nothing -- leaving this Nothing for now
+      , DB.txSize = Generic.txSize tx
+      , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
+      , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
+      , DB.txValidContract = Generic.txValidContract tx
+      , DB.txScriptSize = sum $ Generic.txScriptSizes tx
+      , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
+      }
   where
     txHash = Generic.txHash tx
     outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
     treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
 
-_prepareTxIn ::
+prepareTxIn ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   [(TxIdLedger, DB.TxId)] ->
   DB.TxId ->
   Generic.TxIn ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.TxIn
-_prepareTxIn syncEnv txHashes txId txIn = do
-    txOutTxId <- prepareResolveTxInputs syncEnv txHashes txInKey
-    pure $
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ExtendedTxIn
+prepareTxIn syncEnv txHashes txId txIn = do
+  txOutTxId <- prepareResolveTxInputs syncEnv txHashes txInKey
+  pure $ ExtendedTxIn (txInDb txOutTxId) (Left txInKey)
+  where
+    txInKey = Generic.txInKey txIn
+    txInDb txOutTxId =
       DB.TxIn
         { DB.txInTxInId = txId
         , DB.txInTxOutId = txOutTxId
         , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex (Generic.txInKey txIn)
         , DB.txInRedeemerId = Nothing -- Remove or fix later https://github.com/IntersectMBO/cardano-db-sync/issues/1746
         }
-  where
-    txInKey = Generic.txInKey txIn
 
-insertTx ::
+-- let txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
+
+insertTxRest ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  IsPoolMember ->
   DB.BlockId ->
   EpochNo ->
   SlotNo ->
   ApplyResult ->
-  Word64 ->
+  DB.TxId ->
+  DB.Tx ->
   Generic.Tx ->
-  BlockGroupedData ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped = do
-  let txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
-  let !txHash = Generic.txHash tx
-  let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
-  let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
-      !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
-      !treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
-      txIn = Generic.txInputs tx
-      resolveTxIn needsVals = resolveTxInputsMain syncEnv needsVals (Just (fst <$> groupedTxOut grouped))
+  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+insertTxRest syncEnv blkId epochNo slotNo applyResult txId _ tx = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
-  -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
-  -- In these cases we can avoid expensive queries.
-  (resolvedInputs, fees', deposits) <- case (disInOut, mdeposits, unCoin <$> Generic.txFees tx) of
-    (True, _, _) -> pure ([], 0, unCoin <$> mdeposits)
-    (_, Just deposits, Just fees) -> do
-      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxIn False) txIn
-      pure (resolvedInputs, fees, Just (unCoin deposits))
-    (_, Nothing, Just fees) -> do
-      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxIn False) txIn
-      if any isNothing amounts
-        then pure (resolvedInputs, fees, Nothing)
-        else
-          let !inSum = sum $ map unDbLovelace $ catMaybes amounts
-           in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
-    (_, _, Nothing) -> do
-      -- Nothing in fees means a phase 2 failure
-      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxIn True) txIn
-      let !inSum = sum $ map unDbLovelace $ catMaybes amounts
-          !diffSum = if inSum >= outSum then inSum - outSum else 0
-          !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
-      pure (resolvedInsFull, fromIntegral fees, Just 0)
-  let fees = fromIntegral fees'
-  -- Insert transaction and get txId from the DB.
-  lift $
-    DB.insertTx txId
-      $ DB.Tx
-        { DB.txHash = txHash
-        , DB.txBlockId = blkId
-        , DB.txBlockIndex = blockIndex
-        , DB.txOutSum = DB.DbLovelace outSum
-        , DB.txFee = DB.DbLovelace fees
-        , DB.txDeposit = fromIntegral <$> deposits
-        , DB.txSize = Generic.txSize tx
-        , DB.txInvalidBefore = DbWord64 . unSlotNo <$> Generic.txInvalidBefore tx
-        , DB.txInvalidHereafter = DbWord64 . unSlotNo <$> Generic.txInvalidHereafter tx
-        , DB.txValidContract = Generic.txValidContract tx
-        , DB.txScriptSize = sum $ Generic.txScriptSizes tx
-        , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
-        }
-
   tryUpdateCacheTx cache (Generic.txLedgerTxId tx) txId
   when (ioTxCBOR iopts) $ do
     void
@@ -189,84 +175,55 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         , DB.txCborBytes = Generic.txCBOR tx
         }
 
-  if not (Generic.txValidContract tx)
-    then do
-      !txOutsGrouped <- whenFalseMempty disInOut $ mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
-
-      let !txIns = map (prepareExtendedTxIn txId Map.empty) resolvedInputs
-      -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
-      -- Same happens bellow on last line of this function.
-      pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
-    else do
-      -- The following operations only happen if the script passes stage 2 validation (or the tx has
-      -- no script).
-      !txOutsGrouped <- whenFalseMempty disInOut $ mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
-
-      !redeemers <-
-        Map.fromList
-          <$> whenFalseMempty
-            (ioPlutusExtra iopts)
-            (mapM (insertRedeemer syncEnv disInOut (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
-
-      when (ioPlutusExtra iopts) $ do
-        mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
-        mapM_ (insertCollateralTxIn syncEnv txId) (Generic.txInKey <$> Generic.txCollateralInputs tx)
-        mapM_ (insertReferenceTxIn syncEnv txId) (Generic.txInKey <$> Generic.txReferenceInputs tx)
-        mapM_ (insertCollateralTxOut syncEnv iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
-
-      txMetadata <-
-        whenFalseMempty (ioMetadata iopts) $
-          prepareTxMetadata
-            tracer
-            txId
-            iopts
-            (Generic.txMetadata tx)
-      mapM_
-        (insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers)
-        $ Generic.txCertificates tx
-      when (ioShelley iopts) $
-        mapM_ (insertWithdrawals syncEnv txId redeemers) $
-          Generic.txWithdrawals tx
-      when (ioShelley iopts) $
-        mapM_ (lift . insertParamProposal blkId txId) $
-          Generic.txParamProposal tx
-
-      maTxMint <-
-        whenFalseMempty (ioMultiAssets iopts) $
-          prepareMaTxMint tracer cache txId $
-            Generic.txMint tx
-
-      when (ioPlutusExtra iopts) $
-        mapM_ (lift . insertScript tracer txId) $
-          Generic.txScripts tx
-
-      when (ioPlutusExtra iopts) $
-        mapM_ (insertExtraKeyWitness tracer txId) $
-          Generic.txExtraKeyWitnesses tx
-
-      when (ioGov iopts) $ do
-        mapM_ (insertGovActionProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
-        mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
-
-      let !txIns = map (prepareExtendedTxIn txId redeemers) resolvedInputs
-      pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
+  when (Generic.txValidContract tx) $ do
+    -- The following operations only happen if the script passes stage 2 validation (or the tx has
+    -- no script).
+    !redeemers <-
+      Map.fromList
+        <$> whenFalseMempty
+          (ioPlutusExtra iopts)
+          (mapM (insertRedeemer syncEnv disInOut [] txId) (Generic.txRedeemer tx)) -- TODO leaving this empty for now
+    when (ioPlutusExtra iopts) $ do
+      mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
+      mapM_ (insertCollateralTxIn syncEnv txId) (Generic.txInKey <$> Generic.txCollateralInputs tx)
+      mapM_ (insertReferenceTxIn syncEnv txId) (Generic.txInKey <$> Generic.txReferenceInputs tx)
+      mapM_ (insertCollateralTxOut syncEnv iopts (txId, Generic.txHash tx)) (Generic.txCollateralOutputs tx)
+    mapM_
+      (insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers)
+      $ Generic.txCertificates tx
+    when (ioShelley iopts) $
+      mapM_ (insertWithdrawals syncEnv txId redeemers) $
+        Generic.txWithdrawals tx
+    when (ioShelley iopts) $
+      mapM_ (lift . insertParamProposal blkId txId) $
+        Generic.txParamProposal tx
+    when (ioPlutusExtra iopts) $
+      mapM_ (lift . insertScript tracer txId) $
+        Generic.txScripts tx
+    when (ioPlutusExtra iopts) $
+      mapM_ (insertExtraKeyWitness tracer txId) $
+        Generic.txExtraKeyWitnesses tx
+    when (ioGov iopts) $ do
+      mapM_ (insertGovActionProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+      mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
     mDeposits = maybeFromStrict $ apDeposits applyResult
+    isMember poolId = Set.member poolId (apPoolsRegistered applyResult)
 
 --------------------------------------------------------------------------------------
 -- INSERT TXOUT
 --------------------------------------------------------------------------------------
-insertTxOut ::
+prepareTxOut ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
-insertTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
+prepareTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
   mSaId <- lift $ queryOrInsertStakeRef syncEnv addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
@@ -552,25 +509,3 @@ insertReferenceTxIn syncEnv txInId txIn = do
       , DB.referenceTxInTxOutId = txOutId
       , DB.referenceTxInTxOutIndex = fromIntegral (txInIndex txIn)
       }
-
---------------------------------------------------------------------------------------
--- Prepare TX-IN
---------------------------------------------------------------------------------------
-prepareExtendedTxIn ::
-  DB.TxId ->
-  Map Word64 DB.RedeemerId ->
-  (Generic.TxIn, DB.TxId, Either Generic.TxInKey DB.TxOutIdW) ->
-  ExtendedTxIn
-prepareExtendedTxIn txInId redeemers (txIn, txOutId, mTxOutId) =
-  ExtendedTxIn
-    { etiTxIn = txInDB
-    , etiTxOutId = mTxOutId
-    }
-  where
-    txInDB =
-      DB.TxIn
-        { DB.txInTxInId = txInId
-        , DB.txInTxOutId = txOutId
-        , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex (Generic.txInKey txIn)
-        , DB.txInRedeemerId = mlookup (Generic.txInRedeemerIndex txIn) redeemers
-        }

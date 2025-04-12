@@ -26,7 +26,6 @@ import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, 
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
-import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger

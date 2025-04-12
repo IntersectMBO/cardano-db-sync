@@ -215,6 +215,7 @@ library
                       , prometheus
                       , psqueues
                       , random-shuffle
+                      , resource-pool
                       , scientific
                       , serialise
                       , small-steps

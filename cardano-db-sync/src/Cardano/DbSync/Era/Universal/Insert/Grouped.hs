@@ -29,8 +29,8 @@ import Cardano.DbSync.Api.Types (Prefetch (..), SyncEnv (..))
 import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
-import Cardano.DbSync.Era.Util
 import Cardano.DbSync.Error
+import Cardano.DbSync.Types
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (modifyTVar, readTVarIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -39,7 +39,6 @@ import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import Database.Persist.Sql (SqlBackend)
-import Cardano.DbSync.Types
 
 -- | Group data within the same block, to insert them together in batches
 --

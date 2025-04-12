@@ -25,7 +25,6 @@ import Cardano.DbSync.Cache (insertAddressUsingCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
 import Cardano.Prelude
@@ -89,7 +88,8 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
                   , DB.slotLeaderDescription = "Genesis slot leader"
                   }
             let bid = DB.BlockKey 0
-            lift $ DB.insertBlock bid $
+            lift $
+              DB.insertBlock bid $
                 DB.Block
                   { DB.blockHash = configGenesisHash cfg
                   , DB.blockEpochNo = Nothing

@@ -31,6 +31,7 @@ import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, newTBQueueIO, newTVarIO)
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import Data.Map (Map)
+import Data.Pool (Pool)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word64)
@@ -41,6 +42,7 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 
 data SyncEnv = SyncEnv
   { envBackend :: !SqlBackend
+  , envPool :: !(Pool SqlBackend)
   , envPrefetch :: !Prefetch
   , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString

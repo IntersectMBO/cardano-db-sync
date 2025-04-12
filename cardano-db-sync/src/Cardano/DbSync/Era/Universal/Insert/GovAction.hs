@@ -39,7 +39,6 @@ import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
-import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Util
