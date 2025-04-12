@@ -18,16 +18,14 @@ import Cardano.BM.Trace (logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal, prepareBlock)
 import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent) -- , hasNewEpochEvent)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
-import Cardano.DbSync.Ledger.Types (ApplyResult (..))
-import Cardano.DbSync.LocalStateQuery
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -49,6 +47,8 @@ import Cardano.DbSync.Era.Universal.Insert.Grouped (insertBlockGroupedData)
 import Cardano.DbSync.Cache (queryPrevBlockWithCache)
 import Control.Monad.Extra (whenJust)
 import Database.Persist.Sql
+import Cardano.DbSync.Threads.Ledger
+import Control.Concurrent.Class.MonadSTM.Strict (readTMVar)
 
 insertListBlocks ::
   SyncEnv ->
@@ -84,7 +84,7 @@ applyAndInsertBlocksMaybe syncEnv = go
           liftIO $ setConsistentLevel syncEnv Consistent
           pure $ Just ls
         Right _ -> do
-          (applyRes, _) <- liftIO (mkApplyResult syncEnv cblk False)
+          applyRes <- fst <$> liftIO (mkApplyResult syncEnv cblk)
           whenJust (getNewEpoch applyRes) $ \epochNo ->
             liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
           go rest
@@ -120,7 +120,7 @@ applyAndInsertByronBlock ::
   ((DB.BlockId, Bool), ByronBlock) ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertByronBlock syncEnv ((_blockId, firstAfterRollback), blk) = do
-  (applyResult, tookSnapshot) <- liftIO (mkApplyResult syncEnv (BlockByron blk) True)
+  (applyResult, tookSnapshot) <- liftIO (mkApplyResult syncEnv (BlockByron blk)) -- TODO use writeLedgerAction here as well for better performance
   let isStartEventOrRollback = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let details = apSlotDetails applyResult
   insertNewEpochLedgerEvents syncEnv (sdEpochNo (apSlotDetails applyResult)) (apEvents applyResult)
@@ -135,31 +135,50 @@ applyAndInsertBlock ::
   ((DB.BlockId, Bool), CardanoBlock) ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlock syncEnv ((blockId, firstAfterRollback), cblock) = do
-  (applyResult, tookSnapshot) <- liftIO (mkApplyResult syncEnv cblock True)
-  insertNewEpochLedgerEvents syncEnv (sdEpochNo (apSlotDetails applyResult)) (apEvents applyResult)
+  applyRessultVar <- liftIO (asyncApplyResult syncEnv cblock)
+  -- insertNewEpochLedgerEvents syncEnv (sdEpochNo (apSlotDetails applyResult)) (apEvents applyResult)
   whenGeneric $ \blk ->
-    insertBlock syncEnv (blockId, blk) applyResult firstAfterRollback tookSnapshot
+    prepareInsertBlock syncEnv (blockId, blk) applyRessultVar firstAfterRollback
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
     whenGeneric action =
        maybe (liftIO $ logError tracer "Found Byron Block after Shelley") action (toGenericBlock iopts cblock)
 
-insertBlock ::
+prepareInsertBlock ::
   SyncEnv ->
   (DB.BlockId, Generic.Block) ->
-  ApplyResult ->
-  Bool ->
+  LedgerResultResTMVar ->
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-insertBlock syncEnv (blockId, blk) applyResult firstAfterRollback tookSnapshot = do
+prepareInsertBlock syncEnv (blockId, blk) applyRessultVar firstAfterRollback = do
   (blockDB, preparedTxs) <-
     liftIO $ concurrently
       (runOrThrowIO $ runExceptT $ DB.runDbLoggingExceptT backend tracer $ prepareBlock syncEnv blk)
       (mapConcurrently prepareTxWithPool (Generic.blkTxs blk))
 
   _minIds <- insertBlockGroupedData syncEnv $ mconcat (snd <$> preparedTxs)
-  mapM_ (uncurry3 $ insertTxRest syncEnv blockId epochNo slotNo applyResult) (fst <$> preparedTxs)
+  (applyResult, tookSnapshot) <- liftIO $ atomically $ readTMVar applyRessultVar
+  insertBlockWithLedger syncEnv blockId blockDB blk (fst <$> preparedTxs) applyResult firstAfterRollback tookSnapshot
+  where
+    prepareTxWithPool tx = runOrThrowIO $ runSqlPoolNoTransaction (prepTx tx) (envPool syncEnv) Nothing
+    prepTx = runExceptT . prepareTxGrouped syncEnv [] blockId
+
+    backend = envBackend syncEnv
+    tracer = getTrace syncEnv
+
+insertBlockWithLedger ::
+  SyncEnv ->
+  DB.BlockId ->
+  DB.Block ->
+  Generic.Block ->
+  [(DB.TxId, DB.Tx, Generic.Tx)] ->
+  ApplyResult ->
+  Bool ->
+  Bool ->
+  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+insertBlockWithLedger syncEnv blockId blockDB blk txs applyResult firstAfterRollback tookSnapshot = do
+  mapM_ (uncurry3 $ insertTxRest syncEnv blockId epochNo slotNo applyResult) txs
   insertBlockUniversal
     syncEnv
     blockId
@@ -174,11 +193,6 @@ insertBlock syncEnv (blockId, blk) applyResult firstAfterRollback tookSnapshot =
     epochNo = sdEpochNo details
     slotNo = sdSlotNo details
     blkNo = Generic.blkBlockNo blk
-    backend = envBackend syncEnv
-    tracer = getTrace syncEnv
-
-    prepareTxWithPool tx = runOrThrowIO $ runSqlPoolNoTransaction (prepTx tx) (envPool syncEnv) Nothing
-    prepTx = runExceptT . prepareTxGrouped syncEnv [] blockId
 
 insertBlockRest ::
   SyncEnv ->
@@ -239,17 +253,6 @@ insertBlockRest syncEnv blkNo applyResult tookSnapshot = do
 
     tracer = getTrace syncEnv
     txOutTableType = getTxOutTableType syncEnv
-
-mkApplyResult :: SyncEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
-mkApplyResult syncEnv cblk isCons = do
-  (applyRes, tookSnapshot) <- case envLedgerEnv syncEnv of
-    HasLedger hle -> applyBlockAndSnapshot hle cblk isCons
-    NoLedger nle -> do
-      slotDetails <- getSlotDetailsNode nle (cardanoBlockSlotNo cblk)
-      pure (defaultApplyResult slotDetails, False)
-  let details = apSlotDetails applyRes
-  epochEvents <- liftIO $ atomically $ generateNewEpochEvents syncEnv details
-  pure (applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}, tookSnapshot)
 
 takeWhileByron :: [(a, CardanoBlock)] -> ([(a, ByronBlock)], [(a, CardanoBlock)])
 takeWhileByron = go []

@@ -33,7 +33,7 @@ module Cardano.DbSync.Api (
   getNetwork,
   hasLedgerState,
   writePrefetch,
-  generateNewEpochEvents,
+  addNewEventsAndSort,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -48,7 +48,7 @@ import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Ledger.State (mkHasLedgerEnv)
-import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -181,6 +181,13 @@ initCurrentEpochNo =
   CurrentEpochNo
     { cenEpochNo = Strict.Nothing
     }
+
+addNewEventsAndSort :: SyncEnv -> ApplyResult -> IO ApplyResult
+addNewEventsAndSort env applyResult = do
+  epochEvents <- liftIO $ atomically $ generateNewEpochEvents env details
+  pure applyResult {apEvents = sort $ epochEvents <> apEvents applyResult}
+  where
+    details = apSlotDetails applyResult
 
 generateNewEpochEvents :: SyncEnv -> SlotDetails -> STM [LedgerEvent]
 generateNewEpochEvents env details = do

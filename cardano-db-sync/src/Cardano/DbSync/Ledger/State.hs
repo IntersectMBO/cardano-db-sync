@@ -176,6 +176,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
   intervar <- newTVarIO Strict.Nothing
   swQueue <- newTBQueueIO 5 -- Should be relatively shallow.
   stakeChans <- newEpochStakeChannels
+  applyQueue <- newTBQueueIO 10
   pure
     HasLedgerEnv
       { leTrace = trce
@@ -191,6 +192,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leInterpreter = intervar
       , leStateVar = svar
       , leStateWriteQueue = swQueue
+      , leApplyQueue = applyQueue
       , leEpochStakeChans = stakeChans
       }
 

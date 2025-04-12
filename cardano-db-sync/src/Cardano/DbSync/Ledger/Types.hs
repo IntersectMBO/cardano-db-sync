@@ -37,6 +37,7 @@ import Cardano.Slotting.Slot (
   WithOrigin (..),
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTMVar,
   StrictTVar,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
@@ -73,6 +74,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leApplyQueue :: TBQueue LedgerAction
   , leEpochStakeChans :: EpochStakeChannels
   }
 
@@ -195,6 +197,9 @@ instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState wh
   getAnchorMeasure _ = getTipSlot . clsState
 
 data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
+
+data LedgerAction = LedgerAction CardanoBlock LedgerResultResTMVar
+type LedgerResultResTMVar = StrictTMVar IO (ApplyResult, Bool)
 
 data EpochStakeDBAction = EpochStakeDBAction
   { esaEpochNo :: EpochNo

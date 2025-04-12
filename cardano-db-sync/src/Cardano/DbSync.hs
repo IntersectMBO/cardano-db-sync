@@ -42,6 +42,7 @@ import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Threads.Database
 import Cardano.DbSync.Threads.EpochStake
+import Cardano.DbSync.Threads.Ledger
 import Cardano.DbSync.Threads.Stake
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
@@ -206,6 +207,7 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
               id
               [ runDbThread syncEnv metricsSetters threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runLedgerThread syncEnv
               , runEpochStakeThread syncEnv
               , runStakeThread syncEnv
               , runFetchOffChainPoolThread syncEnv
