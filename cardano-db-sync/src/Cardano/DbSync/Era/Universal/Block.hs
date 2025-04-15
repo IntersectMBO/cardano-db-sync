@@ -51,7 +51,7 @@ import Database.Persist.Sql (SqlBackend)
 -- This is the entry point for inserting a block into the database, used for all eras appart from Byron.
 --------------------------------------------------------------------------------------------
 insertBlockUniversal ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   -- | Should log
   Bool ->
@@ -63,7 +63,7 @@ insertBlockUniversal ::
   SlotDetails ->
   IsPoolMember ->
   ApplyResult ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
+  DB.DbAction m (Either SyncNodeError ())
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
   -- if we're syncing within 2 mins of the tip, we optimise the caches.
   when (isSyncedWithintwoMinutes details) $ optimiseCaches cache

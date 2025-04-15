@@ -53,7 +53,7 @@ import Cardano.Mock.Query (queryMultiAssetCount)
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
-import GHC.Base (error)
+import GHVC.Base (error)
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Network.Block (genesisPoint)
 import Test.Cardano.Db.Mock.Config (
@@ -80,7 +80,7 @@ simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
   withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    let txOutTableType = txOutVariantTypeFromConfig dbSync
+    let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
     -- Forge a block with stake credentials
     void $ Api.registerAllStakeCreds interpreter mockServer
@@ -96,20 +96,20 @@ simpleScript =
     assertBlockNoBackoff dbSync (length epoch + 2)
     assertEqQuery
       dbSync
-      (map getOutFields <$> DB.queryScriptOutputs txOutTableType)
+      (map getOutFields <$> DB.queryScriptOutputs txOutVariantType)
       [expectedFields]
       "Unexpected script outputs"
   where
     testLabel = "conwaySimpleScript"
     getOutFields txOut =
       case txOut of
-        DB.CTxOutW txOut' ->
+        DB.VCTxOutW txOut' ->
           ( VC.txOutAddress txOut'
           , VC.txOutAddressHasScript txOut'
           , VC.txOutValue txOut'
           , VC.txOutDataHash txOut'
           )
-        DB.VTxOutW txOut' mAddress ->
+        DB.VATxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
               ( VA.addressAddress address

@@ -15,7 +15,7 @@ import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Schema.Orphans ()
-import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
   DbLovelace (..),
@@ -294,12 +294,12 @@ rewardEncoder =
 rewardBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64], [PoolHashId])
 rewardBulkEncoder =
   contrazip6
-    (manyEncoder $ idBulkEncoder getStakeAddressId)
-    (manyEncoder $ E.nonNullable rewardSourceEncoder)
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-    (manyEncoder $ idBulkEncoder getPoolHashId)
+    (bulkEncoder $ idBulkEncoder getStakeAddressId)
+    (bulkEncoder $ E.nonNullable rewardSourceEncoder)
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ idBulkEncoder getPoolHashId)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -309,7 +309,8 @@ rewardBulkEncoder =
 
 -----------------------------------------------------------------------------------------------------------------------------------
 data RewardRest = RewardRest
-  { rewardRestType :: !RewardSource -- sqltype=rewardtype
+  { rewardRestAddrId :: !StakeAddressId -- noreference
+  , rewardRestType :: !RewardSource -- sqltype=rewardtype
   , rewardRestAmount :: !DbLovelace -- sqltype=lovelace
   , rewardRestEarnedEpoch :: !Word64 -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
   , rewardRestSpendableEpoch :: !Word64
@@ -328,7 +329,8 @@ entityRewardRestDecoder =
 rewardRestDecoder :: D.Row RewardRest
 rewardRestDecoder =
   RewardRest
-    <$> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
+    <$> idDecoder StakeAddressId -- rewardRestAddrId
+    <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
     <*> dbLovelaceDecoder -- rewardRestAmount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestEarnedEpoch
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestSpendableEpoch
@@ -352,11 +354,11 @@ rewardRestEncoder =
 rewardRestBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
 rewardRestBulkEncoder =
   contrazip5
-    (manyEncoder $ idBulkEncoder getStakeAddressId)
-    (manyEncoder $ E.nonNullable rewardSourceEncoder)
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ idBulkEncoder getStakeAddressId)
+    (bulkEncoder $ E.nonNullable rewardSourceEncoder)
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -413,10 +415,10 @@ epochStakeEncoder =
 epochStakeBulkEncoder :: E.Params ([StakeAddressId], [PoolHashId], [DbLovelace], [Word64])
 epochStakeBulkEncoder =
   contrazip4
-    (manyEncoder $ idBulkEncoder getStakeAddressId)
-    (manyEncoder $ idBulkEncoder getPoolHashId)
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ idBulkEncoder getStakeAddressId)
+    (bulkEncoder $ idBulkEncoder getPoolHashId)
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -464,5 +466,5 @@ epochStakeProgressEncoder =
 epochStakeProgressBulkEncoder :: E.Params ([Word64], [Bool])
 epochStakeProgressBulkEncoder =
   contrazip2
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-    (manyEncoder $ E.nonNullable E.bool)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nonNullable E.bool)

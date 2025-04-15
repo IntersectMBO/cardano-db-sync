@@ -35,7 +35,7 @@ validateAllPoolsHaveOwners = do
 -- select * from pool_hash
 --  where not exists (select * from pool_owner where pool_owner.pool_hash_id = pool_hash.id) ;
 
-queryPoolsWithoutOwners :: MonadIO m => ReaderT SqlBackend m Int
+queryPoolsWithoutOwners :: MonadIO m => DB.DbAction m Int
 queryPoolsWithoutOwners = do
   res <- select $ do
     pupd <- from $ table @PoolUpdate

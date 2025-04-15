@@ -18,7 +18,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-liftLookupFail :: Monad m => Text -> m (Either DB.LookupFail a) -> ExceptT SyncNodeError m a
+liftLookupFail :: Monad m => Text -> m (Either DB.DbError a) -> ExceptT SyncNodeError m a
 liftLookupFail loc =
   firstExceptT (\lf -> SNErrDefault $ mconcat [loc, " ", show lf]) . newExceptT
 

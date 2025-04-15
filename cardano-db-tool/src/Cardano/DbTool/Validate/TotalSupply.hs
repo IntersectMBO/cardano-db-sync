@@ -23,37 +23,37 @@ data TestParams = TestParams
   }
 
 genTestParameters :: TxOutVariantType -> IO TestParams
-genTestParameters txOutTableType = do
+genTestParameters txOutVariantType = do
   mlatest <- runDbNoLoggingEnv queryLatestBlockNo
   case mlatest of
     Nothing -> error "Cardano.DbTool.Validation: Empty database"
     Just latest ->
       TestParams
         <$> randomRIO (1, latest - 1)
-        <*> runDbNoLoggingEnv (queryGenesisSupply txOutTableType)
+        <*> runDbNoLoggingEnv (queryGenesisSupply txOutVariantType)
 
 queryInitialSupply :: TxOutVariantType -> Word64 -> IO Accounting
-queryInitialSupply txOutTableType blkNo =
+queryInitialSupply txOutVariantType blkNo =
   -- Run all queries in a single transaction.
   runDbNoLoggingEnv $
     Accounting
       <$> queryFeesUpToBlockNo blkNo
       <*> queryDepositUpToBlockNo blkNo
       <*> queryWithdrawalsUpToBlockNo blkNo
-      <*> fmap2 utxoSetSum (queryUtxoAtBlockNo txOutTableType) blkNo
+      <*> fmap2 utxoSetSum (queryUtxoAtBlockNo txOutVariantType) blkNo
 
 -- | Validate that the total supply is decreasing.
 -- This is only true for the Byron error where transaction fees are burnt.
 validateTotalSupplyDecreasing :: TxOutVariantType -> IO ()
-validateTotalSupplyDecreasing txOutTableType = do
-  test <- genTestParameters txOutTableType
+validateTotalSupplyDecreasing txOutVariantType = do
+  test <- genTestParameters txOutVariantType
 
   putStrF $
     "Total supply + fees + deposit - withdrawals at block "
       ++ show (testBlockNo test)
       ++ " is same as genesis supply: "
 
-  accounting <- queryInitialSupply txOutTableType (testBlockNo test)
+  accounting <- queryInitialSupply txOutVariantType (testBlockNo test)
 
   let total = accSupply accounting + accFees accounting + accDeposit accounting - accWithdrawals accounting
 

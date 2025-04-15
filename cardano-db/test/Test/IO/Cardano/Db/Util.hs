@@ -14,36 +14,35 @@ module Test.IO.Cardano.Db.Util (
   testSlotLeader,
 ) where
 
-import Cardano.Db
-import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Control.Monad (unless)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import Data.Time.Calendar (Day (..))
 import Data.Time.Clock (UTCTime (..))
 import Data.Word (Word64)
-import Database.Persist.Sql (SqlBackend)
 import Text.Printf (printf)
+
+import Cardano.Db
+import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore(..))
 
 assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =
   liftIO $ unless bool (error msg)
 
-deleteAllBlocks :: MonadIO m => ReaderT SqlBackend m ()
+deleteAllBlocks :: MonadIO m => DbAction m ()
 deleteAllBlocks = do
   mblkId <- queryMinBlock
-  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutCore)
+  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutVariantCore)
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
 
 mkAddressHash :: BlockId -> TxId -> String
 mkAddressHash blkId txId =
-  take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' '
+  take 28 $ printf "tx out #%d, tx #%d" (getBlockId blkId) (getTxId txId) ++ replicate 28 ' '
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
@@ -71,7 +70,7 @@ mkBlockHash blkId =
 
 mkTxHash :: BlockId -> Word64 -> ByteString
 mkTxHash blk tx =
-  BS.pack (take 32 $ printf "block #%d, tx #%d" (unBlockId blk) tx ++ replicate 32 ' ')
+  BS.pack (take 32 $ printf "block #%d, tx #%d" (getBlockId blk) tx ++ replicate 32 ' ')
 
 mkTxs :: BlockId -> Word -> [Tx]
 mkTxs blkId count =
@@ -100,17 +99,17 @@ testSlotLeader =
 mkTxOutCore :: BlockId -> TxId -> TxOutW
 mkTxOutCore blkId txId =
   let addr = mkAddressHash blkId txId
-   in CTxOutW $
-        C.TxOut
-          { C.txOutAddress = Text.pack addr
-          , C.txOutAddressHasScript = False
-          , C.txOutConsumedByTxId = Nothing
-          , C.txOutDataHash = Nothing
-          , C.txOutIndex = 0
-          , C.txOutInlineDatumId = Nothing
-          , C.txOutPaymentCred = Nothing
-          , C.txOutReferenceScriptId = Nothing
-          , C.txOutStakeAddressId = Nothing
-          , C.txOutTxId = txId
-          , C.txOutValue = DbLovelace 1000000000
+   in VCTxOutW $
+        TxOutCore
+          { txOutCoreAddress = Text.pack addr
+          , txOutCoreAddressHasScript = False
+          , txOutCoreConsumedByTxId = Nothing
+          , txOutCoreDataHash = Nothing
+          , txOutCoreIndex = 0
+          , txOutCoreInlineDatumId = Nothing
+          , txOutCorePaymentCred = Nothing
+          , txOutCoreReferenceScriptId = Nothing
+          , txOutCoreStakeAddressId = Nothing
+          , txOutCoreTxId = txId
+          , txOutCoreValue = DbLovelace 1000000000
           }

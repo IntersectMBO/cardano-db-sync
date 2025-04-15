@@ -8,100 +8,102 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Cardano.Db.Types (
-  DbAction (..),
-  DbCallInfo (..),
-  DbEnv (..),
-  Ada (..),
-  AnchorType (..),
-  AssetFingerprint (..),
-  DbLovelace (..),
-  DbInt65 (..),
-  DbWord64 (..),
-  RewardSource (..),
-  SyncState (..),
-  ScriptPurpose (..),
-  ScriptType (..),
-  PoolCertAction (..),
-  PruneConsumeMigration (..),
-  CertNo (..),
-  PoolCert (..),
-  ExtraMigration (..),
-  MigrationValues (..),
-  VoteUrl (..),
-  VoteMetaHash (..),
-  Vote (..),
-  VoterRole (..),
-  GovActionType (..),
-  BootstrapState (..),
-  dbInt65Decoder,
-  dbInt65Encoder,
-  rewardSourceDecoder,
-  rewardSourceEncoder,
-  dbLovelaceDecoder,
-  maybeDbLovelaceDecoder,
-  dbLovelaceEncoder,
-  maybeDbLovelaceEncoder,
-  dbWord64Decoder,
-  maybeDbWord64Decoder,
-  dbWord64Encoder,
-  maybeDbWord64Encoder,
-  processMigrationValues,
-  isStakeDistrComplete,
-  bootstrapState,
-  extraDescription,
-  deltaCoinToDbInt65,
-  integerToDbInt65,
-  lovelaceToAda,
-  mkAssetFingerprint,
-  renderAda,
-  scientificToAda,
-  rewardSourceFromText,
-  syncStateToText,
-  syncStateFromText,
-  syncStateDecoder,
-  syncStateEncoder,
-  scriptPurposeDecoder,
-  scriptPurposeEncoder,
-  scriptPurposeFromText,
-  scriptPurposeToText,
-  scriptTypeEncoder,
-  scriptTypeDecoder,
-  scriptTypeFromText,
-  scriptTypeToText,
-  rewardSourceToText,
-  voteEncoder,
-  voteDecoder,
-  voterRoleEncoder,
-  voterRoleDecoder,
-  voteToText,
-  voteFromText,
-  voterRoleToText,
-  voterRoleFromText,
-  voteUrlDecoder,
-  voteUrlEncoder,
-  govActionTypeToText,
-  govActionTypeFromText,
-  govActionTypeDecoder,
-  govActionTypeEncoder,
-  anchorTypeToText,
-  anchorTypeFromText,
-  anchorTypeDecoder,
-  anchorTypeEncoder,
-  word64ToAda,
-  word128Decoder,
-  word128Encoder,
-  hardcodedAlwaysAbstain,
-  hardcodedAlwaysNoConfidence,
-) where
+module Cardano.Db.Types where
+
+-- (
+--   DbAction (..),
+--   DbCallInfo (..),
+--   DbEnv (..),
+--   Ada (..),
+--   AnchorType (..),
+--   AssetFingerprint (..),
+--   DbLovelace (..),
+--   DbInt65 (..),
+--   DbWord64 (..),
+--   RewardSource (..),
+--   SyncState (..),
+--   ScriptPurpose (..),
+--   ScriptType (..),
+--   PoolCertAction (..),
+--   PruneConsumeMigration (..),
+--   CertNo (..),
+--   PoolCert (..),
+--   ExtraMigration (..),
+--   MigrationValues (..),
+--   VoteUrl (..),
+--   VoteMetaHash (..),
+--   Vote (..),
+--   VoterRole (..),
+--   GovActionType (..),
+--   BootstrapState (..),
+--   dbInt65Decoder,
+--   dbInt65Encoder,
+--   fromDbInt65,
+--   rewardSourceDecoder,
+--   rewardSourceEncoder,
+--   dbLovelaceDecoder,
+--   dbLovelaceEncoder,
+--   maybeDbLovelaceDecoder,
+--   dbLovelaceValueEncoder,
+--   maybeDbLovelaceEncoder,
+--   dbWord64Decoder,
+--   maybeDbWord64Decoder,
+--   dbWord64Encoder,
+--   maybeDbWord64Encoder,
+--   processMigrationValues,
+--   isStakeDistrComplete,
+--   bootstrapState,
+--   extraDescription,
+--   deltaCoinToDbInt65,
+--   integerToDbInt65,
+--   lovelaceToAda,
+--   mkAssetFingerprint,
+--   renderAda,
+--   scientificToAda,
+--   rewardSourceFromText,
+--   syncStateToText,
+--   syncStateFromText,
+--   syncStateDecoder,
+--   syncStateEncoder,
+--   scriptPurposeDecoder,
+--   scriptPurposeEncoder,
+--   scriptPurposeFromText,
+--   scriptPurposeToText,
+--   scriptTypeEncoder,
+--   scriptTypeDecoder,
+--   scriptTypeFromText,
+--   scriptTypeToText,
+--   rewardSourceToText,
+--   voteEncoder,
+--   voteDecoder,
+--   voterRoleEncoder,
+--   voterRoleDecoder,
+--   voteToText,
+--   voteFromText,
+--   voterRoleToText,
+--   voterRoleFromText,
+--   voteUrlDecoder,
+--   voteUrlEncoder,
+--   govActionTypeToText,
+--   govActionTypeFromText,
+--   govActionTypeDecoder,
+--   govActionTypeEncoder,
+--   anchorTypeToText,
+--   anchorTypeFromText,
+--   anchorTypeDecoder,
+--   anchorTypeEncoder,
+--   word64ToAda,
+--   word128Decoder,
+--   word128Encoder,
+--   hardcodedAlwaysAbstain,
+--   hardcodedAlwaysNoConfidence,
+--
 
 import Cardano.BM.Trace (Trace)
 import Cardano.Db.Error (CallSite (..), DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadError (..), MonadIO (..), MonadReader)
+import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadError, MonadReader)
 import qualified Codec.Binary.Bech32 as Bech32
-import Control.Monad.Trans.Except (ExceptT)
-import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
 import Data.Aeson.Encoding (unsafeToEncoding)
@@ -125,7 +127,12 @@ import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import Quiet (Quiet (..))
+import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Reader (ReaderT)
 
+----------------------------------------------------------------------------
+-- DbAction
+----------------------------------------------------------------------------
 newtype DbAction m a = DbAction
   {runDbAction :: ExceptT DbError (ReaderT DbEnv m) a}
   deriving newtype
@@ -137,6 +144,9 @@ newtype DbAction m a = DbAction
     , MonadIO
     )
 
+----------------------------------------------------------------------------
+-- DbCallInfo
+----------------------------------------------------------------------------
 data DbCallInfo = DbCallInfo
   { dciName :: !Text
   , dciCallSite :: !CallSite
@@ -148,6 +158,9 @@ data DbEnv = DbEnv
   , dbTracer :: !(Maybe (Trace IO Text))
   }
 
+----------------------------------------------------------------------------
+-- Other types
+----------------------------------------------------------------------------
 -- | Convert a `Scientific` to `Ada`.
 newtype Ada = Ada
   { unAda :: Micro
@@ -190,12 +203,6 @@ mkAssetFingerprint policyBs assetNameBs =
       fromRight (error "mkAssetFingerprint: Bad human readable part") $
         Bech32.humanReadablePartFromText "asset" -- Should never happen
 
--- This is horrible. Need a 'Word64' with an extra sign bit.
--- data DbInt65
---   = PosInt65 !Word64
---   | NegInt65 !Word64
---   deriving (Eq, Generic, Show)
-
 newtype DbInt65 = DbInt65 {unDbInt65 :: Word64}
   deriving (Eq, Generic)
 
@@ -232,6 +239,9 @@ newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
 
 dbLovelaceEncoder :: HsqlE.Params DbLovelace
 dbLovelaceEncoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+
+dbLovelaceValueEncoder :: HsqlE.NullableOrNot HsqlE.Value DbLovelace
+dbLovelaceValueEncoder = HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
 
 maybeDbLovelaceEncoder :: HsqlE.Params (Maybe DbLovelace)
 maybeDbLovelaceEncoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbLovelace >$< HsqlE.int8

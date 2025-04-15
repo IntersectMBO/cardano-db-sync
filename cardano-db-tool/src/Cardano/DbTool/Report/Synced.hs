@@ -41,7 +41,7 @@ assertFail mdiff = do
 
 -- -----------------------------------------------------------------------------
 
-queryLatestBlockTime :: MonadIO m => ReaderT SqlBackend m (Maybe UTCTime)
+queryLatestBlockTime :: MonadIO m => DB.DbAction m (Maybe UTCTime)
 queryLatestBlockTime = do
   res <- select $ do
     blk <- from $ table @Db.Block

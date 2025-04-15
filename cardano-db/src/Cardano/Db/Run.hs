@@ -2,21 +2,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE RecordWildCards #-}
 
-module Cardano.Db.Run (
-  runDbHandleLogger,
-  runDbIohkLogging,
-  runDbIohkNoLogging,
-  runDbNoLogging,
-  runDbNoLoggingEnv,
-  runIohkLogging,
-  runWithConnectionNoLogging,
-
-  -- * Connection Pool variants
-  runPoolDbIohkLogging,
-) where
+module Cardano.Db.Run where
 
 import Cardano.BM.Data.LogItem (
   LOContent (..),
@@ -26,124 +15,87 @@ import Cardano.BM.Data.LogItem (
  )
 import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Trace (Trace)
-import Cardano.Prelude (ReaderT (..), bracket, lift, runExceptT, throwIO)
-import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (
   LogLevel (..),
   LogSource,
   LoggingT,
   NoLoggingT,
-  defaultLogStr,
   runLoggingT,
   runNoLoggingT,
  )
 import Control.Monad.Trans.Resource (MonadUnliftIO)
 import Control.Tracer (traceWith)
-import qualified Data.ByteString.Char8 as BS
-import Data.Pool (Pool, withResource)
-import Data.Text (Text)
+import Data.Pool (Pool, withResource, newPool, defaultPoolConfig)
 import qualified Data.Text.Encoding as Text
 import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Connection.Setting as HsqlConS
+import qualified Hasql.Session as HsqlSes
 import Language.Haskell.TH.Syntax (Loc)
-import System.IO (Handle)
 import System.Log.FastLogger (LogStr, fromLogStr)
+import Cardano.Prelude
+import Prelude (userError, error)
 
-import Cardano.Db.Error (DbError, runOrThrowIO)
-import qualified Cardano.Db.PGConfig as PGC 
-import qualified Cardano.Db.Types as DB
+import Cardano.Db.Types (DbAction (..), DbEnv (..))
+import Cardano.Db.Error (runOrThrowIO)
+import Cardano.Db.PGConfig
+import Cardano.Db.Statement.Function.Core (runDbSession, mkCallInfo)
 
+-----------------------------------------------------------------------------------------
+-- Transactions
+-----------------------------------------------------------------------------------------
+-- | Execute a transaction start
+startTransaction :: MonadIO m => HsqlCon.Connection -> m ()
+startTransaction conn = liftIO $
+  HsqlSes.run beginTransaction conn >>= \case
+    Left err -> throwIO $ userError $ "Error starting transaction: " <> show err
+    Right _ -> pure ()
 
--- | Run a DB action logging via the provided Handle.
-runDbHandleLogger :: Handle -> PGC.PGPassSource -> DB.DbAction (LoggingT IO) a -> IO a
-runDbHandleLogger logHandle source action = do
-  pgconfig <- runOrThrowIO (PGC.readPGPass source)
-  connSetting <- case PGC.toConnectionSetting pgconfig of
-    Left err -> throwIO $ userError err
-    Right setting -> pure setting
+-- | Commit a transaction
+commitAction :: MonadIO m => HsqlCon.Connection -> m ()
+commitAction conn = liftIO $
+  HsqlSes.run commitTransaction conn >>= \case
+    Left err -> throwIO $ userError $ "Error committing: " <> show err
+    Right _ -> pure ()
 
-  bracket
-    (acquireConnection [connSetting])
-    HsqlCon.release
-    ( \connection -> do
-        let dbEnv = DB.DbEnv connection True Nothing -- No tracer needed
-        runHandleLoggerT $
-          runReaderT (runExceptT (DB.runDbAction action)) dbEnv >>= \case
-            Left err -> liftIO $ throwIO err
-            Right result -> pure result
-    )
-  where
-    runHandleLoggerT :: LoggingT m a -> m a
-    runHandleLoggerT actn =
-      runLoggingT actn logOut
+-- | Rollback a transaction
+rollbackAction :: MonadIO m => HsqlCon.Connection -> m ()
+rollbackAction conn = liftIO $
+  HsqlSes.run rollbackTransaction conn >>= \case
+    Left err -> throwIO $ userError $ "Error rolling back: " <> show err
+    Right _ -> pure ()
 
-    logOut :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-    logOut loc src level msg =
-      BS.hPutStrLn logHandle . fromLogStr $ defaultLogStr loc src level msg
-
-runWithConnectionNoLogging ::
-  PGC.PGPassSource -> DB.DbAction (NoLoggingT IO) a -> IO a
-runWithConnectionNoLogging source action = do
-  pgConfig <- runOrThrowIO (PGC.readPGPass source)
-  connSetting <- case PGC.toConnectionSetting pgConfig of
-    Left err -> throwIO $ userError err
-    Right setting -> pure setting
-
-  bracket
-    (acquireConnection [connSetting])
-    HsqlCon.release
-    ( \connection -> do
-        let dbEnv = DB.DbEnv connection False Nothing
-        runNoLoggingT $
-          runReaderT (runExceptT (DB.runDbAction action)) dbEnv >>= \case
-            Left err -> liftIO $ throwIO err
-            Right result -> pure result
-    )
-
+-----------------------------------------------------------------------------------------
+-- Run DB actions
+-----------------------------------------------------------------------------------------
 -- | Run a DB action logging via iohk-monitoring-framework.
-runDbIohkLogging ::
-  MonadUnliftIO m =>
-  Trace IO Text ->
-  DB.DbEnv ->
-  DB.DbAction m a ->
-  m (Either DbError a)
-runDbIohkLogging tracer dbEnv action =
-  runIohkLogging tracer $
-    lift $
-      runReaderT (runExceptT (DB.runDbAction action)) dbEnv
+runDbIohkLogging :: MonadUnliftIO m => Trace IO Text -> DbEnv ->  DbAction (LoggingT m) a -> m a
+runDbIohkLogging tracer dbEnv@DbEnv{..} action = do
+  runIohkLogging tracer $ do
+    -- Start transaction
+    startTransaction dbConnection
+    -- Run action
+    result <- runReaderT (runExceptT (runDbAction action)) dbEnv
+    -- Commit or rollback
+    case result of
+      Left err -> do
+        rollbackAction dbConnection
+        throwIO err
+      Right val -> do
+        commitAction dbConnection
+        pure val
 
--- | Run a DB action using a Pool with iohk-monitoring-framework logging.
--- This function now expects a Pool of Hasql.Connection instead of SqlBackend
-runPoolDbIohkLogging :: 
-  MonadIO m =>
+-- | Run a DB action using a Pool via iohk-monitoring-framework.
+runPoolDbIohkLogging ::
+  (MonadUnliftIO m) =>
   Pool HsqlCon.Connection ->
   Trace IO Text ->
-  DB.DbAction (LoggingT m) a ->
-  m a
+  DbAction (LoggingT m) a -> m a
 runPoolDbIohkLogging connPool tracer action = do
-  -- Use withResource from Data.Pool which works with MonadIO
   conn <- liftIO $ withResource connPool pure
+  let dbEnv = DbEnv conn True (Just tracer)
+  runDbIohkLogging tracer dbEnv action
 
-  let dbEnv = DB.DbEnv conn True (Just tracer)
-  result <- runIohkLogging tracer $
-              runReaderT (runExceptT (DB.runDbAction action)) dbEnv
-  case result of
-    Left err -> liftIO $ throwIO err
-    Right val -> pure val
-
--- | Run a DB action with no logging.
-runDbIohkNoLogging ::
-  MonadIO m =>
-  HsqlCon.Connection ->
-  DB.DbAction (NoLoggingT m) a ->
-  m a
-runDbIohkNoLogging conn action = do
-  let dbEnv = DB.DbEnv conn False Nothing
-  result <- runNoLoggingT $ runReaderT (runExceptT (DB.runDbAction action)) dbEnv
-  case result of
-    Left err -> liftIO $ throwIO err
-    Right val -> pure val
-
+-- | Run a DB action with loggingT.
 runIohkLogging :: Trace IO Text -> LoggingT m a -> m a
 runIohkLogging tracer action =
   runLoggingT action toIohkLog
@@ -167,33 +119,81 @@ runIohkLogging tracer action =
         LevelError -> Error
         LevelOther _ -> Error
 
+-- | Run a DB action with NoLoggingT.
+runDbIohkNoLogging :: MonadIO m => DbEnv -> DbAction (NoLoggingT m) a -> m a
+runDbIohkNoLogging dbEnv@DbEnv{..} action = do
+  runNoLoggingT $ do
+    -- Start transaction
+    startTransaction dbConnection
+    -- Run action
+    result <- runReaderT (runExceptT (runDbAction action)) dbEnv
+    -- Commit or rollback
+    case result of
+      Left err -> do
+        rollbackAction dbConnection
+        throwIO err
+      Right val -> do
+        commitAction dbConnection
+        pure val
+
+createTransactionCheckpoint :: MonadIO m => DbAction m ()
+createTransactionCheckpoint =
+  runDbSession (mkCallInfo "createTransactionCheckpoint") beginTransaction
+
 -- | Run a DB action without any logging, mainly for tests.
-runDbNoLoggingEnv ::
-  MonadIO m =>
-  DB.DbAction m a ->
-  m a
-runDbNoLoggingEnv = runDbNoLogging PGC.PGPassDefaultEnv
+runDbNoLoggingEnv :: MonadIO m => DbAction m a -> m a
+runDbNoLoggingEnv = runDbNoLogging PGPassDefaultEnv
 
-runDbNoLogging ::
-  MonadIO m =>
-  PGC.PGPassSource ->
-  DB.DbAction m a ->
-  m a
+runDbNoLogging :: MonadIO m => PGPassSource -> DbAction m a -> m a
 runDbNoLogging source action = do
-  pgconfig <- liftIO $ runOrThrowIO (PGC.readPGPass source)
-  connSetting <- liftIO $ case PGC.toConnectionSetting pgconfig of
-    Left err -> error err -- or use a more appropriate error handling
+  pgconfig <- liftIO $ runOrThrowIO (readPGPass source)
+  connSetting <- liftIO $ case toConnectionSetting pgconfig of
+    Left err -> error err
     Right setting -> pure setting
-
   connection <- liftIO $ acquireConnection [connSetting]
-  let dbEnv = DB.DbEnv connection False Nothing
+  let dbEnv = DbEnv connection False Nothing
+  -- Start transaction
+  startTransaction connection
+  -- Run action with exception handling
+  actionResult <- runReaderT (runExceptT (runDbAction action)) dbEnv
+  -- Process results, handle transaction completion
+  case actionResult of
+    Left err -> do
+      -- On error, rollback and rethrow
+      rollbackAction connection
+      liftIO $ HsqlCon.release connection
+      throwIO err
+    Right val -> do
+      -- On success, commit and return value
+      commitAction connection
+      liftIO $ HsqlCon.release connection
+      pure val
 
-  result <- runReaderT (runExceptT (DB.runDbAction action)) dbEnv
-  liftIO $ HsqlCon.release connection
-
-  case result of
-    Left err -> error (show err) -- or use a more appropriate error handling
-    Right val -> pure val
+runWithConnectionNoLogging :: PGPassSource -> DbAction (NoLoggingT IO) a -> IO a
+runWithConnectionNoLogging source action = do
+  pgConfig <- runOrThrowIO (readPGPass source)
+  connSetting <- case toConnectionSetting pgConfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+  bracket
+    (acquireConnection [connSetting])
+    HsqlCon.release
+    (\connection -> do
+      let dbEnv = DbEnv connection False Nothing
+      runNoLoggingT $ do
+        -- Start transaction
+        startTransaction connection
+        -- Run action
+        result <- runReaderT (runExceptT (runDbAction action)) dbEnv
+        -- Commit or rollback
+        case result of
+          Left err -> do
+            rollbackAction connection
+            throwIO err
+          Right val -> do
+            commitAction connection
+            pure val
+    )
 
 acquireConnection :: MonadIO m => [HsqlConS.Setting] -> m HsqlCon.Connection
 acquireConnection settings = liftIO $ do
@@ -201,3 +201,36 @@ acquireConnection settings = liftIO $ do
   case result of
     Left err -> throwIO $ userError $ "Connection error: " <> show err
     Right conn -> pure conn
+
+-- Function to create a connection pool
+createHasqlConnectionPool :: [HsqlConS.Setting] -> Int -> IO (Pool HsqlCon.Connection)
+createHasqlConnectionPool settings numConnections = do
+  newPool poolConfig
+  where
+    poolConfig =
+      defaultPoolConfig
+        acquireConn
+        releaseConn
+        30.0          -- cacheTTL (seconds)
+        numConnections -- maxResources
+    acquireConn = do
+      result <- HsqlCon.acquire settings
+      case result of
+        Left err -> throwIO $ userError $ "Connection error: " <> show err
+        Right conn -> pure conn
+    releaseConn = HsqlCon.release
+
+-----------------------------------------------------------------------------------------
+-- Transaction Sql
+-----------------------------------------------------------------------------------------
+beginTransaction :: HsqlSes.Session ()
+beginTransaction = HsqlSes.sql "BEGIN ISOLATION LEVEL SERIALIZABLE"
+
+commitTransaction :: HsqlSes.Session ()
+commitTransaction = HsqlSes.sql "COMMIT"
+
+rollbackTransaction :: HsqlSes.Session ()
+rollbackTransaction = HsqlSes.sql "ROLLBACK"
+
+checkpointTransaction :: HsqlSes.Session ()
+checkpointTransaction = HsqlSes.sql "COMMIT; BEGIN ISOLATION LEVEL SERIALIZABLE"

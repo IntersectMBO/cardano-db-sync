@@ -29,13 +29,13 @@ module Cardano.Db.Operations.Delete (
 -- import Cardano.Db.Operations.Other.ConsumedTxOut (querySetNullTxOut)
 -- import Cardano.Db.Operations.Other.MinId (MinIds (..), MinIdsWrapper (..), completeMinId, textToMinIds)
 -- import Cardano.Db.Operations.Query
--- import Cardano.Db.Operations.Types (TxOutTableType (..))
+-- import Cardano.Db.Operations.Types (TxOutVariantType (..))
 -- import Cardano.Db.Schema.Core
 -- import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
 -- import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 -- import Cardano.Prelude (Int64)
 -- import Cardano.Slotting.Slot (SlotNo (..))
-import Cardano.Slotting.Slot ()
+-- import Cardano.Slotting.Slot ()
 
 -- import Control.Monad (void)
 -- import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -57,52 +57,52 @@ import Cardano.Slotting.Slot ()
 --  )
 -- import Database.Persist.Sql (Filter, SqlBackend, delete, deleteWhere, deleteWhereCount, selectKeysList)
 
--- -- | Delete a block if it exists. Returns 'True' if it did exist and has been
--- -- deleted and 'False' if it did not exist.
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
 -- deleteBlocksSlotNo ::
 --   MonadIO m =>
 --   Trace IO Text ->
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   SlotNo ->
 --   Bool ->
---   ReaderT SqlBackend m Bool
--- deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
+--   DB.DbAction m Bool
+-- deleteBlocksSlotNo trce txOutVariantType (SlotNo slotNo) isConsumedTxOut = do
 --   mBlockId <- queryNearestBlockSlotNo slotNo
 --   case mBlockId of
 --     Nothing -> do
 --       liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> pack (show slotNo)
 --       pure False
 --     Just (blockId, epochN) -> do
---       void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
+--       void $ deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut
 --       pure True
 
--- -- | Delete starting from a 'BlockId'.
+-- | Delete starting from a 'BlockId'.
 -- deleteBlocksBlockId ::
 --   MonadIO m =>
 --   Trace IO Text ->
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   BlockId ->
 --   -- | The 'EpochNo' of the block to delete.
 --   Word64 ->
 --   -- | Is ConsumeTxout
 --   Bool ->
---   ReaderT SqlBackend m Int64
--- deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut = do
---   mMinIds <- fmap (textToMinIds txOutTableType =<<) <$> queryReverseIndexBlockId blockId
+--   DB.DbAction m Int64
+-- deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
+--   mMinIds <- fmap (textToMinIds txOutVariantType =<<) <$> queryReverseIndexBlockId blockId
 --   (cminIds, completed) <- findMinIdsRec mMinIds mempty
 --   mTxId <- queryMinRefId TxBlockId blockId
 --   minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
 --   deleteEpochLogs <- deleteUsingEpochNo epochN
---   (deleteBlockCount, blockDeleteLogs) <- deleteTablesAfterBlockId txOutTableType blockId mTxId minIds
+--   (deleteBlockCount, blockDeleteLogs) <- deleteTablesAfterBlockId txOutVariantType blockId mTxId minIds
 --   setNullLogs <-
 --     if isConsumedTxOut
---       then querySetNullTxOut txOutTableType mTxId
+--       then querySetNullTxOut txOutVariantType mTxId
 --       else pure ("ConsumedTxOut is not active so no Nulls set", 0)
 --   -- log all the deleted rows in the rollback
 --   liftIO $ logInfo trce $ mkRollbackSummary (deleteEpochLogs <> blockDeleteLogs) setNullLogs
 --   pure deleteBlockCount
 --   where
---     findMinIdsRec :: MonadIO m => [Maybe MinIdsWrapper] -> MinIdsWrapper -> ReaderT SqlBackend m (MinIdsWrapper, Bool)
+--     findMinIdsRec :: MonadIO m => [Maybe MinIdsWrapper] -> MinIdsWrapper -> DB.DbAction m (MinIdsWrapper, Bool)
 --     findMinIdsRec [] minIds = pure (minIds, True)
 --     findMinIdsRec (mMinIds : rest) minIds =
 --       case mMinIds of
@@ -122,7 +122,7 @@ import Cardano.Slotting.Slot ()
 --       CMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
 --       VMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
 
--- deleteUsingEpochNo :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Text, Int64)]
+-- deleteUsingEpochNo :: MonadIO m => Word64 -> DB.DbAction m [(Text, Int64)]
 -- deleteUsingEpochNo epochN = do
 --   countLogs <-
 --     concat
@@ -140,14 +140,15 @@ import Cardano.Slotting.Slot ()
 --     pure [("GovActionProposal Nulled", a + b + c + e)]
 --   pure $ countLogs <> nullLogs
 
+-- TODO: CMDV
 -- deleteTablesAfterBlockId ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   BlockId ->
 --   Maybe TxId ->
 --   MinIdsWrapper ->
---   ReaderT SqlBackend m (Int64, [(Text, Int64)])
--- deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
+--   DB.DbAction m (Int64, [(Text, Int64)])
+-- deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
 --   initialLogs <-
 --     concat
 --       <$> sequence
@@ -183,7 +184,7 @@ import Cardano.Slotting.Slot ()
 --             ]
 --       pure $ logsVoting <> offChain
 --   -- Additional deletions based on TxId and minimum IDs
---   afterTxIdLogs <- deleteTablesAfterTxId txOutTableType mtxId minIdsW
+--   afterTxIdLogs <- deleteTablesAfterTxId txOutVariantType mtxId minIdsW
 --   -- Final block deletions
 --   blockLogs <- onlyDelete "Block" [BlockId >=. blkId]
 --   -- Aggregate and return all logs
@@ -191,11 +192,11 @@ import Cardano.Slotting.Slot ()
 
 -- deleteTablesAfterTxId ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   Maybe TxId ->
 --   MinIdsWrapper ->
---   ReaderT SqlBackend m [(Text, Int64)]
--- deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
+--   DB.DbAction m [(Text, Int64)]
+-- deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
 --   -- Handle deletions and log accumulation from MinIdsWrapper
 --   minIdsLogs <- case minIdsW of
 --     CMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) ->
@@ -220,8 +221,8 @@ import Cardano.Slotting.Slot ()
 --         -- Sequentially delete records with associated transaction ID
 --         concat
 --           <$> sequence
---             [ case txOutTableType of
---                 TxOutCore -> queryDeleteAndLog "CollateralTxOut" C.CollateralTxOutTxId txId
+--             [ case txOutVariantType of
+--                 TxOutVariantCore -> queryDeleteAndLog "CollateralTxOut" C.CollateralTxOutTxId txId
 --                 TxOutVariantAddress -> queryDeleteAndLog "CollateralTxOut" V.CollateralTxOutTxId txId
 --             , queryDeleteAndLog "CollateralTxIn" CollateralTxInTxInId txId
 --             , queryDeleteAndLog "ReferenceTxIn" ReferenceTxInTxInId txId
@@ -297,7 +298,7 @@ import Cardano.Slotting.Slot ()
 --   (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
 --   EntityField record field ->
 --   field ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- queryDelete fieldIdField fieldId = do
 --   mRecordId <- queryMinRefId fieldIdField fieldId
 --   case mRecordId of
@@ -310,7 +311,7 @@ import Cardano.Slotting.Slot ()
 --   Text ->
 --   EntityField record field ->
 --   field ->
---   ReaderT SqlBackend m [(Text, Int64)]
+--   DB.DbAction m [(Text, Int64)]
 -- queryDeleteAndLog tableName txIdField fieldId = do
 --   mRecordId <- queryMinRefId txIdField fieldId
 --   case mRecordId of
@@ -319,23 +320,13 @@ import Cardano.Slotting.Slot ()
 --       count <- deleteWhereCount [persistIdField @record >=. recordId]
 --       pure [(tableName, count)]
 
--- onlyDelete ::
---   forall m record.
---   (MonadIO m, PersistEntity record, PersistEntityBackend record ~ SqlBackend) =>
---   Text ->
---   [Filter record] ->
---   ReaderT SqlBackend m [(Text, Int64)]
--- onlyDelete tableName filters = do
---   count <- deleteWhereCount filters
---   pure [(tableName, count)]
-
 -- queryThenNull ::
 --   forall m record field.
 --   (MonadIO m, PersistEntity record, PersistField field, PersistEntityBackend record ~ SqlBackend) =>
 --   Text ->
 --   EntityField record (Maybe field) ->
 --   field ->
---   ReaderT SqlBackend m [(Text, Int64)]
+--   DB.DbAction m [(Text, Int64)]
 -- queryThenNull tableName txIdField txId = do
 --   mRecordId <- queryMinRefIdNullable txIdField txId
 --   case mRecordId of
@@ -346,7 +337,7 @@ import Cardano.Slotting.Slot ()
 
 -- -- | Delete a delisted pool if it exists. Returns 'True' if it did exist and has been
 -- -- deleted and 'False' if it did not exist.
--- deleteDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+-- deleteDelistedPool :: MonadIO m => ByteString -> DB.DbAction m Bool
 -- deleteDelistedPool poolHash = do
 --   keys <- selectKeysList [DelistedPoolHashRaw ==. poolHash] []
 --   mapM_ delete keys
@@ -379,22 +370,22 @@ import Cardano.Slotting.Slot ()
 
 -- -- Tools
 
--- deleteBlocksSlotNoNoTrace :: MonadIO m => TxOutTableType -> SlotNo -> ReaderT SqlBackend m Bool
--- deleteBlocksSlotNoNoTrace txOutTableType slotNo = deleteBlocksSlotNo nullTracer txOutTableType slotNo True
+-- deleteBlocksSlotNoNoTrace :: MonadIO m => TxOutVariantType -> SlotNo -> DB.DbAction m Bool
+-- deleteBlocksSlotNoNoTrace txOutVariantType slotNo = deleteBlocksSlotNo nullTracer txOutVariantType slotNo True
 
 -- -- Tests
 
--- deleteBlocksForTests :: MonadIO m => TxOutTableType -> BlockId -> Word64 -> ReaderT SqlBackend m ()
--- deleteBlocksForTests txOutTableType blockId epochN = do
---   void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN False
+-- deleteBlocksForTests :: MonadIO m => TxOutVariantType -> BlockId -> Word64 -> DB.DbAction m ()
+-- deleteBlocksForTests txOutVariantType blockId epochN = do
+--   void $ deleteBlocksBlockId nullTracer txOutVariantType blockId epochN False
 
 -- -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- -- deleted and 'False' if it did not exist.
--- deleteBlock :: MonadIO m => TxOutTableType -> Block -> ReaderT SqlBackend m Bool
--- deleteBlock txOutTableType block = do
+-- deleteBlock :: MonadIO m => TxOutVariantType -> Block -> DB.DbAction m Bool
+-- deleteBlock txOutVariantType block = do
 --   mBlockId <- queryBlockHash block
 --   case mBlockId of
 --     Nothing -> pure False
 --     Just (blockId, epochN) -> do
---       void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN False
+--       void $ deleteBlocksBlockId nullTracer txOutVariantType blockId epochN False
 --       pure True

@@ -53,10 +53,10 @@ import Database.Esqueleto.Experimental (
 {- HLINT ignore "Redundant ^." -}
 
 reportTransactions :: TxOutVariantType -> [Text] -> IO ()
-reportTransactions txOutTableType addrs =
+reportTransactions txOutVariantType addrs =
   forM_ addrs $ \saddr -> do
     Text.putStrLn $ "\nTransactions for: " <> saddr <> "\n"
-    xs <- runDbNoLoggingEnv (queryStakeAddressTransactions txOutTableType saddr)
+    xs <- runDbNoLoggingEnv (queryStakeAddressTransactions txOutVariantType saddr)
     renderTransactions $ coaleseTxs xs
 
 -- -------------------------------------------------------------------------------------------------
@@ -84,14 +84,14 @@ instance Ord Transaction where
       GT -> GT
       EQ -> compare (trDirection tra) (trDirection trb)
 
-queryStakeAddressTransactions :: MonadIO m => TxOutVariantType -> Text -> ReaderT SqlBackend m [Transaction]
-queryStakeAddressTransactions txOutTableType address = do
+queryStakeAddressTransactions :: MonadIO m => TxOutVariantType -> Text -> DB.DbAction m [Transaction]
+queryStakeAddressTransactions txOutVariantType address = do
   mSaId <- queryStakeAddressId
   case mSaId of
     Nothing -> pure []
     Just saId -> queryTransactions saId
   where
-    queryStakeAddressId :: MonadIO m => ReaderT SqlBackend m (Maybe StakeAddressId)
+    queryStakeAddressId :: MonadIO m => DB.DbAction m (Maybe StakeAddressId)
     queryStakeAddressId = do
       res <- select $ do
         saddr <- from (table @StakeAddress)
@@ -99,20 +99,20 @@ queryStakeAddressTransactions txOutTableType address = do
         pure (saddr ^. StakeAddressId)
       pure $ fmap unValue (listToMaybe res)
 
-    queryTransactions :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m [Transaction]
+    queryTransactions :: MonadIO m => StakeAddressId -> DB.DbAction m [Transaction]
     queryTransactions saId = do
-      inputs <- queryInputs txOutTableType saId
-      outputs <- queryOutputs txOutTableType saId
+      inputs <- queryInputs txOutVariantType saId
+      outputs <- queryOutputs txOutVariantType saId
       pure $ List.sort (inputs ++ outputs)
 
 queryInputs ::
   MonadIO m =>
   TxOutVariantType ->
   StakeAddressId ->
-  ReaderT SqlBackend m [Transaction]
-queryInputs txOutTableType saId = do
+  DB.DbAction m [Transaction]
+queryInputs txOutVariantType saId = do
   -- Standard UTxO inputs.
-  res1 <- case txOutTableType of
+  res1 <- case txOutVariantType of
     -- get the StakeAddressId from the Core TxOut table
     TxOutVariantCore -> select $ do
       (tx :& txOut :& blk) <-
@@ -176,9 +176,9 @@ sumAmounts =
         Incoming -> acc + trAmount tr
         Outgoing -> acc - trAmount tr
 
-queryOutputs :: MonadIO m => TxOutVariantType -> StakeAddressId -> ReaderT SqlBackend m [Transaction]
-queryOutputs txOutTableType saId = do
-  res <- case txOutTableType of
+queryOutputs :: MonadIO m => TxOutVariantType -> StakeAddressId -> DB.DbAction m [Transaction]
+queryOutputs txOutVariantType saId = do
+  res <- case txOutVariantType of
     TxOutVariantCore -> select $ do
       (txOut :& _txInTx :& _txIn :& txOutTx :& blk) <-
         from $

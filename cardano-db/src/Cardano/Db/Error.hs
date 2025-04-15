@@ -29,23 +29,34 @@ data DbError = DbError
 
 instance Exception DbError
 
--- class AsDbError e where
---   toDbError :: DbError -> e
---   fromDbError :: e -> Maybe DbError
-
--- data DbError
---   = DbError !CallSite !Text !HsqlS.SessionError
---   | DbLookupError !CallSite !Text !LookupContext
---   deriving (Show, Eq)
-
--- instance Exception DbError
-
 data CallSite = CallSite
   { csModule :: !Text
   , csFile :: !Text
   , csLine :: !Int
   }
   deriving (Show, Eq)
+
+base16encode :: ByteString -> Text
+base16encode = Text.decodeUtf8 . Base16.encode
+
+runOrThrowIODb :: forall e a. Exception e => IO (Either e a) -> IO a
+runOrThrowIODb ioEither = do
+  et <- ioEither
+  case et of
+    Left err -> throwIO err
+    Right a -> pure a
+
+runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
+runOrThrowIO ioEither = do
+  et <- ioEither
+  case et of
+    Left err -> throwIO err
+    Right a -> pure a
+
+logAndThrowIO :: Trace IO Text -> Text -> IO a
+logAndThrowIO tracer msg = do
+  logError tracer msg
+  throwIO $ userError $ show msg
 
 -- data LookupContext
 --   = BlockHashContext !ByteString
@@ -90,25 +101,3 @@ data CallSite = CallSite
 --       DBPruneConsumed e -> "DBExtraMigration" <> e
 --       DBRJsonbInSchema e -> "DBRJsonbInSchema" <> e
 --       DBTxOutVariant e -> "DbTxOutVariant" <> e
-
-base16encode :: ByteString -> Text
-base16encode = Text.decodeUtf8 . Base16.encode
-
-runOrThrowIODb :: forall e a. Exception e => IO (Either e a) -> IO a
-runOrThrowIODb ioEither = do
-  et <- ioEither
-  case et of
-    Left err -> throwIO err
-    Right a -> pure a
-
-runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
-runOrThrowIO ioEither = do
-  et <- ioEither
-  case et of
-    Left err -> throwIO err
-    Right a -> pure a
-
-logAndThrowIO :: Trace IO Text -> Text -> IO a
-logAndThrowIO tracer msg = do
-  logError tracer msg
-  throwIO $ userError $ show msg

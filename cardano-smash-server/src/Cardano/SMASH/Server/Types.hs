@@ -32,7 +32,7 @@ import Cardano.Api (
   serialiseToRawBytes,
  )
 import Cardano.Api.Shelley (StakePoolKey)
-import Cardano.Db (LookupFail (..), PoolMetaHash (..))
+import Cardano.Db (DbError, PoolMetaHash (..))
 import Cardano.Prelude
 import Control.Monad.Fail (fail)
 import Data.Aeson (FromJSON (..), ToJSON (..), object, withObject, (.:), (.=))
@@ -369,7 +369,7 @@ data DBFail
   | DbLookupPoolMetadataHash !PoolId !PoolMetadataHash
   | TickerAlreadyReserved !TickerName
   | RecordDoesNotExist
-  | DBFail LookupFail
+  | DBFail !DbError
   | PoolDataLayerError !Text
   | ConfigError !Text
   deriving (Eq)

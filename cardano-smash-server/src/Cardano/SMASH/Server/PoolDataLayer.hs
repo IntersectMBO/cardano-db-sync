@@ -6,7 +6,7 @@ module Cardano.SMASH.Server.PoolDataLayer (
   postgresqlPoolDataLayer,
   filterRegistered,
   createCachedPoolDataLayer,
-  dbToServantPoolId,
+  toDbPoolId,
 ) where
 
 import Cardano.BM.Trace (Trace)
@@ -15,13 +15,13 @@ import Cardano.Prelude
 import Cardano.SMASH.Server.Types
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map.Strict as Map
-import qualified Data.Pool as DB
+import Data.Pool (Pool)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
-import Database.Persist.Postgresql
 import GHC.Err (error)
+import qualified Hasql.Connection as HsqlCon
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -43,12 +43,12 @@ data PoolDataLayer = PoolDataLayer
   }
   deriving (Generic)
 
-postgresqlPoolDataLayer :: Trace IO Text -> DB.Pool SqlBackend -> PoolDataLayer
+postgresqlPoolDataLayer :: Trace IO Text -> Pool HsqlCon.Connection -> PoolDataLayer
 postgresqlPoolDataLayer tracer conn =
   PoolDataLayer
     { dlGetPoolMetadata = \poolId poolMetadataHash -> do
-        let poolHash = servantToDbPoolId poolId
-        let metaHash = servantToDbPoolMetaHash poolMetadataHash
+        let poolHash = fromDbPoolId poolId
+        let metaHash = fromDbPoolMetaHash poolMetadataHash
         mMeta <- Db.runPoolDbIohkLogging conn tracer $ Db.queryOffChainPoolData poolHash metaHash
         case mMeta of
           Just (tickerName, metadata) -> pure $ Right (TickerName tickerName, PoolMetadataRaw metadata)
@@ -56,25 +56,25 @@ postgresqlPoolDataLayer tracer conn =
     , dlAddPoolMetadata = error "dlAddPoolMetadata not defined. Will be used only for testing."
     , dlGetReservedTickers = do
         tickers <- Db.runPoolDbIohkLogging conn tracer Db.queryReservedTickers
-        pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, dbToServantPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
+        pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, toDbPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
     , dlAddReservedTicker = \ticker poolId -> do
         inserted <-
           Db.runPoolDbIohkLogging conn tracer $
             Db.insertReservedPoolTicker $
-              Db.ReservedPoolTicker (getTickerName ticker) (servantToDbPoolId poolId)
+              Db.ReservedPoolTicker (getTickerName ticker) (fromDbPoolId poolId)
         case inserted of
           Just _ -> pure $ Right ticker
           Nothing -> pure $ Left $ TickerAlreadyReserved ticker
     , dlCheckReservedTicker = \ticker -> do
         Db.runPoolDbIohkLogging conn tracer $
-          fmap dbToServantPoolId <$> Db.queryReservedTicker (getTickerName ticker)
+          fmap toDbPoolId <$> Db.queryReservedTicker (getTickerName ticker)
     , dlGetDelistedPools = do
-        fmap dbToServantPoolId <$> Db.runPoolDbIohkLogging conn tracer Db.queryDelistedPools
+        fmap toDbPoolId <$> Db.runPoolDbIohkLogging conn tracer Db.queryDelistedPools
     , dlCheckDelistedPool = \poolHash -> do
-        Db.runPoolDbIohkLogging conn tracer $ Db.existsDelistedPool (servantToDbPoolId poolHash)
+        Db.runPoolDbIohkLogging conn tracer $ Db.existsDelistedPool (fromDbPoolId poolHash)
     , dlAddDelistedPool = \poolHash -> do
         Db.runPoolDbIohkLogging conn tracer $ do
-          let poolHashDb = servantToDbPoolId poolHash
+          let poolHashDb = fromDbPoolId poolHash
           isAlready <- Db.existsDelistedPool poolHashDb
           if isAlready
             then return . Left . DbInsertError $ "Delisted pool already exists!"
@@ -84,21 +84,21 @@ postgresqlPoolDataLayer tracer conn =
     , dlRemoveDelistedPool = \poolHash -> do
         deleted <-
           Db.runPoolDbIohkLogging conn tracer $
-            Db.deleteDelistedPool (servantToDbPoolId poolHash)
+            Db.deleteDelistedPool (fromDbPoolId poolHash)
         if deleted
           then pure $ Right poolHash
           else pure $ Left RecordDoesNotExist
     , dlAddRetiredPool = \_ _ -> throwIO $ PoolDataLayerError "dlAddRetiredPool not defined. Will be used only for testing"
     , dlCheckRetiredPool = \poolId -> do
         actions <- getCertActions tracer conn (Just poolId)
-        pure $ not <$> isRegistered (servantToDbPoolId poolId) actions
+        pure $ not <$> isRegistered (fromDbPoolId poolId) actions
     , dlGetRetiredPools = do
         ls <- filterRetired <$> getCertActions tracer conn Nothing
-        pure $ Right $ dbToServantPoolId <$> ls
+        pure $ Right $ toDbPoolId <$> ls
     , dlGetFetchErrors = \poolId mTimeFrom -> do
         fetchErrors <-
           Db.runPoolDbIohkLogging conn tracer $
-            Db.queryOffChainPoolFetchError (servantToDbPoolId poolId) mTimeFrom
+            Db.queryOffChainPoolFetchError (fromDbPoolId poolId) mTimeFrom
         pure $ Right $ dbToServantFetchError poolId <$> fetchErrors
     , dlGetPool = \poolId -> do
         isActive <- isPoolActive tracer conn poolId
@@ -112,37 +112,37 @@ dbToServantFetchError poolId (fetchError, metaHash) =
   PoolFetchError
     (utcTimeToPOSIXSeconds $ Db.offChainPoolFetchErrorFetchTime fetchError)
     poolId
-    (dbToServantMetaHash metaHash)
+    (toDbServantMetaHash metaHash)
     (Db.offChainPoolFetchErrorFetchError fetchError)
     (Db.offChainPoolFetchErrorRetryCount fetchError)
 
 -- For each pool return the latest certificate action. Also return the
 -- current epoch.
-getCertActions :: Trace IO Text -> DB.Pool SqlBackend -> Maybe PoolId -> IO (Maybe Word64, Map ByteString Db.PoolCertAction)
+getCertActions :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Maybe Word64, Map ByteString Db.PoolCertAction)
 getCertActions tracer conn mPoolId = do
   (certs, epoch) <- Db.runPoolDbIohkLogging conn tracer $ do
-    poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
-    poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
-    currentEpoch <- Db.queryCurrentEpochNo
+    poolRetired <- Db.queryRetiredPools (fromDbPoolId <$> mPoolId)
+    poolUpdate <- Db.queryPoolRegister (fromDbPoolId <$> mPoolId)
+    currentEpoch <- Db.queryBlocksForCurrentEpochNo
     pure (poolRetired ++ poolUpdate, currentEpoch)
   let poolActions = findLatestPoolAction certs
   pure (epoch, poolActions)
 
-getActivePools :: Trace IO Text -> DB.Pool SqlBackend -> Maybe PoolId -> IO (Map ByteString ByteString)
+getActivePools :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Map ByteString ByteString)
 getActivePools tracer conn mPoolId = do
   (certs, epoch) <- Db.runPoolDbIohkLogging conn tracer $ do
-    poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
-    poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
-    currentEpoch <- Db.queryCurrentEpochNo
+    poolRetired <- Db.queryRetiredPools (fromDbPoolId <$> mPoolId)
+    poolUpdate <- Db.queryPoolRegister (fromDbPoolId <$> mPoolId)
+    currentEpoch <- Db.queryBlocksForCurrentEpochNo
     pure (poolRetired ++ poolUpdate, currentEpoch)
   pure $ groupByPoolMeta epoch certs
 
-isPoolActive :: Trace IO Text -> DB.Pool SqlBackend -> PoolId -> IO Bool
+isPoolActive :: Trace IO Text -> Pool HsqlCon.Connection -> PoolId -> IO Bool
 isPoolActive tracer conn poolId = do
   isJust <$> getActiveMetaHash tracer conn poolId
 
 -- If the pool is not retired, it will return the pool Hash and the latest metadata hash.
-getActiveMetaHash :: Trace IO Text -> DB.Pool SqlBackend -> PoolId -> IO (Maybe (ByteString, ByteString))
+getActiveMetaHash :: Trace IO Text -> Pool HsqlCon.Connection -> PoolId -> IO (Maybe (ByteString, ByteString))
 getActiveMetaHash tracer conn poolId = do
   mp <- getActivePools tracer conn (Just poolId)
   case Map.toList mp of
@@ -171,41 +171,41 @@ isRegistered pid (mEpochNo, certs) = case Map.lookup pid certs of
   Just (Db.Retirement retEpochNo) -> Right $ Just retEpochNo > mEpochNo
   Just (Db.Register _) -> Right True
 
-servantToDbPoolId :: PoolId -> ByteString
-servantToDbPoolId pid =
+fromDbPoolId :: PoolId -> ByteString
+fromDbPoolId pid =
   case Base16.decode $ Text.encodeUtf8 $ getPoolId pid of
     Left err -> panic $ Text.pack err
     Right bs -> bs
 
-dbToServantPoolId :: ByteString -> PoolId
-dbToServantPoolId bs = PoolId $ Text.decodeUtf8 $ Base16.encode bs
+toDbPoolId :: ByteString -> PoolId
+toDbPoolId bs = PoolId $ Text.decodeUtf8 $ Base16.encode bs
 
-servantToDbPoolMetaHash :: PoolMetadataHash -> ByteString
-servantToDbPoolMetaHash pmh =
+fromDbPoolMetaHash :: PoolMetadataHash -> ByteString
+fromDbPoolMetaHash pmh =
   case Base16.decode $ Text.encodeUtf8 $ getPoolMetadataHash pmh of
     Left err -> panic $ Text.pack err
     Right bs -> bs
 
-dbToServantMetaHash :: ByteString -> PoolMetadataHash
-dbToServantMetaHash bs = PoolMetadataHash $ Text.decodeUtf8 $ Base16.encode bs
+toDbServantMetaHash :: ByteString -> PoolMetadataHash
+toDbServantMetaHash bs = PoolMetadataHash $ Text.decodeUtf8 $ Base16.encode bs
 
 createCachedPoolDataLayer :: Maybe () -> IO PoolDataLayer
 createCachedPoolDataLayer _ = panic "createCachedPoolDataLayer not defined yet"
 
-_getUsedTickers :: Trace IO Text -> DB.Pool SqlBackend -> IO [(TickerName, PoolMetadataHash)]
+_getUsedTickers :: Trace IO Text -> Pool HsqlCon.Connection -> IO [(TickerName, PoolMetadataHash)]
 _getUsedTickers tracer conn = do
   pools <- getActivePools tracer conn Nothing
   tickers <- Db.runPoolDbIohkLogging conn tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
     mticker <- Db.queryUsedTicker ph meta
-    pure $ map (\ticker -> (TickerName ticker, dbToServantMetaHash meta)) mticker
+    pure $ map (\ticker -> (TickerName ticker, toDbServantMetaHash meta)) mticker
   pure $ catMaybes tickers
 
-_checkUsedTicker :: Trace IO Text -> DB.Pool SqlBackend -> TickerName -> IO (Maybe TickerName)
+_checkUsedTicker :: Trace IO Text -> Pool HsqlCon.Connection -> TickerName -> IO (Maybe TickerName)
 _checkUsedTicker tracer conn ticker = do
   pools <- getActivePools tracer conn Nothing
   tickers <- Db.runPoolDbIohkLogging conn tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
     mticker <- Db.queryUsedTicker ph meta
-    pure $ map (\tickerText -> (TickerName tickerText, dbToServantMetaHash meta)) mticker
+    pure $ map (\tickerText -> (TickerName tickerText, toDbServantMetaHash meta)) mticker
   case Map.lookup ticker (Map.fromList $ catMaybes tickers) of
     Nothing -> pure Nothing
     Just _metaHash -> pure $ Just ticker

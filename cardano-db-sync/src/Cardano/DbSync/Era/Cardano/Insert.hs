@@ -6,7 +6,7 @@ module Cardano.DbSync.Era.Cardano.Insert (
   insertEpochSyncTime,
 ) where
 
-import Cardano.Db (SyncState)
+import Cardano.Db (DbAction, SyncState)
 import qualified Cardano.Db as Db
 import Cardano.Prelude hiding (STM, atomically)
 import Cardano.Slotting.Slot (EpochNo (..))
@@ -18,20 +18,18 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVar,
   writeTVar,
  )
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
-import Database.Persist.Sql (SqlBackend)
 
 -- If `db-sync` is started in epoch `N`, the number of seconds to sync that epoch will be recorded
 -- as `Nothing`.
 
 insertEpochSyncTime ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   EpochNo ->
   SyncState ->
   StrictTVar IO UTCTime ->
-  ReaderT SqlBackend m ()
+  DbAction m ()
 insertEpochSyncTime epochNo syncState estvar = do
   now <- liftIO Time.getCurrentTime
   mlast <- liftIO . atomically $ swapTVar estvar now

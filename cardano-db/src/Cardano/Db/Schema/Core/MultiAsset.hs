@@ -21,7 +21,7 @@ import Hasql.Decoders as D
 import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (DbInt65, dbInt65Decoder, dbInt65Encoder)
 
@@ -44,8 +44,8 @@ type instance Key MultiAsset = MultiAssetId
 instance DbInfo MultiAsset where
   uniqueFields _ = ["policy", "name"]
 
-entityNameMultiAssetDecoder :: D.Row (Entity MultiAsset)
-entityNameMultiAssetDecoder =
+entityMultiAssetDecoder :: D.Row (Entity MultiAsset)
+entityMultiAssetDecoder =
   Entity
     <$> idDecoder MultiAssetId
     <*> multiAssetDecoder
@@ -57,8 +57,8 @@ multiAssetDecoder =
     <*> D.column (D.nonNullable D.bytea) -- multiAssetName
     <*> D.column (D.nonNullable D.text) -- multiAssetFingerprint
 
-entityNameMultiAssetEncoder :: E.Params (Entity MultiAsset)
-entityNameMultiAssetEncoder =
+entityMultiAssetEncoder :: E.Params (Entity MultiAsset)
+entityMultiAssetEncoder =
   mconcat
     [ entityKey >$< idEncoder getMultiAssetId
     , entityVal >$< multiAssetEncoder
@@ -95,8 +95,8 @@ data MaTxMint = MaTxMint
 type instance Key MaTxMint = MaTxMintId
 instance DbInfo MaTxMint
 
-entityNameMaTxMintDecoder :: D.Row (Entity MaTxMint)
-entityNameMaTxMintDecoder =
+entityMaTxMintDecoder :: D.Row (Entity MaTxMint)
+entityMaTxMintDecoder =
   Entity
     <$> idDecoder MaTxMintId
     <*> maTxMintDecoder
@@ -108,8 +108,8 @@ maTxMintDecoder =
     <*> idDecoder MultiAssetId
     <*> idDecoder TxId
 
-entityNameMaTxMintEncoder :: E.Params (Entity MaTxMint)
-entityNameMaTxMintEncoder =
+entityMaTxMintEncoder :: E.Params (Entity MaTxMint)
+entityMaTxMintEncoder =
   mconcat
     [ entityKey >$< idEncoder getMaTxMintId
     , entityVal >$< maTxMintEncoder
@@ -126,6 +126,6 @@ maTxMintEncoder =
 maTxMintBulkEncoder :: E.Params ([DbInt65], [MultiAssetId], [TxId])
 maTxMintBulkEncoder =
   contrazip3
-    (manyEncoder $ E.nonNullable dbInt65Encoder)
-    (manyEncoder $ E.nonNullable $ getMultiAssetId >$< E.int8)
-    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (bulkEncoder $ E.nonNullable dbInt65Encoder)
+    (bulkEncoder $ E.nonNullable $ getMultiAssetId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ getTxId >$< E.int8)

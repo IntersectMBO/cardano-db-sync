@@ -10,7 +10,7 @@ module Cardano.Db.Statement.Function.Core (
   mkCallSite,
   -- runPipelinedSession,
   -- runDbActionWith,
-  manyEncoder,
+  bulkEncoder,
   ResultType (..),
   ResultTypeBulk (..),
 )
@@ -123,10 +123,15 @@ data ResultType c r where
   WithResult :: HsqlD.Result c -> ResultType c c -- Return ID, result type is c
 
 -- | The result type of an insert operation (usualy it's newly generated id).
-data ResultTypeBulk c r where
-  NoResultBulk :: ResultTypeBulk c () -- No IDs, result type is ()
-  WithResultBulk :: HsqlD.Result [c] -> ResultTypeBulk c [c] -- Return IDs, result type is [c]
+-- data ResultTypeBulk c r where
+--   NoResultBulk :: ResultTypeBulk c () -- No IDs, result type is ()
+--   WithResultBulk :: HsqlD.Result [c] -> ResultTypeBulk c [c] -- Return IDs, result type is [c]
+
+-- | The bulk insert result type
+data ResultTypeBulk a where
+  NoResultBulk :: ResultTypeBulk () -- No results returned
+  WithResultBulk :: HsqlD.Result [a] -> ResultTypeBulk [a] -- Return generated IDs
 
 -- | Creates a parameter encoder for an array of values from a single-value encoder
-manyEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
-manyEncoder v = HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray v
+bulkEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
+bulkEncoder v = HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray v

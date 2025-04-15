@@ -138,7 +138,7 @@ reportTestFailures tf = do
 -- reportTestOffChain :: TestOffChain -> IO ()
 -- reportTestOffChain tof = Text.putStrLn $ mconcat [ toTicker tof, " ", unPoolUrl (toUrl tof) ]
 
-queryTestOffChainData :: MonadIO m => ReaderT SqlBackend m [TestOffChain]
+queryTestOffChainData :: MonadIO m => DB.DbAction m [TestOffChain]
 queryTestOffChainData = do
   res <- select $ do
     (pod :& pmr) <-

@@ -29,10 +29,10 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Plutus (
 ) where
 
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (TxOutTableType (..))
+import Cardano.Db (TxOutVariantType (..))
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variant.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
@@ -97,18 +97,18 @@ simpleScript =
   where
     testLabel = "simpleScript-alonzo"
     getOutFields txOutW = case txOutW of
-      DB.CTxOutW txOut ->
-        ( C.txOutAddress txOut
-        , C.txOutAddressHasScript txOut
-        , C.txOutValue txOut
-        , C.txOutDataHash txOut
+      DB.VCTxOutW txOut ->
+        ( VC.txOutAddress txOut
+        , VC.txOutAddressHasScript txOut
+        , VC.txOutValue txOut
+        , VC.txOutDataHash txOut
         )
-      DB.VTxOutW txout mAddress -> case mAddress of
+      DB.VATxOutW txout mAddress -> case mAddress of
         Just address ->
-          ( V.addressAddress address
-          , V.addressHasScript address
-          , V.txOutValue txout
-          , V.txOutDataHash txout
+          ( VA.addressAddress address
+          , VA.addressHasScript address
+          , VA.txOutValue txout
+          , VA.txOutDataHash txout
           )
         Nothing -> error "AlonzoSimpleScript: expected an address"
     expectedFields =

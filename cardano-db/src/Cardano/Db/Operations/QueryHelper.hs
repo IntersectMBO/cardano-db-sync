@@ -53,9 +53,9 @@ module Cardano.Db.Operations.QueryHelper where
 -- maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 -- maybeToEither e f = maybe (Left e) (Right . f)
 
--- -- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
--- -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
--- -- to un-wibble it.
+-- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
+-- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
+-- to un-wibble it.
 -- unValueSumAda :: Maybe (Value (Maybe Micro)) -> Ada
 -- unValueSumAda mvm =
 --   case fmap unValue mvm of

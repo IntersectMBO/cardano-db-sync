@@ -60,8 +60,8 @@ runCommand cmd =
       when forceIndexes $
         void $
           runMigrations pgConfig False mdir mldir Indexes txOutTabletype
-    CmdTxOutMigration txOutTableType -> do
-      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool txOutTableType
+    CmdTxOutMigration txOutVariantType -> do
+      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType
@@ -69,15 +69,15 @@ runCommand cmd =
     CmdVersion -> runVersionCommand
 
 runCreateMigration :: MigrationDir -> TxOutVariantType -> IO ()
-runCreateMigration mdir txOutTableType = do
-  mfp <- createMigration PGPassDefaultEnv mdir txOutTableType
+runCreateMigration mdir txOutVariantType = do
+  mfp <- createMigration PGPassDefaultEnv mdir txOutVariantType
   case mfp of
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
 
 runRollback :: SlotNo -> TxOutVariantType -> IO ()
-runRollback slotNo txOutTableType =
-  print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace txOutTableType slotNo)
+runRollback slotNo txOutVariantType =
+  print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace txOutVariantType slotNo)
 
 runVersionCommand :: IO ()
 runVersionCommand = do

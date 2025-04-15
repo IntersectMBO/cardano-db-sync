@@ -54,7 +54,7 @@ library
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
                         Cardano.DbSync.Database
-                        Cardano.DbSync.DbAction
+                        Cardano.DbSync.DbEvent
                         Cardano.DbSync.Error
 
                         Cardano.DbSync.Era
@@ -96,10 +96,6 @@ library
                         Cardano.DbSync.Era.Universal.Insert.Other
                         Cardano.DbSync.Era.Universal.Insert.Pool
                         Cardano.DbSync.Era.Universal.Insert.Tx
-
-
-                        -- Temporary debugging validation
-                        Cardano.DbSync.Era.Shelley.ValidateWithdrawal
 
                         Cardano.DbSync.Era.Util
 
@@ -181,12 +177,10 @@ library
                       , directory
                       , data-default-class
                       , either
-                      , esqueleto
                       , extra
                       , filepath
                       , groups
                       , hasql
-                      , hasql-pool
                       , http-client
                       , http-client-tls
                       , http-types

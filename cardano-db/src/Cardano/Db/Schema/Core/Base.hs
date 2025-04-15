@@ -26,7 +26,7 @@ import Hasql.Encoders as E
 -- import Cardano.Db.Schema.Orphans ()
 
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
   DbLovelace (..),
@@ -42,6 +42,7 @@ import Cardano.Db.Types (
   scriptTypeDecoder,
   scriptTypeEncoder,
  )
+import qualified Cardano.Db.Schema.Ids as Id
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
@@ -54,17 +55,18 @@ import Cardano.Db.Types (
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 -----------------------------------------------------------------------------------------------------------------------------------
 
--- |
+-----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: block
 -- Description: Stores information about individual blocks in the blockchain, including their hash, size,
 --   and the transactions they contain.
+-----------------------------------------------------------------------------------------------------------------------------------
 data Block = Block
   { blockHash :: !ByteString -- sqltype=hash32type
   , blockEpochNo :: !(Maybe Word64) -- sqltype=word31type
   , blockSlotNo :: !(Maybe Word64) -- sqltype=word63type
   , blockEpochSlotNo :: !(Maybe Word64) -- sqltype=word31type
   , blockBlockNo :: !(Maybe Word64) -- sqltype=word31type
-  , blockPreviousId :: !(Maybe Int) -- noreference
+  , blockPreviousId :: !(Maybe BlockId) -- noreference
   , blockSlotLeaderId :: !SlotLeaderId -- noreference
   , blockSize :: !Word64 -- sqltype=word31type
   , blockTime :: !UTCTime -- sqltype=timestamp
@@ -96,7 +98,7 @@ blockDecoder =
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockSlotNo
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockEpochSlotNo
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockBlockNo
-    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- blockPreviousId
+    <*> maybeIdDecoder BlockId -- blockPreviousId
     <*> idDecoder SlotLeaderId -- blockSlotLeaderId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockSize
     <*> D.column (D.nonNullable D.timestamptz) -- blockTime
@@ -121,7 +123,7 @@ blockEncoder =
     , blockSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockEpochSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockBlockNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , blockPreviousId >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , blockPreviousId >$< maybeIdEncoder getBlockId
     , blockSlotLeaderId >$< idEncoder getSlotLeaderId
     , blockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockTime >$< E.param (E.nonNullable E.timestamptz)
@@ -208,10 +210,9 @@ txEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: txmetadata
 -- Description: Contains metadata associated with transactions, such as metadata ID, key, and date.
+-----------------------------------------------------------------------------------------------------------------------------------
 data TxMetadata = TxMetadata
   { txMetadataKey :: !DbWord64 -- sqltype=word64type
   , txMetadataJson :: !(Maybe Text) -- sqltype=jsonb
@@ -256,16 +257,15 @@ txMetadataEncoder =
 txMetadataBulkEncoder :: E.Params ([DbWord64], [Maybe Text], [ByteString], [TxId])
 txMetadataBulkEncoder =
   contrazip4
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    (manyEncoder $ E.nullable E.text)
-    (manyEncoder $ E.nonNullable E.bytea)
-    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    (bulkEncoder $ E.nullable E.text)
+    (bulkEncoder $ E.nonNullable E.bytea)
+    (bulkEncoder $ E.nonNullable $ getTxId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: txin
 -- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
+-----------------------------------------------------------------------------------------------------------------------------------
 data TxIn = TxIn
   { txInTxInId :: !TxId -- The transaction where this is used as an input.
   , txInTxOutId :: !TxId -- The transaction where this was created as an output.
@@ -310,16 +310,15 @@ txInEncoder =
 encodeTxInBulk :: E.Params ([TxId], [TxId], [Word64], [Maybe RedeemerId])
 encodeTxInBulk =
   contrazip4
-    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
-    (manyEncoder $ E.nonNullable $ getTxId >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-    (manyEncoder $ E.nullable $ getRedeemerId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nullable $ getRedeemerId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: collateral_txin
--- Description:
+-- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
+-----------------------------------------------------------------------------------------------------------------------------------
 data CollateralTxIn = CollateralTxIn
   { collateralTxInTxInId :: !TxId -- noreference -- The transaction where this is used as an input.
   , collateralTxInTxOutId :: !TxId -- noreference -- The transaction where this was created as an output.
@@ -359,10 +358,9 @@ collateralTxInEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: reference_txin
 -- Description: Represents the input side of a transaction, linking to previous transaction outputs being spent
+-----------------------------------------------------------------------------------------------------------------------------------
 data ReferenceTxIn = ReferenceTxIn
   { referenceTxInTxInId :: !TxId -- noreference -- The transaction where this is used as an input.
   , referenceTxInTxOutId :: !TxId -- noreference -- The transaction where this was created as an output.
@@ -402,10 +400,9 @@ referenceTxInEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: reverse_index
 -- Description: Provides a reverse lookup mechanism for transaction inputs, allowing efficient querying of the origin of funds.
+-----------------------------------------------------------------------------------------------------------------------------------
 data ReverseIndex = ReverseIndex
   { reverseIndexBlockId :: !BlockId -- noreference
   , reverseIndexMinIds :: !Text
@@ -442,11 +439,10 @@ reverseIndexEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: txcbor
 -- Description: Stores the raw CBOR (Concise Binary Object Representation) encoding of transactions, useful for validation
 --   and serialization purposes.
+-----------------------------------------------------------------------------------------------------------------------------------
 data TxCbor = TxCbor
   { txCborTxId :: !TxId -- noreference
   , txCborBytes :: !ByteString -- sqltype=bytea
@@ -483,10 +479,9 @@ txCborEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: datum
 -- Description: Contains the data associated with a transaction output, which can be used as input for a script.
+-----------------------------------------------------------------------------------------------------------------------------------
 data Datum = Datum
   { datumHash :: !ByteString -- sqltype=hash32type
   , datumTxId :: !TxId -- noreference
@@ -530,10 +525,9 @@ datumEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: script
 -- Description: Contains the script associated with a transaction output, which can be used as input for a script.
+-----------------------------------------------------------------------------------------------------------------------------------
 data Script = Script
   { scriptTxId :: !TxId -- noreference
   , scriptHash :: !ByteString -- sqltype=hash28type
@@ -583,10 +577,9 @@ scriptEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: redeemer
 -- Description: Holds the redeemer data used to satisfy script conditions during transaction processing.
+-----------------------------------------------------------------------------------------------------------------------------------
 
 -- Unit step is in picosends, and `maxBound :: !Int64` picoseconds is over 100 days, so using
 -- Word64/word63type is safe here. Similarly, `maxBound :: !Int64` if unit step would be an
@@ -647,10 +640,9 @@ redeemerEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: redeemer_data
 -- Description: Additional details about the redeemer, including its type and any associated metadata.
+-----------------------------------------------------------------------------------------------------------------------------------
 data RedeemerData = RedeemerData
   { redeemerDataHash :: !ByteString -- sqltype=hash32type
   , redeemerDataTxId :: !TxId -- noreference
@@ -694,10 +686,9 @@ redeemerDataEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: extra_key_witness
 -- Description: Contains additional key witnesses for transactions, which are used to validate the transaction's signature.
+-----------------------------------------------------------------------------------------------------------------------------------
 data ExtraKeyWitness = ExtraKeyWitness
   { extraKeyWitnessHash :: !ByteString -- sqltype=hash28type
   , extraKeyWitnessTxId :: !TxId -- noreference
@@ -734,13 +725,13 @@ extraKeyWitnessEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: slot_leader
 -- Description:Contains information about the slot leader for a given block, including the slot leader's ID, hash, and description.
+-----------------------------------------------------------------------------------------------------------------------------------
+
 data SlotLeader = SlotLeader
   { slotLeaderHash :: !ByteString -- sqltype=hash28type
-  , slotLeaderPoolHashId :: !(Maybe Int) -- This will be non-null when a block is mined by a pool
+  , slotLeaderPoolHashId :: !(Maybe PoolHashId) -- This will be non-null when a block is mined by a pool
   , slotLeaderDescription :: !Text -- Description of the Slots leader
   }
   deriving (Eq, Show, Generic)
@@ -759,7 +750,7 @@ slotLeaderDecoder :: D.Row SlotLeader
 slotLeaderDecoder =
   SlotLeader
     <$> D.column (D.nonNullable D.bytea) -- slotLeaderHash
-    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- slotLeaderPoolHashId
+    <*> Id.maybeIdDecoder Id.PoolHashId -- slotLeaderPoolHashId
     <*> D.column (D.nonNullable D.text) -- slotLeaderDescription
 
 entitySlotLeaderEncoder :: E.Params (Entity SlotLeader)
@@ -773,7 +764,7 @@ slotLeaderEncoder :: E.Params SlotLeader
 slotLeaderEncoder =
   mconcat
     [ slotLeaderHash >$< E.param (E.nonNullable E.bytea)
-    , slotLeaderPoolHashId >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , slotLeaderPoolHashId >$< Id.maybeIdEncoder Id.getPoolHashId
     , slotLeaderDescription >$< E.param (E.nonNullable E.text)
     ]
 
@@ -783,11 +774,8 @@ slotLeaderEncoder =
 -----------------------------------------------------------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: schema_version
 -- Description: A table for schema versioning.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Schema versioning has three stages to best allow handling of schema migrations.
 --    Stage 1: Set up PostgreSQL data types (using SQL 'DOMAIN' statements).
@@ -833,11 +821,8 @@ schemaVersionEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: meta
 -- Description: A table containing metadata about the chain. There will probably only ever be one value in this table
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data Meta = Meta
   { metaStartTime :: !UTCTime -- sqltype=timestamp
@@ -879,11 +864,8 @@ metaEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: migration
 -- Description: A table containing information about migrations.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data Withdrawal = Withdrawal
   { withdrawalAddrId :: !StakeAddressId
@@ -927,11 +909,8 @@ withdrawalEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: extra_migrations
 -- Description: = A table containing information about extra migrations.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data ExtraMigrations = ExtraMigrations
   { extraMigrationsToken :: !Text

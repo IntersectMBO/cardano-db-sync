@@ -10,7 +10,7 @@
 
 module Cardano.Db.Operations.Other.MinId where
 
--- import Cardano.Db.Operations.Types (MaTxOutFields (..), TxOutFields (..), TxOutTableType (..))
+-- import Cardano.Db.Operations.Types (MaTxOutFields (..), TxOutFields (..), TxOutVariantType (..))
 -- import Cardano.Db.Schema.Core
 -- import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
 -- import qualified Cardano.Db.Schema.Variants.TxOutCore as C
@@ -18,7 +18,7 @@ module Cardano.Db.Operations.Other.MinId where
 -- import qualified Data.Text as Text
 -- import Database.Persist.Sql (PersistEntity, PersistField, SqlBackend, fromSqlKey, toSqlKey)
 
--- data MinIds (a :: TxOutTableType) = MinIds
+-- data MinIds (a :: TxOutVariantType) = MinIds
 --   { minTxInId :: Maybe TxInId
 --   , minTxOutId :: Maybe (TxOutIdFor a)
 --   , minMaTxOutId :: Maybe (MaTxOutIdFor a)
@@ -51,10 +51,10 @@ module Cardano.Db.Operations.Other.MinId where
 -- minIdsToText (CMinIdsWrapper minIds) = minIdsCoreToText minIds
 -- minIdsToText (VMinIdsWrapper minIds) = minIdsVariantToText minIds
 
--- textToMinIds :: TxOutTableType -> Text -> Maybe MinIdsWrapper
--- textToMinIds txOutTableType txt =
---   case txOutTableType of
---     TxOutCore -> CMinIdsWrapper <$> textToMinIdsCore txt
+-- textToMinIds :: TxOutVariantType -> Text -> Maybe MinIdsWrapper
+-- textToMinIds txOutVariantType txt =
+--   case txOutVariantType of
+--     TxOutVariantCore -> CMinIdsWrapper <$> textToMinIdsCore txt
 --     TxOutVariantAddress -> VMinIdsWrapper <$> textToMinIdsVariant txt
 
 -- minIdsCoreToText :: MinIds 'TxOutCore -> Text
@@ -104,19 +104,19 @@ module Cardano.Db.Operations.Other.MinId where
 -- minJust x Nothing = x
 -- minJust (Just x) (Just y) = Just (min x y)
 
--- --------------------------------------------------------------------------------
--- -- CompleteMinId
--- --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- CompleteMinId
+--------------------------------------------------------------------------------
 -- completeMinId ::
 --   (MonadIO m) =>
 --   Maybe TxId ->
 --   MinIdsWrapper ->
---   ReaderT SqlBackend m MinIdsWrapper
+--   DB.DbAction m MinIdsWrapper
 -- completeMinId mTxId mIdW = case mIdW of
 --   CMinIdsWrapper minIds -> CMinIdsWrapper <$> completeMinIdCore mTxId minIds
 --   VMinIdsWrapper minIds -> VMinIdsWrapper <$> completeMinIdVariant mTxId minIds
 
--- completeMinIdCore :: MonadIO m => Maybe TxId -> MinIds 'TxOutCore -> ReaderT SqlBackend m (MinIds 'TxOutCore)
+-- completeMinIdCore :: MonadIO m => Maybe TxId -> MinIds 'TxOutCore -> DB.DbAction m (MinIds 'TxOutCore)
 -- completeMinIdCore mTxId minIds = do
 --   case mTxId of
 --     Nothing -> pure mempty
@@ -133,7 +133,7 @@ module Cardano.Db.Operations.Other.MinId where
 --           , minMaTxOutId = mMaTxOutId
 --           }
 
--- completeMinIdVariant :: MonadIO m => Maybe TxId -> MinIds 'TxOutVariantAddress -> ReaderT SqlBackend m (MinIds 'TxOutVariantAddress)
+-- completeMinIdVariant :: MonadIO m => Maybe TxId -> MinIds 'TxOutVariantAddress -> DB.DbAction m (MinIds 'TxOutVariantAddress)
 -- completeMinIdVariant mTxId minIds = do
 --   case mTxId of
 --     Nothing -> pure mempty
@@ -156,7 +156,7 @@ module Cardano.Db.Operations.Other.MinId where
 --   Maybe (Key record) ->
 --   EntityField record field ->
 --   field ->
---   ReaderT SqlBackend m (Maybe (Key record))
+--   DB.DbAction m (Maybe (Key record))
 -- whenNothingQueryMinRefId mKey efield field = do
 --   case mKey of
 --     Just k -> pure $ Just k

@@ -11,8 +11,8 @@ module Cardano.DbTool.Validate.TxAccounting (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variant.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbTool.Validate.Util
 import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -45,8 +45,8 @@ import qualified System.Random as Random
 
 {- HLINT ignore "Fuse on/on" -}
 
-validateTxAccounting :: TxOutTableType -> IO ()
-validateTxAccounting getTxOutTableType = do
+validateTxAccounting :: TxOutVariantType -> IO ()
+validateTxAccounting getTxOutVariantType = do
   txIdRange <- runDbNoLoggingEnv queryTestTxIds
   putStrF $
     "For "
@@ -55,7 +55,7 @@ validateTxAccounting getTxOutTableType = do
       ++ show (snd txIdRange)
       ++ " accounting is: "
   ids <- randomTxIds testCount txIdRange
-  res <- runExceptT $ traverse (validateAccounting getTxOutTableType) ids
+  res <- runExceptT $ traverse (validateAccounting getTxOutVariantType) ids
   case res of
     Left err -> error $ redText (reportError err)
     Right _ -> putStrLn $ greenText "ok"
@@ -113,16 +113,16 @@ showTxOut txo =
     ]
   where
     (txId, value) = case txo of
-      CTxOutW cTxOut -> (C.txOutTxId cTxOut, C.txOutValue cTxOut)
-      VTxOutW vTxOut _ -> (V.txOutTxId vTxOut, V.txOutValue vTxOut)
+      VCTxOutW cTxOut -> (VC.txOutTxId cTxOut, VC.txOutValue cTxOut)
+      VATxOutW vTxOut _ -> (VA.txOutTxId vTxOut, VA.txOutValue vTxOut)
 
 -- For a given TxId, validate the input/output accounting.
-validateAccounting :: TxOutTableType -> Word64 -> ExceptT ValidateError IO ()
-validateAccounting txOutTableType txId = do
+validateAccounting :: TxOutVariantType -> Word64 -> ExceptT ValidateError IO ()
+validateAccounting txOutVariantType txId = do
   (fee, deposit) <- liftIO $ runDbNoLoggingEnv (queryTxFeeDeposit txId)
   withdrawal <- liftIO $ runDbNoLoggingEnv (queryTxWithdrawal txId)
-  ins <- liftIO $ runDbNoLoggingEnv (queryTxInputs txOutTableType txId)
-  outs <- liftIO $ runDbNoLoggingEnv (queryTxOutputs txOutTableType txId)
+  ins <- liftIO $ runDbNoLoggingEnv (queryTxInputs txOutVariantType txId)
+  outs <- liftIO $ runDbNoLoggingEnv (queryTxOutputs txOutVariantType txId)
   -- A refund is a negative deposit.
   when (deposit >= 0 && sumValues ins + withdrawal /= fee + adaDeposit deposit + sumValues outs) $
     left (ValidateError txId fee deposit withdrawal ins outs)
@@ -140,12 +140,12 @@ sumValues = word64ToAda . sum . map txOutValue
   where
     txOutValue =
       unDbLovelace . \case
-        CTxOutW cTxOut -> C.txOutValue cTxOut
-        VTxOutW vTxOut _ -> V.txOutValue vTxOut
+        VCTxOutW cTxOut -> VC.txOutValue cTxOut
+        VATxOutW vTxOut _ -> VA.txOutValue vTxOut
 
 -- -------------------------------------------------------------------------------------------------
 
-queryTestTxIds :: MonadIO m => ReaderT SqlBackend m (Word64, Word64)
+queryTestTxIds :: MonadIO m => DB.DbAction m (Word64, Word64)
 queryTestTxIds = do
   -- Exclude all 'faked' generated TxId values from the genesis block (block_id == 1).
   lower <-
@@ -156,7 +156,7 @@ queryTestTxIds = do
   upper <- select $ from (table @Tx) >> pure countRows
   pure (maybe 0 (unTxId . unValue) (listToMaybe lower), maybe 0 unValue (listToMaybe upper))
 
-queryTxFeeDeposit :: MonadIO m => Word64 -> ReaderT SqlBackend m (Ada, Int64)
+queryTxFeeDeposit :: MonadIO m => Word64 -> DB.DbAction m (Ada, Int64)
 queryTxFeeDeposit txId = do
   res <- select $ do
     tx <- from $ table @Tx
@@ -167,12 +167,12 @@ queryTxFeeDeposit txId = do
     convert :: (Value DbLovelace, Value (Maybe Int64)) -> (Ada, Int64)
     convert (Value (DbLovelace w64), d) = (word64ToAda w64, fromMaybe 0 (unValue d))
 
-queryTxInputs :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [TxOutW]
-queryTxInputs txOutTableType txId = case txOutTableType of
-  TxOutCore -> map CTxOutW <$> queryInputsBody @'TxOutCore txId
-  TxOutVariantAddress -> map (`VTxOutW` Nothing) <$> queryInputsBody @'TxOutVariantAddress txId
+queryTxInputs :: MonadIO m => TxOutVariantType -> Word64 -> DB.DbAction m [TxOutW]
+queryTxInputs txOutVariantType txId = case txOutVariantType of
+  TxOutVariantCore -> map VCTxOutW <$> queryInputsBody @'TxOutCore txId
+  TxOutVariantAddress -> map (`VATxOutW` Nothing) <$> queryInputsBody @'TxOutVariantAddress txId
 
-queryInputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT SqlBackend m [TxOutTable a]
+queryInputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> DB.DbAction m [TxOutTable a]
 queryInputsBody txId = do
   res <- select $ do
     (tx :& txin :& txout) <-
@@ -187,12 +187,12 @@ queryInputsBody txId = do
     pure txout
   pure $ entityVal <$> res
 
-queryTxOutputs :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [TxOutW]
-queryTxOutputs txOutTableType txId = case txOutTableType of
-  TxOutCore -> map CTxOutW <$> queryTxOutputsBody @'TxOutCore txId
-  TxOutVariantAddress -> map (`VTxOutW` Nothing) <$> queryTxOutputsBody @'TxOutVariantAddress txId
+queryTxOutputs :: MonadIO m => TxOutVariantType -> Word64 -> DB.DbAction m [TxOutW]
+queryTxOutputs txOutVariantType txId = case txOutVariantType of
+  TxOutVariantCore -> map VCTxOutW <$> queryTxOutputsBody @'TxOutCore txId
+  TxOutVariantAddress -> map (`VATxOutW` Nothing) <$> queryTxOutputsBody @'TxOutVariantAddress txId
 
-queryTxOutputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> ReaderT SqlBackend m [TxOutTable a]
+queryTxOutputsBody :: forall a m. (MonadIO m, TxOutFields a) => Word64 -> DB.DbAction m [TxOutTable a]
 queryTxOutputsBody txId = do
   res <- select $ do
     (tx :& txout) <-
@@ -204,7 +204,7 @@ queryTxOutputsBody txId = do
     pure txout
   pure $ entityVal <$> res
 
-queryTxWithdrawal :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+queryTxWithdrawal :: MonadIO m => Word64 -> DB.DbAction m Ada
 queryTxWithdrawal txId = do
   res <- select $ do
     withdraw <- from $ table @Withdrawal

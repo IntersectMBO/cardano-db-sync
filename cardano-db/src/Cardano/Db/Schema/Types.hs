@@ -1,17 +1,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 
-module Cardano.Db.Schema.Types (
-  AddressHash (..),
-  PaymentAddrHash (..),
-  PoolMetaHash (..),
-  PoolUrl (..),
-) where
+module Cardano.Db.Schema.Types where
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Quiet (Quiet (..))
+import qualified Hasql.Decoders as HsqlD
 
 newtype AddressHash -- Length (28 bytes) enforced by Postgres
   = AddressHash {unAddressHash :: ByteString}
@@ -37,3 +33,6 @@ newtype PoolMetaHash = PoolMetaHash {unPoolMetaHash :: ByteString}
 newtype PoolUrl = PoolUrl {unPoolUrl :: Text}
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet PoolUrl)
+
+poolUrlDecoder :: HsqlD.Value PoolUrl
+poolUrlDecoder = PoolUrl <$> HsqlD.text

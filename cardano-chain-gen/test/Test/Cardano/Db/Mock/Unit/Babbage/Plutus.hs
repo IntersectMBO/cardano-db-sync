@@ -32,8 +32,8 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
 
 import qualified Cardano.Crypto.Hash as Crypto
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variant.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
@@ -63,7 +63,7 @@ import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
 import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, txOutTableTypeFromConfig, withFullConfig, withFullConfigAndDropDB)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, txOutVariantTypeFromConfig, withFullConfig, withFullConfigAndDropDB)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -91,7 +91,7 @@ simpleScript =
   withFullConfigAndDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
-    let txOutTableType = txOutTableTypeFromConfig dbSync
+    let txOutVariantType = txOutVariantTypeFromConfig dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
     a <- fillUntilNextEpoch interpreter mockServer
@@ -101,23 +101,23 @@ simpleScript =
         Babbage.mkLockByScriptTx (UTxOIndex 0) [Babbage.TxOutNoInline True] 20000 20000
 
     assertBlockNoBackoff dbSync (fromIntegral $ length a + 2)
-    assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs txOutTableType) [expectedFields] "Unexpected script outputs"
+    assertEqQuery dbSync (fmap getOutFields <$> DB.queryScriptOutputs txOutVariantType) [expectedFields] "Unexpected script outputs"
   where
     testLabel = "simpleScript"
     getOutFields txOutW =
       case txOutW of
-        DB.CTxOutW txOut ->
-          ( C.txOutAddress txOut
-          , C.txOutAddressHasScript txOut
-          , C.txOutValue txOut
-          , C.txOutDataHash txOut
+        DB.VCTxOutW txOut ->
+          ( VC.txOutAddress txOut
+          , VC.txOutAddressHasScript txOut
+          , VC.txOutValue txOut
+          , VC.txOutDataHash txOut
           )
-        DB.VTxOutW txOut mAddress -> case mAddress of
+        DB.VATxOutW txOut mAddress -> case mAddress of
           Just address ->
-            ( V.addressAddress address
-            , V.addressHasScript address
-            , V.txOutValue txOut
-            , V.txOutDataHash txOut
+            ( VA.addressAddress address
+            , VA.addressHasScript address
+            , VA.txOutValue txOut
+            , VA.txOutDataHash txOut
             )
           Nothing -> error "BabbageSimpleScript: expected an address"
 

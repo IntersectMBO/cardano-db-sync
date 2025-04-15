@@ -1,15 +1,18 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Cardano.Db.Statement.Types where
 
+import Cardano.Prelude (Int64)
 import Data.Char (isUpper, toLower)
 import Data.List (stripPrefix)
 import qualified Data.List.NonEmpty as NE
@@ -124,13 +127,22 @@ instance (Selector c) => GRecordFieldNames (M1 S c (K1 i a)) where
 instance GRecordFieldNames (K1 i c) where
   gRecordFieldNames _ = []
 
-data TxOutTableType = TxOutCore | TxOutVariantAddress
-  deriving (Eq, Show)
+-- | Validate a column name against the list of columns in the table.
+validateColumn :: forall a. (DbInfo a) => Text -> Text
+validateColumn colName =
+  let cols = NE.toList $ columnNames (Proxy @a)
+   in if colName `elem` cols
+        then colName
+        else
+          error $
+            "Column "
+              <> Text.unpack colName
+              <> " not found in table "
+              <> Text.unpack (tableName (Proxy @a))
 
 --------------------------------------------------------------------------------
 -- Entity
 --------------------------------------------------------------------------------
-
 data Entity record = Entity
   { entityKey :: Key record
   , entityVal :: record
@@ -156,3 +168,7 @@ toEntity = Entity
 -- Decoder for Entity
 entityDecoder :: HsqlD.Row (Key a) -> HsqlD.Row a -> HsqlD.Row (Entity a)
 entityDecoder keyDec valDec = Entity <$> keyDec <*> valDec
+
+-- Helper function for decoding standard integer IDs
+stdKeyDecoder :: HsqlD.Row Int64
+stdKeyDecoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)

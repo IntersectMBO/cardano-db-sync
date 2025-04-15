@@ -229,7 +229,7 @@ withDBSyncEnv mkEnv = bracket mkEnv stopDBSyncIfRunning
 getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
-queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+queryDBSync :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
 queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer

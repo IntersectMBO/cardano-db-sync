@@ -31,10 +31,10 @@ import Ouroboros.Network.Point
 -- Rollbacks are done in an Era generic way based on the 'Point' we are
 -- rolling back to.
 rollbackFromBlockNo ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   BlockNo ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 rollbackFromBlockNo syncEnv blkNo = do
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
@@ -48,11 +48,11 @@ rollbackFromBlockNo syncEnv blkNo = do
         , textShow blkNo
         ]
     lift $ do
-      deletedBlockCount <- DB.deleteBlocksBlockId trce txOutTableType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
+      deletedBlockCount <- DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
       when (deletedBlockCount > 0) $ do
         -- We use custom constraints to improve input speeds when syncing.
         -- If they don't already exists we add them here as once a rollback has happened
-        -- we always need a the constraints.
+        -- we always need the constraints.
         addConstraintsIfNotExist syncEnv trce
 
     lift $ rollbackCache cache blockId
@@ -61,7 +61,7 @@ rollbackFromBlockNo syncEnv blkNo = do
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv
-    txOutTableType = getTxOutVariantType syncEnv
+    txOutVariantType = getTxOutVariantType syncEnv
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
 prepareRollback syncEnv point serverTip =
@@ -69,7 +69,7 @@ prepareRollback syncEnv point serverTip =
   where
     trce = getTrace syncEnv
 
-    action :: MonadIO m => ExceptT SyncNodeError (ReaderT SqlBackend m) Bool
+    action :: MonadIO m => ExceptT SyncNodeError (DB.DbAction m) Bool
     action = do
       case getPoint point of
         Origin -> do
@@ -109,6 +109,6 @@ prepareRollback syncEnv point serverTip =
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> DB.TxOutVariantType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
-unsafeRollback trce txOutTableType config slotNo = do
+unsafeRollback trce txOutVariantType config slotNo = do
   logWarning trce $ "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutTableType slotNo True)
+  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutVariantType slotNo True)

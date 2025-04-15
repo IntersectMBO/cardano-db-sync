@@ -2,26 +2,23 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-#if __GLASGOW_HASKELL__ >= 908
+
 {-# OPTIONS_GHC -Wno-x-partial #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
-#endif
+
 
 module Test.IO.Cardano.Db.Rollback (
   tests,
 ) where
 
 import Cardano.Db
-import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Reader (ReaderT)
 import Data.Word (Word64)
-import Database.Persist.Sql (SqlBackend)
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
+import Cardano.Slotting.Slot (SlotNo (..))
+import Data.Maybe (fromJust)
 
 tests :: TestTree
 tests =
@@ -50,7 +47,7 @@ _rollbackTest =
     assertBool ("TxIn count before rollback is " ++ show beforeTxInCount ++ " but should be 1.") $ beforeTxInCount == 1
     -- Rollback a set of blocks.
     latestSlotNo <- queryLatestSlotNo
-    Just pSlotNo <- queryWalkChain 5 latestSlotNo
+    pSlotNo <- fromJust <$> queryWalkChain 5 latestSlotNo
     void $ deleteBlocksSlotNoNoTrace TxOutVariantCore (SlotNo pSlotNo)
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
@@ -64,7 +61,7 @@ _rollbackTest =
 
 -- -----------------------------------------------------------------------------
 
-queryWalkChain :: (MonadBaseControl IO m, MonadIO m) => Int -> Word64 -> ReaderT SqlBackend m (Maybe Word64)
+queryWalkChain :: MonadIO m => Int -> Word64 -> DbAction m (Maybe Word64)
 queryWalkChain count blkNo
   | count <= 0 = pure $ Just blkNo
   | otherwise = do
@@ -73,23 +70,23 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Word64 -> ReaderT SqlBackend m ()
+createAndInsertBlocks :: MonadIO m => Word64 -> DbAction m ()
 createAndInsertBlocks blockCount =
   void $ loop (0, Nothing, Nothing)
   where
     loop ::
-      (MonadBaseControl IO m, MonadIO m) =>
+      MonadIO m =>
       (Word64, Maybe BlockId, Maybe TxId) ->
-      ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+      DbAction m (Word64, Maybe BlockId, Maybe TxId)
     loop (indx, mPrevId, mOutId) =
       if indx < blockCount
         then loop =<< createAndInsert (indx, mPrevId, mOutId)
         else pure (0, Nothing, Nothing)
 
     createAndInsert ::
-      (MonadBaseControl IO m, MonadIO m) =>
+      MonadIO m =>
       (Word64, Maybe BlockId, Maybe TxId) ->
-      ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+      DbAction m (Word64, Maybe BlockId, Maybe TxId)
     createAndInsert (indx, mPrevId, mTxOutId) = do
       slid <- insertSlotLeader testSlotLeader
       let newBlock =

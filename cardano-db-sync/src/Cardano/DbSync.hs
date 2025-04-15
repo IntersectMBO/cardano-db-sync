@@ -46,7 +46,7 @@ import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
-import Cardano.DbSync.DbAction
+import Cardano.DbSync.DbEvent
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
@@ -198,7 +198,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConf
           when (not isJsonbInSchema && not removeJsonbFromSchemaConfig) $ do
             liftIO $ logWarning trce "Adding jsonb datatypes back to the database. This can take time."
             liftIO $ runAddJsonbToSchema syncEnv
-          liftIO $ runExtraMigrationsMaybe syncEnv
+          liftIO $ runConsumedTxOutMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             Db.noLedgerMigrations pool trce
@@ -211,10 +211,11 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConf
               id
               [ runDbThread syncEnv metricsSetters threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv
-              , runFetchOffChainVoteThread syncEnv
+              , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
+              , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
               ]
+    )
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
