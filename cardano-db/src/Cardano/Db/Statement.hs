@@ -7,10 +7,18 @@ module Cardano.Db.Statement (
   module Cardano.Db.Statement.Pool,
   module Cardano.Db.Statement.StakeDeligation,
   module Cardano.Db.Statement.Types,
+  module Cardano.Db.Statement.Function.Core,
+  module Cardano.Db.Statement.Function.Delete,
+  module Cardano.Db.Statement.Function.Insert,
+  module Cardano.Db.Statement.Function.Query,
 ) where
 
 import Cardano.Db.Statement.Base
 import Cardano.Db.Statement.EpochAndProtocol
+import Cardano.Db.Statement.Function.Core
+import Cardano.Db.Statement.Function.Delete
+import Cardano.Db.Statement.Function.Insert
+import Cardano.Db.Statement.Function.Query
 import Cardano.Db.Statement.GovernanceAndVoting
 import Cardano.Db.Statement.MultiAsset
 import Cardano.Db.Statement.OffChain

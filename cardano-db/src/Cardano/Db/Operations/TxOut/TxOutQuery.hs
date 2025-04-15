@@ -63,32 +63,6 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- --------------------------------------------------------------------------------
 
 -- -- | Like 'queryTxId' but also return the 'TxOutIdValue' of the transaction output.
--- queryTxOutValue ::
---   MonadIO m =>
---   TxOutTableType ->
---   (ByteString, Word64) ->
---   ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
--- queryTxOutValue txOutTableType hashIndex =
---   case txOutTableType of
---     TxOutCore -> queryTxOutValue' @'TxOutCore hashIndex
---     TxOutVariantAddress -> queryTxOutValue' @'TxOutVariantAddress hashIndex
---   where
---     queryTxOutValue' ::
---       forall (a :: TxOutTableType) m.
---       (MonadIO m, TxOutFields a) =>
---       (ByteString, Word64) ->
---       ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
---     queryTxOutValue' (hash, index) = do
---       res <- select $ do
---         (tx :& txOut) <-
---           from
---             $ table @Tx
---               `innerJoin` table @(TxOutTable a)
---             `on` (\(tx :& txOut) -> tx ^. TxId ==. txOut ^. txOutTxIdField @a)
---         where_ (txOut ^. txOutIndexField @a ==. val index &&. tx ^. TxHash ==. val hash)
---         pure (txOut ^. txOutTxIdField @a, txOut ^. txOutValueField @a)
---       pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
-
 -- --------------------------------------------------------------------------------
 -- -- queryTxOutId
 -- --------------------------------------------------------------------------------
@@ -122,9 +96,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --         pure (txOut ^. txOutTxIdField @a, txOut ^. txOutIdField @a)
 --       pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
--- --------------------------------------------------------------------------------
--- -- queryTxOutIdValue
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryTxOutIdValue
+-- -- --------------------------------------------------------------------------------
 
 -- -- | Like 'queryTxOutId' but also return the 'TxOutIdValue'
 -- queryTxOutIdValue ::
@@ -156,9 +130,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --         pure (txOut ^. txOutTxIdField @a, txOut ^. txOutIdField @a, txOut ^. txOutValueField @a)
 --       pure $ maybeToEither (DbLookupTxHash hash) unValue3 (listToMaybe res)
 
--- --------------------------------------------------------------------------------
--- -- queryTxOutIdValue
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryTxOutIdValue
+-- -- --------------------------------------------------------------------------------
 
 -- -- | Give a (tx hash, index) pair, return the TxOut Credentials.
 -- queryTxOutCredentials ::
@@ -198,9 +172,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     pure (address ^. V.AddressPaymentCred, address ^. V.AddressHasScript)
 --   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
--- --------------------------------------------------------------------------------
--- -- ADDRESS QUERIES
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- ADDRESS QUERIES
+-- -- --------------------------------------------------------------------------------
 -- queryAddressId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe V.AddressId)
 -- queryAddressId addrRaw = do
 --   res <- select $ do
@@ -209,9 +183,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     pure (addr ^. V.AddressId)
 --   pure $ unValue <$> listToMaybe res
 
--- --------------------------------------------------------------------------------
--- -- queryTotalSupply
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryTotalSupply
+-- -- --------------------------------------------------------------------------------
 
 -- -- | Get the current total supply of Lovelace. This only returns the on-chain supply which
 -- -- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
@@ -236,9 +210,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --         pure $ sum_ (txOut ^. txOutValueField @a)
 --       pure $ unValueSumAda (listToMaybe res)
 
--- --------------------------------------------------------------------------------
--- -- queryGenesisSupply
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryGenesisSupply
+-- -- --------------------------------------------------------------------------------
 
 -- -- | Return the total Genesis coin supply.
 -- queryGenesisSupply ::
@@ -284,9 +258,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --                 ^. TxInTxOutIndex
 --         )
 
--- --------------------------------------------------------------------------------
--- -- queryShelleyGenesisSupply
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryShelleyGenesisSupply
+-- -- --------------------------------------------------------------------------------
 
 -- -- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
 -- -- is the unique which has a non-null PreviousId, but has null Epoch.
@@ -314,9 +288,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --         pure $ sum_ (txOut ^. txOutValueField @a)
 --       pure $ unValueSumAda (listToMaybe res)
 
--- --------------------------------------------------------------------------------
--- -- Testing or validating. Queries below are not used in production
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- Testing or validating. Queries below are not used in production
+-- -- --------------------------------------------------------------------------------
 
 -- --------------------------------------------------------------------------------
 -- -- queryUtxoAtBlockNo
@@ -419,9 +393,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --       }
 -- convertVariant _ = Nothing
 
--- --------------------------------------------------------------------------------
--- -- queryAddressBalanceAtSlot
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryAddressBalanceAtSlot
+-- -- --------------------------------------------------------------------------------
 -- queryAddressBalanceAtSlot :: MonadIO m => TxOutTableType -> Text -> Word64 -> ReaderT SqlBackend m Ada
 -- queryAddressBalanceAtSlot txOutTableType addr slotNo = do
 --   eblkId <- select $ do
@@ -476,9 +450,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --             pure $ sum_ (txout ^. V.TxOutValue)
 --           pure $ unValueSumAda (listToMaybe res)
 
--- --------------------------------------------------------------------------------
--- -- queryScriptOutputs
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryScriptOutputs
+-- -- --------------------------------------------------------------------------------
 -- queryScriptOutputs :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m [TxOutW]
 -- queryScriptOutputs txOutTableType =
 --   case txOutTableType of
@@ -507,9 +481,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     combineToWrapper txOut address =
 --       VTxOutW (entityVal txOut) (Just (entityVal address))
 
--- --------------------------------------------------------------------------------
--- -- queryAddressOutputs
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- queryAddressOutputs
+-- -- --------------------------------------------------------------------------------
 -- queryAddressOutputs :: MonadIO m => TxOutTableType -> Text -> ReaderT SqlBackend m DbLovelace
 -- queryAddressOutputs txOutTableType addr = do
 --   res <- case txOutTableType of
@@ -529,9 +503,9 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --       Just (Just x) -> x
 --       _otherwise -> DbLovelace 0
 
--- --------------------------------------------------------------------------------
--- -- Helper Functions
--- --------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------
+-- -- -- Helper Functions
+-- -- --------------------------------------------------------------------------------
 
 -- -- | Count the number of transaction outputs in the TxOut table.
 -- queryTxOutCount ::

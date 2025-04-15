@@ -38,7 +38,7 @@ import Data.WideWord.Word128 (Word128)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 
-import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Contravariant.Extras (contrazip4)
 import Hasql.Decoders as D
@@ -353,10 +353,10 @@ epochStateEncoder =
 epochStateBulkEncoder :: E.Params ([Maybe CommitteeId], [Maybe GovActionProposalId], [Maybe ConstitutionId], [Word64])
 epochStateBulkEncoder =
   contrazip4
-    (manyEncoder $ E.nullable $ getCommitteeId >$< E.int8)
-    (manyEncoder $ E.nullable $ getGovActionProposalId >$< E.int8)
-    (manyEncoder $ E.nullable $ getConstitutionId >$< E.int8)
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nullable $ getCommitteeId >$< E.int8)
+    (bulkEncoder $ E.nullable $ getGovActionProposalId >$< E.int8)
+    (bulkEncoder $ E.nullable $ getConstitutionId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 

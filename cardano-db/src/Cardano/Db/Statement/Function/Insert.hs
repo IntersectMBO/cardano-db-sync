@@ -7,7 +7,7 @@
 module Cardano.Db.Statement.Function.Insert (
   insert,
   insertCheckUnique,
-  bulkInsert,
+  insertBulk,
 )
 where
 
@@ -106,14 +106,14 @@ insertCheckUnique encoder resultType =
 -- `UNNEST` to expand arrays of field values into rows. It’s designed for efficiency,
 -- executing all inserts in one SQL statement, and can return the generated IDs.
 -- This will automatically handle unique constraints, if they are present.
-bulkInsert ::
+insertBulk ::
   forall a b c r.
   (DbInfo a) =>
   ([a] -> b) -> -- Field extractor
   HsqlE.Params b -> -- Encoder
   ResultTypeBulk (Entity c) r -> -- Result type
   HsqlS.Statement [a] r -- Returns a Statement
-bulkInsert extract enc returnIds =
+insertBulk extract enc returnIds =
   case validateUniqueConstraints (Proxy @a) of
     Left err -> error err
     Right uniques ->
@@ -142,39 +142,6 @@ bulkInsert extract enc returnIds =
               , conflictClause uniques
               , shouldReturnId
               ]
-
--- bulkInsert
---   :: forall a c r. (DbInfo a)
---   => HsqlE.Params a              -- Encoder
---   -> ResultTypeBulk (Entity c) r -- Whether to return a result and decoder
---   -> HsqlS.Statement a r         -- Returns the prepared statement
--- bulkInsert enc returnType =
---     case validateUniqueConstraints (Proxy @a) of
---     Left err -> error err
---     Right uniques ->
---       HsqlS.Statement sql enc decoder True
---       where
---         table = tableName (Proxy @a)
---         colNames = NE.toList $ columnNames (Proxy @a)
-
---         unnestVals = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1..length colNames]
-
---         conflictClause :: [Text.Text] -> Text.Text
---         conflictClause [] = ""
---         conflictClause uniqueConstraints = " ON CONFLICT (" <> Text.intercalate ", " uniqueConstraints <> ") DO NOTHING"
-
---         (decoder, shouldReturnId) = case returnType of
---           NoResultBulk -> (HsqlD.noResult, "")
---           WithResultBulk dec  -> (dec, "RETURNING id")
-
---         sql = TextEnc.encodeUtf8 $ Text.concat
---           ["INSERT INTO " <> table
---           , " (" <> Text.intercalate ", " colNames <> ") "
---           , " SELECT * FROM UNNEST ("
---           , unnestVals <> " ) "
---           , conflictClause uniques
---           , shouldReturnId
---           ]
 
 -- | Validates that the unique constraints are valid columns in the table.
 -- If there are no unique constraints, this function will return successfully with [].

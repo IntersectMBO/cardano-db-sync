@@ -23,7 +23,7 @@ import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Schema.Orphans ()
-import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -48,8 +48,8 @@ type instance Key OffChainPoolData = OffChainPoolDataId
 instance DbInfo OffChainPoolData where
   uniqueFields _ = ["pool_id", "prm_id"]
 
-entityNameOffChainPoolDataDecoder :: D.Row (Entity OffChainPoolData)
-entityNameOffChainPoolDataDecoder =
+entityOffChainPoolDataDecoder :: D.Row (Entity OffChainPoolData)
+entityOffChainPoolDataDecoder =
   Entity
     <$> idDecoder OffChainPoolDataId
     <*> offChainPoolDataDecoder
@@ -64,8 +64,8 @@ offChainPoolDataDecoder =
     <*> D.column (D.nonNullable D.bytea) -- offChainPoolDataBytes
     <*> idDecoder PoolMetadataRefId -- offChainPoolDataPmrId
 
-entityNameOffChainPoolDataEncoder :: E.Params (Entity OffChainPoolData)
-entityNameOffChainPoolDataEncoder =
+entityOffChainPoolDataEncoder :: E.Params (Entity OffChainPoolData)
+entityOffChainPoolDataEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainPoolDataId
     , entityVal >$< offChainPoolDataEncoder
@@ -103,8 +103,8 @@ type instance Key OffChainPoolFetchError = OffChainPoolFetchErrorId
 instance DbInfo OffChainPoolFetchError where
   uniqueFields _ = ["pool_id", "fetch_time", "retry_count"]
 
-entityNameOffChainPoolFetchErrorDecoder :: D.Row (Entity OffChainPoolFetchError)
-entityNameOffChainPoolFetchErrorDecoder =
+entityOffChainPoolFetchErrorDecoder :: D.Row (Entity OffChainPoolFetchError)
+entityOffChainPoolFetchErrorDecoder =
   Entity
     <$> idDecoder OffChainPoolFetchErrorId
     <*> offChainPoolFetchErrorDecoder
@@ -118,8 +118,8 @@ offChainPoolFetchErrorDecoder =
     <*> D.column (D.nonNullable D.text) -- offChainPoolFetchErrorFetchError
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainPoolFetchErrorRetryCount
 
-entityNameOffChainPoolFetchErrorEncoder :: E.Params (Entity OffChainPoolFetchError)
-entityNameOffChainPoolFetchErrorEncoder =
+entityOffChainPoolFetchErrorEncoder :: E.Params (Entity OffChainPoolFetchError)
+entityOffChainPoolFetchErrorEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainPoolFetchErrorId
     , entityVal >$< offChainPoolFetchErrorEncoder
@@ -156,8 +156,8 @@ type instance Key OffChainVoteData = OffChainVoteDataId
 instance DbInfo OffChainVoteData where
   uniqueFields _ = ["hash", "voting_anchor_id"]
 
-entityNameOffChainVoteDataDecoder :: D.Row (Entity OffChainVoteData)
-entityNameOffChainVoteDataDecoder =
+entityOffChainVoteDataDecoder :: D.Row (Entity OffChainVoteData)
+entityOffChainVoteDataDecoder =
   Entity
     <$> idDecoder OffChainVoteDataId
     <*> offChainVoteDataDecoder
@@ -174,8 +174,8 @@ offChainVoteDataDecoder =
     <*> D.column (D.nullable D.text) -- offChainVoteDataWarning
     <*> D.column (D.nullable D.bool) -- offChainVoteDataIsValid
 
-entityNameOffChainVoteDataEncoder :: E.Params (Entity OffChainVoteData)
-entityNameOffChainVoteDataEncoder =
+entityOffChainVoteDataEncoder :: E.Params (Entity OffChainVoteData)
+entityOffChainVoteDataEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteDataId
     , entityVal >$< offChainVoteDataEncoder
@@ -211,8 +211,8 @@ data OffChainVoteGovActionData = OffChainVoteGovActionData
 type instance Key OffChainVoteGovActionData = OffChainVoteGovActionDataId
 instance DbInfo OffChainVoteGovActionData
 
-entityNameOffChainVoteGovActionDataDecoder :: D.Row (Entity OffChainVoteGovActionData)
-entityNameOffChainVoteGovActionDataDecoder =
+entityOffChainVoteGovActionDataDecoder :: D.Row (Entity OffChainVoteGovActionData)
+entityOffChainVoteGovActionDataDecoder =
   Entity
     <$> idDecoder OffChainVoteGovActionDataId
     <*> offChainVoteGovActionDataDecoder
@@ -226,8 +226,8 @@ offChainVoteGovActionDataDecoder =
     <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionDataMotivation
     <*> D.column (D.nonNullable D.text) -- offChainVoteGovActionDataRationale
 
-entityNameOffChainVoteGovActionDataEncoder :: E.Params (Entity OffChainVoteGovActionData)
-entityNameOffChainVoteGovActionDataEncoder =
+entityOffChainVoteGovActionDataEncoder :: E.Params (Entity OffChainVoteGovActionData)
+entityOffChainVoteGovActionDataEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteGovActionDataId
     , entityVal >$< offChainVoteGovActionDataEncoder
@@ -263,8 +263,8 @@ data OffChainVoteDrepData = OffChainVoteDrepData
 type instance Key OffChainVoteDrepData = OffChainVoteDrepDataId
 instance DbInfo OffChainVoteDrepData
 
-entityNameOffChainVoteDrepDataDecoder :: D.Row (Entity OffChainVoteDrepData)
-entityNameOffChainVoteDrepDataDecoder =
+entityOffChainVoteDrepDataDecoder :: D.Row (Entity OffChainVoteDrepData)
+entityOffChainVoteDrepDataDecoder =
   Entity
     <$> idDecoder OffChainVoteDrepDataId
     <*> offChainVoteDrepDataDecoder
@@ -281,8 +281,8 @@ offChainVoteDrepDataDecoder =
     <*> D.column (D.nullable D.text) -- offChainVoteDrepDataImageUrl
     <*> D.column (D.nullable D.text) -- offChainVoteDrepDataImageHash
 
-entityNameOffChainVoteDrepDataEncoder :: E.Params (Entity OffChainVoteDrepData)
-entityNameOffChainVoteDrepDataEncoder =
+entityOffChainVoteDrepDataEncoder :: E.Params (Entity OffChainVoteDrepData)
+entityOffChainVoteDrepDataEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteDrepDataId
     , entityVal >$< offChainVoteDrepDataEncoder
@@ -319,8 +319,8 @@ data OffChainVoteAuthor = OffChainVoteAuthor
 type instance Key OffChainVoteAuthor = OffChainVoteAuthorId
 instance DbInfo OffChainVoteAuthor
 
-entityNameOffChainVoteAuthorDecoder :: D.Row (Entity OffChainVoteAuthor)
-entityNameOffChainVoteAuthorDecoder =
+entityOffChainVoteAuthorDecoder :: D.Row (Entity OffChainVoteAuthor)
+entityOffChainVoteAuthorDecoder =
   Entity
     <$> idDecoder OffChainVoteAuthorId
     <*> offChainVoteAuthorDecoder
@@ -335,8 +335,8 @@ offChainVoteAuthorDecoder =
     <*> D.column (D.nonNullable D.text) -- offChainVoteAuthorSignature
     <*> D.column (D.nullable D.text) -- offChainVoteAuthorWarning
 
-entityNameOffChainVoteAuthorEncoder :: E.Params (Entity OffChainVoteAuthor)
-entityNameOffChainVoteAuthorEncoder =
+entityOffChainVoteAuthorEncoder :: E.Params (Entity OffChainVoteAuthor)
+entityOffChainVoteAuthorEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteAuthorId
     , entityVal >$< offChainVoteAuthorEncoder
@@ -357,12 +357,12 @@ offChainVoteAuthorBulkEncoder ::
   E.Params ([OffChainVoteDataId], [Maybe Text], [Text], [Text], [Text], [Maybe Text])
 offChainVoteAuthorBulkEncoder =
   contrazip6
-    (manyEncoder $ idBulkEncoder getOffChainVoteDataId)
-    (manyEncoder $ E.nullable E.text)
-    (manyEncoder $ E.nonNullable E.text)
-    (manyEncoder $ E.nonNullable E.text)
-    (manyEncoder $ E.nonNullable E.text)
-    (manyEncoder $ E.nullable E.text)
+    (bulkEncoder $ idBulkEncoder getOffChainVoteDataId)
+    (bulkEncoder $ E.nullable E.text)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -381,8 +381,8 @@ data OffChainVoteReference = OffChainVoteReference
 type instance Key OffChainVoteReference = OffChainVoteReferenceId
 instance DbInfo OffChainVoteReference
 
-entityNameOffChainVoteReferenceDecoder :: D.Row (Entity OffChainVoteReference)
-entityNameOffChainVoteReferenceDecoder =
+entityOffChainVoteReferenceDecoder :: D.Row (Entity OffChainVoteReference)
+entityOffChainVoteReferenceDecoder =
   Entity
     <$> idDecoder OffChainVoteReferenceId
     <*> offChainVoteReferenceDecoder
@@ -396,8 +396,8 @@ offChainVoteReferenceDecoder =
     <*> D.column (D.nullable D.text) -- offChainVoteReferenceHashDigest
     <*> D.column (D.nullable D.text) -- offChainVoteReferenceHashAlgorithm
 
-entityNameOffChainVoteReferenceEncoder :: E.Params (Entity OffChainVoteReference)
-entityNameOffChainVoteReferenceEncoder =
+entityOffChainVoteReferenceEncoder :: E.Params (Entity OffChainVoteReference)
+entityOffChainVoteReferenceEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteReferenceId
     , entityVal >$< offChainVoteReferenceEncoder
@@ -416,11 +416,11 @@ offChainVoteReferenceEncoder =
 offChainVoteReferenceBulkEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text], [Maybe Text], [Maybe Text])
 offChainVoteReferenceBulkEncoder =
   contrazip5
-    (manyEncoder $ idBulkEncoder getOffChainVoteDataId)
-    (manyEncoder $ E.nonNullable E.text)
-    (manyEncoder $ E.nonNullable E.text)
-    (manyEncoder $ E.nullable E.text)
-    (manyEncoder $ E.nullable E.text)
+    (bulkEncoder $ idBulkEncoder getOffChainVoteDataId)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nullable E.text)
+    (bulkEncoder $ E.nullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -437,8 +437,8 @@ data OffChainVoteExternalUpdate = OffChainVoteExternalUpdate
 type instance Key OffChainVoteExternalUpdate = OffChainVoteExternalUpdateId
 instance DbInfo OffChainVoteExternalUpdate
 
-entityNameOffChainVoteExternalUpdateDecoder :: D.Row (Entity OffChainVoteExternalUpdate)
-entityNameOffChainVoteExternalUpdateDecoder =
+entityOffChainVoteExternalUpdateDecoder :: D.Row (Entity OffChainVoteExternalUpdate)
+entityOffChainVoteExternalUpdateDecoder =
   Entity
     <$> idDecoder OffChainVoteExternalUpdateId
     <*> offChainVoteExternalUpdateDecoder
@@ -450,8 +450,8 @@ offChainVoteExternalUpdateDecoder =
     <*> D.column (D.nonNullable D.text) -- offChainVoteExternalUpdateTitle
     <*> D.column (D.nonNullable D.text) -- offChainVoteExternalUpdateUri
 
-entityNameOffChainVoteExternalUpdateEncoder :: E.Params (Entity OffChainVoteExternalUpdate)
-entityNameOffChainVoteExternalUpdateEncoder =
+entityOffChainVoteExternalUpdateEncoder :: E.Params (Entity OffChainVoteExternalUpdate)
+entityOffChainVoteExternalUpdateEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteExternalUpdateId
     , entityVal >$< offChainVoteExternalUpdateEncoder
@@ -468,9 +468,16 @@ offChainVoteExternalUpdateEncoder =
 offChainVoteExternalUpdatesEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text])
 offChainVoteExternalUpdatesEncoder =
   contrazip3
-    (manyEncoder $ idBulkEncoder getOffChainVoteDataId)
-    (manyEncoder $ E.nonNullable E.text)
-    (manyEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ idBulkEncoder getOffChainVoteDataId)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nonNullable E.text)
+
+offChainVoteExternalUpdatesBulkEncoder :: E.Params ([OffChainVoteDataId], [Text], [Text])
+offChainVoteExternalUpdatesBulkEncoder =
+  contrazip3
+    (bulkEncoder $ idBulkEncoder getOffChainVoteDataId)
+    (bulkEncoder $ E.nonNullable E.text)
+    (bulkEncoder $ E.nonNullable E.text)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -489,8 +496,8 @@ type instance Key OffChainVoteFetchError = OffChainVoteFetchErrorId
 instance DbInfo OffChainVoteFetchError where
   uniqueFields _ = ["voting_anchor_id", "retry_count"]
 
-entityNameOffChainVoteFetchErrorDecoder :: D.Row (Entity OffChainVoteFetchError)
-entityNameOffChainVoteFetchErrorDecoder =
+entityOffChainVoteFetchErrorDecoder :: D.Row (Entity OffChainVoteFetchError)
+entityOffChainVoteFetchErrorDecoder =
   Entity
     <$> idDecoder OffChainVoteFetchErrorId
     <*> offChainVoteFetchErrorDecoder
@@ -503,8 +510,8 @@ offChainVoteFetchErrorDecoder =
     <*> D.column (D.nonNullable D.timestamptz) -- offChainVoteFetchErrorFetchTime
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainVoteFetchErrorRetryCount
 
-entityNameOffChainVoteFetchErrorEncoder :: E.Params (Entity OffChainVoteFetchError)
-entityNameOffChainVoteFetchErrorEncoder =
+entityOffChainVoteFetchErrorEncoder :: E.Params (Entity OffChainVoteFetchError)
+entityOffChainVoteFetchErrorEncoder =
   mconcat
     [ entityKey >$< idEncoder getOffChainVoteFetchErrorId
     , entityVal >$< offChainVoteFetchErrorEncoder

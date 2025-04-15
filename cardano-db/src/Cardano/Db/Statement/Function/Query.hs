@@ -18,11 +18,10 @@ import qualified Hasql.Statement as HsqlS
 import qualified Data.Text.Encoding as TextEnc
 
 import Cardano.Db.Statement.Function.Core (ResultType (..))
-import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key)
-import Cardano.Prelude (Proxy (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key, validateColumn)
+import Cardano.Prelude (Proxy (..), Word64)
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
-import Data.Text (Text)
 
 replace ::
   forall a.
@@ -56,7 +55,7 @@ replace keyEncoder recordEncoder =
 selectByField ::
   forall a b.
   (DbInfo a) =>
-  Text -> -- Field name
+  Text.Text -> -- Field name
   HsqlE.Params b -> -- Parameter encoder (not Value)
   HsqlD.Row (Entity a) -> -- Entity decoder
   HsqlS.Statement b (Maybe (Entity a))
@@ -145,4 +144,100 @@ replaceRecord keyEnc recordEnc =
           [ "UPDATE " <> table
           , " SET " <> setClause
           , " WHERE id = $1"
+          ]
+
+-- | Creates a statement to count rows in a table where a column matches a condition
+--
+-- The function validates that the column exists in the table schema
+-- and throws an error if it doesn't.
+--
+-- === Example
+-- @
+-- queryTxOutUnspentCount :: MonadIO m => TxOutTableType -> DbAction m Word64
+-- queryTxOutUnspentCount txOutTableType =
+--   case txOutTableType of
+--     TxOutCore ->
+--       runDbSession (mkCallInfo "queryTxOutUnspentCountCore") $
+--         HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
+--
+--     TxOutVariantAddress ->
+--       runDbSession (mkCallInfo "queryTxOutUnspentCountAddress") $
+--         HsqlSes.statement () (countWhere @TxOutAddress "consumed_by_tx_id" "IS NULL")
+-- @
+countWhere ::
+  forall a.
+  (DbInfo a) =>
+  -- | Column name to filter on
+  Text.Text ->
+  -- | SQL condition to apply (e.g., "IS NULL", "= $1", "> 100")
+  Text.Text ->
+  -- | Returns a statement that counts matching rows
+  HsqlS.Statement () Word64
+countWhere colName condition =
+  HsqlS.Statement sql HsqlE.noParams decoder True
+  where
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    -- Validate the column name
+    validCol = validateColumn @a colName
+
+    -- SQL statement to count rows matching the condition
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::bigint"
+          , " FROM " <> tableName (Proxy @a)
+          , " WHERE " <> validCol <> " " <> condition
+          ]
+
+-- | Creates a statement to count rows matching a parameterized condition
+parameterisedCountWhere ::
+  forall a p.
+  (DbInfo a) =>
+  -- | Column name to filter on
+  Text.Text ->
+  -- | SQL condition with parameter placeholders
+  Text.Text ->
+  -- | Parameter encoder
+  HsqlE.Params p ->
+  HsqlS.Statement p Word64
+parameterisedCountWhere colName condition encoder =
+  HsqlS.Statement sql encoder decoder True
+  where
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    -- Validate the column name
+    validCol = validateColumn @a colName
+
+    -- SQL statement to count rows matching the condition
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::bigint"
+          , " FROM " <> tableName (Proxy @a)
+          , " WHERE " <> validCol <> " " <> condition
+          ]
+
+-- | Creates a statement to count all rows in a table
+--
+-- === Example
+-- @
+-- queryTableCount :: MonadIO m => DbAction m Word64
+-- queryTableCount =
+--   runDbSession (mkCallInfo "queryTableCount") $
+--     HsqlSes.statement () (countAll @TxOutCore)
+-- @
+countAll ::
+  forall a.
+  (DbInfo a) =>
+  -- | Returns a statement that counts all rows
+  HsqlS.Statement () Word64
+countAll =
+  HsqlS.Statement sql HsqlE.noParams decoder True
+  where
+    table = tableName (Proxy @a)
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::bigint"
+          , " FROM " <> table
           ]

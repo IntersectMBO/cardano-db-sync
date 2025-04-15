@@ -10,7 +10,7 @@ module Cardano.Db.Statement.Function.Core (
   mkCallSite,
   -- runPipelinedSession,
   -- runDbActionWith,
-  manyEncoder,
+  bulkEncoder,
   ResultType (..),
   ResultTypeBulk (..),
 )
@@ -128,5 +128,5 @@ data ResultTypeBulk c r where
   WithResultBulk :: HsqlD.Result [c] -> ResultTypeBulk c [c] -- Return IDs, result type is [c]
 
 -- | Creates a parameter encoder for an array of values from a single-value encoder
-manyEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
-manyEncoder v = HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray v
+bulkEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
+bulkEncoder v = HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray v
