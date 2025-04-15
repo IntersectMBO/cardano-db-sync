@@ -392,8 +392,8 @@ instance DbInfo VotingAnchor where
 entityVotingAnchorDecoder :: D.Row (Entity VotingAnchor)
 entityVotingAnchorDecoder =
   Entity
-    <$> idDecoder VotingAnchorId -- entityKey
-    <*> votingAnchorDecoder -- entityVal
+    <$> idDecoder VotingAnchorId
+    <*> votingAnchorDecoder
 
 votingAnchorDecoder :: D.Row VotingAnchor
 votingAnchorDecoder =

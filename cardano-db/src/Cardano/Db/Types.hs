@@ -41,6 +41,7 @@ module Cardano.Db.Types (
   dbLovelaceDecoder,
   maybeDbLovelaceDecoder,
   dbLovelaceEncoder,
+  dbLovelaceValueEncoder,
   maybeDbLovelaceEncoder,
   dbWord64Decoder,
   maybeDbWord64Decoder,
@@ -232,6 +233,9 @@ newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
 
 dbLovelaceEncoder :: HsqlE.Params DbLovelace
 dbLovelaceEncoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+
+dbLovelaceValueEncoder :: HsqlE.NullableOrNot HsqlE.Value DbLovelace
+dbLovelaceValueEncoder = HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
 
 maybeDbLovelaceEncoder :: HsqlE.Params (Maybe DbLovelace)
 maybeDbLovelaceEncoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
