@@ -57,24 +57,24 @@ import Cardano.Slotting.Slot ()
 --  )
 -- import Database.Persist.Sql (Filter, SqlBackend, delete, deleteWhere, deleteWhereCount, selectKeysList)
 
--- -- | Delete a block if it exists. Returns 'True' if it did exist and has been
--- -- deleted and 'False' if it did not exist.
--- deleteBlocksSlotNo ::
---   MonadIO m =>
---   Trace IO Text ->
---   TxOutTableType ->
---   SlotNo ->
---   Bool ->
---   ReaderT SqlBackend m Bool
--- deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
---   mBlockId <- queryNearestBlockSlotNo slotNo
---   case mBlockId of
---     Nothing -> do
---       liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> pack (show slotNo)
---       pure False
---     Just (blockId, epochN) -> do
---       void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
---       pure True
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteBlocksSlotNo ::
+  MonadIO m =>
+  Trace IO Text ->
+  TxOutTableType ->
+  SlotNo ->
+  Bool ->
+  ReaderT SqlBackend m Bool
+deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
+  mBlockId <- queryNearestBlockSlotNo slotNo
+  case mBlockId of
+    Nothing -> do
+      liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> pack (show slotNo)
+      pure False
+    Just (blockId, epochN) -> do
+      void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
+      pure True
 
 -- -- | Delete starting from a 'BlockId'.
 -- deleteBlocksBlockId ::

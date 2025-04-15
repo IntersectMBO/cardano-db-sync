@@ -1,9 +1,11 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -124,13 +126,22 @@ instance (Selector c) => GRecordFieldNames (M1 S c (K1 i a)) where
 instance GRecordFieldNames (K1 i c) where
   gRecordFieldNames _ = []
 
-data TxOutTableType = TxOutCore | TxOutVariantAddress
-  deriving (Eq, Show)
+-- | Validate a column name against the list of columns in the table.
+validateColumn :: forall a. (DbInfo a) => Text -> Text
+validateColumn colName =
+  let cols = NE.toList $ columnNames (Proxy @a)
+   in if colName `elem` cols
+        then colName
+        else
+          error $
+            "Column "
+              <> Text.unpack colName
+              <> " not found in table "
+              <> Text.unpack (tableName (Proxy @a))
 
 --------------------------------------------------------------------------------
 -- Entity
 --------------------------------------------------------------------------------
-
 data Entity record = Entity
   { entityKey :: Key record
   , entityVal :: record

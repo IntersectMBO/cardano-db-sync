@@ -23,7 +23,7 @@ import Data.Text (Text)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 
-import Cardano.Db.Statement.Function.Core (manyEncoder)
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
   DbLovelace (..),
@@ -54,8 +54,8 @@ type instance Key PoolHash = PoolHashId
 instance DbInfo PoolHash where
   uniqueFields _ = ["hash_raw"]
 
-entityNamePoolHashDecoder :: D.Row (Entity PoolHash)
-entityNamePoolHashDecoder =
+entityPoolHashDecoder :: D.Row (Entity PoolHash)
+entityPoolHashDecoder =
   Entity
     <$> idDecoder PoolHashId
     <*> poolHashDecoder
@@ -66,8 +66,8 @@ poolHashDecoder =
     <$> D.column (D.nonNullable D.bytea) -- poolHashHashRaw
     <*> D.column (D.nonNullable D.text) -- poolHashView
 
-entityNamePoolHashEncoder :: E.Params (Entity PoolHash)
-entityNamePoolHashEncoder =
+entityPoolHashEncoder :: E.Params (Entity PoolHash)
+entityPoolHashEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolHashId
     , entityVal >$< poolHashEncoder
@@ -98,8 +98,8 @@ data PoolStat = PoolStat
 type instance Key PoolStat = PoolStatId
 instance DbInfo PoolStat
 
-entityNamePoolStatDecoder :: D.Row (Entity PoolStat)
-entityNamePoolStatDecoder =
+entityPoolStatDecoder :: D.Row (Entity PoolStat)
+entityPoolStatDecoder =
   Entity
     <$> idDecoder PoolStatId
     <*> poolStatDecoder
@@ -114,8 +114,8 @@ poolStatDecoder =
     <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatStake
     <*> D.column (D.nullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatVotingPower
 
-entityNamePoolStatEncoder :: E.Params (Entity PoolStat)
-entityNamePoolStatEncoder =
+entityPoolStatEncoder :: E.Params (Entity PoolStat)
+entityPoolStatEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolStatId
     , entityVal >$< poolStatEncoder
@@ -135,12 +135,12 @@ poolStatEncoder =
 poolStatBulkEncoder :: E.Params ([PoolHashId], [Word64], [DbWord64], [DbWord64], [DbWord64], [Maybe DbWord64])
 poolStatBulkEncoder =
   contrazip6
-    (manyEncoder $ E.nonNullable $ getPoolHashId >$< E.int8) -- poolHashId
-    (manyEncoder $ E.nonNullable $ fromIntegral >$< E.int4) -- epoch_no
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_blocks
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_delegators
-    (manyEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- stake
-    (manyEncoder $ E.nullable $ fromIntegral . unDbWord64 >$< E.numeric) -- voting_power
+    (bulkEncoder $ E.nonNullable $ getPoolHashId >$< E.int8) -- poolHashId
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int4) -- epoch_no
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_blocks
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_delegators
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- stake
+    (bulkEncoder $ E.nullable $ fromIntegral . unDbWord64 >$< E.numeric) -- voting_power
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -165,8 +165,8 @@ data PoolUpdate = PoolUpdate
 type instance Key PoolUpdate = PoolUpdateId
 instance DbInfo PoolUpdate
 
-entityNamePoolUpdateDecoder :: D.Row (Entity PoolUpdate)
-entityNamePoolUpdateDecoder =
+entityPoolUpdateDecoder :: D.Row (Entity PoolUpdate)
+entityPoolUpdateDecoder =
   Entity
     <$> idDecoder PoolUpdateId
     <*> poolUpdateDecoder
@@ -186,8 +186,8 @@ poolUpdateDecoder =
     <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- poolUpdateDeposit
     <*> idDecoder TxId -- poolUpdateRegisteredTxId
 
-entityNamePoolUpdateEncoder :: E.Params (Entity PoolUpdate)
-entityNamePoolUpdateEncoder =
+entityPoolUpdateEncoder :: E.Params (Entity PoolUpdate)
+entityPoolUpdateEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolUpdateId
     , entityVal >$< poolUpdateEncoder
@@ -225,8 +225,8 @@ data PoolMetadataRef = PoolMetadataRef
 type instance Key PoolMetadataRef = PoolMetadataRefId
 instance DbInfo PoolMetadataRef
 
-entityNamePoolMetadataRefDecoder :: D.Row (Entity PoolMetadataRef)
-entityNamePoolMetadataRefDecoder =
+entityPoolMetadataRefDecoder :: D.Row (Entity PoolMetadataRef)
+entityPoolMetadataRefDecoder =
   Entity
     <$> idDecoder PoolMetadataRefId
     <*> poolMetadataRefDecoder
@@ -239,8 +239,8 @@ poolMetadataRefDecoder =
     <*> D.column (D.nonNullable D.bytea) -- poolMetadataRefHash
     <*> idDecoder TxId -- poolMetadataRefRegisteredTxId
 
-entityNamePoolMetadataRefEncoder :: E.Params (Entity PoolMetadataRef)
-entityNamePoolMetadataRefEncoder =
+entityPoolMetadataRefEncoder :: E.Params (Entity PoolMetadataRef)
+entityPoolMetadataRefEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolMetadataRefId
     , entityVal >$< poolMetadataRefEncoder
@@ -269,8 +269,8 @@ data PoolOwner = PoolOwner
 type instance Key PoolOwner = PoolOwnerId
 instance DbInfo PoolOwner
 
-entityNamePoolOwnerDecoder :: D.Row (Entity PoolOwner)
-entityNamePoolOwnerDecoder =
+entityPoolOwnerDecoder :: D.Row (Entity PoolOwner)
+entityPoolOwnerDecoder =
   Entity
     <$> idDecoder PoolOwnerId
     <*> poolOwnerDecoder
@@ -281,8 +281,8 @@ poolOwnerDecoder =
     <$> idDecoder StakeAddressId -- poolOwnerAddrId
     <*> idDecoder PoolUpdateId -- poolOwnerPoolUpdateId
 
-entityNamePoolOwnerEncoder :: E.Params (Entity PoolOwner)
-entityNamePoolOwnerEncoder =
+entityPoolOwnerEncoder :: E.Params (Entity PoolOwner)
+entityPoolOwnerEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolOwnerId
     , entityVal >$< poolOwnerEncoder
@@ -311,8 +311,8 @@ data PoolRetire = PoolRetire
 type instance Key PoolRetire = PoolRetireId
 instance DbInfo PoolRetire
 
-entityNamePoolRetireDecoder :: D.Row (Entity PoolRetire)
-entityNamePoolRetireDecoder =
+entityPoolRetireDecoder :: D.Row (Entity PoolRetire)
+entityPoolRetireDecoder =
   Entity
     <$> idDecoder PoolRetireId
     <*> poolRetireDecoder
@@ -325,8 +325,8 @@ poolRetireDecoder =
     <*> idDecoder TxId -- poolRetireAnnouncedTxId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolRetireRetiringEpoch
 
-entityNamePoolRetireEncoder :: E.Params (Entity PoolRetire)
-entityNamePoolRetireEncoder =
+entityPoolRetireEncoder :: E.Params (Entity PoolRetire)
+entityPoolRetireEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolRetireId
     , entityVal >$< poolRetireEncoder
@@ -361,8 +361,8 @@ data PoolRelay = PoolRelay
 type instance Key PoolRelay = PoolRelayId
 instance DbInfo PoolRelay
 
-entityNamePoolRelayDecoder :: D.Row (Entity PoolRelay)
-entityNamePoolRelayDecoder =
+entityPoolRelayDecoder :: D.Row (Entity PoolRelay)
+entityPoolRelayDecoder =
   Entity
     <$> idDecoder PoolRelayId
     <*> poolRelayDecoder
@@ -377,8 +377,8 @@ poolRelayDecoder =
     <*> D.column (D.nullable D.text) -- poolRelayDnsSrvName
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- poolRelayPort
 
-entityNamePoolRelayEncoder :: E.Params (Entity PoolRelay)
-entityNamePoolRelayEncoder =
+entityPoolRelayEncoder :: E.Params (Entity PoolRelay)
+entityPoolRelayEncoder =
   mconcat
     [ entityKey >$< idEncoder getPoolRelayId
     , entityVal >$< poolRelayEncoder
@@ -412,8 +412,8 @@ type instance Key DelistedPool = DelistedPoolId
 instance DbInfo DelistedPool where
   uniqueFields _ = ["hash_raw"]
 
-entityNameDelistedPoolDecoder :: D.Row (Entity DelistedPool)
-entityNameDelistedPoolDecoder =
+entityDelistedPoolDecoder :: D.Row (Entity DelistedPool)
+entityDelistedPoolDecoder =
   Entity
     <$> idDecoder DelistedPoolId
     <*> delistedPoolDecoder
@@ -423,8 +423,8 @@ delistedPoolDecoder =
   DelistedPool
     <$> D.column (D.nonNullable D.bytea) -- delistedPoolHashRaw
 
-entityNameDelistedPoolEncoder :: E.Params (Entity DelistedPool)
-entityNameDelistedPoolEncoder =
+entityDelistedPoolEncoder :: E.Params (Entity DelistedPool)
+entityDelistedPoolEncoder =
   mconcat
     [ entityKey >$< idEncoder getDelistedPoolId
     , entityVal >$< delistedPoolEncoder
@@ -451,8 +451,8 @@ type instance Key ReservedPoolTicker = ReservedPoolTickerId
 instance DbInfo ReservedPoolTicker where
   uniqueFields _ = ["name"]
 
-entityNameReservedPoolTickerDecoder :: D.Row (Entity ReservedPoolTicker)
-entityNameReservedPoolTickerDecoder =
+entityReservedPoolTickerDecoder :: D.Row (Entity ReservedPoolTicker)
+entityReservedPoolTickerDecoder =
   Entity
     <$> idDecoder ReservedPoolTickerId
     <*> reservedPoolTickerDecoder
@@ -463,8 +463,8 @@ reservedPoolTickerDecoder =
     <$> D.column (D.nonNullable D.text) -- reservedPoolTickerName
     <*> D.column (D.nonNullable D.bytea) -- reservedPoolTickerPoolHash
 
-entityNameReservedPoolTickerEncoder :: E.Params (Entity ReservedPoolTicker)
-entityNameReservedPoolTickerEncoder =
+entityReservedPoolTickerEncoder :: E.Params (Entity ReservedPoolTicker)
+entityReservedPoolTickerEncoder =
   mconcat
     [ entityKey >$< idEncoder getReservedPoolTickerId
     , entityVal >$< reservedPoolTickerEncoder

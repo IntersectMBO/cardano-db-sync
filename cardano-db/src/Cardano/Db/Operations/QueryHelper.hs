@@ -35,20 +35,20 @@ module Cardano.Db.Operations.QueryHelper where
 -- isJust = not_ . isNothing
 
 -- every tx made before or at the snapshot time
--- txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
--- txLessEqual blkid =
---   subList_select $
---     from (table @Tx) >>= \tx -> do
---       where_ $ tx ^. TxBlockId `in_` blockLessEqual
---       pure $ tx ^. TxId
---   where
---     -- every block made before or at the snapshot time
---     blockLessEqual :: SqlExpr (ValueList BlockId)
---     blockLessEqual =
---       subList_select $
---         from (table @Block) >>= \blk -> do
---           where_ $ blk ^. BlockId <=. val blkid
---           pure $ blk ^. BlockId
+txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
+txLessEqual blkid =
+  subList_select $
+    from (table @Tx) >>= \tx -> do
+      where_ $ tx ^. TxBlockId `in_` blockLessEqual
+      pure $ tx ^. TxId
+  where
+    -- every block made before or at the snapshot time
+    blockLessEqual :: SqlExpr (ValueList BlockId)
+    blockLessEqual =
+      subList_select $
+        from (table @Block) >>= \blk -> do
+          where_ $ blk ^. BlockId <=. val blkid
+          pure $ blk ^. BlockId
 
 -- maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 -- maybeToEither e f = maybe (Left e) (Right . f)

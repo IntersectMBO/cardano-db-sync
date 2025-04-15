@@ -50,9 +50,8 @@ import System.IO (Handle)
 import System.Log.FastLogger (LogStr, fromLogStr)
 
 import Cardano.Db.Error (DbError, runOrThrowIO)
-import qualified Cardano.Db.PGConfig as PGC 
+import qualified Cardano.Db.PGConfig as PGC
 import qualified Cardano.Db.Types as DB
-
 
 -- | Run a DB action logging via the provided Handle.
 runDbHandleLogger :: Handle -> PGC.PGPassSource -> DB.DbAction (LoggingT IO) a -> IO a
@@ -114,7 +113,7 @@ runDbIohkLogging tracer dbEnv action =
 
 -- | Run a DB action using a Pool with iohk-monitoring-framework logging.
 -- This function now expects a Pool of Hasql.Connection instead of SqlBackend
-runPoolDbIohkLogging :: 
+runPoolDbIohkLogging ::
   MonadIO m =>
   Pool HsqlCon.Connection ->
   Trace IO Text ->
@@ -125,8 +124,9 @@ runPoolDbIohkLogging connPool tracer action = do
   conn <- liftIO $ withResource connPool pure
 
   let dbEnv = DB.DbEnv conn True (Just tracer)
-  result <- runIohkLogging tracer $
-              runReaderT (runExceptT (DB.runDbAction action)) dbEnv
+  result <-
+    runIohkLogging tracer $
+      runReaderT (runExceptT (DB.runDbAction action)) dbEnv
   case result of
     Left err -> liftIO $ throwIO err
     Right val -> pure val
