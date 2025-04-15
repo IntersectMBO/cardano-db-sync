@@ -30,7 +30,10 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
+                        Cardano.Db.Schema.Core
                         Cardano.Db.Schema.Variants
+                        Cardano.Db.Schema.Variants.TxOutAddress
+                        Cardano.Db.Schema.Variants.TxOutCore
 
   other-modules:        Cardano.Db.Error
                         Cardano.Db.Git.RevFromGit
@@ -38,21 +41,9 @@ library
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
-                        Cardano.Db.Operations.AlterTable
-                        Cardano.Db.Operations.Delete
-                        Cardano.Db.Operations.Insert
-                        Cardano.Db.Operations.Other.MinId
-                        Cardano.Db.Operations.Query
                         Cardano.Db.Operations.QueryHelper
-                        Cardano.Db.Operations.Types
-                        Cardano.Db.Operations.Other.ConsumedTxOut
-                        Cardano.Db.Operations.Other.JsonbQuery
-                        Cardano.Db.Operations.TxOut.TxOutDelete
-                        Cardano.Db.Operations.TxOut.TxOutInsert
-                        Cardano.Db.Operations.TxOut.TxOutQuery
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
-                        Cardano.Db.Schema.Core
                         Cardano.Db.Schema.Core.Base
                         Cardano.Db.Schema.Core.EpochAndProtocol
                         Cardano.Db.Schema.Core.GovernanceAndVoting
@@ -61,24 +52,29 @@ library
                         Cardano.Db.Schema.Core.Pool
                         Cardano.Db.Schema.Core.StakeDeligation
                         Cardano.Db.Schema.Ids
+                        Cardano.Db.Schema.MinIds
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
-                        Cardano.Db.Schema.Variants.TxOutAddress
-                        Cardano.Db.Schema.Variants.TxOutCore
                         Cardano.Db.Schema.Variants.TxOutUtxoHd
                         Cardano.Db.Schema.Variants.TxOutUtxoHdAddress
                         Cardano.Db.Statement
-                        Cardano.Db.Statement.Function.Core
-                        Cardano.Db.Statement.Function.Query
-                        Cardano.Db.Statement.Function.Insert
                         Cardano.Db.Statement.Base
+                        Cardano.Db.Statement.Constraint
+                        Cardano.Db.Statement.ConsumedTxOut
                         Cardano.Db.Statement.EpochAndProtocol
+                        Cardano.Db.Statement.Function.Core
+                        Cardano.Db.Statement.Function.Delete
+                        Cardano.Db.Statement.Function.Insert
+                        Cardano.Db.Statement.Function.Query
                         Cardano.Db.Statement.GovernanceAndVoting
+                        Cardano.Db.Statement.JsonB
                         Cardano.Db.Statement.MultiAsset
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool
+                        Cardano.Db.Statement.Rollback
                         Cardano.Db.Statement.StakeDeligation
                         Cardano.Db.Statement.Types
+                        Cardano.Db.Statement.Variants.TxOut
                         Cardano.Db.Types
 
   build-depends:        aeson
@@ -89,33 +85,28 @@ library
                       , cardano-crypto-class
                       , cardano-ledger-core
                       , cardano-prelude
-                      , cardano-slotting
-                      , containers
                       , conduit-extra
+                      , containers
                       , contra-tracer
                       , contravariant-extras
                       , cryptonite
                       , directory
                       , extra
                       , fast-logger
-                      , filepath
                       , file-embed
+                      , filepath
                       , hasql
                       , iohk-monitoring
-                      , lifted-base
                       , memory
-                      , monad-control
                       , monad-logger
                       , persistent
-                      , persistent-postgresql
-                      , postgresql-simple
                       , process
                       , quiet
-                      , resourcet
                       , resource-pool
+                      , resourcet
                       , scientific
-                      , text
                       , template-haskell
+                      , text
                       , time
                       , transformers
                       -- This is never intended to run on non-POSIX systems.
@@ -152,9 +143,7 @@ test-suite test
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-mary
-                      , persistent
                       , hedgehog
-                      , text
                       , wide-word
 
 test-suite test-db
@@ -187,40 +176,10 @@ test-suite test-db
                       , directory
                       , extra
                       , filepath
-                      , monad-control
-                      , persistent
                       , tasty
                       , tasty-hunit
                       , text
                       , time
-                      , transformers
-
-executable gen-schema-docs
-  default-language:     Haskell2010
-  main-is:              gen-schema-docs.hs
-  hs-source-dirs:       app
-
-  ghc-options:          -O2
-                        -Wall
-                        -Werror
-                        -Wcompat
-                        -Wredundant-constraints
-                        -Wincomplete-patterns
-                        -Wincomplete-record-updates
-                        -Wincomplete-uni-patterns
-                        -Wunused-imports
-                        -Wunused-packages
-                        -Wno-unsafe
-                        -threaded
-                        -with-rtsopts=-N3
-
-  other-modules:        Paths_cardano_db
-
-  build-depends:        base
-                      , cardano-db
-                      , persistent-documentation
-                      , process
-                      , text
 
 test-suite schema-rollback
   default-language:     Haskell2010

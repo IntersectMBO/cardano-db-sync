@@ -18,7 +18,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 -- import Cardano.Db.Operations.Insert (insertExtraMigration)
 -- import Cardano.Db.Operations.Query (listToMaybe, queryAllExtraMigrations, queryBlockHeight, queryBlockNo, queryMaxRefId)
 -- import Cardano.Db.Operations.QueryHelper (isJust)
--- import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutTable, TxOutTableType (..), isTxOutVariantAddress)
+-- import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutTable, TxOutVariantType (..), isTxOutVariantAddress)
 -- import Cardano.Db.Schema.Core
 -- import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
 -- import qualified Cardano.Db.Schema.Variants.TxOutCore as C
@@ -55,10 +55,10 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 -- --------------------------------------------------------------------------------------------------
 -- querySetNullTxOut ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   Maybe TxId ->
---   ReaderT SqlBackend m (Text, Int64)
--- querySetNullTxOut txOutTableType mMinTxId = do
+--   DB.DbAction m (Text, Int64)
+-- querySetNullTxOut txOutVariantType mMinTxId = do
 --   case mMinTxId of
 --     Nothing -> do
 --       pure ("No tx_out to set to null", 0)
@@ -69,11 +69,11 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --       pure ("tx_out.consumed_by_tx_id", fromIntegral updatedEntriesCount)
 --   where
 --     -- \| This requires an index at TxOutConsumedByTxId.
---     getTxOutConsumedAfter :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOutIdW]
+--     getTxOutConsumedAfter :: MonadIO m => TxId -> DB.DbAction m [TxOutIdW]
 --     getTxOutConsumedAfter txId =
---       case txOutTableType of
---         TxOutCore -> wrapTxOutIds CTxOutIdW (queryConsumedTxOutIds @'TxOutCore txId)
---         TxOutVariantAddress -> wrapTxOutIds VTxOutIdW (queryConsumedTxOutIds @'TxOutVariantAddress txId)
+--       case txOutVariantType of
+--         TxOutVariantCore -> wrapTxOutIds VCTxOutIdW (queryConsumedTxOutIds @'TxOutCore txId)
+--         TxOutVariantAddress -> wrapTxOutIds VATxOutIdW (queryConsumedTxOutIds @'TxOutVariantAddress txId)
 --       where
 --         wrapTxOutIds constructor = fmap (map constructor)
 
@@ -81,7 +81,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --           forall a m.
 --           (TxOutFields a, MonadIO m) =>
 --           TxId ->
---           ReaderT SqlBackend m [TxOutIdFor a]
+--           DB.DbAction m [TxOutIdFor a]
 --         queryConsumedTxOutIds txId' = do
 --           res <- select $ do
 --             txOut <- from $ table @(TxOutTable a)
@@ -90,36 +90,36 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --           pure $ map unValue res
 
 --     -- \| This requires an index at TxOutConsumedByTxId.
---     setNullTxOutConsumedAfter :: MonadIO m => TxOutIdW -> ReaderT SqlBackend m ()
+--     setNullTxOutConsumedAfter :: MonadIO m => TxOutIdW -> DB.DbAction m ()
 --     setNullTxOutConsumedAfter txOutId =
---       case txOutTableType of
---         TxOutCore -> setNull
+--       case txOutVariantType of
+--         TxOutVariantCore -> setNull
 --         TxOutVariantAddress -> setNull
 --       where
 --         setNull ::
 --           MonadIO m =>
---           ReaderT SqlBackend m ()
+--           DB.DbAction m ()
 --         setNull = do
 --           case txOutId of
---             CTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Nothing]
---             VTxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Nothing]
+--             VCTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Nothing]
+--             VATxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Nothing]
 
--- runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> TxOutTableType -> Word64 -> PruneConsumeMigration -> ReaderT SqlBackend m ()
--- runExtraMigrations trce txOutTableType blockNoDiff pcm = do
+-- runConsumedTxOutMigrations :: MonadIO m => Trace IO Text -> TxOutVariantType -> Word64 -> PruneConsumeMigration -> DB.DbAction m ()
+-- runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
 --   ems <- queryAllExtraMigrations
---   isTxOutNull <- queryTxOutIsNull txOutTableType
+--   isTxOutNull <- queryTxOutIsNull txOutVariantType
 --   let migrationValues = processMigrationValues ems pcm
---       isTxOutVariant = isTxOutVariantAddress txOutTableType
+--       isTxOutVariant = isTxOutVariantAddress txOutVariantType
 --       isTxOutAddressSet = isTxOutAddressPreviouslySet migrationValues
 
 --   -- can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
 --   when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
 --     throw $
---       DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
+--       DBExtraMigration "runConsumedTxOutMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
 --   -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
 --   when (not isTxOutVariant && isTxOutAddressSet) $
 --     throw $
---       DBExtraMigration "runExtraMigrations: The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
+--       DBExtraMigration "runConsumedTxOutMigrations: The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
 --   -- Has the user given txout address config && the migration wasn't previously set
 --   when (isTxOutVariant && not isTxOutAddressSet) $ do
 --     updateTxOutAndCreateAddress trce
@@ -131,41 +131,41 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --         "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync should still have this flag activated. Otherwise, it is considered bad usage and can cause crashes."
 --   handleMigration migrationValues
 --   where
---     handleMigration :: (MonadBaseControl IO m, MonadIO m) => MigrationValues -> ReaderT SqlBackend m ()
+--     handleMigration :: MonadIO m => MigrationValues -> DB.DbAction m ()
 --     handleMigration migrationValues@MigrationValues {..} = do
 --       let PruneConsumeMigration {..} = pruneConsumeMigration
 --       case (isConsumeTxOutPreviouslySet, pcmConsumedTxOut, pcmPruneTxOut) of
 --         -- No Migration Needed
 --         (False, False, False) -> do
---           liftIO $ logInfo trce "runExtraMigrations: No extra migration specified"
+--           liftIO $ logInfo trce "runConsumedTxOutMigrations: No extra migration specified"
 --         -- Already migrated
 --         (True, True, False) -> do
---           liftIO $ logInfo trce "runExtraMigrations: Extra migration consumed_tx_out already executed"
+--           liftIO $ logInfo trce "runConsumedTxOutMigrations: Extra migration consumed_tx_out already executed"
 --         -- Invalid State
---         (True, False, False) -> liftIO $ logAndThrowIO trce "runExtraMigrations: consumed-tx-out or prune-tx-out is not set, but consumed migration is found."
+--         (True, False, False) -> liftIO $ logAndThrowIO trce "runConsumedTxOutMigrations: consumed-tx-out or prune-tx-out is not set, but consumed migration is found."
 --         -- Consume TxOut
 --         (False, True, False) -> do
---           liftIO $ logInfo trce "runExtraMigrations: Running extra migration consumed_tx_out"
+--           liftIO $ logInfo trce "runConsumedTxOutMigrations: Running extra migration consumed_tx_out"
 --           insertExtraMigration ConsumeTxOutPreviouslySet
---           migrateTxOut trce txOutTableType $ Just migrationValues
+--           migrateTxOut trce txOutVariantType $ Just migrationValues
 --         -- Prune TxOut
 --         (_, _, True) -> do
 --           unless isPruneTxOutPreviouslySet $ insertExtraMigration PruneTxOutFlagPreviouslySet
 --           if isConsumeTxOutPreviouslySet
 --             then do
---               liftIO $ logInfo trce "runExtraMigrations: Running extra migration prune tx_out"
---               deleteConsumedTxOut trce txOutTableType blockNoDiff
---             else deleteAndUpdateConsumedTxOut trce txOutTableType migrationValues blockNoDiff
+--               liftIO $ logInfo trce "runConsumedTxOutMigrations: Running extra migration prune tx_out"
+--               deleteConsumedTxOut trce txOutVariantType blockNoDiff
+--             else deleteAndUpdateConsumedTxOut trce txOutVariantType migrationValues blockNoDiff
 
--- queryWrongConsumedBy :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+-- queryWrongConsumedBy :: TxOutVariantType -> MonadIO m => DB.DbAction m Word64
 -- queryWrongConsumedBy = \case
---   TxOutCore -> query @'TxOutCore
+--   TxOutVariantCore -> query @'TxOutCore
 --   TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word64
+--       DB.DbAction m Word64
 --     query = do
 --       res <- select $ do
 --         txOut <- from $ table @(TxOutTable a)
@@ -178,15 +178,15 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 -- --------------------------------------------------------------------------------------------------
 
 -- -- | This is a count of the null consumed_by_tx_id
--- queryTxOutConsumedNullCount :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+-- queryTxOutConsumedNullCount :: TxOutVariantType -> MonadIO m => DB.DbAction m Word64
 -- queryTxOutConsumedNullCount = \case
---   TxOutCore -> query @'TxOutCore
+--   TxOutVariantCore -> query @'TxOutCore
 --   TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word64
+--       DB.DbAction m Word64
 --     query = do
 --       res <- select $ do
 --         txOut <- from $ table @(TxOutTable a)
@@ -194,15 +194,15 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --         pure countRows
 --       pure $ maybe 0 unValue (listToMaybe res)
 
--- queryTxOutConsumedCount :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+-- queryTxOutConsumedCount :: TxOutVariantType -> MonadIO m => DB.DbAction m Word64
 -- queryTxOutConsumedCount = \case
---   TxOutCore -> query @'TxOutCore
+--   TxOutVariantCore -> query @'TxOutCore
 --   TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word64
+--       DB.DbAction m Word64
 --     query = do
 --       res <- select $ do
 --         txOut <- from $ table @(TxOutTable a)
@@ -210,15 +210,15 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --         pure countRows
 --       pure $ maybe 0 unValue (listToMaybe res)
 
--- queryTxOutIsNull :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Bool
+-- queryTxOutIsNull :: TxOutVariantType -> MonadIO m => DB.DbAction m Bool
 -- queryTxOutIsNull = \case
---   TxOutCore -> pure False
+--   TxOutVariantCore -> pure False
 --   TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Bool
+--       DB.DbAction m Bool
 --     query = do
 --       res <- select $ do
 --         _ <- from $ table @(TxOutTable a)
@@ -229,25 +229,25 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 -- --------------------------------------------------------------------------------------------------
 -- -- Updates
 -- --------------------------------------------------------------------------------------------------
--- updateListTxOutConsumedByTxId :: MonadIO m => [(TxOutIdW, TxId)] -> ReaderT SqlBackend m ()
+-- updateListTxOutConsumedByTxId :: MonadIO m => [(TxOutIdW, TxId)] -> DB.DbAction m ()
 -- updateListTxOutConsumedByTxId ls = do
 --   mapM_ (uncurry updateTxOutConsumedByTxId) ls
 --   where
---     updateTxOutConsumedByTxId :: MonadIO m => TxOutIdW -> TxId -> ReaderT SqlBackend m ()
+--     updateTxOutConsumedByTxId :: MonadIO m => TxOutIdW -> TxId -> DB.DbAction m ()
 --     updateTxOutConsumedByTxId txOutId txId =
 --       case txOutId of
---         CTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Just txId]
---         VTxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Just txId]
+--         VCTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Just txId]
+--         VATxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Just txId]
 
 -- migrateTxOut ::
 --   ( MonadBaseControl IO m
 --   , MonadIO m
 --   ) =>
 --   Trace IO Text ->
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   Maybe MigrationValues ->
---   ReaderT SqlBackend m ()
--- migrateTxOut trce txOutTableType mMvs = do
+--   DB.DbAction m ()
+-- migrateTxOut trce txOutVariantType mMvs = do
 --   whenJust mMvs $ \mvs -> do
 --     when (pcmConsumedTxOut (pruneConsumeMigration mvs) && not (isTxOutAddressPreviouslySet mvs)) $ do
 --       liftIO $ logInfo trce "migrateTxOut: adding consumed-by-id Index"
@@ -255,44 +255,44 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
 --       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
 --       void createPruneConstraintTxOut
---   migrateNextPageTxOut (Just trce) txOutTableType 0
+--   migrateNextPageTxOut (Just trce) txOutVariantType 0
 
--- migrateNextPageTxOut :: MonadIO m => Maybe (Trace IO Text) -> TxOutTableType -> Word64 -> ReaderT SqlBackend m ()
--- migrateNextPageTxOut mTrce txOutTableType offst = do
+-- migrateNextPageTxOut :: MonadIO m => Maybe (Trace IO Text) -> TxOutVariantType -> Word64 -> DB.DbAction m ()
+-- migrateNextPageTxOut mTrce txOutVariantType offst = do
 --   whenJust mTrce $ \trce ->
 --     liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
 --   page <- getInputPage offst pageSize
---   updatePageEntries txOutTableType page
+--   updatePageEntries txOutVariantType page
 --   when (fromIntegral (length page) == pageSize) $
---     migrateNextPageTxOut mTrce txOutTableType $!
+--     migrateNextPageTxOut mTrce txOutVariantType $!
 --       (offst + pageSize)
 
 -- --------------------------------------------------------------------------------------------------
 -- -- Delete + Update
--- --------------------------------------------------------------------------------------------------
+-- -- --------------------------------------------------------------------------------------------------
 -- deleteAndUpdateConsumedTxOut ::
 --   forall m.
 --   (MonadIO m, MonadBaseControl IO m) =>
 --   Trace IO Text ->
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   MigrationValues ->
 --   Word64 ->
---   ReaderT SqlBackend m ()
--- deleteAndUpdateConsumedTxOut trce txOutTableType migrationValues blockNoDiff = do
+--   DB.DbAction m ()
+-- deleteAndUpdateConsumedTxOut trce txOutVariantType migrationValues blockNoDiff = do
 --   maxTxId <- findMaxTxInId blockNoDiff
 --   case maxTxId of
 --     Left errMsg -> do
 --       liftIO $ logInfo trce $ "No tx_out were deleted as no blocks found: " <> errMsg
 --       liftIO $ logInfo trce "deleteAndUpdateConsumedTxOut: Now Running extra migration prune tx_out"
---       migrateTxOut trce txOutTableType $ Just migrationValues
+--       migrateTxOut trce txOutVariantType $ Just migrationValues
 --       insertExtraMigration ConsumeTxOutPreviouslySet
 --     Right mTxId -> do
 --       migrateNextPage mTxId False 0
 --   where
---     migrateNextPage :: TxId -> Bool -> Word64 -> ReaderT SqlBackend m ()
+--     migrateNextPage :: TxId -> Bool -> Word64 -> DB.DbAction m ()
 --     migrateNextPage maxTxId ranCreateConsumedTxOut offst = do
 --       pageEntries <- getInputPage offst pageSize
---       resPageEntries <- splitAndProcessPageEntries trce txOutTableType ranCreateConsumedTxOut maxTxId pageEntries
+--       resPageEntries <- splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId pageEntries
 --       when (fromIntegral (length pageEntries) == pageSize) $
 --         migrateNextPage maxTxId resPageEntries $!
 --           offst
@@ -303,12 +303,12 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --   forall m.
 --   (MonadIO m, MonadBaseControl IO m) =>
 --   Trace IO Text ->
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   Bool ->
 --   TxId ->
 --   [ConsumedTriplet] ->
---   ReaderT SqlBackend m Bool
--- splitAndProcessPageEntries trce txOutTableType ranCreateConsumedTxOut maxTxId pageEntries = do
+--   DB.DbAction m Bool
+-- splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId pageEntries = do
 --   let entriesSplit = span (\tr -> ctTxInTxId tr <= maxTxId) pageEntries
 --   case entriesSplit of
 --     ([], []) -> do
@@ -316,25 +316,25 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --       pure True
 --     -- the whole list is less that maxTxInId
 --     (xs, []) -> do
---       deletePageEntries txOutTableType xs
+--       deletePageEntries txOutVariantType xs
 --       pure False
 --     -- the whole list is greater that maxTxInId
 --     ([], ys) -> do
 --       shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
---       updatePageEntries txOutTableType ys
+--       updatePageEntries txOutVariantType ys
 --       pure True
 --     -- the list has both bellow and above maxTxInId
 --     (xs, ys) -> do
---       deletePageEntries txOutTableType xs
+--       deletePageEntries txOutVariantType xs
 --       shouldCreateConsumedTxOut trce ranCreateConsumedTxOut
---       updatePageEntries txOutTableType ys
+--       updatePageEntries txOutVariantType ys
 --       pure True
 
 -- shouldCreateConsumedTxOut ::
 --   (MonadIO m, MonadBaseControl IO m) =>
 --   Trace IO Text ->
 --   Bool ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- shouldCreateConsumedTxOut trce rcc =
 --   unless rcc $ do
 --     liftIO $ logInfo trce "Created ConsumedTxOut when handling page entries."
@@ -343,28 +343,28 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 -- -- | Update
 -- updatePageEntries ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   [ConsumedTriplet] ->
---   ReaderT SqlBackend m ()
--- updatePageEntries txOutTableType = mapM_ (updateTxOutConsumedByTxIdUnique txOutTableType)
+--   DB.DbAction m ()
+-- updatePageEntries txOutVariantType = mapM_ (updateTxOutConsumedByTxIdUnique txOutVariantType)
 
--- updateTxOutConsumedByTxIdUnique :: MonadIO m => TxOutTableType -> ConsumedTriplet -> ReaderT SqlBackend m ()
--- updateTxOutConsumedByTxIdUnique txOutTableType ConsumedTriplet {ctTxOutTxId, ctTxOutIndex, ctTxInTxId} =
---   case txOutTableType of
---     TxOutCore -> updateWhere [C.TxOutTxId ==. ctTxOutTxId, C.TxOutIndex ==. ctTxOutIndex] [C.TxOutConsumedByTxId =. Just ctTxInTxId]
+-- updateTxOutConsumedByTxIdUnique :: MonadIO m => TxOutVariantType -> ConsumedTriplet -> DB.DbAction m ()
+-- updateTxOutConsumedByTxIdUnique txOutVariantType ConsumedTriplet {ctTxOutTxId, ctTxOutIndex, ctTxInTxId} =
+--   case txOutVariantType of
+--     TxOutVariantCore -> updateWhere [C.TxOutTxId ==. ctTxOutTxId, C.TxOutIndex ==. ctTxOutIndex] [C.TxOutConsumedByTxId =. Just ctTxInTxId]
 --     TxOutVariantAddress -> updateWhere [V.TxOutTxId ==. ctTxOutTxId, V.TxOutIndex ==. ctTxOutIndex] [V.TxOutConsumedByTxId =. Just ctTxInTxId]
 
--- -- this builds up a single delete query using the pageEntries list
+-- -- -- this builds up a single delete query using the pageEntries list
 -- deletePageEntries ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   [ConsumedTriplet] ->
---   ReaderT SqlBackend m ()
--- deletePageEntries txOutTableType = mapM_ (\ConsumedTriplet {ctTxOutTxId, ctTxOutIndex} -> deleteTxOutConsumed txOutTableType ctTxOutTxId ctTxOutIndex)
+--   DB.DbAction m ()
+-- deletePageEntries txOutVariantType = mapM_ (\ConsumedTriplet {ctTxOutTxId, ctTxOutIndex} -> deleteTxOutConsumed txOutVariantType ctTxOutTxId ctTxOutIndex)
 
--- deleteTxOutConsumed :: MonadIO m => TxOutTableType -> TxId -> Word64 -> ReaderT SqlBackend m ()
--- deleteTxOutConsumed txOutTableType txOutId index = case txOutTableType of
---   TxOutCore -> deleteWhere [C.TxOutTxId ==. txOutId, C.TxOutIndex ==. index]
+-- deleteTxOutConsumed :: MonadIO m => TxOutVariantType -> TxId -> Word64 -> DB.DbAction m ()
+-- deleteTxOutConsumed txOutVariantType txOutId index = case txOutVariantType of
+--   TxOutVariantCore -> deleteWhere [C.TxOutTxId ==. txOutId, C.TxOutIndex ==. index]
 --   TxOutVariantAddress -> deleteWhere [V.TxOutTxId ==. txOutId, V.TxOutIndex ==. index]
 
 -- --------------------------------------------------------------------------------------------------
@@ -376,14 +376,14 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --   ( MonadBaseControl IO m
 --   , MonadIO m
 --   ) =>
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- createConsumedIndexTxOut = do
 --   handle exceptHandler $ rawExecute createIndex []
 --   where
 --     createIndex =
 --       "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_id ON tx_out (consumed_by_tx_id)"
 
---     exceptHandler :: SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DBPruneConsumed $ show e)
 
@@ -392,7 +392,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --   ( MonadBaseControl IO m
 --   , MonadIO m
 --   ) =>
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- createPruneConstraintTxOut = do
 --   handle exceptHandler $ rawExecute addConstraint []
 --   where
@@ -411,7 +411,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --         , "end $$;"
 --         ]
 
---     exceptHandler :: SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DBPruneConsumed $ show e)
 
@@ -423,7 +423,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --   , MonadIO m
 --   ) =>
 --   Trace IO Text ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- updateTxOutAndCreateAddress trc = do
 --   handle exceptHandler $ rawExecute dropViewsQuery []
 --   liftIO $ logInfo trc "updateTxOutAndCreateAddress: Dropped views"
@@ -481,7 +481,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --     createIndexRawQuery =
 --       "CREATE INDEX IF NOT EXISTS idx_address_raw ON address USING HASH (raw);"
 
---     exceptHandler :: SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DBPruneConsumed $ show e)
 
@@ -492,36 +492,36 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --   forall m.
 --   MonadIO m =>
 --   Trace IO Text ->
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   Word64 ->
---   ReaderT SqlBackend m ()
--- deleteConsumedTxOut trce txOutTableType blockNoDiff = do
+--   DB.DbAction m ()
+-- deleteConsumedTxOut trce txOutVariantType blockNoDiff = do
 --   maxTxInId <- findMaxTxInId blockNoDiff
 --   case maxTxInId of
 --     Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
---     Right mxtid -> deleteConsumedBeforeTx trce txOutTableType mxtid
+--     Right mxtid -> deleteConsumedBeforeTx trce txOutVariantType mxtid
 
--- deleteConsumedBeforeTx :: MonadIO m => Trace IO Text -> TxOutTableType -> TxId -> ReaderT SqlBackend m ()
--- deleteConsumedBeforeTx trce txOutTableType txId = do
---   countDeleted <- case txOutTableType of
---     TxOutCore -> deleteWhereCount [C.TxOutConsumedByTxId <=. Just txId]
+-- deleteConsumedBeforeTx :: MonadIO m => Trace IO Text -> TxOutVariantType -> TxId -> DB.DbAction m ()
+-- deleteConsumedBeforeTx trce txOutVariantType txId = do
+--   countDeleted <- case txOutVariantType of
+--     TxOutVariantCore -> deleteWhereCount [C.TxOutConsumedByTxId <=. Just txId]
 --     TxOutVariantAddress -> deleteWhereCount [V.TxOutConsumedByTxId <=. Just txId]
 --   liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
 
 -- --------------------------------------------------------------------------------------------------
 -- -- Helpers
 -- --------------------------------------------------------------------------------------------------
--- migrateTxOutDbTool :: (MonadIO m, MonadBaseControl IO m) => TxOutTableType -> ReaderT SqlBackend m ()
--- migrateTxOutDbTool txOutTableType = do
+-- migrateTxOutDbTool :: (MonadIO m, MonadBaseControl IO m) => TxOutVariantType -> DB.DbAction m ()
+-- migrateTxOutDbTool txOutVariantType = do
 --   _ <- createConsumedIndexTxOut
---   migrateNextPageTxOut Nothing txOutTableType 0
+--   migrateNextPageTxOut Nothing txOutVariantType 0
 
--- findMaxTxInId :: forall m. MonadIO m => Word64 -> ReaderT SqlBackend m (Either Text TxId)
+-- findMaxTxInId :: forall m. MonadIO m => Word64 -> DB.DbAction m (Either Text TxId)
 -- findMaxTxInId blockNoDiff = do
 --   mBlockHeight <- queryBlockHeight
 --   maybe (pure $ Left "No blocks found") findConsumed mBlockHeight
 --   where
---     findConsumed :: Word64 -> ReaderT SqlBackend m (Either Text TxId)
+--     findConsumed :: Word64 -> DB.DbAction m (Either Text TxId)
 --     findConsumed tipBlockNo = do
 --       if tipBlockNo <= blockNoDiff
 --         then pure $ Left $ "Tip blockNo is " <> textShow tipBlockNo
@@ -532,14 +532,14 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --             findConsumedBeforeBlock
 --             mBlockId
 
---     findConsumedBeforeBlock :: BlockId -> ReaderT SqlBackend m (Either Text TxId)
+--     findConsumedBeforeBlock :: BlockId -> DB.DbAction m (Either Text TxId)
 --     findConsumedBeforeBlock blockId = do
 --       mTxId <- queryMaxRefId TxBlockId blockId False
 --       case mTxId of
 --         Nothing -> pure $ Left $ "No txs found before " <> textShow blockId
 --         Just txId -> pure $ Right txId
 
--- getInputPage :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [ConsumedTriplet]
+-- getInputPage :: MonadIO m => Word64 -> Word64 -> DB.DbAction m [ConsumedTriplet]
 -- getInputPage offs pgSize = do
 --   res <- select $ do
 --     txIn <- from $ table @TxIn
@@ -556,7 +556,7 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --         , ctTxInTxId = txInTxInId (entityVal txIn)
 --         }
 
--- countTxIn :: MonadIO m => ReaderT SqlBackend m Word64
+-- countTxIn :: MonadIO m => DB.DbAction m Word64
 -- countTxIn = do
 --   res <- select $ do
 --     _ <- from $ table @TxIn
@@ -565,16 +565,16 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 
 -- countConsumed ::
 --   MonadIO m =>
---   TxOutTableType ->
---   ReaderT SqlBackend m Word64
+--   TxOutVariantType ->
+--   DB.DbAction m Word64
 -- countConsumed = \case
---   TxOutCore -> query @'TxOutCore
+--   TxOutVariantCore -> query @'TxOutCore
 --   TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word64
+--       DB.DbAction m Word64
 --     query = do
 --       res <- select $ do
 --         txOut <- from $ table @(TxOutTable a)

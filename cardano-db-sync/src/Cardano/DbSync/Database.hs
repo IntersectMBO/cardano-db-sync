@@ -4,9 +4,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Database (
-  DbAction (..),
+  DbEvent (..),
   ThreadChannels,
-  lengthDbActionQueue,
+  lengthDbEventQueue,
   mkDbApply,
   runDbThread,
 ) where
@@ -14,7 +14,7 @@ module Cardano.DbSync.Database (
 import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
-import Cardano.DbSync.DbAction
+import Cardano.DbSync.DbEvent
 import Cardano.DbSync.Default
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
@@ -53,7 +53,7 @@ runDbThread syncEnv metricsSetters queue = do
     -- Main loop to process the queue
     processQueue :: IO ()
     processQueue = do
-      actions <- blockingFlushDbActionQueue queue
+      actions <- blockingFlushDbEventQueue queue
 
       -- Log the number of blocks being processed if there are multiple
       when (length actions > 1) $ do
@@ -65,7 +65,7 @@ runDbThread syncEnv metricsSetters queue = do
         Nothing -> processActions actions
 
     -- Process a list of actions
-    processActions :: [DbAction] -> IO ()
+    processActions :: [DbEvent] -> IO ()
     processActions actions = do
       result <- runExceptT $ runActions syncEnv actions -- runActions is where we start inserting information we recieve from the node.
 
@@ -108,7 +108,7 @@ runDbThread syncEnv metricsSetters queue = do
 --   where
 --     trce = getTrace syncEnv
 --     loop = do
---       xs <- blockingFlushDbActionQueue queue
+--       xs <- blockingFlushDbEventQueue queue
 
 --       when (length xs > 1) $ do
 --         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
@@ -136,19 +136,19 @@ runDbThread syncEnv metricsSetters queue = do
 --           atomically $ putTMVar resultVar (latestPoints, currentTip)
 --           loop
 
--- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
+-- | Run the list of 'DbEvent's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions ::
   SyncEnv ->
-  [DbAction] ->
+  [DbEvent] ->
   ExceptT SyncNodeError IO NextState
 runActions syncEnv actions = do
-  dbAction Continue actions
+  dbEvent Continue actions
   where
-    dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
-    dbAction next [] = pure next
-    dbAction Done _ = pure Done
-    dbAction Continue xs =
+    dbEvent :: NextState -> [DbEvent] -> ExceptT SyncNodeError IO NextState
+    dbEvent next [] = pure next
+    dbEvent Done _ = pure Done
+    dbEvent Continue xs =
       case spanDbApply xs of
         ([], DbFinish : _) -> do
           pure Done
@@ -171,12 +171,12 @@ runActions syncEnv actions = do
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
           blockNo <- lift $ getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
-          dbAction Continue ys
+          dbEvent Continue ys
         (ys, zs) -> do
           newExceptT $ insertListBlocks syncEnv ys
           if null zs
             then pure Continue
-            else dbAction Continue zs
+            else dbEvent Continue zs
 
 rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger syncEnv point =
@@ -238,14 +238,14 @@ validateConsistentLevel syncEnv stPoint = do
         , show cLevel
         ]
 
--- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
+-- | Split the DbEvent list into a prefix containing blocks to apply and a postfix.
+spanDbApply :: [DbEvent] -> ([CardanoBlock], [DbEvent])
 spanDbApply lst =
   case lst of
     (DbApplyBlock bt : xs) -> let (ys, zs) = spanDbApply xs in (bt : ys, zs)
     xs -> ([], xs)
 
-hasRestart :: [DbAction] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
+hasRestart :: [DbEvent] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
 hasRestart = go
   where
     go [] = Nothing

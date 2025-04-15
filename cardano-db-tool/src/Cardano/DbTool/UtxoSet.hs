@@ -21,8 +21,8 @@ import System.Exit (exitSuccess)
 import System.IO (IOMode (..), withFile)
 
 utxoSetAtSlot :: TxOutVariantType -> Word64 -> IO ()
-utxoSetAtSlot txOutTableType slotNo = do
-  (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot txOutTableType slotNo
+utxoSetAtSlot txOutVariantType slotNo = do
+  (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot txOutVariantType slotNo
 
   let supply = utxoSetSum utxoSet
   let aggregated = aggregateUtxos utxoSet
@@ -83,12 +83,12 @@ partitionUtxos =
       Text.length addr <= 180 && not (isRedeemTextAddress addr)
 
 queryAtSlot :: TxOutVariantType -> Word64 -> IO (Ada, [UtxoQueryResult], Ada, Either LookupFail UTCTime)
-queryAtSlot txOutTableType slotNo =
+queryAtSlot txOutVariantType slotNo =
   -- Run the following queries in a single transaction.
   runDbNoLoggingEnv $ do
     (,,,)
-      <$> queryGenesisSupply txOutTableType
-      <*> queryUtxoAtSlotNo txOutTableType slotNo
+      <$> queryGenesisSupply txOutVariantType
+      <*> queryUtxoAtSlotNo txOutVariantType slotNo
       <*> queryFeesUpToSlotNo slotNo
       <*> querySlotUtcTime slotNo
 
@@ -118,8 +118,8 @@ utxoSetSum xs =
 
 getTxOutValue :: TxOutW -> Word64
 getTxOutValue wrapper = case wrapper of
-  CTxOutW txOut -> unDbLovelace $ VC.txOutValue txOut
-  VTxOutW txOut _ -> unDbLovelace $ VA.txOutValue txOut
+  VCTxOutW txOut -> unDbLovelace $ C.txOutValue txOut
+  VATxOutW txOut _ -> unDbLovelace $ V.txOutValue txOut
 
 writeUtxos :: FilePath -> [(Text, Word64)] -> IO ()
 writeUtxos fname xs = do

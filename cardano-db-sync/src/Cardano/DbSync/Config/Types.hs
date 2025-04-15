@@ -191,6 +191,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioDbDebug :: Bool
   }
   deriving (Eq, Show)
 
@@ -749,6 +750,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioDbDebug = False
       }
 
 fullInsertOptions :: SyncInsertOptions
@@ -767,6 +769,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -785,6 +788,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -811,6 +815,7 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 addressTypeToEnableDisable :: IsString s => TxOutVariantType -> s

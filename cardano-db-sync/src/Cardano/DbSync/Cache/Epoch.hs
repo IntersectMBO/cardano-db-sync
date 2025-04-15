@@ -14,14 +14,12 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (CacheEpoch (..), CacheInternal (..), CacheStatus (..), EpochBlockDiff (..))
 import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
-import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv (..))
 import Cardano.Ledger.BaseTypes.NonZero (NonZero (..))
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Data.Map.Strict (deleteMin, insert, lookupMax, size, split)
-import Database.Persist.Postgresql (SqlBackend)
 
 -------------------------------------------------------------------------------------
 -- Epoch Cache
@@ -57,7 +55,7 @@ readLastMapEpochFromCache cache =
           Nothing -> pure Nothing
           Just (_, ep) -> pure $ Just ep
 
-rollbackMapEpochInCache :: MonadIO m => CacheInternal -> DB.BlockId -> m (Either SyncNodeError ())
+rollbackMapEpochInCache :: MonadIO m => CacheInternal -> DB.BlockId -> m ()
 rollbackMapEpochInCache cacheInternal blockId = do
   cE <- liftIO $ readTVarIO (cEpoch cacheInternal)
   -- split the map and delete anything after blockId including it self as new blockId might be
@@ -69,10 +67,10 @@ writeEpochBlockDiffToCache ::
   MonadIO m =>
   CacheStatus ->
   EpochBlockDiff ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
+  DB.DbAction m ()
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
-    NoCache -> pure $ Left $ SNErrDefault "writeEpochBlockDiffToCache: Cache is NoCache"
+    NoCache -> throwError $ DB.DbError DB.mkCallSite "writeEpochBlockDiffToCache: Cache is NoCache" Nothing
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
@@ -86,7 +84,7 @@ writeToMapEpochCache ::
   SyncEnv ->
   CacheStatus ->
   DB.Epoch ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
+  DB.DbAction m ()
 writeToMapEpochCache syncEnv cache latestEpoch = do
   -- this can also be tought of as max rollback number
   let securityParam =
@@ -94,12 +92,12 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    NoCache -> pure $ Left $ SNErrDefault "writeToMapEpochCache: Cache is NoCache"
+    NoCache -> throwError $ DB.DbError DB.mkCallSite "writeToMapEpochCache: Cache is NoCache" Nothing
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
-        Nothing -> pure $ Left $ SNErrDefault "writeToMapEpochCache: No epochInternalEpochCache"
+        Nothing -> throwError $ DB.DbError DB.mkCallSite "writeToMapEpochCache: No epochInternalEpochCache" Nothing
         Just ei -> do
           cE <- liftIO $ readTVarIO (cEpoch ci)
           let currentBlockId = ebdBlockId ei
@@ -118,7 +116,6 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
 -- Helpers
 ------------------------------------------------------------------
 
-writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m (Either SyncNodeError ())
+writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m ()
 writeToCache ci newCacheEpoch = do
   void $ liftIO $ atomically $ writeTVar (cEpoch ci) newCacheEpoch
-  pure $ Right ()

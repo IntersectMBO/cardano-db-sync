@@ -1,170 +1,257 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Db.Schema.Variants.TxOutAddress where
 
-import Cardano.Db.Schema.Ids
-import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder)
+import Contravariant.Extras (contrazip3, contrazip9)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant ((>$<))
+import qualified Data.List.NonEmpty as NE
 import Data.Text (Text)
 import Data.Word (Word64)
 import GHC.Generics (Generic)
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
 
+import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
+import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
+
 -----------------------------------------------------------------------------------------------
 -- TxOutAddress
 -----------------------------------------------------------------------------------------------
 data TxOutAddress = TxOutAddress
-  { txOutAddressId :: !TxOutAddressId
-  , txOutAddressTxId :: !TxId
+  { txOutAddressTxId :: !Id.TxId
   , txOutAddressIndex :: !Word64
-  , txOutAddressStakeAddressId :: !(Maybe StakeAddressId)
+  , txOutAddressStakeAddressId :: !(Maybe Id.StakeAddressId)
   , txOutAddressValue :: !DbLovelace
   , txOutAddressDataHash :: !(Maybe ByteString)
-  , txOutAddressInlineDatumId :: !(Maybe DatumId)
-  , txOutAddressReferenceScriptId :: !(Maybe ScriptId)
-  , txOutAddressConsumedByTxId :: !(Maybe TxId)
-  , txOutAddressAddressId :: !AddressId
+  , txOutAddressInlineDatumId :: !(Maybe Id.DatumId)
+  , txOutAddressReferenceScriptId :: !(Maybe Id.ScriptId)
+  , txOutAddressConsumedByTxId :: !(Maybe Id.TxId)
+  , txOutAddressAddressId :: !Id.AddressId
   }
   deriving (Eq, Show, Generic)
+
+type instance Key TxOutAddress = Id.TxOutAddressId
+
+instance DbInfo TxOutAddress where
+  tableName _ = "tx_out"
+  columnNames _ =
+    NE.fromList
+      [ "tx_id"
+      , "index"
+      , "stake_address_id"
+      , "value"
+      , "data_hash"
+      , "inline_datum_id"
+      , "reference_script_id"
+      , "consumed_by_tx_id"
+      , "address_id"
+      ]
+
+entityTxOutAddressDecoder :: D.Row (Entity TxOutAddress)
+entityTxOutAddressDecoder =
+  Entity
+    <$> Id.idDecoder Id.TxOutAddressId -- entityTxOutAddressId
+    <*> txOutAddressDecoder -- entityTxOutAddress
 
 txOutAddressDecoder :: D.Row TxOutAddress
 txOutAddressDecoder =
   TxOutAddress
-    <$> idDecoder TxOutAddressId -- txOutAddressId
-    <*> idDecoder TxId -- txOutAddressTxId
+    <$> Id.idDecoder Id.TxId -- txOutAddressTxId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txOutAddressIndex
-    <*> maybeIdDecoder StakeAddressId -- txOutAddressStakeAddressId
+    <*> Id.maybeIdDecoder Id.StakeAddressId -- txOutAddressStakeAddressId
     <*> dbLovelaceDecoder -- txOutAddressValue
     <*> D.column (D.nullable D.bytea) -- txOutAddressDataHash
-    <*> maybeIdDecoder DatumId -- txOutAddressInlineDatumId
-    <*> maybeIdDecoder ScriptId -- txOutAddressReferenceScriptId
-    <*> maybeIdDecoder TxId -- txOutAddressConsumedByTxId
-    <*> idDecoder AddressId -- txOutAddressAddressId
+    <*> Id.maybeIdDecoder Id.DatumId -- txOutAddressInlineDatumId
+    <*> Id.maybeIdDecoder Id.ScriptId -- txOutAddressReferenceScriptId
+    <*> Id.maybeIdDecoder Id.TxId -- txOutAddressConsumedByTxId
+    <*> Id.idDecoder Id.AddressId -- txOutAddressAddressId
 
 txOutAddressEncoder :: E.Params TxOutAddress
 txOutAddressEncoder =
   mconcat
-    [ txOutAddressId >$< idEncoder getTxOutAddressId
-    , txOutAddressTxId >$< idEncoder getTxId
+    [ txOutAddressTxId >$< Id.idEncoder Id.getTxId
     , txOutAddressIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , txOutAddressStakeAddressId >$< maybeIdEncoder getStakeAddressId
+    , txOutAddressStakeAddressId >$< Id.maybeIdEncoder Id.getStakeAddressId
     , txOutAddressValue >$< dbLovelaceEncoder
     , txOutAddressDataHash >$< E.param (E.nullable E.bytea)
-    , txOutAddressInlineDatumId >$< maybeIdEncoder getDatumId
-    , txOutAddressReferenceScriptId >$< maybeIdEncoder getScriptId
-    , txOutAddressConsumedByTxId >$< maybeIdEncoder getTxId
-    , txOutAddressAddressId >$< idEncoder getAddressId
+    , txOutAddressInlineDatumId >$< Id.maybeIdEncoder Id.getDatumId
+    , txOutAddressReferenceScriptId >$< Id.maybeIdEncoder Id.getScriptId
+    , txOutAddressConsumedByTxId >$< Id.maybeIdEncoder Id.getTxId
+    , txOutAddressAddressId >$< Id.idEncoder Id.getAddressId
     ]
+
+txOutAddressBulkEncoder :: E.Params ([Id.TxId], [Word64], [Maybe Id.StakeAddressId], [DbLovelace], [Maybe ByteString], [Maybe Id.DatumId], [Maybe Id.ScriptId], [Maybe Id.TxId], [Id.AddressId])
+txOutAddressBulkEncoder =
+  contrazip9
+    (bulkEncoder $ E.nonNullable $ Id.getTxId >$< E.int8) -- txOutAddressTxId
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8) -- txOutAddressIndex
+    (bulkEncoder $ E.nullable $ Id.getStakeAddressId >$< E.int8) -- txOutAddressStakeAddressId
+    (bulkEncoder dbLovelaceValueEncoder) -- txOutAddressValue
+    (bulkEncoder $ E.nullable E.bytea) -- txOutAddressDataHash
+    (bulkEncoder $ E.nullable $ Id.getDatumId >$< E.int8) -- txOutAddressInlineDatumId
+    (bulkEncoder $ E.nullable $ Id.getScriptId >$< E.int8) -- txOutAddressReferenceScriptId
+    (bulkEncoder $ E.nullable $ Id.getTxId >$< E.int8) -- txOutAddressConsumedByTxId
+    (bulkEncoder $ E.nonNullable $ Id.getAddressId >$< E.int8) -- txOutAddressAddressId
 
 -----------------------------------------------------------------------------------------------
 -- CollateralTxOutAddress
 -----------------------------------------------------------------------------------------------
 data CollateralTxOutAddress = CollateralTxOutAddress
-  { colateralTxOutAddressId :: !TxOutAddressId
-  , collateralTxOutAddressTxId :: !TxId
+  { collateralTxOutAddressTxId :: !Id.TxId
   , collateralTxOutAddressIndex :: !Word64
-  , collateralTxOutAddressStakeAddressId :: !(Maybe StakeAddressId)
+  , collateralTxOutAddressStakeAddressId :: !(Maybe Id.StakeAddressId)
   , collateralTxOutAddressValue :: !DbLovelace
   , collateralTxOutAddressDataHash :: !(Maybe ByteString)
   , collateralTxOutAddressMultiAssetsDescr :: !Text
-  , collateralTxOutAddressInlineDatumId :: !(Maybe DatumId)
-  , collateralTxOutAddressReferenceScriptId :: !(Maybe ScriptId)
-  , collateralTxOutAddressId :: !AddressId
+  , collateralTxOutAddressInlineDatumId :: !(Maybe Id.DatumId)
+  , collateralTxOutAddressReferenceScriptId :: !(Maybe Id.ScriptId)
+  , collateralTxOutAddressId :: !Id.AddressId
   }
   deriving (Eq, Show, Generic)
+
+type instance Key CollateralTxOutAddress = Id.CollateralTxOutAddressId
+
+instance DbInfo CollateralTxOutAddress where
+  tableName _ = "collateral_tx_out"
+  columnNames _ =
+    NE.fromList
+      [ "tx_id"
+      , "index"
+      , "stake_address_id"
+      , "value"
+      , "data_hash"
+      , "multi_assets_descr"
+      , "inline_datum_id"
+      , "reference_script_id"
+      , "address_id"
+      ]
+
+entityCollateralTxOutAddressDecoder :: D.Row (Entity CollateralTxOutAddress)
+entityCollateralTxOutAddressDecoder =
+  Entity
+    <$> Id.idDecoder Id.CollateralTxOutAddressId -- entityCollateralTxOutAddressId
+    <*> collateralTxOutAddressDecoder -- entityCollateralTxOutAddress
 
 collateralTxOutAddressDecoder :: D.Row CollateralTxOutAddress
 collateralTxOutAddressDecoder =
   CollateralTxOutAddress
-    <$> idDecoder TxOutAddressId -- colateralTxOutAddressId
-    <*> idDecoder TxId -- collateralTxOutAddressTxId
+    <$> Id.idDecoder Id.TxId -- collateralTxOutAddressTxId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- collateralTxOutAddressIndex
-    <*> maybeIdDecoder StakeAddressId -- collateralTxOutAddressStakeAddressId
+    <*> Id.maybeIdDecoder Id.StakeAddressId -- collateralTxOutAddressStakeAddressId
     <*> dbLovelaceDecoder -- collateralTxOutAddressValue
     <*> D.column (D.nullable D.bytea) -- collateralTxOutAddressDataHash
     <*> D.column (D.nonNullable D.text) -- collateralTxOutAddressMultiAssetsDescr
-    <*> maybeIdDecoder DatumId -- collateralTxOutAddressInlineDatumId
-    <*> maybeIdDecoder ScriptId -- collateralTxOutAddressReferenceScriptId
-    <*> idDecoder AddressId -- collateralTxOutAddressId
+    <*> Id.maybeIdDecoder Id.DatumId -- collateralTxOutAddressInlineDatumId
+    <*> Id.maybeIdDecoder Id.ScriptId -- collateralTxOutAddressReferenceScriptId
+    <*> Id.idDecoder Id.AddressId -- collateralTxOutAddressId
 
 collateralTxOutAddressEncoder :: E.Params CollateralTxOutAddress
 collateralTxOutAddressEncoder =
   mconcat
-    [ colateralTxOutAddressId >$< idEncoder getTxOutAddressId
-    , collateralTxOutAddressTxId >$< idEncoder getTxId
+    [ collateralTxOutAddressTxId >$< Id.idEncoder Id.getTxId
     , collateralTxOutAddressIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , collateralTxOutAddressStakeAddressId >$< maybeIdEncoder getStakeAddressId
+    , collateralTxOutAddressStakeAddressId >$< Id.maybeIdEncoder Id.getStakeAddressId
     , collateralTxOutAddressValue >$< dbLovelaceEncoder
     , collateralTxOutAddressDataHash >$< E.param (E.nullable E.bytea)
     , collateralTxOutAddressMultiAssetsDescr >$< E.param (E.nonNullable E.text)
-    , collateralTxOutAddressInlineDatumId >$< maybeIdEncoder getDatumId
-    , collateralTxOutAddressReferenceScriptId >$< maybeIdEncoder getScriptId
-    , collateralTxOutAddressId >$< idEncoder getAddressId
-    ]
-
------------------------------------------------------------------------------------------------
--- MultiAssetTxOutAddress
------------------------------------------------------------------------------------------------
-data MaTxOutAddress = MaTxOutAddress
-  { maTxOutAddressId :: !MaTxOutAddressId
-  , maTxOutAddressIdent :: !MultiAssetId
-  , maTxOutAddressQuantity :: !DbWord64
-  , maTxOutAddressTxOutAddressId :: !TxOutAddressId
-  }
-  deriving (Eq, Show, Generic)
-
-maTxOutAddressDecoder :: D.Row MaTxOutAddress
-maTxOutAddressDecoder =
-  MaTxOutAddress
-    <$> idDecoder MaTxOutAddressId -- maTxOutAddressId
-    <*> idDecoder MultiAssetId -- maTxOutAddressIdent
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutAddressQuantity
-    <*> idDecoder TxOutAddressId -- maTxOutAddressTxOutAddressId
-
-maTxOutAddressEncoder :: E.Params MaTxOutAddress
-maTxOutAddressEncoder =
-  mconcat
-    [ maTxOutAddressId >$< idEncoder getMaTxOutAddressId
-    , maTxOutAddressIdent >$< idEncoder getMultiAssetId
-    , maTxOutAddressQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , maTxOutAddressTxOutAddressId >$< idEncoder getTxOutAddressId
+    , collateralTxOutAddressInlineDatumId >$< Id.maybeIdEncoder Id.getDatumId
+    , collateralTxOutAddressReferenceScriptId >$< Id.maybeIdEncoder Id.getScriptId
+    , collateralTxOutAddressId >$< Id.idEncoder Id.getAddressId
     ]
 
 -----------------------------------------------------------------------------------------------
 -- Address
 -----------------------------------------------------------------------------------------------
 data Address = Address
-  { addressId :: !AddressId
-  , addressAddress :: !Text
+  { addressAddress :: !Text
   , addressRaw :: !ByteString
   , addressHasScript :: !Bool
   , addressPaymentCred :: !(Maybe ByteString)
-  , addressStakeAddressId :: !(Maybe StakeAddressId)
+  , addressStakeAddressId :: !(Maybe Id.StakeAddressId)
   }
   deriving (Eq, Show, Generic)
+
+type instance Key Address = Id.AddressId
+instance DbInfo Address
+
+entityAddressDecoder :: D.Row (Entity Address)
+entityAddressDecoder =
+  Entity
+    <$> Id.idDecoder Id.AddressId -- entityAddressId
+    <*> addressDecoder -- entityAddress
 
 addressDecoder :: D.Row Address
 addressDecoder =
   Address
-    <$> idDecoder AddressId -- addressId
-    <*> D.column (D.nonNullable D.text) -- addressAddress
+    <$> D.column (D.nonNullable D.text) -- addressAddress
     <*> D.column (D.nonNullable D.bytea) -- addressRaw
     <*> D.column (D.nonNullable D.bool) -- addressHasScript
     <*> D.column (D.nullable D.bytea) -- addressPaymentCred
-    <*> maybeIdDecoder StakeAddressId -- addressStakeAddressId
+    <*> Id.maybeIdDecoder Id.StakeAddressId -- addressStakeAddressId
 
 addressEncoder :: E.Params Address
 addressEncoder =
   mconcat
-    [ addressId >$< idEncoder getAddressId
-    , addressAddress >$< E.param (E.nonNullable E.text)
+    [ addressAddress >$< E.param (E.nonNullable E.text)
     , addressRaw >$< E.param (E.nonNullable E.bytea)
     , addressHasScript >$< E.param (E.nonNullable E.bool)
     , addressPaymentCred >$< E.param (E.nullable E.bytea)
-    , addressStakeAddressId >$< maybeIdEncoder getStakeAddressId
+    , addressStakeAddressId >$< Id.maybeIdEncoder Id.getStakeAddressId
     ]
+
+-----------------------------------------------------------------------------------------------
+-- MultiAssetTxOut
+-----------------------------------------------------------------------------------------------
+data MaTxOutAddress = MaTxOutAddress
+  { maTxOutAddressIdent :: !Id.MultiAssetId
+  , maTxOutAddressQuantity :: !DbWord64
+  , maTxOutAddressTxOutId :: !Id.TxOutAddressId
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key MaTxOutAddress = Id.MaTxOutAddressId
+
+instance DbInfo MaTxOutAddress where
+  tableName _ = "ma_tx_out"
+  columnNames _ =
+    NE.fromList
+      [ "ident"
+      , "quantity"
+      , "tx_out_id"
+      ]
+
+entityMaTxOutAddressDecoder :: D.Row (Entity MaTxOutAddress)
+entityMaTxOutAddressDecoder =
+  Entity
+    <$> Id.idDecoder Id.MaTxOutAddressId -- entityMaTxOutAddressId
+    <*> maTxOutAddressDecoder -- entityMaTxOutAddress
+
+maTxOutAddressDecoder :: D.Row MaTxOutAddress
+maTxOutAddressDecoder =
+  MaTxOutAddress
+    <$> Id.idDecoder Id.MultiAssetId -- maTxOutAddressIdent
+    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutAddressQuantity
+    <*> Id.idDecoder Id.TxOutAddressId -- maTxOutAddressTxOutId
+
+maTxOutAddressEncoder :: E.Params MaTxOutAddress
+maTxOutAddressEncoder =
+  mconcat
+    [ maTxOutAddressIdent >$< Id.idEncoder Id.getMultiAssetId
+    , maTxOutAddressQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    , maTxOutAddressTxOutId >$< Id.idEncoder Id.getTxOutAddressId
+    ]
+
+maTxOutAddressBulkEncoder :: E.Params ([Id.MultiAssetId], [DbWord64], [Id.TxOutAddressId])
+maTxOutAddressBulkEncoder =
+  contrazip3
+    (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8) -- maTxOutAddressIdent
+    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8) -- maTxOutAddressQuantity
+    (bulkEncoder $ E.nonNullable $ Id.getTxOutAddressId >$< E.int8) -- maTxOutAddressTxOutId
 
 -- share
 --   [ mkPersist sqlSettings
@@ -183,7 +270,7 @@ addressEncoder =
 --     index               Word64              sqltype=txindex
 --     inlineDatumId       DatumId Maybe       noreference
 --     referenceScriptId   ScriptId Maybe      noreference
---     stakeAddressId      StakeAddressId Maybe noreference
+--     stakeAddressId      Id.StakeAddressId Maybe noreference
 --     txId                TxId                noreference
 --     value               DbLovelace          sqltype=lovelace
 --     UniqueTxout         txId index          -- The (tx_id, index) pair must be unique.
@@ -192,7 +279,7 @@ addressEncoder =
 --     txId                TxId                noreference     -- This type is the primary key for the 'tx' table.
 --     index               Word64              sqltype=txindex
 --     addressId           AddressId
---     stakeAddressId      StakeAddressId Maybe noreference
+--     stakeAddressId      Id.StakeAddressId Maybe noreference
 --     value               DbLovelace          sqltype=lovelace
 --     dataHash            ByteString Maybe    sqltype=hash32type
 --     multiAssetsDescr    Text
@@ -205,7 +292,7 @@ addressEncoder =
 --     raw                 ByteString
 --     hasScript           Bool
 --     paymentCred         ByteString Maybe    sqltype=hash28type
---     stakeAddressId      StakeAddressId Maybe noreference
+--     stakeAddressId      Id.StakeAddressId Maybe noreference
 
 -- ----------------------------------------------
 -- -- MultiAsset

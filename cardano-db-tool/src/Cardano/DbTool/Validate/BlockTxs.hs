@@ -71,7 +71,7 @@ validateBlockTxs epoch = do
                 ++ show (veTxCountActual ve)
             )
 
-validateBlockCount :: MonadIO m => (Word64, Word64) -> ReaderT SqlBackend m (Either ValidateError ())
+validateBlockCount :: MonadIO m => (Word64, Word64) -> DB.DbAction m (Either ValidateError ())
 validateBlockCount (blockNo, txCountExpected) = do
   txCountActual <- queryBlockTxCount blockNo
   pure $
@@ -80,7 +80,7 @@ validateBlockCount (blockNo, txCountExpected) = do
       else Left $ ValidateError blockNo txCountActual txCountExpected
 
 -- This queries by BlockNo, the one in Cardano.Db.Operations.Query queries by BlockId.
-queryBlockTxCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryBlockTxCount :: MonadIO m => Word64 -> DB.DbAction m Word64
 queryBlockTxCount blockNo = do
   res <- select $ do
     (blk :& _tx) <-
@@ -92,7 +92,7 @@ queryBlockTxCount blockNo = do
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
 
-queryEpochBlockNumbers :: MonadIO m => Word64 -> ReaderT SqlBackend m [(Word64, Word64)]
+queryEpochBlockNumbers :: MonadIO m => Word64 -> DB.DbAction m [(Word64, Word64)]
 queryEpochBlockNumbers epoch = do
   res <- select $ do
     blk <- from $ table @Block

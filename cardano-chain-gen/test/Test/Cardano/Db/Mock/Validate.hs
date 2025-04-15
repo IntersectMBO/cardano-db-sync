@@ -44,8 +44,8 @@ module Test.Cardano.Db.Mock.Validate (
 
 import Cardano.Db
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variant.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
@@ -138,24 +138,24 @@ expectFailSilent name action = testCase name $ do
 -- checking that unspent count matches from tx_in to tx_out
 assertUnspentTx :: DBSyncEnv -> IO ()
 assertUnspentTx dbSyncEnv = do
-  let txOutTableType = txOutTableTypeFromConfig dbSyncEnv
-  unspentTxCount <- queryDBSync dbSyncEnv $ DB.queryTxOutConsumedNullCount txOutTableType
-  consumedNullCount <- queryDBSync dbSyncEnv $ DB.queryTxOutUnspentCount txOutTableType
+  let txOutVariantType = txOutVariantTypeFromConfig dbSyncEnv
+  unspentTxCount <- queryDBSync dbSyncEnv $ DB.queryTxOutConsumedNullCount txOutVariantType
+  consumedNullCount <- queryDBSync dbSyncEnv $ DB.queryTxOutUnspentCount txOutVariantType
   assertEqual "Unexpected tx unspent count between tx-in & tx-out" unspentTxCount consumedNullCount
 
 defaultDelays :: [Int]
 defaultDelays = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 
-assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> String -> IO ()
+assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> a -> String -> IO ()
 assertEqQuery env query a msg = do
   assertEqBackoff env query a defaultDelays msg
 
-assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
+assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
 assertEqBackoff env query a delays msg = do
   checkStillRuns env
   assertBackoff env query delays (== a) (\a' -> msg <> ": got " <> show a' <> " expected " <> show a)
 
-assertBackoff :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
+assertBackoff :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
 assertBackoff env query delays check errMsg = go delays
   where
     go ds = do
@@ -167,7 +167,7 @@ assertBackoff env query delays check errMsg = go delays
           threadDelay $ dl * 100_000
           go rest
 
-assertQuery :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
+assertQuery :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
 assertQuery env query check errMsg = do
   ma <- try $ queryDBSync env query
   case ma of
@@ -178,7 +178,7 @@ assertQuery env query check errMsg = do
     Right a | not (check a) -> pure $ Just $ errMsg a
     _ -> pure Nothing
 
-runQuery :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+runQuery :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
 runQuery env query = do
   ma <- try $ queryDBSync env query
   case ma of
@@ -204,7 +204,7 @@ assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
 assertCurrentEpoch env expected =
   assertEqBackoff env q (Just expected) defaultDelays "Unexpected epoch stake counts"
   where
-    q = queryCurrentEpochNo
+    q = queryBlocksForCurrentEpochNo
 
 assertAddrValues ::
   (EraCertState era, Core.EraTxOut era) =>
@@ -216,7 +216,7 @@ assertAddrValues ::
 assertAddrValues env ix expected sta = do
   addr <- assertRight $ resolveAddress ix sta
   let address = Generic.renderAddress addr
-      q = queryAddressOutputs TxOutCore address
+      q = queryAddressOutputs TxOutVariantCore address
   assertEqBackoff env q expected defaultDelays "Unexpected Balance"
 
 assertRight :: Show err => Either err a -> IO a
@@ -337,7 +337,7 @@ assertNonZeroFeesContract :: DBSyncEnv -> IO ()
 assertNonZeroFeesContract env =
   assertEqBackoff env q 0 defaultDelays "Found contract tx with zero fees"
   where
-    q :: ReaderT SqlBackend (NoLoggingT IO) Word64
+    q :: DB.DbAction (NoLoggingT IO) Word64
     q =
       maybe 0 unValue . listToMaybe
         <$> ( select . from $ \tx -> do
@@ -350,7 +350,7 @@ assertDatumCBOR :: DBSyncEnv -> ByteString -> IO ()
 assertDatumCBOR env bs =
   assertEqBackoff env q 1 defaultDelays "Datum bytes not found"
   where
-    q :: ReaderT SqlBackend (NoLoggingT IO) Word64
+    q :: DB.DbAction (NoLoggingT IO) Word64
     q =
       maybe 0 unValue . listToMaybe
         <$> ( select . from $ \datum -> do
@@ -418,29 +418,29 @@ assertBabbageCounts env expected =
       referenceTxIn <-
         maybe 0 unValue . listToMaybe
           <$> (select . from $ \(_a :: SqlExpr (Entity ReferenceTxIn)) -> pure countRows)
-      collTxOut <- case txOutTableTypeFromConfig env of
-        TxOutCore -> do
+      collTxOut <- case txOutVariantTypeFromConfig env of
+        TxOutVariantCore -> do
           maybe 0 unValue . listToMaybe
-            <$> (select . from $ \(_a :: SqlExpr (Entity C.CollateralTxOut)) -> pure countRows)
+            <$> (select . from $ \(_a :: SqlExpr (Entity VC.CollateralTxOut)) -> pure countRows)
         TxOutVariantAddress -> do
           maybe 0 unValue . listToMaybe
-            <$> (select . from $ \(_a :: SqlExpr (Entity V.CollateralTxOut)) -> pure countRows)
+            <$> (select . from $ \(_a :: SqlExpr (Entity VA.CollateralTxOut)) -> pure countRows)
       inlineDatum <-
-        case txOutTableTypeFromConfig env of
-          TxOutCore -> do
+        case txOutVariantTypeFromConfig env of
+          TxOutVariantCore -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutInlineDatumId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VC.TxOutInlineDatumId)) >> pure countRows)
           TxOutVariantAddress -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. V.TxOutInlineDatumId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VA.TxOutInlineDatumId)) >> pure countRows)
       referenceScript <-
-        case txOutTableTypeFromConfig env of
-          TxOutCore -> do
+        case txOutVariantTypeFromConfig env of
+          TxOutVariantCore -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. C.TxOutReferenceScriptId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VC.TxOutReferenceScriptId)) >> pure countRows)
           TxOutVariantAddress -> do
             maybe 0 unValue . listToMaybe
-              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. V.TxOutReferenceScriptId)) >> pure countRows)
+              <$> (select . from $ \txOut -> where_ (isJust (txOut ^. VA.TxOutReferenceScriptId)) >> pure countRows)
       pure
         ( scripts
         , redeemers
@@ -472,7 +472,7 @@ assertPoolCounters :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word
 assertPoolCounters env expected =
   assertEqBackoff env poolCountersQuery expected defaultDelays "Unexpected Pool counts"
 
-poolCountersQuery :: ReaderT SqlBackend (NoLoggingT IO) (Word64, Word64, Word64, Word64, Word64, Word64)
+poolCountersQuery :: DB.DbAction (NoLoggingT IO) (Word64, Word64, Word64, Word64, Word64, Word64)
 poolCountersQuery = do
   poolHash <-
     maybe 0 unValue . listToMaybe

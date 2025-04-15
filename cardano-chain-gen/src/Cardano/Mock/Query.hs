@@ -36,7 +36,7 @@ import Prelude ()
 queryVersionMajorFromEpoch ::
   MonadIO io =>
   Word64 ->
-  ReaderT SqlBackend io (Maybe Word16)
+  DB.DbAction io (Maybe Word16)
 queryVersionMajorFromEpoch epochNo = do
   res <- selectOne $ do
     prop <- from $ table @Db.EpochParam
@@ -48,7 +48,7 @@ queryVersionMajorFromEpoch epochNo = do
 queryParamProposalFromEpoch ::
   MonadIO io =>
   Word64 ->
-  ReaderT SqlBackend io (Maybe Db.ParamProposal)
+  DB.DbAction io (Maybe Db.ParamProposal)
 queryParamProposalFromEpoch epochNo = do
   res <- selectOne $ do
     prop <- from $ table @Db.ParamProposal
@@ -59,7 +59,7 @@ queryParamProposalFromEpoch epochNo = do
 queryParamFromEpoch ::
   MonadIO io =>
   Word64 ->
-  ReaderT SqlBackend io (Maybe Db.EpochParam)
+  DB.DbAction io (Maybe Db.EpochParam)
 queryParamFromEpoch epochNo = do
   res <- selectOne $ do
     param <- from $ table @Db.EpochParam
@@ -68,14 +68,14 @@ queryParamFromEpoch epochNo = do
   pure (entityVal <$> res)
 
 -- | Query whether there any null tx deposits?
-queryNullTxDepositExists :: MonadIO io => ReaderT SqlBackend io Bool
+queryNullTxDepositExists :: MonadIO io => DB.DbAction io Bool
 queryNullTxDepositExists = do
   res <- select $ do
     tx <- from $ table @Db.Tx
     where_ $ isNothing_ (tx ^. Db.TxDeposit)
   pure $ not (null res)
 
-queryMultiAssetCount :: MonadIO io => ReaderT SqlBackend io Word
+queryMultiAssetCount :: MonadIO io => DB.DbAction io Word
 queryMultiAssetCount = do
   res <- select $ do
     _ <- from (table @Db.MultiAsset)
@@ -83,7 +83,7 @@ queryMultiAssetCount = do
 
   pure $ maybe 0 unValue (listToMaybe res)
 
-queryTxMetadataCount :: MonadIO io => ReaderT SqlBackend io Word
+queryTxMetadataCount :: MonadIO io => DB.DbAction io Word
 queryTxMetadataCount = do
   res <- selectOne $ do
     _ <- from (table @Db.TxMetadata)
@@ -95,7 +95,7 @@ queryDRepDistrAmount ::
   MonadIO io =>
   ByteString ->
   Word64 ->
-  ReaderT SqlBackend io Word64
+  DB.DbAction io Word64
 queryDRepDistrAmount drepHash epochNo = do
   res <- selectOne $ do
     (distr :& hash) <-
@@ -113,7 +113,7 @@ queryDRepDistrAmount drepHash epochNo = do
 
 queryGovActionCounts ::
   MonadIO io =>
-  ReaderT SqlBackend io (Word, Word, Word, Word)
+  DB.DbAction io (Word, Word, Word, Word)
 queryGovActionCounts = do
   ratified <- countNonNulls Db.GovActionProposalRatifiedEpoch
   enacted <- countNonNulls Db.GovActionProposalEnactedEpoch
@@ -125,7 +125,7 @@ queryGovActionCounts = do
     countNonNulls ::
       (MonadIO io, PersistField field) =>
       EntityField Db.GovActionProposal (Maybe field) ->
-      ReaderT SqlBackend io Word
+      DB.DbAction io Word
     countNonNulls field = do
       res <- selectOne $ do
         e <- from $ table @Db.GovActionProposal
@@ -137,7 +137,7 @@ queryGovActionCounts = do
 queryConstitutionAnchor ::
   MonadIO io =>
   Word64 ->
-  ReaderT SqlBackend io (Maybe (Text, ByteString))
+  DB.DbAction io (Maybe (Text, ByteString))
 queryConstitutionAnchor epochNo = do
   res <- selectOne $ do
     (_ :& anchor :& epochState) <-
@@ -160,7 +160,7 @@ queryConstitutionAnchor epochNo = do
 
 queryRewardRests ::
   MonadIO io =>
-  ReaderT SqlBackend io [(Db.RewardSource, Word64)]
+  DB.DbAction io [(Db.RewardSource, Word64)]
 queryRewardRests = do
   res <- select $ do
     reward <- from $ table @Db.RewardRest
@@ -170,7 +170,7 @@ queryRewardRests = do
 
 queryTreasuryDonations ::
   MonadIO io =>
-  ReaderT SqlBackend io Word64
+  DB.DbAction io Word64
 queryTreasuryDonations = do
   res <- selectOne $ do
     txs <- from $ table @Db.Tx
@@ -183,7 +183,7 @@ queryVoteCounts ::
   MonadIO io =>
   ByteString ->
   Word16 ->
-  ReaderT SqlBackend io (Word64, Word64, Word64)
+  DB.DbAction io (Word64, Word64, Word64)
 queryVoteCounts txHash idx = do
   yes <- countVotes Db.VoteYes
   no <- countVotes Db.VoteNo
@@ -210,7 +210,7 @@ queryVoteCounts txHash idx = do
 queryEpochStateCount ::
   MonadIO io =>
   Word64 ->
-  ReaderT SqlBackend io Word64
+  DB.DbAction io Word64
 queryEpochStateCount epochNo = do
   res <- selectOne $ do
     epochState <- from (table @Db.EpochState)
@@ -222,7 +222,7 @@ queryEpochStateCount epochNo = do
 queryCommitteeByTxHash ::
   MonadIO io =>
   ByteString ->
-  ReaderT SqlBackend io (Maybe Db.Committee)
+  DB.DbAction io (Maybe Db.Committee)
 queryCommitteeByTxHash txHash = do
   res <- selectOne $ do
     (committee :& _ :& tx) <-
@@ -244,7 +244,7 @@ queryCommitteeByTxHash txHash = do
 queryCommitteeMemberCountByTxHash ::
   MonadIO io =>
   Maybe ByteString ->
-  ReaderT SqlBackend io Word64
+  DB.DbAction io Word64
 queryCommitteeMemberCountByTxHash txHash = do
   res <- selectOne $ do
     (_ :& committee :& _ :& tx) <-

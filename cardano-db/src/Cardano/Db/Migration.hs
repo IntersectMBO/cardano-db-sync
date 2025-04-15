@@ -24,22 +24,11 @@ module Cardano.Db.Migration (
   queryPgIndexesCount,
 ) where
 
-import Cardano.BM.Trace (Trace)
-import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
-import Cardano.Db.Migration.Haskell
-import Cardano.Db.Migration.Version
-import Cardano.Db.Operations.Query
-import Cardano.Db.Operations.Types (TxOutTableType (..))
-import Cardano.Db.PGConfig
-import Cardano.Db.Run
-import Cardano.Db.Schema.Core
-import Cardano.Db.Schema.Variants.TxOutCore (migrateCoreTxOutCardanoDb, migrateVariantAddressCardanoDb)
 import Cardano.Prelude (textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
-import Control.Monad.Trans.Reader (ReaderT)
 import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (isDigit)
@@ -49,22 +38,15 @@ import Data.Either (partitionEithers)
 import Data.List ((\\))
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
-import Data.Text (Text, intercalate, pack)
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import qualified Data.Text.Encoding as TextEnc
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format.ISO8601
-import Database.Persist.Sql (
-  Single (..),
-  SqlBackend,
-  SqlPersistT,
-  entityVal,
-  getMigration,
-  rawExecute,
-  rawSql,
-  selectFirst,
- )
 import GHC.Word (Word64)
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Session as HsqlS
+import qualified Hasql.Statement as HsqlStm
 import System.Directory (listDirectory)
 import System.Exit (ExitCode (..), exitFailure)
 import System.FilePath (takeExtension, takeFileName, (</>))
@@ -79,6 +61,16 @@ import System.IO (
  )
 import Text.Read (readMaybe)
 
+import Cardano.BM.Trace (Trace)
+import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
+import Cardano.Db.Migration.Haskell
+import Cardano.Db.Migration.Version
+import Cardano.Db.PGConfig
+import Cardano.Db.Run
+import Cardano.Db.Schema.Variants (TxOutVariantType (..))
+import qualified Cardano.Db.Statement.Function.Core as DB
+import qualified Cardano.Db.Types as DB
+
 newtype MigrationDir
   = MigrationDir FilePath
   deriving (Show)
@@ -87,14 +79,14 @@ newtype LogFileDir
   = LogFileDir FilePath
 
 data MigrationValidate = MigrationValidate
-  { mvHash :: Text
-  , mvFilepath :: Text
+  { mvHash :: !Text.Text
+  , mvFilepath :: !Text.Text
   }
   deriving (Eq, Show)
 
 data MigrationValidateError = UnknownMigrationsFound
-  { missingMigrations :: [MigrationValidate]
-  , extraMigrations :: [MigrationValidate]
+  { missingMigrations :: ![MigrationValidate]
+  , extraMigrations :: ![MigrationValidate]
   }
   deriving (Eq, Show)
 
@@ -105,8 +97,8 @@ data MigrationToRun = Initial | Full | Indexes
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
-runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutTableType -> IO (Bool, [FilePath])
-runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
+runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutVariantType -> IO (Bool, [FilePath])
+runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = do
   allScripts <- getMigrationScripts migrationDir
   ranAll <- case (mLogfiledir, allScripts) of
     (_, []) ->
@@ -147,17 +139,17 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
         pure (filter filterIndexes scripts, False)
 
     filterIndexesFull (mv, _) = do
-      case txOutTableType of
-        TxOutCore -> True
+      case txOutVariantType of
+        TxOutVariantCore -> True
         TxOutVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
     filterInitial (mv, _) = mvStage mv < 4
     filterIndexes (mv, _) = do
-      case txOutTableType of
-        TxOutCore -> mvStage mv == 4
+      case txOutVariantType of
+        TxOutVariantCore -> mvStage mv == 4
         TxOutVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
 
 -- Build hash for each file found in a directory.
-validateMigrations :: MigrationDir -> [(Text, Text)] -> IO (Maybe (MigrationValidateError, Bool))
+validateMigrations :: MigrationDir -> [(Text.Text, Text.Text)] -> IO (Maybe (MigrationValidateError, Bool))
 validateMigrations migrationDir knownMigrations = do
   let knownMigs = uncurry MigrationValidate <$> knownMigrations
   scripts <- filter (isOfficialMigrationFile . Text.unpack . mvFilepath) <$> liftIO (hashMigrations migrationDir)
@@ -184,12 +176,12 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
   let command =
         List.unwords
           [ "psql"
-          , BS.unpack (pgcDbname pgconfig)
+          , Text.unpack (pgcDbname pgconfig)
           , "--no-password"
           , "--quiet"
-          , "--username=" <> BS.unpack (pgcUser pgconfig)
-          , "--host=" <> BS.unpack (pgcHost pgconfig)
-          , "--port=" <> BS.unpack (pgcPort pgconfig)
+          , "--username=" <> Text.unpack (pgcUser pgconfig)
+          , "--host=" <> Text.unpack (pgcHost pgconfig)
+          , "--port=" <> Text.unpack (pgcPort pgconfig)
           , "--no-psqlrc" -- Ignore the ~/.psqlrc file.
           , "--single-transaction" -- Run the file as a transaction.
           , "--set ON_ERROR_STOP=on" -- Exit with non-zero on error.
@@ -219,90 +211,58 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
         Just logFilename -> putStrLn $ "\nErrors in file: " ++ logFilename ++ "\n"
       exitFailure
 
--- | Create a database migration (using functionality built into Persistent). If no
--- migration is needed return 'Nothing' otherwise return the migration as 'Text'.
-createMigration :: PGPassSource -> MigrationDir -> TxOutTableType -> IO (Maybe FilePath)
-createMigration source (MigrationDir migdir) txOutTableType = do
-  mt <- runDbNoLogging source create
-  case mt of
-    Nothing -> pure Nothing
-    Just (ver, mig) -> do
-      let fname = renderMigrationVersionFile ver
-      Text.writeFile (migdir </> fname) mig
-      pure $ Just fname
-  where
-    create :: ReaderT SqlBackend (NoLoggingT IO) (Maybe (MigrationVersion, Text))
-    create = do
-      ver <- getSchemaVersion
-      statementsBase <- getMigration migrateBaseCardanoDb
-      -- handle what type of migration to generate
-      statements <-
-        case txOutTableType of
-          TxOutCore -> do
-            statementsTxOut <- getMigration migrateCoreTxOutCardanoDb
-            pure $ statementsBase <> statementsTxOut
-          TxOutVariantAddress -> do
-            statementsTxOut <- getMigration migrateVariantAddressCardanoDb
-            pure $ statementsBase <> statementsTxOut
-      if null statements
-        then pure Nothing
-        else do
-          nextVer <- liftIO $ nextMigrationVersion ver
-          pure $ Just (nextVer, genScript statements (mvVersion nextVer))
-
-    genScript :: [Text] -> Int -> Text
-    genScript statements next_version =
-      Text.concat $
-        [ "-- Persistent generated migration.\n\n"
-        , "CREATE FUNCTION migrate() RETURNS void AS $$\n"
-        , "DECLARE\n"
-        , "  next_version int ;\n"
-        , "BEGIN\n"
-        , "  SELECT stage_two + 1 INTO next_version FROM schema_version ;\n"
-        , "  IF next_version = " <> textShow next_version <> " THEN\n"
-        ]
-          ++ concatMap buildStatement statements
-          ++ [ "    -- Hand written SQL statements can be added here.\n"
-             , "    UPDATE schema_version SET stage_two = next_version ;\n"
-             , "    RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;\n"
-             , "  END IF ;\n"
-             , "END ;\n"
-             , "$$ LANGUAGE plpgsql ;\n\n"
-             , "SELECT migrate() ;\n\n"
-             , "DROP FUNCTION migrate() ;\n"
-             ]
-
-    buildStatement :: Text -> [Text]
-    buildStatement sql = ["    EXECUTE '", sql, "' ;\n"]
-
-    getSchemaVersion :: SqlPersistT (NoLoggingT IO) MigrationVersion
-    getSchemaVersion = do
-      res <- selectFirst [] []
-      case res of
-        Nothing -> error "getSchemaVersion failed!"
-        Just x -> do
-          -- Only interested in the stage2 version because that is the only stage for
-          -- which Persistent migrations are generated.
-          let (SchemaVersion _ stage2 _) = entityVal x
-          pure $ MigrationVersion 2 stage2 0
+-- | Create a database migration.
+-- NOTE: This functionality will need to be reimplemented without Persistent.
+-- For now, this serves as a placeholder.
+createMigration :: PGPassSource -> MigrationDir -> TxOutVariantType -> IO (Maybe FilePath)
+createMigration _source (MigrationDir _migdir) _txOutVariantType = do
+  -- This would need to be completely rewritten to generate migrations manually
+  -- or using a different schema management tool
+  putStrLn "Warning: createMigration not implemented for Hasql. Manual migration creation required."
+  pure Nothing
 
 recreateDB :: PGPassSource -> IO ()
 recreateDB pgpass = do
   runWithConnectionNoLogging pgpass $ do
-    rawExecute "drop schema if exists public cascade" []
-    rawExecute "create schema public" []
+    DB.runDbSession (DB.mkCallInfo "recreateDB-dropSchema") $
+      HsqlS.statement () $
+        HsqlStm.Statement
+          "DROP SCHEMA IF EXISTS public CASCADE"
+          HsqlE.noParams
+          HsqlD.noResult
+          True
 
-getAllTableNames :: PGPassSource -> IO [Text]
+    DB.runDbSession (DB.mkCallInfo "recreateDB-createSchema") $
+      HsqlS.statement () $
+        HsqlStm.Statement
+          "CREATE SCHEMA public"
+          HsqlE.noParams
+          HsqlD.noResult
+          True
+
+getAllTableNames :: PGPassSource -> IO [Text.Text]
 getAllTableNames pgpass = do
   runWithConnectionNoLogging pgpass $ do
-    fmap unSingle <$> rawSql "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()" []
+    DB.runDbSession (DB.mkCallInfo "getAllTableNames") $
+      HsqlS.statement () $
+        HsqlStm.Statement
+          "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()"
+          HsqlE.noParams
+          (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
+          True
 
-truncateTables :: PGPassSource -> [Text] -> IO ()
+truncateTables :: PGPassSource -> [Text.Text] -> IO ()
 truncateTables pgpass tables =
   runWithConnectionNoLogging pgpass $ do
-    rawExecute ("TRUNCATE " <> intercalate (pack ", ") tables <> " CASCADE") []
+    DB.runDbSession (DB.mkCallInfo "truncateTables") $
+      HsqlS.statement () $
+        HsqlStm.Statement
+          (TextEnc.encodeUtf8 ("TRUNCATE " <> Text.intercalate ", " tables <> " CASCADE"))
+          HsqlE.noParams
+          HsqlD.noResult
+          True
 
-getMaintenancePsqlConf :: PGConfig -> IO Text
+getMaintenancePsqlConf :: PGConfig -> IO Text.Text
 getMaintenancePsqlConf pgconfig = runWithConnectionNoLogging (PGPassCached pgconfig) $ do
   mem <- showMaintenanceWorkMem
   workers <- showMaxParallelMaintenanceWorkers
@@ -315,13 +275,25 @@ getMaintenancePsqlConf pgconfig = runWithConnectionNoLogging (PGPassCached pgcon
       , mconcat workers
       ]
 
-showMaintenanceWorkMem :: ReaderT SqlBackend (NoLoggingT IO) [Text]
+showMaintenanceWorkMem :: DB.DbAction (NoLoggingT IO) [Text.Text]
 showMaintenanceWorkMem =
-  fmap unSingle <$> rawSql "show maintenance_work_mem" []
+  DB.runDbSession (DB.mkCallInfo "showMaintenanceWorkMem") $
+    HsqlS.statement () $
+      HsqlStm.Statement
+        "SHOW maintenance_work_mem"
+        HsqlE.noParams
+        (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
+        True
 
-showMaxParallelMaintenanceWorkers :: ReaderT SqlBackend (NoLoggingT IO) [Text]
+showMaxParallelMaintenanceWorkers :: DB.DbAction (NoLoggingT IO) [Text.Text]
 showMaxParallelMaintenanceWorkers =
-  fmap unSingle <$> rawSql "show max_parallel_maintenance_workers" []
+  DB.runDbSession (DB.mkCallInfo "showMaxParallelMaintenanceWorkers") $
+    HsqlS.statement () $
+      HsqlStm.Statement
+        "SHOW max_parallel_maintenance_workers"
+        HsqlE.noParams
+        (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
+        True
 
 -- This doesn't clean the DOMAIN, so droppping the schema is a better alternative
 -- for a proper cleanup
@@ -329,15 +301,26 @@ dropTables :: PGPassSource -> IO ()
 dropTables pgpass = do
   runWithConnectionNoLogging pgpass $ do
     mstr <-
-      rawSql
-        ( mconcat
-            [ "select string_agg('drop table \"' || tablename || '\" cascade', '; ')"
-            , "from pg_tables where schemaname = 'public'"
-            ]
-        )
-        []
-    whenJust (join $ listToMaybe mstr) $ \(Single dropsCommand) ->
-      rawExecute dropsCommand []
+      DB.runDbSession (DB.mkCallInfo "dropTables-getCommand") $
+        HsqlS.statement () $
+          HsqlStm.Statement
+            ( mconcat
+                [ "SELECT string_agg('drop table \"' || tablename || '\" cascade', '; ')"
+                , "FROM pg_tables WHERE schemaname = 'public'"
+                ]
+            )
+            HsqlE.noParams
+            (HsqlD.rowMaybe $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
+            True
+
+    whenJust mstr $ \dropsCommand ->
+      DB.runDbSession (DB.mkCallInfo "dropTables-execute") $
+        HsqlS.statement dropsCommand $
+          HsqlStm.Statement
+            "$1"
+            (HsqlE.param $ HsqlE.nonNullable HsqlE.text)
+            HsqlD.noResult
+            True
 
 --------------------------------------------------------------------------------
 
@@ -367,7 +350,7 @@ hashMigrations migrationDir@(MigrationDir location) = do
     hashAs :: ByteString -> Hash Blake2b_256 ByteString
     hashAs = hashWith id
 
-renderMigrationValidateError :: MigrationValidateError -> Text
+renderMigrationValidateError :: MigrationValidateError -> Text.Text
 renderMigrationValidateError = \case
   UnknownMigrationsFound missing unknown ->
     mconcat
@@ -392,23 +375,59 @@ readStageFromFilename fn =
   case takeWhile isDigit . drop 1 $ dropWhile (/= '-') (takeFileName fn) of
     stage -> fromMaybe 0 $ readMaybe stage
 
-noLedgerMigrations :: SqlBackend -> Trace IO Text -> IO ()
-noLedgerMigrations backend trce = do
-  void $ runDbIohkLogging backend trce $ do
-    rawExecute "update redeemer set fee = null where fee is not null" []
-    rawExecute "delete from reward" []
-    rawExecute "delete from epoch_stake" []
-    rawExecute "delete from ada_pots" []
-    rawExecute "delete from epoch_param" []
+noLedgerMigrations :: DB.DbEnv -> Trace IO Text.Text -> IO ()
+noLedgerMigrations dbEnv trce = do
+  let action = do
+        DB.runDbSession (DB.mkCallInfo "noLedgerMigrations-redeemer") $
+          HsqlS.statement () $
+            HsqlStm.Statement
+              "UPDATE redeemer SET fee = NULL"
+              HsqlE.noParams
+              HsqlD.noResult
+              True
 
-queryPgIndexesCount :: MonadIO m => ReaderT SqlBackend m Word64
+        DB.runDbSession (DB.mkCallInfo "noLedgerMigrations-reward") $
+          HsqlS.statement () $
+            HsqlStm.Statement
+              "DELETE FROM reward"
+              HsqlE.noParams
+              HsqlD.noResult
+              True
+
+        DB.runDbSession (DB.mkCallInfo "noLedgerMigrations-epoch_stake") $
+          HsqlS.statement () $
+            HsqlStm.Statement
+              "DELETE FROM epoch_stake"
+              HsqlE.noParams
+              HsqlD.noResult
+              True
+
+        DB.runDbSession (DB.mkCallInfo "noLedgerMigrations-ada_pots") $
+          HsqlS.statement () $
+            HsqlStm.Statement
+              "DELETE FROM ada_pots"
+              HsqlE.noParams
+              HsqlD.noResult
+              True
+
+        DB.runDbSession (DB.mkCallInfo "noLedgerMigrations-epoch_param") $
+          HsqlS.statement () $
+            HsqlStm.Statement
+              "DELETE FROM epoch_param"
+              HsqlE.noParams
+              HsqlD.noResult
+              True
+
+  void $ runDbIohkLogging trce dbEnv action
+
+queryPgIndexesCount :: MonadIO m => DB.DbAction m Word64
 queryPgIndexesCount = do
-  indexesExists :: [Text] <-
-    fmap unSingle
-      <$> rawSql
-        ( mconcat
-            [ "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"
-            ]
-        )
-        []
+  indexesExists <-
+    DB.runDbSession (DB.mkCallInfo "queryPgIndexesCount") $
+      HsqlS.statement () $
+        HsqlStm.Statement
+          "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"
+          HsqlE.noParams
+          (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
+          True
   pure $ fromIntegral (length indexesExists)

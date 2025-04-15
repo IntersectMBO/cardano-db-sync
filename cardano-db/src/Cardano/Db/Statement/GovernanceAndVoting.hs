@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -6,30 +7,29 @@
 
 module Cardano.Db.Statement.GovernanceAndVoting where
 
-import Data.Functor.Contravariant ((>$<))
+import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Word64)
+import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
-import qualified Hasql.Session as HsqlS
-import qualified Hasql.Statement as HsqlS
+import qualified Hasql.Session as HsqlSes
+import qualified Hasql.Statement as HsqlStmt
 
+import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), mkCallInfo, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Statement.Function.Query (existsById)
-import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
-import Cardano.Db.Types (DbAction, hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
-import Cardano.Prelude (ByteString, Int64, MonadIO, Proxy (..), Word64)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), validateColumn)
+import Cardano.Db.Types (DbAction, DbCallInfo (..), hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
 
 --------------------------------------------------------------------------------
-
--- | Committee
-
+-- Committee
 --------------------------------------------------------------------------------
-insertCommitteeStmt :: HsqlS.Statement SGV.Committee (Entity SGV.Committee)
+insertCommitteeStmt :: HsqlStmt.Statement SGV.Committee (Entity SGV.Committee)
 insertCommitteeStmt =
   insert
     SGV.committeeEncoder
@@ -37,17 +37,46 @@ insertCommitteeStmt =
 
 insertCommittee :: MonadIO m => SGV.Committee -> DbAction m Id.CommitteeId
 insertCommittee committee = do
-  entity <- runDbSession (mkCallInfo "insertCommittee") $ HsqlS.statement committee insertCommitteeStmt
+  entity <- runDbSession (mkCallInfo "insertCommittee") $ HsqlSes.statement committee insertCommitteeStmt
   pure $ entityKey entity
 
+queryProposalCommitteeStmt :: HsqlStmt.Statement (Maybe Id.GovActionProposalId) [Id.CommitteeId]
+queryProposalCommitteeStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    table = tableName (Proxy @SGV.Committee)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id FROM " <> table
+          , " WHERE ($1::bigint IS NULL AND gov_action_proposal_id IS NULL)"
+          , " OR ($1::bigint IS NOT NULL AND gov_action_proposal_id = $1)"
+          ]
+
+    encoder =
+      HsqlE.param
+        ( HsqlE.nullable $
+            Id.getGovActionProposalId >$< HsqlE.int8
+        )
+
+    decoder =
+      HsqlD.rowList
+        ( HsqlD.column $
+            HsqlD.nonNullable $
+              Id.CommitteeId <$> HsqlD.int8
+        )
+
+queryProposalCommittee :: MonadIO m => Maybe Id.GovActionProposalId -> DbAction m [Id.CommitteeId]
+queryProposalCommittee mgapId =
+  runDbSession (mkCallInfo "queryProposalCommittee") $
+    HsqlSes.statement mgapId queryProposalCommitteeStmt
+
 --------------------------------------------------------------------------------
-
--- | CommitteeHash
-
+-- CommitteeHash
 --------------------------------------------------------------------------------
 
 -- | Insert
-insertCommitteeHashStmt :: HsqlS.Statement SGV.CommitteeHash (Entity SGV.CommitteeHash)
+insertCommitteeHashStmt :: HsqlStmt.Statement SGV.CommitteeHash (Entity SGV.CommitteeHash)
 insertCommitteeHashStmt =
   insert
     SGV.committeeHashEncoder
@@ -55,20 +84,20 @@ insertCommitteeHashStmt =
 
 insertCommitteeHash :: MonadIO m => SGV.CommitteeHash -> DbAction m Id.CommitteeHashId
 insertCommitteeHash committeeHash = do
-  entity <- runDbSession (mkCallInfo "insertCommitteeHash") $ HsqlS.statement committeeHash insertCommitteeHashStmt
+  entity <- runDbSession (mkCallInfo "insertCommitteeHash") $ HsqlSes.statement committeeHash insertCommitteeHashStmt
   pure $ entityKey entity
 
 -- | Query
-queryCommitteeHashStmt :: HsqlS.Statement ByteString (Maybe Id.CommitteeHashId)
+queryCommitteeHashStmt :: HsqlStmt.Statement ByteString (Maybe Id.CommitteeHashId)
 queryCommitteeHashStmt =
-  HsqlS.Statement sql encoder decoder True
+  HsqlStmt.Statement sql encoder decoder True
   where
     table = tableName (Proxy @SGV.CommitteeHash)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT id FROM " <> table
-          , " WHERE raw IS NULL"
+          , " WHERE raw = $1"
           , " LIMIT 1"
           ]
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
@@ -77,14 +106,12 @@ queryCommitteeHashStmt =
 queryCommitteeHash :: MonadIO m => ByteString -> DbAction m (Maybe Id.CommitteeHashId)
 queryCommitteeHash hash =
   runDbSession (mkCallInfo "queryCommitteeHash") $
-    HsqlS.statement hash queryCommitteeHashStmt
+    HsqlSes.statement hash queryCommitteeHashStmt
 
 --------------------------------------------------------------------------------
-
--- | CommitteeMember
-
+-- CommitteeMember
 --------------------------------------------------------------------------------
-insertCommitteeMemberStmt :: HsqlS.Statement SGV.CommitteeMember (Entity SGV.CommitteeMember)
+insertCommitteeMemberStmt :: HsqlStmt.Statement SGV.CommitteeMember (Entity SGV.CommitteeMember)
 insertCommitteeMemberStmt =
   insert
     SGV.committeeMemberEncoder
@@ -92,10 +119,10 @@ insertCommitteeMemberStmt =
 
 insertCommitteeMember :: MonadIO m => SGV.CommitteeMember -> DbAction m Id.CommitteeMemberId
 insertCommitteeMember committeeMember = do
-  entity <- runDbSession (mkCallInfo "insertCommitteeMember") $ HsqlS.statement committeeMember insertCommitteeMemberStmt
+  entity <- runDbSession (mkCallInfo "insertCommitteeMember") $ HsqlSes.statement committeeMember insertCommitteeMemberStmt
   pure $ entityKey entity
 
-insertCommitteeDeRegistrationStmt :: HsqlS.Statement SGV.CommitteeDeRegistration (Entity SGV.CommitteeDeRegistration)
+insertCommitteeDeRegistrationStmt :: HsqlStmt.Statement SGV.CommitteeDeRegistration (Entity SGV.CommitteeDeRegistration)
 insertCommitteeDeRegistrationStmt =
   insert
     SGV.committeeDeRegistrationEncoder
@@ -105,10 +132,10 @@ insertCommitteeDeRegistration :: MonadIO m => SGV.CommitteeDeRegistration -> DbA
 insertCommitteeDeRegistration committeeDeRegistration = do
   entity <-
     runDbSession (mkCallInfo "insertCommitteeDeRegistration") $
-      HsqlS.statement committeeDeRegistration insertCommitteeDeRegistrationStmt
+      HsqlSes.statement committeeDeRegistration insertCommitteeDeRegistrationStmt
   pure $ entityKey entity
 
-insertCommitteeRegistrationStmt :: HsqlS.Statement SGV.CommitteeRegistration (Entity SGV.CommitteeRegistration)
+insertCommitteeRegistrationStmt :: HsqlStmt.Statement SGV.CommitteeRegistration (Entity SGV.CommitteeRegistration)
 insertCommitteeRegistrationStmt =
   insert
     SGV.committeeRegistrationEncoder
@@ -118,15 +145,13 @@ insertCommitteeRegistration :: MonadIO m => SGV.CommitteeRegistration -> DbActio
 insertCommitteeRegistration committeeRegistration = do
   entity <-
     runDbSession (mkCallInfo "insertCommitteeRegistration") $
-      HsqlS.statement committeeRegistration insertCommitteeRegistrationStmt
+      HsqlSes.statement committeeRegistration insertCommitteeRegistrationStmt
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-
--- | Constitution
-
+-- Constitution
 --------------------------------------------------------------------------------
-insertConstitutionStmt :: HsqlS.Statement SGV.Constitution (Entity SGV.Constitution)
+insertConstitutionStmt :: HsqlStmt.Statement SGV.Constitution (Entity SGV.Constitution)
 insertConstitutionStmt =
   insert
     SGV.constitutionEncoder
@@ -134,15 +159,44 @@ insertConstitutionStmt =
 
 insertConstitution :: MonadIO m => SGV.Constitution -> DbAction m Id.ConstitutionId
 insertConstitution constitution = do
-  entity <- runDbSession (mkCallInfo "insertConstitution") $ HsqlS.statement constitution insertConstitutionStmt
+  entity <- runDbSession (mkCallInfo "insertConstitution") $ HsqlSes.statement constitution insertConstitutionStmt
   pure $ entityKey entity
 
---------------------------------------------------------------------------------
+queryProposalConstitutionStmt :: HsqlStmt.Statement (Maybe Id.GovActionProposalId) [Id.ConstitutionId]
+queryProposalConstitutionStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    table = tableName (Proxy @SGV.Constitution)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id FROM " <> table
+          , " WHERE ($1::bigint IS NULL AND gov_action_proposal_id IS NULL)"
+          , " OR ($1::bigint IS NOT NULL AND gov_action_proposal_id = $1)"
+          ]
 
--- | DelegationVote
+    encoder =
+      HsqlE.param
+        ( HsqlE.nullable $
+            Id.getGovActionProposalId >$< HsqlE.int8
+        )
+
+    decoder =
+      HsqlD.rowList
+        ( HsqlD.column $
+            HsqlD.nonNullable $
+              Id.ConstitutionId <$> HsqlD.int8
+        )
+
+queryProposalConstitution :: MonadIO m => Maybe Id.GovActionProposalId -> DbAction m [Id.ConstitutionId]
+queryProposalConstitution mgapId =
+  runDbSession (mkCallInfo "queryProposalConstitution") $
+    HsqlSes.statement mgapId queryProposalConstitutionStmt
 
 --------------------------------------------------------------------------------
-insertDelegationVoteStmt :: HsqlS.Statement SGV.DelegationVote (Entity SGV.DelegationVote)
+-- DelegationVote
+--------------------------------------------------------------------------------
+insertDelegationVoteStmt :: HsqlStmt.Statement SGV.DelegationVote (Entity SGV.DelegationVote)
 insertDelegationVoteStmt =
   insert
     SGV.delegationVoteEncoder
@@ -150,17 +204,15 @@ insertDelegationVoteStmt =
 
 insertDelegationVote :: MonadIO m => SGV.DelegationVote -> DbAction m Id.DelegationVoteId
 insertDelegationVote delegationVote = do
-  entity <- runDbSession (mkCallInfo "insertDelegationVote") $ HsqlS.statement delegationVote insertDelegationVoteStmt
+  entity <- runDbSession (mkCallInfo "insertDelegationVote") $ HsqlSes.statement delegationVote insertDelegationVoteStmt
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-
--- | Drep
-
+-- Drep
 --------------------------------------------------------------------------------
 
 -- | INSERT
-insertDrepHashStmt :: HsqlS.Statement SGV.DrepHash (Entity SGV.DrepHash)
+insertDrepHashStmt :: HsqlStmt.Statement SGV.DrepHash (Entity SGV.DrepHash)
 insertDrepHashStmt =
   insert
     SGV.drepHashEncoder
@@ -168,10 +220,10 @@ insertDrepHashStmt =
 
 insertDrepHash :: MonadIO m => SGV.DrepHash -> DbAction m Id.DrepHashId
 insertDrepHash drepHash = do
-  entity <- runDbSession (mkCallInfo "insertDrepHash") $ HsqlS.statement drepHash insertDrepHashStmt
+  entity <- runDbSession (mkCallInfo "insertDrepHash") $ HsqlSes.statement drepHash insertDrepHashStmt
   pure $ entityKey entity
 
-insertDrepHashAbstainStmt :: HsqlS.Statement SGV.DrepHash (Entity SGV.DrepHash)
+insertDrepHashAbstainStmt :: HsqlStmt.Statement SGV.DrepHash (Entity SGV.DrepHash)
 insertDrepHashAbstainStmt =
   insert
     SGV.drepHashEncoder
@@ -185,7 +237,7 @@ insertDrepHashAlwaysAbstain = do
     ins = do
       entity <-
         runDbSession (mkCallInfo "insertDrepHashAlwaysAbstain") $
-          HsqlS.statement drepHashAbstain insertDrepHashAbstainStmt
+          HsqlSes.statement drepHashAbstain insertDrepHashAbstainStmt
       pure (entityKey entity)
 
     drepHashAbstain =
@@ -203,7 +255,7 @@ insertDrepHashAlwaysNoConfidence = do
     ins = do
       entity <-
         runDbSession (mkCallInfo "insertDrepHashAlwaysNoConfidence") $
-          HsqlS.statement drepHashNoConfidence insertDrepHashAbstainStmt
+          HsqlSes.statement drepHashNoConfidence insertDrepHashAbstainStmt
       pure (entityKey entity)
 
     drepHashNoConfidence =
@@ -213,7 +265,7 @@ insertDrepHashAlwaysNoConfidence = do
         , SGV.drepHashHasScript = False
         }
 
-insertDrepRegistrationStmt :: HsqlS.Statement SGV.DrepRegistration (Entity SGV.DrepRegistration)
+insertDrepRegistrationStmt :: HsqlStmt.Statement SGV.DrepRegistration (Entity SGV.DrepRegistration)
 insertDrepRegistrationStmt =
   insert
     SGV.drepRegistrationEncoder
@@ -221,49 +273,65 @@ insertDrepRegistrationStmt =
 
 insertDrepRegistration :: MonadIO m => SGV.DrepRegistration -> DbAction m Id.DrepRegistrationId
 insertDrepRegistration drepRegistration = do
-  entity <- runDbSession (mkCallInfo "insertDrepRegistration") $ HsqlS.statement drepRegistration insertDrepRegistrationStmt
+  entity <- runDbSession (mkCallInfo "insertDrepRegistration") $ HsqlSes.statement drepRegistration insertDrepRegistrationStmt
   pure $ entityKey entity
 
 -- | QUERY
-queryDrepHashAlwaysStmt :: Text.Text -> HsqlS.Statement () (Maybe Id.DrepHashId)
-queryDrepHashAlwaysStmt hardcodedAlways =
-  HsqlS.Statement sql HsqlE.noParams decoder True
+queryDrepHashSpecialStmt ::
+  forall a.
+  (DbInfo a) =>
+  Text.Text -> -- targetValue
+  HsqlStmt.Statement () (Maybe Id.DrepHashId)
+queryDrepHashSpecialStmt targetValue =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
-    table = tableName (Proxy @SGV.DrepHash)
+    table = tableName (Proxy @a)
+    rawCol = validateColumn @a "raw"
+    viewCol = validateColumn @a "view"
+    idCol = validateColumn @a "id"
+
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT id FROM " <> table
-          , " WHERE raw IS NULL"
-          , " AND view = '" <> hardcodedAlways <> "'"
-          , " LIMIT 1"
+          [ "SELECT "
+          , idCol
+          , " FROM "
+          , table
+          , " WHERE "
+          , rawCol
+          , " IS NULL"
+          , " AND "
+          , viewCol
+          , " = '"
+          , targetValue
+          , "'"
           ]
-    decoder = HsqlD.singleRow $ Id.maybeIdDecoder Id.DrepHashId
 
-queryDrepHashAlwaysAbstainStmt :: HsqlS.Statement () (Maybe Id.DrepHashId)
-queryDrepHashAlwaysAbstainStmt = queryDrepHashAlwaysStmt hardcodedAlwaysAbstain
-
-queryDrepHashAlwaysNoConfidenceStmt :: HsqlS.Statement () (Maybe Id.DrepHashId)
-queryDrepHashAlwaysNoConfidenceStmt = queryDrepHashAlwaysStmt hardcodedAlwaysNoConfidence
+    decoder =
+      HsqlD.rowMaybe
+        ( HsqlD.column $
+            HsqlD.nonNullable $
+              Id.DrepHashId <$> HsqlD.int8
+        )
 
 queryDrepHashAlwaysAbstain :: MonadIO m => DbAction m (Maybe Id.DrepHashId)
 queryDrepHashAlwaysAbstain =
   runDbSession (mkCallInfo "queryDrepHashAlwaysAbstain") $
-    HsqlS.statement () queryDrepHashAlwaysAbstainStmt
+    HsqlSes.statement () $
+      queryDrepHashSpecialStmt @SGV.DrepHash hardcodedAlwaysAbstain
 
 queryDrepHashAlwaysNoConfidence :: MonadIO m => DbAction m (Maybe Id.DrepHashId)
 queryDrepHashAlwaysNoConfidence =
   runDbSession (mkCallInfo "queryDrepHashAlwaysNoConfidence") $
-    HsqlS.statement () queryDrepHashAlwaysNoConfidenceStmt
+    HsqlSes.statement () $
+      queryDrepHashSpecialStmt @SGV.DrepHash hardcodedAlwaysNoConfidence
 
 --------------------------------------------------------------------------------
-
--- | GovActionProposal
-
+-- GovActionProposal
 --------------------------------------------------------------------------------
 
 -- | INSERT
-insertGovActionProposalStmt :: HsqlS.Statement SGV.GovActionProposal (Entity SGV.GovActionProposal)
+insertGovActionProposalStmt :: HsqlStmt.Statement SGV.GovActionProposal (Entity SGV.GovActionProposal)
 insertGovActionProposalStmt =
   insert
     SGV.govActionProposalEncoder
@@ -273,7 +341,7 @@ insertGovActionProposal :: MonadIO m => SGV.GovActionProposal -> DbAction m Id.G
 insertGovActionProposal govActionProposal = do
   entity <-
     runDbSession (mkCallInfo "insertGovActionProposal") $
-      HsqlS.statement govActionProposal insertGovActionProposalStmt
+      HsqlSes.statement govActionProposal insertGovActionProposalStmt
   pure $ entityKey entity
 
 -- | UPDATE
@@ -284,9 +352,9 @@ updateGovActionStateStmt ::
   Text.Text ->
   -- | Whether to return affected rows count
   ResultType Int64 r ->
-  HsqlS.Statement (Id.GovActionProposalId, Int64) r
+  HsqlStmt.Statement (Id.GovActionProposalId, Int64) r
 updateGovActionStateStmt columnName resultType =
-  HsqlS.Statement sql encoder decoder True
+  HsqlStmt.Statement sql encoder decoder True
   where
     (decoder, returnClause) = case resultType of
       NoResult -> (HsqlD.noResult, "")
@@ -313,9 +381,9 @@ updateGovActionStateStmt columnName resultType =
 setGovActionStateNullStmt ::
   -- | Column name to update
   Text.Text ->
-  HsqlS.Statement Int64 Int64
+  HsqlStmt.Statement Int64 Int64
 setGovActionStateNullStmt columnName =
-  HsqlS.Statement sql encoder decoder True
+  HsqlStmt.Statement sql encoder decoder True
   where
     sql =
       TextEnc.encodeUtf8 $
@@ -335,153 +403,107 @@ setGovActionStateNullStmt columnName =
     decoder = HsqlD.rowsAffected
 
 -- Statements
-updateGovActionEnactedStmt :: HsqlS.Statement (Id.GovActionProposalId, Int64) Int64
+updateGovActionEnactedStmt :: HsqlStmt.Statement (Id.GovActionProposalId, Int64) Int64
 updateGovActionEnactedStmt = updateGovActionStateStmt "enacted_epoch" (WithResult HsqlD.rowsAffected)
 
-updateGovActionRatifiedStmt :: HsqlS.Statement (Id.GovActionProposalId, Int64) ()
+updateGovActionRatifiedStmt :: HsqlStmt.Statement (Id.GovActionProposalId, Int64) ()
 updateGovActionRatifiedStmt = updateGovActionStateStmt "ratified_epoch" NoResult
 
-updateGovActionDroppedStmt :: HsqlS.Statement (Id.GovActionProposalId, Int64) ()
+updateGovActionDroppedStmt :: HsqlStmt.Statement (Id.GovActionProposalId, Int64) ()
 updateGovActionDroppedStmt = updateGovActionStateStmt "dropped_epoch" NoResult
 
-updateGovActionExpiredStmt :: HsqlS.Statement (Id.GovActionProposalId, Int64) ()
+updateGovActionExpiredStmt :: HsqlStmt.Statement (Id.GovActionProposalId, Int64) ()
 updateGovActionExpiredStmt = updateGovActionStateStmt "expired_epoch" NoResult
 
-setNullEnactedStmt :: HsqlS.Statement Int64 Int64
+setNullEnactedStmt :: HsqlStmt.Statement Int64 Int64
 setNullEnactedStmt = setGovActionStateNullStmt "enacted_epoch"
 
-setNullRatifiedStmt :: HsqlS.Statement Int64 Int64
+setNullRatifiedStmt :: HsqlStmt.Statement Int64 Int64
 setNullRatifiedStmt = setGovActionStateNullStmt "ratified_epoch"
 
-setNullExpiredStmt :: HsqlS.Statement Int64 Int64
+setNullExpiredStmt :: HsqlStmt.Statement Int64 Int64
 setNullExpiredStmt = setGovActionStateNullStmt "expired_epoch"
 
-setNullDroppedStmt :: HsqlS.Statement Int64 Int64
+setNullDroppedStmt :: HsqlStmt.Statement Int64 Int64
 setNullDroppedStmt = setGovActionStateNullStmt "dropped_epoch"
 
 -- Executions
 updateGovActionEnacted :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m Int64
 updateGovActionEnacted gaid eNo =
   runDbSession (mkCallInfo "updateGovActionEnacted") $
-    HsqlS.statement (gaid, fromIntegral eNo) updateGovActionEnactedStmt
+    HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionEnactedStmt
 
 updateGovActionRatified :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
 updateGovActionRatified gaid eNo =
   runDbSession (mkCallInfo "updateGovActionRatified") $
-    HsqlS.statement (gaid, fromIntegral eNo) updateGovActionRatifiedStmt
+    HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionRatifiedStmt
 
 updateGovActionDropped :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
 updateGovActionDropped gaid eNo =
   runDbSession (mkCallInfo "updateGovActionDropped") $
-    HsqlS.statement (gaid, fromIntegral eNo) updateGovActionDroppedStmt
+    HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionDroppedStmt
 
 updateGovActionExpired :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
 updateGovActionExpired gaid eNo =
   runDbSession (mkCallInfo "updateGovActionExpired") $
-    HsqlS.statement (gaid, fromIntegral eNo) updateGovActionExpiredStmt
+    HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionExpiredStmt
 
 setNullEnacted :: MonadIO m => Word64 -> DbAction m Int64
 setNullEnacted eNo =
   runDbSession (mkCallInfo "setNullEnacted") $
-    HsqlS.statement (fromIntegral eNo) setNullEnactedStmt
+    HsqlSes.statement (fromIntegral eNo) setNullEnactedStmt
 
 setNullRatified :: MonadIO m => Word64 -> DbAction m Int64
 setNullRatified eNo =
   runDbSession (mkCallInfo "setNullRatified") $
-    HsqlS.statement (fromIntegral eNo) setNullRatifiedStmt
+    HsqlSes.statement (fromIntegral eNo) setNullRatifiedStmt
 
 setNullExpired :: MonadIO m => Word64 -> DbAction m Int64
 setNullExpired eNo =
   runDbSession (mkCallInfo "setNullExpired") $
-    HsqlS.statement (fromIntegral eNo) setNullExpiredStmt
+    HsqlSes.statement (fromIntegral eNo) setNullExpiredStmt
 
 setNullDropped :: MonadIO m => Word64 -> DbAction m Int64
 setNullDropped eNo =
   runDbSession (mkCallInfo "setNullDropped") $
-    HsqlS.statement (fromIntegral eNo) setNullDroppedStmt
+    HsqlSes.statement (fromIntegral eNo) setNullDroppedStmt
 
--- updateGovActionEnacted :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m Int64
--- updateGovActionEnacted gaid eNo = runDbT TransWrite $ mkDbTransaction "updateGovActionEnacted" $
---     updateGovActionStateTransaction gaid eNo "enacted_epoch" (WithResult HsqlD.rowsAffected)
+queryGovActionProposalIdStmt :: HsqlStmt.Statement (Id.TxId, Word64) (Maybe Id.GovActionProposalId)
+queryGovActionProposalIdStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id"
+          , " FROM gov_action_proposal"
+          , " WHERE tx_id = $1 AND index = $2"
+          ]
 
--- updateGovActionRatified :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
--- updateGovActionRatified gaid eNo = runDbT TransWrite $ mkDbTransaction "updateGovActionRatified" $
---   updateGovActionStateTransaction gaid eNo "ratified_epoch" NoResult
+    encoder =
+      contramap fst (Id.idEncoder Id.getTxId)
+        <> contramap snd (HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8))
 
--- updateGovActionDropped :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
--- updateGovActionDropped gaid eNo = runDbT TransWrite $ mkDbTransaction "updateGovActionDropped" $
---   updateGovActionStateTransaction gaid eNo "dropped_epoch" NoResult
+    decoder = HsqlD.rowMaybe (Id.idDecoder Id.GovActionProposalId)
 
--- updateGovActionExpired :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
--- updateGovActionExpired gaid eNo = runDbT TransWrite $ mkDbTransaction "updateGovActionExpired" $
---   updateGovActionStateTransaction gaid eNo "expired_epoch" NoResult
+queryGovActionProposalId :: MonadIO m => Id.TxId -> Word64 -> DbAction m Id.GovActionProposalId
+queryGovActionProposalId txId index = do
+  let callInfo = mkCallInfo "queryGovActionProposalId"
+      errorMsg =
+        "GovActionProposal not found with txId: "
+          <> Text.pack (show txId)
+          <> " and index: "
+          <> Text.pack (show index)
 
--- setNullEnacted :: MonadIO m => Word64 -> DbAction m Int64
--- setNullEnacted eNo =  runDbT TransWrite $ mkDbTransaction "setNullEnacted" $
---   setGovActionStateNullTransaction eNo "enacted_epoch"
-
--- setNullRatified :: MonadIO m => Word64 -> DbAction m Int64
--- setNullRatified eNo = runDbT TransWrite $ mkDbTransaction "setNullRatified" $
---   setGovActionStateNullTransaction eNo "ratified_epoch"
-
--- setNullExpired :: MonadIO m => Word64 -> DbAction m Int64
--- setNullExpired eNo = runDbT TransWrite $ mkDbTransaction "setNullExpired" $
---   setGovActionStateNullTransaction eNo "expired_epoch"
-
--- setNullDropped :: MonadIO m => Word64 -> DbAction m Int64
--- setNullDropped eNo = runDbT TransWrite $ mkDbTransaction "setNullDropped" $
---   setGovActionStateNullTransaction eNo "dropped_epoch"
-
--- updateGovActionStateTransaction
---   :: forall r.
---      Id.GovActionProposalId  -- ^ ID of the proposal to update
---   -> Word64                  -- ^ Epoch number
---   -> Text.Text               -- ^ Column name to update
---   -> ResultType Int64 r      -- ^ Whether to return affected rows count
---   -> HsqlT.Transaction r     -- ^ Transaction result
--- updateGovActionStateTransaction gaid eNo columnName resultType = do
---     let params = (gaid, fromIntegral eNo :: Int64)
---     HsqlT.statement params $ HsqlS.Statement sql encoder decoder True
---   where
---     (decoder, returnClause) = case resultType of
---       NoResult -> (HsqlD.noResult, "")
---       WithResult dec -> (dec, " RETURNING xmax != 0 AS changed")
---     sql = TextEnc.encodeUtf8 $ Text.concat
---       [ "UPDATE gov_action_proposal"
---       , " SET ", columnName, " = $2"
---       , " WHERE id = $1 AND ", columnName, " IS NULL"
---       , returnClause
---       ]
-
---     encoder = mconcat
---       [ fst >$< Id.idEncoder Id.getGovActionProposalId
---       , snd >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
---       ]
-
--- setGovActionStateNullTransaction
---   :: Word64                  -- ^ Epoch number
---   -> Text.Text               -- ^ Column name to update
---   -> HsqlT.Transaction Int64 -- ^ Number of rows affected
--- setGovActionStateNullTransaction eNo columnName = do
---     let param = fromIntegral eNo :: Int64
---     HsqlT.statement param $ HsqlS.Statement sql encoder decoder True
---   where
---     sql = TextEnc.encodeUtf8 $ Text.concat
---       [ "UPDATE gov_action_proposal"
---       , " SET ", columnName, " = NULL"
---       , " WHERE ", columnName, " IS NOT NULL AND ", columnName, " > $1"
---       , " RETURNING xmax != 0 AS changed" -- xmax trick to count affected rows
---       ]
-
---     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
---     decoder = HsqlD.rowsAffected
+  result <- runDbSession callInfo $ HsqlSes.statement (txId, index) queryGovActionProposalIdStmt
+  case result of
+    Just res -> pure res
+    Nothing -> throwError $ DbError (dciCallSite callInfo) errorMsg Nothing
 
 --------------------------------------------------------------------------------
-
--- | ParamProposal
-
+-- ParamProposal
 --------------------------------------------------------------------------------
-insertParamProposalStmt :: HsqlS.Statement SGV.ParamProposal (Entity SGV.ParamProposal)
+insertParamProposalStmt :: HsqlStmt.Statement SGV.ParamProposal (Entity SGV.ParamProposal)
 insertParamProposalStmt =
   insert
     SGV.paramProposalEncoder
@@ -491,15 +513,13 @@ insertParamProposal :: MonadIO m => SGV.ParamProposal -> DbAction m Id.ParamProp
 insertParamProposal paramProposal = do
   entity <-
     runDbSession (mkCallInfo "insertParamProposal") $
-      HsqlS.statement paramProposal insertParamProposalStmt
+      HsqlSes.statement paramProposal insertParamProposalStmt
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-
--- | Treasury
-
+-- Treasury
 --------------------------------------------------------------------------------
-insertTreasuryStmt :: HsqlS.Statement SEP.Treasury (Entity SEP.Treasury)
+insertTreasuryStmt :: HsqlStmt.Statement SEP.Treasury (Entity SEP.Treasury)
 insertTreasuryStmt =
   insert
     SEP.treasuryEncoder
@@ -507,10 +527,10 @@ insertTreasuryStmt =
 
 insertTreasury :: MonadIO m => SEP.Treasury -> DbAction m Id.TreasuryId
 insertTreasury treasury = do
-  entity <- runDbSession (mkCallInfo "insertTreasury") $ HsqlS.statement treasury insertTreasuryStmt
+  entity <- runDbSession (mkCallInfo "insertTreasury") $ HsqlSes.statement treasury insertTreasuryStmt
   pure $ entityKey entity
 
-insertTreasuryWithdrawalStmt :: HsqlS.Statement SGV.TreasuryWithdrawal (Entity SGV.TreasuryWithdrawal)
+insertTreasuryWithdrawalStmt :: HsqlStmt.Statement SGV.TreasuryWithdrawal (Entity SGV.TreasuryWithdrawal)
 insertTreasuryWithdrawalStmt =
   insert
     SGV.treasuryWithdrawalEncoder
@@ -520,17 +540,15 @@ insertTreasuryWithdrawal :: MonadIO m => SGV.TreasuryWithdrawal -> DbAction m Id
 insertTreasuryWithdrawal treasuryWithdrawal = do
   entity <-
     runDbSession (mkCallInfo "insertTreasuryWithdrawal") $
-      HsqlS.statement treasuryWithdrawal insertTreasuryWithdrawalStmt
+      HsqlSes.statement treasuryWithdrawal insertTreasuryWithdrawalStmt
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-
--- | Voting
-
+-- Voting
 --------------------------------------------------------------------------------
 
 -- | INSERT
-insertVotingAnchorStmt :: HsqlS.Statement SGV.VotingAnchor (Entity SGV.VotingAnchor)
+insertVotingAnchorStmt :: HsqlStmt.Statement SGV.VotingAnchor (Entity SGV.VotingAnchor)
 insertVotingAnchorStmt =
   insert
     SGV.votingAnchorEncoder
@@ -540,10 +558,10 @@ insertVotingAnchor :: MonadIO m => SGV.VotingAnchor -> DbAction m Id.VotingAncho
 insertVotingAnchor votingAnchor = do
   entity <-
     runDbSession (mkCallInfo "insertVotingAnchor") $
-      HsqlS.statement votingAnchor insertVotingAnchorStmt
+      HsqlSes.statement votingAnchor insertVotingAnchorStmt
   pure $ entityKey entity
 
-insertVotingProcedureStmt :: HsqlS.Statement SGV.VotingProcedure (Entity SGV.VotingProcedure)
+insertVotingProcedureStmt :: HsqlStmt.Statement SGV.VotingProcedure (Entity SGV.VotingProcedure)
 insertVotingProcedureStmt =
   insert
     SGV.votingProcedureEncoder
@@ -553,12 +571,12 @@ insertVotingProcedure :: MonadIO m => SGV.VotingProcedure -> DbAction m Id.Votin
 insertVotingProcedure votingProcedure = do
   entity <-
     runDbSession (mkCallInfo "insertVotingProcedure") $
-      HsqlS.statement votingProcedure insertVotingProcedureStmt
+      HsqlSes.statement votingProcedure insertVotingProcedureStmt
   pure $ entityKey entity
 
 -- | QUERY
-queryVotingAnchorIdStmt :: HsqlS.Statement Id.VotingAnchorId Bool
-queryVotingAnchorIdStmt =
+queryVotingAnchorIdExistsStmt :: HsqlStmt.Statement Id.VotingAnchorId Bool
+queryVotingAnchorIdExistsStmt =
   existsById
     (Id.idEncoder Id.getVotingAnchorId)
     (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
@@ -566,7 +584,7 @@ queryVotingAnchorIdStmt =
 queryVotingAnchorIdExists :: MonadIO m => Id.VotingAnchorId -> DbAction m Bool
 queryVotingAnchorIdExists votingAnchorId =
   runDbSession (mkCallInfo "queryVotingAnchorIdExists") $
-    HsqlS.statement votingAnchorId queryVotingAnchorIdStmt
+    HsqlSes.statement votingAnchorId queryVotingAnchorIdExistsStmt
 
 -- These tables manage governance-related data, including DReps, committees, and voting procedures.
 

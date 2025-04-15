@@ -17,7 +17,7 @@ module Cardano.Db.Operations.Types where
 -- import Database.Esqueleto.Experimental (PersistEntity (..))
 -- import Database.Persist.Sql (PersistField)
 
--- data TxOutTableType = TxOutCore | TxOutVariantAddress
+-- data TxOutVariantType = TxOutVariantCore | TxOutVariantAddress
 --   deriving (Eq, Show)
 
 -- --------------------------------------------------------------------------------
@@ -26,17 +26,17 @@ module Cardano.Db.Operations.Types where
 
 -- -- | A wrapper for TxOut that allows us to handle both Core and Variant TxOuts
 -- data TxOutW
---   = CTxOutW !C.TxOut
---   | VTxOutW !V.TxOut !(Maybe V.Address)
+--   = VCTxOutW !C.TxOut
+--   | VATxOutW !V.TxOut !(Maybe V.Address)
 
 -- -- | A wrapper for TxOutId
 -- data TxOutIdW
---   = CTxOutIdW !C.TxOutId
---   | VTxOutIdW !V.TxOutId
+--   = VCTxOutIdW !C.TxOutId
+--   | VATxOutIdW !V.TxOutId
 --   deriving (Show)
 
--- -- TxOut fields for a given TxOutTableType
--- class (PersistEntity (TxOutTable a), PersistField (TxOutIdFor a)) => TxOutFields (a :: TxOutTableType) where
+-- -- TxOut fields for a given TxOutVariantType
+-- class (PersistEntity (TxOutTable a), PersistField (TxOutIdFor a)) => TxOutFields (a :: TxOutVariantType) where
 --   type TxOutTable a :: Type
 --   type TxOutIdFor a :: Type
 --   txOutIdField :: EntityField (TxOutTable a) (TxOutIdFor a)
@@ -48,7 +48,7 @@ module Cardano.Db.Operations.Types where
 --   txOutReferenceScriptIdField :: EntityField (TxOutTable a) (Maybe ScriptId)
 --   txOutConsumedByTxIdField :: EntityField (TxOutTable a) (Maybe TxId)
 
--- -- TxOutCore fields
+-- -- TxOutVariantCore fields
 -- instance TxOutFields 'TxOutCore where
 --   type TxOutTable 'TxOutCore = C.TxOut
 --   type TxOutIdFor 'TxOutCore = C.TxOutId
@@ -78,7 +78,7 @@ module Cardano.Db.Operations.Types where
 -- -- Address
 -- -- related fields for TxOutVariantAddress only
 -- --------------------------------------------------------------------------------
--- class AddressFields (a :: TxOutTableType) where
+-- class AddressFields (a :: TxOutVariantType) where
 --   type AddressTable a :: Type
 --   type AddressIdFor a :: Type
 --   addressField :: EntityField (AddressTable a) Text
@@ -115,15 +115,15 @@ module Cardano.Db.Operations.Types where
 --   | VMaTxOutIdW !V.MaTxOutId
 --   deriving (Show)
 
--- -- MaTxOut fields for a given TxOutTableType
--- class (PersistEntity (MaTxOutTable a)) => MaTxOutFields (a :: TxOutTableType) where
+-- -- MaTxOut fields for a given TxOutVariantType
+-- class (PersistEntity (MaTxOutTable a)) => MaTxOutFields (a :: TxOutVariantType) where
 --   type MaTxOutTable a :: Type
 --   type MaTxOutIdFor a :: Type
 --   maTxOutTxOutIdField :: EntityField (MaTxOutTable a) (TxOutIdFor a)
 --   maTxOutIdentField :: EntityField (MaTxOutTable a) MultiAssetId
 --   maTxOutQuantityField :: EntityField (MaTxOutTable a) DbWord64
 
--- -- TxOutCore fields
+-- -- TxOutVariantCore fields
 -- instance MaTxOutFields 'TxOutCore where
 --   type MaTxOutTable 'TxOutCore = C.MaTxOut
 --   type MaTxOutIdFor 'TxOutCore = C.MaTxOutId
@@ -147,7 +147,7 @@ module Cardano.Db.Operations.Types where
 --   }
 
 -- --------------------------------------------------------------------------------
--- -- CollateralTxOut fields for a given TxOutTableType
+-- -- CollateralTxOut fields for a given TxOutVariantType
 -- --------------------------------------------------------------------------------
 -- data CollateralTxOutW
 --   = CCollateralTxOutW !C.CollateralTxOut
@@ -160,7 +160,7 @@ module Cardano.Db.Operations.Types where
 --   | VCollateralTxOutIdW !V.CollateralTxOutId
 --   deriving (Show)
 
--- class (PersistEntity (CollateralTxOutTable a)) => CollateralTxOutFields (a :: TxOutTableType) where
+-- class (PersistEntity (CollateralTxOutTable a)) => CollateralTxOutFields (a :: TxOutVariantType) where
 --   type CollateralTxOutTable a :: Type
 --   type CollateralTxOutIdFor a :: Type
 --   collateralTxOutIdField :: EntityField (CollateralTxOutTable a) (CollateralTxOutIdFor a)
@@ -173,25 +173,25 @@ module Cardano.Db.Operations.Types where
 -- -- Helper functions
 -- --------------------------------------------------------------------------------
 -- extractCoreTxOut :: TxOutW -> C.TxOut
--- extractCoreTxOut (CTxOutW txOut) = txOut
+-- extractCoreTxOut (VCTxOutW txOut) = txOut
 -- -- this will never error as we can only have either CoreTxOut or VariantTxOut
--- extractCoreTxOut (VTxOutW _ _) = error "Unexpected VTxOut in CoreTxOut list"
+-- extractCoreTxOut (VATxOutW _ _) = error "Unexpected VTxOut in CoreTxOut list"
 
 -- extractVariantTxOut :: TxOutW -> V.TxOut
--- extractVariantTxOut (VTxOutW txOut _) = txOut
+-- extractVariantTxOut (VATxOutW txOut _) = txOut
 -- -- this will never error as we can only have either CoreTxOut or VariantTxOut
--- extractVariantTxOut (CTxOutW _) = error "Unexpected CTxOut in VariantTxOut list"
+-- extractVariantTxOut (VCTxOutW _) = error "Unexpected CTxOut in VariantTxOut list"
 
 -- convertTxOutIdCore :: [TxOutIdW] -> [C.TxOutId]
 -- convertTxOutIdCore = mapMaybe unwrapCore
 --   where
---     unwrapCore (CTxOutIdW txOutid) = Just txOutid
+--     unwrapCore (VCTxOutIdW txOutid) = Just txOutid
 --     unwrapCore _ = Nothing
 
 -- convertTxOutIdVariant :: [TxOutIdW] -> [V.TxOutId]
 -- convertTxOutIdVariant = mapMaybe unwrapVariant
 --   where
---     unwrapVariant (VTxOutIdW txOutid) = Just txOutid
+--     unwrapVariant (VATxOutIdW txOutid) = Just txOutid
 --     unwrapVariant _ = Nothing
 
 -- convertMaTxOutIdCore :: [MaTxOutIdW] -> [C.MaTxOutId]
@@ -206,10 +206,10 @@ module Cardano.Db.Operations.Types where
 --     unwrapVariant (VMaTxOutIdW maTxOutId) = Just maTxOutId
 --     unwrapVariant _ = Nothing
 
--- isTxOutCore :: TxOutTableType -> Bool
--- isTxOutCore TxOutCore = True
+-- isTxOutCore :: TxOutVariantType -> Bool
+-- isTxOutCore TxOutVariantCore = True
 -- isTxOutCore TxOutVariantAddress = False
 
--- isTxOutVariantAddress :: TxOutTableType -> Bool
+-- isTxOutVariantAddress :: TxOutVariantType -> Bool
 -- isTxOutVariantAddress TxOutVariantAddress = True
--- isTxOutVariantAddress TxOutCore = False
+-- isTxOutVariantAddress TxOutVariantCore = False
