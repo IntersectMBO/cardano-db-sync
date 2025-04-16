@@ -37,6 +37,7 @@ import Ouroboros.Consensus.Cardano.Node
 import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
@@ -85,7 +86,7 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 -- mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
 mkProtocolInfoCardano ::
   GenesisConfig ->
-  [Consensus.ShelleyLeaderCredentials c] -> -- this is not empty only in tests
+  [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
   (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
 mkProtocolInfoCardano genesisConfig shelleyCred =
   protocolInfoCardano $

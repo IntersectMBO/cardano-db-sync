@@ -16,6 +16,7 @@ module Cardano.DbSync.Util.Bech32 (
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
 import Cardano.Crypto.VRF.Class (rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
 import Cardano.Ledger.Crypto (VRF (..), StandardCrypto ())
+import Cardano.Crypto.VRF.Praos (PraosVRF)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), VerKeyVRF ())
 import Cardano.Prelude
 import Codec.Binary.Bech32
@@ -52,7 +53,7 @@ deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
 
 
 -- | Serialise a Verification Key to bech32 address
-serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF StandardCrypto) -> Text
+serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF PraosVRF) -> Text
 serialiseVerKeyVrfToBech32 =
   serialiseToBech32 "vrf_vk" . rawSerialiseVerKeyVRF
 

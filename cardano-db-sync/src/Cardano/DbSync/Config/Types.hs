@@ -140,8 +140,8 @@ data SyncNodeConfig = SyncNodeConfig
   , dncConwayGenesisFile :: !(Maybe GenesisFile)
   , dncConwayGenesisHash :: !(Maybe GenesisHashConway)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
-  , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ShelleyEra))
-  , dncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) AllegraEra))
+  , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
+  , dncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
   , dncMaryHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) MaryEra))
   , dncAlonzoHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AlonzoEra))
   , dncBabbageHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
