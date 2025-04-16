@@ -164,7 +164,7 @@ library
                       , cardano-ledger-binary
                       , cardano-ledger-byron
                       , cardano-ledger-core
-                      , cardano-ledger-conway ^>= 1.17.3
+                      , cardano-ledger-conway >= 1.17.3
                       , cardano-ledger-binary
                       , cardano-ledger-mary
                       , cardano-ledger-shelley >= 1.12.3.0
@@ -222,7 +222,6 @@ library
                       , time
                       , transformers
                       , transformers-except
-                      , typed-protocols
                       , unix
                       , vector
                       , wide-word

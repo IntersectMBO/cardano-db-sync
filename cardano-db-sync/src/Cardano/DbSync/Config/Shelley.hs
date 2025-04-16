@@ -21,7 +21,6 @@ import qualified Data.ByteString.Char8 as BS
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Block ()
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
@@ -29,7 +28,7 @@ import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 -- can use it.
 
 data ShelleyConfig = ShelleyConfig
-  { scConfig :: !(ShelleyGenesis StandardCrypto)
+  { scConfig :: !ShelleyGenesis
   , scGenesisHash :: !GenesisHashShelley
   }
 

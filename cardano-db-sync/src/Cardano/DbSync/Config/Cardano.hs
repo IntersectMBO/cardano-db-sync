@@ -38,7 +38,6 @@ import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
@@ -48,14 +47,14 @@ data GenesisConfig
       !Byron.Config
       !ShelleyConfig
       !AlonzoGenesis
-      !(ConwayGenesis StandardCrypto)
+      !ConwayGenesis
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
   case ge of
     GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
-    shelleyProtocolMagicId :: ShelleyGenesis StandardCrypto -> ProtocolMagicId
+    shelleyProtocolMagicId :: ShelleyGenesis -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
 
 readCardanoGenesisConfig ::
@@ -86,7 +85,7 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 -- mkProtocolCardano :: GenesisConfig -> Protocol m CardanoBlock CardanoProtocol
 mkProtocolInfoCardano ::
   GenesisConfig ->
-  [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
+  [Consensus.ShelleyLeaderCredentials c] -> -- this is not empty only in tests
   (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
 mkProtocolInfoCardano genesisConfig shelleyCred =
   protocolInfoCardano $

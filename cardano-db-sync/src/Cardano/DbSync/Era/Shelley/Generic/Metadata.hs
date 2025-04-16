@@ -35,7 +35,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text.Lazy
 import Data.Tuple.Extra (both)
 import qualified Data.Vector as Vector
-import Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardMary, StandardShelley)
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, MaryEra, ShelleyEra)
 
 data TxMetadataValue
   = TxMetaMap ![(TxMetadataValue, TxMetadataValue)]
@@ -45,7 +45,7 @@ data TxMetadataValue
   | TxMetaText !Text
   deriving (Eq, Ord, Show)
 
-fromAllegraMetadata :: Allegra.AllegraTxAuxData StandardAllegra -> Map Word64 TxMetadataValue
+fromAllegraMetadata :: Allegra.AllegraTxAuxData AllegraEra -> Map Word64 TxMetadataValue
 fromAllegraMetadata (Allegra.AllegraTxAuxData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
@@ -53,11 +53,11 @@ fromAlonzoMetadata :: AlonzoEraScript era => Alonzo.AlonzoTxAuxData era -> Map W
 fromAlonzoMetadata aux =
   Map.map fromMetadatum $ Alonzo.atadMetadata aux
 
-fromShelleyMetadata :: Shelley.ShelleyTxAuxData StandardShelley -> Map Word64 TxMetadataValue
+fromShelleyMetadata :: Shelley.ShelleyTxAuxData ShelleyEra -> Map Word64 TxMetadataValue
 fromShelleyMetadata (Shelley.ShelleyTxAuxData mdMap) =
   Map.map fromMetadatum mdMap
 
-fromMaryMetadata :: Allegra.AllegraTxAuxData StandardMary -> Map Word64 TxMetadataValue
+fromMaryMetadata :: Allegra.AllegraTxAuxData MaryEra -> Map Word64 TxMetadataValue
 fromMaryMetadata (Allegra.AllegraTxAuxData mdMap _scripts) =
   Map.map fromMetadatum mdMap
 
