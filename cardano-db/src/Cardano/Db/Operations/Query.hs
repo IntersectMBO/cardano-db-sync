@@ -108,7 +108,7 @@ import Cardano.Db.Operations.QueryHelper (defaultUTCTime, isJust, maybeToEither,
 import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
-import Cardano.Ledger.Credential (Ptr (..))
+import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad.Extra (join, whenJust)
 import Control.Monad.IO.Class (MonadIO)
@@ -771,7 +771,7 @@ queryStakeAddress addr toText = do
   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> toText addr) unValue (listToMaybe res)
 
 queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
-queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
+queryStakeRefPtr (Ptr (SlotNo32 slot) (TxIx txIx) (CertIx certIx)) = do
   res <- select $ do
     (blk :& tx :& sr) <-
       from
@@ -781,7 +781,7 @@ queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
           `innerJoin` table @StakeRegistration
         `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationTxId ==. tx ^. TxId)
 
-    where_ (blk ^. BlockSlotNo ==. just (val slot))
+    where_ (blk ^. BlockSlotNo ==. just (val $ fromIntegral slot))
     where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
     where_ (sr ^. StakeRegistrationCertIndex ==. val (fromIntegral certIx))
     -- Need to order by DelegationSlotNo descending for correct behavior when there are two

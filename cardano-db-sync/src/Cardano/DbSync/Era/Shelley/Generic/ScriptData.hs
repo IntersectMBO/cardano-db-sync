@@ -8,9 +8,10 @@ module Cardano.DbSync.Era.Shelley.Generic.ScriptData (
   ScriptData (..),
 ) where
 
+
 import Cardano.Ledger.Binary (Annotator (..), DecCBOR (..), ToCBOR (..), fromPlainDecoder)
 import Cardano.Ledger.Binary.Encoding (EncCBOR (..))
-import Cardano.Ledger.Era (Era (..))
+import Cardano.Ledger.Core (Era (..))
 import Cardano.Ledger.Plutus.Data (Data (..), getPlutusData)
 import Cardano.Prelude hiding (show)
 import Codec.Serialise (Serialise (..))

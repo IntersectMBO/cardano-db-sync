@@ -15,7 +15,6 @@ import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Prelude hiding (atomically, (.))
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -32,7 +31,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras)
+import Ouroboros.Consensus.Cardano.Block (BlockQuery (QueryHardFork), CardanoEras, StandardCrypto)
 import Ouroboros.Consensus.Cardano.Node ()
 import Ouroboros.Consensus.HardFork.Combinator.Ledger.Query (
   QueryHardFork (GetInterpreter),

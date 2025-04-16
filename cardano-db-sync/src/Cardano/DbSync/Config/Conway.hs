@@ -15,7 +15,6 @@ import Cardano.Ledger.BaseTypes (EpochInterval (..))
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Genesis (ConwayGenesis (..))
 import Cardano.Ledger.Conway.PParams (UpgradeConwayPParams (..))
-import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Ledger.Plutus.CostModels (mkCostModel)
 import Cardano.Ledger.Plutus.Language (Language (..))
 import Cardano.Prelude
@@ -37,7 +36,7 @@ data ConwayGenesisError
 
 readConwayGenesisConfig ::
   SyncNodeConfig ->
-  ExceptIO SyncNodeError (ConwayGenesis StandardCrypto)
+  ExceptIO SyncNodeError ConwayGenesis
 readConwayGenesisConfig SyncNodeConfig {..} =
   case dncConwayGenesisFile of
     Just file -> readConwayGenesisConfig' file dncConwayGenesisHash
@@ -66,7 +65,7 @@ readConwayGenesisConfig SyncNodeConfig {..} =
 readGenesis ::
   GenesisFile ->
   Maybe GenesisHashConway ->
-  ExceptIO ConwayGenesisError (ConwayGenesis StandardCrypto)
+  ExceptIO ConwayGenesisError ConwayGenesis
 readGenesis (GenesisFile file) expectedHash = do
   content <- readFile' file
   checkExpectedGenesisHash expectedHash content
@@ -78,7 +77,7 @@ readFile' file =
     (GenesisReadError file . show)
     (ByteString.readFile file)
 
-decodeGenesis :: (Text -> ConwayGenesisError) -> ByteString -> ExceptIO ConwayGenesisError (ConwayGenesis StandardCrypto)
+decodeGenesis :: (Text -> ConwayGenesisError) -> ByteString -> ExceptIO ConwayGenesisError ConwayGenesis
 decodeGenesis f =
   firstExceptT (f . Text.pack)
     . hoistEither
