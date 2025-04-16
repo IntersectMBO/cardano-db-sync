@@ -19,6 +19,7 @@ import Cardano.Ledger.Crypto (VRF (..), StandardCrypto ())
 import Cardano.Crypto.VRF.Praos (PraosVRF)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), VerKeyVRF ())
 import Cardano.Prelude
+import Cardano.Protocol.Crypto
 import Codec.Binary.Bech32
 import Prelude (id)
 
@@ -53,7 +54,7 @@ deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
 
 
 -- | Serialise a Verification Key to bech32 address
-serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF PraosVRF) -> Text
+serialiseVerKeyVrfToBech32 :: VerKeyVRF PraosVRF -> Text
 serialiseVerKeyVrfToBech32 =
   serialiseToBech32 "vrf_vk" . rawSerialiseVerKeyVRF
 
