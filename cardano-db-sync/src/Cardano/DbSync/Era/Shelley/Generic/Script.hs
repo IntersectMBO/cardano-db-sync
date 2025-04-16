@@ -17,10 +17,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Script (
 
 import Cardano.Crypto.Hash.Class
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
-import Cardano.Ledger.Core (EraCrypto ())
+import Cardano.Ledger.Core (Era (..))
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Crypto
-import Cardano.Ledger.Era (Era ())
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), coerceKeyRole)
 import qualified Cardano.Ledger.Shelley.API.Types as Shelley
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
@@ -78,7 +76,7 @@ instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley
         requireSignatureToJSON sig
       multiSigToJSON _ = Aeson.Null -- This can never happen
 
-instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era, EraCrypto era ~ StandardCrypto) => FromJSON (MultiSigScript era) where
+instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era) => FromJSON (MultiSigScript era) where
   parseJSON v = MultiSigScript <$> parseMultiSig v
 
 instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => ToJSON (TimelockScript era) where
@@ -94,10 +92,10 @@ instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra
       timelockToJSON (Allegra.RequireTimeStart slot) = requireTimeStartToJSON slot
       timelockToJSON (Allegra.RequireTimeExpire slot) = requireTimeExpireToJSON slot
 
-instance (Era era, Allegra.AllegraEraScript era, EraCrypto era ~ StandardCrypto, Core.NativeScript era ~ Allegra.Timelock era) => FromJSON (TimelockScript era) where
+instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => FromJSON (TimelockScript era) where
   parseJSON v = TimelockScript <$> parseTimelock v
 
-requireSignatureToJSON :: KeyHash discr c -> Aeson.Value
+requireSignatureToJSON :: KeyHash discr -> Aeson.Value
 requireSignatureToJSON (KeyHash sig) =
   Aeson.object
     [ "type" .= Aeson.String "sig"
@@ -141,7 +139,7 @@ requireTimeStartToJSON slot =
     ]
 
 parseMultiSig ::
-  (Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era, EraCrypto era ~ StandardCrypto) =>
+  (Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era) =>
   Aeson.Value ->
   Parser (Shelley.MultiSig era)
 parseMultiSig v =
@@ -156,7 +154,7 @@ parseMultiSig v =
     parseScriptMOf' = second (fromList . map unMultiSigScript) <$> parseScriptMOf v
 
 parseTimelock ::
-  (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era, EraCrypto era ~ StandardCrypto) =>
+  (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) =>
   Aeson.Value ->
   Parser (Allegra.Timelock era)
 parseTimelock v =
@@ -174,7 +172,7 @@ parseTimelock v =
 
 parseScriptSig ::
   Aeson.Value ->
-  Parser (KeyHash 'Payment StandardCrypto)
+  Parser (KeyHash 'Payment)
 parseScriptSig = Aeson.withObject "sig" $ \obj -> do
   v <- obj .: "type"
   case (v :: Text) of
@@ -185,7 +183,7 @@ parseScriptSig = Aeson.withObject "sig" $ \obj -> do
 
 parseKeyHash ::
   Text ->
-  Parser (KeyHash 'Payment StandardCrypto)
+  Parser (KeyHash 'Payment)
 parseKeyHash v = do
   let maybeHash = hashFromBytesAsHex $ encodeUtf8 v
       maybeKeyHash = KeyHash <$> maybeHash
