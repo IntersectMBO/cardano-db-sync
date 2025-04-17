@@ -14,10 +14,8 @@ module Cardano.DbSync.Util.Bech32 (
 ) where
 
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
-import Cardano.Crypto.VRF.Class (rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
-import Cardano.Ledger.Crypto (VRF (..), StandardCrypto ())
-import Cardano.Crypto.VRF.Praos (PraosVRF)
-import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), VerKeyVRF ())
+import Cardano.Crypto.VRF.Class (VerKeyVRF, rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
+import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Prelude
 import Cardano.Protocol.Crypto
 import Codec.Binary.Bech32
@@ -54,7 +52,7 @@ deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
 
 
 -- | Serialise a Verification Key to bech32 address
-serialiseVerKeyVrfToBech32 :: VerKeyVRF PraosVRF -> Text
+serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF StandardCrypto) -> Text
 serialiseVerKeyVrfToBech32 =
   serialiseToBech32 "vrf_vk" . rawSerialiseVerKeyVRF
 
@@ -63,11 +61,11 @@ serialiseVerKeyVrfToBech32 =
 
 
 -- | Deserialise a bech32 address to a Verification Key
-deserialiseVerKeyVrfFromBech32 :: Text -> Either DecodeError (VerKeyVRF StandardCrypto)
+deserialiseVerKeyVrfFromBech32 :: Text -> Either DecodeError (VerKeyVRF (VRF StandardCrypto))
 deserialiseVerKeyVrfFromBech32 text =
   deserialiseFromBech32 text >>= deserialiseFromRawBytes'
   where
-    deserialiseFromRawBytes' :: ByteString -> Either DecodeError (VerKeyVRF StandardCrypto)
+    deserialiseFromRawBytes' :: ByteString -> Either DecodeError (VerKeyVRF (VRF StandardCrypto))
     deserialiseFromRawBytes' =
       maybeToRight DecodeFromRawBytesError . rawDeserialiseVerKeyVRF
 
