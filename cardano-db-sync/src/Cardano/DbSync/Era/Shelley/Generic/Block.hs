@@ -221,7 +221,7 @@ blockProtoVersionPraos = Praos.hbProtVer . getHeaderBodyPraos . blockHeader
 blockSize :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Word64
 blockSize = fromIntegral . pHeaderBlockSize . blockHeader
 
-blockVrfKeyView :: VerKeyVRF StandardCrypto -> Text
+blockVrfKeyView :: VerKeyVRF (VRF StandardCrypto) -> Text
 blockVrfKeyView = serialiseVerKeyVrfToBech32
 
 blockVrfVkTPraos :: ShelleyBlock TPraosStandard era -> VerKeyVRF StandardCrypto
