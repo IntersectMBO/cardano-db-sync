@@ -248,10 +248,9 @@ insertRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   EpochNo ->
-  EpochNo ->
   [(StakeCred, Set Generic.Reward)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewards syncEnv earnedEpoch spendableEpoch rewardsChunk = do
+insertRewards syncEnv spendableEpoch rewardsChunk = do
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbRewards <- concatMapM mkRewards rewardsChunk
   let chunckDbRewards = splittRecordsEvery 100000 dbRewards
@@ -278,7 +277,6 @@ insertRewards syncEnv earnedEpoch spendableEpoch rewardsChunk = do
           { DB.rewardAddrId = saId
           , DB.rewardType = Generic.rewardSource rwd
           , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
-          , DB.rewardEarnedEpoch = unEpochNo earnedEpoch
           , DB.rewardSpendableEpoch = unEpochNo spendableEpoch
           , DB.rewardPoolId = poolId
           }
@@ -296,10 +294,9 @@ insertRewardRests ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   EpochNo ->
-  EpochNo ->
   [(StakeCred, Set Generic.RewardRest)] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertRewardRests syncEnv earnedEpoch spendableEpoch rewardsChunk = do
+insertRewardRests syncEnv spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   let chunckDbRewards = splittRecordsEvery 100000 dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
@@ -322,7 +319,6 @@ insertRewardRests syncEnv earnedEpoch spendableEpoch rewardsChunk = do
         { DB.rewardRestAddrId = saId
         , DB.rewardRestType = Generic.irSource rwd
         , DB.rewardRestAmount = Generic.coinToDbLovelace (Generic.irAmount rwd)
-        , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
         , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
         }
 
@@ -330,10 +326,9 @@ insertProposalRefunds ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   EpochNo ->
-  EpochNo ->
   [GovActionRefunded] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertProposalRefunds syncEnv earnedEpoch spendableEpoch refunds = do
+insertProposalRefunds syncEnv spendableEpoch refunds = do
   dbRewards <- mapM mkReward refunds
   lift $ DB.insertManyRewardRests dbRewards
   where
@@ -348,7 +343,6 @@ insertProposalRefunds syncEnv earnedEpoch spendableEpoch refunds = do
           { DB.rewardRestAddrId = saId
           , DB.rewardRestType = DB.RwdProposalRefund
           , DB.rewardRestAmount = Generic.coinToDbLovelace (garDeposit refund)
-          , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
           , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
           }
 
@@ -367,7 +361,7 @@ insertPoolDepositRefunds ::
   Generic.Rewards ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolDepositRefunds syncEnv epochNo refunds = do
-  insertRewards syncEnv epochNo epochNo (Map.toList rwds)
+  insertRewards syncEnv epochNo (Map.toList rwds)
   liftIO . logInfo tracer $ "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"
   where
     tracer = getTrace syncEnv

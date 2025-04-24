@@ -136,7 +136,6 @@ applyAndInsertBlock ::
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 applyAndInsertBlock syncEnv ((blockId, firstAfterRollback), cblock) = do
   applyRessultVar <- liftIO (asyncApplyResult syncEnv cblock)
-  -- insertNewEpochLedgerEvents syncEnv (sdEpochNo (apSlotDetails applyResult)) (apEvents applyResult)
   whenGeneric $ \blk ->
     prepareInsertBlock syncEnv (blockId, blk) applyRessultVar firstAfterRollback
   where
