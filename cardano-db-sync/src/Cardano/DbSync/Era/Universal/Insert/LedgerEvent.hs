@@ -51,12 +51,6 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     cache = envCache syncEnv
     ntw = getNetwork syncEnv
 
-    subFromCurrentEpoch :: Word64 -> EpochNo
-    subFromCurrentEpoch m =
-      if unEpochNo currentEpochNo >= m
-        then EpochNo $ unEpochNo currentEpochNo - m
-        else EpochNo 0
-
     toSyncState :: SyncState -> DB.SyncState
     toSyncState SyncLagging = DB.SyncLagging
     toSyncState SyncFollowing = DB.SyncFollowing
@@ -91,7 +85,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerRestrainedRewards e rwd creds ->
           lift $ adjustEpochRewards syncEnv e rwd creds
         LedgerTotalRewards _e rwd ->
-          lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+          lift $ validateEpochRewards tracer ntw currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo enacted dropped expired uncl -> do

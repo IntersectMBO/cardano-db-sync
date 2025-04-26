@@ -7,6 +7,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GADTs #-}
 
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
@@ -49,6 +50,7 @@ import Control.Monad.Extra (whenJust)
 import Database.Persist.Sql
 import Cardano.DbSync.Threads.Ledger
 import Control.Concurrent.Class.MonadSTM.Strict (readTMVar)
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 
 insertListBlocks ::
   SyncEnv ->
@@ -104,7 +106,7 @@ applyAndInsertBlocks syncEnv firstAfterRollback = go
   where
     go [] = pure ()
     go ls@(blk : rest) = do
-      prevBlockId <- DB.runDbLoggingExceptT backend tracer $ queryPrevBlockWithCache "applyAndInsertBlocks" (envCache syncEnv) (cardanoBlockHash blk)
+      prevBlockId <- DB.runDbLoggingExceptT backend tracer $ getPrevBlockId syncEnv blk
       let newBlockId = 1 + DB.unBlockKey prevBlockId
       let flagList = firstAfterRollback : replicate (length rest) False
       let zippedArgs = zip (DB.BlockKey <$> [newBlockId..]) flagList
@@ -119,12 +121,12 @@ applyAndInsertByronBlock ::
   SyncEnv ->
   ((DB.BlockId, Bool), ByronBlock) ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
-applyAndInsertByronBlock syncEnv ((_blockId, firstAfterRollback), blk) = do
+applyAndInsertByronBlock syncEnv ((blockId, firstAfterRollback), blk) = do
   (applyResult, tookSnapshot) <- liftIO (mkApplyResult syncEnv (BlockByron blk)) -- TODO use writeLedgerAction here as well for better performance
   let isStartEventOrRollback = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
   let details = apSlotDetails applyResult
   insertNewEpochLedgerEvents syncEnv (sdEpochNo (apSlotDetails applyResult)) (apEvents applyResult)
-  ExceptT $ insertByronBlock syncEnv isStartEventOrRollback blk details
+  ExceptT $ insertByronBlock syncEnv isStartEventOrRollback blockId blk details
   insertBlockRest syncEnv blkNo applyResult tookSnapshot
   where
     cblk :: CardanoBlock = BlockByron blk
@@ -278,3 +280,19 @@ toGenericBlock iopts = \case
 
 cardanoBlockHash :: CardanoBlock -> ByteString
 cardanoBlockHash = SBS.fromShort . Consensus.getOneEraHash . blockHash
+
+getPrevBlockId :: MonadIO m => SyncEnv -> CardanoBlock -> ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
+getPrevBlockId syncEnv = \case
+  BlockByron blk -> getByHash $ Byron.prevHash blk
+  BlockShelley blk -> getPrev $ Generic.blockPrevHash blk
+  BlockAllegra blk -> getPrev $ Generic.blockPrevHash blk
+  BlockMary blk -> getPrev $ Generic.blockPrevHash blk
+  BlockAlonzo blk -> getPrev $ Generic.blockPrevHash blk
+  BlockBabbage blk -> getPrev $ Generic.blockPrevHash blk
+  BlockConway blk -> getPrev $ Generic.blockPrevHash blk
+  where
+    getPrev = \case
+      Nothing -> liftLookupFail "getPrevBlockId" DB.queryGenesis
+      Just hsh -> getByHash hsh
+
+    getByHash = queryPrevBlockWithCache "getPrevBlockId" (envCache syncEnv)

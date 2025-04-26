@@ -55,14 +55,15 @@ insertByronBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Bool ->
+  DB.BlockId ->
   ByronBlock ->
   SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock syncEnv firstBlockOfEpoch blk details = do
+insertByronBlock syncEnv firstBlockOfEpoch blkId blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
+      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch blkId ablk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv blkId abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
   when
@@ -73,15 +74,15 @@ insertByronBlock syncEnv firstBlockOfEpoch blk details = do
 insertABOBBoundary ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  DB.BlockId ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary syncEnv blk details = do
+insertABOBBoundary syncEnv blkId blk details = do
   let tracer = getTrace syncEnv
       cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
   pbid <- queryPrevBlockWithCache "insertABOBBoundary" cache (Byron.ebbPrevHash blk)
-  let blkId = DB.BlockKey $ 1 + DB.unBlockKey pbid
   let epochNo = unEpochNo $ sdEpochNo details
   slid <-
     lift . DB.insertSlotLeader $
@@ -141,12 +142,12 @@ insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Bool ->
+  DB.BlockId ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock syncEnv firstBlockOfEpoch blk details = do
+insertABlock syncEnv firstBlockOfEpoch blkId blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
-  let blkId = DB.BlockKey $ 1 + DB.unBlockKey pbid
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
   lift $

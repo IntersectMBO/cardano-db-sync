@@ -476,4 +476,5 @@ splitRewardsEpochBoundary les =
       LedgerDeltaRewards {} -> Left le
       LedgerRestrainedRewards {} -> Left le
       LedgerTotalRewards {} -> Left le
+      LedgerPoolReap {} -> Left le
       _ -> Right le
