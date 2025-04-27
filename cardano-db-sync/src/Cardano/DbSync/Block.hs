@@ -23,7 +23,7 @@ import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), SyncE
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal, prepareBlock)
-import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent) -- , hasNewEpochEvent)
+import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types
@@ -156,14 +156,17 @@ prepareInsertBlock syncEnv (blockId, blk) applyRessultVar firstAfterRollback = d
   (blockDB, preparedTxs) <-
     liftIO $ concurrently
       (runOrThrowIO $ runExceptT $ DB.runDbLoggingExceptT backend tracer $ prepareBlock syncEnv blk)
-      (mapConcurrently prepareTxWithPool (Generic.blkTxs blk))
+      (mapConcurrently prepareTxWithPool (zip txIds $ Generic.blkTxs blk))
 
   _minIds <- insertBlockGroupedData syncEnv $ mconcat (snd <$> preparedTxs)
   (applyResult, tookSnapshot) <- liftIO $ atomically $ readTMVar applyRessultVar
   insertBlockWithLedger syncEnv blockId blockDB blk (fst <$> preparedTxs) applyResult firstAfterRollback tookSnapshot
   where
-    prepareTxWithPool tx = runOrThrowIO $ runSqlPoolNoTransaction (prepTx tx) (envPool syncEnv) Nothing
-    prepTx = runExceptT . prepareTxGrouped syncEnv [] blockId
+    txIdBase = 100000 * DB.unBlockKey blockId -- TODO: retrieve the id base from Cache
+    txHashesIds = (\tx -> (Generic.txLedgerTxId tx, DB.TxKey (txIdBase + fromIntegral (Generic.txBlockIndex tx)))) <$> Generic.blkTxs blk
+    txIds = snd <$> txHashesIds
+    prepareTxWithPool (txId, tx) = runOrThrowIO $ runSqlPoolNoTransaction (prepTx txId tx) (envPool syncEnv) Nothing
+    prepTx txId tx = runExceptT $ prepareTxGrouped syncEnv txHashesIds blockId txId tx
 
     backend = envBackend syncEnv
     tracer = getTrace syncEnv

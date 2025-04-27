@@ -240,7 +240,6 @@ insertByronTx ::
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
 insertByronTx syncEnv blkId tx blockIndex = do
-  let txId = DB.TxKey $ DB.unBlockKey blkId
   disInOut <- liftIO $ getDisableInOutState syncEnv
   if disInOut
     then do
@@ -273,19 +272,20 @@ insertByronTx syncEnv blkId tx blockIndex = do
             }
 
       pure 0
-    else insertByronTx' syncEnv blkId tx blockIndex
+    else insertByronTx' syncEnv blkId txId tx blockIndex
   where
     iopts = getInsertOptions syncEnv
+    txId = DB.TxKey $ DB.unBlockKey blkId + fromIntegral blockIndex
 
 insertByronTx' ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   DB.BlockId ->
+  DB.TxId ->
   Byron.TxAux ->
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-insertByronTx' syncEnv blkId tx blockIndex = do
-  let txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
+insertByronTx' syncEnv blkId txId tx blockIndex = do
   resolvedInputs <- mapM (resolveTxInputs txOutTableType) (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
   lift $
@@ -324,7 +324,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
     lift $
-      DB.updateListTxOutConsumedByTxId (prepUpdate txId <$> resolvedInputs)
+      DB.updateListTxOutConsumedByTxId (prepUpdate <$> resolvedInputs)
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
@@ -340,7 +340,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         SNErrInvariant loc ei -> SNErrInvariant loc (annotateInvariantTx (Byron.taTx tx) ei)
         _other -> ee
 
-    prepUpdate txId (_, _, txOutId, _) = (txOutId, txId)
+    prepUpdate (_, _, txOutId, _) = (txOutId, txId)
 
 insertTxOutByron ::
   (MonadBaseControl IO m, MonadIO m) =>

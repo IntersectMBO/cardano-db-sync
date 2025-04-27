@@ -71,9 +71,10 @@ prepareTxGrouped ::
   SyncEnv ->
   [(TxIdLedger, DB.TxId)] ->
   DB.BlockId ->
+  DB.TxId ->
   Generic.Tx ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ((DB.TxId, DB.Tx, Generic.Tx), BlockGroupedData)
-prepareTxGrouped syncEnv txHashes blkId tx = do
+prepareTxGrouped syncEnv txHashes blkId txId tx = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
   txDb <- lift $ prepareTx syncEnv blkId tx
   txIns <- whenTrueMempty disInOut $ mapM (prepareTxIn syncEnv txHashes txId) (Generic.txInputs tx)
@@ -91,8 +92,6 @@ prepareTxGrouped syncEnv txHashes blkId tx = do
         Generic.txMint tx
   pure ((txId, txDb, tx), BlockGroupedData txIns txOuts txMetadata maTxMint 0 outSum)
   where
-    blockIndex = Generic.txBlockIndex tx
-    txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
@@ -149,8 +148,6 @@ prepareTxIn syncEnv txHashes txId txIn = do
         , DB.txInTxOutIndex = fromIntegral $ Generic.txInIndex (Generic.txInKey txIn)
         , DB.txInRedeemerId = Nothing -- Remove or fix later https://github.com/IntersectMBO/cardano-db-sync/issues/1746
         }
-
--- let txId = DB.TxKey $ fromIntegral $ fromIntegral (DB.unBlockId blkId) * 1000 + blockIndex
 
 insertTxRest ::
   (MonadBaseControl IO m, MonadIO m) =>

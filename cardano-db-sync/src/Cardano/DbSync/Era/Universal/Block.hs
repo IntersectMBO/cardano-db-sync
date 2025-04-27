@@ -91,7 +91,7 @@ insertBlockUniversal ::
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertBlockUniversal syncEnv blkId genericBlock blk applyResult shouldLog = do
-  when (isSyncedWithintwoMinutes details) $ lift $ optimiseCaches $ envCache syncEnv
+  -- when (isSyncedWithintwoMinutes details) $ lift $ optimiseCaches $ envCache syncEnv
   lift $
     insertBlockAndCache cache blkId $
       blk

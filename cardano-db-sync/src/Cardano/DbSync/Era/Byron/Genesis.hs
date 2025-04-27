@@ -109,7 +109,7 @@ insertValidateGenesisDist syncEnv (NetworkName networkName) cfg = do
                   , DB.blockOpCert = Nothing
                   , DB.blockOpCertCounter = Nothing
                   }
-            mapM_ (insertTxOutsByron syncEnv disInOut bid) $ genesisTxos cfg
+            mapM_ (insertTxOutsByron syncEnv disInOut bid) $ zip [0 ..] (genesisTxos cfg)
             liftIO . logInfo tracer $
               "Initial genesis distribution populated. Hash "
                 <> renderByteArray (configGenesisHash cfg)
@@ -184,10 +184,9 @@ insertTxOutsByron ::
   SyncEnv ->
   Bool ->
   DB.BlockId ->
-  (Byron.Address, Byron.Lovelace) ->
+  (Int, (Byron.Address, Byron.Lovelace)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertTxOutsByron syncEnv disInOut blkId (address, value) = do
-  let txId = DB.TxKey $ DB.unBlockKey blkId
+insertTxOutsByron syncEnv disInOut blkId (txIndex, (address, value)) = do
   case txHashOfAddress address of
     Left err -> throwError err
     Right val -> lift $ do
@@ -232,12 +231,13 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
                 vAddress = mkVAddress addrRaw
             addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
             void . DB.insertTxOut $
-              DB.VTxOutW (mkVTxOut txId addrDetailId) Nothing
+              DB.VTxOutW (mkVTxOut addrDetailId) Nothing
   where
     cache = envCache syncEnv
+    txId = DB.TxKey $ fromIntegral txIndex + DB.unBlockKey blkId
 
-    mkVTxOut :: DB.TxId -> V.AddressId -> V.TxOut
-    mkVTxOut txId addrDetailId =
+    mkVTxOut :: V.AddressId -> V.TxOut
+    mkVTxOut addrDetailId =
       V.TxOut
         { V.txOutTxId = txId
         , V.txOutIndex = 0

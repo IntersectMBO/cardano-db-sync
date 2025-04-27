@@ -269,7 +269,7 @@ insertTxOuts syncEnv blkId (txIndex, (TxIn txInId _, txOut)) = do
       addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
       void . DB.insertTxOut $ DB.VTxOutW (makeVTxOut addrDetailId) Nothing
   where
-    txId = DB.TxKey $ fromIntegral txIndex + 1000 * DB.unBlockKey blkId
+    txId = DB.TxKey $ fromIntegral txIndex + 20000 * DB.unBlockKey blkId -- On mainnet genesis produces ~14000 txs
     addr = txOut ^. Core.addrTxOutL
     cache = envCache syncEnv
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
