@@ -61,6 +61,7 @@ library
                         Cardano.Db.Schema.Core.Pool
                         Cardano.Db.Schema.Core.StakeDeligation
                         Cardano.Db.Schema.Ids
+                        Cardano.Db.Schema.MinIds
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
                         Cardano.Db.Schema.Variants.TxOutAddress
@@ -78,6 +79,7 @@ library
                         Cardano.Db.Statement.MultiAsset
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool
+                        Cardano.Db.Statement.Rollback
                         Cardano.Db.Statement.StakeDeligation
                         Cardano.Db.Statement.Types
                         Cardano.Db.Statement.Variants.TxOut

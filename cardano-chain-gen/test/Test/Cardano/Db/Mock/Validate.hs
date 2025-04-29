@@ -204,7 +204,7 @@ assertCurrentEpoch :: DBSyncEnv -> Word64 -> IO ()
 assertCurrentEpoch env expected =
   assertEqBackoff env q (Just expected) defaultDelays "Unexpected epoch stake counts"
   where
-    q = queryCurrentEpochNo
+    q = queryBlocksForCurrentEpochNo
 
 assertAddrValues ::
   (EraCertState era, Core.EraTxOut era) =>

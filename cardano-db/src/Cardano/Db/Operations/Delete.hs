@@ -59,24 +59,24 @@ import Cardano.Slotting.Slot ()
 
 -- | Delete a block if it exists. Returns 'True' if it did exist and has been
 -- deleted and 'False' if it did not exist.
-deleteBlocksSlotNo ::
-  MonadIO m =>
-  Trace IO Text ->
-  TxOutTableType ->
-  SlotNo ->
-  Bool ->
-  ReaderT SqlBackend m Bool
-deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
-  mBlockId <- queryNearestBlockSlotNo slotNo
-  case mBlockId of
-    Nothing -> do
-      liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> pack (show slotNo)
-      pure False
-    Just (blockId, epochN) -> do
-      void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
-      pure True
+-- deleteBlocksSlotNo ::
+--   MonadIO m =>
+--   Trace IO Text ->
+--   TxOutTableType ->
+--   SlotNo ->
+--   Bool ->
+--   ReaderT SqlBackend m Bool
+-- deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
+--   mBlockId <- queryNearestBlockSlotNo slotNo
+--   case mBlockId of
+--     Nothing -> do
+--       liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> pack (show slotNo)
+--       pure False
+--     Just (blockId, epochN) -> do
+--       void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
+--       pure True
 
--- -- | Delete starting from a 'BlockId'.
+-- | Delete starting from a 'BlockId'.
 -- deleteBlocksBlockId ::
 --   MonadIO m =>
 --   Trace IO Text ->
@@ -140,6 +140,7 @@ deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
 --     pure [("GovActionProposal Nulled", a + b + c + e)]
 --   pure $ countLogs <> nullLogs
 
+-- TODO: CMDV
 -- deleteTablesAfterBlockId ::
 --   MonadIO m =>
 --   TxOutTableType ->
@@ -318,16 +319,6 @@ deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
 --     Just recordId -> do
 --       count <- deleteWhereCount [persistIdField @record >=. recordId]
 --       pure [(tableName, count)]
-
--- onlyDelete ::
---   forall m record.
---   (MonadIO m, PersistEntity record, PersistEntityBackend record ~ SqlBackend) =>
---   Text ->
---   [Filter record] ->
---   ReaderT SqlBackend m [(Text, Int64)]
--- onlyDelete tableName filters = do
---   count <- deleteWhereCount filters
---   pure [(tableName, count)]
 
 -- queryThenNull ::
 --   forall m record field.

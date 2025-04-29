@@ -8,11 +8,17 @@ module Cardano.Db.Schema.Variants (
   CollateralTxOutIdW (..),
   UtxoQueryResult (..),
   convertTxOutIdCore,
+  unwrapTxOutIdCore,
   convertTxOutIdAddress,
+  unwrapTxOutIdAddress,
   convertMaTxOutIdCore,
+  unwrapMaTxOutIdCore,
   convertMaTxOutIdAddress,
+  unwrapMaTxOutIdAddress,
   convertCollateralTxOutIdCore,
+  unwrapCollateralTxOutIdCore,
   convertCollateralTxOutIdAddress,
+  unwrapCollateralTxOutIdAddress,
   isTxOutCore,
   isTxOutAddress,
   module X,
@@ -86,42 +92,55 @@ data UtxoQueryResult = UtxoQueryResult
 --------------------------------------------------------------------------------
 -- Helper functions
 --------------------------------------------------------------------------------
+
 convertTxOutIdCore :: [TxOutIdW] -> [Id.TxOutCoreId]
-convertTxOutIdCore = mapMaybe unwrapCore
-  where
-    unwrapCore (CTxOutIdW txOutid) = Just txOutid
-    unwrapCore _ = Nothing
+convertTxOutIdCore = mapMaybe unwrapTxOutIdCore
 
+unwrapTxOutIdCore :: TxOutIdW -> Maybe Id.TxOutCoreId
+unwrapTxOutIdCore (CTxOutIdW txOutid) = Just txOutid
+unwrapTxOutIdCore _ = Nothing
+
+--------------------------------------------------------------------------------
 convertTxOutIdAddress :: [TxOutIdW] -> [Id.TxOutAddressId]
-convertTxOutIdAddress = mapMaybe unwrapVariant
-  where
-    unwrapVariant (VTxOutIdW txOutid) = Just txOutid
-    unwrapVariant _ = Nothing
+convertTxOutIdAddress = mapMaybe unwrapTxOutIdAddress
 
+unwrapTxOutIdAddress :: TxOutIdW -> Maybe Id.TxOutAddressId
+unwrapTxOutIdAddress (VTxOutIdW txOutid) = Just txOutid
+unwrapTxOutIdAddress _ = Nothing
+
+--------------------------------------------------------------------------------
 convertMaTxOutIdCore :: [MaTxOutIdW] -> [Id.MaTxOutCoreId]
-convertMaTxOutIdCore = mapMaybe unwrapCore
-  where
-    unwrapCore (CMaTxOutIdW maTxOutId) = Just maTxOutId
-    unwrapCore _ = Nothing
+convertMaTxOutIdCore = mapMaybe unwrapMaTxOutIdCore
 
+unwrapMaTxOutIdCore :: MaTxOutIdW -> Maybe Id.MaTxOutCoreId
+unwrapMaTxOutIdCore (CMaTxOutIdW maTxOutId) = Just maTxOutId
+unwrapMaTxOutIdCore _ = Nothing
+
+--------------------------------------------------------------------------------
 convertMaTxOutIdAddress :: [MaTxOutIdW] -> [Id.MaTxOutAddressId]
-convertMaTxOutIdAddress = mapMaybe unwrapVariant
-  where
-    unwrapVariant (VMaTxOutIdW maTxOutId) = Just maTxOutId
-    unwrapVariant _ = Nothing
+convertMaTxOutIdAddress = mapMaybe unwrapMaTxOutIdAddress
 
+unwrapMaTxOutIdAddress :: MaTxOutIdW -> Maybe Id.MaTxOutAddressId
+unwrapMaTxOutIdAddress (VMaTxOutIdW maTxOutId) = Just maTxOutId
+unwrapMaTxOutIdAddress _ = Nothing
+
+--------------------------------------------------------------------------------
 convertCollateralTxOutIdCore :: [CollateralTxOutIdW] -> [Id.CollateralTxOutCoreId]
-convertCollateralTxOutIdCore = mapMaybe unwrapCore
-  where
-    unwrapCore (CCollateralTxOutIdW iD) = Just iD
-    unwrapCore _ = Nothing
+convertCollateralTxOutIdCore = mapMaybe unwrapCollateralTxOutIdCore
 
+unwrapCollateralTxOutIdCore :: CollateralTxOutIdW -> Maybe Id.CollateralTxOutCoreId
+unwrapCollateralTxOutIdCore (CCollateralTxOutIdW iD) = Just iD
+unwrapCollateralTxOutIdCore _ = Nothing
+
+--------------------------------------------------------------------------------
 convertCollateralTxOutIdAddress :: [CollateralTxOutIdW] -> [Id.CollateralTxOutAddressId]
-convertCollateralTxOutIdAddress = mapMaybe unwrapVariant
-  where
-    unwrapVariant (VCollateralTxOutIdW iD) = Just iD
-    unwrapVariant _ = Nothing
+convertCollateralTxOutIdAddress = mapMaybe unwrapCollateralTxOutIdAddress
 
+unwrapCollateralTxOutIdAddress :: CollateralTxOutIdW -> Maybe Id.CollateralTxOutAddressId
+unwrapCollateralTxOutIdAddress (VCollateralTxOutIdW iD) = Just iD
+unwrapCollateralTxOutIdAddress _ = Nothing
+
+--------------------------------------------------------------------------------
 isTxOutCore :: TxOutTableType -> Bool
 isTxOutCore TxOutTableCore = True
 isTxOutCore _ = False
