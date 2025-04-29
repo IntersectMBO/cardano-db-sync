@@ -35,27 +35,27 @@ module Cardano.Db.Operations.QueryHelper where
 -- isJust = not_ . isNothing
 
 -- every tx made before or at the snapshot time
-txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
-txLessEqual blkid =
-  subList_select $
-    from (table @Tx) >>= \tx -> do
-      where_ $ tx ^. TxBlockId `in_` blockLessEqual
-      pure $ tx ^. TxId
-  where
-    -- every block made before or at the snapshot time
-    blockLessEqual :: SqlExpr (ValueList BlockId)
-    blockLessEqual =
-      subList_select $
-        from (table @Block) >>= \blk -> do
-          where_ $ blk ^. BlockId <=. val blkid
-          pure $ blk ^. BlockId
+-- txLessEqual :: BlockId -> SqlExpr (ValueList TxId)
+-- txLessEqual blkid =
+--   subList_select $
+--     from (table @Tx) >>= \tx -> do
+--       where_ $ tx ^. TxBlockId `in_` blockLessEqual
+--       pure $ tx ^. TxId
+--   where
+--     -- every block made before or at the snapshot time
+--     blockLessEqual :: SqlExpr (ValueList BlockId)
+--     blockLessEqual =
+--       subList_select $
+--         from (table @Block) >>= \blk -> do
+--           where_ $ blk ^. BlockId <=. val blkid
+--           pure $ blk ^. BlockId
 
 -- maybeToEither :: e -> (a -> b) -> Maybe a -> Either e b
 -- maybeToEither e f = maybe (Left e) (Right . f)
 
--- -- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
--- -- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
--- -- to un-wibble it.
+-- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
+-- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
+-- to un-wibble it.
 -- unValueSumAda :: Maybe (Value (Maybe Micro)) -> Ada
 -- unValueSumAda mvm =
 --   case fmap unValue mvm of

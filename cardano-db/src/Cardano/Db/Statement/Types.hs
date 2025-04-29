@@ -12,6 +12,7 @@
 
 module Cardano.Db.Statement.Types where
 
+import Cardano.Prelude (Int64)
 import Data.Char (isUpper, toLower)
 import Data.List (stripPrefix)
 import qualified Data.List.NonEmpty as NE
@@ -167,3 +168,7 @@ toEntity = Entity
 -- Decoder for Entity
 entityDecoder :: HsqlD.Row (Key a) -> HsqlD.Row a -> HsqlD.Row (Entity a)
 entityDecoder keyDec valDec = Entity <$> keyDec <*> valDec
+
+-- Helper function for decoding standard integer IDs
+stdKeyDecoder :: HsqlD.Row Int64
+stdKeyDecoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)

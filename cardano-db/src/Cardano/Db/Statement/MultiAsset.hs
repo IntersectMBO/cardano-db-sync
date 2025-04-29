@@ -2,6 +2,15 @@
 
 module Cardano.Db.Statement.MultiAsset where
 
+import Cardano.Prelude (ByteString, MonadIO)
+import Data.Functor.Contravariant (Contravariant (..))
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TextEnc
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Session as HsqlSes
+import qualified Hasql.Statement as HsqlStmt
+
 import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
@@ -9,17 +18,13 @@ import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..),
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
 import Cardano.Db.Statement.Types (Entity (..))
 import Cardano.Db.Types (DbAction, DbInt65)
-import Cardano.Prelude (MonadIO)
-import qualified Hasql.Decoders as HsqlD
-import qualified Hasql.Session as HsqlSes
-import qualified Hasql.Statement as HsqlS
 
 --------------------------------------------------------------------------------
 -- MultiAsset
 --------------------------------------------------------------------------------
 
--- | INSERT
-insertMultiAssetStmt :: HsqlS.Statement SMA.MultiAsset (Entity SMA.MultiAsset)
+-- | INSERT --------------------------------------------------------------------
+insertMultiAssetStmt :: HsqlStmt.Statement SMA.MultiAsset (Entity SMA.MultiAsset)
 insertMultiAssetStmt =
   insert
     SMA.multiAssetEncoder
@@ -32,10 +37,34 @@ insertMultiAsset multiAsset = do
       HsqlSes.statement multiAsset insertMultiAssetStmt
   pure $ entityKey entity
 
+-- | QUERY -------------------------------------------------------------------
+queryMultiAssetIdStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Id.MultiAssetId)
+queryMultiAssetIdStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id"
+          , " FROM multi_asset"
+          , " WHERE policy = $1 AND name = $2"
+          ]
+
+    encoder =
+      contramap fst (HsqlE.param (HsqlE.nonNullable HsqlE.bytea))
+        <> contramap snd (HsqlE.param (HsqlE.nonNullable HsqlE.bytea))
+
+    decoder = HsqlD.rowMaybe (Id.idDecoder Id.MultiAssetId)
+
+queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Id.MultiAssetId)
+queryMultiAssetId policy assetName =
+  runDbSession (mkCallInfo "queryMultiAssetId") $
+    HsqlSes.statement (policy, assetName) queryMultiAssetIdStmt
+
 --------------------------------------------------------------------------------
 -- MaTxMint
 --------------------------------------------------------------------------------
-insertMaTxMintStmt :: HsqlS.Statement SMA.MaTxMint (Entity SMA.MaTxMint)
+insertMaTxMintStmt :: HsqlStmt.Statement SMA.MaTxMint (Entity SMA.MaTxMint)
 insertMaTxMintStmt =
   insert
     SMA.maTxMintEncoder
@@ -46,7 +75,7 @@ insertMaTxMint maTxMint = do
   entity <- runDbSession (mkCallInfo "insertMaTxMint") $ HsqlSes.statement maTxMint insertMaTxMintStmt
   pure $ entityKey entity
 
-insertBulkMaTxMintStmt :: HsqlS.Statement [SMA.MaTxMint] [Entity MaTxMint]
+insertBulkMaTxMintStmt :: HsqlStmt.Statement [SMA.MaTxMint] [Entity MaTxMint]
 insertBulkMaTxMintStmt =
   insertBulk
     extractMaTxMint

@@ -104,74 +104,74 @@ module Cardano.Db.Operations.Other.ConsumedTxOut where
 --             CTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Nothing]
 --             VTxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Nothing]
 
--- runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> TxOutTableType -> Word64 -> PruneConsumeMigration -> ReaderT SqlBackend m ()
--- runExtraMigrations trce txOutTableType blockNoDiff pcm = do
---   ems <- queryAllExtraMigrations
---   isTxOutNull <- queryTxOutIsNull txOutTableType
---   let migrationValues = processMigrationValues ems pcm
---       isTxOutVariant = isTxOutVariantAddress txOutTableType
---       isTxOutAddressSet = isTxOutAddressPreviouslySet migrationValues
+runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> TxOutTableType -> Word64 -> PruneConsumeMigration -> ReaderT SqlBackend m ()
+runExtraMigrations trce txOutTableType blockNoDiff pcm = do
+  ems <- queryAllExtraMigrations
+  isTxOutNull <- queryTxOutIsNull txOutTableType
+  let migrationValues = processMigrationValues ems pcm
+      isTxOutVariant = isTxOutVariantAddress txOutTableType
+      isTxOutAddressSet = isTxOutAddressPreviouslySet migrationValues
 
---   -- can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
---   when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
---     throw $
---       DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
---   -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
---   when (not isTxOutVariant && isTxOutAddressSet) $
---     throw $
---       DBExtraMigration "runExtraMigrations: The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
---   -- Has the user given txout address config && the migration wasn't previously set
---   when (isTxOutVariant && not isTxOutAddressSet) $ do
---     updateTxOutAndCreateAddress trce
---     insertExtraMigration TxOutAddressPreviouslySet
---   -- first check if pruneTxOut flag is missing and it has previously been used
---   when (isPruneTxOutPreviouslySet migrationValues && not (pcmPruneTxOut pcm)) $
---     throw $
---       DBExtraMigration
---         "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync should still have this flag activated. Otherwise, it is considered bad usage and can cause crashes."
---   handleMigration migrationValues
---   where
---     handleMigration :: (MonadBaseControl IO m, MonadIO m) => MigrationValues -> ReaderT SqlBackend m ()
---     handleMigration migrationValues@MigrationValues {..} = do
---       let PruneConsumeMigration {..} = pruneConsumeMigration
---       case (isConsumeTxOutPreviouslySet, pcmConsumedTxOut, pcmPruneTxOut) of
---         -- No Migration Needed
---         (False, False, False) -> do
---           liftIO $ logInfo trce "runExtraMigrations: No extra migration specified"
---         -- Already migrated
---         (True, True, False) -> do
---           liftIO $ logInfo trce "runExtraMigrations: Extra migration consumed_tx_out already executed"
---         -- Invalid State
---         (True, False, False) -> liftIO $ logAndThrowIO trce "runExtraMigrations: consumed-tx-out or prune-tx-out is not set, but consumed migration is found."
---         -- Consume TxOut
---         (False, True, False) -> do
---           liftIO $ logInfo trce "runExtraMigrations: Running extra migration consumed_tx_out"
---           insertExtraMigration ConsumeTxOutPreviouslySet
---           migrateTxOut trce txOutTableType $ Just migrationValues
---         -- Prune TxOut
---         (_, _, True) -> do
---           unless isPruneTxOutPreviouslySet $ insertExtraMigration PruneTxOutFlagPreviouslySet
---           if isConsumeTxOutPreviouslySet
---             then do
---               liftIO $ logInfo trce "runExtraMigrations: Running extra migration prune tx_out"
---               deleteConsumedTxOut trce txOutTableType blockNoDiff
---             else deleteAndUpdateConsumedTxOut trce txOutTableType migrationValues blockNoDiff
+  -- can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
+  when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
+    throw $
+      DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
+  -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
+  when (not isTxOutVariant && isTxOutAddressSet) $
+    throw $
+      DBExtraMigration "runExtraMigrations: The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
+  -- Has the user given txout address config && the migration wasn't previously set
+  when (isTxOutVariant && not isTxOutAddressSet) $ do
+    updateTxOutAndCreateAddress trce
+    insertExtraMigration TxOutAddressPreviouslySet
+  -- first check if pruneTxOut flag is missing and it has previously been used
+  when (isPruneTxOutPreviouslySet migrationValues && not (pcmPruneTxOut pcm)) $
+    throw $
+      DBExtraMigration
+        "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync should still have this flag activated. Otherwise, it is considered bad usage and can cause crashes."
+  handleMigration migrationValues
+  where
+    handleMigration :: (MonadBaseControl IO m, MonadIO m) => MigrationValues -> ReaderT SqlBackend m ()
+    handleMigration migrationValues@MigrationValues {..} = do
+      let PruneConsumeMigration {..} = pruneConsumeMigration
+      case (isConsumeTxOutPreviouslySet, pcmConsumedTxOut, pcmPruneTxOut) of
+        -- No Migration Needed
+        (False, False, False) -> do
+          liftIO $ logInfo trce "runExtraMigrations: No extra migration specified"
+        -- Already migrated
+        (True, True, False) -> do
+          liftIO $ logInfo trce "runExtraMigrations: Extra migration consumed_tx_out already executed"
+        -- Invalid State
+        (True, False, False) -> liftIO $ logAndThrowIO trce "runExtraMigrations: consumed-tx-out or prune-tx-out is not set, but consumed migration is found."
+        -- Consume TxOut
+        (False, True, False) -> do
+          liftIO $ logInfo trce "runExtraMigrations: Running extra migration consumed_tx_out"
+          insertExtraMigration ConsumeTxOutPreviouslySet
+          migrateTxOut trce txOutTableType $ Just migrationValues
+        -- Prune TxOut
+        (_, _, True) -> do
+          unless isPruneTxOutPreviouslySet $ insertExtraMigration PruneTxOutFlagPreviouslySet
+          if isConsumeTxOutPreviouslySet
+            then do
+              liftIO $ logInfo trce "runExtraMigrations: Running extra migration prune tx_out"
+              deleteConsumedTxOut trce txOutTableType blockNoDiff
+            else deleteAndUpdateConsumedTxOut trce txOutTableType migrationValues blockNoDiff
 
--- queryWrongConsumedBy :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
--- queryWrongConsumedBy = \case
---   TxOutCore -> query @'TxOutCore
---   TxOutVariantAddress -> query @'TxOutVariantAddress
---   where
---     query ::
---       forall (a :: TxOutTableType) m.
---       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word64
---     query = do
---       res <- select $ do
---         txOut <- from $ table @(TxOutTable a)
---         where_ (just (txOut ^. txOutTxIdField @a) E.==. txOut ^. txOutConsumedByTxIdField @a)
---         pure countRows
---       pure $ maybe 0 unValue (listToMaybe res)
+queryWrongConsumedBy :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+queryWrongConsumedBy = \case
+  TxOutCore -> query @'TxOutCore
+  TxOutVariantAddress -> query @'TxOutVariantAddress
+  where
+    query ::
+      forall (a :: TxOutTableType) m.
+      (MonadIO m, TxOutFields a) =>
+      ReaderT SqlBackend m Word64
+    query = do
+      res <- select $ do
+        txOut <- from $ table @(TxOutTable a)
+        where_ (just (txOut ^. txOutTxIdField @a) E.==. txOut ^. txOutConsumedByTxIdField @a)
+        pure countRows
+      pure $ maybe 0 unValue (listToMaybe res)
 
 -- --------------------------------------------------------------------------------------------------
 -- -- Queries Tests
