@@ -105,7 +105,7 @@ httpGetOffChainVoteDataSingle ::
 httpGetOffChainVoteDataSingle vurl metaHash anchorType = do
   manager <- liftIO $ Http.newManager tlsManagerSettings
   request <- parseOffChainUrl url
-  let req = httpGetBytes manager request 10000 30000 url
+  let req = httpGetBytes manager request 3000000 3000000 url
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)

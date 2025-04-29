@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-db-sync
-version:                13.6.0.4
+version:                13.6.0.5
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -20,7 +20,7 @@ extra-source-files:     CHANGELOG.md
 custom-setup
   setup-depends:
                         base
-                      , Cabal
+                      , Cabal >= 3.6 && <3.14
                       , bytestring
                       , cardano-crypto-class
                       , directory
@@ -118,11 +118,6 @@ library
                         Cardano.DbSync.Epoch
 
                         Cardano.DbSync.Rollback
-
-                        Cardano.DbSync.Fix.ConsumedBy
-                        Cardano.DbSync.Fix.EpochStake
-                        Cardano.DbSync.Fix.PlutusDataBytes
-                        Cardano.DbSync.Fix.PlutusScripts
 
                         -- OffChain
                         Cardano.DbSync.OffChain

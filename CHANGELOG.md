@@ -1,5 +1,12 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.5
+- Fix offchain data so it supports files up to 3MB [#1928]
+- Upgrade to PostgreSQL 17
+- Stop creating views and deleting them on every restart [#1950]
+- Maintain less snapshots
+- No longer crash if stage 1 or 2 migration have been altered
+- Improvements for Address variant
 - Fixes an issue where stopping the docker container results in non graceful shutdown
 
 ## 13.6.0.4

@@ -88,10 +88,7 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
     if stage4orNewStage3
       then logWarning trce $ Db.renderMigrationValidateError unknown
-      else do
-        let msg = Db.renderMigrationValidateError unknown
-        logError trce msg
-        throwIO unknown
+      else logError trce $ Db.renderMigrationValidateError unknown
 
   logInfo trce "Schema migration files validated"
 
@@ -125,7 +122,6 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     trce
     iomgr
     connectionString
-    ranMigrations
     (void . runMigration)
     syncNodeConfigFromFile
     params
@@ -153,15 +149,13 @@ runSyncNode ::
   Trace IO Text ->
   IOManager ->
   ConnectionString ->
-  -- | migrations were ran on startup
-  Bool ->
   -- | run migration function
   RunMigration ->
   SyncNodeConfig ->
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -188,7 +182,6 @@ runSyncNode metricsSetters trce iomgr dbConnString ranMigrations runMigrationFnc
                 genCfg
                 syncNodeConfigFromFile
                 syncNodeParams
-                ranMigrations
                 runMigrationFnc
 
           -- Warn the user that jsonb datatypes are being removed from the database schema.
@@ -246,8 +239,6 @@ extractSyncOptions snp aop snc =
           && not (enpEpochDisabled snp || not (enpHasCache snp))
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
-    , soptSkipFix = enpSkipFix snp
-    , soptOnlyFix = enpOnlyFix snp
     , soptPruneConsumeMigration =
         initPruneConsumeMigration
           isTxOutConsumed'

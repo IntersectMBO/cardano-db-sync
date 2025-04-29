@@ -24,7 +24,6 @@ import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent, hasNewEpochEvent)
 import Cardano.DbSync.Era.Universal.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
 import Cardano.DbSync.Error
-import Cardano.DbSync.Fix.EpochStake
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.LocalStateQuery
@@ -83,7 +82,6 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
               , ". Time to restore consistency."
               ]
           rollbackFromBlockNo syncEnv (blockNo cblk)
-          void $ migrateStakeDistr syncEnv (apOldLedger applyRes)
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do

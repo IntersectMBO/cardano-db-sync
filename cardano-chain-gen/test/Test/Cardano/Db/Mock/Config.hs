@@ -122,8 +122,6 @@ data CommandLineArgs = CommandLineArgs
   , claEpochDisabled :: Bool
   , claHasCache :: Bool
   , claHasLedger :: Bool
-  , claSkipFix :: Bool
-  , claOnlyFix :: Bool
   , claForceIndexes :: Bool
   , claHasMultiAssets :: Bool
   , claHasMetadata :: Bool
@@ -286,8 +284,6 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpPGPassSource = DB.PGPassCached pgconfig
       , enpEpochDisabled = claEpochDisabled
       , enpHasCache = claHasCache
-      , enpSkipFix = claSkipFix
-      , enpOnlyFix = claOnlyFix
       , enpForceIndexes = claForceIndexes
       , enpHasInOut = True
       , enpSnEveryFollowing = 35
@@ -361,8 +357,6 @@ initCommandLineArgs =
     , claEpochDisabled = True
     , claHasCache = True
     , claHasLedger = True
-    , claSkipFix = True
-    , claOnlyFix = False
     , claForceIndexes = False
     , claHasMultiAssets = True
     , claHasMetadata = True
