@@ -1,27 +1,35 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Db.Statement.OffChain where
 
+import Cardano.Prelude (ByteString, MonadIO (..), Proxy (..), Text, when)
+import Data.Functor.Contravariant ((>$<))
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TextEnc
+import Data.Time (UTCTime)
 import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlS
+import qualified Hasql.Session as HsqlSes
+import qualified Hasql.Statement as HsqlStmt
 
 import qualified Cardano.Db.Schema.Core.OffChain as SO
+import qualified Cardano.Db.Schema.Core.Pool as SP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertCheckUnique)
 import Cardano.Db.Statement.GovernanceAndVoting (queryVotingAnchorIdExists)
 import Cardano.Db.Statement.Pool (queryPoolHashIdExistsStmt, queryPoolMetadataRefIdExistsStmt)
-import Cardano.Db.Statement.Types (Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (DbAction)
-import Cardano.Prelude (MonadIO (..), Text, when)
-import qualified Hasql.Statement as HsqlS
 
 --------------------------------------------------------------------------------
 -- OffChainPoolData
 --------------------------------------------------------------------------------
-insertOffChainPoolDataStmt :: HsqlS.Statement SO.OffChainPoolData ()
+insertOffChainPoolDataStmt :: HsqlStmt.Statement SO.OffChainPoolData ()
 insertOffChainPoolDataStmt =
   insertCheckUnique
     SO.offChainPoolDataEncoder
@@ -45,9 +53,142 @@ insertCheckOffChainPoolData offChainPoolData = do
       HsqlS.statement offChainPoolData insertOffChainPoolDataStmt
 
 --------------------------------------------------------------------------------
+queryOffChainPoolDataStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe (Text, ByteString))
+queryOffChainPoolDataStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
+    poolHashTable = tableName (Proxy @SP.PoolHash)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT pod.ticker_name, pod.bytes FROM "
+          , offChainPoolDataTable
+          , " pod"
+          , " INNER JOIN "
+          , poolHashTable
+          , " ph ON pod.pool_id = ph.id"
+          , " WHERE ph.hash_raw = $1"
+          , " AND pod.hash = $2"
+          , " LIMIT 1"
+          ]
+
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+        , snd >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+        ]
+
+    decoder =
+      HsqlD.rowMaybe $
+        (,)
+          <$> HsqlD.column (HsqlD.nonNullable HsqlD.text)
+          <*> HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+
+queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe (Text, ByteString))
+queryOffChainPoolData poolHash poolMetadataHash =
+  runDbSession (mkCallInfo "queryOffChainPoolData") $
+    HsqlSes.statement (poolHash, poolMetadataHash) queryOffChainPoolDataStmt
+
+--------------------------------------------------------------------------------
+queryUsedTickerStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Text)
+queryUsedTickerStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
+    poolHashTable = tableName (Proxy @SP.PoolHash)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT pod.ticker_name FROM "
+          , offChainPoolDataTable
+          , " pod"
+          , " INNER JOIN "
+          , poolHashTable
+          , " ph ON ph.id = pod.pool_id"
+          , " WHERE ph.hash_raw = $1"
+          , " AND pod.hash = $2"
+          , " LIMIT 1"
+          ]
+
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+        , snd >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+        ]
+
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.text)
+
+queryUsedTicker :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Text)
+queryUsedTicker poolHash metaHash =
+  runDbSession (mkCallInfo "queryUsedTicker") $
+    HsqlSes.statement (poolHash, metaHash) queryUsedTickerStmt
+
+--------------------------------------------------------------------------------
+queryOffChainPoolFetchErrorStmt :: HsqlStmt.Statement (ByteString, Maybe UTCTime) [(SO.OffChainPoolFetchError, ByteString)]
+queryOffChainPoolFetchErrorStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    offChainPoolFetchErrorTable = tableName (Proxy @SO.OffChainPoolFetchError)
+    poolHashTable = tableName (Proxy @SP.PoolHash)
+    poolMetadataRefTable = tableName (Proxy @SP.PoolMetadataRef)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT ocpfe.pool_id, ocpfe.fetch_time, ocpfe.pmr_id, "
+          , "       ocpfe.fetch_error, ocpfe.retry_count, pmr.hash "
+          , "FROM "
+          , offChainPoolFetchErrorTable
+          , " ocpfe "
+          , "INNER JOIN "
+          , poolHashTable
+          , " ph ON ocpfe.pool_id = ph.id "
+          , "INNER JOIN "
+          , poolMetadataRefTable
+          , " pmr ON ocpfe.pmr_id = pmr.id "
+          , "WHERE ph.hash_raw = $1 "
+          , "AND ($2 IS NULL OR ocpfe.fetch_time >= $2) "
+          , "ORDER BY ocpfe.fetch_time DESC "
+          , "LIMIT 10"
+          ]
+
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+        , snd >$< HsqlE.param (HsqlE.nullable HsqlE.timestamptz)
+        ]
+
+    decoder = HsqlD.rowList $ do
+      poolId <- Id.idDecoder Id.PoolHashId
+      fetchTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      pmrId <- Id.idDecoder Id.PoolMetadataRefId
+      fetchError <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
+      retryCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      metadataHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+
+      let fetchErr =
+            SO.OffChainPoolFetchError
+              { SO.offChainPoolFetchErrorPoolId = poolId
+              , SO.offChainPoolFetchErrorFetchTime = fetchTime
+              , SO.offChainPoolFetchErrorPmrId = pmrId
+              , SO.offChainPoolFetchErrorFetchError = fetchError
+              , SO.offChainPoolFetchErrorRetryCount = retryCount
+              }
+
+      pure (fetchErr, metadataHash)
+
+queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> DbAction m [(SO.OffChainPoolFetchError, ByteString)]
+queryOffChainPoolFetchError hash mFromTime =
+  runDbSession (mkCallInfo "queryOffChainPoolFetchError") $
+    HsqlSes.statement (hash, mFromTime) queryOffChainPoolFetchErrorStmt
+
+--------------------------------------------------------------------------------
 -- OffChainVoteAuthor
 --------------------------------------------------------------------------------
-insertBulkOffChainVoteAuthorsStmt :: HsqlS.Statement [SO.OffChainVoteAuthor] ()
+insertBulkOffChainVoteAuthorsStmt :: HsqlStmt.Statement [SO.OffChainVoteAuthor] ()
 insertBulkOffChainVoteAuthorsStmt =
   insertBulk
     extractOffChainVoteAuthor
@@ -69,7 +210,8 @@ insertBulkOffChainVoteAuthors offChainVoteAuthors =
   runDbSession (mkCallInfo "insertBulkOffChainVoteAuthors") $
     HsqlS.statement offChainVoteAuthors insertBulkOffChainVoteAuthorsStmt
 
-insertOffChainVoteDataStmt :: HsqlS.Statement SO.OffChainVoteData (Entity SO.OffChainVoteData)
+--------------------------------------------------------------------------------
+insertOffChainVoteDataStmt :: HsqlStmt.Statement SO.OffChainVoteData (Entity SO.OffChainVoteData)
 insertOffChainVoteDataStmt =
   insertCheckUnique
     SO.offChainVoteDataEncoder
@@ -86,7 +228,8 @@ insertOffChainVoteData offChainVoteData = do
       pure $ Just (entityKey entity)
     else pure Nothing
 
-insertOffChainVoteDrepDataStmt :: HsqlS.Statement SO.OffChainVoteDrepData (Entity SO.OffChainVoteDrepData)
+--------------------------------------------------------------------------------
+insertOffChainVoteDrepDataStmt :: HsqlStmt.Statement SO.OffChainVoteDrepData (Entity SO.OffChainVoteDrepData)
 insertOffChainVoteDrepDataStmt =
   insert
     SO.offChainVoteDrepDataEncoder
@@ -102,7 +245,7 @@ insertOffChainVoteDrepData drepData = do
 --------------------------------------------------------------------------------
 -- OffChainVoteExternalUpdate
 --------------------------------------------------------------------------------
-insertBulkOffChainVoteExternalUpdatesStmt :: HsqlS.Statement [SO.OffChainVoteExternalUpdate] ()
+insertBulkOffChainVoteExternalUpdatesStmt :: HsqlStmt.Statement [SO.OffChainVoteExternalUpdate] ()
 insertBulkOffChainVoteExternalUpdatesStmt =
   insertBulk
     extractOffChainVoteExternalUpdate
@@ -121,7 +264,8 @@ insertBulkOffChainVoteExternalUpdate offChainVoteExternalUpdates =
   runDbSession (mkCallInfo "insertBulkOffChainVoteExternalUpdate") $
     HsqlS.statement offChainVoteExternalUpdates insertBulkOffChainVoteExternalUpdatesStmt
 
-insertOffChainVoteFetchErrorStmt :: HsqlS.Statement SO.OffChainVoteFetchError ()
+--------------------------------------------------------------------------------
+insertOffChainVoteFetchErrorStmt :: HsqlStmt.Statement SO.OffChainVoteFetchError ()
 insertOffChainVoteFetchErrorStmt =
   insert
     SO.offChainVoteFetchErrorEncoder
@@ -138,7 +282,7 @@ insertOffChainVoteFetchError offChainVoteFetchError = do
 --------------------------------------------------------------------------------
 -- OffChainVoteGovActionData
 --------------------------------------------------------------------------------
-insertOffChainVoteGovActionDataStmt :: HsqlS.Statement SO.OffChainVoteGovActionData (Entity SO.OffChainVoteGovActionData)
+insertOffChainVoteGovActionDataStmt :: HsqlStmt.Statement SO.OffChainVoteGovActionData (Entity SO.OffChainVoteGovActionData)
 insertOffChainVoteGovActionDataStmt =
   insert
     SO.offChainVoteGovActionDataEncoder
@@ -154,7 +298,7 @@ insertOffChainVoteGovActionData offChainVoteGovActionData = do
 --------------------------------------------------------------------------------
 -- OffChainVoteReference
 --------------------------------------------------------------------------------
-insertBulkOffChainVoteReferencesStmt :: HsqlS.Statement [SO.OffChainVoteReference] ()
+insertBulkOffChainVoteReferencesStmt :: HsqlStmt.Statement [SO.OffChainVoteReference] ()
 insertBulkOffChainVoteReferencesStmt =
   insertBulk
     extractOffChainVoteReference

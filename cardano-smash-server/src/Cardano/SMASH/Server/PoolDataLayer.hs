@@ -123,7 +123,7 @@ getCertActions tracer conn mPoolId = do
   (certs, epoch) <- Db.runPoolDbIohkLogging conn tracer $ do
     poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
-    currentEpoch <- Db.queryCurrentEpochNo
+    currentEpoch <- Db.queryBlocksForCurrentEpochNo
     pure (poolRetired ++ poolUpdate, currentEpoch)
   let poolActions = findLatestPoolAction certs
   pure (epoch, poolActions)
@@ -133,7 +133,7 @@ getActivePools tracer conn mPoolId = do
   (certs, epoch) <- Db.runPoolDbIohkLogging conn tracer $ do
     poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
-    currentEpoch <- Db.queryCurrentEpochNo
+    currentEpoch <- Db.queryBlocksForCurrentEpochNo
     pure (poolRetired ++ poolUpdate, currentEpoch)
   pure $ groupByPoolMeta epoch certs
 

@@ -21,12 +21,12 @@ module Cardano.Db.Operations.Query (
 -- queryBlockTxCount,
 -- queryBlockId,
 -- queryCalcEpochEntry,
--- queryCurrentEpochNo,
+-- queryBlocksForCurrentEpochNo,
 -- queryNormalEpochRewardCount,
 -- queryGenesis,
 -- queryLatestBlock,
 -- queryLatestPoints,
--- queryLatestEpochNo,
+-- queryLatestEpochNoFromBlock,
 -- queryLatestBlockId,
 -- queryLatestSlotNo,
 -- queryMeta,
@@ -336,89 +336,89 @@ module Cardano.Db.Operations.Query (
 --     pure epoch
 --   pure $ entityVal <$> res
 
--- | Count the number of epochs in Epoch table.
-queryEpochCount :: MonadIO m => ReaderT SqlBackend m Word
-queryEpochCount = do
-  res <- select $ from (table @Epoch) >> pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- -- | Count the number of epochs in Epoch table.
+-- queryEpochCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryEpochCount = do
+--   res <- select $ from (table @Epoch) >> pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
-queryTxWithBlocks ::
-  MonadIO m =>
-  Word64 ->
-  [(Value Word64, Value (Maybe UTCTime), Value (Maybe UTCTime))] ->
-  ReaderT SqlBackend m Epoch
-queryTxWithBlocks epochNum blockResult = do
-  txRes <- select $ do
-    (tx :& blk) <-
-      from
-        $ table @Tx
-          `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (blk ^. BlockEpochNo ==. just (val epochNum))
-    pure (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
-  case (listToMaybe blockResult, listToMaybe txRes) of
-    (Just blk, Just tx) -> pure $ parseAndCalulateNewEpoch epochNum (unValue3 blk) (unValue3 tx)
-    (Just blk, Nothing) -> pure $ convertBlk epochNum (unValue3 blk)
-    _otherwise -> pure $ emptyEpoch epochNum
+-- queryTxWithBlocks ::
+--   MonadIO m =>
+--   Word64 ->
+--   [(Value Word64, Value (Maybe UTCTime), Value (Maybe UTCTime))] ->
+--   ReaderT SqlBackend m Epoch
+-- queryTxWithBlocks epochNum blockResult = do
+--   txRes <- select $ do
+--     (tx :& blk) <-
+--       from
+--         $ table @Tx
+--           `innerJoin` table @Block
+--         `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+--     where_ (blk ^. BlockEpochNo ==. just (val epochNum))
+--     pure (sum_ (tx ^. TxOutSum), sum_ (tx ^. TxFee), count (tx ^. TxOutSum))
+--   case (listToMaybe blockResult, listToMaybe txRes) of
+--     (Just blk, Just tx) -> pure $ parseAndCalulateNewEpoch epochNum (unValue3 blk) (unValue3 tx)
+--     (Just blk, Nothing) -> pure $ convertBlk epochNum (unValue3 blk)
+--     _otherwise -> pure $ emptyEpoch epochNum
 
-parseAndCalulateNewEpoch ::
-  Word64 ->
-  (Word64, Maybe UTCTime, Maybe UTCTime) ->
-  (Maybe Rational, Maybe Rational, Word64) ->
-  Epoch
-parseAndCalulateNewEpoch epochNum (blkCount, minBlockTime, maxBlockTime) (sumTxOut, sumTxFee, txCount) =
-  case (minBlockTime, maxBlockTime, sumTxOut, sumTxFee) of
-    (Just start, Just end, Just outSum, Just fees) ->
-      Epoch
-        (fromIntegral $ numerator outSum)
-        (DbLovelace . fromIntegral $ numerator fees)
-        txCount
-        blkCount
-        epochNum
-        start
-        end
-    (Just start, Just end, Nothing, Nothing) ->
-      Epoch 0 (DbLovelace 0) txCount blkCount epochNum start end
-    _otherwise ->
-      emptyEpoch epochNum
+-- parseAndCalulateNewEpoch ::
+--   Word64 ->
+--   (Word64, Maybe UTCTime, Maybe UTCTime) ->
+--   (Maybe Rational, Maybe Rational, Word64) ->
+--   Epoch
+-- parseAndCalulateNewEpoch epochNum (blkCount, minBlockTime, maxBlockTime) (sumTxOut, sumTxFee, txCount) =
+--   case (minBlockTime, maxBlockTime, sumTxOut, sumTxFee) of
+--     (Just start, Just end, Just outSum, Just fees) ->
+--       Epoch
+--         (fromIntegral $ numerator outSum)
+--         (DbLovelace . fromIntegral $ numerator fees)
+--         txCount
+--         blkCount
+--         epochNum
+--         start
+--         end
+--     (Just start, Just end, Nothing, Nothing) ->
+--       Epoch 0 (DbLovelace 0) txCount blkCount epochNum start end
+--     _otherwise ->
+--       emptyEpoch epochNum
 
-convertBlk :: Word64 -> (Word64, Maybe UTCTime, Maybe UTCTime) -> Epoch
-convertBlk epochNum (blkCount, b, c) =
-  case (b, c) of
-    (Just start, Just end) -> Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end
-    _otherwise -> emptyEpoch epochNum
+-- convertBlk :: Word64 -> (Word64, Maybe UTCTime, Maybe UTCTime) -> Epoch
+-- convertBlk epochNum (blkCount, b, c) =
+--   case (b, c) of
+--     (Just start, Just end) -> Epoch 0 (DbLovelace 0) 0 blkCount epochNum start end
+--     _otherwise -> emptyEpoch epochNum
 
--- We only return this when something has screwed up.
-emptyEpoch :: Word64 -> Epoch
-emptyEpoch epochNum =
-  Epoch
-    { epochOutSum = 0
-    , epochFees = DbLovelace 0
-    , epochTxCount = 0
-    , epochBlkCount = 0
-    , epochNo = epochNum
-    , epochStartTime = defaultUTCTime
-    , epochEndTime = defaultUTCTime
-    }
+-- -- We only return this when something has screwed up.
+-- emptyEpoch :: Word64 -> Epoch
+-- emptyEpoch epochNum =
+--   Epoch
+--     { epochOutSum = 0
+--     , epochFees = DbLovelace 0
+--     , epochTxCount = 0
+--     , epochBlkCount = 0
+--     , epochNo = epochNum
+--     , epochStartTime = defaultUTCTime
+--     , epochEndTime = defaultUTCTime
+--     }
 
-queryCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryCurrentEpochNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    pure $ max_ (blk ^. BlockEpochNo)
-  pure $ join (unValue =<< listToMaybe res)
+-- queryBlocksForCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryBlocksForCurrentEpochNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     pure $ max_ (blk ^. BlockEpochNo)
+--   pure $ join (unValue =<< listToMaybe res)
 
-queryNormalEpochRewardCount ::
-  MonadIO m =>
-  Word64 ->
-  ReaderT SqlBackend m Word64
-queryNormalEpochRewardCount epochNum = do
-  res <- select $ do
-    rwd <- from $ table @Reward
-    where_ (rwd ^. RewardSpendableEpoch ==. val epochNum)
-    where_ (rwd ^. RewardType `in_` valList [RwdMember, RwdLeader])
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- queryNormalEpochRewardCount ::
+--   MonadIO m =>
+--   Word64 ->
+--   ReaderT SqlBackend m Word64
+-- queryNormalEpochRewardCount epochNum = do
+--   res <- select $ do
+--     rwd <- from $ table @Reward
+--     where_ (rwd ^. RewardSpendableEpoch ==. val epochNum)
+--     where_ (rwd ^. RewardType `in_` valList [RwdMember, RwdLeader])
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
 -- queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
 -- queryGenesis = do
@@ -430,59 +430,59 @@ queryNormalEpochRewardCount epochNum = do
 --     [blk] -> pure $ Right (unValue blk)
 --     _ -> pure $ Left DBMultipleGenesis
 
--- | Get the latest block.
-queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
-queryLatestBlock = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockSlotNo)
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure blk
-  pure $ fmap entityVal (listToMaybe res)
+-- -- | Get the latest block.
+-- queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
+-- queryLatestBlock = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockSlotNo)
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     limit 1
+--     pure blk
+--   pure $ fmap entityVal (listToMaybe res)
 
-queryLatestPoints :: MonadIO m => ReaderT SqlBackend m [(Maybe Word64, ByteString)]
-queryLatestPoints = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockSlotNo)
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 5
-    pure (blk ^. BlockSlotNo, blk ^. BlockHash)
-  pure $ fmap unValue2 res
+-- queryLatestPoints :: MonadIO m => ReaderT SqlBackend m [(Maybe Word64, ByteString)]
+-- queryLatestPoints = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockSlotNo)
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     limit 5
+--     pure (blk ^. BlockSlotNo, blk ^. BlockHash)
+--   pure $ fmap unValue2 res
 
-queryLatestEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
-queryLatestEpochNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockSlotNo)
-    orderBy [desc (blk ^. BlockEpochNo)]
-    limit 1
-    pure (blk ^. BlockEpochNo)
-  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+-- queryLatestEpochNoFromBlock :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryLatestEpochNoFromBlock = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockSlotNo)
+--     orderBy [desc (blk ^. BlockEpochNo)]
+--     limit 1
+--     pure (blk ^. BlockEpochNo)
+--   pure $ fromMaybe 0 (unValue =<< listToMaybe res)
 
--- | Get 'BlockId' of the latest block.
-queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
-queryLatestBlockId = do
-  res <- select $ do
-    blk <- from $ table @Block
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure (blk ^. BlockId)
-  pure $ fmap unValue (listToMaybe res)
+-- -- | Get 'BlockId' of the latest block.
+-- queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
+-- queryLatestBlockId = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     limit 1
+--     pure (blk ^. BlockId)
+--   pure $ fmap unValue (listToMaybe res)
 
 -- | Get the latest slot number
-queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
-queryLatestSlotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockSlotNo)
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure $ blk ^. BlockSlotNo
-  pure $ fromMaybe 0 (unValue =<< listToMaybe res)
+-- queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryLatestSlotNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockSlotNo)
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     limit 1
+--     pure $ blk ^. BlockSlotNo
+--   pure $ fromMaybe 0 (unValue =<< listToMaybe res)
 
-{-# INLINEABLE queryMeta #-}
+-- {-# INLINEABLE queryMeta #-}
 
 -- -- | Get the network metadata.
 -- queryMeta :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Meta)
@@ -493,70 +493,70 @@ queryLatestSlotNo = do
 --     [m] -> Right $ entityVal m
 --     _ -> Left DbMetaMultipleRows
 
-queryScript :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
-queryScript hsh = do
-  xs <- select $ do
-    script <- from $ table @Script
-    where_ (script ^. ScriptHash ==. val hsh)
-    pure (script ^. ScriptId)
-  pure $ unValue <$> listToMaybe xs
+-- queryScriptWithId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
+-- queryScriptWithId hsh = do
+--   xs <- select $ do
+--     script <- from $ table @Script
+--     where_ (script ^. ScriptHash ==. val hsh)
+--     pure (script ^. ScriptId)
+--   pure $ unValue <$> listToMaybe xs
 
-queryDatum :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe DatumId)
-queryDatum hsh = do
-  xs <- select $ do
-    datum <- from $ table @Datum
-    where_ (datum ^. DatumHash ==. val hsh)
-    pure (datum ^. DatumId)
-  pure $ unValue <$> listToMaybe xs
+-- queryDatum :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe DatumId)
+-- queryDatum hsh = do
+--   xs <- select $ do
+--     datum <- from $ table @Datum
+--     where_ (datum ^. DatumHash ==. val hsh)
+--     pure (datum ^. DatumId)
+--   pure $ unValue <$> listToMaybe xs
 
-queryRedeemerData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe RedeemerDataId)
-queryRedeemerData hsh = do
-  xs <- select $ do
-    rdmrDt <- from $ table @RedeemerData
-    where_ (rdmrDt ^. RedeemerDataHash ==. val hsh)
-    pure (rdmrDt ^. RedeemerDataId)
-  pure $ unValue <$> listToMaybe xs
+-- queryRedeemerData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe RedeemerDataId)
+-- queryRedeemerData hsh = do
+--   xs <- select $ do
+--     rdmrDt <- from $ table @RedeemerData
+--     where_ (rdmrDt ^. RedeemerDataHash ==. val hsh)
+--     pure (rdmrDt ^. RedeemerDataId)
+--   pure $ unValue <$> listToMaybe xs
 
-querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m [(SlotNo, ByteString)]
-querySlotHash slotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockSlotNo ==. just (val $ unSlotNo slotNo))
-    pure (blk ^. BlockHash)
-  pure $ (\vh -> (slotNo, unValue vh)) <$> res
+-- querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m [(SlotNo, ByteString)]
+-- querySlotHash slotNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (blk ^. BlockSlotNo ==. just (val $ unSlotNo slotNo))
+--     pure (blk ^. BlockHash)
+--   pure $ (\vh -> (slotNo, unValue vh)) <$> res
 
-queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe MultiAssetId)
-queryMultiAssetId policy assetName = do
-  res <- select $ do
-    ma <- from $ table @MultiAsset
-    where_ (ma ^. MultiAssetPolicy ==. val policy &&. ma ^. MultiAssetName ==. val assetName)
-    pure (ma ^. MultiAssetId)
-  pure $ unValue <$> listToMaybe res
+-- queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe MultiAssetId)
+-- queryMultiAssetId policy assetName = do
+--   res <- select $ do
+--     ma <- from $ table @MultiAsset
+--     where_ (ma ^. MultiAssetPolicy ==. val policy &&. ma ^. MultiAssetName ==. val assetName)
+--     pure (ma ^. MultiAssetId)
+--   pure $ unValue <$> listToMaybe res
 
-queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
-queryCountSlotNosGreaterThan slotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockSlotNo >. just (val slotNo))
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+-- queryCountSlotNosGreaterThan slotNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (blk ^. BlockSlotNo >. just (val slotNo))
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Like 'queryCountSlotNosGreaterThan', but returns all slots in the same order.
-queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
-queryCountSlotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockSlotNo)
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- -- | Like 'queryCountSlotNosGreaterThan', but returns all slots in the same order.
+-- queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryCountSlotNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockSlotNo)
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
--- | Count the number of transactions in the Tx table.
-queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
-queryTxCount = do
-  res <- select $ do
-    _ <- from $ table @Tx
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- -- | Count the number of transactions in the Tx table.
+-- queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryTxCount = do
+--   res <- select $ do
+--     _ <- from $ table @Tx
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Get the 'TxId' associated with the given hash.
 -- queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
@@ -567,122 +567,122 @@ queryTxCount = do
 --     pure (tx ^. TxId)
 --   pure $ maybeToEither (DbLookupTxHash hash) unValue (listToMaybe res)
 
-queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
-queryEpochStakeCount epoch = do
-  res <- select $ do
-    epochStake <- from $ table @EpochStake
-    where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+-- queryEpochStakeCount epoch = do
+--   res <- select $ do
+--     epochStake <- from $ table @EpochStake
+--     where_ (epochStake ^. EpochStakeEpochNo ==. val epoch)
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
-queryMinRefId ::
-  forall m field record.
-  (MonadIO m, PersistEntity record, PersistField field) =>
-  EntityField record field ->
-  field ->
-  ReaderT SqlBackend m (Maybe (Key record))
-queryMinRefId txIdField txId = do
-  res <- select $ do
-    rec <- from $ table @record
-    where_ (rec ^. txIdField >=. val txId)
-    orderBy [asc (rec ^. persistIdField)]
-    limit 1
-    pure $ rec ^. persistIdField
-  pure $ unValue <$> listToMaybe res
+-- queryMinRefId ::
+--   forall m field record.
+--   (MonadIO m, PersistEntity record, PersistField field) =>
+--   EntityField record field ->
+--   field ->
+--   ReaderT SqlBackend m (Maybe (Key record))
+-- queryMinRefId txIdField txId = do
+--   res <- select $ do
+--     rec <- from $ table @record
+--     where_ (rec ^. txIdField >=. val txId)
+--     orderBy [asc (rec ^. persistIdField)]
+--     limit 1
+--     pure $ rec ^. persistIdField
+--   pure $ unValue <$> listToMaybe res
 
-queryMinRefIdNullable ::
-  forall m field record.
-  (MonadIO m, PersistEntity record, PersistField field) =>
-  EntityField record (Maybe field) ->
-  field ->
-  ReaderT SqlBackend m (Maybe (Key record))
-queryMinRefIdNullable txIdField txId = do
-  res <- select $ do
-    rec <- from $ table @record
-    where_ (isJust (rec ^. txIdField))
-    where_ (rec ^. txIdField >=. just (val txId))
-    orderBy [asc (rec ^. persistIdField)]
-    limit 1
-    pure $ rec ^. persistIdField
-  pure $ unValue <$> listToMaybe res
+-- queryMinRefIdNullable ::
+--   forall m field record.
+--   (MonadIO m, PersistEntity record, PersistField field) =>
+--   EntityField record (Maybe field) ->
+--   field ->
+--   ReaderT SqlBackend m (Maybe (Key record))
+-- queryMinRefIdNullable txIdField txId = do
+--   res <- select $ do
+--     rec <- from $ table @record
+--     where_ (isJust (rec ^. txIdField))
+--     where_ (rec ^. txIdField >=. just (val txId))
+--     orderBy [asc (rec ^. persistIdField)]
+--     limit 1
+--     pure $ rec ^. persistIdField
+--   pure $ unValue <$> listToMaybe res
 
-queryMaxRefId ::
-  forall m field record.
-  (MonadIO m, PersistEntity record, PersistField field) =>
-  EntityField record field ->
-  field ->
-  Bool ->
-  ReaderT SqlBackend m (Maybe (Key record))
-queryMaxRefId txIdField txId eq = do
-  res <- select $ do
-    rec <- from $ table @record
-    if eq
-      then where_ (rec ^. txIdField <=. val txId)
-      else where_ (rec ^. txIdField <. val txId)
-    orderBy [desc (rec ^. persistIdField)]
-    limit 1
-    pure $ rec ^. persistIdField
-  pure $ unValue <$> listToMaybe res
+-- queryMaxRefId ::
+--   forall m field record.
+--   (MonadIO m, PersistEntity record, PersistField field) =>
+--   EntityField record field ->
+--   field ->
+--   Bool ->
+--   ReaderT SqlBackend m (Maybe (Key record))
+-- queryMaxRefId txIdField txId eq = do
+--   res <- select $ do
+--     rec <- from $ table @record
+--     if eq
+--       then where_ (rec ^. txIdField <=. val txId)
+--       else where_ (rec ^. txIdField <. val txId)
+--     orderBy [desc (rec ^. persistIdField)]
+--     limit 1
+--     pure $ rec ^. persistIdField
+--   pure $ unValue <$> listToMaybe res
 
-existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
-existsPoolHashId phid = do
-  res <- select $ do
-    poolHash <- from $ table @PoolHash
-    where_ (poolHash ^. PoolHashId ==. val phid)
-    limit 1
-    pure (poolHash ^. PoolHashId)
-  pure $ not (null res)
+-- existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
+-- existsPoolHashId phid = do
+--   res <- select $ do
+--     poolHash <- from $ table @PoolHash
+--     where_ (poolHash ^. PoolHashId ==. val phid)
+--     limit 1
+--     pure (poolHash ^. PoolHashId)
+--   pure $ not (null res)
 
--- db-sync
-existsPoolMetadataRefId :: MonadIO m => PoolMetadataRefId -> ReaderT SqlBackend m Bool
-existsPoolMetadataRefId pmrid = do
-  res <- select $ do
-    pmr <- from $ table @PoolMetadataRef
-    where_ (pmr ^. PoolMetadataRefId ==. val pmrid)
-    limit 1
-    pure (pmr ^. PoolMetadataRefId)
-  pure $ not (null res)
+-- -- db-sync
+-- existsPoolMetadataRefId :: MonadIO m => PoolMetadataRefId -> ReaderT SqlBackend m Bool
+-- existsPoolMetadataRefId pmrid = do
+--   res <- select $ do
+--     pmr <- from $ table @PoolMetadataRef
+--     where_ (pmr ^. PoolMetadataRefId ==. val pmrid)
+--     limit 1
+--     pure (pmr ^. PoolMetadataRefId)
+--   pure $ not (null res)
 
-existsVotingAnchorId :: MonadIO m => VotingAnchorId -> ReaderT SqlBackend m Bool
-existsVotingAnchorId vaId = do
-  res <- select $ do
-    votingAnchor <- from $ table @VotingAnchor
-    where_ (votingAnchor ^. VotingAnchorId ==. val vaId)
-    limit 1
-    pure (votingAnchor ^. VotingAnchorId)
-  pure $ not (null res)
+-- existsVotingAnchorId :: MonadIO m => VotingAnchorId -> ReaderT SqlBackend m Bool
+-- existsVotingAnchorId vaId = do
+--   res <- select $ do
+--     votingAnchor <- from $ table @VotingAnchor
+--     where_ (votingAnchor ^. VotingAnchorId ==. val vaId)
+--     limit 1
+--     pure (votingAnchor ^. VotingAnchorId)
+--   pure $ not (null res)
 
 -- | Get the current block height.
-queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryBlockHeight = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockBlockNo)
-    orderBy [desc (blk ^. BlockBlockNo)]
-    limit 1
-    pure (blk ^. BlockBlockNo)
-  pure $ unValue =<< listToMaybe res
+-- queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryBlockHeight = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockBlockNo)
+--     orderBy [desc (blk ^. BlockBlockNo)]
+--     limit 1
+--     pure (blk ^. BlockBlockNo)
+--   pure $ unValue =<< listToMaybe res
 
-queryAllExtraMigrations :: MonadIO m => ReaderT SqlBackend m [ExtraMigration]
-queryAllExtraMigrations = do
-  res <- select $ do
-    ems <- from $ table @ExtraMigrations
-    pure (ems ^. ExtraMigrationsToken)
-  pure $ read . unpack . unValue <$> res
+-- queryAllExtraMigrations :: MonadIO m => ReaderT SqlBackend m [ExtraMigration]
+-- queryAllExtraMigrations = do
+--   res <- select $ do
+--     ems <- from $ table @ExtraMigrations
+--     pure (ems ^. ExtraMigrationsToken)
+--   pure $ read . unpack . unValue <$> res
 
-queryMinMaxEpochStake :: MonadIO m => ReaderT SqlBackend m (Maybe Word64, Maybe Word64)
-queryMinMaxEpochStake = do
-  maxEpoch <- select $ do
-    es <- from $ table @EpochStake
-    orderBy [desc (es ^. EpochStakeId)]
-    limit 1
-    pure (es ^. EpochStakeEpochNo)
-  minEpoch <- select $ do
-    es <- from $ table @EpochStake
-    orderBy [asc (es ^. EpochStakeId)]
-    limit 1
-    pure (es ^. EpochStakeEpochNo)
-  pure (unValue <$> listToMaybe minEpoch, unValue <$> listToMaybe maxEpoch)
+-- queryMinMaxEpochStake :: MonadIO m => ReaderT SqlBackend m (Maybe Word64, Maybe Word64)
+-- queryMinMaxEpochStake = do
+--   maxEpoch <- select $ do
+--     es <- from $ table @EpochStake
+--     orderBy [desc (es ^. EpochStakeId)]
+--     limit 1
+--     pure (es ^. EpochStakeEpochNo)
+--   minEpoch <- select $ do
+--     es <- from $ table @EpochStake
+--     orderBy [asc (es ^. EpochStakeId)]
+--     limit 1
+--     pure (es ^. EpochStakeEpochNo)
+--   pure (unValue <$> listToMaybe minEpoch, unValue <$> listToMaybe maxEpoch)
 
 -- queryGovActionProposalId :: MonadIO m => TxId -> Word64 -> ReaderT SqlBackend m (Either LookupFail GovActionProposalId)
 -- queryGovActionProposalId txId index = do
@@ -693,63 +693,63 @@ queryMinMaxEpochStake = do
 --     pure ga
 --   pure $ maybeToEither (DbLookupGovActionPair txId index) entityKey (listToMaybe res)
 
-queryDrepHashAlwaysAbstain :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
-queryDrepHashAlwaysAbstain = do
-  res <- select $ do
-    dh <- from $ table @DrepHash
-    where_ (isNothing (dh ^. DrepHashRaw))
-    where_ (dh ^. DrepHashView ==. val hardcodedAlwaysAbstain)
-    pure $ dh ^. DrepHashId
-  pure $ unValue <$> listToMaybe res
+-- queryDrepHashAlwaysAbstain :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
+-- queryDrepHashAlwaysAbstain = do
+--   res <- select $ do
+--     dh <- from $ table @DrepHash
+--     where_ (isNothing (dh ^. DrepHashRaw))
+--     where_ (dh ^. DrepHashView ==. val hardcodedAlwaysAbstain)
+--     pure $ dh ^. DrepHashId
+--   pure $ unValue <$> listToMaybe res
 
-queryDrepHashAlwaysNoConfidence :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
-queryDrepHashAlwaysNoConfidence = do
-  res <- select $ do
-    dh <- from $ table @DrepHash
-    where_ (isNothing (dh ^. DrepHashRaw))
-    where_ (dh ^. DrepHashView ==. val hardcodedAlwaysNoConfidence)
-    pure $ dh ^. DrepHashId
-  pure $ unValue <$> listToMaybe res
+-- queryDrepHashAlwaysNoConfidence :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
+-- queryDrepHashAlwaysNoConfidence = do
+--   res <- select $ do
+--     dh <- from $ table @DrepHash
+--     where_ (isNothing (dh ^. DrepHashRaw))
+--     where_ (dh ^. DrepHashView ==. val hardcodedAlwaysNoConfidence)
+--     pure $ dh ^. DrepHashId
+--   pure $ unValue <$> listToMaybe res
 
-queryCommitteeHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe CommitteeHashId)
-queryCommitteeHash hash = do
-  res <- select $ do
-    ch <- from $ table @CommitteeHash
-    where_ (ch ^. CommitteeHashRaw ==. val hash)
-    pure $ ch ^. CommitteeHashId
-  pure $ unValue <$> listToMaybe res
+-- queryCommitteeHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe CommitteeHashId)
+-- queryCommitteeHash hash = do
+--   res <- select $ do
+--     ch <- from $ table @CommitteeHash
+--     where_ (ch ^. CommitteeHashRaw ==. val hash)
+--     pure $ ch ^. CommitteeHashId
+--   pure $ unValue <$> listToMaybe res
 
-queryProposalConstitution :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [ConstitutionId]
-queryProposalConstitution mgapId = do
-  res <- select $ do
-    c <- from $ table @Constitution
-    where_ (bl c)
-    pure $ c ^. ConstitutionId
-  pure $ unValue <$> res
-  where
-    bl c = case mgapId of
-      Nothing -> isNothing (c ^. ConstitutionGovActionProposalId)
-      Just vl -> c ^. ConstitutionGovActionProposalId ==. val (Just vl)
+-- queryProposalConstitution :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [ConstitutionId]
+-- queryProposalConstitution mgapId = do
+--   res <- select $ do
+--     c <- from $ table @Constitution
+--     where_ (bl c)
+--     pure $ c ^. ConstitutionId
+--   pure $ unValue <$> res
+--   where
+--     bl c = case mgapId of
+--       Nothing -> isNothing (c ^. ConstitutionGovActionProposalId)
+--       Just vl -> c ^. ConstitutionGovActionProposalId ==. val (Just vl)
 
-queryProposalCommittee :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [CommitteeId]
-queryProposalCommittee mgapId = do
-  res <- select $ do
-    c <- from $ table @Committee
-    where_ (bl c)
-    pure $ c ^. CommitteeId
-  pure $ unValue <$> res
-  where
-    bl c = case mgapId of
-      Nothing -> isNothing (c ^. CommitteeGovActionProposalId)
-      Just vl -> c ^. CommitteeGovActionProposalId ==. val (Just vl)
+-- queryProposalCommittee :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [CommitteeId]
+-- queryProposalCommittee mgapId = do
+--   res <- select $ do
+--     c <- from $ table @Committee
+--     where_ (bl c)
+--     pure $ c ^. CommitteeId
+--   pure $ unValue <$> res
+--   where
+--     bl c = case mgapId of
+--       Nothing -> isNothing (c ^. CommitteeGovActionProposalId)
+--       Just vl -> c ^. CommitteeGovActionProposalId ==. val (Just vl)
 
-queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
-queryPoolHashId hash = do
-  res <- select $ do
-    phash <- from $ table @PoolHash
-    where_ (phash ^. PoolHashHashRaw ==. val hash)
-    pure (phash ^. PoolHashId)
-  pure $ unValue <$> listToMaybe res
+-- queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
+-- queryPoolHashId hash = do
+--   res <- select $ do
+--     phash <- from $ table @PoolHash
+--     where_ (phash ^. PoolHashHashRaw ==. val hash)
+--     pure (phash ^. PoolHashId)
+--   pure $ unValue <$> listToMaybe res
 
 -- queryStakeAddress ::
 --   MonadIO m =>
@@ -763,225 +763,225 @@ queryPoolHashId hash = do
 --     pure (saddr ^. StakeAddressId)
 --   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> toText addr) unValue (listToMaybe res)
 
-queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
-queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
-  res <- select $ do
-    (blk :& tx :& sr) <-
-      from
-        $ table @Block
-          `innerJoin` table @Tx
-        `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
-          `innerJoin` table @StakeRegistration
-        `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationTxId ==. tx ^. TxId)
+-- queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
+-- queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
+--   res <- select $ do
+--     (blk :& tx :& sr) <-
+--       from
+--         $ table @Block
+--           `innerJoin` table @Tx
+--         `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
+--           `innerJoin` table @StakeRegistration
+--         `on` (\(_blk :& tx :& sr) -> sr ^. StakeRegistrationTxId ==. tx ^. TxId)
 
-    where_ (blk ^. BlockSlotNo ==. just (val slot))
-    where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
-    where_ (sr ^. StakeRegistrationCertIndex ==. val (fromIntegral certIx))
-    -- Need to order by DelegationSlotNo descending for correct behavior when there are two
-    -- or more delegation certificates in a single epoch.
-    orderBy [desc (blk ^. BlockSlotNo)]
-    limit 1
-    pure (sr ^. StakeRegistrationAddrId)
-  pure $ unValue <$> listToMaybe res
+--     where_ (blk ^. BlockSlotNo ==. just (val slot))
+--     where_ (tx ^. TxBlockIndex ==. val (fromIntegral txIx))
+--     where_ (sr ^. StakeRegistrationCertIndex ==. val (fromIntegral certIx))
+--     -- Need to order by DelegationSlotNo descending for correct behavior when there are two
+--     -- or more delegation certificates in a single epoch.
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     limit 1
+--     pure (sr ^. StakeRegistrationAddrId)
+--   pure $ unValue <$> listToMaybe res
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool
-queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool
-queryPoolUpdateByBlock blkId poolHashId = do
-  res <- select $ do
-    (blk :& _tx :& poolUpdate) <-
-      from
-        $ table @Block
-          `innerJoin` table @Tx
-        `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
-          `innerJoin` table @PoolUpdate
-        `on` (\(_blk :& tx :& poolUpdate) -> tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
-    where_ (poolUpdate ^. PoolUpdateHashId ==. val poolHashId)
-    where_ (blk ^. BlockId ==. val blkId)
-    limit 1
-    pure (blk ^. BlockEpochNo)
-  pure $ not (null res)
+-- queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool
+-- queryPoolUpdateByBlock blkId poolHashId = do
+--   res <- select $ do
+--     (blk :& _tx :& poolUpdate) <-
+--       from
+--         $ table @Block
+--           `innerJoin` table @Tx
+--         `on` (\(blk :& tx) -> blk ^. BlockId ==. tx ^. TxBlockId)
+--           `innerJoin` table @PoolUpdate
+--         `on` (\(_blk :& tx :& poolUpdate) -> tx ^. TxId ==. poolUpdate ^. PoolUpdateRegisteredTxId)
+--     where_ (poolUpdate ^. PoolUpdateHashId ==. val poolHashId)
+--     where_ (blk ^. BlockId ==. val blkId)
+--     limit 1
+--     pure (blk ^. BlockEpochNo)
+--   pure $ not (null res)
 
 {--------------------------------------------
   Queries use in SMASH
 ----------------------------------------------}
 
-queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, ByteString))
-queryOffChainPoolData poolHash poolMetadataHash = do
-  res <- select $ do
-    (pod :& ph) <-
-      from
-        $ table @OffChainPoolData
-          `innerJoin` table @PoolHash
-        `on` (\(pod :& ph) -> pod ^. OffChainPoolDataPoolId ==. ph ^. PoolHashId)
-    where_ (ph ^. PoolHashHashRaw ==. val poolHash)
-    where_ (pod ^. OffChainPoolDataHash ==. val poolMetadataHash)
-    limit 1
-    pure (pod ^. OffChainPoolDataTickerName, pod ^. OffChainPoolDataBytes)
-  pure $ unValue2 <$> listToMaybe res
+-- queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, ByteString))
+-- queryOffChainPoolData poolHash poolMetadataHash = do
+--   res <- select $ do
+--     (pod :& ph) <-
+--       from
+--         $ table @OffChainPoolData
+--           `innerJoin` table @PoolHash
+--         `on` (\(pod :& ph) -> pod ^. OffChainPoolDataPoolId ==. ph ^. PoolHashId)
+--     where_ (ph ^. PoolHashHashRaw ==. val poolHash)
+--     where_ (pod ^. OffChainPoolDataHash ==. val poolMetadataHash)
+--     limit 1
+--     pure (pod ^. OffChainPoolDataTickerName, pod ^. OffChainPoolDataBytes)
+-- pure $ unValue2 <$> listToMaybe res
 
-queryPoolRegister :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
-queryPoolRegister mPoolHash = do
-  res <- select $ do
-    (poolUpdate :& poolHash :& poolMeta :& tx :& blk) <-
-      from
-        $ table @PoolUpdate
-          `innerJoin` table @PoolHash
-        `on` (\(poolUpdate :& poolHash) -> poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(poolUpdate :& _poolHash :& poolMeta) -> poolUpdate ^. PoolUpdateMetaId ==. just (poolMeta ^. PoolMetadataRefId))
-          `innerJoin` table @Tx
-        `on` (\(poolUpdate :& _poolHash :& _poolMeta :& tx) -> poolUpdate ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
-          `innerJoin` table @Block
-        `on` (\(_poolUpdate :& _poolHash :& _poolMeta :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+-- queryPoolRegister :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
+-- queryPoolRegister mPoolHash = do
+--   res <- select $ do
+--     (poolUpdate :& poolHash :& poolMeta :& tx :& blk) <-
+--       from
+--         $ table @PoolUpdate
+--           `innerJoin` table @PoolHash
+--         `on` (\(poolUpdate :& poolHash) -> poolUpdate ^. PoolUpdateHashId ==. poolHash ^. PoolHashId)
+--           `innerJoin` table @PoolMetadataRef
+--         `on` (\(poolUpdate :& _poolHash :& poolMeta) -> poolUpdate ^. PoolUpdateMetaId ==. just (poolMeta ^. PoolMetadataRefId))
+--           `innerJoin` table @Tx
+--         `on` (\(poolUpdate :& _poolHash :& _poolMeta :& tx) -> poolUpdate ^. PoolUpdateRegisteredTxId ==. tx ^. TxId)
+--           `innerJoin` table @Block
+--         `on` (\(_poolUpdate :& _poolHash :& _poolMeta :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
 
-    whenJust mPoolHash $ \ph ->
-      where_ (poolHash ^. PoolHashHashRaw ==. val ph)
-    pure
-      ( poolHash ^. PoolHashHashRaw
-      , poolMeta ^. PoolMetadataRefHash
-      , blk ^. BlockBlockNo
-      , tx ^. TxBlockIndex
-      , poolUpdate ^. PoolUpdateCertIndex
-      )
-  pure $ toUpdateInfo . unValue5 <$> res
-  where
-    toUpdateInfo (poolHash, metaHash, blkNo, txIndex, retIndex) =
-      PoolCert
-        { pcHash = poolHash
-        , pcCertAction = Register metaHash
-        , pcCertNo = CertNo blkNo txIndex retIndex
-        }
+--     whenJust mPoolHash $ \ph ->
+--       where_ (poolHash ^. PoolHashHashRaw ==. val ph)
+--     pure
+--       ( poolHash ^. PoolHashHashRaw
+--       , poolMeta ^. PoolMetadataRefHash
+--       , blk ^. BlockBlockNo
+--       , tx ^. TxBlockIndex
+--       , poolUpdate ^. PoolUpdateCertIndex
+--       )
+--   pure $ toUpdateInfo . unValue5 <$> res
+--   where
+--     toUpdateInfo (poolHash, metaHash, blkNo, txIndex, retIndex) =
+--       PoolCert
+--         { pcHash = poolHash
+--         , pcCertAction = Register metaHash
+--         , pcCertNo = CertNo blkNo txIndex retIndex
+--         }
 
-queryRetiredPools :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
-queryRetiredPools mPoolHash = do
-  res <- select $ do
-    (retired :& poolHash :& tx :& blk) <-
-      from
-        $ table @PoolRetire
-          `innerJoin` table @PoolHash
-        `on` (\(retired :& poolHash) -> retired ^. PoolRetireHashId ==. poolHash ^. PoolHashId)
-          `innerJoin` table @Tx
-        `on` (\(retired :& _poolHash :& tx) -> retired ^. PoolRetireAnnouncedTxId ==. tx ^. TxId)
-          `innerJoin` table @Block
-        `on` (\(_retired :& _poolHash :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    whenJust mPoolHash $ \ph ->
-      where_ (poolHash ^. PoolHashHashRaw ==. val ph)
-    pure
-      ( poolHash ^. PoolHashHashRaw
-      , retired ^. PoolRetireRetiringEpoch
-      , blk ^. BlockBlockNo
-      , tx ^. TxBlockIndex
-      , retired ^. PoolRetireCertIndex
-      )
-  pure $ toRetirementInfo . unValue5 <$> res
-  where
-    toRetirementInfo (hsh, retEpoch, blkNo, txIndex, retIndex) =
-      PoolCert
-        { pcHash = hsh
-        , pcCertAction = Retirement retEpoch
-        , pcCertNo = CertNo blkNo txIndex retIndex
-        }
+-- queryRetiredPools :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
+-- queryRetiredPools mPoolHash = do
+--   res <- select $ do
+--     (retired :& poolHash :& tx :& blk) <-
+--       from
+--         $ table @PoolRetire
+--           `innerJoin` table @PoolHash
+--         `on` (\(retired :& poolHash) -> retired ^. PoolRetireHashId ==. poolHash ^. PoolHashId)
+--           `innerJoin` table @Tx
+--         `on` (\(retired :& _poolHash :& tx) -> retired ^. PoolRetireAnnouncedTxId ==. tx ^. TxId)
+--           `innerJoin` table @Block
+--         `on` (\(_retired :& _poolHash :& tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+--     whenJust mPoolHash $ \ph ->
+--       where_ (poolHash ^. PoolHashHashRaw ==. val ph)
+--     pure
+--       ( poolHash ^. PoolHashHashRaw
+--       , retired ^. PoolRetireRetiringEpoch
+--       , blk ^. BlockBlockNo
+--       , tx ^. TxBlockIndex
+--       , retired ^. PoolRetireCertIndex
+--       )
+--   pure $ toRetirementInfo . unValue5 <$> res
+--   where
+--     toRetirementInfo (hsh, retEpoch, blkNo, txIndex, retIndex) =
+--       PoolCert
+--         { pcHash = hsh
+--         , pcCertAction = Retirement retEpoch
+--         , pcCertNo = CertNo blkNo txIndex retIndex
+--         }
 
-queryUsedTicker :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe Text)
-queryUsedTicker poolHash metaHash = do
-  res <- select $ do
-    (pod :& ph) <-
-      from
-        $ table @OffChainPoolData
-          `innerJoin` table @PoolHash
-        `on` (\(pod :& ph) -> ph ^. PoolHashId ==. pod ^. OffChainPoolDataPoolId)
-    where_ (ph ^. PoolHashHashRaw ==. val poolHash)
-    where_ (pod ^. OffChainPoolDataHash ==. val metaHash)
-    pure $ pod ^. OffChainPoolDataTickerName
-  pure $ unValue <$> listToMaybe res
+-- queryUsedTicker :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe Text)
+-- queryUsedTicker poolHash metaHash = do
+--   res <- select $ do
+--     (pod :& ph) <-
+--       from
+--         $ table @OffChainPoolData
+--           `innerJoin` table @PoolHash
+--         `on` (\(pod :& ph) -> ph ^. PoolHashId ==. pod ^. OffChainPoolDataPoolId)
+--     where_ (ph ^. PoolHashHashRaw ==. val poolHash)
+--     where_ (pod ^. OffChainPoolDataHash ==. val metaHash)
+--     pure $ pod ^. OffChainPoolDataTickerName
+--   pure $ unValue <$> listToMaybe res
 
-queryReservedTicker :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe ByteString)
-queryReservedTicker tickerName = do
-  res <- select $ do
-    ticker <- from $ table @ReservedPoolTicker
-    where_ (ticker ^. ReservedPoolTickerName ==. val tickerName)
-    pure $ ticker ^. ReservedPoolTickerPoolHash
-  pure $ unValue <$> listToMaybe res
+-- queryReservedTicker :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe ByteString)
+-- queryReservedTicker tickerName = do
+--   res <- select $ do
+--     ticker <- from $ table @ReservedPoolTicker
+--     where_ (ticker ^. ReservedPoolTickerName ==. val tickerName)
+--     pure $ ticker ^. ReservedPoolTickerPoolHash
+--   pure $ unValue <$> listToMaybe res
 
-queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [ReservedPoolTicker]
-queryReservedTickers =
-  fmap entityVal <$> selectList [] []
+-- queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [ReservedPoolTicker]
+-- queryReservedTickers =
+--   fmap entityVal <$> selectList [] []
 
 -- Return delisted Pool hashes.
-queryDelistedPools :: MonadIO m => ReaderT SqlBackend m [ByteString]
-queryDelistedPools = do
-  res <- select $ do
-    delistedPool <- from $ table @DelistedPool
-    pure $ delistedPool ^. DelistedPoolHashRaw
-  pure $ unValue <$> res
+-- queryDelistedPools :: MonadIO m => ReaderT SqlBackend m [ByteString]
+-- queryDelistedPools = do
+--   res <- select $ do
+--     delistedPool <- from $ table @DelistedPool
+--     pure $ delistedPool ^. DelistedPoolHashRaw
+--   pure $ unValue <$> res
 
 -- Returns also the metadata hash
-queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(OffChainPoolFetchError, ByteString)]
-queryOffChainPoolFetchError hash Nothing = do
-  res <- select $ do
-    (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
-      from
-        $ table @OffChainPoolFetchError
-          `innerJoin` table @PoolHash
-        `on` (\(offChainPoolFetchError :& poolHash) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPoolId ==. poolHash ^. PoolHashId)
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(offChainPoolFetchError :& _ :& poolMetadataRef) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
+-- queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(OffChainPoolFetchError, ByteString)]
+-- queryOffChainPoolFetchError hash Nothing = do
+--   res <- select $ do
+--     (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
+--       from
+--         $ table @OffChainPoolFetchError
+--           `innerJoin` table @PoolHash
+--         `on` (\(offChainPoolFetchError :& poolHash) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPoolId ==. poolHash ^. PoolHashId)
+--           `innerJoin` table @PoolMetadataRef
+--         `on` (\(offChainPoolFetchError :& _ :& poolMetadataRef) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
 
-    where_ (poolHash ^. PoolHashHashRaw ==. val hash)
-    orderBy [desc (offChainPoolFetchError ^. OffChainPoolFetchErrorFetchTime)]
-    limit 10
-    pure (offChainPoolFetchError, poolMetadataRef ^. PoolMetadataRefHash)
-  pure $ fmap extract res
-  where
-    extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
-queryOffChainPoolFetchError hash (Just fromTime) = do
-  res <- select $ do
-    (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
-      from
-        $ table @OffChainPoolFetchError
-          `innerJoin` table @PoolHash
-        `on` (\(offChainPoolFetchError :& poolHash) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPoolId ==. poolHash ^. PoolHashId)
-          `innerJoin` table @PoolMetadataRef
-        `on` (\(offChainPoolFetchError :& _poolHash :& poolMetadataRef) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
-    where_
-      ( poolHash
-          ^. PoolHashHashRaw
-          ==. val hash
-          &&. offChainPoolFetchError
-          ^. OffChainPoolFetchErrorFetchTime
-          >=. val fromTime
-      )
-    orderBy [desc (offChainPoolFetchError ^. OffChainPoolFetchErrorFetchTime)]
-    limit 10
-    pure (offChainPoolFetchError, poolMetadataRef ^. PoolMetadataRefHash)
-  pure $ fmap extract res
-  where
-    extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
+--     where_ (poolHash ^. PoolHashHashRaw ==. val hash)
+--     orderBy [desc (offChainPoolFetchError ^. OffChainPoolFetchErrorFetchTime)]
+--     limit 10
+--     pure (offChainPoolFetchError, poolMetadataRef ^. PoolMetadataRefHash)
+--   pure $ fmap extract res
+--   where
+--     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
+-- queryOffChainPoolFetchError hash (Just fromTime) = do
+--   res <- select $ do
+--     (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
+--       from
+--         $ table @OffChainPoolFetchError
+--           `innerJoin` table @PoolHash
+--         `on` (\(offChainPoolFetchError :& poolHash) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPoolId ==. poolHash ^. PoolHashId)
+--           `innerJoin` table @PoolMetadataRef
+--         `on` (\(offChainPoolFetchError :& _poolHash :& poolMetadataRef) -> offChainPoolFetchError ^. OffChainPoolFetchErrorPmrId ==. poolMetadataRef ^. PoolMetadataRefId)
+--     where_
+--       ( poolHash
+--           ^. PoolHashHashRaw
+--           ==. val hash
+--           &&. offChainPoolFetchError
+--           ^. OffChainPoolFetchErrorFetchTime
+--           >=. val fromTime
+--       )
+--     orderBy [desc (offChainPoolFetchError ^. OffChainPoolFetchErrorFetchTime)]
+--     limit 10
+--     pure (offChainPoolFetchError, poolMetadataRef ^. PoolMetadataRefHash)
+--   pure $ fmap extract res
+--   where
+--     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
 
-existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
-existsDelistedPool ph = do
-  res <- select $ do
-    delistedPool <- from $ table @DelistedPool
-    where_ (delistedPool ^. DelistedPoolHashRaw ==. val ph)
-    limit 1
-    pure (delistedPool ^. DelistedPoolId)
-  pure $ not (null res)
+-- existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+-- existsDelistedPool ph = do
+--   res <- select $ do
+--     delistedPool <- from $ table @DelistedPool
+--     where_ (delistedPool ^. DelistedPoolHashRaw ==. val ph)
+--     limit 1
+--     pure (delistedPool ^. DelistedPoolId)
+--   pure $ not (null res)
 
 {---------------------------------------------------------
   Queries use in Tools (valiadtion and snapshot creation)
 ----------------------------------------------------------}
 
-queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
-queryDepositUpToBlockNo blkNo = do
-  res <- select $ do
-    (tx :& blk) <-
-      from
-        $ table @Tx
-          `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (blk ^. BlockBlockNo <=. just (val blkNo))
-    pure $ sum_ (tx ^. TxDeposit)
-  pure $ unValueSumAda (listToMaybe res)
+-- queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryDepositUpToBlockNo blkNo = do
+--   res <- select $ do
+--     (tx :& blk) <-
+--       from
+--         $ table @Tx
+--           `innerJoin` table @Block
+--         `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+--     where_ (blk ^. BlockBlockNo <=. just (val blkNo))
+--     pure $ sum_ (tx ^. TxDeposit)
+--   pure $ unValueSumAda (listToMaybe res)
 
 -- queryEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
 -- queryEpochEntry epochNum = do
@@ -990,75 +990,6 @@ queryDepositUpToBlockNo blkNo = do
 --     where_ (epoch ^. EpochNo ==. val epochNum)
 --     pure epoch
 --   pure $ maybeToEither (DbLookupEpochNo epochNum) entityVal (listToMaybe res)
-
--- | Get the fees paid in all block from genesis up to and including the specified block.
-queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
-queryFeesUpToBlockNo blkNo = do
-  res <- select $ do
-    (tx :& blk) <-
-      from
-        $ table @Tx
-          `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (blk ^. BlockBlockNo <=. just (val blkNo))
-    pure $ sum_ (tx ^. TxFee)
-  pure $ unValueSumAda (listToMaybe res)
-
-queryFeesUpToSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
-queryFeesUpToSlotNo slotNo = do
-  res <- select $ do
-    (tx :& blk) <-
-      from
-        $ table @Tx
-          `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (isJust $ blk ^. BlockSlotNo)
-    where_ (blk ^. BlockSlotNo <=. just (val slotNo))
-    pure $ sum_ (tx ^. TxFee)
-  pure $ unValueSumAda (listToMaybe res)
-
-queryLatestCachedEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryLatestCachedEpochNo = do
-  res <- select $ do
-    epoch <- from $ table @Epoch
-    orderBy [desc (epoch ^. EpochNo)]
-    limit 1
-    pure (epoch ^. EpochNo)
-  pure $ unValue <$> listToMaybe res
-
--- | Get the 'BlockNo' of the latest block.
-queryLatestBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
-queryLatestBlockNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust $ blk ^. BlockBlockNo)
-    orderBy [desc (blk ^. BlockBlockNo)]
-    limit 1
-    pure $ blk ^. BlockBlockNo
-  pure $ listToMaybe (mapMaybe unValue res)
-
-querySlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m [SlotNo]
-querySlotNosGreaterThan slotNo = do
-  res <- select $ do
-    blk <- from $ table @Block
-    -- Want all BlockNos where the block satisfies this predicate.
-    where_ (blk ^. BlockSlotNo >. just (val slotNo))
-    -- Return them in descending order so we can delete the highest numbered
-    -- ones first.
-    orderBy [desc (blk ^. BlockSlotNo)]
-    pure (blk ^. BlockSlotNo)
-  pure $ mapMaybe (fmap SlotNo . unValue) res
-
--- | Like 'querySlotNosGreaterThan', but returns all slots in the same order.
-querySlotNos :: MonadIO m => ReaderT SqlBackend m [SlotNo]
-querySlotNos = do
-  res <- select $ do
-    blk <- from $ table @Block
-    -- Return them in descending order so we can delete the highest numbered
-    -- ones first.
-    orderBy [desc (blk ^. BlockSlotNo)]
-    pure (blk ^. BlockSlotNo)
-  pure $ mapMaybe (fmap SlotNo . unValue) res
 
 -- -- | Calculate the slot time (as UTCTime) for a given slot number.
 -- -- This will fail if the slot is empty.
@@ -1070,19 +1001,88 @@ querySlotNos = do
 --     pure (blk ^. BlockTime)
 --   pure $ maybe (Left $ DbLookupSlotNo slotNo) (Right . unValue) (listToMaybe le)
 
-queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
-queryWithdrawalsUpToBlockNo blkNo = do
-  res <- select $ do
-    (_tx :& wdrl :& blk) <-
-      from
-        $ table @Tx
-          `innerJoin` table @Withdrawal
-        `on` (\(tx :& wdrl) -> tx ^. TxId ==. wdrl ^. WithdrawalTxId)
-          `innerJoin` table @Block
-        `on` (\(tx :& _wdrl :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
-    where_ (blk ^. BlockBlockNo <=. val (Just $ fromIntegral blkNo))
-    pure $ sum_ (wdrl ^. WithdrawalAmount)
-  pure $ unValueSumAda (listToMaybe res)
+-- -- | Get the fees paid in all block from genesis up to and including the specified block.
+-- queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryFeesUpToBlockNo blkNo = do
+--   res <- select $ do
+--     (tx :& blk) <-
+--       from
+--         $ table @Tx
+--           `innerJoin` table @Block
+--         `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+--     where_ (blk ^. BlockBlockNo <=. just (val blkNo))
+--     pure $ sum_ (tx ^. TxFee)
+--   pure $ unValueSumAda (listToMaybe res)
+
+-- queryFeesUpToSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryFeesUpToSlotNo slotNo = do
+--   res <- select $ do
+--     (tx :& blk) <-
+--       from
+--         $ table @Tx
+--           `innerJoin` table @Block
+--         `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+--     where_ (isJust $ blk ^. BlockSlotNo)
+--     where_ (blk ^. BlockSlotNo <=. just (val slotNo))
+--     pure $ sum_ (tx ^. TxFee)
+--   pure $ unValueSumAda (listToMaybe res)
+
+-- queryLatestCachedEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryLatestCachedEpochNo = do
+--   res <- select $ do
+--     epoch <- from $ table @Epoch
+--     orderBy [desc (epoch ^. EpochNo)]
+--     limit 1
+--     pure (epoch ^. EpochNo)
+--   pure $ unValue <$> listToMaybe res
+
+-- | Get the 'BlockNo' of the latest block.
+-- queryLatestBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryLatestBlockNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     where_ (isJust $ blk ^. BlockBlockNo)
+--     orderBy [desc (blk ^. BlockBlockNo)]
+--     limit 1
+--     pure $ blk ^. BlockBlockNo
+--   pure $ listToMaybe (mapMaybe unValue res)
+
+-- querySlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m [SlotNo]
+-- querySlotNosGreaterThan slotNo = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     -- Want all BlockNos where the block satisfies this predicate.
+--     where_ (blk ^. BlockSlotNo >. just (val slotNo))
+--     -- Return them in descending order so we can delete the highest numbered
+--     -- ones first.
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     pure (blk ^. BlockSlotNo)
+--   pure $ mapMaybe (fmap SlotNo . unValue) res
+
+-- -- | Like 'querySlotNosGreaterThan', but returns all slots in the same order.
+-- querySlotNos :: MonadIO m => ReaderT SqlBackend m [SlotNo]
+-- querySlotNos = do
+--   res <- select $ do
+--     blk <- from $ table @Block
+--     -- Return them in descending order so we can delete the highest numbered
+--     -- ones first.
+--     orderBy [desc (blk ^. BlockSlotNo)]
+--     pure (blk ^. BlockSlotNo)
+--   pure $ mapMaybe (fmap SlotNo . unValue) res
+
+-- queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryWithdrawalsUpToBlockNo blkNo = do
+--   res <- select $ do
+--     (_tx :& wdrl :& blk) <-
+--       from
+--         $ table @Tx
+--           `innerJoin` table @Withdrawal
+--         `on` (\(tx :& wdrl) -> tx ^. TxId ==. wdrl ^. WithdrawalTxId)
+--           `innerJoin` table @Block
+--         `on` (\(tx :& _wdrl :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+--     where_ (blk ^. BlockBlockNo <=. val (Just $ fromIntegral blkNo))
+--     pure $ sum_ (wdrl ^. WithdrawalAmount)
+--   pure $ unValueSumAda (listToMaybe res)
 
 queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
 queryAdaPots blkId = do
