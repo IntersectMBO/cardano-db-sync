@@ -24,7 +24,10 @@ let
 
   baseImage = dockerTools.buildImage {
     name = "cardano-db-sync-base-env";
-    config.Env = [ "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt" ];
+    config = {
+      Env = [ "NIX_SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt" ];
+      StopSignal = "SIGINT";
+    };
 
     copyToRoot = buildEnv {
       name = "base-image-env";
@@ -93,7 +96,7 @@ let
         db-sync = pkgs.writeScriptBin "cardano-db-sync-${service.cluster}" ''
           #!${runtimeShell}
           set -euo pipefail
-          ${service.script} $@
+          exec ${service.script} $@
         '' // {
           passthru = { inherit service; };
         };

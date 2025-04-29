@@ -7,6 +7,7 @@
 - Maintain less snapshots
 - No longer crash if stage 1 or 2 migration have been altered
 - Improvements for Address variant
+- Fixes an issue where stopping the docker container results in non graceful shutdown
 
 ## 13.6.0.4
 - Fixes an issue from ledger where DRep delegations could be removed under some conditions
