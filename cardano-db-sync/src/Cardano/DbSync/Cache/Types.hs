@@ -18,12 +18,15 @@ module Cardano.DbSync.Cache.Types (
   StakePoolCache,
   StakeDBAction (..),
   StakeChannels (..),
+  MADBAction (..),
+  MAChannels (..),
 
   -- * Inits
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
   newStakeChannels,
+  newMAChannels,
 
   -- * Utils
   shouldCache,
@@ -261,10 +264,14 @@ shouldCache = \case
   UpdateCacheStrong -> True
   _ -> False
 
+--------------------------------------------------------------------------------
+-- Stake
+--------------------------------------------------------------------------------
+
 data StakeDBAction
   = QueryInsertStake RewAccount CacheAction (StrictTMVar IO DB.StakeAddressId)
   | CacheStake RewAccount DB.StakeAddressId Bool
-  | BulkPrefetch CardanoBlock
+  | BulkPrefetchStake CardanoBlock
   | CommitStake
 
 data StakeChannels = StakeChannels
@@ -274,8 +281,27 @@ data StakeChannels = StakeChannels
 
 newStakeChannels :: IO StakeChannels
 newStakeChannels =
-  -- This may never be more than 1. But let's keep it a queue for extensibility shake.
-  -- This may allow us to parallelize the events workload even further
   StakeChannels
+    <$> TBQ.newTBQueueIO 100
+    <*> TBQ.newTBQueueIO 100
+
+--------------------------------------------------------------------------------
+-- MultiAssets
+--------------------------------------------------------------------------------
+
+data MADBAction
+  = QueryInsertMA (PolicyID StandardCrypto) AssetName (StrictTMVar IO DB.MultiAssetId)
+  | CacheMA (PolicyID StandardCrypto) AssetName DB.MultiAssetId
+  | BulkPrefetchMA CardanoBlock
+  | CommitMA
+
+data MAChannels = MAChannels
+  { macPriorityQueue :: TBQueue MADBAction
+  , macSecondaryQueue :: TBQueue MADBAction
+  }
+
+newMAChannels :: IO MAChannels
+newMAChannels =
+  MAChannels
     <$> TBQ.newTBQueueIO 100
     <*> TBQ.newTBQueueIO 100

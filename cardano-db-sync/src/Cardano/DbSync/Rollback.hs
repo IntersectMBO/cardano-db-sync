@@ -12,7 +12,7 @@ module Cardano.DbSync.Rollback (
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types

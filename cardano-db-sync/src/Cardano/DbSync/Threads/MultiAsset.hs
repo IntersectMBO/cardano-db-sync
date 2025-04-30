@@ -1,14 +1,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cardano.DbSync.Threads.Stake where
+module Cardano.DbSync.Threads.MultiAsset where
 
 import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.Stake
 import Cardano.DbSync.Cache.Types
+import Cardano.DbSync.Era.Universal.Insert.Other
 import Cardano.DbSync.Util
 import Control.Concurrent.Class.MonadSTM.Strict
 import qualified Control.Concurrent.STM.TBQueue as TBQ
@@ -16,30 +16,30 @@ import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Database.Persist.Postgresql (IsolationLevel (..), runSqlConnWithIsolation, withPostgresqlConn)
 
-runStakeThread :: SyncEnv -> IO ()
-runStakeThread syncEnv = do
+runMAThread :: SyncEnv -> IO ()
+runMAThread syncEnv = do
   logInfo trce "Running Event thread"
-  logException trce "runStakeThread: " (runStakeLoop syncEnv)
+  logException trce "runMAThread: " (runMALoop syncEnv)
   logInfo trce "Shutting Event thread"
   where
     trce = getTrace syncEnv
 
-runStakeLoop :: SyncEnv -> IO ()
-runStakeLoop syncEnv =
+runMALoop :: SyncEnv -> IO ()
+runMALoop syncEnv =
   DB.runIohkLogging trce $
     withPostgresqlConn (envConnectionString syncEnv) actionDB
   where
     actionDB backend = runSqlConnWithIsolation (forever loopAction) backend Serializable
 
     loopAction = do
-      action <- liftIO $ atomically $ TBQ.readTBQueue (scPriorityQueue stakeChan)
+      action <- liftIO $ atomically $ TBQ.readTBQueue (macPriorityQueue maChan)
       case action of
-        QueryInsertStake rewardAcc ca resVar -> do
-          stakeId <- resolveInsertRewardAccount syncEnv ca rewardAcc
+        QueryInsertMA policy name resVar -> do
+          stakeId <- insertMultiAsset (envCache syncEnv) policy name
           liftIO $ atomically $ writeTMVar resVar stakeId
-        CacheStake _ _ _ -> pure ()
-        BulkPrefetchStake _ -> pure ()
-        CommitStake -> DB.transactionCommit
+        CacheMA {} -> pure ()
+        BulkPrefetchMA _ -> pure ()
+        CommitMA -> DB.transactionCommit
 
-    stakeChan = envStakeChans syncEnv
+    maChan = envMAChans syncEnv
     trce = getTrace syncEnv

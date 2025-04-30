@@ -9,13 +9,15 @@ module Cardano.DbSync.Api.Types (
   RunMigration,
   ConsistentLevel (..),
   CurrentEpochNo (..),
+  DbConnections (..),
   Prefetch (..),
   PrefetchTxId (..),
+  envBackend,
   newPrefetch,
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (CacheStatus, StakeChannels)
+import Cardano.DbSync.Cache.Types (CacheStatus, MAChannels, StakeChannels)
 import Cardano.DbSync.Config.Types (SyncNodeConfig)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Types as Generic
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
@@ -30,6 +32,7 @@ import Cardano.DbSync.Types (
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, newTBQueueIO, newTVarIO)
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
+import Control.Concurrent.MVar
 import Data.Map (Map)
 import Data.Pool (Pool)
 import qualified Data.Strict.Maybe as Strict
@@ -41,7 +44,7 @@ import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 
 data SyncEnv = SyncEnv
-  { envBackend :: !SqlBackend
+  { envBackends :: !DbConnections
   , envPool :: !(Pool SqlBackend)
   , envPrefetch :: !Prefetch
   , envCache :: !CacheStatus
@@ -55,6 +58,7 @@ data SyncEnv = SyncEnv
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
   , envStakeChans :: !StakeChannels
+  , envMAChans :: !MAChannels
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
   , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainPoolWorkQueue)
   , envOffChainVoteResultQueue :: !(StrictTBQueue IO OffChainVoteResult)
@@ -64,6 +68,9 @@ data SyncEnv = SyncEnv
   , envRunDelayedMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }
+
+envBackend :: SyncEnv -> SqlBackend
+envBackend = mainBackend . envBackends
 
 data SyncOptions = SyncOptions
   { soptEpochAndCacheEnabled :: !Bool
@@ -106,6 +113,12 @@ data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
 
 newtype CurrentEpochNo = CurrentEpochNo
   { cenEpochNo :: Strict.Maybe EpochNo
+  }
+
+data DbConnections = DbConnections
+  { mainBackend :: !SqlBackend
+  , scriptBackend :: !(MVar SqlBackend)
+  , datumBackend :: !(MVar SqlBackend)
   }
 
 data PrefetchTxId = PrefetchTxIdBlock CardanoBlock | PrefetchTxIdBlocks [CardanoBlock]

@@ -16,7 +16,7 @@ module Cardano.DbSync.Threads.Database (
 import Cardano.BM.Trace (logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Block
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Error

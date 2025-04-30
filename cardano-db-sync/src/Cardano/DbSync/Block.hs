@@ -2,13 +2,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GADTs #-}
-
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 
 module Cardano.DbSync.Block (
@@ -19,38 +18,38 @@ import Cardano.BM.Trace (logError, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types
+import Cardano.DbSync.Cache (queryPrevBlockWithCache)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
+import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal, prepareBlock)
 import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent)
+import Cardano.DbSync.Era.Universal.Insert.Grouped (insertBlockGroupedData)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
+import Cardano.DbSync.Era.Universal.Insert.Tx
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Rollback
+import Cardano.DbSync.Threads.Ledger
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Concurrent.Async
+import Control.Concurrent.Class.MonadSTM.Strict (readTMVar)
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Logger (LoggingT)
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Strict.Maybe as Strict
+import Database.Persist.Sql
 import Database.Persist.SqlBackend.Internal
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Network.Block (BlockNo, blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
-import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
-import Control.Concurrent.Async
-import Cardano.DbSync.Era.Universal.Insert.Tx
-import Cardano.DbSync.Era.Universal.Insert.Grouped (insertBlockGroupedData)
-import Cardano.DbSync.Cache (queryPrevBlockWithCache)
-import Control.Monad.Extra (whenJust)
-import Database.Persist.Sql
-import Cardano.DbSync.Threads.Ledger
-import Control.Concurrent.Class.MonadSTM.Strict (readTMVar)
-import qualified Cardano.DbSync.Era.Byron.Util as Byron
 
 insertListBlocks ::
   SyncEnv ->
@@ -58,11 +57,11 @@ insertListBlocks ::
   ExceptT SyncNodeError IO ()
 insertListBlocks syncEnv blocks = do
   bl <- liftIO $ isConsistent syncEnv
-  if bl then
-    applyAndInsertBlocks syncEnv False blocks
-  else do
-    mrestBlocks <- applyAndInsertBlocksMaybe syncEnv blocks
-    whenJust mrestBlocks $ applyAndInsertBlocks syncEnv True
+  if bl
+    then applyAndInsertBlocks syncEnv False blocks
+    else do
+      mrestBlocks <- applyAndInsertBlocksMaybe syncEnv blocks
+      whenJust mrestBlocks $ applyAndInsertBlocks syncEnv True
 
 applyAndInsertBlocksMaybe ::
   SyncEnv ->
@@ -71,7 +70,7 @@ applyAndInsertBlocksMaybe ::
 applyAndInsertBlocksMaybe syncEnv = go
   where
     go [] = pure Nothing
-    go ls@(cblk: rest) = do
+    go ls@(cblk : rest) = do
       eiBlockInDbAlreadyId <- lift $ DB.runDbLogging (envBackend syncEnv) tracer $ DB.queryBlockId (cardanoBlockHash cblk)
       case eiBlockInDbAlreadyId of
         Left _ -> do
@@ -109,11 +108,10 @@ applyAndInsertBlocks syncEnv firstAfterRollback = go
       prevBlockId <- DB.runDbLoggingExceptT backend tracer $ getPrevBlockId syncEnv blk
       let newBlockId = 1 + DB.unBlockKey prevBlockId
       let flagList = firstAfterRollback : replicate (length rest) False
-      let zippedArgs = zip (DB.BlockKey <$> [newBlockId..]) flagList
+      let zippedArgs = zip (DB.BlockKey <$> [newBlockId ..]) flagList
       let (byronBlocks, blocks) = takeWhileByron $ zip zippedArgs (blk : rest)
       DB.runDbIohkLoggingExceptT backend tracer $ mapM_ (applyAndInsertByronBlock syncEnv) byronBlocks
       DB.runDbIohkLoggingExceptT backend tracer $ mapM_ (applyAndInsertBlock syncEnv) blocks -- we can use this split to parallelise even further within
-
     backend = envBackend syncEnv
     tracer = getTrace syncEnv
 
@@ -144,7 +142,7 @@ applyAndInsertBlock syncEnv ((blockId, firstAfterRollback), cblock) = do
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
     whenGeneric action =
-       maybe (liftIO $ logError tracer "Found Byron Block after Shelley") action (toGenericBlock iopts cblock)
+      maybe (liftIO $ logError tracer "Found Byron Block after Shelley") action (toGenericBlock iopts cblock)
 
 prepareInsertBlock ::
   SyncEnv ->
@@ -154,9 +152,10 @@ prepareInsertBlock ::
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 prepareInsertBlock syncEnv (blockId, blk) applyRessultVar firstAfterRollback = do
   (blockDB, preparedTxs) <-
-    liftIO $ concurrently
-      (runOrThrowIO $ runExceptT $ DB.runDbLoggingExceptT backend tracer $ prepareBlock syncEnv blk)
-      (mapConcurrently prepareTxWithPool (zip txIds $ Generic.blkTxs blk))
+    liftIO $
+      concurrently
+        (runOrThrowIO $ runExceptT $ DB.runDbLoggingExceptT backend tracer $ prepareBlock syncEnv blk)
+        (mapConcurrently prepareTxWithPool (zip txIds $ Generic.blkTxs blk))
 
   _minIds <- insertBlockGroupedData syncEnv $ mconcat (snd <$> preparedTxs)
   (applyResult, tookSnapshot) <- liftIO $ atomically $ readTMVar applyRessultVar
@@ -206,7 +205,6 @@ insertBlockRest ::
   Bool ->
   ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
 insertBlockRest syncEnv blkNo applyResult tookSnapshot = do
-
   -- TODO update the epoch
   -- updateEpoch
   whenPruneTxOut syncEnv $

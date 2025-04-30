@@ -21,8 +21,8 @@ import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache (insertAddressUsingCache, queryTxIdWithCache, tryUpdateCacheTx)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
+import Cardano.DbSync.Cache (insertAddressUsingCache, queryOrInsertSyncMultiAsset, queryTxIdWithCache, tryUpdateCacheTx)
+import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxInKey (..))
@@ -36,7 +36,6 @@ import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Other (
   insertDatum,
   insertExtraKeyWitness,
-  insertMultiAsset,
   insertRedeemer,
   insertScript,
   insertWithdrawals,
@@ -88,12 +87,11 @@ prepareTxGrouped syncEnv txHashes blkId txId tx = do
         (Generic.txMetadata tx)
   maTxMint <-
     whenFalseMempty (ioMultiAssets iopts && Generic.txValidContract tx) $
-      prepareMaTxMint tracer cache txId $
+      prepareMaTxMint syncEnv txId $
         Generic.txMint tx
   pure ((txId, txDb, tx), BlockGroupedData txIns txOuts txMetadata maTxMint 0 outSum)
   where
     tracer = getTrace syncEnv
-    cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
     outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
 
@@ -181,7 +179,7 @@ insertTxRest syncEnv blkId epochNo slotNo applyResult txId _ tx = do
           (ioPlutusExtra iopts)
           (mapM (insertRedeemer syncEnv disInOut [] txId) (Generic.txRedeemer tx)) -- TODO leaving this empty for now
     when (ioPlutusExtra iopts) $ do
-      mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
+      mapM_ (insertDatum syncEnv txId) (Generic.txData tx)
       mapM_ (insertCollateralTxIn syncEnv txId) (Generic.txInKey <$> Generic.txCollateralInputs tx)
       mapM_ (insertReferenceTxIn syncEnv txId) (Generic.txInKey <$> Generic.txReferenceInputs tx)
       mapM_ (insertCollateralTxOut syncEnv iopts (txId, Generic.txHash tx)) (Generic.txCollateralOutputs tx)
@@ -195,7 +193,7 @@ insertTxRest syncEnv blkId epochNo slotNo applyResult txId _ tx = do
       mapM_ (lift . insertParamProposal blkId txId) $
         Generic.txParamProposal tx
     when (ioPlutusExtra iopts) $
-      mapM_ (lift . insertScript tracer txId) $
+      mapM_ (lift . insertScript syncEnv txId) $
         Generic.txScripts tx
     when (ioPlutusExtra iopts) $
       mapM_ (insertExtraKeyWitness tracer txId) $
@@ -225,11 +223,11 @@ prepareTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap 
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
-        insertDatum tracer cache txId
+        insertDatum syncEnv txId
   mScriptId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       whenMaybe mScript $
-        lift . insertScript tracer txId
+        lift . insertScript syncEnv txId
   !txOut <-
     case ioTxOutTableType iopts of
       DB.TxOutCore ->
@@ -267,7 +265,7 @@ prepareTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap 
         case ioTxOutTableType iopts of
           DB.TxOutCore -> ExtendedTxOut txHash txOut
           DB.TxOutVariantAddress -> ExtendedTxOut txHash txOut
-  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ insertMaTxOuts tracer cache maMap
+  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ prepareMaTxOuts syncEnv maMap
   pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
@@ -290,7 +288,6 @@ prepareTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap 
         , V.txOutStakeAddressId = mSaId
         }
 
-    tracer = getTrace syncEnv
     cache = envCache syncEnv
 
 prepareTxMetadata ::
@@ -341,12 +338,11 @@ prepareTxMetadata tracer txId inOpts mmetadata = do
 --------------------------------------------------------------------------------------
 prepareMaTxMint ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   DB.TxId ->
   MultiAsset StandardCrypto ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
-prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
+prepareMaTxMint syncEnv txId (MultiAsset mintMap) =
   concatMapM (lift . prepareOuter) $ Map.toList mintMap
   where
     prepareOuter ::
@@ -362,7 +358,7 @@ prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
       (AssetName, Integer) ->
       ReaderT SqlBackend m DB.MaTxMint
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- queryOrInsertSyncMultiAsset syncEnv policy aname
       pure $
         DB.MaTxMint
           { DB.maTxMintIdent = maId
@@ -370,13 +366,12 @@ prepareMaTxMint _tracer cache txId (MultiAsset mintMap) =
           , DB.maTxMintTxId = txId
           }
 
-insertMaTxOuts ::
+prepareMaTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   Map (PolicyID StandardCrypto) (Map AssetName Integer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [MissingMaTxOut]
-insertMaTxOuts _tracer cache maMap =
+prepareMaTxOuts syncEnv maMap =
   concatMapM (lift . prepareOuter) $ Map.toList maMap
   where
     prepareOuter ::
@@ -392,7 +387,7 @@ insertMaTxOuts _tracer cache maMap =
       (AssetName, Integer) ->
       ReaderT SqlBackend m MissingMaTxOut
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- queryOrInsertSyncMultiAsset syncEnv policy aname
       pure $
         MissingMaTxOut
           { mmtoIdent = maId
@@ -414,11 +409,11 @@ insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr va
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
-        insertDatum tracer cache txId
+        insertDatum syncEnv txId
   mScriptId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       whenMaybe mScript $
-        lift . insertScript tracer txId
+        lift . insertScript syncEnv txId
   _ <-
     case ioTxOutTableType iopts of
       DB.TxOutCore -> do
@@ -468,7 +463,6 @@ insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr va
     hasScript :: Bool
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
 
-    tracer = getTrace syncEnv
     cache = envCache syncEnv
 
 insertCollateralTxIn ::

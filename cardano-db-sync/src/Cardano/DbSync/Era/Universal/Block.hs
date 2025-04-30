@@ -18,7 +18,6 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (
   insertBlockAndCache,
-  optimiseCaches,
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
  )

@@ -14,6 +14,7 @@ module Cardano.DbSync.Cache (
   queryMAWithCache,
   queryPoolKeyOrInsert,
   queryPoolKeyWithCache,
+  queryOrInsertSyncMultiAsset,
   queryPrevBlockWithCache,
   insertAddressUsingCache,
   queryTxIdWithCache,
@@ -35,7 +36,7 @@ import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Stake as X
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
+import Cardano.DbSync.Cache.Types
 import Cardano.DbSync.Cache.Util
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Error
@@ -45,9 +46,12 @@ import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
   modifyTVar,
+  newEmptyTMVarIO,
   readTVarIO,
+  takeTMVar,
   writeTVar,
  )
+import qualified Control.Concurrent.STM.TBQueue as TBQ
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
@@ -299,6 +303,23 @@ queryMAWithCache cache policyId asset =
       let !policyBs = Generic.unScriptHash $ policyID policyId
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
+
+queryOrInsertSyncMultiAsset ::
+  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
+  PolicyID StandardCrypto ->
+  AssetName ->
+  ReaderT SqlBackend m DB.MultiAssetId
+queryOrInsertSyncMultiAsset syncEnv policy aName = do
+  mId <- queryMAWithCache (envCache syncEnv) policy aName
+  case mId of
+    Right maId -> pure maId
+    Left _ -> liftIO $ do
+      resultVar <- newEmptyTMVarIO
+      atomically $ TBQ.writeTBQueue (macPriorityQueue $ maChan) $ QueryInsertMA policy aName resultVar
+      atomically $ takeTMVar resultVar
+  where
+    maChan = envMAChans syncEnv
 
 queryPrevBlockWithCache ::
   MonadIO m =>

@@ -26,6 +26,9 @@ module Cardano.DbSync.Api (
   getHasConsumedOrPruneTxOut,
   getSkipTxIn,
   getPrunes,
+  withDBSyncConnections,
+  withScriptConnection,
+  withDatumConnection,
   mkSyncEnvFromConfig,
   getInsertOptions,
   getTrace,
@@ -41,7 +44,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, newStakeChannels, useNoCache)
+import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, newMAChannels, newStakeChannels, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
@@ -65,9 +68,12 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   writeTVar,
  )
 import qualified Control.Concurrent.Class.MonadSTM.Strict.TBQueue as TBQ
+import Control.Concurrent.MVar
+import Control.Monad.Logger (LoggingT, MonadLoggerIO)
+import Control.Monad.Trans.Resource (MonadUnliftIO)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
-import Database.Persist.Postgresql (ConnectionString, createPostgresqlPool)
+import Database.Persist.Postgresql (ConnectionString, createPostgresqlPool, withPostgresqlConn)
 import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Abstract (BlockProtocol)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -248,7 +254,7 @@ writePrefetch syncEnv cblock = do
 
 mkSyncEnv ::
   Trace IO Text ->
-  SqlBackend ->
+  DbConnections ->
   ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -259,7 +265,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
+mkSyncEnv trce backends connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -278,8 +284,9 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
   bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
-  -- Offline Pool + Anchor queues
   cChans <- newStakeChannels
+  maChans <- newMAChannels
+  -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
   oprq <- newTBQueueIO 1000
   oawq <- newTBQueueIO 1000
@@ -309,7 +316,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
   pure $
     SyncEnv
-      { envBackend = backend
+      { envBackends = backends
       , envPool = pool
       , envBootstrap = bootstrapVar
       , envCache = cache
@@ -323,6 +330,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
       , envStakeChans = cChans
+      , envMAChans = maChans
       , envOffChainPoolResultQueue = oprq
       , envOffChainPoolWorkQueue = opwq
       , envOffChainVoteResultQueue = oarq
@@ -335,10 +343,47 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   where
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
+    backend = mainBackend backends
+
+withDBSyncConnections ::
+  (MonadUnliftIO m, MonadLoggerIO m) =>
+  ConnectionString ->
+  (DbConnections -> m a) ->
+  m a
+withDBSyncConnections connStr action =
+  withPostgresqlConn connStr $ \mainConn ->
+    withPostgresqlConn connStr $ \scriptConn ->
+      withPostgresqlConn connStr $ \datumConn -> do
+        scr <- liftIO $ newMVar scriptConn
+        dt <- liftIO $ newMVar datumConn
+        action $ DbConnections mainConn scr dt
+
+withScriptConnection ::
+  SyncEnv ->
+  ReaderT SqlBackend (LoggingT IO) a ->
+  IO a
+withScriptConnection = withGivenConnection scriptBackend
+
+withDatumConnection ::
+  SyncEnv ->
+  ReaderT SqlBackend (LoggingT IO) a ->
+  IO a
+withDatumConnection = withGivenConnection datumBackend
+
+withGivenConnection ::
+  (DbConnections -> MVar SqlBackend) ->
+  SyncEnv ->
+  ReaderT SqlBackend (LoggingT IO) a ->
+  IO a
+withGivenConnection toConn syncEnv action = do
+  withMVar connVar $ \conn ->
+    DB.runDbLogging conn (getTrace syncEnv) action
+  where
+    connVar = toConn $ envBackends syncEnv
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->
-  SqlBackend ->
+  DbConnections ->
   ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
@@ -347,7 +392,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+mkSyncEnvFromConfig trce backends connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -374,7 +419,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
           Right
             <$> mkSyncEnv
               trce
-              backend
+              backends
               connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])

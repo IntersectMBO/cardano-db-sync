@@ -152,5 +152,4 @@ queryOrInsertRewardAccount syncEnv cacheUA ra = do
       atomically $ TBQ.writeTBQueue (scPriorityQueue stakeChan) $ QueryInsertStake ra cacheUA resultVar
       atomically $ takeTMVar resultVar
   where
-    _trce = getTrace syncEnv
     stakeChan = envStakeChans syncEnv
