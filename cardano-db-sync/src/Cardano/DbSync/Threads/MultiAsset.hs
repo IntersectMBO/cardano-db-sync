@@ -39,7 +39,9 @@ runMALoop syncEnv =
           liftIO $ atomically $ writeTMVar resVar stakeId
         CacheMA {} -> pure ()
         BulkPrefetchMA _ -> pure ()
-        CommitMA -> DB.transactionCommit
+        CommitMA retVar -> do
+          DB.transactionCommit
+          liftIO $ atomically $ writeTMVar retVar ()
 
     maChan = envMAChans syncEnv
     trce = getTrace syncEnv

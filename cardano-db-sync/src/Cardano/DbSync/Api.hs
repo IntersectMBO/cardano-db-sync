@@ -29,6 +29,7 @@ module Cardano.DbSync.Api (
   withDBSyncConnections,
   withScriptConnection,
   withDatumConnection,
+  commitAll,
   mkSyncEnvFromConfig,
   getInsertOptions,
   getTrace,
@@ -44,7 +45,7 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, newMAChannels, newStakeChannels, useNoCache)
+import Cardano.DbSync.Cache.Types
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
@@ -61,14 +62,15 @@ import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
+  newEmptyTMVarIO,
   newTBQueueIO,
   newTVarIO,
   readTVar,
   readTVarIO,
+  takeTMVar,
   writeTVar,
  )
-import qualified Control.Concurrent.Class.MonadSTM.Strict.TBQueue as TBQ
-import Control.Concurrent.MVar
+import qualified Control.Concurrent.STM.TBQueue as TBQ
 import Control.Monad.Logger (LoggingT, MonadLoggerIO)
 import Control.Monad.Trans.Resource (MonadUnliftIO)
 import qualified Data.Strict.Maybe as Strict
@@ -247,10 +249,11 @@ hasLedgerState syncEnv =
     NoLedger _ -> False
 
 writePrefetch :: SyncEnv -> CardanoBlock -> IO ()
-writePrefetch syncEnv cblock = do
-  atomically $
-    TBQ.writeTBQueue (pTxInQueue $ envPrefetch syncEnv) $
-      PrefetchTxIdBlock cblock
+writePrefetch _syncEnv _cblock = pure ()
+
+--   atomically $
+--     TBQ.writeTBQueue (pTxInQueue $ envPrefetch syncEnv) $
+--       PrefetchTxIdBlock cblock
 
 mkSyncEnv ::
   Trace IO Text ->
@@ -380,6 +383,18 @@ withGivenConnection toConn syncEnv action = do
     DB.runDbLogging conn (getTrace syncEnv) action
   where
     connVar = toConn $ envBackends syncEnv
+
+commitAll :: SyncEnv -> IO ()
+commitAll syncEnv = do
+  maRet <- newEmptyTMVarIO
+  stakeRet <- newEmptyTMVarIO
+  -- queue actions are async here, so we let them run, while blocking on sync actions.
+  atomically $ TBQ.writeTBQueue (macPriorityQueue $ envMAChans syncEnv) $ CommitMA maRet
+  atomically $ TBQ.writeTBQueue (scPriorityQueue $ envStakeChans syncEnv) $ CommitStake stakeRet
+  withScriptConnection syncEnv DB.transactionCommit
+  withDatumConnection syncEnv DB.transactionCommit
+  atomically $ takeTMVar maRet
+  atomically $ takeTMVar stakeRet
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->

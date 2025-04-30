@@ -37,9 +37,11 @@ runStakeLoop syncEnv =
         QueryInsertStake rewardAcc ca resVar -> do
           stakeId <- resolveInsertRewardAccount syncEnv ca rewardAcc
           liftIO $ atomically $ writeTMVar resVar stakeId
-        CacheStake _ _ _ -> pure ()
+        CacheStake {} -> pure ()
         BulkPrefetchStake _ -> pure ()
-        CommitStake -> DB.transactionCommit
+        CommitStake retVar -> do
+          DB.transactionCommit
+          liftIO $ atomically $ writeTMVar retVar ()
 
     stakeChan = envStakeChans syncEnv
     trce = getTrace syncEnv

@@ -45,7 +45,6 @@ import Control.Monad.Logger (LoggingT)
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Strict.Maybe as Strict
 import Database.Persist.Sql
-import Database.Persist.SqlBackend.Internal
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
@@ -110,8 +109,12 @@ applyAndInsertBlocks syncEnv firstAfterRollback = go
       let flagList = firstAfterRollback : replicate (length rest) False
       let zippedArgs = zip (DB.BlockKey <$> [newBlockId ..]) flagList
       let (byronBlocks, blocks) = takeWhileByron $ zip zippedArgs (blk : rest)
-      DB.runDbIohkLoggingExceptT backend tracer $ mapM_ (applyAndInsertByronBlock syncEnv) byronBlocks
-      DB.runDbIohkLoggingExceptT backend tracer $ mapM_ (applyAndInsertBlock syncEnv) blocks -- we can use this split to parallelise even further within
+      DB.runDbIohkLoggingExceptT backend tracer $ do
+        mapM_ (applyAndInsertByronBlock syncEnv) byronBlocks
+        liftIO $ commitAll syncEnv
+      DB.runDbIohkLoggingExceptT backend tracer $ do
+        mapM_ (applyAndInsertBlock syncEnv) blocks -- we can use this split to parallelise even further within
+        liftIO $ commitAll syncEnv -- make sure all secondary transactions are commited before the main one.
     backend = envBackend syncEnv
     tracer = getTrace syncEnv
 
@@ -239,6 +242,7 @@ insertBlockRest syncEnv blkNo applyResult tookSnapshot = do
       commited <-
         if withinTwoMin || tookSnapshot
           then do
+            liftIO $ commitAll syncEnv
             lift DB.transactionCommit
             pure True
           else pure False
@@ -247,7 +251,9 @@ insertBlockRest syncEnv blkNo applyResult tookSnapshot = do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         lift $ addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $ do
-          lift $ unless commited DB.transactionCommit
+          lift $ unless commited $ do
+            liftIO $ commitAll syncEnv
+            DB.transactionCommit
           liftIO $ runIndexMigrations syncEnv
 
     withinTwoMin = isSyncedWithinSeconds details 120 == SyncFollowing

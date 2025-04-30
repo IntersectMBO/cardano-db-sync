@@ -316,7 +316,7 @@ queryOrInsertSyncMultiAsset syncEnv policy aName = do
     Right maId -> pure maId
     Left _ -> liftIO $ do
       resultVar <- newEmptyTMVarIO
-      atomically $ TBQ.writeTBQueue (macPriorityQueue $ maChan) $ QueryInsertMA policy aName resultVar
+      atomically $ TBQ.writeTBQueue (macPriorityQueue maChan) $ QueryInsertMA policy aName resultVar
       atomically $ takeTMVar resultVar
   where
     maChan = envMAChans syncEnv

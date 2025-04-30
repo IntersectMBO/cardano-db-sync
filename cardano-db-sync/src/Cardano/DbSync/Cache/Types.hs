@@ -272,7 +272,7 @@ data StakeDBAction
   = QueryInsertStake RewAccount CacheAction (StrictTMVar IO DB.StakeAddressId)
   | CacheStake RewAccount DB.StakeAddressId Bool
   | BulkPrefetchStake CardanoBlock
-  | CommitStake
+  | CommitStake (StrictTMVar IO ())
 
 data StakeChannels = StakeChannels
   { scPriorityQueue :: TBQueue StakeDBAction
@@ -293,7 +293,7 @@ data MADBAction
   = QueryInsertMA (PolicyID StandardCrypto) AssetName (StrictTMVar IO DB.MultiAssetId)
   | CacheMA (PolicyID StandardCrypto) AssetName DB.MultiAssetId
   | BulkPrefetchMA CardanoBlock
-  | CommitMA
+  | CommitMA (StrictTMVar IO ())
 
 data MAChannels = MAChannels
   { macPriorityQueue :: TBQueue MADBAction
