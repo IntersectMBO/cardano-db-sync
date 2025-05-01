@@ -14,6 +14,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
 import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage as Babbage
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
+import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
@@ -21,7 +22,6 @@ import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.TxBody
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
@@ -77,7 +77,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     txBody :: Core.TxBody StandardConway
     txBody = tx ^. Core.bodyTxL
 
-    txId :: TxId StandardCrypto
+    txId :: TxIdLedger
     txId = mkTxId tx
 
     outputs :: [TxOut]

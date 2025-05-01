@@ -7,16 +7,17 @@ module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.BM.Trace (logInfo)
 import qualified Cardano.Db as Db
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache (
+  queryOrInsertStakeAddress,
   queryPoolKeyWithCache,
-  queryStakeAddrWithCache,
  )
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
+import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Types (StakeCred)
-import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Prelude hiding (from, groupBy, on)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -48,16 +49,14 @@ import Database.Esqueleto.Experimental (
 
 adjustEpochRewards ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Network ->
-  CacheStatus ->
+  SyncEnv ->
   EpochNo ->
   Generic.Rewards ->
   Set StakeCred ->
   ReaderT SqlBackend m ()
-adjustEpochRewards trce nw cache epochNo rwds creds = do
+adjustEpochRewards syncEnv epochNo rwds creds = do
   let eraIgnored = Map.toList $ Generic.unRewards rwds
-  liftIO . logInfo trce $
+  liftIO . logInfo (getTrace syncEnv) $
     mconcat
       [ "Removing "
       , if null eraIgnored then "" else textShow (length eraIgnored) <> " rewards and "
@@ -66,23 +65,21 @@ adjustEpochRewards trce nw cache epochNo rwds creds = do
       ]
   forM_ eraIgnored $ \(cred, rewards) ->
     forM_ (Set.toList rewards) $ \rwd ->
-      deleteReward trce nw cache epochNo (cred, rwd)
-  crds <- rights <$> forM (Set.toList creds) (queryStakeAddrWithCache trce cache DoNotUpdateCache nw)
+      deleteReward syncEnv epochNo (cred, rwd)
+  crds <- forM (Set.toList creds) (queryOrInsertStakeAddress syncEnv DoNotUpdateCache)
   deleteOrphanedRewards epochNo crds
 
 deleteReward ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  Network ->
-  CacheStatus ->
+  SyncEnv ->
   EpochNo ->
   (StakeCred, Generic.Reward) ->
   ReaderT SqlBackend m ()
-deleteReward trce nw cache epochNo (cred, rwd) = do
-  mAddrId <- queryStakeAddrWithCache trce cache DoNotUpdateCache nw cred
-  eiPoolId <- queryPoolKeyWithCache cache DoNotUpdateCache (Generic.rewardPool rwd)
-  case (mAddrId, eiPoolId) of
-    (Right addrId, Right poolId) -> do
+deleteReward syncEnv epochNo (cred, rwd) = do
+  addrId <- queryOrInsertStakeAddress syncEnv DoNotUpdateCache cred
+  eiPoolId <- queryPoolKeyWithCache (envCache syncEnv) DoNotUpdateCache (Generic.rewardPool rwd)
+  case eiPoolId of
+    Right poolId -> do
       delete $ do
         rwdDb <- from $ table @Db.Reward
         where_ (rwdDb ^. Db.RewardAddrId ==. val addrId)

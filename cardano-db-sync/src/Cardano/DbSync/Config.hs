@@ -15,7 +15,6 @@ module Cardano.DbSync.Config (
   SyncProtocol (..),
   SyncNodeConfig (..),
   SyncNodeParams (..),
-  cardanoLedgerConfig,
   genesisProtocolMagicId,
   readCardanoGenesisConfig,
   readSyncNodeConfig,

@@ -29,3 +29,4 @@ import Cardano.Db.Run as X
 import Cardano.Db.Schema.BaseSchema as X
 import Cardano.Db.Schema.Types as X
 import Cardano.Db.Types as X
+import Cardano.Db.Util as X

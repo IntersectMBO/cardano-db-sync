@@ -95,6 +95,7 @@ share
   -- All NULL-able fields other than 'epochNo' are NULL for EBBs, whereas 'epochNo' is
   -- only NULL for the genesis block.
   Block
+    Id                  Int64               sqltype=bigint Primary
     hash                ByteString          sqltype=hash32type
     epochNo             Word64 Maybe        sqltype=word31type
     slotNo              Word64 Maybe        sqltype=word63type
@@ -114,6 +115,7 @@ share
     UniqueBlock         hash
 
   Tx
+    Id                  Int64               sqltype=bigint Primary -- generated="block_id * 1000 + block_index"
     hash                ByteString          sqltype=hash32type
     blockId             BlockId             noreference     -- This type is the primary key for the 'block' table.
     blockIndex          Word64              sqltype=word31type    -- The index of this transaction within the block.
@@ -287,7 +289,6 @@ share
     addrId              StakeAddressId      noreference
     type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
-    earnedEpoch         Word64 generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
     spendableEpoch      Word64
     poolId              PoolHashId          noreference
     -- Here used to lie a unique constraint which would slow down inserts when in syncing mode
@@ -299,7 +300,6 @@ share
     addrId              StakeAddressId      noreference
     type                RewardSource        sqltype=rewardtype
     amount              DbLovelace          sqltype=lovelace
-    earnedEpoch         Word64 generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
     spendableEpoch      Word64
     deriving Show
 
@@ -954,9 +954,6 @@ schemaDocs =
       RewardAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardType # "The type of the rewards"
       RewardAmount # "The reward amount (in Lovelace)."
-      RewardEarnedEpoch
-        # "The epoch in which the reward was earned. For `pool` and `leader` rewards spendable in epoch `N`, this will be\
-          \ `N - 2`, `refund` N."
       RewardSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
       RewardPoolId
         # "The PoolHash table index for the pool the stake address was delegated to when\
@@ -970,9 +967,6 @@ schemaDocs =
       RewardRestAddrId # "The StakeAddress table index for the stake address that earned the reward."
       RewardRestType # "The type of the rewards."
       RewardRestAmount # "The reward amount (in Lovelace)."
-      RewardRestEarnedEpoch
-        # "The epoch in which the reward was earned. For rewards spendable in epoch `N`, this will be\
-          \ `N - 1`."
       RewardRestSpendableEpoch # "The epoch in which the reward is actually distributed and can be spent."
 
     Withdrawal --^ do

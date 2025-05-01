@@ -72,7 +72,6 @@ module Cardano.Db.Operations.Insert (
   setNullRatified,
   setNullExpired,
   setNullDropped,
-  replaceAdaPots,
   insertAnchor,
   insertConstitution,
   insertGovActionProposal,
@@ -92,8 +91,6 @@ module Cardano.Db.Operations.Insert (
   insertAlwaysNoConfidence,
   insertUnchecked,
   insertMany',
-  -- Export mainly for testing.
-  insertBlockChecked,
 ) where
 
 import Cardano.Db.Operations.Query
@@ -121,6 +118,7 @@ import Database.Persist.Class (
   checkUnique,
   insert,
   insertBy,
+  insertKey,
   replaceUnique,
  )
 import Database.Persist.EntityDef.Internal (entityDB, entityUniques)
@@ -134,7 +132,6 @@ import Database.Persist.Sql (
   insertMany,
   rawExecute,
   rawSql,
-  replace,
   toPersistFields,
   toPersistValue,
   uniqueDBName,
@@ -171,8 +168,8 @@ import Database.PostgreSQL.Simple (SqlError)
 insertAdaPots :: (MonadBaseControl IO m, MonadIO m) => AdaPots -> ReaderT SqlBackend m AdaPotsId
 insertAdaPots = insertUnchecked "AdaPots"
 
-insertBlock :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlock = insertUnchecked "Block"
+insertBlock :: (MonadBaseControl IO m, MonadIO m) => BlockId -> Block -> ReaderT SqlBackend m ()
+insertBlock = insertKeyUnchecked "Block"
 
 insertCollateralTxIn :: (MonadBaseControl IO m, MonadIO m) => CollateralTxIn -> ReaderT SqlBackend m CollateralTxInId
 insertCollateralTxIn = insertUnchecked "CollateralTxIn"
@@ -282,8 +279,8 @@ insertStakeRegistration = insertUnchecked "StakeRegistration"
 insertTreasury :: (MonadBaseControl IO m, MonadIO m) => Treasury -> ReaderT SqlBackend m TreasuryId
 insertTreasury = insertUnchecked "Treasury"
 
-insertTx :: (MonadBaseControl IO m, MonadIO m) => Tx -> ReaderT SqlBackend m TxId
-insertTx tx = insertUnchecked ("Tx: " ++ show (BS.length (txHash tx))) tx
+insertTx :: (MonadBaseControl IO m, MonadIO m) => TxId -> Tx -> ReaderT SqlBackend m ()
+insertTx k tx = insertKeyUnchecked ("Tx: " ++ show (BS.length (txHash tx))) k tx
 
 insertTxIn :: (MonadBaseControl IO m, MonadIO m) => TxIn -> ReaderT SqlBackend m TxInId
 insertTxIn = insertUnchecked "TxIn"
@@ -406,18 +403,6 @@ setNullExpired eNo =
 setNullDropped :: MonadIO m => Word64 -> ReaderT SqlBackend m Int64
 setNullDropped eNo =
   updateWhereCount [GovActionProposalDroppedEpoch !=. Nothing, GovActionProposalDroppedEpoch >. Just eNo] [GovActionProposalDroppedEpoch =. Nothing]
-
-replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
-replaceAdaPots blockId adapots = do
-  mAdaPotsId <- queryAdaPotsId blockId
-  case mAdaPotsId of
-    Nothing -> pure False
-    Just adaPotsDB
-      | entityVal adaPotsDB == adapots ->
-          pure False
-    Just adaPotsDB -> do
-      replace (entityKey adaPotsDB) adapots
-      pure True
 
 insertAnchor :: (MonadBaseControl IO m, MonadIO m) => VotingAnchor -> ReaderT SqlBackend m VotingAnchorId
 insertAnchor = insertCheckUnique "VotingAnchor"
@@ -699,6 +684,26 @@ insertUnchecked vtype =
     exceptHandler e =
       liftIO $ throwIO (DbInsertException vtype e)
 
+-- Insert without checking uniqueness constraints. This should be safe for most tables
+-- even tables with uniqueness constraints, especially block, tx and many others, where
+-- uniqueness is enforced by the ledger.
+insertKeyUnchecked ::
+  ( MonadIO m
+  , MonadBaseControl IO m
+  , PersistEntityBackend record ~ SqlBackend
+  , PersistEntity record
+  ) =>
+  String ->
+  Key record ->
+  record ->
+  ReaderT SqlBackend m ()
+insertKeyUnchecked vtype k v =
+  handle exceptHandler $ insertKey k v
+  where
+    exceptHandler :: MonadIO m => SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DbInsertException vtype e)
+
 -- This is cargo culted from Persistent because it is not exported.
 escapeFieldName :: FieldNameDB -> Text
 escapeFieldName (FieldNameDB s) =
@@ -715,8 +720,3 @@ onlyOneUniqueDef prxy =
   case entityUniques (entityDef prxy) of
     [uniq] -> uniq
     _ -> error "impossible due to OnlyOneUniqueKey constraint"
-
--- Used in tests
-
-insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
-insertBlockChecked = insertCheckUnique "Block"

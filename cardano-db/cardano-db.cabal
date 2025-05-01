@@ -57,6 +57,7 @@ library
                         Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
                         Cardano.Db.Types
+                        Cardano.Db.Util
 
   build-depends:        aeson
                       , base                            >= 4.14         && < 5
@@ -142,7 +143,6 @@ test-suite test-db
 
   other-modules:        Test.IO.Cardano.Db.Insert
                         Test.IO.Cardano.Db.Migration
-                        Test.IO.Cardano.Db.Rollback
                         Test.IO.Cardano.Db.TotalSupply
                         Test.IO.Cardano.Db.Util
                         Test.IO.Cardano.Db.PGConfig
@@ -160,11 +160,9 @@ test-suite test-db
   build-depends:        base
                       , bytestring
                       , cardano-db
-                      , cardano-slotting
                       , directory
                       , extra
                       , filepath
-                      , monad-control
                       , persistent
                       , tasty
                       , tasty-hunit

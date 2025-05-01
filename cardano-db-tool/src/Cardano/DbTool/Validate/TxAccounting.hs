@@ -33,7 +33,6 @@ import Database.Esqueleto.Experimental (
   on,
   select,
   table,
-  toSqlKey,
   val,
   where_,
   (==.),
@@ -151,7 +150,7 @@ queryTestTxIds = do
   lower <-
     select $
       from (table @Tx) >>= \tx -> do
-        where_ (tx ^. TxBlockId >. val (toSqlKey 1))
+        where_ (tx ^. TxBlockId >. val (BlockKey 1))
         pure (tx ^. TxId)
   upper <- select $ from (table @Tx) >> pure countRows
   pure (maybe 0 (unTxId . unValue) (listToMaybe lower), maybe 0 unValue (listToMaybe upper))
@@ -160,7 +159,7 @@ queryTxFeeDeposit :: MonadIO m => Word64 -> ReaderT SqlBackend m (Ada, Int64)
 queryTxFeeDeposit txId = do
   res <- select $ do
     tx <- from $ table @Tx
-    where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
+    where_ (tx ^. TxId ==. val (TxKey $ fromIntegral txId))
     pure (tx ^. TxFee, tx ^. TxDeposit)
   pure $ maybe (0, 0) convert (listToMaybe res)
   where
@@ -182,7 +181,7 @@ queryInputsBody txId = do
         `on` (\(tx :& txin) -> tx ^. TxId ==. txin ^. TxInTxInId)
           `innerJoin` table @(TxOutTable a)
         `on` (\(_tx :& txin :& txout) -> txin ^. TxInTxOutId ==. txout ^. txOutTxIdField @a)
-    where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
+    where_ (tx ^. TxId ==. val (TxKey $ fromIntegral txId))
     where_ (txout ^. txOutIndexField @a ==. txin ^. TxInTxOutIndex)
     pure txout
   pure $ entityVal <$> res
@@ -200,7 +199,7 @@ queryTxOutputsBody txId = do
         $ table @Tx
           `innerJoin` table @(TxOutTable a)
         `on` (\(tx :& txout) -> tx ^. TxId ==. txout ^. txOutTxIdField @a)
-    where_ (tx ^. TxId ==. val (toSqlKey $ fromIntegral txId))
+    where_ (tx ^. TxId ==. val (TxKey $ fromIntegral txId))
     pure txout
   pure $ entityVal <$> res
 
@@ -208,7 +207,7 @@ queryTxWithdrawal :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
 queryTxWithdrawal txId = do
   res <- select $ do
     withdraw <- from $ table @Withdrawal
-    where_ (withdraw ^. WithdrawalTxId ==. val (toSqlKey $ fromIntegral txId))
+    where_ (withdraw ^. WithdrawalTxId ==. val (TxKey $ fromIntegral txId))
     pure (withdraw ^. WithdrawalAmount)
   -- It is probably not possible to have two withdrawals in a single Tx.
   -- If it is possible then there will be an accounting error.

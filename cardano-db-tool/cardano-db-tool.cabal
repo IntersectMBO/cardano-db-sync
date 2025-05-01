@@ -74,6 +74,7 @@ library
                       , ouroboros-consensus-cardano
                       , ouroboros-network
                       , ouroboros-network-api
+                      , persistent
                       , random
                       , random-shuffle
                       , text

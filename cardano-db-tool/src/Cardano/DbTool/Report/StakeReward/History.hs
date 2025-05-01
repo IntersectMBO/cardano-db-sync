@@ -114,7 +114,7 @@ queryHistoryStakeRewards address = do
               `innerJoin` table @Reward
             `on` (\(saddr :& rwd) -> saddr ^. StakeAddressId ==. rwd ^. RewardAddrId)
               `innerJoin` table @Epoch
-            `on` (\(_saddr :& rwd :& ep) -> ep ^. EpochNo ==. rwd ^. RewardEarnedEpoch)
+            `on` (\(_saddr :& rwd :& ep) -> ep ^. EpochNo ==. rwd ^. RewardSpendableEpoch)
         where_ (ep ^. EpochNo ==. val en)
         where_ (saddr ^. StakeAddressId ==. val saId)
         orderBy [asc (ep ^. EpochNo)]

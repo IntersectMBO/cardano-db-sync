@@ -53,10 +53,9 @@ validateEpochRewards ::
   Trace IO Text ->
   Network ->
   EpochNo ->
-  EpochNo ->
   Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
   ReaderT SqlBackend m ()
-validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
+validateEpochRewards tracer network spendableEpochNo rmap = do
   actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
   if actualCount /= expectedCount
     then do

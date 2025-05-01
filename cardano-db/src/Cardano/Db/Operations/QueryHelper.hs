@@ -66,10 +66,10 @@ entityPair e =
   (entityKey e, entityVal e)
 
 unBlockId :: BlockId -> Word64
-unBlockId = fromIntegral . unSqlBackendKey . unBlockKey
+unBlockId = fromIntegral . unBlockKey
 
 unTxId :: TxId -> Word64
-unTxId = fromIntegral . unSqlBackendKey . unTxKey
+unTxId = fromIntegral . unTxKey
 
 unTxInId :: TxInId -> Word64
 unTxInId = fromIntegral . unSqlBackendKey . unTxInKey
