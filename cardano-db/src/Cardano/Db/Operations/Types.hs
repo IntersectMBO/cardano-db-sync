@@ -47,6 +47,7 @@ class (PersistEntity (TxOutTable a), PersistField (TxOutIdFor a)) => TxOutFields
   txOutInlineDatumIdField :: EntityField (TxOutTable a) (Maybe DatumId)
   txOutReferenceScriptIdField :: EntityField (TxOutTable a) (Maybe ScriptId)
   txOutConsumedByTxIdField :: EntityField (TxOutTable a) (Maybe TxId)
+  txOutMaTxOutField :: EntityField (TxOutTable a) (Maybe Text)
 
 -- TxOutCore fields
 instance TxOutFields 'TxOutCore where
@@ -60,6 +61,7 @@ instance TxOutFields 'TxOutCore where
   txOutInlineDatumIdField = C.TxOutInlineDatumId
   txOutReferenceScriptIdField = C.TxOutReferenceScriptId
   txOutConsumedByTxIdField = C.TxOutConsumedByTxId
+  txOutMaTxOutField = C.TxOutMaTxOut
 
 -- TxOutVariantAddress fields
 instance TxOutFields 'TxOutVariantAddress where
@@ -73,6 +75,7 @@ instance TxOutFields 'TxOutVariantAddress where
   txOutInlineDatumIdField = V.TxOutInlineDatumId
   txOutReferenceScriptIdField = V.TxOutReferenceScriptId
   txOutConsumedByTxIdField = V.TxOutConsumedByTxId
+  txOutMaTxOutField = V.TxOutMaTxOut
 
 --------------------------------------------------------------------------------
 -- Address

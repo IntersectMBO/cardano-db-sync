@@ -76,6 +76,7 @@ initialSupplyTest =
             , C.txOutInlineDatumId = Nothing
             , C.txOutReferenceScriptId = Nothing
             , C.txOutConsumedByTxId = Nothing
+            , C.txOutMaTxOut = Nothing
             }
     supply1 <- queryTotalSupply TxOutCore
     assertBool ("Total supply should be < " ++ show supply0) (supply1 < supply0)

@@ -196,6 +196,7 @@ unitTests iom knownMigrations =
         , test "mint many multi assets" Plutus.mintMultiAssets
         , test "swap many multi assets" Plutus.swapMultiAssets
         , test "swap with multi assets disabled" Plutus.swapMultiAssetsDisabled
+        , test "multi assets tx out" Plutus.multiAssetsTxOut
         ]
     , testGroup
         "Pools and smash"
