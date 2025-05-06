@@ -231,7 +231,6 @@
                   [ "../config/pgpass-mainnet" ];
                 packages.cardano-chain-gen.package.extraSrcFiles =
                   [ "../schema/*.sql" ];
-
               })
 
               ({ lib, config, ... }:
@@ -488,6 +487,17 @@
 
           in rec {
             checks = staticChecks;
+
+            devShells = 
+              let
+                mkVariantShell = compiler: variant: 
+                  lib.nameValuePair "profiled-${compiler}" v.shell;
+              in 
+                # "Profiled" devshell variants for each extra compiler
+                lib.mapAttrs' mkVariantShell project.profiled.projectVariants // {
+                  # A "profiled" variant shell for the default compiler
+                  profiled = project.profiled.shell;
+                };
 
             hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
               ciJobs = flake.hydraJobs;
