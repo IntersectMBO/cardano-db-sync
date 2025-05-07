@@ -59,7 +59,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 --------------------------------------------------------------------------------------
 -- INSERT TX
@@ -335,21 +334,21 @@ insertMaTxMint ::
   Trace IO Text ->
   CacheStatus ->
   DB.TxId ->
-  MultiAsset StandardCrypto ->
+  MultiAsset ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [DB.MaTxMint]
 insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
   concatMapM (lift . prepareOuter) $ Map.toList mintMap
   where
     prepareOuter ::
       (MonadBaseControl IO m, MonadIO m) =>
-      (PolicyID StandardCrypto, Map AssetName Integer) ->
+      (PolicyID, Map AssetName Integer) ->
       ReaderT SqlBackend m [DB.MaTxMint]
     prepareOuter (policy, aMap) =
       mapM (prepareInner policy) $ Map.toList aMap
 
     prepareInner ::
       (MonadBaseControl IO m, MonadIO m) =>
-      PolicyID StandardCrypto ->
+      PolicyID ->
       (AssetName, Integer) ->
       ReaderT SqlBackend m DB.MaTxMint
     prepareInner policy (aname, amount) = do
@@ -365,21 +364,21 @@ insertMaTxOuts ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   CacheStatus ->
-  Map (PolicyID StandardCrypto) (Map AssetName Integer) ->
+  Map PolicyID (Map AssetName Integer) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) [MissingMaTxOut]
 insertMaTxOuts _tracer cache maMap =
   concatMapM (lift . prepareOuter) $ Map.toList maMap
   where
     prepareOuter ::
       (MonadBaseControl IO m, MonadIO m) =>
-      (PolicyID StandardCrypto, Map AssetName Integer) ->
+      (PolicyID, Map AssetName Integer) ->
       ReaderT SqlBackend m [MissingMaTxOut]
     prepareOuter (policy, aMap) =
       mapM (prepareInner policy) $ Map.toList aMap
 
     prepareInner ::
       (MonadBaseControl IO m, MonadIO m) =>
-      PolicyID StandardCrypto ->
+      PolicyID ->
       (AssetName, Integer) ->
       ReaderT SqlBackend m MissingMaTxOut
     prepareInner policy (aname, amount) = do

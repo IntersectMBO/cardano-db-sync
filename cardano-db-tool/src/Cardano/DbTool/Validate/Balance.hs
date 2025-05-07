@@ -24,15 +24,13 @@ import Cardano.Chain.Common (
  )
 import qualified Cardano.Chain.UTxO as Byron
 import Cardano.Ledger.Address
-import Cardano.Ledger.Alonzo (AlonzoEra)
 import qualified Cardano.Ledger.Alonzo.TxBody as Alonzo
+import Cardano.Ledger.Api (AlonzoEra)
 import Cardano.Ledger.Compactible
 import qualified Cardano.Ledger.Core as Ledger
-import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Shelley.API (Coin (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Ledger.Shelley.TxOut
-import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 import Cardano.Ledger.Val
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
@@ -102,7 +100,7 @@ getByronBalance addrText utxo = do
 
 getShelleyBalance ::
   forall era.
-  (EraCrypto era ~ StandardCrypto, Ledger.TxOut era ~ ShelleyTxOut era) =>
+  Ledger.TxOut era ~ ShelleyTxOut era =>
   Val (Ledger.Value era) =>
   Text ->
   Shelley.UTxO era ->
@@ -112,20 +110,20 @@ getShelleyBalance addrText utxo = do
     Left err -> Left $ VBErrShelley err
     Right cmpAddr -> Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue cmpAddr) (Map.elems $ Shelley.unUTxO utxo)
   where
-    compactTxOutValue :: CompactAddr (EraCrypto era) -> Ledger.TxOut era -> Maybe Coin
+    compactTxOutValue :: CompactAddr -> Ledger.TxOut era -> Maybe Coin
     compactTxOutValue caddr (TxOutCompact scaddr v) =
       if caddr == scaddr
         then Just $ coin (fromCompact v)
         else Nothing
 
-getAlonzoBalance :: Text -> Shelley.UTxO (AlonzoEra StandardCrypto) -> Either ValidateBalanceError Word64
+getAlonzoBalance :: Text -> Shelley.UTxO AlonzoEra -> Either ValidateBalanceError Word64
 getAlonzoBalance addrText utxo = do
   case covertToCompactAddress addrText of
     Left err -> Left $ VBErrAlonzo err
     Right cmpAddr -> Right . fromIntegral . sum $ unCoin <$> mapMaybe (compactTxOutValue cmpAddr) (Map.elems $ Shelley.unUTxO utxo)
   where
     compactTxOutValue ::
-      CompactAddr StandardCrypto -> Alonzo.AlonzoTxOut (AlonzoEra StandardCrypto) -> Maybe Coin
+      CompactAddr -> Alonzo.AlonzoTxOut AlonzoEra -> Maybe Coin
     compactTxOutValue caddr txOut =
       let (scaddr, val) = case txOut of
             Alonzo.TxOutCompact a v -> (a, v)
@@ -134,7 +132,7 @@ getAlonzoBalance addrText utxo = do
             then Just $ coin (fromCompact val)
             else Nothing
 
-covertToCompactAddress :: Text -> Either String (CompactAddr StandardCrypto)
+covertToCompactAddress :: Text -> Either String CompactAddr
 covertToCompactAddress addrText =
   case Api.deserialiseAddress (Api.AsAddress Api.AsShelleyAddr) addrText of
     Nothing ->

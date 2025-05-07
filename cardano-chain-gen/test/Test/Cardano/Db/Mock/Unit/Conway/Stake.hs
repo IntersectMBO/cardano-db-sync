@@ -1,4 +1,6 @@
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Stake (
   -- * Stake Address
@@ -21,14 +23,15 @@ module Test.Cardano.Db.Mock.Unit.Conway.Stake (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
+import Cardano.Ledger.BaseTypes (CertIx (..), SlotNo (..), TxIx (..))
 import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Credential (Ptr (..))
+import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Conway.Scenarios as Conway
 import Cardano.Mock.Forging.Types (StakeIndex (..), UTxOIndex (..))
 import Cardano.Prelude
+import Data.IntCast (intCastMaybe)
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Network.Block (blockSlot)
 import Test.Cardano.Db.Mock.Config
@@ -127,7 +130,7 @@ stakeAddressPtr =
         Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
 
     -- Forge a block pointing to the cert
-    let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
+    let ptr = Ptr (unsafeToSlotNo32 $ blockSlot blk) (TxIx 0) (CertIx 0)
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
@@ -148,7 +151,7 @@ stakeAddressPtrDereg =
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert SNothing)]
     -- Forge a block with a pointer
-    let ptr0 = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
+    let ptr0 = Ptr (unsafeToSlotNo32 $ blockSlot blk) (TxIx 0) (CertIx 0)
     blk' <- Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
       sequence
         [ Conway.mkPaymentTx
@@ -166,7 +169,7 @@ stakeAddressPtrDereg =
         ]
 
     -- Forge a block with a pointers to the certs
-    let ptr1 = Ptr (blockSlot blk') (TxIx 1) (CertIx 1)
+    let ptr1 = Ptr (unsafeToSlotNo32 $ blockSlot blk') (TxIx 1) (CertIx 1)
     void $ Api.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
       sequence
         [ Conway.mkPaymentTx
@@ -215,7 +218,7 @@ stakeAddressPtrUseBefore =
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Create a pointer to it
-    let ptr = Ptr (blockSlot blk) (TxIx 0) (CertIx 0)
+    let ptr = Ptr (unsafeToSlotNo32 $ blockSlot blk) (TxIx 0) (CertIx 0)
     void $
       Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
@@ -435,3 +438,16 @@ registerStakeCredsNoShelley = do
         }
     testLabel = "conwayConfigShelleyDisabled"
     cfgDir = conwayConfigDir
+
+-- This function cargo culted from cardano-wallet.
+unsafeToSlotNo32 :: SlotNo -> SlotNo32
+unsafeToSlotNo32 =
+  fromMaybe reportFailure . toSlotNo32
+  where
+    reportFailure :: e
+    reportFailure =
+      panic
+        "Test.Cardano.Db.Mock.Unit.Conway.Stake.unsafeToSlotNo32: unable to convert SlotNo to SlotNo32"
+
+    toSlotNo32 :: SlotNo -> Maybe SlotNo32
+    toSlotNo32 (SlotNo n) = SlotNo32 <$> intCastMaybe @Word64 @Word32 n

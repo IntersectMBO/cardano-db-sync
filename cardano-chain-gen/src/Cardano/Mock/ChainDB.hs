@@ -62,7 +62,7 @@ replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
 extendChainDB :: LedgerSupportsProtocol block => ChainDB block -> block -> ChainDB block
 extendChainDB chainDB blk = do
   let !chain = cchain chainDB
-      !st = tickThenReapply (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
+      !st = tickThenReapply ComputeLedgerEvents (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
    in chainDB {cchain = chain :> (blk, st)}
 
 findFirstPoint :: HasHeader block => [Point block] -> ChainDB block -> Maybe (Point block)
