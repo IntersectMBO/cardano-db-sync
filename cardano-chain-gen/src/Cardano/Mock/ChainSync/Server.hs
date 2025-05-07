@@ -2,10 +2,13 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Cardano.Mock.ChainSync.Server (
   -- * server
@@ -48,11 +51,11 @@ import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
 import Data.Void (Void)
-import Network.TypedProtocol.Core (Peer (..))
+import qualified Network.Mux as Mux
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
 import Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
-import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx)
+import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
 import qualified Ouroboros.Consensus.Network.NodeToClient as NTC
@@ -81,12 +84,16 @@ import Ouroboros.Network.Block (
   genesisPoint,
   mkSerialised,
  )
+import Network.TypedProtocol.Peer (Peer (..))
+import qualified Network.TypedProtocol.Stateful.Peer as St
+import Network.TypedProtocol.Stateful.Codec ()
 import Ouroboros.Network.Channel (Channel)
 import Ouroboros.Network.Driver.Simple (runPeer)
+import qualified Ouroboros.Network.Driver.Stateful as St (runPeer)
 import Ouroboros.Network.IOManager (IOManager)
 import qualified Ouroboros.Network.IOManager as IOManager
 import Ouroboros.Network.Magic (NetworkMagic)
-import Ouroboros.Network.Mux (MuxMode (..), OuroborosApplicationWithMinimalCtx)
+import Ouroboros.Network.Mux (OuroborosApplicationWithMinimalCtx)
 import Ouroboros.Network.NodeToClient (NodeToClientVersionData (..))
 import qualified Ouroboros.Network.NodeToClient as NodeToClient
 import Ouroboros.Network.NodeToNode (Versions)
@@ -98,9 +105,10 @@ import Ouroboros.Network.Protocol.ChainSync.Server (
   chainSyncServerPeer,
  )
 import Ouroboros.Network.Protocol.Handshake.Version (simpleSingletonVersions)
+import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
 import Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
-import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy)
+import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy (..))
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -157,6 +165,7 @@ type MockServerConstraint blk =
   , ShowProxy (GenTx blk)
   , SupportedNetworkProtocolVersion blk
   , EncodeDisk blk blk
+  , ShowProxy (TxId (GenTx blk))
   )
 
 forkServerThread ::
@@ -216,7 +225,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
       Versions
         NodeToClientVersion
         NodeToClientVersionData
-        (OuroborosApplicationWithMinimalCtx 'ResponderMode LocalAddress ByteString IO Void ())
+        (OuroborosApplicationWithMinimalCtx 'Mux.ResponderMode LocalAddress ByteString IO Void ())
     versions state =
       let version = fromJust $ snd $ latestReleasedNodeVersion (Proxy @blk)
           allVersions = supportedNodeToClientVersions (Proxy @blk)
@@ -224,7 +233,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
        in simpleSingletonVersions
             version
             (NodeToClientVersionData netMagic False)
-            (NTC.responder version $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
+            (\versionData -> NTC.responder version versionData $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
     mkApps ::
       StrictTVar IO (ChainProducerState blk) ->
@@ -268,11 +277,12 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
           Channel IO ByteString ->
           IO ((), Maybe ByteString)
         stateQueryServer _them channel =
-          runPeer
+          St.runPeer
             nullTracer
             (cStateQueryCodec codecs)
             channel
-            (Effect (forever $ threadDelay 3_600_000_000))
+            LocalStateQuery.StateIdle
+            (St.Effect (forever $ threadDelay 3_600_000_000))
 
         txMonitorServer ::
           localPeer ->
@@ -281,7 +291,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
         txMonitorServer _them channel =
           runPeer
             nullTracer
-            (cStateQueryCodec codecs)
+            (cTxMonitorCodec codecs)
             channel
             (Effect (forever $ threadDelay 3_600_000_000))
 

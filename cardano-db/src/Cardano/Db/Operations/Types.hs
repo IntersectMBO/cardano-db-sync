@@ -116,7 +116,7 @@ data MaTxOutIdW
   deriving (Show)
 
 -- MaTxOut fields for a given TxOutTableType
-class (PersistEntity (MaTxOutTable a)) => MaTxOutFields (a :: TxOutTableType) where
+class PersistEntity (MaTxOutTable a) => MaTxOutFields (a :: TxOutTableType) where
   type MaTxOutTable a :: Type
   type MaTxOutIdFor a :: Type
   maTxOutTxOutIdField :: EntityField (MaTxOutTable a) (TxOutIdFor a)
@@ -160,7 +160,7 @@ data CollateralTxOutIdW
   | VCollateralTxOutIdW !V.CollateralTxOutId
   deriving (Show)
 
-class (PersistEntity (CollateralTxOutTable a)) => CollateralTxOutFields (a :: TxOutTableType) where
+class PersistEntity (CollateralTxOutTable a) => CollateralTxOutFields (a :: TxOutTableType) where
   type CollateralTxOutTable a :: Type
   type CollateralTxOutIdFor a :: Type
   collateralTxOutIdField :: EntityField (CollateralTxOutTable a) (CollateralTxOutIdFor a)

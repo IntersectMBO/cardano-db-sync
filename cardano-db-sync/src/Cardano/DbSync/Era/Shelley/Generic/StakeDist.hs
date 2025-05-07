@@ -190,7 +190,7 @@ getPoolDistr els =
     LedgerStateConway cls -> Just $ genericPoolDistr cls
 
 genericPoolDistr ::
-  forall era p .
+  forall era p.
   LedgerState (ShelleyBlock p era) ->
   (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
 genericPoolDistr lstate =

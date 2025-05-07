@@ -17,9 +17,9 @@ import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import Cardano.Ledger.Shelley.TxOut
 import Cardano.Prelude
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (StandardMary)
+import Ouroboros.Consensus.Cardano.Block (MaryEra)
 
-fromMaryTx :: (Word64, Core.Tx StandardMary) -> Tx
+fromMaryTx :: (Word64, Core.Tx MaryEra) -> Tx
 fromMaryTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -53,13 +53,13 @@ fromMaryTx (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Mary does not support treasury donations
     }
   where
-    txBody :: Core.TxBody StandardMary
+    txBody :: Core.TxBody MaryEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
     outputs = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
 
-    fromTxOut :: Word64 -> ShelleyTxOut StandardMary -> TxOut
+    fromTxOut :: Word64 -> ShelleyTxOut MaryEra -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index

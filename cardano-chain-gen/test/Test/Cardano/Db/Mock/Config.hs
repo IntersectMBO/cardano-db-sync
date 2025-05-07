@@ -96,6 +96,9 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
+import Ouroboros.Consensus.Byron.Ledger.Mempool ()
+import Ouroboros.Consensus.HardFork.Combinator.Mempool ()
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)

@@ -17,6 +17,7 @@ import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
 import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv (..))
+import Cardano.Ledger.BaseTypes.NonZero (NonZero (..))
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Data.Map.Strict (deleteMin, insert, lookupMax, size, split)
@@ -106,7 +107,7 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
               -- To make sure our Map Epoch doesn't get too large so we use something slightly bigger than K value "securityParam"
               -- and once the map gets larger than that number we delete the first inserted item making room for another Epoch.
               scaledMapEpoch =
-                if size mapEpoch > fromEnum securityParam
+                if size mapEpoch > fromEnum (unNonZero securityParam)
                   then deleteMin mapEpoch
                   else mapEpoch
 

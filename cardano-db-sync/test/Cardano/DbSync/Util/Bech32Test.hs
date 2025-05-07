@@ -9,7 +9,6 @@ import Cardano.Crypto.Hash.Blake2b (Blake2b_224 ())
 import Cardano.Crypto.Hash.Class (HashAlgorithm (..), hashFromBytes)
 import Cardano.Crypto.VRF.Praos (genSeed, keypairFromSeed)
 import Cardano.DbSync.Util.Bech32
-import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Prelude
 import Data.ByteString.Base16 (decodeLenient, encode)
@@ -126,11 +125,11 @@ genKey = do
 
   pure $ decodeUtf8 $ encode $ serialize' vkey
 
-genBlake224 :: MonadGen m => m (Maybe (KeyHash 'StakePool StandardCrypto))
+genBlake224 :: MonadGen m => m (Maybe (KeyHash 'StakePool))
 genBlake224 = do
   serialiseHash <$> Gen.bytes (Range.linear 0 100)
   where
-    serialiseHash :: ByteString -> Maybe (KeyHash 'StakePool StandardCrypto)
+    serialiseHash :: ByteString -> Maybe (KeyHash 'StakePool)
     serialiseHash = (KeyHash <$>) . hashFromBytes . digest (Proxy @Blake2b_224)
 
 -- * Utilities
