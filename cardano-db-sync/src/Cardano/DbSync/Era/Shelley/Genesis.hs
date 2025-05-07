@@ -47,7 +47,7 @@ import Data.Time.Clock (UTCTime (..))
 import qualified Data.Time.Clock as Time
 import Database.Persist.Sql (SqlBackend)
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto, StandardShelley)
+import Ouroboros.Consensus.Cardano.Block (ShelleyEra)
 import Ouroboros.Consensus.Shelley.Node (
   ShelleyGenesis (..),
   ShelleyGenesisStaking (..),
@@ -61,7 +61,7 @@ import Paths_cardano_db_sync (version)
 insertValidateGenesisDist ::
   SyncEnv ->
   Text ->
-  ShelleyGenesis StandardCrypto ->
+  ShelleyGenesis ->
   Bool ->
   ExceptT SyncNodeError IO ()
 insertValidateGenesisDist syncEnv networkName cfg shelleyInitiation = do
@@ -166,7 +166,7 @@ validateGenesisDistribution ::
   SyncEnv ->
   Bool ->
   Text ->
-  ShelleyGenesis StandardCrypto ->
+  ShelleyGenesis ->
   DB.BlockId ->
   Word64 ->
   ReaderT SqlBackend m (Either SyncNodeError ())
@@ -225,7 +225,7 @@ insertTxOuts ::
   SyncEnv ->
   Trace IO Text ->
   DB.BlockId ->
-  (TxIn StandardCrypto, ShelleyTxOut StandardShelley) ->
+  (TxIn, ShelleyTxOut ShelleyEra) ->
   ReaderT SqlBackend m ()
 insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
   -- Each address/value pair of the initial coin distribution comes from an artifical transaction
@@ -305,7 +305,7 @@ insertStaking ::
   Trace IO Text ->
   CacheStatus ->
   DB.BlockId ->
-  ShelleyGenesis StandardCrypto ->
+  ShelleyGenesis ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStaking tracer cache blkId genesis = do
   -- All Genesis staking comes from an artifical transaction
@@ -339,34 +339,34 @@ insertStaking tracer cache blkId genesis = do
 
 -- -----------------------------------------------------------------------------
 
-configGenesisHash :: ShelleyGenesis StandardCrypto -> ByteString
+configGenesisHash :: ShelleyGenesis -> ByteString
 configGenesisHash _ = BS.take 32 ("Shelley Genesis Block Hash " <> BS.replicate 32 '\0')
 
-genesisHashSlotLeader :: ShelleyGenesis StandardCrypto -> ByteString
+genesisHashSlotLeader :: ShelleyGenesis -> ByteString
 genesisHashSlotLeader _ = BS.take 28 ("Shelley Genesis SlotLeader Hash" <> BS.replicate 28 '\0')
 
 configGenesisStakingHash :: ByteString
 configGenesisStakingHash = BS.take 32 ("Shelley Genesis Staking Tx Hash " <> BS.replicate 32 '\0')
 
-configGenesisSupply :: ShelleyGenesis StandardCrypto -> DB.Ada
+configGenesisSupply :: ShelleyGenesis -> DB.Ada
 configGenesisSupply =
   DB.word64ToAda . fromIntegral . sum . map Ledger.unCoin . genesisTxoAssocList
 
-genesisUTxOSize :: ShelleyGenesis StandardCrypto -> Int
+genesisUTxOSize :: ShelleyGenesis -> Int
 genesisUTxOSize = length . genesisUtxOs
 
-genesisTxoAssocList :: ShelleyGenesis StandardCrypto -> [Ledger.Coin]
+genesisTxoAssocList :: ShelleyGenesis -> [Ledger.Coin]
 genesisTxoAssocList =
   map (unTxOut . snd) . genesisUtxOs
   where
-    unTxOut :: ShelleyTxOut StandardShelley -> Ledger.Coin
+    unTxOut :: ShelleyTxOut ShelleyEra -> Ledger.Coin
     unTxOut txOut = txOut ^. Core.valueTxOutL
 
-genesisUtxOs :: ShelleyGenesis StandardCrypto -> [(TxIn StandardCrypto, ShelleyTxOut StandardShelley)]
+genesisUtxOs :: ShelleyGenesis -> [(TxIn, ShelleyTxOut ShelleyEra)]
 genesisUtxOs =
   Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
 
-configStartTime :: ShelleyGenesis StandardCrypto -> UTCTime
+configStartTime :: ShelleyGenesis -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart
 
 roundToMillseconds :: UTCTime -> UTCTime

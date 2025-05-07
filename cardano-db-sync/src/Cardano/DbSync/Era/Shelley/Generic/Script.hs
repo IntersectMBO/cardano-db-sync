@@ -212,7 +212,7 @@ parseScriptAny = Aeson.withObject "any" $ \obj -> do
     _ -> fail "\"any\" script value not found"
 
 parseScriptMOf ::
-  (FromJSON script) =>
+  FromJSON script =>
   Aeson.Value ->
   Parser (Int, [script])
 parseScriptMOf = Aeson.withObject "atLeast" $ \obj -> do

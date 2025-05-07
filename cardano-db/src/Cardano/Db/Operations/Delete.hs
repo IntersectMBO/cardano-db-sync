@@ -187,7 +187,7 @@ deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
   pure (sum $ map snd blockLogs, initialLogs <> blockLogs <> offChainLogs <> afterTxIdLogs)
 
 deleteTablesAfterTxId ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   Maybe TxId ->
   MinIdsWrapper ->

@@ -128,7 +128,7 @@ queryTxOutId txOutTableType hashIndex =
 
 -- | Like 'queryTxOutId' but also return the 'TxOutIdValue'
 queryTxOutIdValue ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   (ByteString, Word64) ->
   ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdW, DbLovelace))
@@ -217,7 +217,7 @@ queryAddressId addrRaw = do
 -- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
 -- rewards are part of the ledger state and hence not on chain.
 queryTotalSupply ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   ReaderT SqlBackend m Ada
 queryTotalSupply txOutTableType =
@@ -242,7 +242,7 @@ queryTotalSupply txOutTableType =
 
 -- | Return the total Genesis coin supply.
 queryGenesisSupply ::
-  (MonadIO m) =>
+  MonadIO m =>
   TxOutTableType ->
   ReaderT SqlBackend m Ada
 queryGenesisSupply txOutTableType =

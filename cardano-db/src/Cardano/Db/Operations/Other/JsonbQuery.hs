@@ -95,7 +95,7 @@ disableJsonbInSchema = do
       []
 
 queryJsonbInSchemaExists ::
-  (MonadIO m) =>
+  MonadIO m =>
   ReaderT SqlBackend m Bool
 queryJsonbInSchemaExists = do
   isjsonb <- rawSql query []

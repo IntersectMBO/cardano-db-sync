@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -32,18 +31,14 @@ import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (LedgerState, StandardShelley)
-import Ouroboros.Consensus.Shelley.Eras (ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (LedgerState, ShelleyEra)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
-type ShelleyUTxOIndex = UTxOIndex (ShelleyEra StandardCrypto)
+type ShelleyUTxOIndex = UTxOIndex ShelleyEra
 
-type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard (ShelleyEra StandardCrypto))
+type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard ShelleyEra)
 
-type ShelleyTx = ShelleyTx.ShelleyTx (ShelleyEra StandardCrypto)
-
--- instance HasField "address" (TxOut (ShelleyEra StandardCrypto)) (Addr StandardCrypto) where
---     getField (TxOut addr _) = addr
+type ShelleyTx = ShelleyTx.ShelleyTx ShelleyEra
 
 mkPaymentTx ::
   ShelleyUTxOIndex ->
@@ -67,18 +62,18 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
 mkDCertTxPools :: ShelleyLedgerState -> Either ForgingError ShelleyTx
 mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
-mkSimpleTx :: ShelleyTxBody (ShelleyEra StandardCrypto) -> ShelleyTx
+mkSimpleTx :: ShelleyTxBody ShelleyEra -> ShelleyTx
 mkSimpleTx txBody =
   ShelleyTx.ShelleyTx
     txBody
     mempty
     (maybeToStrictMaybe Nothing)
 
-mkDCertTx :: [ShelleyTxCert StandardShelley] -> Withdrawals StandardCrypto -> Either ForgingError ShelleyTx
+mkDCertTx :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> Either ForgingError ShelleyTx
 mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential StandardCrypto -> ShelleyTxCert StandardShelley)] ->
+  [(StakeIndex, StakeCredential -> ShelleyTxCert ShelleyEra)] ->
   ShelleyLedgerState ->
   Either ForgingError ShelleyTx
 mkSimpleDCertTx consDert st = do
@@ -88,22 +83,22 @@ mkSimpleDCertTx consDert st = do
   mkDCertTx dcerts (Withdrawals mempty)
 
 consPaymentTxBody ::
-  Set (TxIn StandardCrypto) ->
-  StrictSeq (ShelleyTxOut (ShelleyEra StandardCrypto)) ->
+  Set TxIn ->
+  StrictSeq (ShelleyTxOut ShelleyEra) ->
   Coin ->
-  ShelleyTxBody (ShelleyEra StandardCrypto)
+  ShelleyTxBody ShelleyEra
 consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Withdrawals mempty)
 
-consCertTxBody :: [ShelleyTxCert StandardShelley] -> Withdrawals StandardCrypto -> ShelleyTxBody (ShelleyEra StandardCrypto)
+consCertTxBody :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> ShelleyTxBody ShelleyEra
 consCertTxBody = consTxBody mempty mempty (Coin 0)
 
 consTxBody ::
-  Set (TxIn StandardCrypto) ->
-  StrictSeq (ShelleyTxOut (ShelleyEra StandardCrypto)) ->
+  Set TxIn ->
+  StrictSeq (ShelleyTxOut ShelleyEra) ->
   Coin ->
-  [ShelleyTxCert StandardShelley] ->
-  Withdrawals StandardCrypto ->
-  ShelleyTxBody (ShelleyEra StandardCrypto)
+  [ShelleyTxCert ShelleyEra] ->
+  Withdrawals ->
+  ShelleyTxBody ShelleyEra
 consTxBody ins outs fees certs wdrl =
   ShelleyTxBody
     ins

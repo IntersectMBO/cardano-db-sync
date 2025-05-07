@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Cardano.Mock.Forging.Tx.Generic (
   allPoolStakeCert,
@@ -43,20 +42,18 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (Voter (..))
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
-import Cardano.Ledger.Crypto (ADDRHASH)
-import Cardano.Ledger.Era (Era (..), EraCrypto)
-import Cardano.Ledger.Hashes (ScriptHash (ScriptHash))
-import Cardano.Ledger.Keys
+import Cardano.Ledger.Hashes (ADDRHASH, ScriptHash (ScriptHash))
+import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), hashWithSerialiser)
 import Cardano.Ledger.PoolParams
 import Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import Cardano.Ledger.Shelley.TxCert
-import Cardano.Ledger.Shelley.UTxO
 import Cardano.Ledger.TxIn (TxIn (..))
 import qualified Cardano.Ledger.UMap as UMap
 import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, map, (.))
+import Cardano.Protocol.Crypto (hashVerKeyVRF)
 import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
@@ -72,10 +69,10 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 resolveAddress ::
   forall era p.
-  (EraCrypto era ~ StandardCrypto, Core.EraTxOut era) =>
+  (Core.EraTxOut era, EraCertState era) =>
   UTxOIndex era ->
   LedgerState (ShelleyBlock p era) ->
-  Either ForgingError (Addr (EraCrypto era))
+  Either ForgingError Addr
 resolveAddress index st = case index of
   UTxOAddressNew n -> Right $ Addr Testnet (unregisteredAddresses !! n) StakeRefNull
   UTxOAddressNewWithStake n stakeIndex -> do
@@ -88,10 +85,10 @@ resolveAddress index st = case index of
 
 resolveUTxOIndex ::
   forall era p.
-  (EraCrypto era ~ StandardCrypto, Core.EraTxOut era) =>
+  (Core.EraTxOut era, EraCertState era) =>
   UTxOIndex era ->
   LedgerState (ShelleyBlock p era) ->
-  Either ForgingError ((TxIn (EraCrypto era), Core.TxOut era), UTxOIndex era)
+  Either ForgingError ((TxIn, Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
   UTxOIndex n -> utxoPairs !? n
   UTxOAddress addr -> find (hasAddr addr) utxoPairs
@@ -107,7 +104,7 @@ resolveUTxOIndex index st = toLeft $ case index of
     addr <- rightToMaybe $ resolveAddress index st
     find (hasAddr addr) utxoPairs
   where
-    utxoPairs :: [(TxIn (EraCrypto era), Core.TxOut era)]
+    utxoPairs :: [(TxIn, Core.TxOut era)]
     utxoPairs =
       Map.toList $
         unUTxO $
@@ -120,15 +117,16 @@ resolveUTxOIndex index st = toLeft $ case index of
     hasAddr addr (_, txOut) = addr == txOut ^. Core.addrTxOutL
     hasInput inp (inp', _) = inp == inp'
 
-    toLeft :: Maybe (TxIn (EraCrypto era), Core.TxOut era) -> Either ForgingError ((TxIn (EraCrypto era), Core.TxOut era), UTxOIndex era)
+    toLeft :: Maybe (TxIn, Core.TxOut era) -> Either ForgingError ((TxIn, Core.TxOut era), UTxOIndex era)
     toLeft Nothing = Left CantFindUTxO
     toLeft (Just (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds ::
-  EraCrypto era ~ StandardCrypto =>
+  forall era p.
+  EraCertState era =>
   StakeIndex ->
   LedgerState (ShelleyBlock p era) ->
-  Either ForgingError (StakeCredential StandardCrypto)
+  Either ForgingError StakeCredential
 resolveStakeCreds indx st = case indx of
   StakeIndex n -> toEither $ fst <$> (rewardAccs !? n)
   StakeAddress addr -> Right addr
@@ -140,36 +138,34 @@ resolveStakeCreds indx st = case indx of
     rewardAccs =
       Map.toList $
         UMap.rewardMap $
-          dsUnified $
-            certDState $
+          dsUnified dstate
+
+    poolParams :: Map (KeyHash 'StakePool) PoolParams
+    poolParams =
+      psStakePoolParams $
+        let certState =
               lsCertState $
                 esLState $
                   nesEs $
                     Consensus.shelleyLedgerState st
-
-    poolParams =
-      psStakePoolParams $
-        certPState $
-          lsCertState $
-            esLState $
-              nesEs $
-                Consensus.shelleyLedgerState st
+         in certState ^. certPStateL
 
     delegs = UMap.sPoolMap $ dsUnified dstate
 
     dstate =
-      certDState $
-        lsCertState $
-          esLState $
-            nesEs $
-              Consensus.shelleyLedgerState st
+      let certState =
+            lsCertState $
+              esLState $
+                nesEs $
+                  Consensus.shelleyLedgerState st
+       in certState ^. certDStateL
 
     resolvePoolMember n poolIndex =
       let poolId = ppId (findPoolParams poolIndex)
           poolMembers = Map.keys $ Map.filter (== poolId) delegs
        in poolMembers !! n
 
-    findPoolParams :: PoolIndex -> PoolParams StandardCrypto
+    findPoolParams :: PoolIndex -> PoolParams
     findPoolParams (PoolIndex n) = Map.elems poolParams !! n
     findPoolParams (PoolIndexId pid) = poolParams Map.! pid
     findPoolParams pix@(PoolIndexNew _) = poolParams Map.! resolvePool pix st
@@ -179,10 +175,10 @@ resolveStakeCreds indx st = case indx of
     toEither (Just a) = Right a
 
 resolvePool ::
-  EraCrypto era ~ StandardCrypto =>
+  EraCertState era =>
   PoolIndex ->
   LedgerState (ShelleyBlock p era) ->
-  KeyHash 'StakePool StandardCrypto
+  KeyHash 'StakePool
 resolvePool pix st = case pix of
   PoolIndexId key -> key
   PoolIndex n -> ppId $ poolParams !! n
@@ -191,87 +187,89 @@ resolvePool pix st = case pix of
     poolParams =
       Map.elems $
         psStakePoolParams $
-          certPState $
-            lsCertState $
-              esLState $
-                nesEs $
-                  Consensus.shelleyLedgerState st
+          let certState =
+                lsCertState $
+                  esLState $
+                    nesEs $
+                      Consensus.shelleyLedgerState st
+           in certState ^. certPStateL
 
-allPoolStakeCert :: LedgerState (ShelleyBlock p era) -> [ShelleyTxCert era]
+allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) -> [ShelleyTxCert era]
 allPoolStakeCert st =
   ShelleyTxCertDelegCert . ShelleyRegCert <$> nub creds
   where
     poolParms =
       Map.elems $
         psStakePoolParams $
-          certPState $
-            lsCertState $
-              esLState $
-                nesEs $
-                  Consensus.shelleyLedgerState st
+          let certState =
+                lsCertState $
+                  esLState $
+                    nesEs $
+                      Consensus.shelleyLedgerState st
+           in certState ^. certPStateL
     creds = concatMap getPoolStakeCreds poolParms
 
-getPoolStakeCreds :: PoolParams c -> [StakeCredential c]
+getPoolStakeCreds :: PoolParams -> [StakeCredential]
 getPoolStakeCreds pparams =
   raCredential (ppRewardAccount pparams)
     : (KeyHashObj <$> Set.toList (ppOwners pparams))
 
-unregisteredStakeCredentials :: [StakeCredential StandardCrypto]
+unregisteredStakeCredentials :: [StakeCredential]
 unregisteredStakeCredentials =
   [ KeyHashObj $ KeyHash "000131350ac206583290486460934394208654903261221230945870"
   , KeyHashObj $ KeyHash "11130293748658946834096854968435096854309685490386453861"
   , KeyHashObj $ KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredKeyHash :: [KeyHash 'Staking StandardCrypto]
+unregisteredKeyHash :: [KeyHash 'Staking]
 unregisteredKeyHash =
   [ KeyHash "000131350ac206583290486460934394208654903261221230945870"
   , KeyHash "11130293748658946834096854968435096854309685490386453861"
   , KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredWitnessKey :: [KeyHash 'Witness StandardCrypto]
+unregisteredWitnessKey :: [KeyHash 'Witness]
 unregisteredWitnessKey =
   [ KeyHash "000131350ac206583290486460934394208654903261221230945870"
   , KeyHash "11130293748658946834096854968435096854309685490386453861"
   , KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredAddresses :: [PaymentCredential StandardCrypto]
+unregisteredAddresses :: [PaymentCredential]
 unregisteredAddresses =
   [ KeyHashObj $ KeyHash "11121865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
   ]
 
-unregisteredPools :: [KeyHash 'StakePool StandardCrypto]
+unregisteredPools :: [KeyHash 'StakePool]
 unregisteredPools =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
-unregisteredGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+unregisteredGenesisKeys :: [KeyHash 'Genesis]
 unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
-registeredByronGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+registeredByronGenesisKeys :: [KeyHash 'Genesis]
 registeredByronGenesisKeys =
   [ KeyHash "1a3e49767796fd99b057ad54db3310fd640806fcb0927399bbca7b43"
   ]
 
-registeredShelleyGenesisKeys :: [KeyHash 'Genesis StandardCrypto]
+registeredShelleyGenesisKeys :: [KeyHash 'Genesis]
 registeredShelleyGenesisKeys =
   [ KeyHash "30c3083efd794227fde2351a04500349d1b467556c30e35d6794a501"
   , KeyHash "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6"
   ]
 
 bootstrapCommitteeCreds ::
-  [ ( Credential 'ColdCommitteeRole StandardCrypto
-    , Credential 'HotCommitteeRole StandardCrypto
+  [ ( Credential 'ColdCommitteeRole
+    , Credential 'HotCommitteeRole
     )
   ]
 bootstrapCommitteeCreds =
@@ -293,26 +291,26 @@ bootstrapCommitteeCreds =
     )
   ]
 
-unregisteredCommitteeCreds :: [Credential 'ColdCommitteeRole StandardCrypto]
+unregisteredCommitteeCreds :: [Credential 'ColdCommitteeRole]
 unregisteredCommitteeCreds =
   [ KeyHashObj $ KeyHash "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
   , KeyHashObj $ KeyHash "f15d3cfda3ac52c86d2d98925419795588e74f4e270a3c17beabeaff"
   ]
 
-unregisteredDRepIds :: [Credential 'DRepRole StandardCrypto]
+unregisteredDRepIds :: [Credential 'DRepRole]
 unregisteredDRepIds =
   [KeyHashObj $ KeyHash "0d94e174732ef9aae73f395ab44507bfa983d65023c11a951f0c32e4"]
 
-createStakeCredentials :: Int -> [StakeCredential StandardCrypto]
+createStakeCredentials :: Int -> [StakeCredential]
 createStakeCredentials n =
-  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))) [1 .. n]
+  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH)) [1 .. n]
 
-createPaymentCredentials :: Int -> [PaymentCredential StandardCrypto]
+createPaymentCredentials :: Int -> [PaymentCredential]
 createPaymentCredentials n =
-  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))) [1 .. n]
+  fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH)) [1 .. n]
 
-mkDummyScriptHash :: Int -> ScriptHash StandardCrypto
-mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @(ADDRHASH StandardCrypto)) n
+mkDummyScriptHash :: Int -> ScriptHash
+mkDummyScriptHash n = ScriptHash $ mkDummyHash (Proxy @ADDRHASH) n
 
 {-# ANN module ("HLint: ignore Avoid restricted function" :: Text) #-}
 
@@ -320,14 +318,14 @@ mkDummyHash :: forall h a. HashAlgorithm h => Proxy h -> Int -> Hash.Hash h a
 mkDummyHash _ = coerce . hashWithSerialiser @h toCBOR
 
 consPoolParams ::
-  KeyHash 'StakePool StandardCrypto ->
-  StakeCredential StandardCrypto ->
-  [KeyHash 'Staking StandardCrypto] ->
-  PoolParams StandardCrypto
+  KeyHash 'StakePool ->
+  StakeCredential ->
+  [KeyHash 'Staking] ->
+  PoolParams
 consPoolParams poolId rwCred owners =
   PoolParams
     { ppId = poolId
-    , ppVrf = hashVerKeyVRF . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , ppVrf = hashVerKeyVRF @StandardCrypto . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
     , ppPledge = Coin 1000
     , ppCost = Coin 10000
     , ppMargin = minBound
@@ -338,17 +336,17 @@ consPoolParams poolId rwCred owners =
     }
 
 resolveStakePoolVoters ::
-  EraCrypto era ~ StandardCrypto =>
+  EraCertState era =>
   LedgerState (ShelleyBlock proto era) ->
-  [Voter StandardCrypto]
+  [Voter]
 resolveStakePoolVoters ledger =
   [ StakePoolVoter (resolvePool (PoolIndex 0) ledger)
   , StakePoolVoter (resolvePool (PoolIndex 1) ledger)
   , StakePoolVoter (resolvePool (PoolIndex 2) ledger)
   ]
 
-drepVoters :: [Voter StandardCrypto]
+drepVoters :: [Voter]
 drepVoters = map DRepVoter unregisteredDRepIds
 
-committeeVoters :: [Voter StandardCrypto]
+committeeVoters :: [Voter]
 committeeVoters = map (CommitteeVoter . snd) bootstrapCommitteeCreds

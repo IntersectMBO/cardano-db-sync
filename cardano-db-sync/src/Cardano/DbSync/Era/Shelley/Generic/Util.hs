@@ -44,10 +44,9 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Credential as Ledger
+import Cardano.Ledger.Hashes (SafeHash, ScriptHash (..), extractHash)
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..))
-import qualified Cardano.Ledger.SafeHash as Ledger
-import qualified Cardano.Ledger.Shelley.Scripts as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.TxIn
@@ -59,27 +58,26 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
-import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
-annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential era -> Ledger.RewardAccount era
+annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential -> Ledger.RewardAccount
 annotateStakingCred = Shelley.RewardAccount
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
 
-getPaymentCred :: Ledger.Addr StandardCrypto -> Maybe (Ledger.PaymentCredential StandardCrypto)
+getPaymentCred :: Ledger.Addr -> Maybe Ledger.PaymentCredential
 getPaymentCred addr =
   case addr of
     Ledger.Addr _nw pcred _sref -> Just pcred
     Ledger.AddrBootstrap {} -> Nothing
 
-hasCredScript :: Ledger.Credential kr StandardCrypto -> Bool
+hasCredScript :: Ledger.Credential kr -> Bool
 hasCredScript pc =
   case pc of
     Ledger.ScriptHashObj _ -> True
     Ledger.KeyHashObj {} -> False
 
-maybePaymentCred :: Ledger.Addr era -> Maybe ByteString
+maybePaymentCred :: Ledger.Addr -> Maybe ByteString
 maybePaymentCred addr =
   case addr of
     Ledger.Addr _nw pcred _sref ->
@@ -87,7 +85,7 @@ maybePaymentCred addr =
     Ledger.AddrBootstrap {} ->
       Nothing
 
-getCredentialScriptHash :: Ledger.Credential kr StandardCrypto -> Maybe ByteString
+getCredentialScriptHash :: Ledger.Credential kr -> Maybe ByteString
 getCredentialScriptHash pc =
   case pc of
     Ledger.ScriptHashObj hash -> Just $ unScriptHash hash
@@ -109,59 +107,59 @@ nonceToBytes nonce =
     Ledger.NeutralNonce -> Nothing
 
 partitionMIRTargets ::
-  [MIRTarget StandardCrypto] ->
-  ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+  [MIRTarget] ->
+  ([Map (Ledger.Credential 'Ledger.Staking) DeltaCoin], [Coin])
 partitionMIRTargets =
   List.foldl' foldfunc ([], [])
   where
     foldfunc ::
-      ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin]) ->
-      MIRTarget StandardCrypto ->
-      ([Map (Ledger.Credential 'Ledger.Staking StandardCrypto) DeltaCoin], [Coin])
+      ([Map (Ledger.Credential 'Ledger.Staking) DeltaCoin], [Coin]) ->
+      MIRTarget ->
+      ([Map (Ledger.Credential 'Ledger.Staking) DeltaCoin], [Coin])
     foldfunc (xs, ys) mt =
       case mt of
         StakeAddressesMIR x -> (x : xs, ys)
         SendToOppositePotMIR y -> (xs, y : ys)
 
-renderAddress :: Ledger.Addr StandardCrypto -> Text
+renderAddress :: Ledger.Addr -> Text
 renderAddress = serialiseAddress
 
-renderRewardAccount :: Ledger.RewardAccount StandardCrypto -> Text
+renderRewardAccount :: Ledger.RewardAccount -> Text
 renderRewardAccount = serialiseRewardAccount
 
-stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString
+stakingCredHash :: Ledger.Network -> Ledger.StakeCredential -> ByteString
 stakingCredHash network = Ledger.serialiseRewardAccount . annotateStakingCred network
 
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Ledger.unboundRational
 
-unCredentialHash :: Ledger.Credential kr StandardCrypto -> ByteString
+unCredentialHash :: Ledger.Credential kr -> ByteString
 unCredentialHash = \case
   Ledger.ScriptHashObj scriptHash -> unScriptHash scriptHash
   Ledger.KeyHashObj keyHash -> unKeyHashRaw keyHash
 
-unKeyHashRaw :: Ledger.KeyHash d era -> ByteString
+unKeyHashRaw :: Ledger.KeyHash d -> ByteString
 unKeyHashRaw (Ledger.KeyHash kh) = Crypto.hashToBytes kh
 
-unKeyHashView :: Ledger.KeyHash 'Ledger.StakePool StandardCrypto -> Text
+unKeyHashView :: Ledger.KeyHash 'Ledger.StakePool -> Text
 unKeyHashView = serialiseStakePoolKeyHashToBech32
 
-unScriptHash :: Shelley.ScriptHash StandardCrypto -> ByteString
-unScriptHash (Shelley.ScriptHash h) = Crypto.hashToBytes h
+unScriptHash :: ScriptHash -> ByteString
+unScriptHash (ScriptHash h) = Crypto.hashToBytes h
 
-unTxHash :: TxId c -> ByteString
-unTxHash (TxId txid) = Crypto.hashToBytes $ Ledger.extractHash txid
+unTxHash :: TxId -> ByteString
+unTxHash (TxId txid) = Crypto.hashToBytes $ extractHash txid
 
 unAssetName :: AssetName -> ByteString
 unAssetName = SBS.fromShort . assetNameBytes
 
 dataHashToBytes :: DataHash -> ByteString
-dataHashToBytes = Crypto.hashToBytes . Ledger.extractHash
+dataHashToBytes = Crypto.hashToBytes . extractHash
 
-safeHashToByteString :: Ledger.SafeHash StandardCrypto c -> ByteString
-safeHashToByteString = Crypto.hashToBytes . Ledger.extractHash
+safeHashToByteString :: SafeHash a -> ByteString
+safeHashToByteString = Crypto.hashToBytes . extractHash
 
-toGovAction :: GovAction StandardConway -> Db.GovActionType
+toGovAction :: GovAction a -> Db.GovActionType
 toGovAction = \case
   ParameterChange {} -> Db.ParameterChange
   HardForkInitiation {} -> Db.HardForkInitiation
@@ -177,7 +175,7 @@ toVote = \case
   VoteYes -> Db.VoteYes
   Abstain -> Db.VoteAbstain
 
-toVoterRole :: Voter StandardCrypto -> Db.VoterRole
+toVoterRole :: Voter -> Db.VoterRole
 toVoterRole = \case
   CommitteeVoter {} -> Db.ConstitutionalCommittee
   DRepVoter {} -> Db.DRep

@@ -70,7 +70,6 @@ import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (MigrationDir, PGPassSource (..), TxOutTableType (..))
-import Cardano.Ledger.Conway (ConwayEra)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (fail)
@@ -80,8 +79,8 @@ import Data.Aeson.Key (fromText)
 import Data.Aeson.Types (Pair, Parser, typeMismatch)
 import Data.ByteString.Short (ShortByteString (), fromShort, toShort)
 import Data.Default.Class (Default (..))
-import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger)
-import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, MaryEra, ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, MaryEra, ShelleyEra, StandardCrypto)
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)

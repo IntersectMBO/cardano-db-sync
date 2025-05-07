@@ -61,6 +61,7 @@ library
                       , cardano-api
                       , cardano-db
                       , cardano-db-sync
+                      , cardano-ledger-api
                       , cardano-ledger-alonzo
                       , cardano-ledger-byron
                       , cardano-ledger-core

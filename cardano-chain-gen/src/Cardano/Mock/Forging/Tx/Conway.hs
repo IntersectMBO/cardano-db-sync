@@ -7,7 +7,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 
 #if __GLASGOW_HASKELL__ >= 908
 {-# OPTIONS_GHC -Wno-x-partial #-}
@@ -80,13 +79,14 @@ import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.Tx (AlonzoTx (..))
 import Cardano.Ledger.Conway.TxBody (ConwayTxBody (..))
 import Cardano.Ledger.Conway.TxCert hiding (mkDelegTxCert)
+import Cardano.Ledger.Core (ADDRHASH)
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
-import Cardano.Ledger.Crypto (ADDRHASH ())
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import Cardano.Ledger.Plutus.Data
 import Cardano.Ledger.Plutus.Language (Language (..))
+import Cardano.Ledger.Shelley.LedgerState (certPStateL)
 import qualified Cardano.Ledger.Shelley.LedgerState as LedgerState
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Ledger.TxIn (TxIn (..))
@@ -112,28 +112,28 @@ import Data.Sequence.Strict (StrictSeq ())
 import qualified Data.Sequence.Strict as StrictSeq
 import qualified Data.Set as Set
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (EraCrypto, LedgerState ())
-import Ouroboros.Consensus.Shelley.Eras (StandardConway (), StandardCrypto ())
+import Ouroboros.Consensus.Cardano.Block (LedgerState)
+import Ouroboros.Consensus.Shelley.Eras (ConwayEra)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import Prelude (error, (!!))
 import qualified Prelude
 
-type ConwayUTxOIndex = UTxOIndex StandardConway
-type ConwayLedgerState = LedgerState (ShelleyBlock PraosStandard StandardConway)
+type ConwayUTxOIndex = UTxOIndex ConwayEra
+type ConwayLedgerState = LedgerState (ShelleyBlock PraosStandard ConwayEra)
 
 consTxBody ::
-  Set (TxIn StandardCrypto) ->
-  Set (TxIn StandardCrypto) ->
-  Set (TxIn StandardCrypto) ->
-  StrictSeq (BabbageTxOut StandardConway) ->
-  StrictMaybe (BabbageTxOut StandardConway) ->
+  Set TxIn ->
+  Set TxIn ->
+  Set TxIn ->
+  StrictSeq (BabbageTxOut ConwayEra) ->
+  StrictMaybe (BabbageTxOut ConwayEra) ->
   Coin ->
-  MultiAsset StandardCrypto ->
-  [ConwayTxCert StandardConway] ->
-  Withdrawals StandardCrypto ->
+  MultiAsset ->
+  [ConwayTxCert ConwayEra] ->
+  Withdrawals ->
   Coin ->
-  ConwayTxBody StandardConway
+  ConwayTxBody ConwayEra
 consTxBody ins cols ref outs colOut fees minted certs withdrawals donation =
   ConwayTxBody
     { ctbSpendInputs = ins
@@ -158,10 +158,10 @@ consTxBody ins cols ref outs colOut fees minted certs withdrawals donation =
     }
 
 consCertTxBody ::
-  Maybe (TxIn StandardCrypto) ->
-  [ConwayTxCert StandardConway] ->
-  Withdrawals StandardCrypto ->
-  ConwayTxBody StandardConway
+  Maybe TxIn ->
+  [ConwayTxCert ConwayEra] ->
+  Withdrawals ->
+  ConwayTxBody ConwayEra
 consCertTxBody ref certs withdrawals =
   consTxBody
     mempty
@@ -179,9 +179,9 @@ consCertTxBody ref certs withdrawals =
     toSet (Just a) = Set.singleton a
 
 consTxCertPool ::
-  [StakeCredential StandardCrypto] ->
-  KeyHash 'StakePool StandardCrypto ->
-  ConwayTxCert StandardConway
+  [StakeCredential] ->
+  KeyHash 'StakePool ->
+  ConwayTxCert ConwayEra
 consTxCertPool [] _ = panic "Expected at least 1 pool owner"
 consTxCertPool (rwCred : poolOwners) poolId =
   ConwayTxCertPool
@@ -200,7 +200,7 @@ mkPaymentTx ::
   Integer ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkPaymentTx inputIndex outputIndex amount =
   mkPaymentTx' inputIndex outputIndices
   where
@@ -208,11 +208,11 @@ mkPaymentTx inputIndex outputIndex amount =
 
 mkPaymentTx' ::
   ConwayUTxOIndex ->
-  [(ConwayUTxOIndex, MaryValue StandardCrypto)] ->
+  [(ConwayUTxOIndex, MaryValue)] ->
   Integer ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkPaymentTx' inputIndex outputIndices fees donation state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
   outputs <- mapM mkOutputs outputIndices
@@ -243,7 +243,7 @@ mkPaymentTx' inputIndex outputIndices fees donation state' = do
       addr <- resolveAddress outIx state'
       pure (BabbageTxOut addr val NoDatum SNothing)
 
-mkDonationTx :: Coin -> AlonzoTx StandardConway
+mkDonationTx :: Coin -> AlonzoTx ConwayEra
 mkDonationTx amount = mkSimpleTx True txBody
   where
     txBody = mkDummyTxBody {ctbTreasuryDonation = amount}
@@ -254,7 +254,7 @@ mkLockByScriptTx ::
   Integer ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkLockByScriptTx inputIndex txOutTypes amount fees state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
 
@@ -288,7 +288,7 @@ mkUnlockScriptTx ::
   Integer ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkUnlockScriptTx inputIndex colInputIndex outputIndex =
   mkUnlockScriptTx' inputIndex colInputIndex outputIndex mempty Nothing
 
@@ -302,7 +302,7 @@ mkUnlockScriptTxBabbage ::
   Integer ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succeeds amount fees state' = do
   let colTxOutType =
         if compl
@@ -322,22 +322,22 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
     state'
 
 mkDCertTx ::
-  [ConwayTxCert StandardConway] ->
-  Withdrawals StandardCrypto ->
-  Maybe (TxIn StandardCrypto) ->
-  Either ForgingError (AlonzoTx StandardConway)
+  [ConwayTxCert ConwayEra] ->
+  Withdrawals ->
+  Maybe TxIn ->
+  Either ForgingError (AlonzoTx ConwayEra)
 mkDCertTx certs wdrl ref = Right (mkSimpleTx True $ consCertTxBody ref certs wdrl)
 
 mkDCertPoolTx ::
   [ ( [StakeIndex]
     , PoolIndex
-    , [StakeCredential StandardCrypto] ->
-      KeyHash 'StakePool StandardCrypto ->
-      ConwayTxCert StandardConway
+    , [StakeCredential] ->
+      KeyHash 'StakePool ->
+      ConwayTxCert ConwayEra
     )
   ] ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkDCertPoolTx consDCert state' = do
   dcerts <- forM consDCert $ \(stakeIxs, poolIx, mkDCert) -> do
     stakeCreds <- forM stakeIxs $ \stakeIx -> resolveStakeCreds stakeIx state'
@@ -346,13 +346,13 @@ mkDCertPoolTx consDCert state' = do
 
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
-mkDCertTxPools :: ConwayLedgerState -> Either ForgingError (AlonzoTx StandardConway)
+mkDCertTxPools :: ConwayLedgerState -> Either ForgingError (AlonzoTx ConwayEra)
 mkDCertTxPools state' =
   Right $
     mkSimpleTx True $
       consCertTxBody Nothing (allPoolStakeCert' state') (Withdrawals mempty)
 
-mkSimpleTx :: Bool -> ConwayTxBody StandardConway -> AlonzoTx StandardConway
+mkSimpleTx :: Bool -> ConwayTxBody ConwayEra -> AlonzoTx ConwayEra
 mkSimpleTx isValid' txBody =
   AlonzoTx
     { body = txBody
@@ -363,9 +363,9 @@ mkSimpleTx isValid' txBody =
 
 mkAuxDataTx ::
   Bool ->
-  ConwayTxBody StandardConway ->
+  ConwayTxBody ConwayEra ->
   Map Word64 Metadatum ->
-  AlonzoTx StandardConway
+  AlonzoTx ConwayEra
 mkAuxDataTx isValid' txBody auxData =
   AlonzoTx
     { body = txBody
@@ -375,9 +375,9 @@ mkAuxDataTx isValid' txBody auxData =
     }
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential StandardCrypto -> ConwayTxCert StandardConway)] ->
+  [(StakeIndex, StakeCredential -> ConwayTxCert ConwayEra)] ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkSimpleDCertTx consDCert st = do
   dcerts <- forM consDCert $ \(stakeIndex, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
@@ -385,10 +385,10 @@ mkSimpleDCertTx consDCert st = do
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
 mkScriptDCertTx ::
-  [(StakeIndex, Bool, StakeCredential StandardCrypto -> ConwayTxCert StandardConway)] ->
+  [(StakeIndex, Bool, StakeCredential -> ConwayTxCert ConwayEra)] ->
   Bool ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkScriptDCertTx consCert isValid' state' = do
   dcerts <- forM consCert $ \(stakeIndex, _, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex state'
@@ -411,13 +411,13 @@ mkScriptDCertTx consCert isValid' state' = do
 mkMultiAssetsScriptTx ::
   [ConwayUTxOIndex] ->
   ConwayUTxOIndex ->
-  [(ConwayUTxOIndex, MaryValue StandardCrypto)] ->
+  [(ConwayUTxOIndex, MaryValue)] ->
   [ConwayUTxOIndex] ->
-  MultiAsset StandardCrypto ->
+  MultiAsset ->
   Bool ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees state' = do
   inputs <- mapM (`resolveUTxOIndex` state') inputIx
   refs <- mapM (`resolveUTxOIndex` state') refInput
@@ -448,14 +448,14 @@ mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees 
         BabbageTxOut
           addr
           val
-          (DatumHash $ hashData @StandardConway plutusDataList)
+          (DatumHash $ hashData @ConwayEra plutusDataList)
           SNothing
 
 mkDepositTxPools ::
   ConwayUTxOIndex ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkDepositTxPools inputIndex deposit state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
 
@@ -483,68 +483,68 @@ mkDepositTxPools inputIndex deposit state' = do
         (Coin 0)
 
 mkRegisterDRepTx ::
-  Credential 'DRepRole StandardCrypto ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Credential 'DRepRole ->
+  Either ForgingError (AlonzoTx ConwayEra)
 mkRegisterDRepTx cred = mkDCertTx [cert] (Withdrawals mempty) Nothing
   where
     cert = ConwayTxCertGov (ConwayRegDRep cred deposit SNothing)
     deposit = Coin 500_000_000
 
 mkCommitteeAuthTx ::
-  Credential 'ColdCommitteeRole StandardCrypto ->
-  Credential 'HotCommitteeRole StandardCrypto ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Credential 'ColdCommitteeRole ->
+  Credential 'HotCommitteeRole ->
+  Either ForgingError (AlonzoTx ConwayEra)
 mkCommitteeAuthTx cold hot = mkDCertTx [cert] (Withdrawals mempty) Nothing
   where
     cert = ConwayTxCertGov (ConwayAuthCommitteeHotKey cold hot)
 
-mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx StandardConway)
+mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx ConwayEra)
 mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
   where
     consDelegCert =
       mkRegTxCert SNothing
         . KeyHashObj
         . KeyHash
-        . mkDummyHash (Proxy @(ADDRHASH StandardCrypto))
+        . mkDummyHash (Proxy @ADDRHASH)
         . fromIntegral
         <$> [n, m]
 
 mkRegTxCert ::
   StrictMaybe Coin ->
-  StakeCredential StandardCrypto ->
-  ConwayTxCert StandardConway
+  StakeCredential ->
+  ConwayTxCert ConwayEra
 mkRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayRegCert cred coin'
 
 mkUnRegTxCert ::
   StrictMaybe Coin ->
-  StakeCredential StandardCrypto ->
-  ConwayTxCert StandardConway
+  StakeCredential ->
+  ConwayTxCert ConwayEra
 mkUnRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayUnRegCert cred coin'
 
 mkRegDelegTxCert ::
   Coin ->
-  Delegatee StandardCrypto ->
-  StakeCredential StandardCrypto ->
-  ConwayTxCert StandardConway
+  Delegatee ->
+  StakeCredential ->
+  ConwayTxCert ConwayEra
 mkRegDelegTxCert deposit delegatee =
   mkTxDelegCert $ \cred -> ConwayRegDelegCert cred delegatee deposit
 
 mkDelegTxCert ::
-  Delegatee StandardCrypto ->
-  StakeCredential StandardCrypto ->
-  ConwayTxCert StandardConway
+  Delegatee ->
+  StakeCredential ->
+  ConwayTxCert ConwayEra
 mkDelegTxCert delegatee = mkTxDelegCert $ \cred -> ConwayDelegCert cred delegatee
 
 mkTxDelegCert ::
-  (StakeCredential StandardCrypto -> ConwayDelegCert StandardCrypto) ->
-  StakeCredential StandardCrypto ->
-  ConwayTxCert StandardConway
+  (StakeCredential -> ConwayDelegCert) ->
+  StakeCredential ->
+  ConwayTxCert ConwayEra
 mkTxDelegCert f = ConwayTxCertDeleg . f
 
 mkAddCommitteeTx ::
-  Maybe (Governance.GovPurposeId 'Governance.CommitteePurpose StandardConway) ->
-  Credential 'ColdCommitteeRole StandardCrypto ->
-  AlonzoTx StandardConway
+  Maybe (Governance.GovPurposeId 'Governance.CommitteePurpose ConwayEra) ->
+  Credential 'ColdCommitteeRole ->
+  AlonzoTx ConwayEra
 mkAddCommitteeTx prevGovAction cred = mkGovActionProposalTx govAction
   where
     govAction = Governance.UpdateCommittee prevGovAction' mempty newMembers threshold
@@ -553,44 +553,44 @@ mkAddCommitteeTx prevGovAction cred = mkGovActionProposalTx govAction
     threshold = fromJust $ boundRational (1 % 1)
 
 mkNewConstitutionTx ::
-  Anchor StandardCrypto ->
-  AlonzoTx StandardConway
+  Anchor ->
+  AlonzoTx ConwayEra
 mkNewConstitutionTx anchor = mkGovActionProposalTx govAction
   where
     govAction = Governance.NewConstitution SNothing constitution
     constitution = Governance.Constitution anchor SNothing
 
 mkTreasuryWithdrawalTx ::
-  RewardAccount StandardCrypto ->
+  RewardAccount ->
   Coin ->
-  AlonzoTx StandardConway
+  AlonzoTx ConwayEra
 mkTreasuryWithdrawalTx rewardAccount amount = mkGovActionProposalTx govAction
   where
     govAction = Governance.TreasuryWithdrawals withdrawals hashProtection
     withdrawals = Map.singleton rewardAccount amount
     hashProtection = SNothing
 
-mkParamChangeTx :: AlonzoTx StandardConway
+mkParamChangeTx :: AlonzoTx ConwayEra
 mkParamChangeTx = mkGovActionProposalTx govAction
   where
     govAction = Governance.ParameterChange SNothing paramUpdate hasProtection
     paramUpdate = Core.emptyPParamsUpdate & Core.ppuMaxTxSizeL .~ SJust 32_000
     hasProtection = SNothing
 
-mkHardForkInitTx :: AlonzoTx StandardConway
+mkHardForkInitTx :: AlonzoTx ConwayEra
 mkHardForkInitTx = mkGovActionProposalTx govAction
   where
     govAction = Governance.HardForkInitiation SNothing protoVersion
     protoVersion = ProtVer (natVersion @11) 0
 
-mkInfoTx :: AlonzoTx StandardConway
+mkInfoTx :: AlonzoTx ConwayEra
 mkInfoTx = mkGovActionProposalTx govAction
   where
     govAction = Governance.InfoAction
 
 mkGovActionProposalTx ::
-  Governance.GovAction StandardConway ->
-  AlonzoTx StandardConway
+  Governance.GovAction ConwayEra ->
+  AlonzoTx ConwayEra
 mkGovActionProposalTx govAction = mkSimpleTx True txBody
   where
     txBody = mkDummyTxBody {ctbProposalProcedures = OSet.singleton proposal}
@@ -607,20 +607,20 @@ mkGovActionProposalTx govAction = mkSimpleTx True txBody
     anchor =
       Governance.Anchor
         { Governance.anchorUrl = fromJust (textToUrl 64 "best.cc")
-        , Governance.anchorDataHash = hashAnchorData (Governance.AnchorData mempty)
+        , Governance.anchorDataHash = Core.hashAnnotated (Governance.AnchorData mempty)
         }
 
 mkGovVoteYesTx ::
-  Governance.GovActionId StandardCrypto ->
-  [Governance.Voter StandardCrypto] ->
-  AlonzoTx StandardConway
+  Governance.GovActionId ->
+  [Governance.Voter] ->
+  AlonzoTx ConwayEra
 mkGovVoteYesTx govAction =
   mkGovVoteTx govAction . Map.fromList . map (,Governance.VoteYes)
 
 mkGovVoteTx ::
-  Governance.GovActionId StandardCrypto ->
-  Map (Governance.Voter StandardCrypto) Governance.Vote ->
-  AlonzoTx StandardConway
+  Governance.GovActionId ->
+  Map Governance.Voter Governance.Vote ->
+  AlonzoTx ConwayEra
 mkGovVoteTx govAction votes = mkSimpleTx True txBody
   where
     txBody = mkDummyTxBody {ctbVotingProcedures = Governance.VotingProcedures votes'}
@@ -632,7 +632,7 @@ mkGovVoteTx govAction votes = mkSimpleTx True txBody
         , Governance.vProcAnchor = SNothing
         }
 
-mkDummyTxBody :: ConwayTxBody StandardConway
+mkDummyTxBody :: ConwayTxBody ConwayEra
 mkDummyTxBody =
   consTxBody
     mempty
@@ -650,7 +650,7 @@ mkFullTx ::
   Int ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkFullTx n m state' = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') inputs
   let redeemers = mkScriptInps inputPairs
@@ -658,8 +658,8 @@ mkFullTx n m state' = do
         mkWitnesses
           redeemers
           [
-            ( hashData @StandardConway plutusDataList
-            , plutusDataList @StandardConway
+            ( hashData @ConwayEra plutusDataList
+            , plutusDataList @ConwayEra
             )
           ]
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') refInputs
@@ -704,24 +704,24 @@ mkFullTx n m state' = do
         }
     -- Outputs
     outputs = StrictSeq.fromList [out0, out1]
-    out0, out1, out2 :: BabbageTxOut StandardConway
+    out0, out1, out2 :: BabbageTxOut ConwayEra
     out0 =
       BabbageTxOut
         addr0
         outValue0
-        (DatumHash (hashData @StandardConway plutusDataList))
+        (DatumHash (hashData @ConwayEra plutusDataList))
         (SJust alwaysFailsScript)
     out1 =
       BabbageTxOut
         alwaysSucceedsScriptAddr
         outValue0
-        (DatumHash (hashData @StandardConway plutusDataList))
+        (DatumHash (hashData @ConwayEra plutusDataList))
         SNothing
     out2 =
       BabbageTxOut
         addr2
         outValue0
-        (DatumHash (hashData @StandardConway plutusDataList))
+        (DatumHash (hashData @ConwayEra plutusDataList))
         (SJust alwaysFailsScript)
     addr0 =
       Addr
@@ -743,7 +743,7 @@ mkFullTx n m state' = do
     mkInputs inputs' = Set.fromList $ fst <$> inputs'
 
     -- Certificates
-    certs :: [ConwayTxCert StandardConway]
+    certs :: [ConwayTxCert ConwayEra]
     certs =
       [ ConwayTxCertDeleg $ ConwayRegCert (Prelude.head unregisteredStakeCredentials) SNothing
       , ConwayTxCertPool $ Core.RegPool poolParams0
@@ -794,14 +794,14 @@ mkFullTx n m state' = do
       NonEmpty.fromList [alwaysFailsPlutusBinary]
 
 mkScriptMint' ::
-  MultiAsset StandardCrypto ->
-  [(ConwayPlutusPurpose AsIx era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+  MultiAsset ->
+  [(ConwayPlutusPurpose AsIx era, Maybe (Core.ScriptHash, Core.Script ConwayEra))]
 mkScriptMint' = fmap (first (ConwayMinting . AsIx)) . mkScriptMint
 
 {-}
 mkScriptMint ::
-  MultiAsset StandardCrypto ->
-  [(AlonzoPlutusPurpose AsIx era, Maybe (Core.ScriptHash StandardCrypto, Core.Script StandardConway))]
+  MultiAsset ->
+  [(AlonzoPlutusPurpose AsIx era, Maybe (Core.ScriptHash, Core.Script ConwayEra))]
 mkScriptMint (MultiAsset m) =
   mapMaybe mkMint . zip [0 ..] . map policyID $ Map.keys m
   where
@@ -819,32 +819,32 @@ mkScriptMint (MultiAsset m) =
     alwaysMint = (alwaysMintScriptHash, alwaysMintScript)
 -}
 consPaymentTxBody ::
-  Set (TxIn StandardCrypto) ->
-  Set (TxIn StandardCrypto) ->
-  Set (TxIn StandardCrypto) ->
-  StrictSeq (BabbageTxOut StandardConway) ->
-  StrictMaybe (BabbageTxOut StandardConway) ->
+  Set TxIn ->
+  Set TxIn ->
+  Set TxIn ->
+  StrictSeq (BabbageTxOut ConwayEra) ->
+  StrictMaybe (BabbageTxOut ConwayEra) ->
   Coin ->
-  MultiAsset StandardCrypto ->
+  MultiAsset ->
   Coin ->
-  ConwayTxBody StandardConway
+  ConwayTxBody ConwayEra
 consPaymentTxBody ins cols ref outs colOut fees minted =
   consTxBody ins cols ref outs colOut fees minted mempty (Withdrawals mempty)
 
 mkUTxOConway ::
-  AlonzoTx StandardConway ->
-  [(TxIn StandardCrypto, BabbageTxOut StandardConway)]
+  AlonzoTx ConwayEra ->
+  [(TxIn, BabbageTxOut ConwayEra)]
 mkUTxOConway = mkUTxOAlonzo
 
 mkUTxOCollConway ::
-  AlonzoTx StandardConway ->
-  [(TxIn StandardCrypto, BabbageTxOut StandardConway)]
+  AlonzoTx ConwayEra ->
+  [(TxIn, BabbageTxOut ConwayEra)]
 mkUTxOCollConway = Babbage.mkUTxOCollBabbage
 
 mkOutFromType ::
   Integer ->
   Babbage.TxOutScriptType ->
-  BabbageTxOut StandardConway
+  BabbageTxOut ConwayEra
 mkOutFromType amount txOutType =
   BabbageTxOut outAddress (valueFromList (Coin amount) []) datum script
   where
@@ -857,21 +857,21 @@ mkOutFromType amount txOutType =
         Datum (dataToBinaryData plutusDataList)
       Babbage.InlineDatumCBOR sbs ->
         Datum $ either error identity (makeBinaryData sbs)
-    dataHash = hashData @StandardConway plutusDataList
+    dataHash = hashData @ConwayEra plutusDataList
     script = case Babbage.getInlineScript txOutType of
       SNothing -> SNothing
       SJust True -> SJust alwaysSucceedsScript
       SJust False -> SJust alwaysFailsScript
 
 mkScriptInps ::
-  [(TxIn StandardCrypto, Core.TxOut StandardConway)] ->
-  [(ConwayPlutusPurpose AsIx StandardConway, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript StandardConway))]
+  [(TxIn, Core.TxOut ConwayEra)] ->
+  [(ConwayPlutusPurpose AsIx ConwayEra, Maybe (Core.ScriptHash, Script ConwayEra))]
 mkScriptInps = mapMaybe mkScriptInp . zip [0 ..]
 
 mkScriptInp ::
-  (BabbageEraTxOut era, EraCrypto era ~ StandardCrypto) =>
-  (Word64, (TxIn StandardCrypto, Core.TxOut era)) ->
-  Maybe (ConwayPlutusPurpose AsIx era, Maybe (Core.ScriptHash StandardCrypto, AlonzoScript era))
+  BabbageEraTxOut era =>
+  (Word64, (TxIn, Core.TxOut era)) ->
+  Maybe (ConwayPlutusPurpose AsIx era, Maybe (Core.ScriptHash, Script era))
 mkScriptInp = fmap (first $ ConwaySpending . AsIx) . Babbage.mkScriptInp
 
 mkUnlockScriptTx' ::
@@ -879,12 +879,12 @@ mkUnlockScriptTx' ::
   ConwayUTxOIndex ->
   ConwayUTxOIndex ->
   [ConwayUTxOIndex] ->
-  Maybe (BabbageTxOut StandardConway) ->
+  Maybe (BabbageTxOut ConwayEra) ->
   Bool ->
   Integer ->
   Integer ->
   ConwayLedgerState ->
-  Either ForgingError (AlonzoTx StandardConway)
+  Either ForgingError (AlonzoTx ConwayEra)
 mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds amount fees state' = do
   inputPairs <- map fst <$> mapM (`resolveUTxOIndex` state') inputIndex
   refInputPairs <- map fst <$> mapM (`resolveUTxOIndex` state') refInput
@@ -913,13 +913,14 @@ mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds 
         mempty
         (Coin 0)
 
-allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert StandardConway]
+allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert ConwayEra]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)
   where
     getCreds = nub . concatMap getPoolStakeCreds . Map.elems . stakePoolParams
+
     stakePoolParams =
       LedgerState.psStakePoolParams
-        . LedgerState.certPState
+        . (^. certPStateL)
         . LedgerState.lsCertState
         . LedgerState.esLState
         . LedgerState.nesEs

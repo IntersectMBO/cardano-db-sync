@@ -14,7 +14,6 @@ module Test.Cardano.Db.Mock.Unit.Conway.Rollback (
 
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.TxCert (ConwayDelegCert (..), Delegatee (..))
-import Cardano.Ledger.Crypto ()
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway

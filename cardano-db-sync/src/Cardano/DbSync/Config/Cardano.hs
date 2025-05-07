@@ -33,11 +33,11 @@ import Control.Monad.Trans.Except (ExceptT)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import Ouroboros.Consensus.Cardano.Node
 import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 

@@ -52,7 +52,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
-import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
+import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
 import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
@@ -214,8 +214,9 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
       case dncShelleyHardFork cfg of
-        HardFork.TriggerHardForkAtEpoch (EpochNo 0) -> True
+        CardanoTriggerHardForkAtEpoch (EpochNo 0) -> True
         _other -> False
+
     removeJsonbFromSchemaConfig = ioRemoveJsonbFromSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 

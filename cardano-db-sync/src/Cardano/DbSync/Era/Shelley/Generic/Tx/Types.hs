@@ -48,11 +48,11 @@ import Cardano.Ledger.Shelley.TxCert
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
-import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, ConwayEra, ShelleyEra)
 
 data Tx = Tx
   { txHash :: !ByteString
-  , txLedgerTxId :: !(Ledger.TxId StandardCrypto)
+  , txLedgerTxId :: !Ledger.TxId
   , txBlockIndex :: !Word64
   , txCBOR :: ByteString
   , txSize :: !Word64
@@ -71,19 +71,19 @@ data Tx = Tx
   , txCertificates :: ![TxCertificate]
   , txWithdrawals :: ![TxWithdrawal]
   , txParamProposal :: ![ParamProposal]
-  , txMint :: !(MultiAsset StandardCrypto)
+  , txMint :: !MultiAsset
   , txRedeemer :: [(Word64, TxRedeemer)]
   , txData :: [PlutusData]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txExtraKeyWitnesses :: ![ByteString]
-  , txVotingProcedure :: ![(Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)])]
-  , txProposalProcedure :: ![(GovActionId StandardCrypto, ProposalProcedure StandardConway)]
+  , txVotingProcedure :: ![(Voter, [(GovActionId, VotingProcedure ConwayEra)])]
+  , txProposalProcedure :: ![(GovActionId, ProposalProcedure ConwayEra)]
   , txTreasuryDonation :: !Coin
   }
 
-type ShelleyCert = ShelleyTxCert StandardShelley
-type ConwayCert = ConwayTxCert StandardConway
+type ShelleyCert = ShelleyTxCert ShelleyEra
+type ConwayCert = ConwayTxCert ConwayEra
 type Cert = Either ShelleyCert ConwayCert
 
 data TxCertificate = TxCertificate
@@ -94,22 +94,22 @@ data TxCertificate = TxCertificate
 
 data TxWithdrawal = TxWithdrawal
   { txwRedeemerIndex :: !(Maybe Word64)
-  , txwRewardAccount :: !(Shelley.RewardAccount StandardCrypto)
+  , txwRewardAccount :: !Shelley.RewardAccount
   , txwAmount :: !Coin
   }
 
 data TxIn = TxIn
   { txInIndex :: !Word64
-  , txInTxId :: !(Ledger.TxId StandardCrypto)
+  , txInTxId :: !Ledger.TxId
   , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
   }
   deriving (Show)
 
 data TxOut = TxOut
   { txOutIndex :: !Word64
-  , txOutAddress :: !(Ledger.Addr StandardCrypto)
+  , txOutAddress :: !Ledger.Addr
   , txOutAdaValue :: !Coin
-  , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
+  , txOutMaValue :: !(Map PolicyID (Map AssetName Integer))
   , txOutScript :: Maybe TxScript
   , txOutDatum :: !TxOutDatum
   }
@@ -182,7 +182,7 @@ class AlonzoEraTxBody era => DBScriptPurpose era where
   getPurpose :: PlutusPurpose AsIx era -> (DB.ScriptPurpose, Word32)
   toAlonzoPurpose :: TxBody era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIx era)) (ConwayPlutusPurpose AsItem era))
 
-instance DBScriptPurpose StandardAlonzo where
+instance DBScriptPurpose AlonzoEra where
   getPurpose = \case
     AlonzoSpending idx -> (DB.Spend, unAsIx idx)
     AlonzoMinting idx -> (DB.Mint, unAsIx idx)
@@ -195,7 +195,7 @@ instance DBScriptPurpose StandardAlonzo where
     AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
     AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
-instance DBScriptPurpose StandardBabbage where
+instance DBScriptPurpose BabbageEra where
   getPurpose = \case
     AlonzoSpending idx -> (DB.Spend, unAsIx idx)
     AlonzoMinting idx -> (DB.Mint, unAsIx idx)
@@ -208,7 +208,7 @@ instance DBScriptPurpose StandardBabbage where
     AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
     AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
-instance DBScriptPurpose StandardConway where
+instance DBScriptPurpose ConwayEra where
   getPurpose = \case
     ConwaySpending idx -> (DB.Spend, unAsIx idx)
     ConwayMinting idx -> (DB.Mint, unAsIx idx)
@@ -225,14 +225,14 @@ instance DBScriptPurpose StandardConway where
 class AlonzoEraScript era => DBPlutusScript era where
   getPlutusScriptType :: PlutusScript era -> DB.ScriptType
 
-instance DBPlutusScript StandardAlonzo where
+instance DBPlutusScript AlonzoEra where
   getPlutusScriptType _ = DB.PlutusV1
 
-instance DBPlutusScript StandardBabbage where
+instance DBPlutusScript BabbageEra where
   getPlutusScriptType (BabbagePlutusV1 _) = DB.PlutusV1
   getPlutusScriptType (BabbagePlutusV2 _) = DB.PlutusV2
 
-instance DBPlutusScript StandardConway where
+instance DBPlutusScript ConwayEra where
   getPlutusScriptType (ConwayPlutusV1 _) = DB.PlutusV1
   getPlutusScriptType (ConwayPlutusV2 _) = DB.PlutusV2
   getPlutusScriptType (ConwayPlutusV3 _) = DB.PlutusV3

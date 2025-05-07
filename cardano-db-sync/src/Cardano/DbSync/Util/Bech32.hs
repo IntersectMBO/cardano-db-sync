@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Cardano.DbSync.Util.Bech32 (
   serialiseToBech32,
@@ -17,8 +16,8 @@ import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
 import Cardano.Crypto.VRF.Class (VerKeyVRF, rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Prelude
-import Cardano.Protocol.Crypto
-import Codec.Binary.Bech32
+import Cardano.Protocol.Crypto (StandardCrypto, VRF)
+import Codec.Binary.Bech32 (DecodingError, dataPartFromBytes, dataPartToBytes, decodeLenient, encodeLenient, humanReadablePartFromText)
 import Prelude (id)
 
 -- | Wrap Bech32 deserialisation errors
@@ -49,16 +48,12 @@ deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
     decodeLenient' = bimap Bech32DecodingError snd . decodeLenient
     dataPartToBytes' d = maybeToEither DataPartToBytesError $ dataPartToBytes d
 
-
-
 -- | Serialise a Verification Key to bech32 address
 serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF StandardCrypto) -> Text
 serialiseVerKeyVrfToBech32 =
   serialiseToBech32 "vrf_vk" . rawSerialiseVerKeyVRF
 
 -- deriving instance VRFAlgorithm (VRF PraosVRF)
-
-
 
 -- | Deserialise a bech32 address to a Verification Key
 deserialiseVerKeyVrfFromBech32 :: Text -> Either DecodeError (VerKeyVRF (VRF StandardCrypto))

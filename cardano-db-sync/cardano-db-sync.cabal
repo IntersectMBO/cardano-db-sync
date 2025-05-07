@@ -154,6 +154,7 @@ library
                       , cardano-client
                       , cardano-crypto
                       , cardano-crypto-class
+                      , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-data
                       , cardano-db
@@ -222,6 +223,7 @@ library
                       , time
                       , transformers
                       , transformers-except
+                      , typed-protocols
                       , unix
                       , vector
                       , wide-word

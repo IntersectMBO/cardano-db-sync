@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.ParamProposal (
@@ -20,7 +19,6 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin, unCoin)
 import Cardano.Ledger.Conway.Core
 import Cardano.Ledger.Conway.PParams (ppuMinFeeRefScriptCostPerByteL)
-import Cardano.Ledger.Crypto
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
@@ -28,7 +26,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, ConwayEra)
 
 data ParamProposal = ParamProposal
   { pppEpochNo :: !(Maybe EpochNo)
@@ -74,7 +72,7 @@ data ParamProposal = ParamProposal
   , pppMinFeeRefScriptCostPerByte :: !(Maybe Rational)
   }
 
-convertParamProposal :: EraCrypto era ~ StandardCrypto => Witness era -> Shelley.Update era -> [ParamProposal]
+convertParamProposal :: Witness era -> Shelley.Update era -> [ParamProposal]
 convertParamProposal witness (Shelley.Update pp epoch) =
   case witness of
     Shelley {} -> shelleyParamProposal epoch pp
@@ -89,17 +87,17 @@ shelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 
 shelleyParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
   map (convertShelleyParamProposal epochNo) $ Map.toList umap
 
-alonzoParamProposal :: EpochNo -> Shelley.ProposedPPUpdates StandardAlonzo -> [ParamProposal]
+alonzoParamProposal :: EpochNo -> Shelley.ProposedPPUpdates AlonzoEra -> [ParamProposal]
 alonzoParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
   map (convertAlonzoParamProposal epochNo) $ Map.toList umap
 
-babbageParamProposal :: EpochNo -> Shelley.ProposedPPUpdates StandardBabbage -> [ParamProposal]
+babbageParamProposal :: EpochNo -> Shelley.ProposedPPUpdates BabbageEra -> [ParamProposal]
 babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
   map (convertBabbageParamProposal epochNo) $ Map.toList umap
 
 -- -------------------------------------------------------------------------------------------------
 
-convertConwayParamProposal :: PParamsUpdate StandardConway -> ParamProposal
+convertConwayParamProposal :: PParamsUpdate ConwayEra -> ParamProposal
 convertConwayParamProposal pmap =
   ParamProposal
     { pppEpochNo = Nothing
@@ -112,7 +110,7 @@ convertConwayParamProposal pmap =
     , pppKeyDeposit = strictMaybeToMaybe (pmap ^. ppuKeyDepositL)
     , pppPoolDeposit = strictMaybeToMaybe (pmap ^. ppuPoolDepositL)
     , pppMaxEpoch = strictMaybeToMaybe (pmap ^. ppuEMaxL)
-    , pppOptimalPoolCount = strictMaybeToMaybe (pmap ^. ppuNOptL)
+    , pppOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuNOptL)
     , pppInfluence = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuA0L)
     , pppMonetaryExpandRate = strictMaybeToMaybe (pmap ^. ppuRhoL)
     , pppTreasuryGrowthRate = strictMaybeToMaybe (pmap ^. ppuTauL)
@@ -144,7 +142,7 @@ convertConwayParamProposal pmap =
     , pppMinFeeRefScriptCostPerByte = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuMinFeeRefScriptCostPerByteL)
     }
 
-convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis StandardCrypto, PParamsUpdate StandardBabbage) -> ParamProposal
+convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate BabbageEra) -> ParamProposal
 convertBabbageParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
@@ -157,7 +155,7 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppKeyDeposit = strictMaybeToMaybe (pmap ^. ppuKeyDepositL)
     , pppPoolDeposit = strictMaybeToMaybe (pmap ^. ppuPoolDepositL)
     , pppMaxEpoch = strictMaybeToMaybe (pmap ^. ppuEMaxL)
-    , pppOptimalPoolCount = strictMaybeToMaybe (pmap ^. ppuNOptL)
+    , pppOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuNOptL)
     , pppInfluence = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuA0L)
     , pppMonetaryExpandRate = strictMaybeToMaybe (pmap ^. ppuRhoL)
     , pppTreasuryGrowthRate = strictMaybeToMaybe (pmap ^. ppuTauL)
@@ -188,7 +186,7 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppMinFeeRefScriptCostPerByte = Nothing
     }
 
-convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis crypto, PParamsUpdate StandardAlonzo) -> ParamProposal
+convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate AlonzoEra) -> ParamProposal
 convertAlonzoParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
@@ -201,7 +199,7 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppKeyDeposit = strictMaybeToMaybe (pmap ^. ppuKeyDepositL)
     , pppPoolDeposit = strictMaybeToMaybe (pmap ^. ppuPoolDepositL)
     , pppMaxEpoch = strictMaybeToMaybe (pmap ^. ppuEMaxL)
-    , pppOptimalPoolCount = strictMaybeToMaybe (pmap ^. ppuNOptL)
+    , pppOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuNOptL)
     , pppInfluence = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuA0L)
     , pppMonetaryExpandRate = strictMaybeToMaybe (pmap ^. ppuRhoL)
     , pppTreasuryGrowthRate = strictMaybeToMaybe (pmap ^. ppuTauL)
@@ -234,7 +232,7 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     }
 
 -- | This works fine from Shelley to Mary. Not for Alonzo since 'ppuMinUTxOValueL' was removed
-convertShelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 6, ProtVerAtMost era 8) => EpochNo -> (Ledger.KeyHash genesis crypto, PParamsUpdate era) -> ParamProposal
+convertShelleyParamProposal :: (EraPParams era, ProtVerAtMost era 4, ProtVerAtMost era 6, ProtVerAtMost era 8) => EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate era) -> ParamProposal
 convertShelleyParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
@@ -247,7 +245,7 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppKeyDeposit = strictMaybeToMaybe (pmap ^. ppuKeyDepositL)
     , pppPoolDeposit = strictMaybeToMaybe (pmap ^. ppuPoolDepositL)
     , pppMaxEpoch = strictMaybeToMaybe (pmap ^. ppuEMaxL)
-    , pppOptimalPoolCount = strictMaybeToMaybe (pmap ^. ppuNOptL)
+    , pppOptimalPoolCount = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuNOptL)
     , pppInfluence = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuA0L)
     , pppMonetaryExpandRate = strictMaybeToMaybe (pmap ^. ppuRhoL)
     , pppTreasuryGrowthRate = strictMaybeToMaybe (pmap ^. ppuTauL)
