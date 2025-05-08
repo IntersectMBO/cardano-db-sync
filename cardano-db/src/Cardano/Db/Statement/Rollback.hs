@@ -24,8 +24,8 @@ import qualified Cardano.Db.Schema.Core.StakeDeligation as SCS
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..))
 import qualified Cardano.Db.Schema.Variants as SV
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variants.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Db.Statement.Function.Core (mkCallInfo, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
 import Cardano.Db.Statement.Function.Query (queryMinRefId)
@@ -71,12 +71,12 @@ prepareDelete fieldName value operator encoder =
 deleteTablesAfterBlockId ::
   forall m.
   MonadIO m =>
-  SV.TxOutTableType ->
+  SV.TxOutVariantType ->
   Id.BlockId ->
   Maybe Id.TxId ->
   MinIdsWrapper ->
   DbAction m (Int64, [(Text.Text, Int64)])
-deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
+deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
   let blockIdEncoder = Id.idEncoder Id.getBlockId
 
   -- Create a pipeline for initial deletions
@@ -134,7 +134,7 @@ deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
           ]
       pure $ logsVoting <> offChain
   -- Additional deletions based on TxId and minimum IDs
-  afterTxIdLogs <- deleteTablesAfterTxId txOutTableType mtxId minIdsW
+  afterTxIdLogs <- deleteTablesAfterTxId txOutVariantType mtxId minIdsW
   -- Final block deletions
   blockLogs <-
     runDeletePipeline
@@ -146,11 +146,11 @@ deleteTablesAfterBlockId txOutTableType blkId mtxId minIdsW = do
 deleteTablesAfterTxId ::
   forall m.
   MonadIO m =>
-  SV.TxOutTableType ->
+  SV.TxOutVariantType ->
   Maybe Id.TxId ->
   MinIdsWrapper ->
   DbAction m [(Text.Text, Int64)]
-deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
+deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
   let txIdEncoder = Id.idEncoder Id.getTxId
 
   -- Handle deletions and log accumulation from MinIdsWrapper
@@ -159,8 +159,8 @@ deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
       let operations =
             catMaybes
               [ fmap (\txInId -> prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)) mtxInId
-              , prepareTypedDelete @C.TxOutCore "id" mtxOutId SV.unwrapTxOutIdCore (Id.idEncoder Id.getTxOutCoreId)
-              , prepareTypedDelete @C.MaTxOutCore "id" mmaTxOutId SV.unwrapMaTxOutIdCore (Id.idEncoder Id.getMaTxOutCoreId)
+              , prepareTypedDelete @VC.TxOutCore "id" mtxOutId SV.unwrapTxOutIdCore (Id.idEncoder Id.getTxOutCoreId)
+              , prepareTypedDelete @VC.MaTxOutCore "id" mmaTxOutId SV.unwrapMaTxOutIdCore (Id.idEncoder Id.getMaTxOutCoreId)
               ]
       if null operations
         then pure []
@@ -169,8 +169,8 @@ deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
       let operations =
             catMaybes
               [ fmap (\txInId -> prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)) mtxInId
-              , prepareTypedDelete @V.TxOutAddress "id" mtxOutId SV.unwrapTxOutIdAddress (Id.idEncoder Id.getTxOutAddressId)
-              , prepareTypedDelete @V.MaTxOutAddress "id" mmaTxOutId SV.unwrapMaTxOutIdAddress (Id.idEncoder Id.getMaTxOutAddressId)
+              , prepareTypedDelete @VA.TxOutAddress "id" mtxOutId SV.unwrapTxOutIdAddress (Id.idEncoder Id.getTxOutAddressId)
+              , prepareTypedDelete @VA.MaTxOutAddress "id" mmaTxOutId SV.unwrapMaTxOutIdAddress (Id.idEncoder Id.getMaTxOutAddressId)
               ]
       if null operations
         then pure []
@@ -184,9 +184,9 @@ deleteTablesAfterTxId txOutTableType mtxId minIdsW = do
       result <-
         runDeletePipeline
           "txRelatedDelete"
-          [ case txOutTableType of
-              SV.TxOutTableCore -> prepareDelete @C.CollateralTxOutCore "tx_id" txId ">=" txIdEncoder
-              SV.TxOutTableVariantAddress -> prepareDelete @V.CollateralTxOutAddress "tx_id" txId ">=" txIdEncoder
+          [ case txOutVariantType of
+              SV.TxOutVariantCore -> prepareDelete @VC.CollateralTxOutCore "tx_id" txId ">=" txIdEncoder
+              SV.TxOutVariantAddress -> prepareDelete @VA.CollateralTxOutAddress "tx_id" txId ">=" txIdEncoder
           , prepareDelete @SCB.CollateralTxIn "tx_in_id" txId ">=" txIdEncoder
           , prepareDelete @SCB.ReferenceTxIn "tx_in_id" txId ">=" txIdEncoder
           , prepareDelete @SCP.PoolRetire "announced_tx_id" txId ">=" txIdEncoder

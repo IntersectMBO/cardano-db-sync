@@ -115,52 +115,52 @@ module Cardano.Db.Operations.Insert (
 -- import qualified Data.Text as Text
 -- import Data.Word (Word64)
 -- import Database.Persist (updateWhere, (!=.), (=.), (==.), (>.))
-import Database.Persist.Class (
-  AtLeastOneUniqueKey,
-  PersistEntity,
-  PersistEntityBackend,
-  SafeToInsert,
-  checkUnique,
-  insert,
-  insertBy,
-  replaceUnique,
- )
-import Database.Persist.EntityDef.Internal (entityDB, entityUniques)
+-- import Database.Persist.Class (
+--   AtLeastOneUniqueKey,
+--   PersistEntity,
+--   PersistEntityBackend,
+--   SafeToInsert,
+--   checkUnique,
+--   insert,
+--   insertBy,
+--   replaceUnique,
+--  )
+-- import Database.Persist.EntityDef.Internal (entityDB, entityUniques)
 
--- import Database.Persist.Postgresql (upsertWhere)
-import Database.Persist.Sql (
-  OnlyOneUniqueKey,
-  PersistRecordBackend,
-  SqlBackend,
-  UniqueDef,
-  entityDef,
-  insertMany,
-  rawExecute,
-  rawSql,
-  replace,
-  toPersistFields,
-  toPersistValue,
-  uniqueDBName,
-  uniqueFields,
-  updateWhereCount,
- )
+-- -- import Database.Persist.Postgresql (upsertWhere)
+-- import Database.Persist.Sql (
+--   OnlyOneUniqueKey,
+--   PersistRecordBackend,
+--   SqlBackend,
+--   UniqueDef,
+--   entityDef,
+--   insertMany,
+--   rawExecute,
+--   rawSql,
+--   replace,
+--   toPersistFields,
+--   toPersistValue,
+--   uniqueDBName,
+--   uniqueFields,
+--   updateWhereCount,
+--  )
 
--- import qualified Database.Persist.Sql.Util as Util
-import Database.Persist.Types (
-  ConstraintNameDB (..),
-  Entity (..),
-  EntityNameDB (..),
-  FieldNameDB (..),
-  PersistValue,
-  entityKey,
- )
+-- -- import qualified Database.Persist.Sql.Util as Util
+-- import Database.Persist.Types (
+--   ConstraintNameDB (..),
+--   Entity (..),
+--   EntityNameDB (..),
+--   FieldNameDB (..),
+--   PersistValue,
+--   entityKey,
+--  )
 
 -- import Database.PostgreSQL.Simple (SqlError)
 -- import Hasql.Statement (Statement)
 
 -- The original naive way of inserting rows into Postgres was:
 --
---     insertByReturnKey :: record -> ReaderT SqlBackend m recordId
+--     insertByReturnKey :: record -> DB.DbAction m recordId
 --        res <- getByValue value
 --        case res of
 --          Nothing -> insertBy value
@@ -175,40 +175,40 @@ import Database.Persist.Types (
 -- and `insertChecked` for tables where the uniqueness constraint might hit.
 
 -- insertManyEpochStakes ::
---   (MonadBaseControl IO m, MonadIO m) =>
+--   MonadIO m =>
 --   -- | Does constraint already exists
 --   Bool ->
 --   ConstraintNameDB ->
 --   [EpochStake] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- insertManyEpochStakes = insertManyWithManualUnique "Many EpochStake"
 
 -- insertManyRewards ::
---   (MonadBaseControl IO m, MonadIO m) =>
+--   MonadIO m =>
 --   -- | Does constraint already exists
 --   Bool ->
 --   ConstraintNameDB ->
 --   [Reward] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- insertManyRewards = insertManyWithManualUnique "Many Rewards"
 
 -- insertManyRewardRests ::
---   (MonadBaseControl IO m, MonadIO m) =>
+--   MonadIO m =>
 --   [RewardRest] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- insertManyRewardRests = insertManyUnique "Many Rewards Rest" Nothing
 
 -- insertManyDrepDistr ::
---   (MonadBaseControl IO m, MonadIO m) =>
+--   MonadIO m =>
 --   [DrepDistr] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- insertManyDrepDistr = insertManyCheckUnique "Many DrepDistr"
 
--- updateSetComplete :: MonadIO m => Word64 -> ReaderT SqlBackend m ()
+-- updateSetComplete :: MonadIO m => Word64 -> DB.DbAction m ()
 -- updateSetComplete epoch = do
 --   upsertWhere (EpochStakeProgress epoch True) [EpochStakeProgressCompleted Database.Persist.=. True] [EpochStakeProgressEpochNo Database.Persist.==. epoch]
 
--- replaceAdaPots :: (MonadBaseControl IO m, MonadIO m) => BlockId -> AdaPots -> ReaderT SqlBackend m Bool
+-- replaceAdaPots :: MonadIO m => BlockId -> AdaPots -> DB.DbAction m Bool
 -- replaceAdaPots blockId adapots = do
 --   mAdaPotsId <- queryAdaPotsId blockId
 --   case mAdaPotsId of
@@ -238,10 +238,10 @@ import Database.Persist.Types (
 --   ) =>
 --   String ->
 --   [record] ->
---   ReaderT SqlBackend m [Key record]
+--   DB.DbAction m [Key record]
 -- insertMany' vtype records = handle exceptHandler (insertMany records)
 --   where
---     exceptHandler :: SqlError -> ReaderT SqlBackend m [Key record]
+--     exceptHandler :: SqlError -> DB.DbAction m [Key record]
 --     exceptHandler e =
 --       liftIO $ throwIO (DbInsertException vtype e)
 
@@ -256,7 +256,7 @@ import Database.Persist.Types (
 --   -- | Does constraint already exists
 --   Maybe ConstraintNameDB ->
 --   [record] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- insertManyUnique vtype mConstraintName records = do
 --   unless (null records) $
 --     handle exceptHandler (rawExecute query values)
@@ -295,7 +295,7 @@ import Database.Persist.Types (
 --     (fieldNames, placeholders) =
 --       unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
 
---     exceptHandler :: SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DbInsertException vtype e)
 
@@ -310,7 +310,7 @@ import Database.Persist.Types (
 --   Bool ->
 --   ConstraintNameDB ->
 --   [record] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- insertManyWithManualUnique str contraintExists constraintName =
 --   insertManyUnique str mConstraintName
 --   where
@@ -324,7 +324,7 @@ import Database.Persist.Types (
 -- --   ) =>
 -- --   String ->
 -- --   [record] ->
--- --   ReaderT SqlBackend m ()
+-- --   DB.DbAction m ()
 -- -- insertManyCheckUnique vtype records = do
 -- --   let constraintName = uniqueDBName $ onlyOneUniqueDef (Proxy @record)
 -- --   insertManyUnique vtype (Just constraintName) records
@@ -340,7 +340,7 @@ import Database.Persist.Types (
 --   ) =>
 --   String ->
 --   record ->
---   ReaderT SqlBackend m (Key record)
+--   DB.DbAction m (Key record)
 -- insertCheckUnique vtype record = do
 --   res <- handle exceptHandler $ rawSql query values
 --   case res of
@@ -376,7 +376,7 @@ import Database.Persist.Types (
 --     (fieldNames, placeholders) =
 --       unzip (Util.mkInsertPlaceholders (entityDef (Proxy @record)) escapeFieldName)
 
---     exceptHandler :: SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DbInsertException vtype e)
 
@@ -395,7 +395,7 @@ import Database.Persist.Types (
 --   ) =>
 --   String ->
 --   record ->
---   ReaderT SqlBackend m (Key record)
+--   DB.DbAction m (Key record)
 -- insertReplace vtype record =
 --   handle exceptHandler $ do
 --     eres <- insertBy record
@@ -405,7 +405,7 @@ import Database.Persist.Types (
 --         mres <- replaceUnique (entityKey rec) record
 --         maybe (pure $ entityKey rec) (const . pure $ entityKey rec) mres
 --   where
---     exceptHandler :: SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DbInsertException vtype e)
 
@@ -421,11 +421,11 @@ import Database.Persist.Types (
 --   ) =>
 --   String ->
 --   record ->
---   ReaderT SqlBackend m (Key record)
+--   DB.DbAction m (Key record)
 -- insertUnchecked vtype =
 --   handle exceptHandler . insert
 --   where
---     exceptHandler :: MonadIO m => SqlError -> ReaderT SqlBackend m a
+--     exceptHandler :: MonadIO m => SqlError -> DB.DbAction m a
 --     exceptHandler e =
 --       liftIO $ throwIO (DbInsertException vtype e)
 
@@ -448,5 +448,5 @@ import Database.Persist.Types (
 
 -- Used in tests
 
--- insertBlockChecked :: (MonadBaseControl IO m, MonadIO m) => Block -> ReaderT SqlBackend m BlockId
+-- insertBlockChecked :: MonadIO m => Block -> DB.DbAction m BlockId
 -- insertBlockChecked = insertCheckUnique "Block"

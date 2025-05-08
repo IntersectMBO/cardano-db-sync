@@ -70,12 +70,12 @@ data EpochReward = EpochReward
   , erPercent :: !Double
   }
 
-queryEpochStakeRewards :: MonadIO m => Word64 -> Text -> ReaderT SqlBackend m (Maybe EpochReward)
+queryEpochStakeRewards :: MonadIO m => Word64 -> Text -> DB.DbAction m (Maybe EpochReward)
 queryEpochStakeRewards epochNum address = do
   mdel <- queryDelegation address epochNum
   maybe (pure Nothing) ((fmap . fmap) Just (queryReward epochNum address)) mdel
 
-queryLatestStakeRewards :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe EpochReward)
+queryLatestStakeRewards :: MonadIO m => Text -> DB.DbAction m (Maybe EpochReward)
 queryLatestStakeRewards address = do
   epochNum <- queryLatestMemberRewardEpochNo
   mdel <- queryDelegation address epochNum
@@ -84,7 +84,7 @@ queryLatestStakeRewards address = do
     -- Find the latest epoch where member rewards have been distributed.
     -- Can't use the Reward table for this because that table may have been partially
     -- populated for the next epcoh.
-    queryLatestMemberRewardEpochNo :: MonadIO m => ReaderT SqlBackend m Word64
+    queryLatestMemberRewardEpochNo :: MonadIO m => DB.DbAction m Word64
     queryLatestMemberRewardEpochNo = do
       res <- select $ do
         blk <- from $ table @Block
@@ -96,7 +96,7 @@ queryDelegation ::
   MonadIO m =>
   Text ->
   Word64 ->
-  ReaderT SqlBackend m (Maybe (StakeAddressId, UTCTime, DbLovelace, PoolHashId))
+  DB.DbAction m (Maybe (StakeAddressId, UTCTime, DbLovelace, PoolHashId))
 queryDelegation address epochNum = do
   res <- select $ do
     (ep :& es :& saddr) <-
@@ -124,7 +124,7 @@ queryReward ::
   Word64 ->
   Text ->
   (StakeAddressId, UTCTime, DbLovelace, PoolHashId) ->
-  ReaderT SqlBackend m EpochReward
+  DB.DbAction m EpochReward
 queryReward en address (saId, date, DbLovelace delegated, poolId) = do
   res <- select $ do
     (ep :& reward :& saddr) <-

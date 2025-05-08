@@ -35,13 +35,12 @@ import Database.Persist.Postgresql (ConnectionString)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 
-
+-- | SyncEnv is the main environment for the whole application.
 data SyncEnv = SyncEnv
-  { envDbEnv :: !!DB.DbEnv
+  { envDbEnv :: !DB.DbEnv
   , envCache :: !CacheStatus
   , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
-  , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
@@ -83,7 +82,7 @@ data InsertOptions = InsertOptions
   , ioPoolStats :: !Bool
   , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
-  , ioTxOutTableType :: !DB.TxOutTableType
+  , ioTxOutVariantType :: !DB.TxOutVariantType
   }
   deriving (Show)
 

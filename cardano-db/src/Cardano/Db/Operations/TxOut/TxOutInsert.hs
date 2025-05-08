@@ -18,7 +18,7 @@ module Cardano.Db.Operations.TxOut.TxOutInsert where
 --   SqlBackend,
 --  )
 
--- insertCollateralTxOut :: (MonadBaseControl IO m, MonadIO m) => CollateralTxOutW -> ReaderT SqlBackend m CollateralTxOutIdW
+-- insertCollateralTxOut :: MonadIO m => CollateralTxOutW -> DB.DbAction m CollateralTxOutIdW
 -- insertCollateralTxOut collateralTxOutW =
 --   case collateralTxOutW of
 --     CCollateralTxOutW txOut -> do

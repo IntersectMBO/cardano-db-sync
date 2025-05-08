@@ -7,7 +7,7 @@
 
 module Cardano.Db.Statement.Variants.TxOut where
 
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Text, Word64, forM, fromMaybe)
+import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Text, Word64, fromMaybe)
 import Control.Monad.Extra (whenJust)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
@@ -19,7 +19,7 @@ import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Variants (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutTableType (..), TxOutW (..), UtxoQueryResult (..))
+import Cardano.Db.Schema.Variants (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutVariantType (..), TxOutW (..), UtxoQueryResult (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
@@ -50,16 +50,16 @@ insertTxOutAddressStmt =
 insertTxOut :: MonadIO m => TxOutW -> DbAction m TxOutIdW
 insertTxOut txOutW =
   case txOutW of
-    CTxOutW txOut -> do
+    VCTxOutW txOut -> do
       txOutId <-
         runDbSession (mkCallInfo "insertTxOutCore") $
           HsqlSes.statement txOut insertTxOutCoreStmt
-      pure $ CTxOutIdW $ entityKey txOutId
-    VTxOutW txOut _ -> do
+      pure $ VCTxOutIdW $ entityKey txOutId
+    VATxOutW txOut _ -> do
       txOutId <-
         runDbSession (mkCallInfo "insertTxOutAddress") $
           HsqlSes.statement txOut insertTxOutAddressStmt
-      pure $ VTxOutIdW $ entityKey txOutId
+      pure $ VATxOutIdW $ entityKey txOutId
 
 --------------------------------------------------------------------------------
 insertBulkCoreTxOutStmt :: HsqlStmt.Statement [SVC.TxOutCore] [Entity SVC.TxOutCore]
@@ -136,35 +136,35 @@ insertBulkTxOut disInOut txOutWs =
       [] -> pure []
       txOuts@(txOutW : _) ->
         case txOutW of
-          CTxOutW _ -> do
+          VCTxOutW _ -> do
             let coreTxOuts = map extractCoreTxOut txOuts
             ids <-
               runDbSession (mkCallInfo "insertBulkTxOutCore") $
                 HsqlSes.statement coreTxOuts insertBulkCoreTxOutStmt
-            pure $ map (CTxOutIdW . entityKey) ids
-          VTxOutW _ _ -> do
+            pure $ map (VCTxOutIdW . entityKey) ids
+          VATxOutW _ _ -> do
             let variantTxOuts = map extractVariantTxOut txOuts
             ids <-
               runDbSession (mkCallInfo "insertBulkTxOutAddress") $
                 HsqlSes.statement variantTxOuts insertBulkAddressTxOutStmt
-            pure $ map (VTxOutIdW . entityKey) ids
+            pure $ map (VATxOutIdW . entityKey) ids
   where
     extractCoreTxOut :: TxOutW -> SVC.TxOutCore
-    extractCoreTxOut (CTxOutW txOut) = txOut
-    extractCoreTxOut (VTxOutW _ _) = error "Unexpected VTxOutW in CoreTxOut list"
+    extractCoreTxOut (VCTxOutW txOut) = txOut
+    extractCoreTxOut (VATxOutW _ _) = error "Unexpected VATxOutW in CoreTxOut list"
 
     extractVariantTxOut :: TxOutW -> SVA.TxOutAddress
-    extractVariantTxOut (VTxOutW txOut _) = txOut
-    extractVariantTxOut (CTxOutW _) = error "Unexpected CTxOutW in VariantTxOut list"
+    extractVariantTxOut (VATxOutW txOut _) = txOut
+    extractVariantTxOut (VCTxOutW _) = error "Unexpected VCTxOutW in VariantTxOut list"
 
 -- | QUERIES -------------------------------------------------------------------
-queryTxOutCount :: MonadIO m => TxOutTableType -> DbAction m Word64
-queryTxOutCount txOutTableType =
-  case txOutTableType of
-    TxOutTableCore ->
+queryTxOutCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
+queryTxOutCount txOutVariantType =
+  case txOutVariantType of
+    TxOutVariantCore ->
       runDbSession (mkCallInfo "queryTxOutCountCore") $
         HsqlSes.statement () (countAll @SVC.TxOutCore)
-    TxOutTableVariantAddress ->
+    TxOutVariantAddress ->
       runDbSession (mkCallInfo "queryTxOutCountAddress") $
         HsqlSes.statement () (countAll @SVA.TxOutAddress)
 
@@ -234,16 +234,16 @@ queryTxOutIdStmt =
 
 queryTxOutId ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   (ByteString, Word64) ->
   DbAction m (Id.TxId, TxOutIdW)
-queryTxOutId txOutTableType hashIndex@(hash, _) = do
+queryTxOutId txOutVariantType hashIndex@(hash, _) = do
   result <- runDbSession callInfo $ HsqlSes.statement hashIndex queryTxOutIdStmt
   case result of
     Just (txId, rawId) ->
-      pure $ case txOutTableType of
-        TxOutTableCore -> (txId, CTxOutIdW (Id.TxOutCoreId rawId))
-        TxOutTableVariantAddress -> (txId, VTxOutIdW (Id.TxOutAddressId rawId))
+      pure $ case txOutVariantType of
+        TxOutVariantCore -> (txId, VCTxOutIdW (Id.TxOutCoreId rawId))
+        TxOutVariantAddress -> (txId, VATxOutIdW (Id.TxOutAddressId rawId))
     Nothing ->
       throwError $ DbError (dciCallSite callInfo) errorMsg Nothing
   where
@@ -277,24 +277,24 @@ queryTxOutIdValueStmt =
 
 queryTxOutIdValue ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   (ByteString, Word64) ->
   DbAction m (Id.TxId, TxOutIdW, DbLovelace)
-queryTxOutIdValue txOutTableType hashIndex@(hash, _) = do
+queryTxOutIdValue txOutVariantType hashIndex@(hash, _) = do
   let callInfo = mkCallInfo "queryTxOutIdValue"
       errorMsg = "TxOut not found for hash: " <> Text.pack (show hash)
 
   result <- runDbSession callInfo $ HsqlSes.statement hashIndex queryTxOutIdValueStmt
   case result of
     Just (txId, rawId, value) ->
-      pure $ case txOutTableType of
-        TxOutTableCore -> (txId, CTxOutIdW (Id.TxOutCoreId rawId), value)
-        TxOutTableVariantAddress -> (txId, VTxOutIdW (Id.TxOutAddressId rawId), value)
+      pure $ case txOutVariantType of
+        TxOutVariantCore -> (txId, VCTxOutIdW (Id.TxOutCoreId rawId), value)
+        TxOutVariantAddress -> (txId, VATxOutIdW (Id.TxOutAddressId rawId), value)
     Nothing ->
       throwError $ DbError (dciCallSite callInfo) errorMsg Nothing
 
 --------------------------------------------------------------------------------
-queryTxOutCredentialsCoreStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString, Bool))
+queryTxOutCredentialsCoreStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))
 queryTxOutCredentialsCoreStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
@@ -311,14 +311,11 @@ queryTxOutCredentialsCoreStmt =
         <> contramap snd (HsqlE.param $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
 
     decoder =
-      HsqlD.rowMaybe
-        ( (,)
-            <$> HsqlD.column (HsqlD.nullable HsqlD.bytea)
-            <*> HsqlD.column (HsqlD.nonNullable HsqlD.bool)
-        )
+      HsqlD.rowMaybe $ HsqlD.column (HsqlD.nullable HsqlD.bytea)
+
 
 --------------------------------------------------------------------------------
-queryTxOutCredentialsVariantStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString, Bool))
+queryTxOutCredentialsVariantStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))
 queryTxOutCredentialsVariantStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
@@ -337,25 +334,21 @@ queryTxOutCredentialsVariantStmt =
         <> contramap snd (HsqlE.param $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
 
     decoder =
-      HsqlD.rowMaybe
-        ( (,)
-            <$> HsqlD.column (HsqlD.nullable HsqlD.bytea)
-            <*> HsqlD.column (HsqlD.nonNullable HsqlD.bool)
-        )
+      HsqlD.rowMaybe $ HsqlD.column (HsqlD.nullable HsqlD.bytea)
 
 queryTxOutCredentials ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   (ByteString, Word64) ->
-  DbAction m (Maybe ByteString, Bool)
-queryTxOutCredentials txOutTableType hashIndex@(hash, _) = do
+  DbAction m (Maybe ByteString)
+queryTxOutCredentials txOutVariantType hashIndex@(hash, _) = do
   let callInfo = mkCallInfo "queryTxOutCredentials"
       errorMsg = "TxOut not found for hash: " <> Text.pack (show hash)
 
-  result <- case txOutTableType of
-    TxOutTableCore ->
+  result <- case txOutVariantType of
+    TxOutVariantCore ->
       runDbSession callInfo $ HsqlSes.statement hashIndex queryTxOutCredentialsCoreStmt
-    TxOutTableVariantAddress ->
+    TxOutVariantAddress ->
       runDbSession callInfo $ HsqlSes.statement hashIndex queryTxOutCredentialsVariantStmt
 
   case result of
@@ -386,7 +379,7 @@ queryTotalSupplyStmt =
 -- | Get the current total supply of Lovelace. This only returns the on-chain supply which
 -- does not include staking rewards that have not yet been withdrawn. Before wihdrawal
 -- rewards are part of the ledger state and hence not on chain.
-queryTotalSupply :: MonadIO m => TxOutTableType -> DbAction m Ada
+queryTotalSupply :: MonadIO m => TxOutVariantType -> DbAction m Ada
 queryTotalSupply _ =
   runDbSession (mkCallInfo "queryTotalSupply") $
     HsqlSes.statement () queryTotalSupplyStmt
@@ -394,7 +387,7 @@ queryTotalSupply _ =
 --------------------------------------------------------------------------------
 -- DELETES
 
--- Statement for deleting MaTxOutCore and TxOutCore records after specific IDs
+-- Statement for deleting MaTxOutCore and TxOutVariantCore records after specific IDs
 deleteMaTxOutCoreAfterIdStmt :: HsqlStmt.Statement Id.MaTxOutCoreId ()
 deleteMaTxOutCoreAfterIdStmt =
   parameterisedDeleteWhere @SVC.MaTxOutCore
@@ -460,12 +453,12 @@ deleteTxOutAddressAllCountStmt :: HsqlStmt.Statement () Int64
 deleteTxOutAddressAllCountStmt = deleteAllCount @SVA.TxOutAddress
 
 -- Function that uses the delete all count statements
-deleteTxOut :: MonadIO m => TxOutTableType -> DbAction m Int64
+deleteTxOut :: MonadIO m => TxOutVariantType -> DbAction m Int64
 deleteTxOut = \case
-  TxOutTableCore ->
+  TxOutVariantCore ->
     runDbSession (mkCallInfo "deleteTxOutCore") $
       HsqlSes.statement () deleteTxOutCoreAllCountStmt
-  TxOutTableVariantAddress ->
+  TxOutVariantAddress ->
     runDbSession (mkCallInfo "deleteTxOutAddress") $
       HsqlSes.statement () deleteTxOutAddressAllCountStmt
 
@@ -537,7 +530,7 @@ insertBulkAddressMaTxOutStmt =
       [SVA.MaTxOutAddress] ->
       ( [Id.MultiAssetId]
       , [DbWord64]
-      , [Id.TxOutCoreId]
+      , [Id.TxOutAddressId]
       )
     extractAddressMaTxOutValues xs =
       ( map SVA.maTxOutAddressIdent xs
@@ -624,7 +617,7 @@ queryTxOutUnspentCountStmt =
       HsqlD.singleRow $
         fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
-queryTxOutUnspentCount :: MonadIO m => TxOutTableType -> DbAction m Word64
+queryTxOutUnspentCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
 queryTxOutUnspentCount _ =
   runDbSession (mkCallInfo "queryTxOutUnspentCount") $
     HsqlSes.statement () queryTxOutUnspentCountStmt
@@ -668,7 +661,7 @@ queryUtxoAtBlockIdCoreStmt =
       txHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea) -- Now non-nullable
       pure $
         UtxoQueryResult
-          { utxoTxOutW = CTxOutW txOut
+          { utxoTxOutW = VCTxOutW txOut
           , utxoAddress = address
           , utxoTxHash = txHash
           }
@@ -698,7 +691,7 @@ queryUtxoAtBlockIdVariantStmt =
       txHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea) -- Now non-nullable
       pure $
         UtxoQueryResult
-          { utxoTxOutW = VTxOutW txOut (Just addr)
+          { utxoTxOutW = VATxOutW txOut (Just addr)
           , utxoAddress = SVA.addressAddress addr
           , utxoTxHash = txHash
           }
@@ -787,8 +780,8 @@ queryAddressBalanceAtBlockIdVariantStmt =
         fromMaybe (Ada 0) <$> HsqlD.column (HsqlD.nullable (Ada . fromIntegral <$> HsqlD.int8))
 
 -- Main query function
-queryAddressBalanceAtSlot :: MonadIO m => TxOutTableType -> Text -> Word64 -> DbAction m Ada
-queryAddressBalanceAtSlot txOutTableType addr slotNo = do
+queryAddressBalanceAtSlot :: MonadIO m => TxOutVariantType -> Text -> Word64 -> DbAction m Ada
+queryAddressBalanceAtSlot txOutVariantType addr slotNo = do
   let callInfo = mkCallInfo "queryAddressBalanceAtSlot"
 
   -- First get the block ID for the slot
@@ -800,11 +793,11 @@ queryAddressBalanceAtSlot txOutTableType addr slotNo = do
   case mBlockId of
     Nothing -> pure $ Ada 0
     Just blockId ->
-      case txOutTableType of
-        TxOutTableCore ->
+      case txOutVariantType of
+        TxOutVariantCore ->
           runDbSession (mkCallInfo "queryAddressBalanceAtBlockIdCore") $
             HsqlSes.statement (blockId, addr) queryAddressBalanceAtBlockIdCoreStmt
-        TxOutTableVariantAddress ->
+        TxOutVariantAddress ->
           runDbSession (mkCallInfo "queryAddressBalanceAtBlockIdVariant") $
             HsqlSes.statement (blockId, addr) queryAddressBalanceAtBlockIdVariantStmt
 
@@ -838,13 +831,13 @@ queryAddressOutputsVariantStmt =
     encoder = HsqlE.param $ HsqlE.nonNullable HsqlE.text
     decoder = HsqlD.singleRow dbLovelaceDecoder
 
-queryAddressOutputs :: MonadIO m => TxOutTableType -> Text -> DbAction m DbLovelace
-queryAddressOutputs txOutTableType addr =
-  case txOutTableType of
-    TxOutTableCore ->
+queryAddressOutputs :: MonadIO m => TxOutVariantType -> Text -> DbAction m DbLovelace
+queryAddressOutputs txOutVariantType addr =
+  case txOutVariantType of
+    TxOutVariantCore ->
       runDbSession (mkCallInfo "queryAddressOutputsCore") $
         HsqlSes.statement addr queryAddressOutputsCoreStmt
-    TxOutTableVariantAddress ->
+    TxOutVariantAddress ->
       runDbSession (mkCallInfo "queryAddressOutputsVariant") $
         HsqlSes.statement addr queryAddressOutputsVariantStmt
 
@@ -876,19 +869,19 @@ queryScriptOutputsVariantStmt =
           ]
     decoder = HsqlD.rowList $ (,) <$> SVA.txOutAddressDecoder <*> SVA.addressDecoder
 
-queryScriptOutputs :: MonadIO m => TxOutTableType -> DbAction m [TxOutW]
-queryScriptOutputs txOutTableType =
-  case txOutTableType of
-    TxOutTableCore -> do
+queryScriptOutputs :: MonadIO m => TxOutVariantType -> DbAction m [TxOutW]
+queryScriptOutputs txOutVariantType =
+  case txOutVariantType of
+    TxOutVariantCore -> do
       txOuts <-
         runDbSession (mkCallInfo "queryScriptOutputsCore") $
           HsqlSes.statement () queryScriptOutputsCoreStmt
-      pure $ map CTxOutW txOuts
-    TxOutTableVariantAddress -> do
+      pure $ map VCTxOutW txOuts
+    TxOutVariantAddress -> do
       results <-
         runDbSession (mkCallInfo "queryScriptOutputsVariant") $
           HsqlSes.statement () queryScriptOutputsVariantStmt
-      pure $ map (\(txOut, addr) -> VTxOutW txOut (Just addr)) results
+      pure $ map (\(txOut, addr) -> VATxOutW txOut (Just addr)) results
 
 --------------------------------------------------------------------------------
 -- UPDATES
@@ -920,20 +913,20 @@ setNullTxOutConsumedBatchStmt =
 -- Main function to set NULL for tx_out consumed_by_tx_id
 querySetNullTxOut ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   Maybe Id.TxId ->
   DbAction m (Text.Text, Int64)
-querySetNullTxOut txOutTableType mMinTxId = do
+querySetNullTxOut txOutVariantType mMinTxId = do
   case mMinTxId of
     Nothing -> pure ("No tx_out to set to null (no TxId provided)", 0)
     Just txId -> do
       let callInfo = mkCallInfo "querySetNullTxOut"
-      -- Decide which table to use based on the TxOutTableType
-      updatedCount <- case txOutTableType of
-        TxOutTableCore ->
+      -- Decide which table to use based on the TxOutVariantType
+      updatedCount <- case txOutVariantType of
+        TxOutVariantCore ->
           runDbSession callInfo $
             HsqlSes.statement txId (setNullTxOutConsumedBatchStmt @SVC.TxOutCore)
-        TxOutTableVariantAddress ->
+        TxOutVariantAddress ->
           runDbSession callInfo $
             HsqlSes.statement txId (setNullTxOutConsumedBatchStmt @SVA.TxOutAddress)
       -- Return result

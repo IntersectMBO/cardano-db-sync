@@ -12,7 +12,7 @@
 
 module Cardano.Db.Schema.Core.OffChain where
 
-import Contravariant.Extras (contrazip3, contrazip5, contrazip6)
+import Contravariant.Extras (contrazip3, contrazip5, contrazip6, contrazip8, contrazip4)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)
@@ -192,6 +192,18 @@ offChainVoteDataEncoder =
     , offChainVoteDataIsValid >$< E.param (E.nullable E.bool)
     ]
 
+offChainVoteDataBulkEncoder :: E.Params ([Id.VotingAnchorId], [ByteString], [Text], [Maybe Text], [Text], [ByteString], [Maybe Text], [Maybe Bool])
+offChainVoteDataBulkEncoder =
+  contrazip8
+    (bulkEncoder (Id.idBulkEncoder Id.getVotingAnchorId))
+    (bulkEncoder (E.nonNullable E.bytea))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nonNullable E.bytea))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nullable E.bool))
+
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: off_chain_vote_gov_action_data
 -- Description:
@@ -239,6 +251,15 @@ offChainVoteGovActionDataEncoder =
     , offChainVoteGovActionDataMotivation >$< E.param (E.nonNullable E.text)
     , offChainVoteGovActionDataRationale >$< E.param (E.nonNullable E.text)
     ]
+
+offChainVoteGovActionDataBulkEncoder :: E.Params ([Id.OffChainVoteDataId], [Text], [Text], [Text], [Text])
+offChainVoteGovActionDataBulkEncoder =
+  contrazip5
+    (bulkEncoder (Id.idBulkEncoder Id.getOffChainVoteDataId))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nonNullable E.text))
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: off_chain_vote_drep_data
@@ -296,6 +317,18 @@ offChainVoteDrepDataEncoder =
     , offChainVoteDrepDataImageUrl >$< E.param (E.nullable E.text)
     , offChainVoteDrepDataImageHash >$< E.param (E.nullable E.text)
     ]
+
+offChainVoteDrepDataBulkEncoder :: E.Params ([Id.OffChainVoteDataId], [Maybe Text], [Text], [Maybe Text], [Maybe Text], [Maybe Text], [Maybe Text], [Maybe Text])
+offChainVoteDrepDataBulkEncoder =
+  contrazip8
+    (bulkEncoder (Id.idBulkEncoder Id.getOffChainVoteDataId))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nullable E.text))
+    (bulkEncoder (E.nullable E.text))
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: off_chain_vote_author
@@ -517,3 +550,11 @@ offChainVoteFetchErrorEncoder =
     , offChainVoteFetchErrorFetchTime >$< E.param (E.nonNullable E.timestamptz)
     , offChainVoteFetchErrorRetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
+
+offChainVoteFetchErrorBulkEncoder :: E.Params ([Id.VotingAnchorId], [Text], [UTCTime], [Word])
+offChainVoteFetchErrorBulkEncoder =
+  contrazip4
+    (bulkEncoder (Id.idBulkEncoder Id.getVotingAnchorId))
+    (bulkEncoder (E.nonNullable E.text))
+    (bulkEncoder (E.nonNullable E.timestamptz))
+    (bulkEncoder (E.nonNullable (fromIntegral >$< E.int4)))

@@ -52,7 +52,7 @@ _migrationMap = Map.empty
 
 -- --------------------------------------------------------------------------------
 
--- migrationMap :: MonadLogger m => Map MigrationVersion (ReaderT SqlBackend m ())
+-- migrationMap :: MonadLogger m => Map MigrationVersion (DB.DbAction m ())
 -- migrationMap =
 --   Map.fromList
 --     [ (MigrationVersion 2 1 20190731, migration0001)
@@ -60,7 +60,7 @@ _migrationMap = Map.empty
 
 -- --------------------------------------------------------------------------------
 
--- migration0001 :: MonadLogger m => ReaderT SqlBackend m ()
+-- migration0001 :: MonadLogger m => DB.DbAction m ()
 -- migration0001 =
 --   -- Place holder.
 --   pure ()

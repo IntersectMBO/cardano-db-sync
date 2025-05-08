@@ -108,7 +108,7 @@ traverseMEither action xs = do
       action y >>= either (pure . Left) (const $ traverseMEither action ys)
 
 -- | Needed when debugging disappearing exceptions.
-liftedLogException :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
+liftedLogException :: (MonadIO m, MonadBaseControl IO m) => Trace IO Text -> Text -> m a -> m a
 liftedLogException tracer txt action =
   action `catch` logger
   where
@@ -120,7 +120,7 @@ liftedLogException tracer txt action =
         throwIO e
 
 -- | Log the runtime duration of an action. Mainly for debugging.
-logActionDuration :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> Text -> m a -> m a
+logActionDuration :: MonadIO m => Trace IO Text -> Text -> m a -> m a
 logActionDuration tracer label action = do
   before <- liftIO Time.getCurrentTime
   a <- action

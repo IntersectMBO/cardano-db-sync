@@ -116,7 +116,7 @@ validateTimestampsOrdered blkCount = do
 
 -- -------------------------------------------------------------------------------------------------
 
-queryBlockNoList :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [Word64]
+queryBlockNoList :: MonadIO m => Word64 -> Word64 -> DB.DbAction m [Word64]
 queryBlockNoList start count = do
   res <- select $ do
     blk <- from $ table @Block
@@ -127,7 +127,7 @@ queryBlockNoList start count = do
     pure (blk ^. BlockBlockNo)
   pure $ mapMaybe unValue res
 
-queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> ReaderT SqlBackend m [UTCTime]
+queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> DB.DbAction m [UTCTime]
 queryBlockTimestamps start count = do
   res <- select $ do
     blk <- from $ table @Block
@@ -138,7 +138,7 @@ queryBlockTimestamps start count = do
     pure (blk ^. BlockTime)
   pure $ map unValue res
 
-queryBlocksTimeAfters :: MonadIO m => UTCTime -> ReaderT SqlBackend m [(Maybe Word64, Maybe Word64, UTCTime)]
+queryBlocksTimeAfters :: MonadIO m => UTCTime -> DB.DbAction m [(Maybe Word64, Maybe Word64, UTCTime)]
 queryBlocksTimeAfters now = do
   res <- select $ do
     blk <- from $ table @Block

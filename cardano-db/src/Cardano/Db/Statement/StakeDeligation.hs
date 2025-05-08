@@ -4,10 +4,11 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ApplicativeDo #-}
 
 module Cardano.Db.Statement.StakeDeligation where
 
-import Cardano.Prelude (ByteString, MonadError (..), MonadIO, Proxy (..))
+import Cardano.Prelude (ByteString, MonadIO, Proxy (..))
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -17,17 +18,18 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
-import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.StakeDeligation as SS
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession, bulkEncoder)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertCheckUnique)
-import Cardano.Db.Statement.Function.Query (countAll)
+import Cardano.Db.Statement.Function.Query (countAll, adaSumDecoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), validateColumn)
-import Cardano.Db.Types (DbAction, DbCallInfo (..), DbLovelace, RewardSource)
+import Cardano.Db.Types (DbAction, DbLovelace, RewardSource, Ada, rewardSourceDecoder, dbLovelaceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Credential (Ptr (..))
+import qualified Hasql.Pipeline as HsqlP
+import Contravariant.Extras (contrazip4, contrazip2)
 
 --------------------------------------------------------------------------------
 -- Deligation
@@ -42,6 +44,27 @@ insertDelegation :: MonadIO m => SS.Delegation -> DbAction m Id.DelegationId
 insertDelegation delegation = do
   entity <- runDbSession (mkCallInfo "insertDelegation") $ HsqlSes.statement delegation insertDelegationStmt
   pure $ entityKey entity
+
+--------------------------------------------------------------------------------
+-- Statement for querying delegations with non-null redeemer_id
+queryDelegationScriptStmt :: HsqlStmt.Statement () [SS.Delegation]
+queryDelegationScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SS.Delegation)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE redeemer_id IS NOT NULL"
+          ]
+    decoder = HsqlD.rowList SS.delegationDecoder
+
+queryDelegationScript :: MonadIO m => DbAction m [SS.Delegation]
+queryDelegationScript =
+  runDbSession (mkCallInfo "queryDelegationScript") $
+    HsqlSes.statement () queryDelegationScriptStmt
 
 --------------------------------------------------------------------------------
 -- EpochStake
@@ -208,6 +231,98 @@ queryRewardCount =
     HsqlSes.statement () (countAll @SS.Reward)
 
 --------------------------------------------------------------------------------
+queryRewardMapDataStmt :: HsqlStmt.Statement Word64 [(ByteString, RewardSource, DbLovelace)]
+queryRewardMapDataStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    rewardTableN = tableName (Proxy @SS.Reward)
+    stakeAddressTableN = tableName (Proxy @SS.StakeAddress)
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT sa.hash_raw, r.type, r.amount"
+      , " FROM " <> rewardTableN <> " r"
+      , " INNER JOIN " <> stakeAddressTableN <> " sa ON r.addr_id = sa.id"
+      , " WHERE r.spendable_epoch = $1"
+      , " AND r.type != 'deposit-refund'"
+      , " AND r.type != 'treasury'"
+      , " AND r.type != 'reserves'"
+      , " ORDER BY sa.hash_raw DESC"
+      ]
+    encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
+
+    decoder = HsqlD.rowList $ do
+      hashRaw <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      rewardType <- HsqlD.column (HsqlD.nonNullable rewardSourceDecoder)
+      amount <- dbLovelaceDecoder
+      pure (hashRaw, rewardType, amount)
+
+queryRewardMapData :: MonadIO m => Word64 -> DbAction m [(ByteString, RewardSource, DbLovelace)]
+queryRewardMapData epochNo =
+  runDbSession (mkCallInfo "queryRewardMapData") $
+    HsqlSes.statement epochNo queryRewardMapDataStmt
+
+
+-- Bulk delete statement
+deleteRewardsBulkStmt :: HsqlStmt.Statement ([Id.StakeAddressId], [RewardSource], [Word64], [Id.PoolHashId]) ()
+deleteRewardsBulkStmt =
+  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  where
+    rewardTableN = tableName (Proxy @SS.Reward)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "WITH to_delete AS ("
+      , "  SELECT r.id"
+      , "  FROM " <> rewardTableN <> " r"
+      , "  JOIN UNNEST($1, $2, $3, $4) AS t(addr_id, reward_type, epoch, pool_id)"
+      , "  ON r.addr_id = t.addr_id"
+      , "  AND r.type = t.reward_type"
+      , "  AND r.spendable_epoch = t.epoch"
+      , "  AND r.pool_id = t.pool_id"
+      , ")"
+      , "DELETE FROM " <> rewardTableN
+      , " WHERE id IN (SELECT id FROM to_delete)"
+      ]
+
+    encoder = contrazip4
+      (bulkEncoder $ Id.idBulkEncoder Id.getStakeAddressId)
+      (bulkEncoder $ HsqlE.nonNullable rewardSourceEncoder)
+      (bulkEncoder $ HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
+      (bulkEncoder $ Id.idBulkEncoder Id.getPoolHashId)
+
+-- Public API function
+deleteRewardsBulk ::
+  MonadIO m =>
+  ([Id.StakeAddressId], [RewardSource], [Word64], [Id.PoolHashId]) ->
+  DbAction m ()
+deleteRewardsBulk params =
+  runDbSession (mkCallInfo "deleteRewardsBulk") $
+    HsqlSes.statement params deleteRewardsBulkStmt
+
+--------------------------------------------------------------------------------
+deleteOrphanedRewardsBulkStmt :: HsqlStmt.Statement (Word64, [Id.StakeAddressId]) ()
+deleteOrphanedRewardsBulkStmt =
+  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  where
+    rewardTableN = tableName (Proxy @SS.Reward)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "DELETE FROM " <> rewardTableN
+      , " WHERE spendable_epoch = $1"
+      , " AND addr_id = ANY($2)"
+      ]
+    encoder = contrazip2
+      (fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8))
+      (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray (Id.idBulkEncoder Id.getStakeAddressId))
+
+-- | Delete orphaned rewards in bulk
+deleteOrphanedRewardsBulk ::
+  MonadIO m =>
+  Word64 ->
+  [Id.StakeAddressId] ->
+  DbAction m ()
+deleteOrphanedRewardsBulk epochNo addrIds =
+  runDbSession (mkCallInfo "deleteOrphanedRewardsBulk") $
+    HsqlSes.statement (epochNo, addrIds) deleteOrphanedRewardsBulkStmt
+
+--------------------------------------------------------------------------------
 -- RewardRest
 --------------------------------------------------------------------------------
 insertBulkRewardRestsStmt :: HsqlStmt.Statement [SS.RewardRest] ()
@@ -253,6 +368,7 @@ insertStakeAddress stakeAddress =
       HsqlSes.statement stakeAddress insertStakeAddressStmt
     pure $ entityKey entity
 
+--------------------------------------------------------------------------------
 insertStakeDeregistrationStmt :: HsqlStmt.Statement SS.StakeDeregistration (Entity SS.StakeDeregistration)
 insertStakeDeregistrationStmt =
   insertCheckUnique
@@ -266,6 +382,7 @@ insertStakeDeregistration stakeDeregistration =
       HsqlSes.statement stakeDeregistration insertStakeDeregistrationStmt
     pure $ entityKey entity
 
+--------------------------------------------------------------------------------
 insertStakeRegistrationStmt :: HsqlStmt.Statement SS.StakeRegistration (Entity SS.StakeRegistration)
 insertStakeRegistrationStmt =
   insert
@@ -280,6 +397,8 @@ insertStakeRegistration stakeRegistration = do
   pure $ entityKey entity
 
 -- | Queries
+
+--------------------------------------------------------------------------------
 queryStakeAddressStmt :: HsqlStmt.Statement ByteString (Maybe Id.StakeAddressId)
 queryStakeAddressStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -294,15 +413,11 @@ queryStakeAddressStmt =
           , " WHERE hash_raw = $1"
           ]
 
-queryStakeAddress :: MonadIO m => ByteString -> (ByteString -> Text.Text) -> DbAction m Id.StakeAddressId
-queryStakeAddress addr toText = do
-  result <- runDbSession callInfo $ HsqlSes.statement addr queryStakeAddressStmt
-  case result of
-    Just res -> pure res
-    Nothing -> throwError $ DbError (dciCallSite callInfo) errorMsg Nothing
+queryStakeAddress :: MonadIO m => ByteString -> DbAction m (Maybe Id.StakeAddressId)
+queryStakeAddress addr = do
+  runDbSession callInfo $ HsqlSes.statement addr queryStakeAddressStmt
   where
     callInfo = mkCallInfo "queryStakeAddress"
-    errorMsg = "StakeAddress " <> toText addr <> " not found"
 
 -----------------------------------------------------------------------------------
 queryStakeRefPtrStmt :: HsqlStmt.Statement Ptr (Maybe Id.StakeAddressId)
@@ -350,6 +465,101 @@ queryStakeRefPtr :: MonadIO m => Ptr -> DbAction m (Maybe Id.StakeAddressId)
 queryStakeRefPtr ptr =
   runDbSession (mkCallInfo "queryStakeRefPtr") $
     HsqlSes.statement ptr queryStakeRefPtrStmt
+
+-----------------------------------------------------------------------------------
+-- Statement for querying stake addresses with non-null script_hash
+queryStakeAddressScriptStmt :: HsqlStmt.Statement () [SS.StakeAddress]
+queryStakeAddressScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SS.StakeAddress)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE script_hash IS NOT NULL"
+          ]
+    decoder = HsqlD.rowList SS.stakeAddressDecoder
+
+queryStakeAddressScript :: MonadIO m => DbAction m [SS.StakeAddress]
+queryStakeAddressScript =
+  runDbSession (mkCallInfo "queryStakeAddressScript") $
+    HsqlSes.statement () queryStakeAddressScriptStmt
+
+-----------------------------------------------------------------------------------
+queryAddressInfoRewardsStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
+queryAddressInfoRewardsStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    rewardTableN = tableName (Proxy @SS.Reward)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT COALESCE(SUM(amount), 0)"
+      , " FROM " <> rewardTableN
+      , " WHERE addr_id = $1"
+      ]
+    encoder = Id.idEncoder Id.getStakeAddressId
+    decoder = HsqlD.singleRow adaSumDecoder
+
+queryAddressInfoWithdrawalsStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
+queryAddressInfoWithdrawalsStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    withdrawalTableN = tableName (Proxy @SCB.Withdrawal)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT COALESCE(SUM(amount), 0)"
+      , " FROM " <> withdrawalTableN
+      , " WHERE addr_id = $1"
+      ]
+    encoder = Id.idEncoder Id.getStakeAddressId
+    decoder = HsqlD.singleRow adaSumDecoder
+
+queryAddressInfoViewStmt :: HsqlStmt.Statement Id.StakeAddressId (Maybe Text.Text)
+queryAddressInfoViewStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    stakeAddrTableN = tableName (Proxy @SS.StakeAddress)
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT view"
+      , " FROM " <> stakeAddrTableN
+      , " WHERE id = $1"
+      ]
+    encoder = Id.idEncoder Id.getStakeAddressId
+    decoder = HsqlD.rowMaybe $ HsqlD.column (HsqlD.nonNullable HsqlD.text)
+
+-- Pipeline function
+queryAddressInfoData :: MonadIO m => Id.StakeAddressId -> DbAction m (Ada, Ada, Maybe Text.Text)
+queryAddressInfoData addrId =
+  runDbSession (mkCallInfo "queryAddressInfoData") $
+    HsqlSes.pipeline $ do
+      rewards <- HsqlP.statement addrId queryAddressInfoRewardsStmt
+      withdrawals <- HsqlP.statement addrId queryAddressInfoWithdrawalsStmt
+      view <- HsqlP.statement addrId queryAddressInfoViewStmt
+      pure (rewards, withdrawals, view)
+---------------------------------------------------------------------------
+-- StakeDeregistration
+---------------------------------------------------------------------------
+
+queryDeregistrationScriptStmt :: HsqlStmt.Statement () [SS.StakeDeregistration]
+queryDeregistrationScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SS.StakeDeregistration)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE redeemer_id IS NOT NULL"
+          ]
+
+    decoder = HsqlD.rowList SS.stakeDeregistrationDecoder
+
+queryDeregistrationScript :: MonadIO m => DbAction m [SS.StakeDeregistration]
+queryDeregistrationScript =
+  runDbSession (mkCallInfo "queryDeregistrationScript") $
+    HsqlSes.statement () queryDeregistrationScriptStmt
 
 -- These tables handle stake addresses, delegation, and reward
 
