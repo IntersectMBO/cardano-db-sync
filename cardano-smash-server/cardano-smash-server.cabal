@@ -65,6 +65,7 @@ library
                       , cardano-db
                       , cardano-prelude
                       , containers
+                      , hasql
                       , http-conduit
                       , iohk-monitoring
                       , network-uri

@@ -4,9 +4,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Database (
-  DbAction (..),
+  DbEvent (..),
   ThreadChannels,
-  lengthDbActionQueue,
+  lengthDbEventQueue,
   mkDbApply,
   runDbThread,
 ) where
@@ -14,7 +14,7 @@ module Cardano.DbSync.Database (
 import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
-import Cardano.DbSync.DbAction
+import Cardano.DbSync.DbEvent
 import Cardano.DbSync.Default
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
@@ -44,53 +44,111 @@ runDbThread ::
   ThreadChannels ->
   IO ()
 runDbThread syncEnv metricsSetters queue = do
-  logInfo trce "Running DB thread"
-  logException trce "runDBThread: " loop
-  logInfo trce "Shutting down DB thread"
+  logInfo tracer "Starting DB thread"
+  logException tracer "runDbThread: " processQueue
+  logInfo tracer "Shutting down DB thread"
   where
-    trce = getTrace syncEnv
-    loop = do
-      xs <- blockingFlushDbActionQueue queue
+    tracer = getTrace syncEnv
 
-      when (length xs > 1) $ do
-        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+    -- Main loop to process the queue
+    processQueue :: IO ()
+    processQueue = do
+      actions <- blockingFlushDbEventQueue queue
 
-      case hasRestart xs of
-        Nothing -> do
-          eNextState <- runExceptT $ runActions syncEnv xs
+      -- Log the number of blocks being processed if there are multiple
+      when (length actions > 1) $ do
+        logDebug tracer $ "Processing " <> textShow (length actions) <> " blocks"
 
-          mBlock <- getDbLatestBlockInfo (envBackend syncEnv)
-          whenJust mBlock $ \block -> do
-            setDbBlockHeight metricsSetters $ bBlockNo block
-            setDbSlotHeight metricsSetters $ bSlotNo block
+      -- Handle the case where the syncing thread has restarted
+      case hasRestart actions of
+        Just resultVar -> handleRestart resultVar
+        Nothing -> processActions actions
 
-          case eNextState of
-            Left err -> logError trce $ show err
-            Right Continue -> loop
-            Right Done -> pure ()
-        Just resultVar -> do
-          -- In this case the syncing thread has restarted, so ignore all blocks that are not
-          -- inserted yet.
-          logInfo trce "Chain Sync client thread has restarted"
-          latestPoints <- getLatestPoints syncEnv
-          currentTip <- getCurrentTipBlockNo syncEnv
-          logDbState syncEnv
-          atomically $ putTMVar resultVar (latestPoints, currentTip)
-          loop
+    -- Process a list of actions
+    processActions :: [DbEvent] -> IO ()
+    processActions actions = do
+      result <- runExceptT $ runActions syncEnv actions -- runActions is where we start inserting information we recieve from the node.
 
--- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
+      -- Update metrics with the latest block information
+      updateBlockMetrics
+
+      -- Handle the result of running the actions
+      case result of
+        Left err -> logError tracer $ "Error: " <> show err
+        Right Continue -> processQueue -- Continue processing
+        Right Done -> pure () -- Stop processing
+
+    -- Handle the case where the syncing thread has restarted
+    handleRestart :: TMVar (LatestPoints, CurrentTip) -> IO ()
+    handleRestart resultVar = do
+      logInfo tracer "Chain Sync client thread has restarted"
+      latestPoints <- getLatestPoints syncEnv
+      currentTip <- getCurrentTipBlockNo syncEnv
+      logDbState syncEnv
+      atomically $ putTMVar resultVar (latestPoints, currentTip)
+      processQueue -- Continue processing
+
+    -- Update block and slot height metrics
+    updateBlockMetrics :: IO ()
+    updateBlockMetrics = do
+      mBlock <- getDbLatestBlockInfo (envDbEnv syncEnv)
+      whenJust mBlock $ \block -> do
+        setDbBlockHeight metricsSetters $ bBlockNo block
+        setDbSlotHeight metricsSetters $ bSlotNo block
+
+-- runDbThread ::
+--   SyncEnv ->
+--   MetricSetters ->
+--   ThreadChannels ->
+--   IO ()
+-- runDbThread syncEnv metricsSetters queue = do
+--   logInfo trce "Running DB thread"
+--   logException trce "runDBThread: " loop
+--   logInfo trce "Shutting down DB thread"
+--   where
+--     trce = getTrace syncEnv
+--     loop = do
+--       xs <- blockingFlushDbEventQueue queue
+
+--       when (length xs > 1) $ do
+--         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+
+--       case hasRestart xs of
+--         Nothing -> do
+--           eNextState <- runExceptT $ runActions syncEnv xs
+
+--           mBlock <- getDbLatestBlockInfo (envDbEnv syncEnv)
+--           whenJust mBlock $ \block -> do
+--             setDbBlockHeight metricsSetters $ bBlockNo block
+--             setDbSlotHeight metricsSetters $ bSlotNo block
+
+--           case eNextState of
+--             Left err -> logError trce $ show err
+--             Right Continue -> loop
+--             Right Done -> pure ()
+--         Just resultVar -> do
+--           -- In this case the syncing thread has restarted, so ignore all blocks that are not
+--           -- inserted yet.
+--           logInfo trce "Chain Sync client thread has restarted"
+--           latestPoints <- getLatestPoints syncEnv
+--           currentTip <- getCurrentTipBlockNo syncEnv
+--           logDbState syncEnv
+--           atomically $ putTMVar resultVar (latestPoints, currentTip)
+--           loop
+
+-- | Run the list of 'DbEvent's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions ::
   SyncEnv ->
-  [DbAction] ->
+  [DbEvent] ->
   ExceptT SyncNodeError IO NextState
 runActions syncEnv actions = do
-  dbAction Continue actions
+  dbEvent Continue actions
   where
-    dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
-    dbAction next [] = pure next
-    dbAction Done _ = pure Done
-    dbAction Continue xs =
+    dbEvent :: NextState -> [DbEvent] -> ExceptT SyncNodeError IO NextState
+    dbEvent next [] = pure next
+    dbEvent Done _ = pure Done
+    dbEvent Continue xs =
       case spanDbApply xs of
         ([], DbFinish : _) -> do
           pure Done
@@ -113,12 +171,12 @@ runActions syncEnv actions = do
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
           blockNo <- lift $ getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
-          dbAction Continue ys
+          dbEvent Continue ys
         (ys, zs) -> do
           newExceptT $ insertListBlocks syncEnv ys
           if null zs
             then pure Continue
-            else dbAction Continue zs
+            else dbEvent Continue zs
 
 rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
 rollbackLedger syncEnv point =
@@ -148,7 +206,7 @@ rollbackLedger syncEnv point =
 -- 'Consistent' Level is correct based on the db tip.
 validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
 validateConsistentLevel syncEnv stPoint = do
-  dbTipInfo <- getDbLatestBlockInfo (envBackend syncEnv)
+  dbTipInfo <- getDbLatestBlockInfo (envDbEnv syncEnv)
   cLevel <- getConsistentLevel syncEnv
   compareTips stPoint dbTipInfo cLevel
   where
@@ -180,14 +238,14 @@ validateConsistentLevel syncEnv stPoint = do
         , show cLevel
         ]
 
--- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
+-- | Split the DbEvent list into a prefix containing blocks to apply and a postfix.
+spanDbApply :: [DbEvent] -> ([CardanoBlock], [DbEvent])
 spanDbApply lst =
   case lst of
     (DbApplyBlock bt : xs) -> let (ys, zs) = spanDbApply xs in (bt : ys, zs)
     xs -> ([], xs)
 
-hasRestart :: [DbAction] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
+hasRestart :: [DbEvent] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
 hasRestart = go
   where
     go [] = Nothing

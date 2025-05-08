@@ -22,6 +22,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Database.Persist.Postgresql
 import GHC.Err (error)
+import qualified Hasql.Connection as HsqlCon
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -43,7 +44,7 @@ data PoolDataLayer = PoolDataLayer
   }
   deriving (Generic)
 
-postgresqlPoolDataLayer :: Trace IO Text -> DB.Pool SqlBackend -> PoolDataLayer
+postgresqlPoolDataLayer :: Trace IO Text -> DB.Pool HsqlCon.Connection -> PoolDataLayer
 postgresqlPoolDataLayer tracer conn =
   PoolDataLayer
     { dlGetPoolMetadata = \poolId poolMetadataHash -> do
@@ -123,7 +124,7 @@ getCertActions tracer conn mPoolId = do
   (certs, epoch) <- Db.runPoolDbIohkLogging conn tracer $ do
     poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
-    currentEpoch <- Db.queryCurrentEpochNo
+    currentEpoch <- Db.queryBlocksForCurrentEpochNo
     pure (poolRetired ++ poolUpdate, currentEpoch)
   let poolActions = findLatestPoolAction certs
   pure (epoch, poolActions)
@@ -133,7 +134,7 @@ getActivePools tracer conn mPoolId = do
   (certs, epoch) <- Db.runPoolDbIohkLogging conn tracer $ do
     poolRetired <- Db.queryRetiredPools (servantToDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (servantToDbPoolId <$> mPoolId)
-    currentEpoch <- Db.queryCurrentEpochNo
+    currentEpoch <- Db.queryBlocksForCurrentEpochNo
     pure (poolRetired ++ poolUpdate, currentEpoch)
   pure $ groupByPoolMeta epoch certs
 

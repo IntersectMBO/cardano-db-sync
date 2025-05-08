@@ -54,7 +54,7 @@ library
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
                         Cardano.DbSync.Database
-                        Cardano.DbSync.DbAction
+                        Cardano.DbSync.DbEvent
                         Cardano.DbSync.Error
 
                         Cardano.DbSync.Era
@@ -184,6 +184,8 @@ library
                       , extra
                       , filepath
                       , groups
+                      , hasql
+                      , hasql-pool
                       , http-client
                       , http-client-tls
                       , http-types

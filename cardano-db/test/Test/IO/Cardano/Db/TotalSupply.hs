@@ -12,7 +12,7 @@ module Test.IO.Cardano.Db.TotalSupply (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import qualified Data.Text as Text
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
