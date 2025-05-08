@@ -22,6 +22,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Database.Persist.Postgresql
 import GHC.Err (error)
+import qualified Hasql.Connection as HsqlCon
 
 {- HLINT ignore "Reduce duplication" -}
 
@@ -43,7 +44,7 @@ data PoolDataLayer = PoolDataLayer
   }
   deriving (Generic)
 
-postgresqlPoolDataLayer :: Trace IO Text -> DB.Pool SqlBackend -> PoolDataLayer
+postgresqlPoolDataLayer :: Trace IO Text -> DB.Pool HsqlCon.Connection -> PoolDataLayer
 postgresqlPoolDataLayer tracer conn =
   PoolDataLayer
     { dlGetPoolMetadata = \poolId poolMetadataHash -> do

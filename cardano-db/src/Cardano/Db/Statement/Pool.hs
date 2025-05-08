@@ -16,7 +16,7 @@ import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
-import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
+import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertIfUnique)
 import Cardano.Db.Statement.Function.Query (existsById, existsWhere)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (CertNo (..), DbAction, DbWord64, PoolCert (..), PoolCertAction (..))
@@ -240,16 +240,18 @@ insertPoolUpdate poolUpdate = do
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-insertReservedPoolTickerStmt :: HsqlStmt.Statement SCP.ReservedPoolTicker (Entity SCP.ReservedPoolTicker)
+insertReservedPoolTickerStmt :: HsqlStmt.Statement SCP.ReservedPoolTicker (Maybe (Entity SCP.ReservedPoolTicker))
 insertReservedPoolTickerStmt =
-  insert
+  insertIfUnique
     SCP.reservedPoolTickerEncoder
-    (WithResult $ HsqlD.singleRow SCP.entityReservedPoolTickerDecoder)
+    SCP.entityReservedPoolTickerDecoder
 
-insertReservedPoolTicker :: MonadIO m => SCP.ReservedPoolTicker -> DbAction m Id.ReservedPoolTickerId
+insertReservedPoolTicker :: MonadIO m => SCP.ReservedPoolTicker -> DbAction m (Maybe Id.ReservedPoolTickerId)
 insertReservedPoolTicker reservedPool = do
-  entity <- runDbSession (mkCallInfo "insertReservedPoolTicker") $ HsqlSes.statement reservedPool insertReservedPoolTickerStmt
-  pure $ entityKey entity
+  mEntity <-
+    runDbSession (mkCallInfo "insertReservedPoolTicker") $
+      HsqlSes.statement reservedPool insertReservedPoolTickerStmt
+  pure $ entityKey <$> mEntity
 
 --------------------------------------------------------------------------------
 -- PoolUpdate

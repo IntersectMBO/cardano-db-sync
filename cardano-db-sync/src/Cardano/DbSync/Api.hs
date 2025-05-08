@@ -17,7 +17,7 @@ module Cardano.DbSync.Api (
   getRanIndexes,
   runIndexMigrations,
   initPruneConsumeMigration,
-  runExtraMigrationsMaybe,
+  runConsumedTxOutMigrationsMaybe,
   runAddJsonbToSchema,
   runRemoveJsonbFromSchema,
   getSafeBlockNoDiff,
@@ -151,13 +151,13 @@ initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
 getPruneConsume = soptPruneConsumeMigration . envOptions
 
-runExtraMigrationsMaybe :: SyncEnv -> IO ()
-runExtraMigrationsMaybe syncEnv = do
+runConsumedTxOutMigrationsMaybe :: SyncEnv -> IO ()
+runConsumedTxOutMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutTableType = getTxOutTableType syncEnv
-  logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
+  logInfo (getTrace syncEnv) $ "runConsumedTxOutMigrationsMaybe: " <> textShow pcm
   DB.runDbIohkNoLogging (envDbEnv syncEnv) $
-    DB.runExtraMigrations
+    DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
       txOutTableType
       (getSafeBlockNoDiff syncEnv)
@@ -170,7 +170,7 @@ runAddJsonbToSchema syncEnv =
 runRemoveJsonbFromSchema ::
   (MonadIO m, AsDbError e) =>
   SyncEnv ->
-  DbAction e m ()
+  DbEvent e m ()
 runRemoveJsonbFromSchema syncEnv = do
   DB.runDbT DB.Write transx
   where

@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -9,7 +10,7 @@
 module Cardano.Db.Statement.Base where
 
 import Cardano.BM.Data.Trace (Trace)
-import Cardano.BM.Trace (logInfo, logWarning)
+import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
 import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Word64, textShow, void)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
@@ -20,6 +21,7 @@ import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Pipeline as HsqlPipeL
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -36,8 +38,8 @@ import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll, parameteris
 import Cardano.Db.Statement.GovernanceAndVoting (setNullDroppedStmt, setNullEnactedStmt, setNullExpiredStmt, setNullRatifiedStmt)
 import Cardano.Db.Statement.Rollback (deleteTablesAfterBlockId)
 import Cardano.Db.Statement.Types (DbInfo, Entity (..), tableName, validateColumn)
+import Cardano.Db.Statement.Variants.TxOut (querySetNullTxOut)
 import Cardano.Db.Types (Ada (..), DbAction, DbCallInfo (..), DbWord64, ExtraMigration, extraDescription)
-import qualified Hasql.Pipeline as HsqlPipeL
 
 --------------------------------------------------------------------------------
 -- Block
@@ -641,7 +643,9 @@ queryBlockHeightStmt colName =
           , " LIMIT 1"
           ]
 
-    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable $ fromIntegral >$< HsqlD.int8)
+    decoder = HsqlD.rowMaybe $ do
+      blockNo <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+      pure $ fromIntegral blockNo
 
 queryBlockHeight :: MonadIO m => DbAction m (Maybe Word64)
 queryBlockHeight =
@@ -743,6 +747,31 @@ querySlotNos :: MonadIO m => DbAction m [SlotNo]
 querySlotNos =
   runDbSession (mkCallInfo "querySlotNos") $
     HsqlSes.statement () querySlotNosStmt
+
+-----------------------------------------------------------------------------------
+queryPreviousSlotNoStmt :: HsqlStmt.Statement Word64 (Maybe Word64)
+queryPreviousSlotNoStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT prev_block.slot_no"
+          , " FROM " <> blockTableN <> " block"
+          , " INNER JOIN " <> blockTableN <> " prev_block"
+          , " ON block.previous_id = prev_block.id"
+          , " WHERE block.slot_no = $1"
+          ]
+    encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder = HsqlD.rowMaybe $ do
+      slotNo <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+      pure $ fromIntegral slotNo
+
+queryPreviousSlotNo :: MonadIO m => Word64 -> DbAction m (Maybe Word64)
+queryPreviousSlotNo slotNo =
+  runDbSession (mkCallInfo "queryPreviousSlotNo") $
+    HsqlSes.statement slotNo queryPreviousSlotNoStmt
 
 -- | DELETE --------------------------------------------------------------------
 deleteBlocksBlockIdStmt :: HsqlStmt.Statement (Id.BlockId, Word64, Bool) Int64
@@ -851,7 +880,7 @@ data DeleteResults = DeleteResults
   , expiredNullCount :: !Int64
   }
 
-deleteUsingEpochNo :: MonadIO m => Word64 -> DbAction m [(Text.Text, Int64)]
+deleteUsingEpochNo :: (MonadIO m) => Word64 -> DbAction m [(Text.Text, Int64)]
 deleteUsingEpochNo epochN = do
   let callInfo = mkCallInfo "deleteUsingEpochNo"
       epochEncoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
@@ -892,6 +921,46 @@ deleteUsingEpochNo epochN = do
 
     nullLogs = [("GovActionProposal Nulled", nullTotal)]
   pure $ countLogs <> nullLogs
+
+--------------------------------------------------------------------------------
+deleteBlocksSlotNo ::
+  MonadIO m =>
+  Trace IO Text.Text ->
+  TxOutTableType ->
+  SlotNo ->
+  Bool ->
+  DbAction m Bool
+deleteBlocksSlotNo trce txOutTableType (SlotNo slotNo) isConsumedTxOut = do
+  mBlockEpoch <- queryNearestBlockSlotNo slotNo
+  case mBlockEpoch of
+    Nothing -> do
+      liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block contains the the slot: " <> Text.pack (show slotNo)
+      pure False
+    Just (blockId, epochN) -> do
+      void $ deleteBlocksBlockId trce txOutTableType blockId epochN isConsumedTxOut
+      pure True
+
+--------------------------------------------------------------------------------
+deleteBlocksSlotNoNoTrace :: MonadIO m => TxOutTableType -> SlotNo -> DbAction m Bool
+deleteBlocksSlotNoNoTrace txOutTableType slotNo = deleteBlocksSlotNo nullTracer txOutTableType slotNo True
+
+--------------------------------------------------------------------------------
+deleteBlocksForTests :: MonadIO m => TxOutTableType -> Id.BlockId -> Word64 -> DbAction m ()
+deleteBlocksForTests txOutTableType blockId epochN = do
+  void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN False
+
+--------------------------------------------------------------------------------
+
+-- | Delete a block if it exists. Returns 'True' if it did exist and has been
+-- deleted and 'False' if it did not exist.
+deleteBlock :: MonadIO m => TxOutTableType -> SC.Block -> DbAction m Bool
+deleteBlock txOutTableType block = do
+  mBlockId <- queryBlockHash block
+  case mBlockId of
+    Nothing -> pure False
+    Just (blockId, epochN) -> do
+      void $ deleteBlocksBlockId nullTracer txOutTableType blockId epochN False
+      pure True
 
 --------------------------------------------------------------------------------
 -- Datum
@@ -1119,6 +1188,31 @@ insertReverseIndex :: MonadIO m => SCB.ReverseIndex -> DbAction m Id.ReverseInde
 insertReverseIndex reverseIndex = do
   entity <- runDbSession (mkCallInfo "insertReverseIndex") $ HsqlSes.statement reverseIndex insertReverseIndexStmt
   pure $ entityKey entity
+
+--------------------------------------------------------------------------------
+
+-- | SchemaVersion
+
+--------------------------------------------------------------------------------
+querySchemaVersionStmt :: HsqlStmt.Statement () (Maybe SCB.SchemaVersion)
+querySchemaVersionStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SCB.SchemaVersion)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT stage_one, stage_two, stage_three"
+          , " FROM " <> tableN
+          , " ORDER BY stage_one DESC"
+          , " LIMIT 1"
+          ]
+    decoder = HsqlD.rowMaybe SCB.schemaVersionDecoder
+
+querySchemaVersion :: MonadIO m => DbAction m (Maybe SCB.SchemaVersion)
+querySchemaVersion =
+  runDbSession (mkCallInfo "querySchemaVersion") $
+    HsqlSes.statement () querySchemaVersionStmt
 
 --------------------------------------------------------------------------------
 -- Script
@@ -1427,6 +1521,27 @@ insertWithdrawal :: MonadIO m => SCB.Withdrawal -> DbAction m Id.WithdrawalId
 insertWithdrawal withdrawal = do
   entity <- runDbSession (mkCallInfo "insertWithdrawal") $ HsqlSes.statement withdrawal insertWithdrawalStmt
   pure $ entityKey entity
+
+--------------------------------------------------------------------------------
+-- Statement for querying withdrawals with non-null redeemer_id
+queryWithdrawalScriptStmt :: HsqlStmt.Statement () [SCB.Withdrawal]
+queryWithdrawalScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SCB.Withdrawal)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE redeemer_id IS NOT NULL"
+          ]
+    decoder = HsqlD.rowList SCB.withdrawalDecoder
+
+queryWithdrawalScript :: MonadIO m => DbAction m [SCB.Withdrawal]
+queryWithdrawalScript =
+  runDbSession (mkCallInfo "queryWithdrawalScript") $
+    HsqlSes.statement () queryWithdrawalScriptStmt
 
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 

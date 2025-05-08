@@ -7,7 +7,7 @@
 
 module Cardano.Db.Statement.Variants.TxOut where
 
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Text, Word64, forM, fromMaybe)
+import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Text, Word64, fromMaybe)
 import Control.Monad.Extra (whenJust)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text

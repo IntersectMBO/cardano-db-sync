@@ -7,6 +7,7 @@
 module Cardano.Db.Statement.Function.Insert (
   insert,
   insertCheckUnique,
+  insertIfUnique,
   insertBulk,
 )
 where
@@ -98,6 +99,41 @@ insertCheckUnique encoder resultType =
           , " ON CONFLICT (" <> Text.intercalate ", " uniqueCols <> ")"
           , " DO UPDATE SET " <> dummyUpdateField <> " = EXCLUDED." <> dummyUpdateField
           , returnClause
+          ]
+
+-- | Inserts a record into a table, only if it doesn't violate a unique constraint.
+-- Returns Nothing if the record already exists (based on unique constraints).
+insertIfUnique ::
+  forall a c.
+  (DbInfo a) =>
+  HsqlE.Params a -> -- Encoder
+  HsqlD.Row (Entity c) -> -- Row decoder
+  HsqlS.Statement a (Maybe (Entity c)) -- Statement that returns Maybe Entity
+insertIfUnique encoder entityDecoder =
+  case validateUniqueConstraints (Proxy @a) of
+    Left err -> error err
+    Right _ -> HsqlS.Statement sql encoder decoder True
+  where
+    decoder = HsqlD.rowMaybe entityDecoder
+
+    table = tableName (Proxy @a)
+    colNames = columnNames (Proxy @a)
+    uniqueCols = uniqueFields (Proxy @a)
+
+    placeholders = Text.intercalate ", " $ map (\i -> "$" <> Text.pack (show i)) [1 .. length (NE.toList colNames)]
+
+    -- This SQL will try to insert, but on conflict will do nothing
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH ins AS ("
+          , "  INSERT INTO " <> table
+          , "  (" <> Text.intercalate ", " (NE.toList colNames) <> ")"
+          , "  VALUES (" <> placeholders <> ")"
+          , "  ON CONFLICT (" <> Text.intercalate ", " uniqueCols <> ") DO NOTHING"
+          , "  RETURNING *"
+          , ")"
+          , "SELECT * FROM ins"
           ]
 
 -- | Inserts multiple records into a table in a single transaction using UNNEST.

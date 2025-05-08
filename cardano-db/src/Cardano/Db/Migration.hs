@@ -67,7 +67,7 @@ import Cardano.Db.Migration.Haskell
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
 import Cardano.Db.Run
-import Cardano.Db.Schema.Variants (TxOutTableType)
+import Cardano.Db.Schema.Variants (TxOutTableType (..))
 import qualified Cardano.Db.Statement.Function.Core as DB
 import qualified Cardano.Db.Types as DB
 
@@ -140,13 +140,13 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
 
     filterIndexesFull (mv, _) = do
       case txOutTableType of
-        TxOutCore -> True
-        TxOutVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
+        TxOutTableCore -> True
+        TxOutTableVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
     filterInitial (mv, _) = mvStage mv < 4
     filterIndexes (mv, _) = do
       case txOutTableType of
-        TxOutCore -> mvStage mv == 4
-        TxOutVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
+        TxOutTableCore -> mvStage mv == 4
+        TxOutTableVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
 
 -- Build hash for each file found in a directory.
 validateMigrations :: MigrationDir -> [(Text.Text, Text.Text)] -> IO (Maybe (MigrationValidateError, Bool))
