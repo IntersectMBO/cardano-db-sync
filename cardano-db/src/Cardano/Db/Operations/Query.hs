@@ -1084,121 +1084,121 @@ module Cardano.Db.Operations.Query (
 --     pure $ sum_ (wdrl ^. WithdrawalAmount)
 --   pure $ unValueSumAda (listToMaybe res)
 
-queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
-queryAdaPots blkId = do
-  res <- select $ do
-    adaPots <- from $ table @AdaPots
-    where_ (adaPots ^. AdaPotsBlockId ==. val blkId)
-    pure adaPots
-  pure $ fmap entityVal (listToMaybe res)
+-- queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
+-- queryAdaPots blkId = do
+--   res <- select $ do
+--     adaPots <- from $ table @AdaPots
+--     where_ (adaPots ^. AdaPotsBlockId ==. val blkId)
+--     pure adaPots
+--   pure $ fmap entityVal (listToMaybe res)
 
 {-----------------------
   Queries use in tests
 ------------------------}
 
-queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
-queryRewardCount = do
-  res <- select $ do
-    _ <- from $ table @Reward
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryRewardCount = do
+--   res <- select $ do
+--     _ <- from $ table @Reward
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
-queryRewardRestCount :: MonadIO m => ReaderT SqlBackend m Word64
-queryRewardRestCount = do
-  res <- select $ do
-    _ <- from $ table @RewardRest
-    pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- queryRewardRestCount :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryRewardRestCount = do
+--   res <- select $ do
+--     _ <- from $ table @RewardRest
+--     pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Count the number of transactions in the Tx table.
-queryTxInCount :: MonadIO m => ReaderT SqlBackend m Word
-queryTxInCount = do
-  res <- select $ from (table @TxIn) >> pure countRows
-  pure $ maybe 0 unValue (listToMaybe res)
+-- queryTxInCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryTxInCount = do
+--   res <- select $ from (table @TxIn) >> pure countRows
+--   pure $ maybe 0 unValue (listToMaybe res)
 
-queryCostModel :: MonadIO m => ReaderT SqlBackend m [CostModelId]
-queryCostModel =
-  fmap entityKey <$> selectList [] [Asc CostModelId]
+-- queryCostModel :: MonadIO m => ReaderT SqlBackend m [CostModelId]
+-- queryCostModel =
+--   fmap entityKey <$> selectList [] [Asc CostModelId]
 
-queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
-queryTxInRedeemer = do
-  res <- select $ do
-    tx_in <- from $ table @TxIn
-    where_ (isJust $ tx_in ^. TxInRedeemerId)
-    pure tx_in
-  pure $ entityVal <$> res
+-- queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
+-- queryTxInRedeemer = do
+--   res <- select $ do
+--     tx_in <- from $ table @TxIn
+--     where_ (isJust $ tx_in ^. TxInRedeemerId)
+--     pure tx_in
+--   pure $ entityVal <$> res
 
 -- | Gets all the 'TxIn' of invalid txs
-queryTxInFailedTx :: MonadIO m => ReaderT SqlBackend m [TxIn]
-queryTxInFailedTx = do
-  res <- select $ do
-    (tx_in :& tx) <-
-      from
-        $ table @TxIn
-          `innerJoin` table @Tx
-        `on` (\(tx_in :& tx) -> tx_in ^. TxInTxInId ==. tx ^. TxId)
-    where_ (tx ^. TxValidContract ==. val False)
-    pure tx_in
-  pure $ entityVal <$> res
+-- queryTxInFailedTx :: MonadIO m => ReaderT SqlBackend m [TxIn]
+-- queryTxInFailedTx = do
+--   res <- select $ do
+--     (tx_in :& tx) <-
+--       from
+--         $ table @TxIn
+--           `innerJoin` table @Tx
+--         `on` (\(tx_in :& tx) -> tx_in ^. TxInTxInId ==. tx ^. TxId)
+--     where_ (tx ^. TxValidContract ==. val False)
+--     pure tx_in
+--   pure $ entityVal <$> res
 
-queryInvalidTx :: MonadIO m => ReaderT SqlBackend m [Tx]
-queryInvalidTx = do
-  res <- select $ do
-    tx <- from $ table @Tx
-    where_ (tx ^. TxValidContract ==. val False)
-    pure tx
-  pure $ entityVal <$> res
+-- queryInvalidTx :: MonadIO m => ReaderT SqlBackend m [Tx]
+-- queryInvalidTx = do
+--   res <- select $ do
+--     tx <- from $ table @Tx
+--     where_ (tx ^. TxValidContract ==. val False)
+--     pure tx
+--   pure $ entityVal <$> res
 
-queryDeregistrationScript :: MonadIO m => ReaderT SqlBackend m [StakeDeregistration]
-queryDeregistrationScript = do
-  res <- select $ do
-    dereg <- from $ table @StakeDeregistration
-    where_ (isJust $ dereg ^. StakeDeregistrationRedeemerId)
-    pure dereg
-  pure $ entityVal <$> res
+-- queryDeregistrationScript :: MonadIO m => ReaderT SqlBackend m [StakeDeregistration]
+-- queryDeregistrationScript = do
+--   res <- select $ do
+--     dereg <- from $ table @StakeDeregistration
+--     where_ (isJust $ dereg ^. StakeDeregistrationRedeemerId)
+--     pure dereg
+--   pure $ entityVal <$> res
 
-queryDelegationScript :: MonadIO m => ReaderT SqlBackend m [Delegation]
-queryDelegationScript = do
-  res <- select $ do
-    deleg <- from $ table @Delegation
-    where_ (isJust $ deleg ^. DelegationRedeemerId)
-    pure deleg
-  pure $ entityVal <$> res
+-- queryDelegationScript :: MonadIO m => ReaderT SqlBackend m [Delegation]
+-- queryDelegationScript = do
+--   res <- select $ do
+--     deleg <- from $ table @Delegation
+--     where_ (isJust $ deleg ^. DelegationRedeemerId)
+--     pure deleg
+--   pure $ entityVal <$> res
 
-queryWithdrawalScript :: MonadIO m => ReaderT SqlBackend m [Withdrawal]
-queryWithdrawalScript = do
-  res <- select $ do
-    wtdr <- from $ table @Withdrawal
-    where_ (isJust $ wtdr ^. WithdrawalRedeemerId)
-    pure wtdr
-  pure $ entityVal <$> res
+-- queryWithdrawalScript :: MonadIO m => ReaderT SqlBackend m [Withdrawal]
+-- queryWithdrawalScript = do
+--   res <- select $ do
+--     wtdr <- from $ table @Withdrawal
+--     where_ (isJust $ wtdr ^. WithdrawalRedeemerId)
+--     pure wtdr
+--   pure $ entityVal <$> res
 
-queryStakeAddressScript :: MonadIO m => ReaderT SqlBackend m [StakeAddress]
-queryStakeAddressScript = do
-  res <- select $ do
-    st_addr <- from $ table @StakeAddress
-    where_ (isJust $ st_addr ^. StakeAddressScriptHash)
-    pure st_addr
-  pure $ entityVal <$> res
+-- queryStakeAddressScript :: MonadIO m => ReaderT SqlBackend m [StakeAddress]
+-- queryStakeAddressScript = do
+--   res <- select $ do
+--     st_addr <- from $ table @StakeAddress
+--     where_ (isJust $ st_addr ^. StakeAddressScriptHash)
+--     pure st_addr
+--   pure $ entityVal <$> res
 
-querySchemaVersion :: MonadIO m => ReaderT SqlBackend m (Maybe SchemaVersion)
-querySchemaVersion = do
-  res <- select $ do
-    sch <- from $ table @SchemaVersion
-    orderBy [desc (sch ^. SchemaVersionStageOne)]
-    limit 1
-    pure (sch ^. SchemaVersionStageOne, sch ^. SchemaVersionStageTwo, sch ^. SchemaVersionStageThree)
-  pure $ uncurry3 SchemaVersion . unValue3 <$> listToMaybe res
+-- querySchemaVersion :: MonadIO m => ReaderT SqlBackend m (Maybe SchemaVersion)
+-- querySchemaVersion = do
+--   res <- select $ do
+--     sch <- from $ table @SchemaVersion
+--     orderBy [desc (sch ^. SchemaVersionStageOne)]
+--     limit 1
+--     pure (sch ^. SchemaVersionStageOne, sch ^. SchemaVersionStageTwo, sch ^. SchemaVersionStageThree)
+--   pure $ uncurry3 SchemaVersion . unValue3 <$> listToMaybe res
 
 -- | Given a 'SlotNo' return the 'SlotNo' of the previous block.
-queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
-queryPreviousSlotNo slotNo = do
-  res <- select $ do
-    (blk :& pblk) <-
-      from
-        $ table @Block
-          `innerJoin` table @Block
-        `on` (\(blk :& pblk) -> blk ^. BlockPreviousId ==. just (pblk ^. BlockId))
-    where_ (blk ^. BlockSlotNo ==. just (val slotNo))
-    pure $ pblk ^. BlockSlotNo
-  pure $ unValue =<< listToMaybe res
+-- queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
+-- queryPreviousSlotNo slotNo = do
+--   res <- select $ do
+--     (blk :& pblk) <-
+--       from
+--         $ table @Block
+--           `innerJoin` table @Block
+--         `on` (\(blk :& pblk) -> blk ^. BlockPreviousId ==. just (pblk ^. BlockId))
+--     where_ (blk ^. BlockSlotNo ==. just (val slotNo))
+--     pure $ pblk ^. BlockSlotNo
+--   pure $ unValue =<< listToMaybe res

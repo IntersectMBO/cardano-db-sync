@@ -44,6 +44,27 @@ insertDelegation delegation = do
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
+-- Statement for querying delegations with non-null redeemer_id
+queryDelegationScriptStmt :: HsqlStmt.Statement () [SS.Delegation]
+queryDelegationScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SS.Delegation)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE redeemer_id IS NOT NULL"
+          ]
+    decoder = HsqlD.rowList SS.delegationDecoder
+
+queryDelegationScript :: MonadIO m => DbAction m [SS.Delegation]
+queryDelegationScript =
+  runDbSession (mkCallInfo "queryDelegationScript") $
+    HsqlSes.statement () queryDelegationScriptStmt
+
+--------------------------------------------------------------------------------
 -- EpochStake
 --------------------------------------------------------------------------------
 
@@ -253,6 +274,7 @@ insertStakeAddress stakeAddress =
       HsqlSes.statement stakeAddress insertStakeAddressStmt
     pure $ entityKey entity
 
+--------------------------------------------------------------------------------
 insertStakeDeregistrationStmt :: HsqlStmt.Statement SS.StakeDeregistration (Entity SS.StakeDeregistration)
 insertStakeDeregistrationStmt =
   insertCheckUnique
@@ -266,6 +288,7 @@ insertStakeDeregistration stakeDeregistration =
       HsqlSes.statement stakeDeregistration insertStakeDeregistrationStmt
     pure $ entityKey entity
 
+--------------------------------------------------------------------------------
 insertStakeRegistrationStmt :: HsqlStmt.Statement SS.StakeRegistration (Entity SS.StakeRegistration)
 insertStakeRegistrationStmt =
   insert
@@ -280,6 +303,8 @@ insertStakeRegistration stakeRegistration = do
   pure $ entityKey entity
 
 -- | Queries
+
+--------------------------------------------------------------------------------
 queryStakeAddressStmt :: HsqlStmt.Statement ByteString (Maybe Id.StakeAddressId)
 queryStakeAddressStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -350,6 +375,52 @@ queryStakeRefPtr :: MonadIO m => Ptr -> DbAction m (Maybe Id.StakeAddressId)
 queryStakeRefPtr ptr =
   runDbSession (mkCallInfo "queryStakeRefPtr") $
     HsqlSes.statement ptr queryStakeRefPtrStmt
+
+-----------------------------------------------------------------------------------
+-- Statement for querying stake addresses with non-null script_hash
+queryStakeAddressScriptStmt :: HsqlStmt.Statement () [SS.StakeAddress]
+queryStakeAddressScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SS.StakeAddress)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE script_hash IS NOT NULL"
+          ]
+    decoder = HsqlD.rowList SS.stakeAddressDecoder
+
+queryStakeAddressScript :: MonadIO m => DbAction m [SS.StakeAddress]
+queryStakeAddressScript =
+  runDbSession (mkCallInfo "queryStakeAddressScript") $
+    HsqlSes.statement () queryStakeAddressScriptStmt
+
+---------------------------------------------------------------------------
+-- StakeDeregistration
+---------------------------------------------------------------------------
+
+queryDeregistrationScriptStmt :: HsqlStmt.Statement () [SS.StakeDeregistration]
+queryDeregistrationScriptStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    tableN = tableName (Proxy @SS.StakeDeregistration)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableN
+          , " WHERE redeemer_id IS NOT NULL"
+          ]
+
+    decoder = HsqlD.rowList SS.stakeDeregistrationDecoder
+
+queryDeregistrationScript :: MonadIO m => DbAction m [SS.StakeDeregistration]
+queryDeregistrationScript =
+  runDbSession (mkCallInfo "queryDeregistrationScript") $
+    HsqlSes.statement () queryDeregistrationScriptStmt
 
 -- These tables handle stake addresses, delegation, and reward
 

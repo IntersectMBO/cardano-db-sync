@@ -11,7 +11,8 @@
 
 module Cardano.Db.Statement.Function.Query where
 
-import Cardano.Prelude (MonadIO, Proxy (..), Word64)
+import Cardano.Prelude (MonadIO, Proxy (..), Word64, fromMaybe)
+import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as Text
@@ -425,12 +426,20 @@ queryMaxRefId fieldName value eq encoder keyDecoder =
 adaDecoder :: HsqlD.Row Ada
 adaDecoder = do
   amount <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
-  pure $ lovelaceToAda (Micro $ fromIntegral amount)
+  pure $ lovelaceToAda (MkFixed $ fromIntegral amount)
 
 -- Decoder for summed Ada amounts with null handling
 adaSumDecoder :: HsqlD.Row Ada
 adaSumDecoder = do
   amount <- HsqlD.column (HsqlD.nullable HsqlD.int8)
   case amount of
-    Just value -> pure $ lovelaceToAda (Micro $ fromIntegral value)
+    Just value -> pure $ lovelaceToAda (MkFixed $ fromIntegral value)
     Nothing -> pure $ Ada 0
+
+-- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
+-- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
+-- to un-wibble it.
+unValueSumAda :: HsqlD.Result Ada
+unValueSumAda =
+  HsqlD.singleRow $
+    fromMaybe (Ada 0) <$> HsqlD.column (HsqlD.nullable (Ada . fromIntegral <$> HsqlD.int8))
