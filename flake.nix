@@ -161,7 +161,9 @@
 
             crossPlatforms = p:
               lib.optional (system == "x86_64-linux") p.musl64 ++
-              lib.optional (system == "x86_64-linux") p.aarch64-multiplatform-musl;
+              lib.optional 
+                (system == "x86_64-linux" && config.compiler-nix-name == "ghc966") 
+                p.aarch64-multiplatform-musl;
 
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
