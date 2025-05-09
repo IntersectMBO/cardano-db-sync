@@ -77,23 +77,6 @@
                   })
 
                 (final: prev: {
-                  # HLint 3.2.x requires GHC >= 8.10 && < 9.0
-                  hlint = final.haskell-nix.tool "ghc8107" "hlint" {
-                    version = "3.2.7";
-                  };
-
-                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
-                  fourmolu = final.haskell-nix.tool "ghc928" "fourmolu" {
-                    version = "0.10.1.0";
-                  };
-
-                  # Weeder 2.2.0 requires GHC >= 8.10 && < 9.0
-                  weeder = final.haskell-nix.tool "ghc8107" "weeder" {
-                    version = "2.2.0";
-                  };
-                })
-
-                (final: prev: {
                   postgresql = prev.postgresql.overrideAttrs (_:
                     final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
                       NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
@@ -156,25 +139,20 @@
           project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
-            compiler-nix-name =
-              if system == "x86_64-linux"
-                then lib.mkDefault "ghc810"
-                else lib.mkDefault "ghc96";
+            compiler-nix-name = lib.mkDefault "ghc96";
             flake.variants =
               let
                 compilers =
                   if (system == "x86_64-linux") then
-                    ["ghc96" "ghc98" "ghc910"]
+                    [ "ghc98" "ghc910" ]
                   else
-                    ["ghc98"];
+                    [ "ghc98" ];
               in
                 lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
             crossPlatforms = p:
               lib.optional (system == "x86_64-linux") p.musl64 ++
-              lib.optional
-                (system == "x86_64-linux" && config.compiler-nix-name == "ghc966")
-                p.aarch64-multiplatform-musl;
+              lib.optional (system == "x86_64-linux") p.aarch64-multiplatform-musl;
 
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
@@ -182,12 +160,11 @@
 
             shell.tools = {
               cabal = "latest";
+              hlint = "latest";
+              fourmolu = "latest";
+              weeder = "latest";
               haskell-language-server = {
-                src =
-                  if config.compiler-nix-name == "ghc8107" then
-                    nixpkgs.haskell-nix.sources."hls-1.10"
-                  else
-                    nixpkgs.haskell-nix.sources."hls-2.9";
+                src = nixpkgs.haskell-nix.sources."hls-2.9";
               };
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
@@ -195,18 +172,6 @@
             # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
-              hlint
-            ] ++ lib.optionals (config.compiler-nix-name == "ghc8107") [
-              # Weeder requires the GHC version to match HIE files
-              weeder
-            ] ++ lib.optionals (system != "aarch64-darwin") [
-              # TODO: Fourmolu 0.10 is currently failing to build with aarch64-darwin
-              #
-              # Linking dist/build/fourmolu/fourmolu ...
-              # ld: line 269:  2352 Segmentation fault ...
-              # clang-11: error: linker command failed with exit code 139 (use -v to see invocation)
-              # `cc' failed in phase `Linker'. (Exit code: 139)
-              fourmolu
             ];
             shell.withHoogle = true;
             shell.crossPlatforms = _: [];
