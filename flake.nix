@@ -169,18 +169,19 @@
 
             shell.tools = {
               cabal = "latest";
-              hlint = "latest";
               fourmolu = "latest";
-              weeder = "latest";
               haskell-language-server = {
                 src = nixpkgs.haskell-nix.sources."hls-2.9";
               };
+            } // lib.optionalAttrs (config.compiler-nix-name == "ghc966") {
+              weeder = "latest";
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
             # compilation setting, we don't run into issues where we pick tools
             # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
+              hlint
             ];
             shell.withHoogle = true;
             shell.crossPlatforms = _: [];
