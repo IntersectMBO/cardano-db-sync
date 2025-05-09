@@ -8,8 +8,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Cardano.Mock.ChainSync.Server (
   -- * server
   forkServerThread,
