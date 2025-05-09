@@ -52,7 +52,6 @@ import Cardano.Db (
 import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import qualified Cardano.Ledger.Credential as Ledger
-import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
 
@@ -61,6 +60,7 @@ import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import qualified Ouroboros.Consensus.Cardano.Block as Cardano
 import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Protocol.Praos (Praos)
@@ -69,9 +69,9 @@ import Ouroboros.Consensus.Shelley.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.Protocol.TPraos ()
 import Ouroboros.Network.Block (BlockNo, Point)
 
-type TPraosStandard = TPraos StandardCrypto
+type TPraosStandard = TPraos
 
-type PraosStandard = Praos StandardCrypto
+type PraosStandard = Praos
 
 type CardanoBlock = Cardano.CardanoBlock StandardCrypto
 
@@ -80,11 +80,11 @@ type CardanoInterpreter =
 
 type CardanoPoint = Point CardanoBlock
 
-type StakeCred = Ledger.StakeCredential StandardCrypto
+type StakeCred = Ledger.StakeCredential
 
-type PoolKeyHash = KeyHash 'StakePool StandardCrypto
+type PoolKeyHash = KeyHash 'StakePool
 
-type DataHash = Ledger.DataHash StandardCrypto
+type DataHash = Ledger.DataHash
 
 data BlockDetails = BlockDetails
   { bdBlock :: !CardanoBlock

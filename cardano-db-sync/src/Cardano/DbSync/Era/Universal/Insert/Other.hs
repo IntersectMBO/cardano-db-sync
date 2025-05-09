@@ -37,7 +37,6 @@ import Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 --------------------------------------------------------------------------------------------
 -- Insert Redeemer
@@ -150,7 +149,7 @@ insertStakeAddressRefIfMissing ::
   (MonadBaseControl IO m, MonadIO m) =>
   Trace IO Text ->
   CacheStatus ->
-  Ledger.Addr StandardCrypto ->
+  Ledger.Addr ->
   ReaderT SqlBackend m (Maybe DB.StakeAddressId)
 insertStakeAddressRefIfMissing trce cache addr =
   case addr of
@@ -166,7 +165,7 @@ insertStakeAddressRefIfMissing trce cache addr =
 insertMultiAsset ::
   (MonadBaseControl IO m, MonadIO m) =>
   CacheStatus ->
-  PolicyID StandardCrypto ->
+  PolicyID ->
   AssetName ->
   ReaderT SqlBackend m DB.MultiAssetId
 insertMultiAsset cache policy aName = do

@@ -8,7 +8,6 @@ import Cardano.DbSync.Util.Address
 import Cardano.Ledger.Address (Addr (..), BootstrapAddress (..), RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network (..))
 import qualified Cardano.Ledger.Binary.Decoding as Decoding
-import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Prelude
 import Data.ByteString.Base16 (decodeLenient)
 import Hedgehog
@@ -212,13 +211,13 @@ knownStakeAddresses =
     )
   ]
 
-genByronAddress :: Gen (BootstrapAddress StandardCrypto)
+genByronAddress :: Gen BootstrapAddress
 genByronAddress = arbitrary
 
-genShelleyAddress :: Gen (Addr StandardCrypto)
+genShelleyAddress :: Gen Addr
 genShelleyAddress = Addr <$> arbitrary <*> arbitrary <*> arbitrary
 
-genRewardAccount :: Gen (RewardAccount StandardCrypto)
+genRewardAccount :: Gen RewardAccount
 genRewardAccount = arbitrary
 
 deserialiseBase16 :: FromCBOR a => Text -> a
@@ -229,6 +228,6 @@ decodeBase16 = deserialise' . decodeLenient . encodeUtf8
   where
     deserialise' = Decoding.unsafeDeserialize' Decoding.shelleyProtVer
 
-getNetwork :: Addr c -> Network
+getNetwork :: Addr -> Network
 getNetwork (AddrBootstrap _) = Mainnet
 getNetwork (Addr net _ _) = net

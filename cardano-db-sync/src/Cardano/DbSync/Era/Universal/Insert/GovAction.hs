@@ -64,7 +64,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (ConwayEra)
 
 insertGovActionProposal ::
   forall m.
@@ -74,8 +74,8 @@ insertGovActionProposal ::
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
-  Maybe (ConwayGovState StandardConway) ->
-  (Word64, (GovActionId StandardCrypto, ProposalProcedure StandardConway)) ->
+  Maybe (ConwayGovState ConwayEra) ->
+  (Word64, (GovActionId, ProposalProcedure ConwayEra)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, pp)) = do
   addrId <-
@@ -114,7 +114,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
     NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
     _ -> pure ()
   where
-    mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
+    mprevGovAction :: Maybe GovActionId = case pProcGovAction pp of
       ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       HardForkInitiation prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       NoConfidence prv -> unGovPurposeId <$> strictMaybeToMaybe prv
@@ -142,7 +142,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
           other ->
             liftIO $ logWarning trce $ textShow other <> ": Failed to find committee for " <> textShow pp
 
-insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> ReaderT SqlBackend m DB.CommitteeId
+insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee ConwayEra -> ReaderT SqlBackend m DB.CommitteeId
 insertCommittee mgapId committee = do
   committeeId <- insertCommitteeDB
   mapM_ (insertNewMember committeeId) (Map.toList $ committeeMembers committee)
@@ -172,7 +172,7 @@ insertCommittee mgapId committee = do
 resolveGovActionProposal ::
   MonadIO m =>
   CacheStatus ->
-  GovActionId StandardCrypto ->
+  GovActionId ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) DB.GovActionProposalId
 resolveGovActionProposal cache gaId = do
   let txId = gaidTxId gaId
@@ -249,7 +249,7 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
       }
 
-insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> ReaderT SqlBackend m DB.ConstitutionId
+insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution ConwayEra -> ReaderT SqlBackend m DB.ConstitutionId
 insertConstitution blockId mgapId constitution = do
   votingAnchorId <- insertVotingAnchor blockId DB.ConstitutionAnchor $ constitutionAnchor constitution
   DB.insertConstitution $
@@ -268,7 +268,7 @@ insertVotingProcedures ::
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
-  (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
+  (Voter, [(GovActionId, VotingProcedure ConwayEra)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertVotingProcedures trce cache blkId txId (voter, actions) =
   mapM_ (insertVotingProcedure trce cache blkId txId voter) (zip [0 ..] actions)
@@ -279,8 +279,8 @@ insertVotingProcedure ::
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
-  Voter StandardCrypto ->
-  (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
+  Voter ->
+  (Word16, (GovActionId, VotingProcedure ConwayEra)) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal cache gaId
@@ -311,7 +311,7 @@ insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
       , DB.votingProcedureInvalid = Nothing
       }
 
-insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> ReaderT SqlBackend m DB.VotingAnchorId
+insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor -> ReaderT SqlBackend m DB.VotingAnchorId
 insertVotingAnchor blockId anchorType anchor =
   DB.insertAnchor $
     DB.VotingAnchor
@@ -321,7 +321,7 @@ insertVotingAnchor blockId anchorType anchor =
       , DB.votingAnchorType = anchorType
       }
 
-insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential kr StandardCrypto -> ReaderT SqlBackend m DB.CommitteeHashId
+insertCommitteeHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential kr -> ReaderT SqlBackend m DB.CommitteeHashId
 insertCommitteeHash cred = do
   DB.insertCommitteeHash
     DB.CommitteeHash
@@ -332,13 +332,13 @@ insertCommitteeHash cred = do
 --------------------------------------------------------------------------------------
 -- DREP
 --------------------------------------------------------------------------------------
-insertDrep :: (MonadBaseControl IO m, MonadIO m) => DRep StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
+insertDrep :: (MonadBaseControl IO m, MonadIO m) => DRep -> ReaderT SqlBackend m DB.DrepHashId
 insertDrep = \case
   DRepCredential cred -> insertCredDrepHash cred
   DRepAlwaysAbstain -> DB.insertAlwaysAbstainDrep
   DRepAlwaysNoConfidence -> DB.insertAlwaysNoConfidence
 
-insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'DRepRole StandardCrypto -> ReaderT SqlBackend m DB.DrepHashId
+insertCredDrepHash :: (MonadBaseControl IO m, MonadIO m) => Ledger.Credential 'DRepRole -> ReaderT SqlBackend m DB.DrepHashId
 insertCredDrepHash cred = do
   DB.insertDrepHash
     DB.DrepHash
@@ -349,12 +349,12 @@ insertCredDrepHash cred = do
   where
     bs = Generic.unCredentialHash cred
 
-insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> PulsingSnapshot StandardConway -> ReaderT SqlBackend m ()
+insertDrepDistr :: forall m. (MonadBaseControl IO m, MonadIO m) => EpochNo -> PulsingSnapshot ConwayEra -> ReaderT SqlBackend m ()
 insertDrepDistr e pSnapshot = do
   drepsDB <- mapM mkEntry (Map.toList $ psDRepDistr pSnapshot)
   DB.insertManyDrepDistr drepsDB
   where
-    mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
+    mkEntry :: (DRep, Ledger.CompactForm Coin) -> ReaderT SqlBackend m DB.DrepDistr
     mkEntry (drep, coin) = do
       drepId <- insertDrep drep
       pure $
@@ -365,7 +365,7 @@ insertDrepDistr e pSnapshot = do
           , DB.drepDistrActiveUntil = unEpochNo <$> isActiveEpochNo drep
           }
 
-    isActiveEpochNo :: DRep StandardCrypto -> Maybe EpochNo
+    isActiveEpochNo :: DRep -> Maybe EpochNo
     isActiveEpochNo = \case
       DRepAlwaysAbstain -> Nothing
       DRepAlwaysNoConfidence -> Nothing
@@ -388,7 +388,7 @@ updateRatified ::
   MonadIO m =>
   CacheStatus ->
   EpochNo ->
-  [GovActionState StandardConway] ->
+  [GovActionState ConwayEra] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 updateRatified cache epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
@@ -400,7 +400,7 @@ updateExpired ::
   MonadIO m =>
   CacheStatus ->
   EpochNo ->
-  [GovActionId StandardCrypto] ->
+  [GovActionId] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 updateExpired cache epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
@@ -412,7 +412,7 @@ updateDropped ::
   MonadIO m =>
   CacheStatus ->
   EpochNo ->
-  [GovActionId StandardCrypto] ->
+  [GovActionId] ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 updateDropped cache epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
@@ -426,7 +426,7 @@ insertUpdateEnacted ::
   CacheStatus ->
   DB.BlockId ->
   EpochNo ->
-  ConwayGovState StandardConway ->
+  ConwayGovState ConwayEra ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertUpdateEnacted trce cache blkId epochNo enactedState = do
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee

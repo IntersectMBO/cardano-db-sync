@@ -4,7 +4,7 @@
 module Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest (tests) where
 
 import Cardano.DbSync.Era.Shelley.Generic.ScriptData
-import Cardano.Ledger.Api (Shelley ())
+import Cardano.Ledger.Api (ShelleyEra)
 import Cardano.Ledger.Binary.Decoding
 import Cardano.Ledger.Plutus.Data (Data (..))
 import qualified Cardano.Ledger.Plutus.Data as Ledger
@@ -41,7 +41,7 @@ prop_scriptDataToJSON_bad = property $ do
   jsonText <- forAll $ Gen.element knownBadScriptData
   assert $ isLeft (decodeJson jsonText)
   where
-    decodeJson :: Text -> Either String (ScriptData Shelley)
+    decodeJson :: Text -> Either String (ScriptData ShelleyEra)
     decodeJson = Aeson.eitherDecodeStrict . encodeUtf8
 
 prop_scriptDataToJSON_roundtrip :: Property
@@ -84,17 +84,17 @@ knownBadScriptData =
   , "{\"fields\": [{\"int\": 24}], \"constructor\": 4, \"extra\": 5}"
   ]
 
-genScriptData :: Gen (ScriptData Shelley)
+genScriptData :: Gen (ScriptData ShelleyEra)
 genScriptData = ScriptData . Data <$> Gen.arbitrary
 
-decodeCbor :: Text -> Either DecoderError (Ledger.Data Shelley)
+decodeCbor :: Text -> Either DecoderError (Ledger.Data ShelleyEra)
 decodeCbor =
   decode'
     . LByteString.fromStrict
     . Base16.decodeLenient
     . encodeUtf8
   where
-    decode' :: LByteString.ByteString -> Either DecoderError (Ledger.Data Shelley)
+    decode' :: LByteString.ByteString -> Either DecoderError (Ledger.Data ShelleyEra)
     decode' bytes = do
       Annotator ann <- decodeFull shelleyProtVer bytes
       pure $ ann (Full bytes)

@@ -16,8 +16,11 @@ import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion ())
 
+import Debug.Trace as Trace
+
 configRemoveJsonbFromSchemaEnabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaEnabled = do
+  Trace.traceM "configRemoveJsonbFromSchemaEnabled: Outside"
   withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
     startDBSync dbSync
     threadDelay 7_000_000
@@ -27,6 +30,7 @@ configRemoveJsonbFromSchemaEnabled = do
       False
       "There should be no jsonb data types in database if option is enabled"
     checkStillRuns dbSync
+    Trace.traceM "configRemoveJsonbFromSchemaEnabled: End"
   where
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayConfigRemoveJsonbFromSchemaEnabled"
@@ -37,6 +41,7 @@ configRemoveJsonbFromSchemaDisabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaDisabled = do
   withCustomConfigAndDropDB args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
     \_interpreter _mockServer dbSync -> do
+      Trace.traceM "configRemoveJsonbFromSchemaDisabled A"
       startDBSync dbSync
       threadDelay 7_000_000
       assertEqQuery
