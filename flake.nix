@@ -173,7 +173,7 @@
               cabal = "latest";
               fourmolu = "latest";
               haskell-language-server = {
-                src = nixpkgs.haskell-nix.sources."hls-2.9";
+                src = nixpkgs.haskell-nix.sources."hls-2.10";
               };
             } // lib.optionalAttrs (config.compiler-nix-name == "ghc966") {
               weeder = "latest";
