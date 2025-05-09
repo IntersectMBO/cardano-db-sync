@@ -183,7 +183,6 @@
             # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
-              hlint
             ];
             shell.withHoogle = true;
             shell.crossPlatforms = _: [];
@@ -211,32 +210,13 @@
 
               })
 
-              ({ lib, config, ... }:
-                # Disable haddock on 8.x
-                lib.mkIf (lib.versionOlder config.compiler.version "9") {
-                  packages.cardano-ledger-alonzo.doHaddock = false;
-                  packages.cardano-ledger-allegra.doHaddock = false;
-                  packages.cardano-ledger-api.doHaddock = false;
-                  packages.cardano-ledger-babbage.doHaddock = false;
-                  packages.cardano-ledger-conway.doHaddock = false;
-                  packages.cardano-ledger-shelley.doHaddock = false;
-                  packages.cardano-protocol-tpraos.doHaddock = false;
-                  packages.fs-api.doHaddock = false;
-                  packages.ouroboros-network-framework.doHaddock = false;
-                  packages.ouroboros-consensus-cardano.doHaddock = false;
-                  packages.ouroboros-consensus.doHaddock = false;
-                  packages.cardano-ledger-core.doHaddock = false;
-                  packages.plutus-ledger-api.doHaddock = false;
-                  packages.wai-extra.doHaddock = false;
-                })
 
-              ({ lib, pkgs, config, ... }:
-                lib.mkIf (lib.versionAtLeast config.compiler.version "9.4") {
-                  # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
-                  # to call out to all kinds of silly tools that GHC doesn't really provide.
-                  # For this reason, we try to get away without re-installing lib:ghc for now.
-                  reinstallableLibGhc = false;
-                })
+              ({ lib, pkgs, config, ... }: {
+                # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
+                # to call out to all kinds of silly tools that GHC doesn't really provide.
+                # For this reason, we try to get away without re-installing lib:ghc for now.
+                reinstallableLibGhc = false;
+              })
 
               ({ pkgs, ... }:
                 # Database tests
