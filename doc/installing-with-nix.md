@@ -9,7 +9,7 @@ build Cardano DB Sync.
 This guide assumes you have the following tools:
 
  * [Nix](https://nixos.org/download.html)
- * [Cardano Node](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
+ * [Cardano Node](https://developers.cardano.org/docs/get-started/cardano-node/installing-cardano-node/)
 
 Nix will handle all other dependencies.
 

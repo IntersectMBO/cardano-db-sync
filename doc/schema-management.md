@@ -32,7 +32,7 @@ where the `1` denotes "stage 1" of the SQL migration, the `0000` is the migratio
 last number is the date. Listing the directory containing the schema and sorting the list will
 order them in the correct order for applying to the database.
 
-Since the introduction of `use_address_table` [config](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#tx-out). The file `migration-4-001-*` when indexing will not be ran when the this configuration is active.
+Since the introduction of `use_address_table` [config](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#address-table), the `migration-4-001-*` file will not be executed during indexing when this configuration is active.
 
 There is also a flag you can use in cardano-db-tool `--use-tx-out-address` which handles the alternate variation of the schema, one might be using.
 
