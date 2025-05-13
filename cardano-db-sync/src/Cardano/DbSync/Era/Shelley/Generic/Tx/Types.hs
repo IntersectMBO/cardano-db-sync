@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -13,6 +15,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxWithdrawal (..),
   TxIn (..),
   TxOut (..),
+  TxOutMultiAsset (..),
   TxRedeemer (..),
   TxScript (..),
   PlutusData (..),
@@ -26,6 +29,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   getMaybeDatumHash,
   sumTxOutCoin,
   toTxHash,
+  fromMultiAssetMap,
 ) where
 
 import qualified Cardano.Db as DB
@@ -42,12 +46,17 @@ import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 import Cardano.Ledger.Core (TxBody)
-import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
+import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
+import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
+import Data.Aeson.Types (object, withObject)
+import qualified Data.ByteString.Base16 as Base16
+import Data.ByteString.Short (fromShort, toShort)
+import qualified Data.Map as Map
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
 
 data Tx = Tx
@@ -114,6 +123,13 @@ data TxOut = TxOut
   , txOutDatum :: !TxOutDatum
   }
 
+data TxOutMultiAsset = TxOutMultiAsset
+  { txOutMaPolicyId :: !(PolicyID StandardCrypto)
+  , txOutMaAssetName :: !AssetName
+  , txOutMaAmount :: !Integer
+  }
+  deriving (Eq, Show)
+
 data TxRedeemer = TxRedeemer
   { txRedeemerMem :: !Word64
   , txRedeemerSteps :: !Word64
@@ -151,6 +167,25 @@ data PoolStats = PoolStats
   , votingPower :: Maybe Coin
   }
 
+instance ToJSON TxOutMultiAsset where
+  toJSON TxOutMultiAsset {..} =
+    object
+      [ "policyId" .= txOutMaPolicyId
+      , "assetName" .= txOutMaAssetName
+      , "amount" .= txOutMaAmount
+      ]
+
+instance FromJSON TxOutMultiAsset where
+  parseJSON = withObject "MultiAsset" $ \o ->
+    TxOutMultiAsset
+      <$> o .: "policyId"
+      <*> (parseAssetName <$> o .: "assetName")
+      <*> o .: "amount"
+    where
+      parseAssetName :: Text -> AssetName
+      parseAssetName =
+        AssetName . toShort . Base16.decodeLenient . encodeUtf8
+
 toTxCert :: Word16 -> Cert -> TxCertificate
 toTxCert idx dcert =
   TxCertificate
@@ -171,6 +206,17 @@ getTxOutDatumHash NoDatum = Nothing
 getMaybeDatumHash :: Maybe DataHash -> TxOutDatum
 getMaybeDatumHash Nothing = NoDatum
 getMaybeDatumHash (Just hsh) = DatumHash hsh
+
+fromMultiAssetMap ::
+  Map (PolicyID StandardCrypto) (Map AssetName Integer) ->
+  [TxOutMultiAsset]
+fromMultiAssetMap = concat . toListBy foldAssets
+  where
+    foldAssets :: PolicyID StandardCrypto -> Map AssetName Integer -> [TxOutMultiAsset]
+    foldAssets policy = toListBy (TxOutMultiAsset policy)
+
+    toListBy :: (k -> a -> b) -> Map k a -> [b]
+    toListBy f = Map.foldrWithKey (\k a xs -> f k a : xs) []
 
 sumTxOutCoin :: [TxOut] -> Coin
 sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)

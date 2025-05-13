@@ -1,5 +1,10 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Cardano.Mock.Query (
   queryVersionMajorFromEpoch,
@@ -7,6 +12,7 @@ module Cardano.Mock.Query (
   queryParamFromEpoch,
   queryNullTxDepositExists,
   queryMultiAssetCount,
+  queryTxOutMultiAssets,
   queryTxMetadataCount,
   queryDRepDistrAmount,
   queryGovActionCounts,
@@ -82,6 +88,35 @@ queryMultiAssetCount = do
     pure countRows
 
   pure $ maybe 0 unValue (listToMaybe res)
+
+queryTxOutMultiAssets ::
+  MonadIO io =>
+  Db.TxOutTableType ->
+  ByteString ->
+  Word64 ->
+  ReaderT SqlBackend io (Maybe Text)
+queryTxOutMultiAssets txOutVariant txHash index =
+  case txOutVariant of
+    Db.TxOutCore -> queryMultiAssetsValue @'Db.TxOutCore
+    Db.TxOutVariantAddress -> queryMultiAssetsValue @'Db.TxOutVariantAddress
+  where
+    queryMultiAssetsValue ::
+      forall (t :: Db.TxOutTableType) io.
+      (MonadIO io, Db.TxOutFields t) =>
+      ReaderT SqlBackend io (Maybe Text)
+    queryMultiAssetsValue = do
+      res <- selectOne $ do
+        (tx :& txOut) <-
+          from
+            $ table @Db.Tx
+              `innerJoin` table
+            `on` (\(tx :& txOut) -> tx ^. Db.TxId ==. txOut ^. Db.txOutTxIdField @t)
+        where_ $
+          tx ^. Db.TxHash ==. val txHash
+            &&. txOut ^. Db.txOutIndexField @t ==. val index
+        pure (txOut ^. Db.txOutMaTxOutField @t)
+
+      pure (unValue =<< res)
 
 queryTxMetadataCount :: MonadIO io => ReaderT SqlBackend io Word
 queryTxMetadataCount = do

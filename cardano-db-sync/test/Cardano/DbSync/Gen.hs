@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -19,6 +20,10 @@ module Cardano.DbSync.Gen (
   addr,
   networkName,
 
+  -- * Tx Type generators
+  txOutMultiAsset,
+  multiAsset,
+
   -- * Utility generators
   hashBlake2b_256,
   filePath,
@@ -36,14 +41,19 @@ import Cardano.Crypto.Hash.Class (HashAlgorithm (..), hashFromBytes)
 import Cardano.Db (PGPassSource (..))
 import Cardano.DbSync
 import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Era.Shelley.Generic (TxOutMultiAsset (..))
+import Cardano.Ledger.Crypto (StandardCrypto)
+import Cardano.Ledger.Mary.Value (MultiAsset)
 import Cardano.Ledger.Slot (EpochNo (..))
 import Cardano.Prelude
 import Data.ByteString.Short (ShortByteString (), toShort)
 import Data.Maybe (fromJust)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
+import Hedgehog.Gen.QuickCheck (arbitrary)
 import qualified Hedgehog.Range as Range
 import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
+import Test.Cardano.Ledger.Mary.Arbitrary ()
 
 syncPreConfig :: Gen SyncPreConfig
 syncPreConfig =
@@ -186,6 +196,16 @@ scriptHash = toShort <$> Gen.utf8 (Range.linear 1 5) Gen.unicode
 
 networkName :: Gen NetworkName
 networkName = NetworkName <$> Gen.text (Range.linear 0 100) Gen.alpha
+
+txOutMultiAsset :: Gen TxOutMultiAsset
+txOutMultiAsset =
+  TxOutMultiAsset
+    <$> arbitrary
+    <*> arbitrary
+    <*> Gen.integral (Range.linear 0 999_999_999_999)
+
+multiAsset :: Gen (MultiAsset StandardCrypto)
+multiAsset = arbitrary
 
 hashBlake2b_256 :: MonadGen m => m (Maybe (Hash Blake2b_256 ByteString))
 hashBlake2b_256 = serialiseHash <$> Gen.bytes (Range.linear 0 100)

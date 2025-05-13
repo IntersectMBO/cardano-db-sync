@@ -226,6 +226,7 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
                   , C.txOutInlineDatumId = Nothing
                   , C.txOutReferenceScriptId = Nothing
                   , C.txOutConsumedByTxId = Nothing
+                  , C.txOutMaTxOut = Nothing
                   }
           DB.TxOutVariantAddress -> do
             let addrRaw = serialize' address
@@ -248,6 +249,7 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
         , V.txOutAddressId = addrDetailId
         , V.txOutConsumedByTxId = Nothing
         , V.txOutStakeAddressId = Nothing
+        , V.txOutMaTxOut = Nothing
         }
 
     mkVAddress :: ByteString -> V.Address
