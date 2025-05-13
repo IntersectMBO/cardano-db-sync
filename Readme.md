@@ -49,19 +49,86 @@ with the use of foreign keys from one table to another). More user friendly data
 implemented using [Postgres Views][PostgresView] to implement joins between tables.
 
 ## System Requirements
+### Last update: May 2025
 
 The system requirements for `cardano-db-sync` (with both `db-sync` and the `node` running
 on the same machine are:
 
 * Any of the big well known Linux distributions (eg, Debian, Ubuntu, RHEL, CentOS, Arch
   etc).
-* 32 Gigabytes of RAM or more.
+* 64 Gigabytes of RAM or more (for `mainnet`).
 * 4 CPU cores or more.
 * Ensure that the machine has sufficient IOPS (Input/Output Operations per Second). Ie it should be
   60k IOPS or better. Lower IOPS ratings will result in slower sync times and/or falling behind the
   chain tip.
-* 320 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
+* 700 Gigabytes or more of disk storage (preferably SSD which are 2-5 times faster than
   electro-mechanical disks).
+
+
+Stats for configuration:
+
+```json
+  "insert_options": {
+    "tx_cbor": "disable",
+    "tx_out": {
+      "value": "enable",
+      "force_tx_in": false,
+      "use_address_table": false
+    },
+    "ledger": "enable",
+    "shelley": {
+      "enable": true
+    },
+    "multi_asset": {
+      "enable": true
+    },
+    "metadata": {
+      "enable": true
+    },
+    "plutus": {
+      "enable": true
+    },
+    "governance": "enable",
+    "offchain_pool_data": "enable",
+    "json_type": "text"
+  }
+```
+
+### `mainnet`
+
+#### Storage
+- `cardano-node` database size: 203 GB
+- `cardano-db-sync` total ledger state files size: ~ 10 GB
+- `Postgres` database `mainnet_13.6.0.5` total size: 438 GB
+
+#### RAM
+- `cardano-node` RAM: 24 GB
+- `cardano-db-sync` RSS RAM: 21 GB
+
+
+### `preprod`
+
+#### Storage
+- `cardano-node` database size: 12 GB
+- `cardano-db-sync` total ledger state files size: ~ 2 GB
+- `Postgres` database `preprod_13.6.0.5` total size: 16 GB
+
+#### RAM
+- `cardano-node` RSS RAM: 5,5 GB
+- `cardano-db-sync` RSS RAM: 3,5 GB
+
+
+### `preview`
+
+#### Storage
+- `cardano-node` database size: 12 GB
+- `cardano-db-sync` total ledger state files size: ~ 2 GB
+- `Postgres` database `preview_13.6.0.5` total size: 21 GB
+
+#### RAM
+- `cardano-node` RSS RAM: 2,8 GB
+- `cardano-db-sync` RSS RAM: 3,5 GB
+
 
 The recommended configuration is to have the `db-sync` and the PostgreSQL server on the same
 machine. During syncing (getting historical data from the blockchain) there is a **HUGE** amount
