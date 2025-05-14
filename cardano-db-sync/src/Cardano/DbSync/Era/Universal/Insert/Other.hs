@@ -188,7 +188,7 @@ insertScript ::
   Generic.TxScript ->
   ReaderT SqlBackend m DB.ScriptId
 insertScript tracer txId script = do
-  mScriptId <- DB.queryScript $ Generic.txScriptHash script
+  mScriptId <- DB.queryScriptWithId $ Generic.txScriptHash script
   case mScriptId of
     Just scriptId -> pure scriptId
     Nothing -> do

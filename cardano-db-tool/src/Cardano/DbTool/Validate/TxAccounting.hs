@@ -11,8 +11,8 @@ module Cardano.DbTool.Validate.TxAccounting (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variant.TxOutCore as C
 import Cardano.DbTool.Validate.Util
 import Control.Monad (replicateM, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)

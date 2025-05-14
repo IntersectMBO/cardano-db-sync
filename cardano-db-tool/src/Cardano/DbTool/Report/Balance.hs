@@ -114,7 +114,7 @@ queryStakeAddressBalance txOutTableType address = do
 
     queryRewardsSum :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
     queryRewardsSum saId = do
-      currentEpoch <- queryLatestEpochNo
+      currentEpoch <- queryLatestEpochNoFromBlock
       res <- select $ do
         rwd <- from $ table @Reward
         where_ (rwd ^. RewardAddrId ==. val saId)
