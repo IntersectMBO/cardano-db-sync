@@ -14,7 +14,7 @@ The first generation of SMASH server has been deployed by Input Output Global (I
 
 Exchanges, for example, can use the same functionality to keep track of stake pool metadata. SMASH will allow an exchange to fetch stake pool metadata and verify its content against the on-chain registered hash. The exchange can then check existing metadata for correctness (size limits, content), create new stake pools manually, and reserve their ticker names. In case there is a stake pool with a duplicated ticker name, counterfeit or offensive content, it will be possible to delist this pool.
 
-## SMASH Characteristics**
+## SMASH Characteristics
 
 There are two main parts of SMASH:
 
@@ -70,7 +70,7 @@ SMASH records and serves the following subset of information:
 
 More information about the pool metadata (the `PoolMetaData` record) can be found [here](https://github.com/IntersectMBO/cardano-ledger/blob/4458fdba7e2211f63e7f28ecd3f9b55b02eee071/shelley/chain-and-ledger/executable-spec/src/Shelley/Spec/Ledger/TxData.hs#L62)
 
-Stake pool metadata information can be also found in [The mainnet metadata Design Specification for Delegation and Incentives in Cardano](https://hydra.iohk.io/build/790053/download/1/delegation_design_spec.pdf) section 4.2 Stake Pool Metadata, p.30.
+Stake pool metadata information can be also found in [The mainnet metadata Design Specification for Delegation and Incentives in Cardano](https://github.com/intersectmbo/cardano-ledger/releases/latest/download/shelley-delegation.pdf) section 4.2 Stake Pool Metadata, p.30.
 
 
 ## Installation

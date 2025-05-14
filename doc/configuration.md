@@ -552,7 +552,7 @@ This will effect all governance related data/functionality.
 `remove_jsonb_from_schema`
 
 To improve inserting performance you can remove Jsonb data types in the schema. They can be reintroduced by using `disable` or by simply not using all together.
-A warning will logw if `remove_jsonb_from_schema` was previously set to `enable` and then either removed from the configuration file or set to `disabled`.
+A warning will log if `remove_jsonb_from_schema` was previously set to `enable` and then either removed from the configuration file or set to `disabled`.
 
 * Type: `string`
 
