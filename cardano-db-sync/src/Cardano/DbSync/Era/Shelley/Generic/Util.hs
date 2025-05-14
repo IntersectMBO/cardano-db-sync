@@ -126,7 +126,7 @@ partitionMIRTargets =
 renderAddress :: Ledger.Addr StandardCrypto -> Text
 renderAddress = serialiseAddress
 
-renderRewardAccount :: Ledger.RewardAccount StandardCrypto -> Text
+renderRewardAccount :: RewAccount -> Text
 renderRewardAccount = serialiseRewardAccount
 
 stakingCredHash :: Ledger.Network -> Ledger.StakeCredential era -> ByteString

@@ -131,7 +131,7 @@ queryReward en address (saId, date, DbLovelace delegated, poolId) = do
       from
         $ table @Epoch
           `innerJoin` table @Reward
-        `on` (\(ep :& reward) -> ep ^. EpochNo ==. reward ^. RewardEarnedEpoch)
+        `on` (\(ep :& reward) -> ep ^. EpochNo ==. reward ^. RewardSpendableEpoch)
           `innerJoin` table @StakeAddress
         `on` (\(_ep :& reward :& saddr) -> saddr ^. StakeAddressId ==. reward ^. RewardAddrId)
     where_ (ep ^. EpochNo ==. val en)

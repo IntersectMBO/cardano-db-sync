@@ -8,6 +8,7 @@ module Cardano.DbSync.Util.Address (
   deserialiseRewardAccount,
 ) where
 
+import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Bech32 (deserialiseFromBech32, serialiseToBech32)
 import qualified Cardano.Ledger.Address as Address
 import Cardano.Ledger.Api.Tx.Address (decodeAddrLenient)
@@ -39,7 +40,7 @@ deserialiseShelleyAddress bech32 = decodeAddrLenient =<< rawBytes
     rawBytes = rightToMaybe $ deserialiseFromBech32 bech32
 
 -- | Serialise a Shelley era stake address to bech32
-serialiseRewardAccount :: Address.RewardAccount StandardCrypto -> Text
+serialiseRewardAccount :: RewAccount -> Text
 serialiseRewardAccount acnt@(Address.RewardAccount net _) =
   serialiseToBech32 (prefix net) (Address.serialiseRewardAccount acnt)
   where

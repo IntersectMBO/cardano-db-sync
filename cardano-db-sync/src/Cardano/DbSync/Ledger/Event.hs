@@ -19,6 +19,7 @@ module Cardano.DbSync.Ledger.Event (
   convertPoolRewards,
   ledgerEventName,
   splitDeposits,
+  splitRewardsEpochBoundary,
 ) where
 
 import Cardano.Db hiding (AdaPots, EpochNo, SyncState, TreasuryWithdrawals, epochNo)
@@ -26,7 +27,6 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Ledger.Address (RewardAccount)
 import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
@@ -83,8 +83,8 @@ data LedgerEvent
 data GovActionRefunded = GovActionRefunded
   { garGovActionId :: GovActionId StandardCrypto
   , garDeposit :: Coin
-  , garReturnAddr :: RewardAccount StandardCrypto
-  , garMTreasury :: Maybe (Map (RewardAccount StandardCrypto) Coin)
+  , garReturnAddr :: RewAccount
+  , garMTreasury :: Maybe (Map RewAccount Coin)
   }
   deriving (Eq)
 
@@ -466,3 +466,15 @@ splitDeposits les =
       case le of
         LedgerDeposits hsh coin -> Left (txHashFromSafe hsh, coin)
         _ -> Right le
+
+splitRewardsEpochBoundary :: [LedgerEvent] -> ([LedgerEvent], [LedgerEvent])
+splitRewardsEpochBoundary les =
+  partitionEithers $ eitherRewEB <$> les
+  where
+    eitherRewEB :: LedgerEvent -> Either LedgerEvent LedgerEvent
+    eitherRewEB le = case le of
+      LedgerDeltaRewards {} -> Left le
+      LedgerRestrainedRewards {} -> Left le
+      LedgerTotalRewards {} -> Left le
+      LedgerPoolReap {} -> Left le
+      _ -> Right le

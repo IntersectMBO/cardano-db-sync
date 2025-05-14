@@ -32,7 +32,6 @@ import Cardano.DbSync.Cache (
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
-import Cardano.DbSync.Era.Util (liftLookupFail)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -56,14 +55,15 @@ insertByronBlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Bool ->
+  DB.BlockId ->
   ByronBlock ->
   SlotDetails ->
   ReaderT SqlBackend m (Either SyncNodeError ())
-insertByronBlock syncEnv firstBlockOfEpoch blk details = do
+insertByronBlock syncEnv firstBlockOfEpoch blkId blk details = do
   res <- runExceptT $
     case byronBlockRaw blk of
-      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
-      Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
+      Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch blkId ablk details
+      Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv blkId abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
   when
@@ -74,10 +74,11 @@ insertByronBlock syncEnv firstBlockOfEpoch blk details = do
 insertABOBBoundary ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
+  DB.BlockId ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABOBBoundary syncEnv blk details = do
+insertABOBBoundary syncEnv blkId blk details = do
   let tracer = getTrace syncEnv
       cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
@@ -90,8 +91,8 @@ insertABOBBoundary syncEnv blk details = do
         , DB.slotLeaderPoolHashId = Nothing
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
-  blkId <-
-    lift . insertBlockAndCache cache $
+  lift $
+    insertBlockAndCache cache blkId $
       DB.Block
         { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
         , DB.blockEpochNo = Just epochNo
@@ -141,15 +142,16 @@ insertABlock ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   Bool ->
+  DB.BlockId ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
-insertABlock syncEnv firstBlockOfEpoch blk details = do
+insertABlock syncEnv firstBlockOfEpoch blkId blk details = do
   pbid <- queryPrevBlockWithCache "insertABlock" cache (Byron.blockPreviousHash blk)
   slid <- lift . DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
-  blkId <-
-    lift . insertBlockAndCache cache $
+  lift $
+    insertBlockAndCache cache blkId $
       DB.Block
         { DB.blockHash = Byron.blockHash blk
         , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -241,8 +243,8 @@ insertByronTx syncEnv blkId tx blockIndex = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
   if disInOut
     then do
-      txId <-
-        lift . DB.insertTx $
+      lift $
+        DB.insertTx txId $
           DB.Tx
             { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
             , DB.txBlockId = blkId
@@ -270,22 +272,24 @@ insertByronTx syncEnv blkId tx blockIndex = do
             }
 
       pure 0
-    else insertByronTx' syncEnv blkId tx blockIndex
+    else insertByronTx' syncEnv blkId txId tx blockIndex
   where
     iopts = getInsertOptions syncEnv
+    txId = DB.TxKey $ DB.unBlockKey blkId + fromIntegral blockIndex
 
 insertByronTx' ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   DB.BlockId ->
+  DB.TxId ->
   Byron.TxAux ->
   Word64 ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) Word64
-insertByronTx' syncEnv blkId tx blockIndex = do
+insertByronTx' syncEnv blkId txId tx blockIndex = do
   resolvedInputs <- mapM (resolveTxInputs txOutTableType) (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- firstExceptT annotateTx $ ExceptT $ pure (calculateTxFee (Byron.taTx tx) resolvedInputs)
-  txId <-
-    lift . DB.insertTx $
+  lift $
+    DB.insertTx txId $
       DB.Tx
         { DB.txHash = Byron.unTxHash $ Crypto.serializeCborHash (Byron.taTx tx)
         , DB.txBlockId = blkId
@@ -320,7 +324,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
     mapM_ (insertTxIn tracer txId) resolvedInputs
   whenConsumeOrPruneTxOut syncEnv $
     lift $
-      DB.updateListTxOutConsumedByTxId (prepUpdate txId <$> resolvedInputs)
+      DB.updateListTxOutConsumedByTxId (prepUpdate <$> resolvedInputs)
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
@@ -336,7 +340,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         SNErrInvariant loc ei -> SNErrInvariant loc (annotateInvariantTx (Byron.taTx tx) ei)
         _other -> ee
 
-    prepUpdate txId (_, _, txOutId, _) = (txOutId, txId)
+    prepUpdate (_, _, txOutId, _) = (txOutId, txId)
 
 insertTxOutByron ::
   (MonadBaseControl IO m, MonadIO m) =>

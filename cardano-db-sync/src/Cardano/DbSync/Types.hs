@@ -9,7 +9,9 @@ module Cardano.DbSync.Types (
   BlockEra (..),
   CardanoBlock,
   CardanoPoint,
+  TxIdLedger,
   StakeCred,
+  RewAccount,
   PoolKeyHash,
   DataHash,
   CardanoInterpreter,
@@ -56,6 +58,8 @@ import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Keys
 
+import qualified Cardano.Ledger.Address as Ledger
+import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude hiding (Meta, show)
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..), SlotNo (..))
 import qualified Data.Text as Text
@@ -80,7 +84,11 @@ type CardanoInterpreter =
 
 type CardanoPoint = Point CardanoBlock
 
+type TxIdLedger = Ledger.TxId StandardCrypto
+
 type StakeCred = Ledger.StakeCredential StandardCrypto
+
+type RewAccount = Ledger.RewardAccount StandardCrypto
 
 type PoolKeyHash = KeyHash 'StakePool StandardCrypto
 

@@ -3,8 +3,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Api (
@@ -12,7 +10,6 @@ module Cardano.DbSync.Api (
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
-  getIsConsumedFixed,
   getDisableInOutState,
   getRanIndexes,
   runIndexMigrations,
@@ -29,21 +26,18 @@ module Cardano.DbSync.Api (
   getHasConsumedOrPruneTxOut,
   getSkipTxIn,
   getPrunes,
+  withDBSyncConnections,
+  withScriptConnection,
+  withDatumConnection,
+  commitAll,
   mkSyncEnvFromConfig,
-  verifySnapshotPoint,
   getInsertOptions,
   getTrace,
   getTopLevelConfig,
   getNetwork,
   hasLedgerState,
-  getLatestPoints,
-  getSlotHash,
-  getDbLatestBlockInfo,
-  getDbTipBlockNo,
-  getCurrentTipBlockNo,
-  generateNewEpochEvents,
-  logDbState,
-  convertToPoint,
+  writePrefetch,
+  addNewEventsAndSort,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -51,19 +45,14 @@ import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
+import Cardano.DbSync.Cache.Types
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
-import Cardano.DbSync.Ledger.State (
-  getHeaderHash,
-  hashToAnnotation,
-  listKnownSnapshots,
-  mkHasLedgerEnv,
- )
-import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), SnapshotPoint (..))
+import Cardano.DbSync.Ledger.State (mkHasLedgerEnv)
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -71,28 +60,30 @@ import Cardano.DbSync.Util.Constraint (dbConstraintNamesExists)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
+  newEmptyTMVarIO,
   newTBQueueIO,
   newTVarIO,
   readTVar,
   readTVarIO,
+  takeTMVar,
   writeTVar,
  )
-import Control.Monad.Trans.Maybe (MaybeT (..))
+import qualified Control.Concurrent.STM.TBQueue as TBQ
+import Control.Monad.Logger (LoggingT, MonadLoggerIO)
+import Control.Monad.Trans.Resource (MonadUnliftIO)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (getCurrentTime)
-import Database.Persist.Postgresql (ConnectionString)
+import Database.Persist.Postgresql (ConnectionString, createPostgresqlPool, withPostgresqlConn)
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
+import Ouroboros.Consensus.Block.Abstract (BlockProtocol)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
-import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
-import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -109,16 +100,6 @@ isConsistent env = do
   case cst of
     Consistent -> pure True
     _ -> pure False
-
-getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
-getIsConsumedFixed env =
-  case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutTableType)
-    _ -> pure Nothing
-  where
-    txOutTableType = getTxOutTableType env
-    pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envBackend env
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
@@ -176,11 +157,12 @@ getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
 getPruneInterval :: SyncEnv -> Word64
 getPruneInterval syncEnv = 10 * getSecurityParam syncEnv
 
-whenConsumeOrPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
-whenConsumeOrPruneTxOut env =
-  when (DB.pcmConsumedTxOut $ getPruneConsume env)
+whenConsumeOrPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
+whenConsumeOrPruneTxOut syncEnv action = do
+  disInOut <- liftIO $ getDisableInOutState syncEnv
+  when (not disInOut && DB.pcmConsumedTxOut (getPruneConsume syncEnv)) action
 
-whenPruneTxOut :: (MonadIO m) => SyncEnv -> m () -> m ()
+whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
   when (DB.pcmPruneTxOut $ getPruneConsume env)
 
@@ -207,6 +189,13 @@ initCurrentEpochNo =
   CurrentEpochNo
     { cenEpochNo = Strict.Nothing
     }
+
+addNewEventsAndSort :: SyncEnv -> ApplyResult -> IO ApplyResult
+addNewEventsAndSort env applyResult = do
+  epochEvents <- liftIO $ atomically $ generateNewEpochEvents env details
+  pure applyResult {apEvents = sort $ epochEvents <> apEvents applyResult}
+  where
+    details = apSlotDetails applyResult
 
 generateNewEpochEvents :: SyncEnv -> SlotDetails -> STM [LedgerEvent]
 generateNewEpochEvents env details = do
@@ -253,63 +242,22 @@ getNetwork sEnv =
 getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
-getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
-
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
   case envLedgerEnv syncEnv of
     HasLedger _ -> True
     NoLedger _ -> False
 
-getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
-getDbLatestBlockInfo backend = do
-  runMaybeT $ do
-    block <- MaybeT $ DB.runDbIohkNoLogging backend DB.queryLatestBlock
-    -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
-    -- era, but we need to make the types match, hence `fromMaybe`.
-    pure $
-      TipInfo
-        { bHash = DB.blockHash block
-        , bEpochNo = EpochNo . fromMaybe 0 $ DB.blockEpochNo block
-        , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
-        , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
-        }
+writePrefetch :: SyncEnv -> CardanoBlock -> IO ()
+writePrefetch _syncEnv _cblock = pure ()
 
-getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
-getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
-  pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
-
-logDbState :: SyncEnv -> IO ()
-logDbState env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
-  case mblk of
-    Nothing -> logInfo tracer "Database is empty"
-    Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
-  where
-    showTip :: TipInfo -> Text
-    showTip tipInfo =
-      mconcat
-        [ "slot "
-        , textShow (unSlotNo $ bSlotNo tipInfo)
-        , ", block "
-        , textShow (unBlockNo $ bBlockNo tipInfo)
-        ]
-
-    tracer :: Trace IO Text
-    tracer = getTrace env
-
-getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
-getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
-  case maybeTip of
-    Just tip -> pure $ At (bBlockNo tip)
-    Nothing -> pure Origin
+--   atomically $
+--     TBQ.writeTBQueue (pTxInQueue $ envPrefetch syncEnv) $
+--       PrefetchTxIdBlock cblock
 
 mkSyncEnv ::
   Trace IO Text ->
-  SqlBackend ->
+  DbConnections ->
   ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -320,7 +268,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
+mkSyncEnv trce backends connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
   cache <-
     if soptCache syncOptions
@@ -334,10 +282,13 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
             , cacheCapacityTx = 100000
             }
       else pure useNoCache
+  prefetch <- newPrefetch
   consistentLevelVar <- newTVarIO Unchecked
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
   bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
   bootstrapVar <- newTVarIO bts
+  cChans <- newStakeChannels
+  maChans <- newMAChannels
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
   oprq <- newTBQueueIO 1000
@@ -345,6 +296,7 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   oarq <- newTBQueueIO 1000
   epochVar <- newTVarIO initCurrentEpochNo
   epochSyncTime <- newTVarIO =<< getCurrentTime
+  pool <- DB.runIohkLogging trce $ createPostgresqlPool connectionString 5 -- TODO make configurable
   ledgerEnvType <-
     case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
       (Just dir, True) ->
@@ -367,9 +319,11 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
 
   pure $
     SyncEnv
-      { envBackend = backend
+      { envBackends = backends
+      , envPool = pool
       , envBootstrap = bootstrapVar
       , envCache = cache
+      , envPrefetch = prefetch
       , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
       , envDbConstraints = dbCNamesVar
@@ -378,6 +332,8 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
       , envIndexes = indexesVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
+      , envStakeChans = cChans
+      , envMAChans = maChans
       , envOffChainPoolResultQueue = oprq
       , envOffChainPoolWorkQueue = opwq
       , envOffChainVoteResultQueue = oarq
@@ -390,10 +346,59 @@ mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemS
   where
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
+    backend = mainBackend backends
+
+withDBSyncConnections ::
+  (MonadUnliftIO m, MonadLoggerIO m) =>
+  ConnectionString ->
+  (DbConnections -> m a) ->
+  m a
+withDBSyncConnections connStr action =
+  withPostgresqlConn connStr $ \mainConn ->
+    withPostgresqlConn connStr $ \scriptConn ->
+      withPostgresqlConn connStr $ \datumConn -> do
+        scr <- liftIO $ newMVar scriptConn
+        dt <- liftIO $ newMVar datumConn
+        action $ DbConnections mainConn scr dt
+
+withScriptConnection ::
+  SyncEnv ->
+  ReaderT SqlBackend (LoggingT IO) a ->
+  IO a
+withScriptConnection = withGivenConnection scriptBackend
+
+withDatumConnection ::
+  SyncEnv ->
+  ReaderT SqlBackend (LoggingT IO) a ->
+  IO a
+withDatumConnection = withGivenConnection datumBackend
+
+withGivenConnection ::
+  (DbConnections -> MVar SqlBackend) ->
+  SyncEnv ->
+  ReaderT SqlBackend (LoggingT IO) a ->
+  IO a
+withGivenConnection toConn syncEnv action = do
+  withMVar connVar $ \conn ->
+    DB.runDbLogging conn (getTrace syncEnv) action
+  where
+    connVar = toConn $ envBackends syncEnv
+
+commitAll :: SyncEnv -> IO ()
+commitAll syncEnv = do
+  maRet <- newEmptyTMVarIO
+  stakeRet <- newEmptyTMVarIO
+  -- queue actions are async here, so we let them run, while blocking on sync actions.
+  atomically $ TBQ.writeTBQueue (macPriorityQueue $ envMAChans syncEnv) $ CommitMA maRet
+  atomically $ TBQ.writeTBQueue (scPriorityQueue $ envStakeChans syncEnv) $ CommitStake stakeRet
+  withScriptConnection syncEnv DB.transactionCommit
+  withDatumConnection syncEnv DB.transactionCommit
+  atomically $ takeTMVar maRet
+  atomically $ takeTMVar stakeRet
 
 mkSyncEnvFromConfig ::
   Trace IO Text ->
-  SqlBackend ->
+  DbConnections ->
   ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
@@ -402,7 +407,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+mkSyncEnvFromConfig trce backends connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -429,7 +434,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
           Right
             <$> mkSyncEnv
               trce
-              backend
+              backends
               connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])
@@ -439,52 +444,6 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
               syncNodeConfigFromFile
               syncNodeParams
               runMigrationFnc
-
--- | 'True' is for in memory points and 'False' for on disk
-getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
-getLatestPoints env = do
-  case envLedgerEnv env of
-    HasLedger hasLedgerEnv -> do
-      snapshotPoints <- listKnownSnapshots hasLedgerEnv
-      verifySnapshotPoint env snapshotPoints
-    NoLedger _ -> do
-      -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
-      pure $ mapMaybe convert lastPoints
-  where
-    convert (Nothing, _) = Nothing
-    convert (Just slot, bs) = convertToDiskPoint (SlotNo slot) bs
-
-verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
-verifySnapshotPoint env snapPoints =
-  catMaybes <$> mapM validLedgerFileToPoint snapPoints
-  where
-    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
-    validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
-      let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
-      case valid of
-        Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
-        _ -> pure Nothing
-    validLedgerFileToPoint (InMemory pnt) = do
-      case pnt of
-        GenesisPoint -> pure Nothing
-        BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envBackend env) slotNo
-          let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
-          case valid of
-            Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
-            _ -> pure Nothing
-
-convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
-convertToDiskPoint slot hashBlob = (,False) <$> convertToPoint slot hashBlob
-
-convertToPoint :: SlotNo -> ByteString -> Maybe CardanoPoint
-convertToPoint slot hashBlob =
-  Point . Point.block slot <$> convertHashBlob hashBlob
-  where
-    convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
-    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
 
 getSecurityParam :: SyncEnv -> Word64
 getSecurityParam syncEnv =

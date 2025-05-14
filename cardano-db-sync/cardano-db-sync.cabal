@@ -45,6 +45,7 @@ library
                         Cardano.DbSync.Api
                         Cardano.DbSync.Api.Ledger
                         Cardano.DbSync.Api.Types
+                        Cardano.DbSync.Ledger.Async
                         Cardano.DbSync.Config
                         Cardano.DbSync.Config.Alonzo
                         Cardano.DbSync.Config.Byron
@@ -53,7 +54,6 @@ library
                         Cardano.DbSync.Config.Node
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
-                        Cardano.DbSync.Database
                         Cardano.DbSync.DbAction
                         Cardano.DbSync.Error
 
@@ -109,12 +109,14 @@ library
 
                         Cardano.DbSync.Metrics
 
+                        Cardano.DbSync.Block
                         Cardano.DbSync.Cache
                         Cardano.DbSync.Cache.Epoch
                         Cardano.DbSync.Cache.FIFO
                         Cardano.DbSync.Cache.LRU
+                        Cardano.DbSync.Cache.Stake
                         Cardano.DbSync.Cache.Types
-                        Cardano.DbSync.Default
+                        Cardano.DbSync.Cache.Util
                         Cardano.DbSync.Epoch
 
                         Cardano.DbSync.Rollback
@@ -130,6 +132,13 @@ library
                         Cardano.DbSync.LocalStateQuery
                         Cardano.DbSync.StateQuery
                         Cardano.DbSync.Sync
+                        Cardano.DbSync.Threads.Database
+                        Cardano.DbSync.Threads.EpochStake
+                        Cardano.DbSync.Threads.Ledger
+                        Cardano.DbSync.Threads.MultiAsset
+                        Cardano.DbSync.Threads.Rewards
+                        Cardano.DbSync.Threads.Stake
+                        Cardano.DbSync.Threads.TxInResolve
                         Cardano.DbSync.Tracing.ToObjectOrphans
                         Cardano.DbSync.Types
 
@@ -209,6 +218,8 @@ library
                       , prometheus
                       , psqueues
                       , random-shuffle
+                      , resourcet
+                      , resource-pool
                       , scientific
                       , serialise
                       , small-steps

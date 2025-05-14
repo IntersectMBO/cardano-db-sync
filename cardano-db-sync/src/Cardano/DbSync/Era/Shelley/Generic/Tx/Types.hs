@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
+  TxInKey (..),
   TxOut (..),
   TxRedeemer (..),
   TxScript (..),
@@ -43,43 +44,41 @@ import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 import Cardano.Ledger.Core (TxBody)
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
-import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo, StandardBabbage, StandardConway, StandardCrypto, StandardShelley)
 
 data Tx = Tx
-  { txHash :: !ByteString
-  , txLedgerTxId :: !(Ledger.TxId StandardCrypto)
-  , txBlockIndex :: !Word64
+  { txHash :: ByteString
+  , txLedgerTxId :: TxIdLedger
+  , txBlockIndex :: Word64
   , txCBOR :: ByteString
-  , txSize :: !Word64
-  , txValidContract :: !Bool
-  , txInputs :: ![TxIn]
-  , txCollateralInputs :: ![TxIn]
-  , txReferenceInputs :: ![TxIn]
-  , txOutputs :: ![TxOut]
-  , txCollateralOutputs :: ![TxOut]
-  , txFees :: !(Maybe Coin) -- Nothing means it needs to be computed by inSum - outSum and happens on phase 2 failures.
-  , txOutSum :: !Coin
-  , txInvalidBefore :: !(Maybe SlotNo)
-  , txInvalidHereafter :: !(Maybe SlotNo)
-  , txWithdrawalSum :: !Coin
-  , txMetadata :: !(Maybe (Map Word64 TxMetadataValue))
-  , txCertificates :: ![TxCertificate]
-  , txWithdrawals :: ![TxWithdrawal]
-  , txParamProposal :: ![ParamProposal]
-  , txMint :: !(MultiAsset StandardCrypto)
+  , txSize :: Word64
+  , txValidContract :: Bool
+  , txInputs :: [TxIn]
+  , txCollateralInputs :: [TxIn]
+  , txReferenceInputs :: [TxIn]
+  , txOutputs :: [TxOut]
+  , txCollateralOutputs :: [TxOut]
+  , txFees :: Maybe Coin -- Nothing means it needs to be computed by inSum - outSum and happens on phase 2 failures.
+  , txOutSum :: Coin
+  , txInvalidBefore :: Maybe SlotNo
+  , txInvalidHereafter :: Maybe SlotNo
+  , txWithdrawalSum :: Coin
+  , txMetadata :: Maybe (Map Word64 TxMetadataValue)
+  , txCertificates :: [TxCertificate]
+  , txWithdrawals :: [TxWithdrawal]
+  , txParamProposal :: [ParamProposal]
+  , txMint :: MultiAsset StandardCrypto
   , txRedeemer :: [(Word64, TxRedeemer)]
   , txData :: [PlutusData]
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
-  , txExtraKeyWitnesses :: ![ByteString]
-  , txVotingProcedure :: ![(Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)])]
-  , txProposalProcedure :: ![(GovActionId StandardCrypto, ProposalProcedure StandardConway)]
-  , txTreasuryDonation :: !Coin
+  , txExtraKeyWitnesses :: [ByteString]
+  , txVotingProcedure :: [(Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)])]
+  , txProposalProcedure :: [(GovActionId StandardCrypto, ProposalProcedure StandardConway)]
+  , txTreasuryDonation :: Coin
   }
 
 type ShelleyCert = ShelleyTxCert StandardShelley
@@ -87,31 +86,36 @@ type ConwayCert = ConwayTxCert StandardConway
 type Cert = Either ShelleyCert ConwayCert
 
 data TxCertificate = TxCertificate
-  { txcRedeemerIndex :: !(Maybe Word64)
-  , txcIndex :: !Word16
-  , txcCert :: !Cert
+  { txcRedeemerIndex :: Maybe Word64
+  , txcIndex :: Word16
+  , txcCert :: Cert
   }
 
 data TxWithdrawal = TxWithdrawal
-  { txwRedeemerIndex :: !(Maybe Word64)
-  , txwRewardAccount :: !(Shelley.RewardAccount StandardCrypto)
-  , txwAmount :: !Coin
+  { txwRedeemerIndex :: Maybe Word64
+  , txwRewardAccount :: RewAccount
+  , txwAmount :: Coin
   }
 
+data TxInKey = TxInKey
+  { txInTxId :: TxIdLedger
+  , txInIndex :: Word64
+  }
+  deriving (Eq, Show, Ord)
+
 data TxIn = TxIn
-  { txInIndex :: !Word64
-  , txInTxId :: !(Ledger.TxId StandardCrypto)
-  , txInRedeemerIndex :: !(Maybe Word64) -- This only has a meaning for Alonzo.
+  { txInKey :: TxInKey
+  , txInRedeemerIndex :: Maybe Word64 -- This only has a meaning for Alonzo.
   }
   deriving (Show)
 
 data TxOut = TxOut
-  { txOutIndex :: !Word64
-  , txOutAddress :: !(Ledger.Addr StandardCrypto)
-  , txOutAdaValue :: !Coin
-  , txOutMaValue :: !(Map (PolicyID StandardCrypto) (Map AssetName Integer))
+  { txOutIndex :: Word64
+  , txOutAddress :: Ledger.Addr StandardCrypto
+  , txOutAdaValue :: Coin
+  , txOutMaValue :: Map (PolicyID StandardCrypto) (Map AssetName Integer)
   , txOutScript :: Maybe TxScript
-  , txOutDatum :: !TxOutDatum
+  , txOutDatum :: TxOutDatum
   }
 
 data TxRedeemer = TxRedeemer
@@ -127,7 +131,7 @@ data TxRedeemer = TxRedeemer
 -- Fields are intentionally left lazy, to avoid transformation if the entry already
 -- exists in db.
 data TxScript = TxScript
-  { txScriptHash :: !ByteString
+  { txScriptHash :: ByteString
   , txScriptType :: DB.ScriptType
   , txScriptPlutusSize :: Maybe Word64
   , txScriptJson :: Maybe ByteString
@@ -137,7 +141,7 @@ data TxScript = TxScript
 -- Fields are intentionally left lazy, to avoid transformation if the entry already
 -- exists in db.
 data PlutusData = PlutusData
-  { txDataHash :: !DataHash
+  { txDataHash :: DataHash
   , txDataValue :: ByteString -- we turn this into json later.
   , txDataBytes :: ByteString
   }
@@ -175,7 +179,7 @@ getMaybeDatumHash (Just hsh) = DatumHash hsh
 sumTxOutCoin :: [TxOut] -> Coin
 sumTxOutCoin = Coin . sum . map (unCoin . txOutAdaValue)
 
-toTxHash :: TxIn -> ByteString
+toTxHash :: TxInKey -> ByteString
 toTxHash = unTxHash . txInTxId
 
 class AlonzoEraTxBody era => DBScriptPurpose era where

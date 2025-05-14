@@ -16,11 +16,17 @@ module Cardano.DbSync.Cache.Types (
   EpochBlockDiff (..),
   StakeCache (..),
   StakePoolCache,
+  StakeDBAction (..),
+  StakeChannels (..),
+  MADBAction (..),
+  MAChannels (..),
 
   -- * Inits
   useNoCache,
   initCacheStatistics,
   newEmptyCache,
+  newStakeChannels,
+  newMAChannels,
 
   -- * Utils
   shouldCache,
@@ -36,15 +42,17 @@ import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
 import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Types (DataHash, PoolKeyHash, StakeCred)
+import Cardano.DbSync.Types (CardanoBlock, DataHash, PoolKeyHash, RewAccount, StakeCred, TxIdLedger)
 import Cardano.Ledger.Mary.Value (AssetName, PolicyID)
-import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTMVar,
   StrictTVar,
   newTVarIO,
   readTVarIO,
  )
+import Control.Concurrent.STM.TBQueue (TBQueue)
+import qualified Control.Concurrent.STM.TBQueue as TBQ
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (UTCTime)
 import Data.WideWord.Word128 (Word128)
@@ -52,7 +60,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
--- | We use a stable cache for entries that are expected to be reused frequentyl.
+-- | We use a stable cache for entries that are expected to be reused frequently.
 -- These are stake addresses that have rewards, delegations etc.
 -- They are never removed unless manually eg when it's deregistered
 -- The LRU cache is much smaller for the rest stake addresses.
@@ -84,7 +92,7 @@ data CacheInternal = CacheInternal
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString V.AddressId))
-  , cTxIds :: !(StrictTVar IO (FIFOCache (Ledger.TxId StandardCrypto) DB.TxId))
+  , cTxIds :: !(StrictTVar IO (FIFOCache TxIdLedger DB.TxId))
   }
 
 data CacheStatistics = CacheStatistics
@@ -217,8 +225,8 @@ textShowStats (ActiveCache ic) = do
 useNoCache :: CacheStatus
 useNoCache = NoCache
 
-newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
-newEmptyCache CacheCapacity {..} = liftIO $ do
+newEmptyCache :: CacheCapacity -> IO CacheStatus
+newEmptyCache CacheCapacity {..} = do
   cIsCacheOptimised <- newTVarIO False
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
@@ -255,3 +263,45 @@ shouldCache = \case
   UpdateCache -> True
   UpdateCacheStrong -> True
   _ -> False
+
+--------------------------------------------------------------------------------
+-- Stake
+--------------------------------------------------------------------------------
+
+data StakeDBAction
+  = QueryInsertStake RewAccount CacheAction (StrictTMVar IO DB.StakeAddressId)
+  | CacheStake RewAccount DB.StakeAddressId Bool
+  | BulkPrefetchStake CardanoBlock
+  | CommitStake (StrictTMVar IO ())
+
+data StakeChannels = StakeChannels
+  { scPriorityQueue :: TBQueue StakeDBAction
+  , scSecondaryQueue :: TBQueue StakeDBAction
+  }
+
+newStakeChannels :: IO StakeChannels
+newStakeChannels =
+  StakeChannels
+    <$> TBQ.newTBQueueIO 100
+    <*> TBQ.newTBQueueIO 100
+
+--------------------------------------------------------------------------------
+-- MultiAssets
+--------------------------------------------------------------------------------
+
+data MADBAction
+  = QueryInsertMA (PolicyID StandardCrypto) AssetName (StrictTMVar IO DB.MultiAssetId)
+  | CacheMA (PolicyID StandardCrypto) AssetName DB.MultiAssetId
+  | BulkPrefetchMA CardanoBlock
+  | CommitMA (StrictTMVar IO ())
+
+data MAChannels = MAChannels
+  { macPriorityQueue :: TBQueue MADBAction
+  , macSecondaryQueue :: TBQueue MADBAction
+  }
+
+newMAChannels :: IO MAChannels
+newMAChannels =
+  MAChannels
+    <$> TBQ.newTBQueueIO 100
+    <*> TBQ.newTBQueueIO 100

@@ -21,13 +21,16 @@ import Cardano.DbSync.Types (
   CardanoPoint,
   PoolKeyHash,
   SlotDetails,
+  StakeCred,
  )
 import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Credential (Credential (..))
+import qualified Cardano.Ledger.EpochBoundary as Ledger
 import Cardano.Ledger.Keys (KeyRole (..))
+import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState ())
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
@@ -36,6 +39,7 @@ import Cardano.Slotting.Slot (
   WithOrigin (..),
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
+  StrictTMVar,
   StrictTVar,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
@@ -46,6 +50,7 @@ import qualified Data.Strict.Maybe as Strict
 import Lens.Micro (Traversal')
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerState)
+import Ouroboros.Consensus.Config (TopLevelConfig (..))
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -72,6 +77,9 @@ data HasLedgerEnv = HasLedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leApplyQueue :: TBQueue LedgerAction
+  , leEpochStakeChans :: EpochStakeChannels
+  , leRewardsChans :: RewardsChannels
   }
 
 data CardanoLedgerState = CardanoLedgerState
@@ -140,7 +148,6 @@ data ApplyResult = ApplyResult
   , apOldLedger :: !(Strict.Maybe CardanoLedgerState)
   , apDeposits :: !(Strict.Maybe Generic.Deposits) -- The current required deposits
   , apSlotDetails :: !SlotDetails
-  , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
   , apGovActionState :: !(Maybe (ConwayGovState StandardConway))
   , apDepositsMap :: !DepositsMap
@@ -156,7 +163,6 @@ defaultApplyResult slotDetails =
     , apOldLedger = Strict.Nothing
     , apDeposits = Strict.Nothing
     , apSlotDetails = slotDetails
-    , apStakeSlice = Generic.NoSlices
     , apEvents = []
     , apGovActionState = Nothing
     , apDepositsMap = emptyDepositsMap
@@ -186,6 +192,9 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
             newCommitteeMembers
             newQuorum
 
+getTopLevelconfigHasLedger :: HasLedgerEnv -> TopLevelConfig CardanoBlock
+getTopLevelconfigHasLedger = Consensus.pInfoConfig . leProtocolInfo
+
 newtype LedgerDB = LedgerDB
   { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
   }
@@ -195,6 +204,33 @@ instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState wh
   getAnchorMeasure _ = getTipSlot . clsState
 
 data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
+
+data LedgerAction = LedgerAction CardanoBlock LedgerResultResTMVar
+type LedgerResultResTMVar = StrictTMVar IO (ApplyResult, Bool)
+
+data EpochStakeDBAction = EpochStakeDBAction
+  { esaEpochNo :: EpochNo
+  , esaSnapShot :: Ledger.SnapShot StandardCrypto
+  , esaCheckFirst :: Bool -- Check if the data is already there before inserting
+  }
+
+data EpochState = Running | Done
+data EpochStakeChannels = EpochStakeChannels
+  { estakeQueue :: TBQueue EpochStakeDBAction
+  , epochResult :: StrictTVar IO (Maybe (EpochNo, EpochState))
+  }
+
+data EpochRewardState = RewRunning | RewDone | RewEBRunning | RewEBDone
+  deriving (Eq, Ord, Show)
+
+data RewardsDBAction
+  = RewardsDBAction EpochNo (Map StakeCred (Set (Ledger.Reward StandardCrypto))) Bool
+  | RewardsEpochBoundary EpochNo [LedgerEvent]
+
+data RewardsChannels = RewardsChannels
+  { rQueue :: TBQueue RewardsDBAction
+  , rewardsResult :: StrictTVar IO (Maybe (EpochNo, EpochRewardState))
+  }
 
 -- | Per-era pure getters and setters on @NewEpochState@. Note this is a bit of an abuse
 -- of the cardano-ledger/ouroboros-consensus public APIs, because ledger state is not

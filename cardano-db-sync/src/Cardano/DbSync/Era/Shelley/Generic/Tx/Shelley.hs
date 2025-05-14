@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley (
   getTxSize,
   mkTxIn,
   fromTxIn,
+  toTxInKey,
   mkTxOut,
   mkTxWithdrawals,
   mkTxWithdrawal,
@@ -35,6 +36,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Script (fromMultiSig)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import Cardano.DbSync.Era.Shelley.Generic.Witness
+import Cardano.DbSync.Types (RewAccount, TxIdLedger)
 import Cardano.Ledger.BaseTypes (TxIx (..), strictMaybeToMaybe)
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Core as Core
@@ -122,12 +124,14 @@ mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBody
         , txOutDatum = NoDatum -- Shelley does not support plutus data
         }
 
+toTxInKey :: Ledger.TxIn StandardCrypto -> TxInKey
+toTxInKey (Ledger.TxIn txId (TxIx w64)) = TxInKey txId w64
+
 fromTxIn :: Ledger.TxIn StandardCrypto -> TxIn
-fromTxIn (Ledger.TxIn (Ledger.TxId txid) (TxIx w64)) =
+fromTxIn txIn =
   TxIn
-    { txInIndex = w64
+    { txInKey = toTxInKey txIn
     , txInRedeemerIndex = Nothing
-    , txInTxId = Ledger.TxId txid
     }
 
 txHashId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> ByteString
@@ -136,7 +140,7 @@ txHashId = safeHashToByteString . txSafeHash
 txSafeHash :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> Ledger.SafeHash StandardCrypto Core.EraIndependentTxBody
 txSafeHash tx = Ledger.hashAnnotated (tx ^. Core.bodyTxL)
 
-mkTxId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> Ledger.TxId StandardCrypto
+mkTxId :: (EraCrypto era ~ StandardCrypto, Core.EraTx era) => Core.Tx era -> TxIdLedger
 mkTxId = Ledger.TxId . txSafeHash
 
 txHashFromSafe :: Ledger.SafeHash StandardCrypto Core.EraIndependentTxBody -> ByteString
@@ -171,7 +175,7 @@ mkTxWithdrawals ::
 mkTxWithdrawals bd =
   map mkTxWithdrawal $ Map.toList $ Shelley.unWithdrawals $ bd ^. Core.withdrawalsTxBodyL
 
-mkTxWithdrawal :: (Shelley.RewardAccount StandardCrypto, Coin) -> TxWithdrawal
+mkTxWithdrawal :: (RewAccount, Coin) -> TxWithdrawal
 mkTxWithdrawal (ra, c) =
   TxWithdrawal
     { txwRedeemerIndex = Nothing

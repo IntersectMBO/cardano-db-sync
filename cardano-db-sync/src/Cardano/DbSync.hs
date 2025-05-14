@@ -29,11 +29,10 @@ import qualified Cardano.Crypto as Crypto
 import qualified Cardano.Db as DB
 import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
+import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Database
 import Cardano.DbSync.DbAction
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
@@ -41,6 +40,10 @@ import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
+import Cardano.DbSync.Threads.Database
+import Cardano.DbSync.Threads.EpochStake
+import Cardano.DbSync.Threads.Ledger
+import Cardano.DbSync.Threads.Stake
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Constraint (queryIsJsonbInSchema)
@@ -51,7 +54,7 @@ import Control.Monad.Extra (whenJust)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
-import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
+import Database.Persist.Postgresql (ConnectionString)
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
@@ -163,20 +166,18 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
   logInfo trce $ "Using shelley genesis file from: " <> (show . unGenesisFile $ dncShelleyGenesisFile syncNodeConfigFromFile)
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
-  let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-
   Db.runIohkLogging trce $
-    withPostgresqlConn dbConnString $
-      \backend -> liftIO $ do
+    withDBSyncConnections dbConnString $
+      \backends -> liftIO $ do
         runOrThrowIO $ runExceptT $ do
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- queryIsJsonbInSchema backend
+          isJsonbInSchema <- queryIsJsonbInSchema (mainBackend backends)
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
                 trce
-                backend
+                backends
                 dbConnString
                 syncOptions
                 genCfg
@@ -196,7 +197,7 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations backend trce
+            Db.noLedgerMigrations (mainBackend backends) trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread
@@ -206,6 +207,9 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
               id
               [ runDbThread syncEnv metricsSetters threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runLedgerThread syncEnv
+              , runEpochStakeThread syncEnv
+              , runStakeThread syncEnv
               , runFetchOffChainPoolThread syncEnv
               , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
@@ -218,6 +222,8 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
         _other -> False
     removeJsonbFromSchemaConfig = ioRemoveJsonbFromSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
+
+    useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
 
 logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
 logProtocolMagicId tracer pm =
@@ -237,6 +243,7 @@ extractSyncOptions snp aop snc =
         not isTxOutConsumedBootstrap'
           && ioInOut iopts
           && not (enpEpochDisabled snp || not (enpHasCache snp))
+          && False
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptPruneConsumeMigration =
