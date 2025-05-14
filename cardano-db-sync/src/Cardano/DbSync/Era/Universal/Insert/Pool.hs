@@ -42,7 +42,6 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Prelude
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type IsPoolMember = PoolKeyHash -> Bool
 
@@ -57,7 +56,7 @@ insertPoolRegister ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolP.PoolParams StandardCrypto ->
+  PoolP.PoolParams ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
   poolHashId <- lift $ insertPoolKeyWithCache cache UpdateCache (PoolP.ppId params)
@@ -76,7 +75,7 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
       $ DB.PoolUpdate
         { DB.poolUpdateHashId = poolHashId
         , DB.poolUpdateCertIndex = idx
-        , DB.poolUpdateVrfKeyHash = hashToBytes (PoolP.ppVrf params)
+        , DB.poolUpdateVrfKeyHash = hashToBytes $ Ledger.fromVRFVerKeyHash (PoolP.ppVrf params)
         , DB.poolUpdatePledge = Generic.coinToDbLovelace (PoolP.ppPledge params)
         , DB.poolUpdateRewardAddrId = saId
         , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
@@ -103,7 +102,7 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
 
     -- Ignore the network in the `RewardAccount` and use the provided one instead.
     -- This is a workaround for https://github.com/IntersectMBO/cardano-db-sync/issues/546
-    adjustNetworkTag :: Ledger.RewardAccount StandardCrypto -> Ledger.RewardAccount StandardCrypto
+    adjustNetworkTag :: Ledger.RewardAccount -> Ledger.RewardAccount
     adjustNetworkTag (Shelley.RewardAccount _ cred) = Shelley.RewardAccount network cred
 
 insertPoolRetire ::
@@ -113,7 +112,7 @@ insertPoolRetire ::
   CacheStatus ->
   EpochNo ->
   Word16 ->
-  Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
+  Ledger.KeyHash 'Ledger.StakePool ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolRetire trce txId cache epochNum idx keyHash = do
   poolId <- lift $ queryPoolKeyOrInsert "insertPoolRetire" trce cache UpdateCache True keyHash
@@ -147,7 +146,7 @@ insertPoolOwner ::
   CacheStatus ->
   Ledger.Network ->
   DB.PoolUpdateId ->
-  Ledger.KeyHash 'Ledger.Staking StandardCrypto ->
+  Ledger.KeyHash 'Ledger.Staking ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolOwner trce cache network poolUpdateId skh = do
   saId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network (Ledger.KeyHashObj skh)
@@ -206,7 +205,7 @@ insertPoolCert ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolCert StandardCrypto ->
+  PoolCert ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertPoolCert tracer cache isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of

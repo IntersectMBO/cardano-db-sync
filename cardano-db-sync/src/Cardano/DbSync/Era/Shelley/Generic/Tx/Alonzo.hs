@@ -50,10 +50,9 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Scripts (ConwayPlutusPurpose (..))
 import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Hashes (ScriptHash)
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), policyID)
-import qualified Cardano.Ledger.SafeHash as Ledger
-import Cardano.Ledger.Shelley.Scripts (ScriptHash)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert as Shelley
 import qualified Cardano.Ledger.TxIn as Ledger
@@ -65,9 +64,9 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Maybe.Strict as Strict
 import qualified Data.Set as Set
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (EraCrypto, StandardAlonzo, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra)
 
-fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardAlonzo) -> Tx
+fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx AlonzoEra) -> Tx
 fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -113,13 +112,13 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Alonzo does not support treasury donations
     }
   where
-    txBody :: Alonzo.AlonzoTxBody StandardAlonzo
+    txBody :: Alonzo.AlonzoTxBody AlonzoEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
     outputs = zipWith fromTxOut [0 ..] $ toList (Alonzo.outputs' txBody)
 
-    fromTxOut :: Word64 -> AlonzoTxOut StandardAlonzo -> TxOut
+    fromTxOut :: Word64 -> AlonzoTxOut AlonzoEra -> TxOut
     fromTxOut index txOut =
       TxOut
         { txOutIndex = index
@@ -145,13 +144,12 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
 
     collInputs = mkCollTxIn txBody
 
-mkCollTxIn :: (EraCrypto era ~ StandardCrypto, AlonzoEraTxBody era) => Core.TxBody era -> [TxIn]
+mkCollTxIn :: AlonzoEraTxBody era => Core.TxBody era -> [TxIn]
 mkCollTxIn txBody = map fromTxIn . toList $ txBody ^. Alonzo.collateralInputsTxBodyL
 
 getScripts ::
   forall era.
-  ( EraCrypto era ~ StandardCrypto
-  , Core.Script era ~ Alonzo.AlonzoScript era
+  ( Core.Script era ~ Alonzo.AlonzoScript era
   , Core.TxAuxData era ~ AlonzoTxAuxData era
   , Core.EraTx era
   , DBPlutusScript era
@@ -167,7 +165,7 @@ getScripts tx =
   where
     getAuxScripts ::
       StrictMaybe (AlonzoTxAuxData era) ->
-      [(ScriptHash StandardCrypto, Alonzo.AlonzoScript era)]
+      [(ScriptHash, Alonzo.AlonzoScript era)]
     getAuxScripts maux =
       case strictMaybeToMaybe maux of
         Nothing -> []
@@ -178,8 +176,7 @@ getScripts tx =
 
 resolveRedeemers ::
   forall era.
-  ( EraCrypto era ~ StandardCrypto
-  , Alonzo.AlonzoEraTxWits era
+  ( Alonzo.AlonzoEraTxWits era
   , Core.EraTx era
   , DBScriptPurpose era
   ) =>
@@ -199,7 +196,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
     txBody :: Core.TxBody era
     txBody = tx ^. Core.bodyTxL
 
-    withdrawalsNoRedeemers :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
+    withdrawalsNoRedeemers :: Map Shelley.RewardAccount TxWithdrawal
     withdrawalsNoRedeemers =
       Map.mapWithKey (curry mkTxWithdrawal) $
         Shelley.unWithdrawals $
@@ -211,7 +208,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
         toList $
           toCert <$> (txBody ^. Core.certsTxBodyL)
 
-    txInsMissingRedeemer :: Map (Ledger.TxIn StandardCrypto) TxIn
+    txInsMissingRedeemer :: Map Ledger.TxIn TxIn
     txInsMissingRedeemer = Map.fromList $ fmap (\inp -> (inp, fromTxIn inp)) $ toList $ txBody ^. Core.inputsTxBodyL
 
     initRedeemersMaps :: RedeemerMaps
@@ -267,14 +264,14 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
           Strict.SNothing -> Nothing
           Strict.SJust a -> toAlonzoPurpose txBody $ Alonzo.hoistPlutusPurpose Alonzo.toAsItem a
 
-handleTxInPtr :: Word64 -> Ledger.TxIn StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+handleTxInPtr :: Word64 -> Ledger.TxIn -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
   Nothing -> (mps, Nothing)
   Just gtxIn ->
     let gtxIn' = gtxIn {txInRedeemerIndex = Just rdmrIx}
      in (mps {rmInps = Map.insert txIn gtxIn' (rmInps mps)}, Just (Left gtxIn'))
 
-handleRewardPtr :: Word64 -> Shelley.RewardAccount StandardCrypto -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+handleRewardPtr :: Word64 -> Shelley.RewardAccount -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleRewardPtr rdmrIx rwdAcnt mps = case Map.lookup rwdAcnt (rmWdrl mps) of
   Nothing -> (mps, Nothing)
   Just wdrl ->
@@ -289,14 +286,14 @@ handleCertPtr rdmrIx dcert mps =
     f x = x
 
 data RedeemerMaps = RedeemerMaps
-  { rmWdrl :: Map (Shelley.RewardAccount StandardCrypto) TxWithdrawal
+  { rmWdrl :: Map Shelley.RewardAccount TxWithdrawal
   , rmCerts :: [(Cert, TxCertificate)]
-  , rmInps :: Map (Ledger.TxIn StandardCrypto) TxIn
+  , rmInps :: Map Ledger.TxIn TxIn
   }
 
 mkTxScript ::
   (DBPlutusScript era, Core.NativeScript era ~ Timelock era) =>
-  (ScriptHash StandardCrypto, Alonzo.AlonzoScript era) ->
+  (ScriptHash, Alonzo.AlonzoScript era) ->
   TxScript
 mkTxScript (hsh, script) =
   TxScript
@@ -324,7 +321,7 @@ mkTxScript (hsh, script) =
     plutusCborScript =
       case script of
         Alonzo.TimelockScript {} -> Nothing
-        plScript -> Just $ Ledger.originalBytes plScript
+        plScript -> Just $ Core.originalBytes plScript
 
 getPlutusSizes ::
   forall era.
@@ -349,14 +346,14 @@ getPlutusScriptSize script =
       Just $ fromIntegral $ SBS.length $ unPlutusBinary $ Alonzo.plutusScriptBinary ps
 
 txDataWitness ::
-  (Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era, EraCrypto era ~ StandardCrypto) =>
+  (Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era) =>
   Core.Tx era ->
   [PlutusData]
 txDataWitness tx =
   mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (tx ^. Core.witsTxL))
 
 mkTxData :: (DataHash, Alonzo.Data era) -> PlutusData
-mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Ledger.originalBytes dt)
+mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Core.originalBytes dt)
   where
     jsonData :: Alonzo.Data era -> ByteString
     jsonData =
@@ -373,7 +370,7 @@ extraKeyWits txBody =
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
       txBody ^. Alonzo.reqSignerHashesTxBodyL
 
-scriptHashAcnt :: Shelley.RewardAccount StandardCrypto -> Maybe ByteString
+scriptHashAcnt :: Shelley.RewardAccount -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.raCredential rewardAddr
 
 scriptHashCert :: Cert -> Maybe ByteString
@@ -387,13 +384,13 @@ scriptHashCertConway cert = unScriptHash <$> getScriptWitnessTxCert cert
 scriptHashCertShelley :: ShelleyCert -> Maybe ByteString
 scriptHashCertShelley cert = unScriptHash <$> getScriptWitnessTxCert cert
 
-getConwayVotingScriptHash :: Voter StandardCrypto -> Maybe ByteString
+getConwayVotingScriptHash :: Voter -> Maybe ByteString
 getConwayVotingScriptHash = \case
   CommitteeVoter cred -> getCredentialScriptHash cred
   DRepVoter cred -> getCredentialScriptHash cred
   StakePoolVoter _ -> Nothing
 
-getConwayProposalScriptHash :: EraCrypto era ~ StandardCrypto => ProposalProcedure era -> Maybe ByteString
+getConwayProposalScriptHash :: ProposalProcedure era -> Maybe ByteString
 getConwayProposalScriptHash pp = case pProcGovAction pp of
   ParameterChange _ _ p -> unScriptHash <$> strictMaybeToMaybe p
   TreasuryWithdrawals _ p -> unScriptHash <$> strictMaybeToMaybe p

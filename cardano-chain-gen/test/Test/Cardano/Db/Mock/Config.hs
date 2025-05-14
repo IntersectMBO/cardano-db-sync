@@ -96,11 +96,16 @@ import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
+import Ouroboros.Consensus.Byron.Ledger.Mempool ()
+import Ouroboros.Consensus.HardFork.Combinator.Mempool ()
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
 import System.FilePath.Posix (takeDirectory, (</>))
 import System.IO.Silently (hSilence)
+
+import Debug.Trace as Trace
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -471,7 +476,8 @@ withCustomConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndDropDB =
+withCustomConfigAndDropDB = do
+  Trace.traceM "withCustomConfigAndDropDB: Start"
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -537,6 +543,7 @@ withFullConfig' ::
   [(Text, Text)] ->
   IO a
 withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath testLabelFilePath action iom migr = do
+  Trace.traceM "withFullConfig': Start"
   recreateDir mutableDir
   -- check if custom syncNodeConfigs have been passed or not
   syncNodeConfig <-

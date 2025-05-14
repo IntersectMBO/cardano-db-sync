@@ -43,7 +43,9 @@ import Data.Maybe (fromJust)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import Ouroboros.Consensus.Cardano.Node (CardanoHardForkTrigger (..))
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 syncPreConfig :: Gen SyncPreConfig
 syncPreConfig =
@@ -202,12 +204,11 @@ protocolVersion = ProtocolVersion <$> word16 <*> word16 <*> word8
     word16 = Gen.word16 (Range.linear minBound maxBound)
     word8 = Gen.word8 (Range.linear minBound maxBound)
 
-triggerHardFork :: MonadGen m => m TriggerHardFork
+triggerHardFork :: MonadGen m => m (CardanoHardForkTrigger (ShelleyBlock (crypto StandardCrypto) era))
 triggerHardFork =
   Gen.choice
-    [ Gen.constant TriggerHardForkNotDuringThisExecution
-    , TriggerHardForkAtEpoch . EpochNo <$> Gen.word64 (Range.linear minBound maxBound)
-    , TriggerHardForkAtVersion <$> Gen.word16 (Range.linear minBound maxBound)
+    [ Gen.constant CardanoTriggerHardForkAtDefaultVersion
+    , CardanoTriggerHardForkAtEpoch . EpochNo <$> Gen.word64 (Range.linear minBound maxBound)
     ]
 
 -- | @Logging.Representation@ is not useful for our testing, so we just generate a minimal example

@@ -18,7 +18,7 @@ import qualified Cardano.Protocol.TPraos.API as Shelley
 import qualified Cardano.Protocol.TPraos.Rules.Tickn as Shelley
 import Cardano.Slotting.Slot (EpochNo (..))
 import Data.Strict.Maybe (Maybe (..))
-import Ouroboros.Consensus.Cardano.Block (HardForkState (..), StandardConway)
+import Ouroboros.Consensus.Cardano.Block (ConwayEra, HardForkState (..))
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -30,8 +30,8 @@ data NewEpoch = NewEpoch
   , neIsEBB :: !Bool
   , neAdaPots :: !(Maybe Shelley.AdaPots)
   , neEpochUpdate :: !EpochUpdate
-  , neDRepState :: !(Maybe (DRepPulsingState StandardConway))
-  , neEnacted :: !(Maybe (ConwayGovState StandardConway))
+  , neDRepState :: !(Maybe (DRepPulsingState ConwayEra))
+  , neEnacted :: !(Maybe (ConwayGovState ConwayEra))
   , nePoolDistr :: !(Maybe (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural))
   }
 
@@ -60,9 +60,9 @@ extractEpochNonce extLedgerState =
     ChainDepStateBabbage st -> extractNoncePraos st
     ChainDepStateConway st -> extractNoncePraos st
   where
-    extractNonce :: Consensus.TPraosState c -> Ledger.Nonce
+    extractNonce :: Consensus.TPraosState -> Ledger.Nonce
     extractNonce =
       Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
 
-    extractNoncePraos :: Consensus.PraosState c -> Ledger.Nonce
+    extractNoncePraos :: Consensus.PraosState -> Ledger.Nonce
     extractNoncePraos = praosStateEpochNonce

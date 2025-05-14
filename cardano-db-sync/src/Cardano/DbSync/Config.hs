@@ -35,6 +35,7 @@ import Cardano.Prelude
 import qualified Data.Text as Text
 import System.FilePath (takeDirectory, (</>))
 
+
 configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO Text)
 configureLogging syncNodeConfig loggingName = do
   if not (dncEnableLogging syncNodeConfig)
@@ -95,8 +96,10 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncIpfsGateway = endsInSlash <$> pcIpfsGateway pcfg
       }
 
+
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
 mkAdjustPath cfg fp = takeDirectory (pcNodeConfigFilePath cfg) </> fp
 
 endsInSlash :: Text -> Text
 endsInSlash txt = if Text.isSuffixOf "/" txt then txt else txt <> "/"
+

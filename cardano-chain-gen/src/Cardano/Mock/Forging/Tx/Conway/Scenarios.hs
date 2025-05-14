@@ -20,7 +20,6 @@ import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.TxCert (Delegatee (..))
 import Cardano.Ledger.Core (Tx ())
 import Cardano.Ledger.Credential (Credential (..), StakeCredential (), StakeReference (..))
-import Cardano.Ledger.Crypto (StandardCrypto ())
 import Cardano.Ledger.DRep (DRep (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..))
@@ -32,7 +31,7 @@ import Cardano.Prelude
 import Data.List.Extra (chunksOf)
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
-import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
+import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock ())
 import qualified Prelude
 
@@ -56,14 +55,14 @@ delegateAndSendBlocks n interpreter = do
         (\(payCred, stakeCred) -> Addr Testnet payCred (StakeRefBase stakeCred))
         (zip payCreds stakeCreds)
 
-mkRegisterBlocks :: [StakeCredential StandardCrypto] -> Interpreter -> IO [CardanoBlock]
+mkRegisterBlocks :: [StakeCredential] -> Interpreter -> IO [CardanoBlock]
 mkRegisterBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txCreds _ ->
   Conway.mkDCertTx
     (Conway.mkRegTxCert SNothing <$> txCreds)
     (Withdrawals mempty)
     Nothing
 
-mkDelegateBlocks :: [StakeCredential StandardCrypto] -> Interpreter -> IO [CardanoBlock]
+mkDelegateBlocks :: [StakeCredential] -> Interpreter -> IO [CardanoBlock]
 mkDelegateBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txCreds state' ->
   Conway.mkDCertTx
     (map (mkDelegCert state') $ zip (cycle [0, 1, 2]) txCreds)
@@ -75,7 +74,7 @@ mkDelegateBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txC
         (DelegStake $ resolvePool (PoolIndex poolIx) (unState state'))
         cred
 
-mkPaymentBlocks :: UTxOIndex StandardConway -> [Addr StandardCrypto] -> Interpreter -> IO [CardanoBlock]
+mkPaymentBlocks :: UTxOIndex ConwayEra -> [Addr] -> Interpreter -> IO [CardanoBlock]
 mkPaymentBlocks utxoIx addresses interpreter =
   forgeBlocksChunked interpreter addresses $ \txAddrs ->
     Conway.mkPaymentTx' utxoIx (map mkUTxOAddress txAddrs) 0 0 . unState
@@ -86,7 +85,7 @@ mkPaymentBlocks utxoIx addresses interpreter =
 forgeBlocksChunked ::
   Interpreter ->
   [a] ->
-  ([a] -> ShelleyLedgerState StandardConway -> Either ForgingError (Tx StandardConway)) ->
+  ([a] -> ShelleyLedgerState ConwayEra -> Either ForgingError (Tx ConwayEra)) ->
   IO [CardanoBlock]
 forgeBlocksChunked interpreter vs f = forM (chunksOf 500 vs) $ \blockCreds -> do
   blockTxs <- withConwayLedgerState interpreter $ \state' ->
@@ -105,10 +104,10 @@ registerDRepsAndDelegateVotes interpreter = do
   forgeNextFindLeader interpreter (map TxConway blockTxs)
 
 registerDRepAndDelegateVotes' ::
-  Credential 'DRepRole StandardCrypto ->
+  Credential 'DRepRole ->
   StakeIndex ->
   Conway.ConwayLedgerState ->
-  Either ForgingError [AlonzoTx StandardConway]
+  Either ForgingError [AlonzoTx ConwayEra]
 registerDRepAndDelegateVotes' drepId stakeIx ledger = do
   stakeCreds <- resolveStakeCreds stakeIx ledger
 

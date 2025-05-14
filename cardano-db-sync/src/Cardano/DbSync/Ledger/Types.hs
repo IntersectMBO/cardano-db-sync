@@ -142,7 +142,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
-  , apGovActionState :: !(Maybe (ConwayGovState StandardConway))
+  , apGovActionState :: !(Maybe (ConwayGovState ConwayEra))
   , apDepositsMap :: !DepositsMap
   }
 
@@ -169,11 +169,11 @@ getGovExpiresAt applyResult e = case apGovExpiresAfter applyResult of
 
 -- TODO reuse this function rom ledger after it's exported.
 updatedCommittee ::
-  Set.Set (Credential 'ColdCommitteeRole StandardCrypto) ->
-  Map.Map (Credential 'ColdCommitteeRole StandardCrypto) EpochNo ->
+  Set.Set (Credential 'ColdCommitteeRole) ->
+  Map.Map (Credential 'ColdCommitteeRole) EpochNo ->
   Ledger.UnitInterval ->
-  Ledger.StrictMaybe (Committee StandardConway) ->
-  Committee StandardConway
+  Ledger.StrictMaybe (Committee ConwayEra) ->
+  Committee ConwayEra
 updatedCommittee membersToRemove membersToAdd newQuorum committee =
   case committee of
     Ledger.SNothing -> Committee membersToAdd newQuorum
@@ -208,7 +208,7 @@ class HasNewEpochState era where
     ExtLedgerState CardanoBlock ->
     ExtLedgerState CardanoBlock
 
-instance HasNewEpochState StandardShelley where
+instance HasNewEpochState ShelleyEra where
   getNewEpochState st = case ledgerState st of
     LedgerStateShelley shelley -> Just (shelleyLedgerState shelley)
     _ -> Nothing
@@ -217,7 +217,7 @@ instance HasNewEpochState StandardShelley where
     hApplyExtLedgerState $
       fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* fn id :* Nil
 
-instance HasNewEpochState StandardAllegra where
+instance HasNewEpochState AllegraEra where
   getNewEpochState st = case ledgerState st of
     LedgerStateAllegra allegra -> Just (shelleyLedgerState allegra)
     _ -> Nothing
@@ -226,7 +226,7 @@ instance HasNewEpochState StandardAllegra where
     hApplyExtLedgerState $
       fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* Nil
 
-instance HasNewEpochState StandardMary where
+instance HasNewEpochState MaryEra where
   getNewEpochState st = case ledgerState st of
     LedgerStateMary mary -> Just (shelleyLedgerState mary)
     _ -> Nothing
@@ -235,7 +235,7 @@ instance HasNewEpochState StandardMary where
     hApplyExtLedgerState $
       fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* Nil
 
-instance HasNewEpochState StandardAlonzo where
+instance HasNewEpochState AlonzoEra where
   getNewEpochState st = case ledgerState st of
     LedgerStateAlonzo alonzo -> Just (shelleyLedgerState alonzo)
     _ -> Nothing
@@ -244,7 +244,7 @@ instance HasNewEpochState StandardAlonzo where
     hApplyExtLedgerState $
       fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* Nil
 
-instance HasNewEpochState StandardBabbage where
+instance HasNewEpochState BabbageEra where
   getNewEpochState st = case ledgerState st of
     LedgerStateBabbage babbage -> Just (shelleyLedgerState babbage)
     _ -> Nothing
@@ -253,7 +253,7 @@ instance HasNewEpochState StandardBabbage where
     hApplyExtLedgerState $
       fn id :* fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* Nil
 
-instance HasNewEpochState StandardConway where
+instance HasNewEpochState ConwayEra where
   getNewEpochState st = case ledgerState st of
     LedgerStateConway conway -> Just (shelleyLedgerState conway)
     _ -> Nothing
