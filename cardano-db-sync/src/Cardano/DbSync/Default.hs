@@ -51,7 +51,7 @@ insertListBlocks ::
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
 insertListBlocks synEnv blocks = do
-  DB.runDbIohkLogging (envBackend synEnv) tracer
+  DB.runDbIohkLogging (envDbEnv synEnv) tracer
     . runExceptT
     $ traverse_ (applyAndInsertBlockMaybe synEnv tracer) blocks
   where
@@ -61,7 +61,7 @@ applyAndInsertBlockMaybe ::
   SyncEnv ->
   Trace IO Text ->
   CardanoBlock ->
-  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+  ExceptT SyncNodeError (DB.DbAction (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
@@ -120,7 +120,7 @@ insertBlock ::
   Bool ->
   -- has snapshot been taken
   Bool ->
-  ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+  ExceptT SyncNodeError (DB.DbAction (LoggingT IO)) ()
 insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   !epochEvents <- liftIO $ atomically $ generateNewEpochEvents syncEnv (apSlotDetails applyRes)
   let !applyResult = applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}
@@ -177,11 +177,11 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   whenPruneTxOut syncEnv $
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
       do
-        lift $ DB.deleteConsumedTxOut tracer txOutTableType (getSafeBlockNoDiff syncEnv)
+        lift $ DB.deleteConsumedTxOut tracer txOutVariantType (getSafeBlockNoDiff syncEnv)
   commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
-    txOutTableType = getTxOutTableType syncEnv
+    txOutVariantType = getTxOutVariantType syncEnv
     iopts = getInsertOptions syncEnv
 
     updateEpoch details isNewEpochEvent =
@@ -201,7 +201,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       Strict.Nothing | hasLedgerState syncEnv -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
 
-    commitOrIndexes :: Bool -> Bool -> ExceptT SyncNodeError (ReaderT SqlBackend (LoggingT IO)) ()
+    commitOrIndexes :: Bool -> Bool -> ExceptT SyncNodeError (DB.DbAction (LoggingT IO)) ()
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
         if withinTwoMin || tookSnapshot

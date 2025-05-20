@@ -63,7 +63,7 @@ reportError ai =
     ]
 
 -- For a given StakeAddressId, validate that sum rewards >= sum withdrawals.
-validateAccounting :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m (Either AddressInfo ())
+validateAccounting :: MonadIO m => StakeAddressId -> DB.DbAction m (Either AddressInfo ())
 validateAccounting addrId = do
   ai <- queryAddressInfo addrId
   pure $
@@ -71,38 +71,16 @@ validateAccounting addrId = do
       then Left ai
       else Right ()
 
--- -------------------------------------------------------------------------------------------------
-
--- Get all stake addresses with have seen a withdrawal, and return them in shuffled order.
-queryWithdrawalAddresses :: MonadIO m => ReaderT SqlBackend m [StakeAddressId]
-queryWithdrawalAddresses = do
-  res <- select . distinct $ do
-    wd <- from (table @Withdrawal)
-    pure (wd ^. WithdrawalAddrId)
-  liftIO $ shuffleM (map unValue res)
-
-queryAddressInfo :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m AddressInfo
+queryAddressInfo :: MonadIO m => StakeAddressId -> DbAction m AddressInfo
 queryAddressInfo addrId = do
-  rwds <-
-    select $
-      from (table @Reward) >>= \rwd -> do
-        where_ (rwd ^. RewardAddrId ==. val addrId)
-        pure (sum_ $ rwd ^. RewardAmount)
-  wdls <- select $ do
-    wdl <- from (table @Withdrawal)
-    where_ (wdl ^. WithdrawalAddrId ==. val addrId)
-    pure (sum_ (wdl ^. WithdrawalAmount))
-  view <- select $ do
-    saddr <- from $ table @StakeAddress
-    where_ (saddr ^. StakeAddressId ==. val addrId)
-    pure (saddr ^. StakeAddressView)
-  pure $ convert (listToMaybe rwds) (listToMaybe wdls) (listToMaybe view)
-  where
-    convert :: Maybe (Value (Maybe Micro)) -> Maybe (Value (Maybe Micro)) -> Maybe (Value Text) -> AddressInfo
-    convert rAmount wAmount mview =
-      AddressInfo
-        { aiStakeAddressId = addrId
-        , aiStakeAddress = maybe "unknown" unValue mview
-        , aiSumRewards = unValueSumAda rAmount
-        , aiSumWithdrawals = unValueSumAda wAmount
-        }
+  result <- queryAddressInfoData addrId
+  pure $ makeAddressInfo addrId result
+
+makeAddressInfo :: StakeAddressId -> (Ada, Ada, Maybe Text) -> AddressInfo
+makeAddressInfo addrId (rewards, withdrawals, view) =
+  AddressInfo
+    { aiStakeAddressId = addrId
+    , aiStakeAddress = fromMaybe "unknown" view
+    , aiSumRewards = rewards
+    , aiSumWithdrawals = withdrawals
+    }
