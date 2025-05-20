@@ -42,6 +42,7 @@ import Cardano.Db.Types (
   scriptTypeDecoder,
   scriptTypeEncoder,
  )
+import qualified Cardano.Db.Schema.Ids as Id
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
@@ -65,7 +66,7 @@ data Block = Block
   , blockSlotNo :: !(Maybe Word64) -- sqltype=word63type
   , blockEpochSlotNo :: !(Maybe Word64) -- sqltype=word31type
   , blockBlockNo :: !(Maybe Word64) -- sqltype=word31type
-  , blockPreviousId :: !(Maybe Int) -- noreference
+  , blockPreviousId :: !(Maybe BlockId) -- noreference
   , blockSlotLeaderId :: !SlotLeaderId -- noreference
   , blockSize :: !Word64 -- sqltype=word31type
   , blockTime :: !UTCTime -- sqltype=timestamp
@@ -97,7 +98,7 @@ blockDecoder =
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockSlotNo
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockEpochSlotNo
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockBlockNo
-    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- blockPreviousId
+    <*> maybeIdDecoder BlockId -- blockPreviousId
     <*> idDecoder SlotLeaderId -- blockSlotLeaderId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockSize
     <*> D.column (D.nonNullable D.timestamptz) -- blockTime
@@ -122,7 +123,7 @@ blockEncoder =
     , blockSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockEpochSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockBlockNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    , blockPreviousId >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , blockPreviousId >$< maybeIdEncoder getBlockId
     , blockSlotLeaderId >$< idEncoder getSlotLeaderId
     , blockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockTime >$< E.param (E.nonNullable E.timestamptz)
@@ -730,7 +731,7 @@ extraKeyWitnessEncoder =
 
 data SlotLeader = SlotLeader
   { slotLeaderHash :: !ByteString -- sqltype=hash28type
-  , slotLeaderPoolHashId :: !(Maybe Int) -- This will be non-null when a block is mined by a pool
+  , slotLeaderPoolHashId :: !(Maybe PoolHashId) -- This will be non-null when a block is mined by a pool
   , slotLeaderDescription :: !Text -- Description of the Slots leader
   }
   deriving (Eq, Show, Generic)
@@ -749,7 +750,7 @@ slotLeaderDecoder :: D.Row SlotLeader
 slotLeaderDecoder =
   SlotLeader
     <$> D.column (D.nonNullable D.bytea) -- slotLeaderHash
-    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- slotLeaderPoolHashId
+    <*> Id.maybeIdDecoder Id.PoolHashId -- slotLeaderPoolHashId
     <*> D.column (D.nonNullable D.text) -- slotLeaderDescription
 
 entitySlotLeaderEncoder :: E.Params (Entity SlotLeader)
@@ -763,7 +764,7 @@ slotLeaderEncoder :: E.Params SlotLeader
 slotLeaderEncoder =
   mconcat
     [ slotLeaderHash >$< E.param (E.nonNullable E.bytea)
-    , slotLeaderPoolHashId >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , slotLeaderPoolHashId >$< Id.maybeIdEncoder Id.getPoolHashId
     , slotLeaderDescription >$< E.param (E.nonNullable E.text)
     ]
 

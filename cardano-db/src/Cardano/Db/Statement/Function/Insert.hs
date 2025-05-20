@@ -143,11 +143,11 @@ insertIfUnique encoder entityDecoder =
 -- executing all inserts in one SQL statement, and can return the generated IDs.
 -- This will automatically handle unique constraints, if they are present.
 insertBulk ::
-  forall a b c r.
+  forall a b r.
   (DbInfo a) =>
   ([a] -> b) -> -- Field extractor
   HsqlE.Params b -> -- Encoder
-  ResultTypeBulk (Entity c) r -> -- Result type
+  ResultTypeBulk r -> -- Result type
   HsqlS.Statement [a] r -- Returns a Statement
 insertBulk extract enc returnIds =
   case validateUniqueConstraints (Proxy @a) of

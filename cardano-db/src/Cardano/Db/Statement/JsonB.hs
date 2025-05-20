@@ -6,21 +6,26 @@
 module Cardano.Db.Statement.JsonB where
 
 import Cardano.Prelude (ExceptT, MonadError (..))
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
-import qualified Hasql.Session as HsqlS
-import qualified Hasql.Statement as HsqlS
+import qualified Hasql.Session as HsqlSes
+import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
-import Cardano.Db.Statement.Function.Core (mkCallSite)
+import Cardano.Db.Statement.Function.Core (mkCallSite, runDbSession, mkCallInfo)
+import Cardano.Db.Types (DbAction)
 
-enableJsonbInSchema :: HsqlS.Statement () ()
-enableJsonbInSchema = do
-  HsqlS.Statement
+
+--------------------------------------------------------------------------------
+-- Enable JSONB for specific fields in the schema
+--------------------------------------------------------------------------------
+enableJsonbInSchemaStmt :: HsqlStmt.Statement () ()
+enableJsonbInSchemaStmt = do
+  HsqlStmt.Statement
     ( mconcat $
         zipWith
           ( \s i ->
@@ -52,9 +57,17 @@ enableJsonbInSchema = do
       , ("off_chain_vote_data", "json")
       ]
 
-disableJsonbInSchema :: HsqlS.Statement () ()
-disableJsonbInSchema =
-  HsqlS.Statement
+enableJsonbInSchema :: MonadIO m => DbAction m ()
+enableJsonbInSchema  =
+  runDbSession (mkCallInfo "enableJsonbInSchema") $
+    HsqlSes.statement () enableJsonbInSchemaStmt
+
+--------------------------------------------------------------------------------
+-- Disable JSONB for specific fields in the schema
+--------------------------------------------------------------------------------
+disableJsonbInSchemaStmt :: HsqlStmt.Statement () ()
+disableJsonbInSchemaStmt =
+  HsqlStmt.Statement
     ( mconcat $
         zipWith
           ( \columnDef i ->
@@ -85,16 +98,23 @@ disableJsonbInSchema =
       , ("off_chain_vote_data", "json")
       ]
 
+disableJsonbInSchema :: MonadIO m => DbAction m ()
+disableJsonbInSchema  =
+  runDbSession (mkCallInfo "disableJsonbInSchema") $
+    HsqlSes.statement () disableJsonbInSchemaStmt
+
+
+-- | Check if the JSONB column exists in the schema used for tests
 queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
 queryJsonbInSchemaExists conn = do
-  result <- liftIO $ HsqlS.run (HsqlS.statement () jsonbSchemaStatement) conn
+  result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
   case result of
     Left err -> throwError $ DbError mkCallSite "queryJsonbInSchemaExists" $ Just err
     Right countRes -> pure $ countRes == 1
   where
-    jsonbSchemaStatement :: HsqlS.Statement () Int64
+    jsonbSchemaStatement :: HsqlStmt.Statement () Int64
     jsonbSchemaStatement =
-      HsqlS.Statement
+      HsqlStmt.Statement
         query
         HsqlE.noParams -- No parameters needed
         decoder

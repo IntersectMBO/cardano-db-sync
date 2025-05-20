@@ -58,7 +58,7 @@ module Test.Cardano.Db.Mock.Config (
   withCustomConfigAndLogs,
   withFullConfig',
   replaceConfigFile,
-  txOutTableTypeFromConfig,
+  txOutVariantTypeFromConfig,
 ) where
 
 import Cardano.Api (NetworkMagic (..))
@@ -229,7 +229,7 @@ withDBSyncEnv mkEnv = bracket mkEnv stopDBSyncIfRunning
 getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
-queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
+queryDBSync :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
 queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
@@ -604,14 +604,14 @@ replaceConfigFile newFilename dbSync@DBSyncEnv {..} = do
     newParams =
       dbSyncParams {enpConfigFile = ConfigFile $ configDir </> newFilename}
 
-txOutTableTypeFromConfig :: DBSyncEnv -> DB.TxOutTableType
-txOutTableTypeFromConfig dbSyncEnv =
+txOutVariantTypeFromConfig :: DBSyncEnv -> DB.TxOutVariantType
+txOutVariantTypeFromConfig dbSyncEnv =
   case sioTxOut $ dncInsertOptions $ dbSyncConfig dbSyncEnv of
-    TxOutDisable -> DB.TxOutCore
+    TxOutDisable -> DB.TxOutVariantCore
     TxOutEnable useTxOutAddress -> getTxOutTT useTxOutAddress
     TxOutConsumed _ useTxOutAddress -> getTxOutTT useTxOutAddress
     TxOutConsumedPrune _ useTxOutAddress -> getTxOutTT useTxOutAddress
     TxOutConsumedBootstrap _ useTxOutAddress -> getTxOutTT useTxOutAddress
   where
-    getTxOutTT :: UseTxOutAddress -> DB.TxOutTableType
-    getTxOutTT value = if unUseTxOutAddress value then DB.TxOutVariantAddress else DB.TxOutCore
+    getTxOutTT :: UseTxOutAddress -> DB.TxOutVariantType
+    getTxOutTT value = if unUseTxOutAddress value then DB.TxOutVariantAddress else DB.TxOutVariantCore

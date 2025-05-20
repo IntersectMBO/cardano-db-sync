@@ -45,7 +45,7 @@ data Accounting = Accounting
   , accSumAdaPots :: Ada
   }
 
-queryAdaPotsAccounting :: MonadIO m => ReaderT SqlBackend m [Accounting]
+queryAdaPotsAccounting :: MonadIO m => DB.DbAction m [Accounting]
 queryAdaPotsAccounting = do
   -- AdaPots
   res <- select $ do

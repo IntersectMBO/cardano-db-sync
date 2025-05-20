@@ -19,9 +19,9 @@ import Text.Read (read)
 
 import Cardano.Db.Schema.Core.Base (TxIn)
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..), TxOutTableType (..))
-import qualified Cardano.Db.Schema.Variants as C
-import qualified Cardano.Db.Schema.Variants as V
+import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..), TxOutVariantType (..))
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import Cardano.Db.Statement.Function.Query (queryMinRefId)
 import Cardano.Db.Statement.Types (DbInfo, Key)
 import Cardano.Db.Types (DbAction)
@@ -62,8 +62,8 @@ instance Semigroup MinIdsWrapper where
 -- Helper functions for MinIds
 --------------------------------------------------------------------------------
 compareTxOutIds :: TxOutIdW -> TxOutIdW -> Ordering
-compareTxOutIds (CTxOutIdW a) (CTxOutIdW b) = compare (Id.getTxOutCoreId a) (Id.getTxOutCoreId b)
-compareTxOutIds (VTxOutIdW a) (VTxOutIdW b) = compare (Id.getTxOutAddressId a) (Id.getTxOutAddressId b)
+compareTxOutIds (VCTxOutIdW a) (VCTxOutIdW b) = compare (Id.getTxOutCoreId a) (Id.getTxOutCoreId b)
+compareTxOutIds (VATxOutIdW a) (VATxOutIdW b) = compare (Id.getTxOutAddressId a) (Id.getTxOutAddressId b)
 compareTxOutIds _ _ = EQ -- Different types can't be compared meaningfully
 
 compareMaTxOutIds :: MaTxOutIdW -> MaTxOutIdW -> Ordering
@@ -85,7 +85,7 @@ extractCoreTxOutId :: Maybe TxOutIdW -> Maybe Id.TxOutCoreId
 extractCoreTxOutId =
   ( >>=
       \case
-        CTxOutIdW id -> Just id
+        VCTxOutIdW id -> Just id
         _otherwise -> Nothing
   )
 
@@ -93,7 +93,7 @@ extractVariantTxOutId :: Maybe TxOutIdW -> Maybe Id.TxOutAddressId
 extractVariantTxOutId =
   ( >>=
       \case
-        VTxOutIdW id -> Just id
+        VATxOutIdW id -> Just id
         _otherwise -> Nothing
   )
 
@@ -116,6 +116,41 @@ extractVariantMaTxOutId =
 --------------------------------------------------------------------------------
 -- Text serialization for MinIds
 --------------------------------------------------------------------------------
+minIdsCoreToText :: MinIds -> Text
+minIdsCoreToText minIds =
+  Text.intercalate
+    ":"
+    [ maybe "" (Text.pack . show . Id.getTxInId) $ minTxInId minIds
+    , maybe "" txOutIdCoreToText $ minTxOutId minIds
+    , maybe "" maTxOutIdCoreToText $ minMaTxOutId minIds
+    ]
+  where
+    txOutIdCoreToText :: TxOutIdW -> Text
+    txOutIdCoreToText (VCTxOutIdW txOutId) = Text.pack . show $ Id.getTxOutCoreId txOutId
+    txOutIdCoreToText _ = ""  -- Skip non-core IDs
+
+    maTxOutIdCoreToText :: MaTxOutIdW -> Text
+    maTxOutIdCoreToText (CMaTxOutIdW maTxOutId) = Text.pack . show $ Id.getMaTxOutCoreId maTxOutId
+    maTxOutIdCoreToText _ = ""  -- Skip non-core IDs
+
+minIdsAddressToText :: MinIds -> Text
+minIdsAddressToText minIds =
+  Text.intercalate
+    ":"
+    [ maybe "" (Text.pack . show . Id.getTxInId) $ minTxInId minIds
+    , maybe "" txOutIdAddressToText $ minTxOutId minIds
+    , maybe "" maTxOutIdAddressToText $ minMaTxOutId minIds
+    ]
+  where
+    txOutIdAddressToText :: TxOutIdW -> Text
+    txOutIdAddressToText (VATxOutIdW txOutId) = Text.pack . show $ Id.getTxOutAddressId txOutId
+    txOutIdAddressToText _ = ""  -- Skip non-variant IDs
+
+    maTxOutIdAddressToText :: MaTxOutIdW -> Text
+    maTxOutIdAddressToText (VMaTxOutIdW maTxOutId) = Text.pack . show $ Id.getMaTxOutAddressId maTxOutId
+    maTxOutIdAddressToText _ = ""  -- Skip non-variant IDs
+
+--------------------------------------------------------------------------------
 minIdsToText :: MinIdsWrapper -> Text
 minIdsToText (CMinIdsWrapper minIds) = minIdsToTextHelper minIds "C"
 minIdsToText (VMinIdsWrapper minIds) = minIdsToTextHelper minIds "V"
@@ -134,16 +169,17 @@ minIdsToTextHelper minIds prefix =
 
     txOutIdText = case minTxOutId minIds of
       Nothing -> ""
-      Just (CTxOutIdW id) -> "C" <> Text.pack (show (Id.getTxOutCoreId id))
-      Just (VTxOutIdW id) -> "V" <> Text.pack (show (Id.getTxOutAddressId id))
+      Just (VCTxOutIdW id) -> "C" <> Text.pack (show (Id.getTxOutCoreId id))
+      Just (VATxOutIdW id) -> "V" <> Text.pack (show (Id.getTxOutAddressId id))
 
     maTxOutIdText = case minMaTxOutId minIds of
       Nothing -> ""
       Just (CMaTxOutIdW id) -> "C" <> Text.pack (show (Id.getMaTxOutCoreId id))
       Just (VMaTxOutIdW id) -> "V" <> Text.pack (show (Id.getMaTxOutAddressId id))
 
-textToMinIds :: TxOutTableType -> Text -> Maybe MinIdsWrapper
-textToMinIds txOutTableType txt =
+--------------------------------------------------------------------------------
+textToMinIds :: TxOutVariantType -> Text -> Maybe MinIdsWrapper
+textToMinIds txOutVariantType txt =
   case Text.split (== ':') txt of
     [tminTxInId, tminTxOutId, tminMaTxOutId, typeId] ->
       let
@@ -158,14 +194,14 @@ textToMinIds txOutTableType txt =
             else case Text.head tminTxOutId of
               'C' ->
                 Just $
-                  CTxOutIdW $
+                  VCTxOutIdW $
                     Id.TxOutCoreId $
                       read $
                         Text.unpack $
                           Text.tail tminTxOutId
               'V' ->
                 Just $
-                  VTxOutIdW $
+                  VATxOutIdW $
                     Id.TxOutAddressId $
                       read $
                         Text.unpack $
@@ -194,9 +230,9 @@ textToMinIds txOutTableType txt =
 
         minIds = MinIds mTxInId mTxOutId mMaTxOutId
        in
-        case (txOutTableType, typeId) of
-          (TxOutTableCore, "C") -> Just $ CMinIdsWrapper minIds
-          (TxOutTableVariantAddress, "V") -> Just $ VMinIdsWrapper minIds
+        case (txOutVariantType, typeId) of
+          (TxOutVariantCore, "C") -> Just $ CMinIdsWrapper minIds
+          (TxOutVariantAddress, "V") -> Just $ VMinIdsWrapper minIds
           _otherwise -> Nothing
     _otherwise -> Nothing
 
@@ -226,7 +262,7 @@ completeMinIdCore mTxId minIds = do
           (Id.idDecoder Id.TxInId)
 
       mTxOutId <-
-        whenNothingQueryMinRefId @C.TxOutCore
+        whenNothingQueryMinRefId @VC.TxOutCore
           (extractCoreTxOutId $ minTxOutId minIds)
           "tx_id"
           txId
@@ -236,7 +272,7 @@ completeMinIdCore mTxId minIds = do
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
         Just txOutId ->
-          whenNothingQueryMinRefId @C.MaTxOutCore
+          whenNothingQueryMinRefId @VC.MaTxOutCore
             (extractCoreMaTxOutId $ minMaTxOutId minIds)
             "tx_out_id"
             txOutId
@@ -246,7 +282,7 @@ completeMinIdCore mTxId minIds = do
       pure $
         MinIds
           { minTxInId = mTxInId
-          , minTxOutId = CTxOutIdW <$> mTxOutId
+          , minTxOutId = VCTxOutIdW <$> mTxOutId
           , minMaTxOutId = CMaTxOutIdW <$> mMaTxOutId
           }
 
@@ -264,7 +300,7 @@ completeMinIdVariant mTxId minIds = do
           (Id.idDecoder Id.TxInId)
 
       mTxOutId <-
-        whenNothingQueryMinRefId @V.TxOutAddress
+        whenNothingQueryMinRefId @VA.TxOutAddress
           (extractVariantTxOutId $ minTxOutId minIds)
           "tx_id"
           txId
@@ -274,7 +310,7 @@ completeMinIdVariant mTxId minIds = do
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
         Just txOutId ->
-          whenNothingQueryMinRefId @V.MaTxOutAddress
+          whenNothingQueryMinRefId @VA.MaTxOutAddress
             (extractVariantMaTxOutId $ minMaTxOutId minIds)
             "tx_out_id"
             txOutId
@@ -284,7 +320,7 @@ completeMinIdVariant mTxId minIds = do
       pure $
         MinIds
           { minTxInId = mTxInId
-          , minTxOutId = VTxOutIdW <$> mTxOutId
+          , minTxOutId = VATxOutIdW <$> mTxOutId
           , minMaTxOutId = VMaTxOutIdW <$> mMaTxOutId
           }
 

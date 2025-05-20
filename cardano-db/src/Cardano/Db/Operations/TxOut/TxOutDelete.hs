@@ -22,17 +22,17 @@ module Cardano.Db.Operations.TxOut.TxOutDelete where
 --------------------------------------------------------------------------------
 -- Delete
 --------------------------------------------------------------------------------
--- deleteCoreTxOutTablesAfterTxId :: MonadIO m => Maybe C.TxOutId -> Maybe C.MaTxOutId -> ReaderT SqlBackend m ()
+-- deleteCoreTxOutTablesAfterTxId :: MonadIO m => Maybe C.TxOutId -> Maybe C.MaTxOutId -> DB.DbAction m ()
 -- deleteCoreTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
 --   whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [C.MaTxOutId >=. maTxOutId]
 --   whenJust mtxOutId $ \txOutId -> deleteWhere [C.TxOutId >=. txOutId]
 
--- deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe V.TxOutId -> Maybe V.MaTxOutId -> ReaderT SqlBackend m ()
+-- deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe V.TxOutId -> Maybe V.MaTxOutId -> DB.DbAction m ()
 -- deleteVariantTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
 --   whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [V.MaTxOutId >=. maTxOutId]
 --   whenJust mtxOutId $ \txOutId -> deleteWhere [V.TxOutId >=. txOutId]
 
--- deleteTxOut :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m Int64
+-- deleteTxOut :: MonadIO m => TxOutVariantType -> DB.DbAction m Int64
 -- deleteTxOut = \case
---   TxOutCore -> deleteWhereCount ([] :: [Filter C.TxOut])
+--   TxOutVariantCore -> deleteWhereCount ([] :: [Filter C.TxOut])
 --   TxOutVariantAddress -> deleteWhereCount ([] :: [Filter V.TxOut])

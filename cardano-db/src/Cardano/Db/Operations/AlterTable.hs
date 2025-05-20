@@ -48,7 +48,7 @@ module Cardano.Db.Operations.AlterTable (
 --   ) =>
 --   EntityDef ->
 --   AlterTable ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- alterTable entity (AddUniqueConstraint cname cols) =
 --   alterTableAddUniqueConstraint entity cname cols
 -- alterTable entity (DropUniqueConstraint cname) =
@@ -62,7 +62,7 @@ module Cardano.Db.Operations.AlterTable (
 --   EntityDef ->
 --   ConstraintNameDB ->
 --   [FieldNameDB] ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- alterTableAddUniqueConstraint entity cname cols = do
 --   if checkAllFieldsValid entity cols
 --     then handle alterTableExceptHandler (rawExecute queryAddConstraint [])
@@ -80,7 +80,7 @@ module Cardano.Db.Operations.AlterTable (
 --         , ")"
 --         ]
 
---     throwErr :: forall m'. MonadIO m' => [Char] -> ReaderT SqlBackend m' ()
+--     throwErr :: forall m'. MonadIO m' => [Char] -> DB.DbAction m' ()
 --     throwErr e = liftIO $ throwIO (DbAlterTableException e sqlError)
 
 -- alterTableDropUniqueConstraint ::
@@ -90,7 +90,7 @@ module Cardano.Db.Operations.AlterTable (
 --   ) =>
 --   EntityDef ->
 --   ConstraintNameDB ->
---   ReaderT SqlBackend m ()
+--   DB.DbAction m ()
 -- alterTableDropUniqueConstraint entity cname =
 --   handle alterTableExceptHandler (rawExecute query [])
 --   where
@@ -107,7 +107,7 @@ module Cardano.Db.Operations.AlterTable (
 -- queryHasConstraint ::
 --   MonadIO m =>
 --   ConstraintNameDB ->
---   ReaderT SqlBackend m Bool
+--   DB.DbAction m Bool
 -- queryHasConstraint cname = do
 --   constraintRes :: [Single Int] <- rawSql queryCheckConstraint []
 --   if constraintRes == [Single 1]
@@ -133,7 +133,7 @@ module Cardano.Db.Operations.AlterTable (
 --   forall m a.
 --   MonadIO m =>
 --   SqlError ->
---   ReaderT SqlBackend m a
+--   DB.DbAction m a
 -- alterTableExceptHandler e = liftIO $ throwIO (DbAlterTableException "" e)
 
 -- sqlError :: SqlError

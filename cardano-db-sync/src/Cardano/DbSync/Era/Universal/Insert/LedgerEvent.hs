@@ -39,11 +39,11 @@ import Database.Persist.SqlBackend.Internal.StatementCache
 -- Insert LedgerEvents
 --------------------------------------------------------------------------------------------
 insertNewEpochLedgerEvents ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   EpochNo ->
   [LedgerEvent] ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
@@ -62,9 +62,9 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     toSyncState SyncFollowing = DB.SyncFollowing
 
     handler ::
-      (MonadBaseControl IO m, MonadIO m) =>
+      MonadIO m =>
       LedgerEvent ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+      ExceptT SyncNodeError (DB.DbAction m) ()
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do

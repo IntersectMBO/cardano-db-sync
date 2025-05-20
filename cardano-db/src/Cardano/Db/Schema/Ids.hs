@@ -18,6 +18,9 @@ idDecoder f = D.column (D.nonNullable $ f <$> D.int8)
 maybeIdDecoder :: (Int64 -> a) -> D.Row (Maybe a)
 maybeIdDecoder f = D.column (D.nullable $ f <$> D.int8)
 
+idBulkDecoder :: (Int64 -> a) -> D.Result [a]
+idBulkDecoder f = D.rowList $ D.column (D.nonNullable $ f <$> D.int8)
+
 -- |
 --   Helper function to create an encoder for an id column.
 --   The function takes a function that extracts the Int64 from the id type.
