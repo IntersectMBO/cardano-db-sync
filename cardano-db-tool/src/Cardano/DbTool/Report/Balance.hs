@@ -40,9 +40,9 @@ import Database.Esqueleto.Experimental (
 {- HLINT ignore "Redundant ^." -}
 {- HLINT ignore "Fuse on/on" -}
 
-reportBalance :: TxOutTableType -> [Text] -> IO ()
-reportBalance txOutTableType saddr = do
-  xs <- catMaybes <$> runDbNoLoggingEnv (mapM (queryStakeAddressBalance txOutTableType) saddr)
+reportBalance :: TxOutVariantType -> [Text] -> IO ()
+reportBalance txOutVariantType saddr = do
+  xs <- catMaybes <$> runDbNoLoggingEnv (mapM (queryStakeAddressBalance txOutVariantType) saddr)
   renderBalances xs
 
 -- -------------------------------------------------------------------------------------------------
@@ -59,14 +59,14 @@ data Balance = Balance
   , balTotal :: !Ada
   }
 
-queryStakeAddressBalance :: MonadIO m => TxOutTableType -> Text -> ReaderT SqlBackend m (Maybe Balance)
-queryStakeAddressBalance txOutTableType address = do
+queryStakeAddressBalance :: MonadIO m => TxOutVariantType -> Text -> DB.DbAction m (Maybe Balance)
+queryStakeAddressBalance txOutVariantType address = do
   mSaId <- queryStakeAddressId
   case mSaId of
     Nothing -> pure Nothing
     Just saId -> Just <$> queryBalance saId
   where
-    queryStakeAddressId :: MonadIO m => ReaderT SqlBackend m (Maybe StakeAddressId)
+    queryStakeAddressId :: MonadIO m => DB.DbAction m (Maybe StakeAddressId)
     queryStakeAddressId = do
       res <- select $ do
         saddr <- from $ table @StakeAddress
@@ -74,7 +74,7 @@ queryStakeAddressBalance txOutTableType address = do
         pure (saddr ^. StakeAddressId)
       pure $ fmap unValue (listToMaybe res)
 
-    queryBalance :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Balance
+    queryBalance :: MonadIO m => StakeAddressId -> DB.DbAction m Balance
     queryBalance saId = do
       inputs <- queryInputs saId
       (outputs, fees, deposit) <- queryOutputs saId
@@ -93,9 +93,9 @@ queryStakeAddressBalance txOutTableType address = do
           , balTotal = inputs - outputs + rewards - withdrawals
           }
 
-    queryInputs :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
-    queryInputs saId = case txOutTableType of
-      TxOutCore -> do
+    queryInputs :: MonadIO m => StakeAddressId -> DB.DbAction m Ada
+    queryInputs saId = case txOutVariantType of
+      TxOutVariantCore -> do
         res <- select $ do
           txo <- from $ table @C.TxOut
           where_ (txo ^. C.TxOutStakeAddressId ==. just (val saId))
@@ -112,7 +112,7 @@ queryStakeAddressBalance txOutTableType address = do
           pure (sum_ (txo ^. V.TxOutValue))
         pure $ unValueSumAda (listToMaybe res)
 
-    queryRewardsSum :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
+    queryRewardsSum :: MonadIO m => StakeAddressId -> DB.DbAction m Ada
     queryRewardsSum saId = do
       currentEpoch <- queryLatestEpochNoFromBlock
       res <- select $ do
@@ -122,7 +122,7 @@ queryStakeAddressBalance txOutTableType address = do
         pure (sum_ (rwd ^. RewardAmount))
       pure $ unValueSumAda (listToMaybe res)
 
-    queryWithdrawals :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m Ada
+    queryWithdrawals :: MonadIO m => StakeAddressId -> DB.DbAction m Ada
     queryWithdrawals saId = do
       res <- select $ do
         wdrl <- from $ table @Withdrawal
@@ -130,9 +130,9 @@ queryStakeAddressBalance txOutTableType address = do
         pure (sum_ (wdrl ^. WithdrawalAmount))
       pure $ unValueSumAda (listToMaybe res)
 
-    queryOutputs :: MonadIO m => StakeAddressId -> ReaderT SqlBackend m (Ada, Ada, Ada)
-    queryOutputs saId = case txOutTableType of
-      TxOutCore -> do
+    queryOutputs :: MonadIO m => StakeAddressId -> DB.DbAction m (Ada, Ada, Ada)
+    queryOutputs saId = case txOutVariantType of
+      TxOutVariantCore -> do
         res <- select $ do
           (txOut :& tx :& _txIn) <-
             from

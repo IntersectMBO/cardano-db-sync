@@ -107,7 +107,7 @@ existsById encoder resultType =
           , " WHERE id = $1)"
           ]
 
--- | Creates a statement to check if a row exists with a specific value in a given column
+-- | Statement to check if a row exists with a specific value in a given column
 --
 -- === Example
 -- @
@@ -125,6 +125,43 @@ existsWhere ::
   ResultType Bool r ->
   HsqlStmt.Statement (Key a) r
 existsWhere colName encoder resultType =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    decoder = case resultType of
+      NoResult -> HsqlD.noResult
+      WithResult dec -> dec
+
+    table = tableName (Proxy @a)
+    validCol = validateColumn @a colName
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT EXISTS ("
+          , "  SELECT 1"
+          , "  FROM " <> table
+          , "  WHERE " <> validCol <> " = $1"
+          , ")"
+          ]
+
+-- | Statement to check if a row exists with a specific value in a given column
+--
+-- === Example
+-- @
+-- existsWhereByColumnStmt :: HsqlStmt.Statement ByteString Bool
+-- existsWhereByColumnStmt = existsWhereByColumn @DelistedPool "hash_raw" (HsqlE.param (HsqlE.nonNullable HsqlE.bytea)) (WithResult boolDecoder)
+-- @
+existsWhereByColumn ::
+  forall a b r.
+  (DbInfo a) =>
+  -- | Column name to filter on
+  Text.Text ->
+  -- | Parameter encoder for the column value
+  HsqlE.Params b ->
+  -- | Whether to return result and decoder
+  ResultType Bool r ->
+  HsqlStmt.Statement b r
+existsWhereByColumn colName encoder resultType =
   HsqlStmt.Statement sql encoder decoder True
   where
     decoder = case resultType of
@@ -193,10 +230,10 @@ replaceRecord keyEnc recordEnc =
 --
 -- === Example
 -- @
--- queryTxOutUnspentCount :: MonadIO m => TxOutTableType -> DbAction m Word64
--- queryTxOutUnspentCount txOutTableType =
---   case txOutTableType of
---     TxOutCore ->
+-- queryTxOutUnspentCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
+-- queryTxOutUnspentCount txOutVariantType =
+--   case txOutVariantType of
+--     TxOutVariantCore ->
 --       runDbSession (mkCallInfo "queryTxOutUnspentCountCore") $
 --         HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
 --

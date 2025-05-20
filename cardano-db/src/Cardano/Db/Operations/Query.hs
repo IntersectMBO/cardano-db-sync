@@ -178,7 +178,7 @@ module Cardano.Db.Operations.Query (
 -- does.
 
 -- | Count the number of blocks in the Block table.
--- queryBlockCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryBlockCount :: MonadIO m => DB.DbAction m Word
 -- queryBlockCount = do
 --   res <- select $ do
 --     _blk <- from $ table @Block
@@ -186,7 +186,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Count the number of blocks in the Block table after a 'BlockNo'.
--- queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> ReaderT SqlBackend m Word
+-- queryBlockCountAfterBlockNo :: MonadIO m => Word64 -> Bool -> DB.DbAction m Word
 -- queryBlockCountAfterBlockNo blockNo queryEq = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -199,7 +199,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Get the 'BlockNo' associated with the given hash.
--- queryBlockHashBlockNo :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail (Maybe Word64))
+-- queryBlockHashBlockNo :: MonadIO m => ByteString -> DB.DbAction m (Either LookupFail (Maybe Word64))
 -- queryBlockHashBlockNo hash = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -207,7 +207,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ blk ^. BlockBlockNo
 --   pure $ maybeToEither (DbLookupBlockHash hash) unValue (listToMaybe res)
 
--- queryBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe BlockId)
+-- queryBlockNo :: MonadIO m => Word64 -> DB.DbAction m (Maybe BlockId)
 -- queryBlockNo blkNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -215,7 +215,7 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockId)
 --   pure $ fmap unValue (listToMaybe res)
 
--- queryBlockNoAndEpoch :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (BlockId, Word64))
+-- queryBlockNoAndEpoch :: MonadIO m => Word64 -> DB.DbAction m (Maybe (BlockId, Word64))
 -- queryBlockNoAndEpoch blkNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -224,7 +224,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ convertBlockQuery (listToMaybe res)
 
 -- | Retrieves the nearest block with a slot number equal to or greater than the given slot number.
--- queryNearestBlockSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe (BlockId, Word64))
+-- queryNearestBlockSlotNo :: MonadIO m => Word64 -> DB.DbAction m (Maybe (BlockId, Word64))
 -- queryNearestBlockSlotNo slotNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -234,7 +234,7 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockId, blk ^. BlockBlockNo)
 --   pure $ convertBlockQuery (listToMaybe res)
 
--- queryBlockHash :: MonadIO m => Block -> ReaderT SqlBackend m (Maybe (BlockId, Word64))
+-- queryBlockHash :: MonadIO m => Block -> DB.DbAction m (Maybe (BlockId, Word64))
 -- queryBlockHash hash = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -242,7 +242,7 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockId, blk ^. BlockEpochNo)
 --   pure $ convertBlockQuery (listToMaybe res)
 
--- queryMinBlock :: MonadIO m => ReaderT SqlBackend m (Maybe (BlockId, Word64))
+-- queryMinBlock :: MonadIO m => DB.DbAction m (Maybe (BlockId, Word64))
 -- queryMinBlock = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -258,7 +258,7 @@ module Cardano.Db.Operations.Query (
 --     Just (_, Value Nothing) -> Nothing -- Should never happen.
 --     Just (Value blkid, Value (Just epoch)) -> Just (blkid, epoch)
 
--- queryReverseIndexBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m [Maybe Text]
+-- queryReverseIndexBlockId :: MonadIO m => BlockId -> DB.DbAction m [Maybe Text]
 -- queryReverseIndexBlockId blockId = do
 --   res <- select $ do
 --     (blk :& ridx) <-
@@ -271,7 +271,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ ridx ?. ReverseIndexMinIds
 --   pure $ fmap unValue res
 
--- queryMinIdsAfterReverseIndex :: MonadIO m => ReverseIndexId -> ReaderT SqlBackend m [Text]
+-- queryMinIdsAfterReverseIndex :: MonadIO m => ReverseIndexId -> DB.DbAction m [Text]
 -- queryMinIdsAfterReverseIndex rollbackId = do
 --   res <- select $ do
 --     rl <- from $ table @ReverseIndex
@@ -281,7 +281,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ fmap unValue res
 
 -- -- | Get the number of transactions in the specified block.
--- queryBlockTxCount :: MonadIO m => BlockId -> ReaderT SqlBackend m Word64
+-- queryBlockTxCount :: MonadIO m => BlockId -> DB.DbAction m Word64
 -- queryBlockTxCount blkId = do
 --   res <- select $ do
 --     tx <- from $ table @Tx
@@ -290,7 +290,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Get the 'BlockId' associated with the given hash.
--- queryBlockId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail BlockId)
+-- queryBlockId :: MonadIO m => ByteString -> DB.DbAction m (Either LookupFail BlockId)
 -- queryBlockId hash = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -301,7 +301,7 @@ module Cardano.Db.Operations.Query (
 -- -- | Calculate the Epoch table entry for the specified epoch.
 -- -- When syncing the chain or filling an empty table, this is called at each epoch boundary to
 -- -- calculate the Epoch entry for the last epoch.
--- queryCalcEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m Epoch
+-- queryCalcEpochEntry :: MonadIO m => Word64 -> DB.DbAction m Epoch
 -- queryCalcEpochEntry epochNum = do
 --   blockResult <- select $ do
 --     block <- from $ table @Block
@@ -310,7 +310,7 @@ module Cardano.Db.Operations.Query (
 --   queryTxWithBlocks epochNum blockResult
 
 -- -- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
--- queryForEpochId :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe EpochId)
+-- queryForEpochId :: MonadIO m => Word64 -> DB.DbAction m (Maybe EpochId)
 -- queryForEpochId epochNum = do
 --   res <- selectOne $ do
 --     epoch <- from $ table @Epoch
@@ -319,7 +319,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ unValue <$> res
 
 -- -- | Get an epoch given it's number.
--- queryEpochFromNum :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Epoch)
+-- queryEpochFromNum :: MonadIO m => Word64 -> DB.DbAction m (Maybe Epoch)
 -- queryEpochFromNum epochNum = do
 --   res <- selectOne $ do
 --     epoch <- from $ table @Epoch
@@ -328,7 +328,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ entityVal <$> res
 
 -- -- | Get the most recent epoch in the Epoch DB table.
--- queryLatestEpoch :: MonadIO m => ReaderT SqlBackend m (Maybe Epoch)
+-- queryLatestEpoch :: MonadIO m => DB.DbAction m (Maybe Epoch)
 -- queryLatestEpoch = do
 --   res <- selectOne $ do
 --     epoch <- from $ table @Epoch
@@ -337,7 +337,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ entityVal <$> res
 
 -- -- | Count the number of epochs in Epoch table.
--- queryEpochCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryEpochCount :: MonadIO m => DB.DbAction m Word
 -- queryEpochCount = do
 --   res <- select $ from (table @Epoch) >> pure countRows
 --   pure $ maybe 0 unValue (listToMaybe res)
@@ -346,7 +346,7 @@ module Cardano.Db.Operations.Query (
 --   MonadIO m =>
 --   Word64 ->
 --   [(Value Word64, Value (Maybe UTCTime), Value (Maybe UTCTime))] ->
---   ReaderT SqlBackend m Epoch
+--   DB.DbAction m Epoch
 -- queryTxWithBlocks epochNum blockResult = do
 --   txRes <- select $ do
 --     (tx :& blk) <-
@@ -401,7 +401,7 @@ module Cardano.Db.Operations.Query (
 --     , epochEndTime = defaultUTCTime
 --     }
 
--- queryBlocksForCurrentEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryBlocksForCurrentEpochNo :: MonadIO m => DB.DbAction m (Maybe Word64)
 -- queryBlocksForCurrentEpochNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -411,7 +411,7 @@ module Cardano.Db.Operations.Query (
 -- queryNormalEpochRewardCount ::
 --   MonadIO m =>
 --   Word64 ->
---   ReaderT SqlBackend m Word64
+--   DB.DbAction m Word64
 -- queryNormalEpochRewardCount epochNum = do
 --   res <- select $ do
 --     rwd <- from $ table @Reward
@@ -420,7 +420,7 @@ module Cardano.Db.Operations.Query (
 --     pure countRows
 --   pure $ maybe 0 unValue (listToMaybe res)
 
--- queryGenesis :: MonadIO m => ReaderT SqlBackend m (Either LookupFail BlockId)
+-- queryGenesis :: MonadIO m => DB.DbAction m (Either LookupFail BlockId)
 -- queryGenesis = do
 --   res <- select $ do
 --     blk <- from (table @Block)
@@ -431,7 +431,7 @@ module Cardano.Db.Operations.Query (
 --     _ -> pure $ Left DBMultipleGenesis
 
 -- -- | Get the latest block.
--- queryLatestBlock :: MonadIO m => ReaderT SqlBackend m (Maybe Block)
+-- queryLatestBlock :: MonadIO m => DB.DbAction m (Maybe Block)
 -- queryLatestBlock = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -441,7 +441,7 @@ module Cardano.Db.Operations.Query (
 --     pure blk
 --   pure $ fmap entityVal (listToMaybe res)
 
--- queryLatestPoints :: MonadIO m => ReaderT SqlBackend m [(Maybe Word64, ByteString)]
+-- queryLatestPoints :: MonadIO m => DB.DbAction m [(Maybe Word64, ByteString)]
 -- queryLatestPoints = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -451,7 +451,7 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockSlotNo, blk ^. BlockHash)
 --   pure $ fmap unValue2 res
 
--- queryLatestEpochNoFromBlock :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryLatestEpochNoFromBlock :: MonadIO m => DB.DbAction m Word64
 -- queryLatestEpochNoFromBlock = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -462,7 +462,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ fromMaybe 0 (unValue =<< listToMaybe res)
 
 -- -- | Get 'BlockId' of the latest block.
--- queryLatestBlockId :: MonadIO m => ReaderT SqlBackend m (Maybe BlockId)
+-- queryLatestBlockId :: MonadIO m => DB.DbAction m (Maybe BlockId)
 -- queryLatestBlockId = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -472,7 +472,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ fmap unValue (listToMaybe res)
 
 -- | Get the latest slot number
--- queryLatestSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryLatestSlotNo :: MonadIO m => DB.DbAction m Word64
 -- queryLatestSlotNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -485,7 +485,7 @@ module Cardano.Db.Operations.Query (
 -- {-# INLINEABLE queryMeta #-}
 
 -- -- | Get the network metadata.
--- queryMeta :: MonadIO m => ReaderT SqlBackend m (Either LookupFail Meta)
+-- queryMeta :: MonadIO m => DB.DbAction m (Either LookupFail Meta)
 -- queryMeta = do
 --   res <- select . from $ table @Meta
 --   pure $ case res of
@@ -493,7 +493,7 @@ module Cardano.Db.Operations.Query (
 --     [m] -> Right $ entityVal m
 --     _ -> Left DbMetaMultipleRows
 
--- queryScriptWithId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe ScriptId)
+-- queryScriptWithId :: MonadIO m => ByteString -> DB.DbAction m (Maybe ScriptId)
 -- queryScriptWithId hsh = do
 --   xs <- select $ do
 --     script <- from $ table @Script
@@ -501,7 +501,7 @@ module Cardano.Db.Operations.Query (
 --     pure (script ^. ScriptId)
 --   pure $ unValue <$> listToMaybe xs
 
--- queryDatum :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe DatumId)
+-- queryDatum :: MonadIO m => ByteString -> DB.DbAction m (Maybe DatumId)
 -- queryDatum hsh = do
 --   xs <- select $ do
 --     datum <- from $ table @Datum
@@ -509,7 +509,7 @@ module Cardano.Db.Operations.Query (
 --     pure (datum ^. DatumId)
 --   pure $ unValue <$> listToMaybe xs
 
--- queryRedeemerData :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe RedeemerDataId)
+-- queryRedeemerData :: MonadIO m => ByteString -> DB.DbAction m (Maybe RedeemerDataId)
 -- queryRedeemerData hsh = do
 --   xs <- select $ do
 --     rdmrDt <- from $ table @RedeemerData
@@ -517,7 +517,7 @@ module Cardano.Db.Operations.Query (
 --     pure (rdmrDt ^. RedeemerDataId)
 --   pure $ unValue <$> listToMaybe xs
 
--- querySlotHash :: MonadIO m => SlotNo -> ReaderT SqlBackend m [(SlotNo, ByteString)]
+-- querySlotHash :: MonadIO m => SlotNo -> DB.DbAction m [(SlotNo, ByteString)]
 -- querySlotHash slotNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -525,7 +525,7 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockHash)
 --   pure $ (\vh -> (slotNo, unValue vh)) <$> res
 
--- queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe MultiAssetId)
+-- queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> DB.DbAction m (Maybe MultiAssetId)
 -- queryMultiAssetId policy assetName = do
 --   res <- select $ do
 --     ma <- from $ table @MultiAsset
@@ -533,7 +533,7 @@ module Cardano.Db.Operations.Query (
 --     pure (ma ^. MultiAssetId)
 --   pure $ unValue <$> listToMaybe res
 
--- queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+-- queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> DB.DbAction m Word64
 -- queryCountSlotNosGreaterThan slotNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -542,7 +542,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Like 'queryCountSlotNosGreaterThan', but returns all slots in the same order.
--- queryCountSlotNo :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryCountSlotNo :: MonadIO m => DB.DbAction m Word64
 -- queryCountSlotNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -551,7 +551,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Count the number of transactions in the Tx table.
--- queryTxCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryTxCount :: MonadIO m => DB.DbAction m Word
 -- queryTxCount = do
 --   res <- select $ do
 --     _ <- from $ table @Tx
@@ -559,7 +559,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- -- | Get the 'TxId' associated with the given hash.
--- queryTxId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail TxId)
+-- queryTxId :: MonadIO m => ByteString -> DB.DbAction m (Either LookupFail TxId)
 -- queryTxId hash = do
 --   res <- select $ do
 --     tx <- from $ table @Tx
@@ -567,7 +567,7 @@ module Cardano.Db.Operations.Query (
 --     pure (tx ^. TxId)
 --   pure $ maybeToEither (DbLookupTxHash hash) unValue (listToMaybe res)
 
--- queryEpochStakeCount :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+-- queryEpochStakeCount :: MonadIO m => Word64 -> DB.DbAction m Word64
 -- queryEpochStakeCount epoch = do
 --   res <- select $ do
 --     epochStake <- from $ table @EpochStake
@@ -580,7 +580,7 @@ module Cardano.Db.Operations.Query (
 --   (MonadIO m, PersistEntity record, PersistField field) =>
 --   EntityField record field ->
 --   field ->
---   ReaderT SqlBackend m (Maybe (Key record))
+--   DB.DbAction m (Maybe (Key record))
 -- queryMinRefId txIdField txId = do
 --   res <- select $ do
 --     rec <- from $ table @record
@@ -595,7 +595,7 @@ module Cardano.Db.Operations.Query (
 --   (MonadIO m, PersistEntity record, PersistField field) =>
 --   EntityField record (Maybe field) ->
 --   field ->
---   ReaderT SqlBackend m (Maybe (Key record))
+--   DB.DbAction m (Maybe (Key record))
 -- queryMinRefIdNullable txIdField txId = do
 --   res <- select $ do
 --     rec <- from $ table @record
@@ -612,7 +612,7 @@ module Cardano.Db.Operations.Query (
 --   EntityField record field ->
 --   field ->
 --   Bool ->
---   ReaderT SqlBackend m (Maybe (Key record))
+--   DB.DbAction m (Maybe (Key record))
 -- queryMaxRefId txIdField txId eq = do
 --   res <- select $ do
 --     rec <- from $ table @record
@@ -624,7 +624,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ rec ^. persistIdField
 --   pure $ unValue <$> listToMaybe res
 
--- existsPoolHashId :: MonadIO m => PoolHashId -> ReaderT SqlBackend m Bool
+-- existsPoolHashId :: MonadIO m => PoolHashId -> DB.DbAction m Bool
 -- existsPoolHashId phid = do
 --   res <- select $ do
 --     poolHash <- from $ table @PoolHash
@@ -634,7 +634,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ not (null res)
 
 -- -- db-sync
--- existsPoolMetadataRefId :: MonadIO m => PoolMetadataRefId -> ReaderT SqlBackend m Bool
+-- existsPoolMetadataRefId :: MonadIO m => PoolMetadataRefId -> DB.DbAction m Bool
 -- existsPoolMetadataRefId pmrid = do
 --   res <- select $ do
 --     pmr <- from $ table @PoolMetadataRef
@@ -643,7 +643,7 @@ module Cardano.Db.Operations.Query (
 --     pure (pmr ^. PoolMetadataRefId)
 --   pure $ not (null res)
 
--- existsVotingAnchorId :: MonadIO m => VotingAnchorId -> ReaderT SqlBackend m Bool
+-- existsVotingAnchorId :: MonadIO m => VotingAnchorId -> DB.DbAction m Bool
 -- existsVotingAnchorId vaId = do
 --   res <- select $ do
 --     votingAnchor <- from $ table @VotingAnchor
@@ -653,7 +653,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ not (null res)
 
 -- | Get the current block height.
--- queryBlockHeight :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryBlockHeight :: MonadIO m => DB.DbAction m (Maybe Word64)
 -- queryBlockHeight = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -663,14 +663,14 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockBlockNo)
 --   pure $ unValue =<< listToMaybe res
 
--- queryAllExtraMigrations :: MonadIO m => ReaderT SqlBackend m [ExtraMigration]
+-- queryAllExtraMigrations :: MonadIO m => DB.DbAction m [ExtraMigration]
 -- queryAllExtraMigrations = do
 --   res <- select $ do
 --     ems <- from $ table @ExtraMigrations
 --     pure (ems ^. ExtraMigrationsToken)
 --   pure $ read . unpack . unValue <$> res
 
--- queryMinMaxEpochStake :: MonadIO m => ReaderT SqlBackend m (Maybe Word64, Maybe Word64)
+-- queryMinMaxEpochStake :: MonadIO m => DB.DbAction m (Maybe Word64, Maybe Word64)
 -- queryMinMaxEpochStake = do
 --   maxEpoch <- select $ do
 --     es <- from $ table @EpochStake
@@ -684,7 +684,7 @@ module Cardano.Db.Operations.Query (
 --     pure (es ^. EpochStakeEpochNo)
 --   pure (unValue <$> listToMaybe minEpoch, unValue <$> listToMaybe maxEpoch)
 
--- queryGovActionProposalId :: MonadIO m => TxId -> Word64 -> ReaderT SqlBackend m (Either LookupFail GovActionProposalId)
+-- queryGovActionProposalId :: MonadIO m => TxId -> Word64 -> DB.DbAction m (Either LookupFail GovActionProposalId)
 -- queryGovActionProposalId txId index = do
 --   res <- select $ do
 --     ga <- from $ table @GovActionProposal
@@ -693,7 +693,7 @@ module Cardano.Db.Operations.Query (
 --     pure ga
 --   pure $ maybeToEither (DbLookupGovActionPair txId index) entityKey (listToMaybe res)
 
--- queryDrepHashAlwaysAbstain :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
+-- queryDrepHashAlwaysAbstain :: MonadIO m => DB.DbAction m (Maybe DrepHashId)
 -- queryDrepHashAlwaysAbstain = do
 --   res <- select $ do
 --     dh <- from $ table @DrepHash
@@ -702,7 +702,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ dh ^. DrepHashId
 --   pure $ unValue <$> listToMaybe res
 
--- queryDrepHashAlwaysNoConfidence :: MonadIO m => ReaderT SqlBackend m (Maybe DrepHashId)
+-- queryDrepHashAlwaysNoConfidence :: MonadIO m => DB.DbAction m (Maybe DrepHashId)
 -- queryDrepHashAlwaysNoConfidence = do
 --   res <- select $ do
 --     dh <- from $ table @DrepHash
@@ -711,7 +711,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ dh ^. DrepHashId
 --   pure $ unValue <$> listToMaybe res
 
--- queryCommitteeHash :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe CommitteeHashId)
+-- queryCommitteeHash :: MonadIO m => ByteString -> DB.DbAction m (Maybe CommitteeHashId)
 -- queryCommitteeHash hash = do
 --   res <- select $ do
 --     ch <- from $ table @CommitteeHash
@@ -719,7 +719,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ ch ^. CommitteeHashId
 --   pure $ unValue <$> listToMaybe res
 
--- queryProposalConstitution :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [ConstitutionId]
+-- queryProposalConstitution :: MonadIO m => Maybe GovActionProposalId -> DB.DbAction m [ConstitutionId]
 -- queryProposalConstitution mgapId = do
 --   res <- select $ do
 --     c <- from $ table @Constitution
@@ -731,7 +731,7 @@ module Cardano.Db.Operations.Query (
 --       Nothing -> isNothing (c ^. ConstitutionGovActionProposalId)
 --       Just vl -> c ^. ConstitutionGovActionProposalId ==. val (Just vl)
 
--- queryProposalCommittee :: MonadIO m => Maybe GovActionProposalId -> ReaderT SqlBackend m [CommitteeId]
+-- queryProposalCommittee :: MonadIO m => Maybe GovActionProposalId -> DB.DbAction m [CommitteeId]
 -- queryProposalCommittee mgapId = do
 --   res <- select $ do
 --     c <- from $ table @Committee
@@ -743,7 +743,7 @@ module Cardano.Db.Operations.Query (
 --       Nothing -> isNothing (c ^. CommitteeGovActionProposalId)
 --       Just vl -> c ^. CommitteeGovActionProposalId ==. val (Just vl)
 
--- queryPoolHashId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe PoolHashId)
+-- queryPoolHashId :: MonadIO m => ByteString -> DB.DbAction m (Maybe PoolHashId)
 -- queryPoolHashId hash = do
 --   res <- select $ do
 --     phash <- from $ table @PoolHash
@@ -755,7 +755,7 @@ module Cardano.Db.Operations.Query (
 --   MonadIO m =>
 --   ByteString ->
 --   (ByteString -> Text) ->
---   ReaderT SqlBackend m (Either LookupFail StakeAddressId)
+--   DB.DbAction m (Either LookupFail StakeAddressId)
 -- queryStakeAddress addr toText = do
 --   res <- select $ do
 --     saddr <- from $ table @StakeAddress
@@ -763,7 +763,7 @@ module Cardano.Db.Operations.Query (
 --     pure (saddr ^. StakeAddressId)
 --   pure $ maybeToEither (DbLookupMessage $ "StakeAddress " <> toText addr) unValue (listToMaybe res)
 
--- queryStakeRefPtr :: MonadIO m => Ptr -> ReaderT SqlBackend m (Maybe StakeAddressId)
+-- queryStakeRefPtr :: MonadIO m => Ptr -> DB.DbAction m (Maybe StakeAddressId)
 -- queryStakeRefPtr (Ptr (SlotNo slot) (TxIx txIx) (CertIx certIx)) = do
 --   res <- select $ do
 --     (blk :& tx :& sr) <-
@@ -785,7 +785,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ unValue <$> listToMaybe res
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool
--- queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> ReaderT SqlBackend m Bool
+-- queryPoolUpdateByBlock :: MonadIO m => BlockId -> PoolHashId -> DB.DbAction m Bool
 -- queryPoolUpdateByBlock blkId poolHashId = do
 --   res <- select $ do
 --     (blk :& _tx :& poolUpdate) <-
@@ -805,7 +805,7 @@ module Cardano.Db.Operations.Query (
   Queries use in SMASH
 ----------------------------------------------}
 
--- queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe (Text, ByteString))
+-- queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> DB.DbAction m (Maybe (Text, ByteString))
 -- queryOffChainPoolData poolHash poolMetadataHash = do
 --   res <- select $ do
 --     (pod :& ph) <-
@@ -819,7 +819,7 @@ module Cardano.Db.Operations.Query (
 --     pure (pod ^. OffChainPoolDataTickerName, pod ^. OffChainPoolDataBytes)
 -- pure $ unValue2 <$> listToMaybe res
 
--- queryPoolRegister :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
+-- queryPoolRegister :: MonadIO m => Maybe ByteString -> DB.DbAction m [PoolCert]
 -- queryPoolRegister mPoolHash = do
 --   res <- select $ do
 --     (poolUpdate :& poolHash :& poolMeta :& tx :& blk) <-
@@ -852,7 +852,7 @@ module Cardano.Db.Operations.Query (
 --         , pcCertNo = CertNo blkNo txIndex retIndex
 --         }
 
--- queryRetiredPools :: MonadIO m => Maybe ByteString -> ReaderT SqlBackend m [PoolCert]
+-- queryRetiredPools :: MonadIO m => Maybe ByteString -> DB.DbAction m [PoolCert]
 -- queryRetiredPools mPoolHash = do
 --   res <- select $ do
 --     (retired :& poolHash :& tx :& blk) <-
@@ -882,7 +882,7 @@ module Cardano.Db.Operations.Query (
 --         , pcCertNo = CertNo blkNo txIndex retIndex
 --         }
 
--- queryUsedTicker :: MonadIO m => ByteString -> ByteString -> ReaderT SqlBackend m (Maybe Text)
+-- queryUsedTicker :: MonadIO m => ByteString -> ByteString -> DB.DbAction m (Maybe Text)
 -- queryUsedTicker poolHash metaHash = do
 --   res <- select $ do
 --     (pod :& ph) <-
@@ -895,7 +895,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ pod ^. OffChainPoolDataTickerName
 --   pure $ unValue <$> listToMaybe res
 
--- queryReservedTicker :: MonadIO m => Text -> ReaderT SqlBackend m (Maybe ByteString)
+-- queryReservedTicker :: MonadIO m => Text -> DB.DbAction m (Maybe ByteString)
 -- queryReservedTicker tickerName = do
 --   res <- select $ do
 --     ticker <- from $ table @ReservedPoolTicker
@@ -903,12 +903,12 @@ module Cardano.Db.Operations.Query (
 --     pure $ ticker ^. ReservedPoolTickerPoolHash
 --   pure $ unValue <$> listToMaybe res
 
--- queryReservedTickers :: MonadIO m => ReaderT SqlBackend m [ReservedPoolTicker]
+-- queryReservedTickers :: MonadIO m => DB.DbAction m [ReservedPoolTicker]
 -- queryReservedTickers =
 --   fmap entityVal <$> selectList [] []
 
 -- Return delisted Pool hashes.
--- queryDelistedPools :: MonadIO m => ReaderT SqlBackend m [ByteString]
+-- queryDelistedPools :: MonadIO m => DB.DbAction m [ByteString]
 -- queryDelistedPools = do
 --   res <- select $ do
 --     delistedPool <- from $ table @DelistedPool
@@ -916,7 +916,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ unValue <$> res
 
 -- Returns also the metadata hash
--- queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(OffChainPoolFetchError, ByteString)]
+-- queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> DB.DbAction m [(OffChainPoolFetchError, ByteString)]
 -- queryOffChainPoolFetchError hash Nothing = do
 --   res <- select $ do
 --     (offChainPoolFetchError :& poolHash :& poolMetadataRef) <-
@@ -958,7 +958,7 @@ module Cardano.Db.Operations.Query (
 --   where
 --     extract (fetchErr, metadataHash) = (entityVal fetchErr, unValue metadataHash)
 
--- existsDelistedPool :: MonadIO m => ByteString -> ReaderT SqlBackend m Bool
+-- existsDelistedPool :: MonadIO m => ByteString -> DB.DbAction m Bool
 -- existsDelistedPool ph = do
 --   res <- select $ do
 --     delistedPool <- from $ table @DelistedPool
@@ -971,7 +971,7 @@ module Cardano.Db.Operations.Query (
   Queries use in Tools (valiadtion and snapshot creation)
 ----------------------------------------------------------}
 
--- queryDepositUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryDepositUpToBlockNo :: MonadIO m => Word64 -> DB.DbAction m Ada
 -- queryDepositUpToBlockNo blkNo = do
 --   res <- select $ do
 --     (tx :& blk) <-
@@ -983,7 +983,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ sum_ (tx ^. TxDeposit)
 --   pure $ unValueSumAda (listToMaybe res)
 
--- queryEpochEntry :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail Epoch)
+-- queryEpochEntry :: MonadIO m => Word64 -> DB.DbAction m (Either LookupFail Epoch)
 -- queryEpochEntry epochNum = do
 --   res <- select $ do
 --     epoch <- from $ table @Epoch
@@ -993,7 +993,7 @@ module Cardano.Db.Operations.Query (
 
 -- -- | Calculate the slot time (as UTCTime) for a given slot number.
 -- -- This will fail if the slot is empty.
--- querySlotUtcTime :: MonadIO m => Word64 -> ReaderT SqlBackend m (Either LookupFail UTCTime)
+-- querySlotUtcTime :: MonadIO m => Word64 -> DB.DbAction m (Either LookupFail UTCTime)
 -- querySlotUtcTime slotNo = do
 --   le <- select $ do
 --     blk <- from $ table @Block
@@ -1002,7 +1002,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe (Left $ DbLookupSlotNo slotNo) (Right . unValue) (listToMaybe le)
 
 -- -- | Get the fees paid in all block from genesis up to and including the specified block.
--- queryFeesUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryFeesUpToBlockNo :: MonadIO m => Word64 -> DB.DbAction m Ada
 -- queryFeesUpToBlockNo blkNo = do
 --   res <- select $ do
 --     (tx :& blk) <-
@@ -1014,7 +1014,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ sum_ (tx ^. TxFee)
 --   pure $ unValueSumAda (listToMaybe res)
 
--- queryFeesUpToSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryFeesUpToSlotNo :: MonadIO m => Word64 -> DB.DbAction m Ada
 -- queryFeesUpToSlotNo slotNo = do
 --   res <- select $ do
 --     (tx :& blk) <-
@@ -1027,7 +1027,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ sum_ (tx ^. TxFee)
 --   pure $ unValueSumAda (listToMaybe res)
 
--- queryLatestCachedEpochNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryLatestCachedEpochNo :: MonadIO m => DB.DbAction m (Maybe Word64)
 -- queryLatestCachedEpochNo = do
 --   res <- select $ do
 --     epoch <- from $ table @Epoch
@@ -1037,7 +1037,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ unValue <$> listToMaybe res
 
 -- | Get the 'BlockNo' of the latest block.
--- queryLatestBlockNo :: MonadIO m => ReaderT SqlBackend m (Maybe Word64)
+-- queryLatestBlockNo :: MonadIO m => DB.DbAction m (Maybe Word64)
 -- queryLatestBlockNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -1047,7 +1047,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ blk ^. BlockBlockNo
 --   pure $ listToMaybe (mapMaybe unValue res)
 
--- querySlotNosGreaterThan :: MonadIO m => Word64 -> ReaderT SqlBackend m [SlotNo]
+-- querySlotNosGreaterThan :: MonadIO m => Word64 -> DB.DbAction m [SlotNo]
 -- querySlotNosGreaterThan slotNo = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -1060,7 +1060,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ mapMaybe (fmap SlotNo . unValue) res
 
 -- -- | Like 'querySlotNosGreaterThan', but returns all slots in the same order.
--- querySlotNos :: MonadIO m => ReaderT SqlBackend m [SlotNo]
+-- querySlotNos :: MonadIO m => DB.DbAction m [SlotNo]
 -- querySlotNos = do
 --   res <- select $ do
 --     blk <- from $ table @Block
@@ -1070,7 +1070,7 @@ module Cardano.Db.Operations.Query (
 --     pure (blk ^. BlockSlotNo)
 --   pure $ mapMaybe (fmap SlotNo . unValue) res
 
--- queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> ReaderT SqlBackend m Ada
+-- queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> DB.DbAction m Ada
 -- queryWithdrawalsUpToBlockNo blkNo = do
 --   res <- select $ do
 --     (_tx :& wdrl :& blk) <-
@@ -1084,7 +1084,7 @@ module Cardano.Db.Operations.Query (
 --     pure $ sum_ (wdrl ^. WithdrawalAmount)
 --   pure $ unValueSumAda (listToMaybe res)
 
--- queryAdaPots :: MonadIO m => BlockId -> ReaderT SqlBackend m (Maybe AdaPots)
+-- queryAdaPots :: MonadIO m => BlockId -> DB.DbAction m (Maybe AdaPots)
 -- queryAdaPots blkId = do
 --   res <- select $ do
 --     adaPots <- from $ table @AdaPots
@@ -1096,14 +1096,14 @@ module Cardano.Db.Operations.Query (
   Queries use in tests
 ------------------------}
 
--- queryRewardCount :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryRewardCount :: MonadIO m => DB.DbAction m Word64
 -- queryRewardCount = do
 --   res <- select $ do
 --     _ <- from $ table @Reward
 --     pure countRows
 --   pure $ maybe 0 unValue (listToMaybe res)
 
--- queryRewardRestCount :: MonadIO m => ReaderT SqlBackend m Word64
+-- queryRewardRestCount :: MonadIO m => DB.DbAction m Word64
 -- queryRewardRestCount = do
 --   res <- select $ do
 --     _ <- from $ table @RewardRest
@@ -1111,16 +1111,16 @@ module Cardano.Db.Operations.Query (
 --   pure $ maybe 0 unValue (listToMaybe res)
 
 -- | Count the number of transactions in the Tx table.
--- queryTxInCount :: MonadIO m => ReaderT SqlBackend m Word
+-- queryTxInCount :: MonadIO m => DB.DbAction m Word
 -- queryTxInCount = do
 --   res <- select $ from (table @TxIn) >> pure countRows
 --   pure $ maybe 0 unValue (listToMaybe res)
 
--- queryCostModel :: MonadIO m => ReaderT SqlBackend m [CostModelId]
+-- queryCostModel :: MonadIO m => DB.DbAction m [CostModelId]
 -- queryCostModel =
 --   fmap entityKey <$> selectList [] [Asc CostModelId]
 
--- queryTxInRedeemer :: MonadIO m => ReaderT SqlBackend m [TxIn]
+-- queryTxInRedeemer :: MonadIO m => DB.DbAction m [TxIn]
 -- queryTxInRedeemer = do
 --   res <- select $ do
 --     tx_in <- from $ table @TxIn
@@ -1129,7 +1129,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ entityVal <$> res
 
 -- | Gets all the 'TxIn' of invalid txs
--- queryTxInFailedTx :: MonadIO m => ReaderT SqlBackend m [TxIn]
+-- queryTxInFailedTx :: MonadIO m => DB.DbAction m [TxIn]
 -- queryTxInFailedTx = do
 --   res <- select $ do
 --     (tx_in :& tx) <-
@@ -1141,7 +1141,7 @@ module Cardano.Db.Operations.Query (
 --     pure tx_in
 --   pure $ entityVal <$> res
 
--- queryInvalidTx :: MonadIO m => ReaderT SqlBackend m [Tx]
+-- queryInvalidTx :: MonadIO m => DB.DbAction m [Tx]
 -- queryInvalidTx = do
 --   res <- select $ do
 --     tx <- from $ table @Tx
@@ -1149,7 +1149,7 @@ module Cardano.Db.Operations.Query (
 --     pure tx
 --   pure $ entityVal <$> res
 
--- queryDeregistrationScript :: MonadIO m => ReaderT SqlBackend m [StakeDeregistration]
+-- queryDeregistrationScript :: MonadIO m => DB.DbAction m [StakeDeregistration]
 -- queryDeregistrationScript = do
 --   res <- select $ do
 --     dereg <- from $ table @StakeDeregistration
@@ -1157,7 +1157,7 @@ module Cardano.Db.Operations.Query (
 --     pure dereg
 --   pure $ entityVal <$> res
 
--- queryDelegationScript :: MonadIO m => ReaderT SqlBackend m [Delegation]
+-- queryDelegationScript :: MonadIO m => DB.DbAction m [Delegation]
 -- queryDelegationScript = do
 --   res <- select $ do
 --     deleg <- from $ table @Delegation
@@ -1165,7 +1165,7 @@ module Cardano.Db.Operations.Query (
 --     pure deleg
 --   pure $ entityVal <$> res
 
--- queryWithdrawalScript :: MonadIO m => ReaderT SqlBackend m [Withdrawal]
+-- queryWithdrawalScript :: MonadIO m => DB.DbAction m [Withdrawal]
 -- queryWithdrawalScript = do
 --   res <- select $ do
 --     wtdr <- from $ table @Withdrawal
@@ -1173,7 +1173,7 @@ module Cardano.Db.Operations.Query (
 --     pure wtdr
 --   pure $ entityVal <$> res
 
--- queryStakeAddressScript :: MonadIO m => ReaderT SqlBackend m [StakeAddress]
+-- queryStakeAddressScript :: MonadIO m => DB.DbAction m [StakeAddress]
 -- queryStakeAddressScript = do
 --   res <- select $ do
 --     st_addr <- from $ table @StakeAddress
@@ -1181,7 +1181,7 @@ module Cardano.Db.Operations.Query (
 --     pure st_addr
 --   pure $ entityVal <$> res
 
--- querySchemaVersion :: MonadIO m => ReaderT SqlBackend m (Maybe SchemaVersion)
+-- querySchemaVersion :: MonadIO m => DB.DbAction m (Maybe SchemaVersion)
 -- querySchemaVersion = do
 --   res <- select $ do
 --     sch <- from $ table @SchemaVersion
@@ -1191,7 +1191,7 @@ module Cardano.Db.Operations.Query (
 --   pure $ uncurry3 SchemaVersion . unValue3 <$> listToMaybe res
 
 -- | Given a 'SlotNo' return the 'SlotNo' of the previous block.
--- queryPreviousSlotNo :: MonadIO m => Word64 -> ReaderT SqlBackend m (Maybe Word64)
+-- queryPreviousSlotNo :: MonadIO m => Word64 -> DB.DbAction m (Maybe Word64)
 -- queryPreviousSlotNo slotNo = do
 --   res <- select $ do
 --     (blk :& pblk) <-

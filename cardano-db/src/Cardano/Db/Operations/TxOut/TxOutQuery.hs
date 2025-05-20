@@ -15,7 +15,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 
 -- import Cardano.Db.Error (LookupFail (..))
 -- import Cardano.Db.Operations.QueryHelper (isJust, maybeToEither, txLessEqual, unValue2, unValue3, unValueSumAda)
--- import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutTableType (..), TxOutW (..), UtxoQueryResult (..))
+-- import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutVariantType (..), TxOutW (..), UtxoQueryResult (..))
 -- import Cardano.Db.Schema.Core
 -- import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
 -- import qualified Cardano.Db.Schema.Variants.TxOutCore as C
@@ -54,7 +54,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- {- HLINT ignore "Fuse on/on" -}
 -- {- HLINT ignore "Redundant ^." -}
 
--- -- Some Queries can accept TxOutTableType as a parameter, whilst others that return a TxOut related value can't
+-- -- Some Queries can accept TxOutVariantType as a parameter, whilst others that return a TxOut related value can't
 -- -- as they wiil either deal with Core or Variant TxOut/Address types.
 -- -- These types also need to be handled at the call site.
 
@@ -70,13 +70,13 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- | Like 'queryTxId' but also return the 'TxOutId' of the transaction output.
 -- queryTxOutId ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   (ByteString, Word64) ->
---   ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdW))
--- queryTxOutId txOutTableType hashIndex =
---   case txOutTableType of
---     TxOutCore -> wrapTxOutId CTxOutIdW (queryTxOutId' @'TxOutCore hashIndex)
---     TxOutVariantAddress -> wrapTxOutId VTxOutIdW (queryTxOutId' @'TxOutVariantAddress hashIndex)
+--   DB.DbAction m (Either LookupFail (TxId, TxOutIdW))
+-- queryTxOutId txOutVariantType hashIndex =
+--   case txOutVariantType of
+--     TxOutVariantCore -> wrapTxOutId VCTxOutIdW (queryTxOutId' @'TxOutCore hashIndex)
+--     TxOutVariantAddress -> wrapTxOutId VATxOutIdW (queryTxOutId' @'TxOutVariantAddress hashIndex)
 --   where
 --     wrapTxOutId constructor = fmap (fmap (second constructor))
 
@@ -84,7 +84,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --       forall a m.
 --       (TxOutFields a, MonadIO m) =>
 --       (ByteString, Word64) ->
---       ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdFor a))
+--       DB.DbAction m (Either LookupFail (TxId, TxOutIdFor a))
 --     queryTxOutId' (hash, index) = do
 --       res <- select $ do
 --         (tx :& txOut) <-
@@ -103,22 +103,22 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- | Like 'queryTxOutId' but also return the 'TxOutIdValue'
 -- queryTxOutIdValue ::
 --   (MonadIO m) =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   (ByteString, Word64) ->
---   ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdW, DbLovelace))
--- queryTxOutIdValue getTxOutTableType hashIndex = do
---   case getTxOutTableType of
---     TxOutCore -> wrapTxOutId CTxOutIdW (queryTxOutIdValue' @'TxOutCore hashIndex)
---     TxOutVariantAddress -> wrapTxOutId VTxOutIdW (queryTxOutIdValue' @'TxOutVariantAddress hashIndex)
+--   DB.DbAction m (Either LookupFail (TxId, TxOutIdW, DbLovelace))
+-- queryTxOutIdValue getTxOutVariantType hashIndex = do
+--   case getTxOutVariantType of
+--     TxOutVariantCore -> wrapTxOutId VCTxOutIdW (queryTxOutIdValue' @'TxOutCore hashIndex)
+--     TxOutVariantAddress -> wrapTxOutId VATxOutIdW (queryTxOutIdValue' @'TxOutVariantAddress hashIndex)
 --   where
 --     wrapTxOutId constructor =
 --       fmap (fmap (\(txId, txOutId, lovelace) -> (txId, constructor txOutId, lovelace)))
 
 --     queryTxOutIdValue' ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
 --       (ByteString, Word64) ->
---       ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdFor a, DbLovelace))
+--       DB.DbAction m (Either LookupFail (TxId, TxOutIdFor a, DbLovelace))
 --     queryTxOutIdValue' (hash, index) = do
 --       res <- select $ do
 --         (tx :& txOut) <-
@@ -137,15 +137,15 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- | Give a (tx hash, index) pair, return the TxOut Credentials.
 -- queryTxOutCredentials ::
 --   MonadIO m =>
---   TxOutTableType ->
+--   TxOutVariantType ->
 --   (ByteString, Word64) ->
---   ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
--- queryTxOutCredentials txOutTableType (hash, index) =
---   case txOutTableType of
---     TxOutCore -> queryTxOutCredentialsCore (hash, index)
+--   DB.DbAction m (Either LookupFail (Maybe ByteString, Bool))
+-- queryTxOutCredentials txOutVariantType (hash, index) =
+--   case txOutVariantType of
+--     TxOutVariantCore -> queryTxOutCredentialsCore (hash, index)
 --     TxOutVariantAddress -> queryTxOutCredentialsVariant (hash, index)
 
--- queryTxOutCredentialsCore :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
+-- queryTxOutCredentialsCore :: MonadIO m => (ByteString, Word64) -> DB.DbAction m (Either LookupFail (Maybe ByteString, Bool))
 -- queryTxOutCredentialsCore (hash, index) = do
 --   res <- select $ do
 --     (tx :& txOut) <-
@@ -157,7 +157,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     pure (txOut ^. C.TxOutPaymentCred, txOut ^. C.TxOutAddressHasScript)
 --   pure $ maybeToEither (DbLookupTxHash hash) unValue2 (listToMaybe res)
 
--- queryTxOutCredentialsVariant :: MonadIO m => (ByteString, Word64) -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
+-- queryTxOutCredentialsVariant :: MonadIO m => (ByteString, Word64) -> DB.DbAction m (Either LookupFail (Maybe ByteString, Bool))
 -- queryTxOutCredentialsVariant (hash, index) = do
 --   res <- select $ do
 --     (tx :& txOut :& address) <-
@@ -175,7 +175,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- --------------------------------------------------------------------------------
 -- -- -- ADDRESS QUERIES
 -- -- --------------------------------------------------------------------------------
--- queryAddressId :: MonadIO m => ByteString -> ReaderT SqlBackend m (Maybe V.AddressId)
+-- queryAddressId :: MonadIO m => ByteString -> DB.DbAction m (Maybe V.AddressId)
 -- queryAddressId addrRaw = do
 --   res <- select $ do
 --     addr <- from $ table @V.Address
@@ -192,17 +192,17 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- rewards are part of the ledger state and hence not on chain.
 -- queryTotalSupply ::
 --   (MonadIO m) =>
---   TxOutTableType ->
---   ReaderT SqlBackend m Ada
--- queryTotalSupply txOutTableType =
---   case txOutTableType of
---     TxOutCore -> query @'TxOutCore
+--   TxOutVariantType ->
+--   DB.DbAction m Ada
+-- queryTotalSupply txOutVariantType =
+--   case txOutVariantType of
+--     TxOutVariantCore -> query @'TxOutCore
 --     TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Ada
+--       DB.DbAction m Ada
 --     query = do
 --       res <- select $ do
 --         txOut <- from $ table @(TxOutTable a)
@@ -217,17 +217,17 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- | Return the total Genesis coin supply.
 -- queryGenesisSupply ::
 --   (MonadIO m) =>
---   TxOutTableType ->
---   ReaderT SqlBackend m Ada
--- queryGenesisSupply txOutTableType =
---   case txOutTableType of
---     TxOutCore -> query @'TxOutCore
+--   TxOutVariantType ->
+--   DB.DbAction m Ada
+-- queryGenesisSupply txOutVariantType =
+--   case txOutVariantType of
+--     TxOutVariantCore -> query @'TxOutCore
 --     TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Ada
+--       DB.DbAction m Ada
 --     query = do
 --       res <- select $ do
 --         (_tx :& txOut :& blk) <-
@@ -264,16 +264,16 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 
 -- -- | Return the total Shelley Genesis coin supply. The Shelley Genesis Block
 -- -- is the unique which has a non-null PreviousId, but has null Epoch.
--- queryShelleyGenesisSupply :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m Ada
--- queryShelleyGenesisSupply txOutTableType =
---   case txOutTableType of
---     TxOutCore -> query @'TxOutCore
+-- queryShelleyGenesisSupply :: MonadIO m => TxOutVariantType -> DB.DbAction m Ada
+-- queryShelleyGenesisSupply txOutVariantType =
+--   case txOutVariantType of
+--     TxOutVariantCore -> query @'TxOutCore
 --     TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Ada
+--       DB.DbAction m Ada
 --     query = do
 --       res <- select $ do
 --         (txOut :& _tx :& blk) <-
@@ -295,35 +295,35 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- --------------------------------------------------------------------------------
 -- -- queryUtxoAtBlockNo
 -- --------------------------------------------------------------------------------
--- queryUtxoAtBlockNo :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [UtxoQueryResult]
--- queryUtxoAtBlockNo txOutTableType blkNo = do
+-- queryUtxoAtBlockNo :: MonadIO m => TxOutVariantType -> Word64 -> DB.DbAction m [UtxoQueryResult]
+-- queryUtxoAtBlockNo txOutVariantType blkNo = do
 --   eblkId <- select $ do
 --     blk <- from $ table @Block
 --     where_ (blk ^. BlockBlockNo ==. just (val blkNo))
 --     pure (blk ^. BlockId)
---   maybe (pure []) (queryUtxoAtBlockId txOutTableType . unValue) (listToMaybe eblkId)
+--   maybe (pure []) (queryUtxoAtBlockId txOutVariantType . unValue) (listToMaybe eblkId)
 
 -- --------------------------------------------------------------------------------
 -- -- queryUtxoAtSlotNo
 -- --------------------------------------------------------------------------------
--- queryUtxoAtSlotNo :: MonadIO m => TxOutTableType -> Word64 -> ReaderT SqlBackend m [UtxoQueryResult]
--- queryUtxoAtSlotNo txOutTableType slotNo = do
+-- queryUtxoAtSlotNo :: MonadIO m => TxOutVariantType -> Word64 -> DB.DbAction m [UtxoQueryResult]
+-- queryUtxoAtSlotNo txOutVariantType slotNo = do
 --   eblkId <- select $ do
 --     blk <- from $ table @Block
 --     where_ (blk ^. BlockSlotNo ==. just (val slotNo))
 --     pure (blk ^. BlockId)
---   maybe (pure []) (queryUtxoAtBlockId txOutTableType . unValue) (listToMaybe eblkId)
+--   maybe (pure []) (queryUtxoAtBlockId txOutVariantType . unValue) (listToMaybe eblkId)
 
 -- --------------------------------------------------------------------------------
 -- -- queryUtxoAtBlockId
 -- --------------------------------------------------------------------------------
--- queryUtxoAtBlockId :: MonadIO m => TxOutTableType -> BlockId -> ReaderT SqlBackend m [UtxoQueryResult]
--- queryUtxoAtBlockId txOutTableType blkid =
---   case txOutTableType of
---     TxOutCore -> queryUtxoAtBlockIdCore blkid
+-- queryUtxoAtBlockId :: MonadIO m => TxOutVariantType -> BlockId -> DB.DbAction m [UtxoQueryResult]
+-- queryUtxoAtBlockId txOutVariantType blkid =
+--   case txOutVariantType of
+--     TxOutVariantCore -> queryUtxoAtBlockIdCore blkid
 --     TxOutVariantAddress -> queryUtxoAtBlockIdVariant blkid
 
--- queryUtxoAtBlockIdCore :: MonadIO m => BlockId -> ReaderT SqlBackend m [UtxoQueryResult]
+-- queryUtxoAtBlockIdCore :: MonadIO m => BlockId -> DB.DbAction m [UtxoQueryResult]
 -- queryUtxoAtBlockIdCore blkid = do
 --   outputs <- select $ do
 --     (txout :& _txin :& _tx1 :& blk :& tx2) <-
@@ -347,7 +347,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     pure (txout, txout ^. C.TxOutAddress, tx2 ?. TxHash)
 --   pure $ mapMaybe convertCore outputs
 
--- queryUtxoAtBlockIdVariant :: MonadIO m => BlockId -> ReaderT SqlBackend m [UtxoQueryResult]
+-- queryUtxoAtBlockIdVariant :: MonadIO m => BlockId -> DB.DbAction m [UtxoQueryResult]
 -- queryUtxoAtBlockIdVariant blkid = do
 --   outputs <- select $ do
 --     (txout :& _txin :& _tx1 :& blk :& tx2 :& address) <-
@@ -377,7 +377,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- convertCore (out, Value address, Value (Just hash')) =
 --   Just $
 --     UtxoQueryResult
---       { utxoTxOutW = CTxOutW $ entityVal out
+--       { utxoTxOutW = VCTxOutW $ entityVal out
 --       , utxoAddress = address
 --       , utxoTxHash = hash'
 --       }
@@ -387,7 +387,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- convertVariant (out, address, Value (Just hash')) =
 --   Just $
 --     UtxoQueryResult
---       { utxoTxOutW = VTxOutW (entityVal out) (Just (entityVal address))
+--       { utxoTxOutW = VATxOutW (entityVal out) (Just (entityVal address))
 --       , utxoAddress = V.addressAddress $ entityVal address
 --       , utxoTxHash = hash'
 --       }
@@ -396,20 +396,20 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- --------------------------------------------------------------------------------
 -- -- -- queryAddressBalanceAtSlot
 -- -- --------------------------------------------------------------------------------
--- queryAddressBalanceAtSlot :: MonadIO m => TxOutTableType -> Text -> Word64 -> ReaderT SqlBackend m Ada
--- queryAddressBalanceAtSlot txOutTableType addr slotNo = do
+-- queryAddressBalanceAtSlot :: MonadIO m => TxOutVariantType -> Text -> Word64 -> DB.DbAction m Ada
+-- queryAddressBalanceAtSlot txOutVariantType addr slotNo = do
 --   eblkId <- select $ do
 --     blk <- from (table @Block)
 --     where_ (blk ^. BlockSlotNo ==. just (val slotNo))
 --     pure (blk ^. BlockId)
 --   maybe (pure 0) (queryAddressBalanceAtBlockId . unValue) (listToMaybe eblkId)
 --   where
---     queryAddressBalanceAtBlockId :: MonadIO m => BlockId -> ReaderT SqlBackend m Ada
+--     queryAddressBalanceAtBlockId :: MonadIO m => BlockId -> DB.DbAction m Ada
 --     queryAddressBalanceAtBlockId blkid = do
 --       -- tx1 refers to the tx of the input spending this output (if it is ever spent)
 --       -- tx2 refers to the tx of the output
---       case txOutTableType of
---         TxOutCore -> do
+--       case txOutVariantType of
+--         TxOutVariantCore -> do
 --           res <- select $ do
 --             (txout :& _ :& _ :& blk :& _) <-
 --               from
@@ -453,13 +453,13 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- --------------------------------------------------------------------------------
 -- -- -- queryScriptOutputs
 -- -- --------------------------------------------------------------------------------
--- queryScriptOutputs :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m [TxOutW]
--- queryScriptOutputs txOutTableType =
---   case txOutTableType of
---     TxOutCore -> fmap (map CTxOutW) queryScriptOutputsCore
+-- queryScriptOutputs :: MonadIO m => TxOutVariantType -> DB.DbAction m [TxOutW]
+-- queryScriptOutputs txOutVariantType =
+--   case txOutVariantType of
+--     TxOutVariantCore -> fmap (map VCTxOutW) queryScriptOutputsCore
 --     TxOutVariantAddress -> queryScriptOutputsVariant
 
--- queryScriptOutputsCore :: MonadIO m => ReaderT SqlBackend m [C.TxOut]
+-- queryScriptOutputsCore :: MonadIO m => DB.DbAction m [C.TxOut]
 -- queryScriptOutputsCore = do
 --   res <- select $ do
 --     tx_out <- from $ table @C.TxOut
@@ -467,7 +467,7 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     pure tx_out
 --   pure $ entityVal <$> res
 
--- queryScriptOutputsVariant :: MonadIO m => ReaderT SqlBackend m [TxOutW]
+-- queryScriptOutputsVariant :: MonadIO m => DB.DbAction m [TxOutW]
 -- queryScriptOutputsVariant = do
 --   res <- select $ do
 --     address <- from $ table @V.Address
@@ -479,15 +479,15 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --   where
 --     combineToWrapper :: Entity V.TxOut -> Entity V.Address -> TxOutW
 --     combineToWrapper txOut address =
---       VTxOutW (entityVal txOut) (Just (entityVal address))
+--       VATxOutW (entityVal txOut) (Just (entityVal address))
 
 -- -- --------------------------------------------------------------------------------
 -- -- -- queryAddressOutputs
 -- -- --------------------------------------------------------------------------------
--- queryAddressOutputs :: MonadIO m => TxOutTableType -> Text -> ReaderT SqlBackend m DbLovelace
--- queryAddressOutputs txOutTableType addr = do
---   res <- case txOutTableType of
---     TxOutCore -> select $ do
+-- queryAddressOutputs :: MonadIO m => TxOutVariantType -> Text -> DB.DbAction m DbLovelace
+-- queryAddressOutputs txOutVariantType addr = do
+--   res <- case txOutVariantType of
+--     TxOutVariantCore -> select $ do
 --       txout <- from $ table @C.TxOut
 --       where_ (txout ^. C.TxOutAddress ==. val addr)
 --       pure $ sum_ (txout ^. C.TxOutValue)
@@ -510,34 +510,34 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 -- -- | Count the number of transaction outputs in the TxOut table.
 -- queryTxOutCount ::
 --   MonadIO m =>
---   TxOutTableType ->
---   ReaderT SqlBackend m Word
--- queryTxOutCount txOutTableType = do
---   case txOutTableType of
---     TxOutCore -> query @'TxOutCore
+--   TxOutVariantType ->
+--   DB.DbAction m Word
+-- queryTxOutCount txOutVariantType = do
+--   case txOutVariantType of
+--     TxOutVariantCore -> query @'TxOutCore
 --     TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word
+--       DB.DbAction m Word
 --     query = do
 --       res <- select $ from (table @(TxOutTable a)) >> pure countRows
 --       pure $ maybe 0 unValue (listToMaybe res)
 
 -- queryTxOutUnspentCount ::
 --   MonadIO m =>
---   TxOutTableType ->
---   ReaderT SqlBackend m Word64
--- queryTxOutUnspentCount txOutTableType =
---   case txOutTableType of
---     TxOutCore -> query @'TxOutCore
+--   TxOutVariantType ->
+--   DB.DbAction m Word64
+-- queryTxOutUnspentCount txOutVariantType =
+--   case txOutVariantType of
+--     TxOutVariantCore -> query @'TxOutCore
 --     TxOutVariantAddress -> query @'TxOutVariantAddress
 --   where
 --     query ::
---       forall (a :: TxOutTableType) m.
+--       forall (a :: TxOutVariantType) m.
 --       (MonadIO m, TxOutFields a) =>
---       ReaderT SqlBackend m Word64
+--       DB.DbAction m Word64
 --     query = do
 --       res <- select $ do
 --         txOut <- from $ table @(TxOutTable a)

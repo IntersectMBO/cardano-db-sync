@@ -26,6 +26,7 @@ import Data.Word (Word64)
 import Text.Printf (printf)
 
 import Cardano.Db
+import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore(..))
 
 assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =
@@ -34,7 +35,7 @@ assertBool msg bool =
 deleteAllBlocks :: MonadIO m => DbAction m ()
 deleteAllBlocks = do
   mblkId <- queryMinBlock
-  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutTableCore)
+  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutVariantCore)
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
@@ -98,7 +99,7 @@ testSlotLeader =
 mkTxOutCore :: BlockId -> TxId -> TxOutW
 mkTxOutCore blkId txId =
   let addr = mkAddressHash blkId txId
-   in CTxOutW $
+   in VCTxOutW $
         TxOutCore
           { txOutCoreAddress = Text.pack addr
           , txOutCoreAddressHasScript = False

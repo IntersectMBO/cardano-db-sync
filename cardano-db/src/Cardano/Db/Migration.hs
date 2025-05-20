@@ -67,7 +67,7 @@ import Cardano.Db.Migration.Haskell
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
 import Cardano.Db.Run
-import Cardano.Db.Schema.Variants (TxOutTableType (..))
+import Cardano.Db.Schema.Variants (TxOutVariantType (..))
 import qualified Cardano.Db.Statement.Function.Core as DB
 import qualified Cardano.Db.Types as DB
 
@@ -97,8 +97,8 @@ data MigrationToRun = Initial | Full | Indexes
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
-runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutTableType -> IO (Bool, [FilePath])
-runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
+runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutVariantType -> IO (Bool, [FilePath])
+runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = do
   allScripts <- getMigrationScripts migrationDir
   ranAll <- case (mLogfiledir, allScripts) of
     (_, []) ->
@@ -139,14 +139,14 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
         pure (filter filterIndexes scripts, False)
 
     filterIndexesFull (mv, _) = do
-      case txOutTableType of
-        TxOutTableCore -> True
-        TxOutTableVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
+      case txOutVariantType of
+        TxOutVariantCore -> True
+        TxOutVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
     filterInitial (mv, _) = mvStage mv < 4
     filterIndexes (mv, _) = do
-      case txOutTableType of
-        TxOutTableCore -> mvStage mv == 4
-        TxOutTableVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
+      case txOutVariantType of
+        TxOutVariantCore -> mvStage mv == 4
+        TxOutVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
 
 -- Build hash for each file found in a directory.
 validateMigrations :: MigrationDir -> [(Text.Text, Text.Text)] -> IO (Maybe (MigrationValidateError, Bool))
@@ -214,8 +214,8 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
 -- | Create a database migration.
 -- NOTE: This functionality will need to be reimplemented without Persistent.
 -- For now, this serves as a placeholder.
-createMigration :: PGPassSource -> MigrationDir -> TxOutTableType -> IO (Maybe FilePath)
-createMigration _source (MigrationDir _migdir) _txOutTableType = do
+createMigration :: PGPassSource -> MigrationDir -> TxOutVariantType -> IO (Maybe FilePath)
+createMigration _source (MigrationDir _migdir) _txOutVariantType = do
   -- This would need to be completely rewritten to generate migrations manually
   -- or using a different schema management tool
   putStrLn "Warning: createMigration not implemented for Hasql. Manual migration creation required."

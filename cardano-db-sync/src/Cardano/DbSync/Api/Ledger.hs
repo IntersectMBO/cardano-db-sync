@@ -49,23 +49,23 @@ import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 bootStrapMaybe ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 bootStrapMaybe syncEnv = do
   bts <- liftIO $ readTVarIO (envBootstrap syncEnv)
   when bts $ migrateBootstrapUTxO syncEnv
 
 migrateBootstrapUTxO ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 migrateBootstrapUTxO syncEnv = do
   case envLedgerEnv syncEnv of
     HasLedger lenv -> do
       liftIO $ logInfo trce "Starting UTxO bootstrap migration"
       cls <- liftIO $ readCurrentStateUnsafe lenv
-      count <- lift $ DB.deleteTxOut (getTxOutTableType syncEnv)
+      count <- lift $ DB.deleteTxOut (getTxOutVariantType syncEnv)
       when (count > 0) $
         liftIO $
           logWarning trce $
@@ -80,10 +80,10 @@ migrateBootstrapUTxO syncEnv = do
     trce = getTrace syncEnv
 
 storeUTxOFromLedger ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   ExtLedgerState CardanoBlock ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
   LedgerStateConway stc -> storeUTxO env (getUTxO stc)
@@ -109,7 +109,7 @@ storeUTxO ::
   ) =>
   SyncEnv ->
   Map (TxIn StandardCrypto) (BabbageTxOut era) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 storeUTxO env mp = do
   liftIO $
     logInfo trce $
@@ -140,16 +140,16 @@ storePage ::
   SyncEnv ->
   Float ->
   (Int, [(TxIn StandardCrypto, BabbageTxOut era)]) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) ()
+  ExceptT SyncNodeError (DB.DbAction m) ()
 storePage syncEnv percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
   txOuts <- mapM (prepareTxOut syncEnv) ls
   txOutIds <-
     lift . DB.insertManyTxOut False $ etoTxOut . fst <$> txOuts
-  let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> txOuts)
+  let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
   where
-    txOutTableType = getTxOutTableType syncEnv
+    txOutVariantType = getTxOutVariantType syncEnv
     trce = getTrace syncEnv
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
 
@@ -166,7 +166,7 @@ prepareTxOut ::
   ) =>
   SyncEnv ->
   (TxIn StandardCrypto, BabbageTxOut era) ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
+  ExceptT SyncNodeError (DB.DbAction m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut index txOut

@@ -69,7 +69,6 @@ library
                       , http-conduit
                       , iohk-monitoring
                       , network-uri
-                      , persistent-postgresql
                       , quiet
                       , resource-pool
                       , servant-server

@@ -102,10 +102,8 @@ module Cardano.Db.Types where
 import Cardano.BM.Trace (Trace)
 import Cardano.Db.Error (CallSite (..), DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadError (..), MonadIO (..), MonadReader)
+import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadError, MonadReader)
 import qualified Codec.Binary.Bech32 as Bech32
-import Control.Monad.Trans.Except (ExceptT)
-import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
 import Data.Aeson.Encoding (unsafeToEncoding)
@@ -129,7 +127,12 @@ import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import Quiet (Quiet (..))
+import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Reader (ReaderT)
 
+----------------------------------------------------------------------------
+-- DbAction
+----------------------------------------------------------------------------
 newtype DbAction m a = DbAction
   {runDbAction :: ExceptT DbError (ReaderT DbEnv m) a}
   deriving newtype
@@ -141,6 +144,9 @@ newtype DbAction m a = DbAction
     , MonadIO
     )
 
+----------------------------------------------------------------------------
+-- DbCallInfo
+----------------------------------------------------------------------------
 data DbCallInfo = DbCallInfo
   { dciName :: !Text
   , dciCallSite :: !CallSite
@@ -152,6 +158,9 @@ data DbEnv = DbEnv
   , dbTracer :: !(Maybe (Trace IO Text))
   }
 
+----------------------------------------------------------------------------
+-- Other types
+----------------------------------------------------------------------------
 -- | Convert a `Scientific` to `Ada`.
 newtype Ada = Ada
   { unAda :: Micro

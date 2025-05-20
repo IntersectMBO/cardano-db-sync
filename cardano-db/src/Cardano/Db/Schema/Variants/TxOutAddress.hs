@@ -4,10 +4,6 @@
 
 module Cardano.Db.Schema.Variants.TxOutAddress where
 
-import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (bulkEncoder)
-import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
-import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
 import Contravariant.Extras (contrazip3, contrazip9)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant ((>$<))
@@ -17,6 +13,11 @@ import Data.Word (Word64)
 import GHC.Generics (Generic)
 import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
+
+import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
+import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
 
 -----------------------------------------------------------------------------------------------
 -- TxOutAddress
@@ -209,7 +210,7 @@ addressEncoder =
 data MaTxOutAddress = MaTxOutAddress
   { maTxOutAddressIdent :: !Id.MultiAssetId
   , maTxOutAddressQuantity :: !DbWord64
-  , maTxOutAddressTxOutId :: !Id.TxOutCoreId
+  , maTxOutAddressTxOutId :: !Id.TxOutAddressId
   }
   deriving (Eq, Show, Generic)
 
@@ -235,22 +236,22 @@ maTxOutAddressDecoder =
   MaTxOutAddress
     <$> Id.idDecoder Id.MultiAssetId -- maTxOutAddressIdent
     <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutAddressQuantity
-    <*> Id.idDecoder Id.TxOutCoreId -- maTxOutAddressTxOutId
+    <*> Id.idDecoder Id.TxOutAddressId -- maTxOutAddressTxOutId
 
 maTxOutAddressEncoder :: E.Params MaTxOutAddress
 maTxOutAddressEncoder =
   mconcat
     [ maTxOutAddressIdent >$< Id.idEncoder Id.getMultiAssetId
     , maTxOutAddressQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , maTxOutAddressTxOutId >$< Id.idEncoder Id.getTxOutCoreId
+    , maTxOutAddressTxOutId >$< Id.idEncoder Id.getTxOutAddressId
     ]
 
-maTxOutAddressBulkEncoder :: E.Params ([Id.MultiAssetId], [DbWord64], [Id.TxOutCoreId])
+maTxOutAddressBulkEncoder :: E.Params ([Id.MultiAssetId], [DbWord64], [Id.TxOutAddressId])
 maTxOutAddressBulkEncoder =
   contrazip3
     (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8) -- maTxOutAddressIdent
     (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8) -- maTxOutAddressQuantity
-    (bulkEncoder $ E.nonNullable $ Id.getTxOutCoreId >$< E.int8) -- maTxOutAddressTxOutId
+    (bulkEncoder $ E.nonNullable $ Id.getTxOutAddressId >$< E.int8) -- maTxOutAddressTxOutId
 
 -- share
 --   [ mkPersist sqlSettings

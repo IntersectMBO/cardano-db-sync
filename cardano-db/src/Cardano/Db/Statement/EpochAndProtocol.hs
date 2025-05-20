@@ -85,6 +85,14 @@ queryAdaPotsId blockId =
   runDbSession (mkCallInfo "queryAdaPotsId") $
     HsqlSes.statement blockId queryAdaPotsIdStmt
 
+-- AdaPots query function used in tests
+queryAdaPotsIdTest :: MonadIO m => Id.BlockId -> DbAction m (Maybe SEnP.AdaPots)
+queryAdaPotsIdTest blockId = do
+  mEntityAdaPots <- runDbSession (mkCallInfo "queryAdaPotsId") $
+    HsqlSes.statement blockId queryAdaPotsIdStmt
+  pure $ entityVal <$> mEntityAdaPots
+
+--------------------------------------------------------------------------------
 replaceAdaPotsStmt :: HsqlStmt.Statement (Id.AdaPotsId, SEnP.AdaPots) ()
 replaceAdaPotsStmt =
   replace
@@ -353,6 +361,18 @@ queryLatestCachedEpochNo :: MonadIO m => DbAction m (Maybe Word64)
 queryLatestCachedEpochNo =
   runDbSession (mkCallInfo "queryLatestCachedEpochNo") $
     HsqlSes.statement () queryLatestCachedEpochNoStmt
+
+--------------------------------------------------------------------------------
+replaceEpochStmt :: HsqlStmt.Statement (Id.EpochId, SEnP.Epoch) ()
+replaceEpochStmt =
+  replace
+    (Id.idEncoder Id.getEpochId)
+    SEnP.epochEncoder
+
+replaceEpoch :: MonadIO m => Id.EpochId -> SEnP.Epoch -> DbAction m ()
+replaceEpoch epochId epoch =
+  runDbSession (mkCallInfo "replaceEpoch") $
+    HsqlSes.statement (epochId, epoch) replaceEpochStmt
 
 --------------------------------------------------------------------------------
 -- EpochStake

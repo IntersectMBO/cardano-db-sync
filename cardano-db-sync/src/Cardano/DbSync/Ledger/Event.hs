@@ -21,7 +21,7 @@ module Cardano.DbSync.Ledger.Event (
   splitDeposits,
 ) where
 
-import Cardano.Db hiding (AdaPots, EpochNo, SyncState, TreasuryWithdrawals, epochNo)
+import Cardano.Db hiding (AdaPots, SyncState, TreasuryWithdrawals, epochNo)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types

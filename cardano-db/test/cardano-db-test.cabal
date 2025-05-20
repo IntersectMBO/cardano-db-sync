@@ -38,6 +38,7 @@ library
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-mary
+                      , cardano-slotting
                       , extra
                       , hedgehog
                       , text

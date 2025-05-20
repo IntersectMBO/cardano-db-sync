@@ -19,7 +19,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
   RemoveJsonbFromSchemaConfig (..),
-  TxOutTableTypeConfig (..),
+  TxOutVariantTypeConfig (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
@@ -69,7 +69,7 @@ import qualified Cardano.BM.Data.Configuration as Logging
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (MigrationDir, PGPassSource (..), TxOutTableType (..))
+import Cardano.Db (MigrationDir, PGPassSource (..), TxOutVariantType (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (fail)
@@ -187,6 +187,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioDbDebug :: Bool
   }
   deriving (Eq, Show)
 
@@ -265,8 +266,8 @@ newtype RemoveJsonbFromSchemaConfig = RemoveJsonbFromSchemaConfig
   }
   deriving (Eq, Show)
 
-newtype TxOutTableTypeConfig = TxOutTableTypeConfig
-  { unTxOutTableTypeConfig :: TxOutTableType
+newtype TxOutVariantTypeConfig = TxOutVariantTypeConfig
+  { unTxOutVariantTypeConfig :: TxOutVariantType
   }
   deriving (Eq, Show)
 
@@ -699,14 +700,14 @@ instance FromJSON RemoveJsonbFromSchemaConfig where
 instance ToJSON RemoveJsonbFromSchemaConfig where
   toJSON = boolToEnableDisable . isRemoveJsonbFromSchemaEnabled
 
-instance FromJSON TxOutTableTypeConfig where
+instance FromJSON TxOutVariantTypeConfig where
   parseJSON = Aeson.withText "use_address_table" $ \v ->
-    case enableDisableToTxOutTableType v of
-      Just g -> pure (TxOutTableTypeConfig g)
+    case enableDisableToTxOutVariantType v of
+      Just g -> pure (TxOutVariantTypeConfig g)
       Nothing -> fail $ "unexpected use_address_table: " <> show v
 
-instance ToJSON TxOutTableTypeConfig where
-  toJSON = addressTypeToEnableDisable . unTxOutTableTypeConfig
+instance ToJSON TxOutVariantTypeConfig where
+  toJSON = addressTypeToEnableDisable . unTxOutVariantTypeConfig
 
 instance FromJSON OffchainPoolDataConfig where
   parseJSON = Aeson.withText "offchain_pool_data" $ \v ->
@@ -745,6 +746,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioDbDebug = False
       }
 
 fullInsertOptions :: SyncInsertOptions
@@ -763,6 +765,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -781,6 +784,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -807,16 +811,17 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
-addressTypeToEnableDisable :: IsString s => TxOutTableType -> s
+addressTypeToEnableDisable :: IsString s => TxOutVariantType -> s
 addressTypeToEnableDisable TxOutVariantAddress = "enable"
-addressTypeToEnableDisable TxOutCore = "disable"
+addressTypeToEnableDisable TxOutVariantCore = "disable"
 
-enableDisableToTxOutTableType :: (Eq s, IsString s) => s -> Maybe TxOutTableType
-enableDisableToTxOutTableType = \case
+enableDisableToTxOutVariantType :: (Eq s, IsString s) => s -> Maybe TxOutVariantType
+enableDisableToTxOutVariantType = \case
   "enable" -> Just TxOutVariantAddress
-  "disable" -> Just TxOutCore
+  "disable" -> Just TxOutVariantCore
   _ -> Nothing
 
 boolToEnableDisable :: IsString s => Bool -> s

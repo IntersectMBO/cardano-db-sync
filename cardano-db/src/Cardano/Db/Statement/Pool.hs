@@ -3,7 +3,7 @@
 
 module Cardano.Db.Statement.Pool where
 
-import Cardano.Prelude (ByteString, MonadIO, Proxy (..), Word64)
+import Cardano.Prelude (ByteString, MonadIO, Proxy (..), Word64, Int64)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -17,9 +17,10 @@ import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertIfUnique)
-import Cardano.Db.Statement.Function.Query (existsById, existsWhere)
+import Cardano.Db.Statement.Function.Query (existsById, existsWhereByColumn)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (CertNo (..), DbAction, DbWord64, PoolCert (..), PoolCertAction (..))
+import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 
 --------------------------------------------------------------------------------
 -- DelistedPool
@@ -58,6 +59,45 @@ queryDelistedPools :: MonadIO m => DbAction m [ByteString]
 queryDelistedPools =
   runDbSession (mkCallInfo "queryDelistedPools") $
     HsqlSes.statement () queryDelistedPoolsStmt
+
+--------------------------------------------------------------------------------
+existsDelistedPoolStmt :: HsqlStmt.Statement ByteString Bool
+existsDelistedPoolStmt =
+  existsWhereByColumn
+    @SCP.DelistedPool  -- Specify the type explicitly
+    "hash_raw"     -- Column to match on
+    (HsqlE.param (HsqlE.nonNullable HsqlE.bytea))  -- ByteString encoder
+    (WithResult $ HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool))
+
+-- Updated function that takes a ByteString
+existsDelistedPool :: MonadIO m => ByteString -> DbAction m Bool
+existsDelistedPool ph =
+  runDbSession (mkCallInfo "existsDelistedPool") $
+    HsqlSes.statement ph existsDelistedPoolStmt
+
+--------------------------------------------------------------------------------
+deleteDelistedPoolStmt :: HsqlStmt.Statement ByteString Int64
+deleteDelistedPoolStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "WITH deleted AS ("
+      , "  DELETE FROM delisted_pool"
+      , "  WHERE hash_raw = $1"
+      , "  RETURNING *"
+      , ")"
+      , "SELECT COUNT(*)::bigint FROM deleted"
+      ]
+
+    encoder = id >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
+
+deleteDelistedPool :: MonadIO m => ByteString -> DbAction m Bool
+deleteDelistedPool poolHash =
+  runDbSession (mkCallInfo "deleteDelistedPool") $ do
+    count <- HsqlSes.statement poolHash deleteDelistedPoolStmt
+    pure $ count > 0
+
 
 --------------------------------------------------------------------------------
 -- PoolHash
@@ -114,31 +154,6 @@ queryPoolHashIdExists poolHashId =
     HsqlSes.statement poolHashId queryPoolHashIdExistsStmt
 
 --------------------------------------------------------------------------------
-existsDelistedPoolStmt :: HsqlStmt.Statement Id.DelistedPoolId Bool
-existsDelistedPoolStmt =
-  existsWhere
-    "hash_raw"
-    (Id.idEncoder Id.getDelistedPoolId)
-    (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
-
-existsDelistedPool :: MonadIO m => Id.DelistedPoolId -> DbAction m Bool
-existsDelistedPool ph =
-  runDbSession (mkCallInfo "existsDelistedPool") $
-    HsqlSes.statement ph existsDelistedPoolStmt
-
---------------------------------------------------------------------------------
-existsPoolMetadataRefIdStmt :: HsqlStmt.Statement Id.PoolMetadataRefId Bool
-existsPoolMetadataRefIdStmt =
-  existsById
-    (Id.idEncoder Id.getPoolMetadataRefId)
-    (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
-
-existsPoolMetadataRefId :: MonadIO m => Id.PoolMetadataRefId -> DbAction m Bool
-existsPoolMetadataRefId pmrid =
-  runDbSession (mkCallInfo "existsPoolMetadataRefId") $
-    HsqlSes.statement pmrid existsPoolMetadataRefIdStmt
-
---------------------------------------------------------------------------------
 -- PoolMetadataRef
 --------------------------------------------------------------------------------
 insertPoolMetadataRefStmt :: HsqlStmt.Statement SCP.PoolMetadataRef (Entity SCP.PoolMetadataRef)
@@ -167,20 +182,27 @@ queryPoolMetadataRefIdExists poolMetadataRefId =
     HsqlSes.statement poolMetadataRefId queryPoolMetadataRefIdExistsStmt
 
 --------------------------------------------------------------------------------
-insertPoolOwnerStmt :: HsqlStmt.Statement SCP.PoolOwner (Entity SCP.PoolOwner)
-insertPoolOwnerStmt =
-  insert
-    SCP.poolOwnerEncoder
-    (WithResult $ HsqlD.singleRow SCP.entityPoolOwnerDecoder)
+existsPoolMetadataRefIdStmt :: HsqlStmt.Statement Id.PoolMetadataRefId Bool
+existsPoolMetadataRefIdStmt =
+  existsById
+    (Id.idEncoder Id.getPoolMetadataRefId)
+    (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
 
-insertPoolOwner :: MonadIO m => SCP.PoolOwner -> DbAction m Id.PoolOwnerId
-insertPoolOwner poolOwner = do
-  entity <-
-    runDbSession (mkCallInfo "insertPoolOwner") $
-      HsqlSes.statement poolOwner insertPoolOwnerStmt
-  pure $ entityKey entity
+existsPoolMetadataRefId :: MonadIO m => Id.PoolMetadataRefId -> DbAction m Bool
+existsPoolMetadataRefId pmrid =
+  runDbSession (mkCallInfo "existsPoolMetadataRefId") $
+    HsqlSes.statement pmrid existsPoolMetadataRefIdStmt
 
 --------------------------------------------------------------------------------
+deletePoolMetadataRefById :: MonadIO m => Id.PoolMetadataRefId -> DbAction m ()
+deletePoolMetadataRefById pmrId =
+  runDbSession (mkCallInfo "deletePoolMetadataRefById") $
+    HsqlSes.statement pmrId (parameterisedDeleteWhere @SCP.PoolMetadataRef "id" ">=" $ Id.idEncoder Id.getPoolMetadataRefId)
+
+--------------------------------------------------------------------------------
+-- PoolRelay
+--------------------------------------------------------------------------------
+
 insertPoolRelayStmt :: HsqlStmt.Statement SCP.PoolRelay (Entity SCP.PoolRelay)
 insertPoolRelayStmt =
   insert
@@ -193,17 +215,7 @@ insertPoolRelay poolRelay = do
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-insertPoolRetireStmt :: HsqlStmt.Statement SCP.PoolRetire (Entity SCP.PoolRetire)
-insertPoolRetireStmt =
-  insert
-    SCP.poolRetireEncoder
-    (WithResult $ HsqlD.singleRow SCP.entityPoolRetireDecoder)
-
-insertPoolRetire :: MonadIO m => SCP.PoolRetire -> DbAction m Id.PoolRetireId
-insertPoolRetire poolRetire = do
-  entity <- runDbSession (mkCallInfo "insertPoolRetire") $ HsqlSes.statement poolRetire insertPoolRetireStmt
-  pure $ entityKey entity
-
+-- PoolStat
 --------------------------------------------------------------------------------
 insertBulkPoolStatStmt :: HsqlStmt.Statement [SCP.PoolStat] ()
 insertBulkPoolStatStmt =
@@ -228,6 +240,9 @@ insertBulkPoolStat poolStats = do
     HsqlSes.statement poolStats insertBulkPoolStatStmt
 
 --------------------------------------------------------------------------------
+-- PoolUpdate
+--------------------------------------------------------------------------------
+
 insertPoolUpdateStmt :: HsqlStmt.Statement SCP.PoolUpdate (Entity SCP.PoolUpdate)
 insertPoolUpdateStmt =
   insert
@@ -240,18 +255,74 @@ insertPoolUpdate poolUpdate = do
   pure $ entityKey entity
 
 --------------------------------------------------------------------------------
-insertReservedPoolTickerStmt :: HsqlStmt.Statement SCP.ReservedPoolTicker (Maybe (Entity SCP.ReservedPoolTicker))
-insertReservedPoolTickerStmt =
-  insertIfUnique
-    SCP.reservedPoolTickerEncoder
-    SCP.entityReservedPoolTickerDecoder
+-- PoolOwner
+--------------------------------------------------------------------------------
 
-insertReservedPoolTicker :: MonadIO m => SCP.ReservedPoolTicker -> DbAction m (Maybe Id.ReservedPoolTickerId)
-insertReservedPoolTicker reservedPool = do
-  mEntity <-
-    runDbSession (mkCallInfo "insertReservedPoolTicker") $
-      HsqlSes.statement reservedPool insertReservedPoolTickerStmt
-  pure $ entityKey <$> mEntity
+insertPoolOwnerStmt :: HsqlStmt.Statement SCP.PoolOwner (Entity SCP.PoolOwner)
+insertPoolOwnerStmt =
+  insert
+    SCP.poolOwnerEncoder
+    (WithResult $ HsqlD.singleRow SCP.entityPoolOwnerDecoder)
+
+insertPoolOwner :: MonadIO m => SCP.PoolOwner -> DbAction m Id.PoolOwnerId
+insertPoolOwner poolOwner = do
+  entity <-
+    runDbSession (mkCallInfo "insertPoolOwner") $
+      HsqlSes.statement poolOwner insertPoolOwnerStmt
+  pure $ entityKey entity
+
+--------------------------------------------------------------------------------
+-- PoolRetire
+--------------------------------------------------------------------------------
+
+insertPoolRetireStmt :: HsqlStmt.Statement SCP.PoolRetire (Entity SCP.PoolRetire)
+insertPoolRetireStmt =
+  insert
+    SCP.poolRetireEncoder
+    (WithResult $ HsqlD.singleRow SCP.entityPoolRetireDecoder)
+
+insertPoolRetire :: MonadIO m => SCP.PoolRetire -> DbAction m Id.PoolRetireId
+insertPoolRetire poolRetire = do
+  entity <- runDbSession (mkCallInfo "insertPoolRetire") $ HsqlSes.statement poolRetire insertPoolRetireStmt
+  pure $ entityKey entity
+
+--------------------------------------------------------------------------------
+queryRetiredPoolsStmt :: HsqlStmt.Statement (Maybe ByteString) [PoolCert]
+queryRetiredPoolsStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    poolRetireN = tableName (Proxy @SCP.PoolRetire)
+    poolHashN = tableName (Proxy @SCP.PoolHash)
+    txN = tableName (Proxy @SCB.Tx)
+    blockN = tableName (Proxy @SCB.Block)
+
+    sql = TextEnc.encodeUtf8 $ Text.concat
+      [ "SELECT ph.hash_raw, pr.retiring_epoch, blk.block_no, tx.block_index, pr.cert_index"
+      , " FROM " <> poolRetireN <> " pr"
+      , " INNER JOIN " <> poolHashN <> " ph ON pr.hash_id = ph.id"
+      , " INNER JOIN " <> txN <> " tx ON pr.announced_tx_id = tx.id"
+      , " INNER JOIN " <> blockN <> " blk ON tx.block_id = blk.id"
+      , " WHERE ($1::bytea IS NULL OR ph.hash_raw = $1)"
+      ]
+
+    encoder = HsqlE.param (HsqlE.nullable HsqlE.bytea)
+
+    decoder = HsqlD.rowList $ do
+      hsh <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      retEpoch <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      blkNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
+      txIndex <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      retIndex <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      pure $ PoolCert
+        { pcHash = hsh
+        , pcCertAction = Retirement retEpoch
+        , pcCertNo = CertNo blkNo txIndex retIndex
+        }
+
+queryRetiredPools :: MonadIO m => Maybe ByteString -> DbAction m [PoolCert]
+queryRetiredPools mPoolHash =
+  runDbSession (mkCallInfo "queryRetiredPools") $
+    HsqlSes.statement mPoolHash queryRetiredPoolsStmt
 
 --------------------------------------------------------------------------------
 -- PoolUpdate
@@ -288,7 +359,6 @@ queryPoolUpdateByBlockStmt =
         [ snd >$< HsqlE.param (HsqlE.nonNullable (Id.getPoolHashId >$< HsqlE.int8))
         , fst >$< HsqlE.param (HsqlE.nonNullable (Id.getBlockId >$< HsqlE.int8))
         ]
-
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.bool)
 
 queryPoolUpdateByBlock :: MonadIO m => Id.BlockId -> Id.PoolHashId -> DbAction m Bool
@@ -354,6 +424,20 @@ queryPoolRegister mPoolHash =
 -- ReservedPoolTicker
 --------------------------------------------------------------------------------
 
+insertReservedPoolTickerStmt :: HsqlStmt.Statement SCP.ReservedPoolTicker (Maybe (Entity SCP.ReservedPoolTicker))
+insertReservedPoolTickerStmt =
+  insertIfUnique
+    SCP.reservedPoolTickerEncoder
+    SCP.entityReservedPoolTickerDecoder
+
+insertReservedPoolTicker :: MonadIO m => SCP.ReservedPoolTicker -> DbAction m (Maybe Id.ReservedPoolTickerId)
+insertReservedPoolTicker reservedPool = do
+  mEntity <-
+    runDbSession (mkCallInfo "insertReservedPoolTicker") $
+      HsqlSes.statement reservedPool insertReservedPoolTickerStmt
+  pure $ entityKey <$> mEntity
+
+--------------------------------------------------------------------------------
 queryReservedTickerStmt :: HsqlStmt.Statement Text.Text (Maybe ByteString)
 queryReservedTickerStmt =
   HsqlStmt.Statement sql encoder decoder True

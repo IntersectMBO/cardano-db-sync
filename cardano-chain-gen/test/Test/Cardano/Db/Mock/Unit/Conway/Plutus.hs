@@ -37,8 +37,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variant.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
@@ -63,7 +63,7 @@ import Test.Cardano.Db.Mock.Config (
   conwayConfigDir,
   initCommandLineArgs,
   startDBSync,
-  txOutTableTypeFromConfig,
+  txOutVariantTypeFromConfig,
   withCustomConfig,
   withFullConfig,
   withFullConfigAndDropDB,
@@ -80,7 +80,7 @@ simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
   withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    let txOutTableType = txOutTableTypeFromConfig dbSync
+    let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
     -- Forge a block with stake credentials
     void $ Api.registerAllStakeCreds interpreter mockServer
@@ -96,20 +96,20 @@ simpleScript =
     assertBlockNoBackoff dbSync (length epoch + 2)
     assertEqQuery
       dbSync
-      (map getOutFields <$> DB.queryScriptOutputs txOutTableType)
+      (map getOutFields <$> DB.queryScriptOutputs txOutVariantType)
       [expectedFields]
       "Unexpected script outputs"
   where
     testLabel = "conwaySimpleScript"
     getOutFields txOut =
       case txOut of
-        DB.CTxOutW txOut' ->
+        DB.VCTxOutW txOut' ->
           ( C.txOutAddress txOut'
           , C.txOutAddressHasScript txOut'
           , C.txOutValue txOut'
           , C.txOutDataHash txOut'
           )
-        DB.VTxOutW txOut' mAddress ->
+        DB.VATxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
               ( V.addressAddress address
