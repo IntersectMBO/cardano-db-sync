@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2025-05-07T06:09:46Z
-  , cardano-haskell-packages 2025-04-29T20:52:57Z
+  , hackage.haskell.org 2025-05-23T06:30:40Z
+  , cardano-haskell-packages 2025-05-16T20:03:45Z
 
 packages:
   cardano-db
@@ -67,9 +67,6 @@ package snap-server
   -- only if the `cardano-node` is compiled with `+rtview`.
   flags: -openssl
 
-package cardano-ledger-shelley
-  flags: -XAllowAmbiguousTypes
-
 -- ---------------------------------------------------------
 
 constraints:
@@ -85,27 +82,11 @@ constraints:
 
 if impl (ghc >= 9.12)
   allow-newer:
-    -- https://github.com/phadej/vec/issues/118
-    , bin:base
-    , fin:base
-    , ral:base
-
-    -- https://github.com/haskellari/tree-diff/issues/97
-    , tree-diff:base
-
     -- https://github.com/kapralVV/Unique/issues/11
     , Unique:hashable
 
     -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
     , pipes-safe:base
-
-    -- https://github.com/phadej/insert-ordered-containers/issues/65
-    , insert-ordered-containers:base
-    , insert-ordered-containers:hashable
-
-	-- https://github.com/GetShopTV/swagger2/issues/256
-    , swagger2:base
-    , swagger2:template-haskell
 
     -- https://github.com/haskellari/postgresql-simple/issues/152
     , postgresql-simple:base
