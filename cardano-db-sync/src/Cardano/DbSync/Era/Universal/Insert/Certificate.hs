@@ -55,7 +55,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Group (invert)
 import qualified Data.Map.Strict as Map
 import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 insertCertificate ::
   (MonadBaseControl IO m, MonadIO m) =>
@@ -115,7 +114,7 @@ insertDelegCert ::
   Maybe DB.RedeemerId ->
   EpochNo ->
   SlotNo ->
-  ShelleyDelegCert StandardCrypto ->
+  ShelleyDelegCert ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegCert tracer cache mDeposits network txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
@@ -132,7 +131,7 @@ insertConwayDelegCert ::
   Maybe DB.RedeemerId ->
   EpochNo ->
   SlotNo ->
-  ConwayDelegCert StandardCrypto ->
+  ConwayDelegCert ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
@@ -175,7 +174,7 @@ insertMirCert ::
   Ledger.Network ->
   DB.TxId ->
   Word16 ->
-  MIRCert StandardCrypto ->
+  MIRCert ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertMirCert tracer cache network txId idx mcert = do
   case mirPot mcert of
@@ -239,9 +238,9 @@ insertDrepRegistration ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'DRepRole StandardCrypto ->
+  Ledger.Credential 'DRepRole ->
   Maybe Coin ->
-  Maybe (Anchor StandardCrypto) ->
+  Maybe Anchor ->
   ReaderT SqlBackend m ()
 insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
@@ -260,7 +259,7 @@ insertDrepDeRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'DRepRole StandardCrypto ->
+  Ledger.Credential 'DRepRole ->
   Coin ->
   ReaderT SqlBackend m ()
 insertDrepDeRegistration txId idx cred coin = do
@@ -279,8 +278,8 @@ insertCommitteeRegistration ::
   (MonadBaseControl IO m, MonadIO m) =>
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
-  Ledger.Credential 'HotCommitteeRole StandardCrypto ->
+  Ledger.Credential 'ColdCommitteeRole ->
+  Ledger.Credential 'HotCommitteeRole ->
   ReaderT SqlBackend m ()
 insertCommitteeRegistration txId idx khCold cred = do
   khHotId <- insertCommitteeHash cred
@@ -299,8 +298,8 @@ insertCommitteeDeRegistration ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'ColdCommitteeRole StandardCrypto ->
-  Maybe (Anchor StandardCrypto) ->
+  Ledger.Credential 'ColdCommitteeRole ->
+  Maybe Anchor ->
   ReaderT SqlBackend m ()
 insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
   votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blockId DB.CommitteeDeRegAnchor
@@ -344,7 +343,7 @@ insertStakeRegistration ::
   Maybe Generic.Deposits ->
   DB.TxId ->
   Word16 ->
-  Shelley.RewardAccount StandardCrypto ->
+  Shelley.RewardAccount ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertStakeRegistration tracer cache epochNo mDeposits txId idx rewardAccount = do
   saId <- lift $ queryOrInsertRewardAccount tracer cache UpdateCache rewardAccount
@@ -410,7 +409,7 @@ insertDelegation ::
   Word16 ->
   Maybe DB.RedeemerId ->
   StakeCred ->
-  Ledger.KeyHash 'Ledger.StakePool StandardCrypto ->
+  Ledger.KeyHash 'Ledger.StakePool ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegation trce cache network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
   addrId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network cred
@@ -434,7 +433,7 @@ insertDelegationVote ::
   DB.TxId ->
   Word16 ->
   StakeCred ->
-  DRep StandardCrypto ->
+  DRep ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 insertDelegationVote trce cache network txId idx cred drep = do
   addrId <- lift $ queryOrInsertStakeAddress trce cache UpdateCacheStrong network cred

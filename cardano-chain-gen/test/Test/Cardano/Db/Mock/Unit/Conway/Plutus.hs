@@ -41,9 +41,9 @@ import qualified Cardano.Db.Schema.Core.TxOut as C
 import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Hashes (extractHash)
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Plutus.Data
-import Cardano.Ledger.SafeHash (extractHash)
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
@@ -54,7 +54,7 @@ import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
 import GHC.Base (error)
-import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
+import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Network.Block (genesisPoint)
 import Test.Cardano.Db.Mock.Config (
   CommandLineArgs (..),
@@ -124,7 +124,7 @@ simpleScript =
       , True
       , DB.DbLovelace 20_000
       , Just $
-          hashToBytes (extractHash $ hashData @StandardConway Examples.plutusDataList)
+          hashToBytes (extractHash $ hashData @ConwayEra Examples.plutusDataList)
       )
 
 unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion

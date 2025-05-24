@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -63,6 +64,9 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Time.Clock as Time
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
+import qualified Ouroboros.Consensus.Cardano.Block as Consensus
+import Ouroboros.Consensus.Cardano.CanHardFork ()
 import Ouroboros.Consensus.Protocol.Praos ()
 import Ouroboros.Consensus.Shelley.HFEras ()
 import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
@@ -70,7 +74,7 @@ import Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
 import Text.Show.Pretty (ppShow)
 
-cardanoBlockSlotNo :: CardanoBlock -> SlotNo
+cardanoBlockSlotNo :: Consensus.CardanoBlock StandardCrypto -> SlotNo
 cardanoBlockSlotNo = blockSlot
 
 fmap3 :: (Functor f, Functor g, Functor h) => (a -> b) -> f (g (h a)) -> f (g (h b))

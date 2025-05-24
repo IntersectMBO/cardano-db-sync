@@ -27,15 +27,14 @@ import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
-import qualified Cardano.Ledger.Era as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
-import Ouroboros.Consensus.Shelley.Eras (StandardBabbage, StandardCrypto)
+import Ouroboros.Consensus.Shelley.Eras (BabbageEra)
 
-fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardBabbage) -> Tx
+fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx BabbageEra) -> Tx
 fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -82,7 +81,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Babbage does not support treasury donations
     }
   where
-    txBody :: Core.TxBody StandardBabbage
+    txBody :: Core.TxBody BabbageEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
@@ -96,7 +95,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     collIndex :: Word64
     collIndex =
       case txIxFromIntegral (length outputs) of
-        Just (TxIx i) -> i
+        Just (TxIx i) -> fromIntegral i
         Nothing -> fromIntegral (maxBound :: Word16)
 
     -- This is true if second stage contract validation passes.
@@ -113,12 +112,11 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
 fromTxOut ::
   forall era.
   ( Core.BabbageEraTxOut era
-  , EraCrypto era ~ StandardCrypto
-  , Core.Value era ~ MaryValue (EraCrypto era)
   , Core.TxOut era ~ BabbageTxOut era
   , Core.Script era ~ Alonzo.AlonzoScript era
   , DBPlutusScript era
   , NativeScript era ~ Timelock era
+  , Value era ~ MaryValue
   ) =>
   Word64 ->
   BabbageTxOut era ->
@@ -139,8 +137,7 @@ fromTxOut index txOut =
 
 fromScript ::
   forall era.
-  ( EraCrypto era ~ StandardCrypto
-  , Core.Script era ~ Alonzo.AlonzoScript era
+  ( Core.Script era ~ Alonzo.AlonzoScript era
   , DBPlutusScript era
   , NativeScript era ~ Timelock era
   ) =>
@@ -148,7 +145,7 @@ fromScript ::
   TxScript
 fromScript scr = mkTxScript (Core.hashScript @era scr, scr)
 
-fromDatum :: (EraCrypto era ~ StandardCrypto, Ledger.Era era) => Alonzo.Datum era -> TxOutDatum
+fromDatum :: Era era => Alonzo.Datum era -> TxOutDatum
 fromDatum bdat =
   case bdat of
     Alonzo.NoDatum -> NoDatum

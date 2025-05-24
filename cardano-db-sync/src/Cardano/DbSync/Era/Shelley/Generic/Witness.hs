@@ -30,11 +30,11 @@ instance Show (Evidence c) where
 -- show Test = "Test"-- | Witness of a valid (predefined) era
 
 data Witness era where
-  Shelley :: Evidence c -> Witness (ShelleyEra c)
-  Allegra :: Evidence c -> Witness (AllegraEra c)
-  Mary :: Evidence c -> Witness (MaryEra c)
-  Alonzo :: Evidence c -> Witness (AlonzoEra c)
-  Babbage :: Evidence c -> Witness (BabbageEra c)
+  Shelley :: Evidence c -> Witness ShelleyEra
+  Allegra :: Evidence c -> Witness AllegraEra
+  Mary :: Evidence c -> Witness MaryEra
+  Alonzo :: Evidence c -> Witness AlonzoEra
+  Babbage :: Evidence c -> Witness BabbageEra
 
 --  Conway :: Evidence c -> Witness (ConwayEra c)
 
