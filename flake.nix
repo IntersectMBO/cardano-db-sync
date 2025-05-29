@@ -9,7 +9,7 @@
       inputs.hackage.follows = "hackageNix";
     };
     hackageNix = {
-      url = "github:input-output-hk/hackage.nix";
+      url = "github:input-output-hk/hackage.nix?ref=for-stackage";
       flake = false;
     };
     iohkNix = {
@@ -170,6 +170,11 @@
               in
                 lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
+            # cardano-cli is needed when building the docker image
+            cabalProjectLocal = ''
+              extra-packages: cardano-cli
+            '';
+
             crossPlatforms = p:
               lib.optional (system == "x86_64-linux") p.musl64 ++
               lib.optional
@@ -213,10 +218,14 @@
 
             modules = [
               ({ lib, pkgs, ... }: {
+                package-keys = ["ekg"];
                 # Ignore version bounds
                 packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
                 packages.ekg.components.library.enableSeparateDataOutput = true;
+                # Haddock is failing for these two packages (at least with GHC 8.10.7)                
+                packages.ouroboros-network.doHaddock = config.compiler-nix-name != "ghc8107";
+                packages.cardano-node.doHaddock = config.compiler-nix-name != "ghc8107";
               })
 
               ({
