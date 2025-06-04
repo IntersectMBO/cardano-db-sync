@@ -221,16 +221,18 @@ dbInt65Encoder = fromDbInt65 >$< HsqlE.int8
 
 -- Helper functions to pack/unpack the sign and value
 toDbInt65 :: Int64 -> DbInt65
-toDbInt65 n =
-  DbInt65 $
-    if n >= 0
-      then fromIntegral n
-      else setBit (fromIntegral (abs n)) 63 -- Set sign bit for negative
+toDbInt65 n
+  | n >= 0 = DbInt65 (fromIntegral n)
+  | n == minBound = DbInt65 (setBit 0 63)  -- Special: magnitude 0 + sign bit = minBound
+  | otherwise = DbInt65 (setBit (fromIntegral (abs n)) 63)
 
 fromDbInt65 :: DbInt65 -> Int64
 fromDbInt65 (DbInt65 w) =
   if testBit w 63
-    then negate $ fromIntegral (clearBit w 63) -- Clear sign bit for value
+    then let magnitude = clearBit w 63
+         in if magnitude == 0
+            then minBound  -- Special: magnitude 0 + sign bit = minBound
+            else negate (fromIntegral magnitude)
     else fromIntegral w
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
