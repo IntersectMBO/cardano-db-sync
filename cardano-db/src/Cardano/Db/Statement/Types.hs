@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Statement.Types where
 
@@ -130,7 +131,7 @@ instance GRecordFieldNames (K1 i c) where
 -- | Validate a column name against the list of columns in the table.
 validateColumn :: forall a. (DbInfo a) => Text -> Text
 validateColumn colName =
-  let cols = NE.toList $ columnNames (Proxy @a)
+  let cols = "id" : NE.toList (columnNames (Proxy @a))
    in if colName `elem` cols
         then colName
         else

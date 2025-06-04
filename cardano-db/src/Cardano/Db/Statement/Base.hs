@@ -15,7 +15,7 @@ import Cardano.Ledger.BaseTypes (SlotNo (..))
 import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Word64, textShow, void)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import Data.List (partition)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, fromMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
@@ -311,8 +311,8 @@ queryMinBlockStmt =
 
     decoder = HsqlD.rowMaybe $ do
       blockId <- Id.idDecoder Id.BlockId
-      blockNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      pure (blockId, blockNo)
+      blockNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
+      pure (blockId, fromMaybe 0 blockNo)
 
 queryMinBlock :: MonadIO m => DbAction m (Maybe (Id.BlockId, Word64))
 queryMinBlock =
@@ -1317,16 +1317,15 @@ queryScriptWithId hash =
 --------------------------------------------------------------------------------
 -- SlotLeader
 --------------------------------------------------------------------------------
-insertSlotLeaderStmt :: HsqlStmt.Statement SCB.SlotLeader (Entity SCB.SlotLeader)
+insertSlotLeaderStmt :: HsqlStmt.Statement SCB.SlotLeader Id.SlotLeaderId
 insertSlotLeaderStmt =
   insert
     SCB.slotLeaderEncoder
-    (WithResult $ HsqlD.singleRow SCB.entitySlotLeaderDecoder)
+    (WithResult $ Id.idDecoder Id.SlotLeaderId)
 
 insertSlotLeader :: MonadIO m => SCB.SlotLeader -> DbAction m Id.SlotLeaderId
 insertSlotLeader slotLeader = do
-  entity <- runDbSession (mkCallInfo "insertSlotLeader") $ HsqlSes.statement slotLeader insertSlotLeaderStmt
-  pure $ entityKey entity
+  runDbSession (mkCallInfo "insertSlotLeader") $ HsqlSes.statement slotLeader insertSlotLeaderStmt
 
 --------------------------------------------------------------------------------
 -- TxCbor
