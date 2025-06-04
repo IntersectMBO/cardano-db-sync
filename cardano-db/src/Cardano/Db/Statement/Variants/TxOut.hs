@@ -18,14 +18,15 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
+import qualified Cardano.Db.Schema.Core.Base as SVC
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Variants (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutVariantType (..), TxOutW (..), UtxoQueryResult (..))
+import Cardano.Db.Schema.Variants (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutVariantType (..), TxOutW (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteAllCount, parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
-import Cardano.Db.Statement.Function.Query (countAll)
+import Cardano.Db.Statement.Function.Query (adaDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (Ada (..), DbAction, DbCallInfo (..), DbLovelace, DbWord64, dbLovelaceDecoder)
 
@@ -313,7 +314,6 @@ queryTxOutCredentialsCoreStmt =
     decoder =
       HsqlD.rowMaybe $ HsqlD.column (HsqlD.nullable HsqlD.bytea)
 
-
 --------------------------------------------------------------------------------
 queryTxOutCredentialsVariantStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))
 queryTxOutCredentialsVariantStmt =
@@ -383,6 +383,58 @@ queryTotalSupply :: MonadIO m => TxOutVariantType -> DbAction m Ada
 queryTotalSupply _ =
   runDbSession (mkCallInfo "queryTotalSupply") $
     HsqlSes.statement () queryTotalSupplyStmt
+
+queryGenesisSupplyStmt :: Text -> HsqlStmt.Statement () Ada
+queryGenesisSupplyStmt txOutTableName =
+  HsqlStmt.Statement sql HsqlE.noParams (HsqlD.singleRow adaDecoder) True
+  where
+    txTable = tableName (Proxy @SVC.Tx)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(" <> txOutTableName <> ".value), 0)::bigint"
+          , " FROM " <> txTable
+          , " INNER JOIN " <> txOutTableName <> " ON tx.id = " <> txOutTableName <> ".tx_id"
+          , " INNER JOIN block ON tx.block_id = block.id"
+          , " WHERE block.previous_id IS NULL"
+          ]
+
+queryGenesisSupply :: MonadIO m => TxOutVariantType -> DbAction m Ada
+queryGenesisSupply txOutVariantType = do
+  case txOutVariantType of
+    TxOutVariantCore ->
+      runDbSession (mkCallInfo "queryGenesisSupplyCore") $
+        HsqlSes.statement () (queryGenesisSupplyStmt (tableName (Proxy @SVC.TxOutCore)))
+    TxOutVariantAddress ->
+      runDbSession (mkCallInfo "queryGenesisSupplyAddress") $
+        HsqlSes.statement () (queryGenesisSupplyStmt (tableName (Proxy @SVA.TxOutAddress)))
+
+--------------------------------------------------------------------------------
+queryShelleyGenesisSupplyStmt :: Text -> HsqlStmt.Statement () Ada
+queryShelleyGenesisSupplyStmt txOutTableName =
+  HsqlStmt.Statement sql HsqlE.noParams (HsqlD.singleRow adaDecoder) True
+  where
+    txTable = tableName (Proxy @SVC.Tx)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(" <> txOutTableName <> ".value), 0)::bigint"
+          , " FROM " <> txOutTableName
+          , " INNER JOIN " <> txTable <> " ON " <> txOutTableName <> ".tx_id = tx.id"
+          , " INNER JOIN block ON tx.block_id = block.id"
+          , " WHERE block.previous_id IS NOT NULL"
+          , " AND block.epoch_no IS NULL"
+          ]
+
+queryShelleyGenesisSupply :: MonadIO m => TxOutVariantType -> DbAction m Ada
+queryShelleyGenesisSupply txOutVariantType = do
+  case txOutVariantType of
+    TxOutVariantCore ->
+      runDbSession (mkCallInfo "queryShelleyGenesisSupplyCore") $
+        HsqlSes.statement () (queryShelleyGenesisSupplyStmt (tableName (Proxy @SVC.TxOutCore)))
+    TxOutVariantAddress ->
+      runDbSession (mkCallInfo "queryShelleyGenesisSupplyAddress") $
+        HsqlSes.statement () (queryShelleyGenesisSupplyStmt (tableName (Proxy @SVA.TxOutAddress)))
 
 --------------------------------------------------------------------------------
 -- DELETES
@@ -583,16 +635,16 @@ insertCollateralTxOutAddressStmt =
 insertCollateralTxOut :: MonadIO m => CollateralTxOutW -> DbAction m CollateralTxOutIdW
 insertCollateralTxOut collateralTxOutW =
   case collateralTxOutW of
-    CCollateralTxOutW txOut -> do
+    VCCollateralTxOutW txOut -> do
       txOutId <-
         runDbSession (mkCallInfo "insertCollateralTxOutCore") $
           HsqlSes.statement txOut insertCollateralTxOutCoreStmt
-      pure $ CCollateralTxOutIdW $ entityKey txOutId
-    VCollateralTxOutW txOut -> do
+      pure $ VCCollateralTxOutIdW $ entityKey txOutId
+    VACollateralTxOutW txOut -> do
       txOutId <-
         runDbSession (mkCallInfo "insertCollateralTxOutAddress") $
           HsqlSes.statement txOut insertCollateralTxOutAddressStmt
-      pure $ VCollateralTxOutIdW $ entityKey txOutId
+      pure $ VACollateralTxOutIdW $ entityKey txOutId
 
 --------------------------------------------------------------------------------
 -- Testing or validating. Queries below are not used in production
@@ -621,185 +673,6 @@ queryTxOutUnspentCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
 queryTxOutUnspentCount _ =
   runDbSession (mkCallInfo "queryTxOutUnspentCount") $
     HsqlSes.statement () queryTxOutUnspentCountStmt
-
---------------------------------------------------------------------------------
-utxoAtBlockIdWhereClause :: Text
-utxoAtBlockIdWhereClause =
-  Text.concat
-    [ " WHERE txout.tx_id IN ("
-    , "   SELECT tx.id FROM tx"
-    , "   WHERE tx.block_id IN ("
-    , "     SELECT block.id FROM block"
-    , "     WHERE block.id <= $1"
-    , "   )"
-    , " )"
-    , " AND (blk.block_no IS NULL OR blk.id > $1)"
-    , " AND tx2.hash IS NOT NULL" -- Filter out NULL hashes
-    ]
-
-queryUtxoAtBlockIdCoreStmt :: HsqlStmt.Statement Id.BlockId [UtxoQueryResult]
-queryUtxoAtBlockIdCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT txout.*, txout.address, tx2.hash"
-          , " FROM tx_out txout"
-          , " LEFT JOIN tx_in txin ON txout.tx_id = txin.tx_out_id AND txout.index = txin.tx_out_index"
-          , " LEFT JOIN tx tx1 ON txin.tx_in_id = tx1.id"
-          , " LEFT JOIN block blk ON tx1.block_id = blk.id"
-          , " LEFT JOIN tx tx2 ON txout.tx_id = tx2.id"
-          , utxoAtBlockIdWhereClause
-          ]
-
-    encoder = Id.idEncoder Id.getBlockId
-
-    decoder = HsqlD.rowList $ do
-      txOut <- SVC.txOutCoreDecoder
-      address <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
-      txHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea) -- Now non-nullable
-      pure $
-        UtxoQueryResult
-          { utxoTxOutW = VCTxOutW txOut
-          , utxoAddress = address
-          , utxoTxHash = txHash
-          }
-
-queryUtxoAtBlockIdVariantStmt :: HsqlStmt.Statement Id.BlockId [UtxoQueryResult]
-queryUtxoAtBlockIdVariantStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT txout.*, addr.*, tx2.hash"
-          , " FROM tx_out txout"
-          , " LEFT JOIN tx_in txin ON txout.tx_id = txin.tx_out_id AND txout.index = txin.tx_out_index"
-          , " LEFT JOIN tx tx1 ON txin.tx_in_id = tx1.id"
-          , " LEFT JOIN block blk ON tx1.block_id = blk.id"
-          , " LEFT JOIN tx tx2 ON txout.tx_id = tx2.id"
-          , " INNER JOIN address addr ON txout.address_id = addr.id"
-          , utxoAtBlockIdWhereClause
-          ]
-
-    encoder = Id.idEncoder Id.getBlockId
-
-    decoder = HsqlD.rowList $ do
-      txOut <- SVA.txOutAddressDecoder
-      addr <- SVA.addressDecoder
-      txHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea) -- Now non-nullable
-      pure $
-        UtxoQueryResult
-          { utxoTxOutW = VATxOutW txOut (Just addr)
-          , utxoAddress = SVA.addressAddress addr
-          , utxoTxHash = txHash
-          }
-
---------------------------------------------------------------------------------
--- Query to get block ID at a specific slot
-queryBlockIdAtSlotStmt :: HsqlStmt.Statement Word64 (Maybe Id.BlockId)
-queryBlockIdAtSlotStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id FROM block"
-          , " WHERE slot_no = $1"
-          ]
-
-    encoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8
-    decoder = HsqlD.rowMaybe $ Id.idDecoder Id.BlockId
-
--- Shared WHERE clause for address balance queries
-addressBalanceWhereClause :: Text
-addressBalanceWhereClause =
-  Text.concat
-    [ " WHERE txout.tx_id IN ("
-    , "   SELECT tx.id FROM tx"
-    , "   WHERE tx.block_id IN ("
-    , "     SELECT block.id FROM block"
-    , "     WHERE block.id <= $1"
-    , "   )"
-    , " )"
-    , " AND (blk.block_no IS NULL OR blk.id > $1)"
-    ]
-
--- Query to get address balance for Core variant
-queryAddressBalanceAtBlockIdCoreStmt :: HsqlStmt.Statement (Id.BlockId, Text) Ada
-queryAddressBalanceAtBlockIdCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT COALESCE(SUM(txout.value), 0)::bigint"
-          , " FROM tx_out txout"
-          , " LEFT JOIN tx_in txin ON txout.tx_id = txin.tx_out_id AND txout.index = txin.tx_out_index"
-          , " LEFT JOIN tx tx1 ON txin.tx_in_id = tx1.id"
-          , " LEFT JOIN block blk ON tx1.block_id = blk.id"
-          , " LEFT JOIN tx tx2 ON txout.tx_id = tx2.id"
-          , addressBalanceWhereClause
-          , " AND txout.address = $2"
-          ]
-
-    encoder =
-      contramap fst (Id.idEncoder Id.getBlockId)
-        <> contramap snd (HsqlE.param $ HsqlE.nonNullable HsqlE.text)
-
-    decoder =
-      HsqlD.singleRow $
-        fromMaybe (Ada 0) <$> HsqlD.column (HsqlD.nullable (Ada . fromIntegral <$> HsqlD.int8))
-
--- Query to get address balance for Variant variant
-queryAddressBalanceAtBlockIdVariantStmt :: HsqlStmt.Statement (Id.BlockId, Text) Ada
-queryAddressBalanceAtBlockIdVariantStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT COALESCE(SUM(txout.value), 0)::bigint"
-          , " FROM tx_out txout"
-          , " LEFT JOIN tx_in txin ON txout.tx_id = txin.tx_out_id AND txout.index = txin.tx_out_index"
-          , " LEFT JOIN tx tx1 ON txin.tx_in_id = tx1.id"
-          , " LEFT JOIN block blk ON tx1.block_id = blk.id"
-          , " LEFT JOIN tx tx2 ON txout.tx_id = tx2.id"
-          , " INNER JOIN address addr ON txout.address_id = addr.id"
-          , addressBalanceWhereClause
-          , " AND addr.address = $2"
-          ]
-
-    encoder =
-      contramap fst (Id.idEncoder Id.getBlockId)
-        <> contramap snd (HsqlE.param $ HsqlE.nonNullable HsqlE.text)
-
-    decoder =
-      HsqlD.singleRow $
-        fromMaybe (Ada 0) <$> HsqlD.column (HsqlD.nullable (Ada . fromIntegral <$> HsqlD.int8))
-
--- Main query function
-queryAddressBalanceAtSlot :: MonadIO m => TxOutVariantType -> Text -> Word64 -> DbAction m Ada
-queryAddressBalanceAtSlot txOutVariantType addr slotNo = do
-  let callInfo = mkCallInfo "queryAddressBalanceAtSlot"
-
-  -- First get the block ID for the slot
-  mBlockId <-
-    runDbSession callInfo $
-      HsqlSes.statement slotNo queryBlockIdAtSlotStmt
-
-  -- If no block at that slot, return 0
-  case mBlockId of
-    Nothing -> pure $ Ada 0
-    Just blockId ->
-      case txOutVariantType of
-        TxOutVariantCore ->
-          runDbSession (mkCallInfo "queryAddressBalanceAtBlockIdCore") $
-            HsqlSes.statement (blockId, addr) queryAddressBalanceAtBlockIdCoreStmt
-        TxOutVariantAddress ->
-          runDbSession (mkCallInfo "queryAddressBalanceAtBlockIdVariant") $
-            HsqlSes.statement (blockId, addr) queryAddressBalanceAtBlockIdVariantStmt
 
 --------------------------------------------------------------------------------
 queryAddressOutputsCoreStmt :: HsqlStmt.Statement Text DbLovelace

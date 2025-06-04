@@ -314,9 +314,6 @@ module Cardano.Db.Operations.TxOut.TxOutQuery where
 --     pure (blk ^. BlockId)
 --   maybe (pure []) (queryUtxoAtBlockId txOutVariantType . unValue) (listToMaybe eblkId)
 
--- --------------------------------------------------------------------------------
--- -- queryUtxoAtBlockId
--- --------------------------------------------------------------------------------
 -- queryUtxoAtBlockId :: MonadIO m => TxOutVariantType -> BlockId -> DB.DbAction m [UtxoQueryResult]
 -- queryUtxoAtBlockId txOutVariantType blkid =
 --   case txOutVariantType of

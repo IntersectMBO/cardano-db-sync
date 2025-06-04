@@ -12,7 +12,7 @@
 
 module Cardano.Db.Schema.Core.OffChain where
 
-import Contravariant.Extras (contrazip3, contrazip5, contrazip6, contrazip8, contrazip4)
+import Contravariant.Extras (contrazip3, contrazip4, contrazip5, contrazip6, contrazip8)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)

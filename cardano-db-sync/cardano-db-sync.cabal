@@ -199,8 +199,6 @@ library
                       , ouroboros-network-api
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
-                      , persistent
-                      , persistent-postgresql
                       , plutus-ledger-api
                       , pretty-show
                       , prometheus
@@ -313,12 +311,10 @@ executable test-http-get-json-metadata
                       , bytestring
                       , cardano-db
                       , cardano-db-sync
-                      , esqueleto
                       , extra
                       , http-client
                       , http-client-tls
                       , text
-                      , transformers
                       , transformers-except
 
 test-suite test

@@ -110,7 +110,7 @@ data CollateralTxOutAddress = CollateralTxOutAddress
   , collateralTxOutAddressMultiAssetsDescr :: !Text
   , collateralTxOutAddressInlineDatumId :: !(Maybe Id.DatumId)
   , collateralTxOutAddressReferenceScriptId :: !(Maybe Id.ScriptId)
-  , collateralTxOutAddressId :: !Id.AddressId
+  , collateralTxOutAddressAddressId :: !Id.AddressId
   }
   deriving (Eq, Show, Generic)
 
@@ -161,7 +161,7 @@ collateralTxOutAddressEncoder =
     , collateralTxOutAddressMultiAssetsDescr >$< E.param (E.nonNullable E.text)
     , collateralTxOutAddressInlineDatumId >$< Id.maybeIdEncoder Id.getDatumId
     , collateralTxOutAddressReferenceScriptId >$< Id.maybeIdEncoder Id.getScriptId
-    , collateralTxOutAddressId >$< Id.idEncoder Id.getAddressId
+    , collateralTxOutAddressAddressId >$< Id.idEncoder Id.getAddressId
     ]
 
 -----------------------------------------------------------------------------------------------

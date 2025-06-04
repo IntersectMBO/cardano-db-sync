@@ -208,7 +208,8 @@ updateEpochWhenSyncing syncEnv cache mEpochBlockDiff mLastMapEpochFromCache epoc
 
 -- When syncing, on every block we update the Map epoch in cache. Making sure to handle restarts
 handleEpochCachingWhenSyncing ::
-  MonadIO m =>SyncEnv ->
+  MonadIO m =>
+  SyncEnv ->
   CacheStatus ->
   Maybe DB.Epoch ->
   Maybe EpochBlockDiff ->
@@ -233,7 +234,8 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
 -- This is an expensive DB query so we minimise its use to
 -- server restarts when syncing or following and rollbacks
 makeEpochWithDBQuery ::
-  MonadIO m =>SyncEnv ->
+  MonadIO m =>
+  SyncEnv ->
   CacheStatus ->
   Maybe DB.Epoch ->
   Word64 ->

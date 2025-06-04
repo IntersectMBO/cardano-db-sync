@@ -150,14 +150,14 @@ module Cardano.Db.Operations.Types where
 -- -- CollateralTxOut fields for a given TxOutVariantType
 -- --------------------------------------------------------------------------------
 -- data CollateralTxOutW
---   = CCollateralTxOutW !C.CollateralTxOut
+--   = VCCollateralTxOutW !C.CollateralTxOut
 --   | VCollateralTxOutW !V.CollateralTxOut
 --   deriving (Show)
 
 -- -- | A wrapper for TxOutId
 -- data CollateralTxOutIdW
---   = CCollateralTxOutIdW !C.CollateralTxOutId
---   | VCollateralTxOutIdW !V.CollateralTxOutId
+--   = VCCollateralTxOutIdW !C.CollateralTxOutId
+--   | VACollateralTxOutIdW !V.CollateralTxOutId
 --   deriving (Show)
 
 -- class (PersistEntity (CollateralTxOutTable a)) => CollateralTxOutFields (a :: TxOutVariantType) where

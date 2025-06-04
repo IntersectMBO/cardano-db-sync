@@ -459,6 +459,18 @@ queryMaxRefId fieldName value eq encoder keyDecoder =
 -- QUERY HELPERS
 ---------------------------------------------------------------------------
 
+queryStatementCacheStmt :: HsqlStmt.Statement () Int
+queryStatementCacheStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql = "SELECT count(*) FROM pg_prepared_statements"
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+
+queryStatementCacheSize :: MonadIO m => DbAction m Int
+queryStatementCacheSize =
+  runDbSession (mkCallInfo "queryStatementCacheSize") $
+    HsqlSes.statement () queryStatementCacheStmt
+
 -- Decoder for Ada amounts from database int8 values
 adaDecoder :: HsqlD.Row Ada
 adaDecoder = do

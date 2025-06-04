@@ -4,7 +4,7 @@
 
 module Cardano.Db.Statement.OffChain where
 
-import Cardano.Prelude (ByteString, MonadIO (..), Proxy (..), Text, when, Word64)
+import Cardano.Prelude (ByteString, MonadIO (..), Proxy (..), Text, Word64, when)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -16,19 +16,19 @@ import qualified Hasql.Session as HsqlS
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
+import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SV
 import qualified Cardano.Db.Schema.Core.OffChain as SO
 import qualified Cardano.Db.Schema.Core.Pool as SP
 import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertCheckUnique)
+import Cardano.Db.Statement.Function.Query (countAll)
 import Cardano.Db.Statement.GovernanceAndVoting (queryVotingAnchorIdExists)
 import Cardano.Db.Statement.Pool (queryPoolHashIdExistsStmt, queryPoolMetadataRefIdExistsStmt)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
-import Cardano.Db.Types (DbAction, VoteUrl, AnchorType, anchorTypeDecoder, voteUrlDecoder)
-import Cardano.Db.Statement.Function.Query (countAll)
-import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
-import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SV
-import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder)
+import Cardano.Db.Types (AnchorType, DbAction, VoteUrl, anchorTypeDecoder, voteUrlDecoder)
 
 --------------------------------------------------------------------------------
 -- OffChainPoolData
@@ -129,6 +129,65 @@ queryUsedTicker :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Te
 queryUsedTicker poolHash metaHash =
   runDbSession (mkCallInfo "queryUsedTicker") $
     HsqlSes.statement (poolHash, metaHash) queryUsedTickerStmt
+
+--------------------------------------------------------------------------------
+queryTestOffChainDataStmt :: HsqlStmt.Statement () [(Text, PoolUrl, ByteString, Id.PoolHashId)]
+queryTestOffChainDataStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
+    poolMetadataRefTable = tableName (Proxy @SP.PoolMetadataRef)
+    poolRetireTable = tableName (Proxy @SP.PoolRetire)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT pod.ticker_name, pmr.url, pmr.hash, pod.pool_id"
+          , " FROM " <> offChainPoolDataTable <> " pod"
+          , " INNER JOIN " <> poolMetadataRefTable <> " pmr"
+          , " ON pod.pmr_id = pmr.id"
+          , " WHERE NOT EXISTS ("
+          , "   SELECT 1 FROM " <> poolRetireTable <> " pr"
+          , "   WHERE pod.pool_id = pr.hash_id"
+          , " )"
+          ]
+
+    decoder = HsqlD.rowList $ do
+      tickerName <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
+      url <- HsqlD.column (HsqlD.nonNullable poolUrlDecoder)
+      hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      poolId <- Id.idDecoder Id.PoolHashId
+      pure (tickerName, url, hash, poolId)
+
+queryTestOffChainData :: MonadIO m => DbAction m [(Text, PoolUrl, ByteString, Id.PoolHashId)]
+queryTestOffChainData =
+  runDbSession (mkCallInfo "queryTestOffChainData") $
+    HsqlSes.statement () queryTestOffChainDataStmt
+
+--------------------------------------------------------------------------------
+
+-- | Query pool ticker name for pool
+queryPoolTickerStmt :: HsqlStmt.Statement Id.PoolHashId (Maybe Text)
+queryPoolTickerStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    encoder = Id.idEncoder Id.getPoolHashId
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.text)
+    offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT " <> offChainPoolDataTable <> ".ticker_name"
+          , " FROM " <> offChainPoolDataTable
+          , " WHERE " <> offChainPoolDataTable <> ".pool_id = $1"
+          , " ORDER BY " <> offChainPoolDataTable <> ".id DESC"
+          , " LIMIT 1"
+          ]
+
+queryPoolTicker :: MonadIO m => Id.PoolHashId -> DbAction m (Maybe Text)
+queryPoolTicker poolId =
+  runDbSession (mkCallInfo "queryPoolTicker") $
+    HsqlSes.statement poolId queryPoolTickerStmt
 
 --------------------------------------------------------------------------------
 -- OffChainPoolFetchError
@@ -237,24 +296,26 @@ queryOffChainVoteWorkQueueDataStmt =
     offChainVoteFetchErrorTableN = tableName (Proxy @SO.OffChainVoteFetchError)
     offChainVoteDataTableN = tableName (Proxy @SO.OffChainVoteData)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "WITH latest_errors AS ("
-      , "  SELECT MAX(id) as max_id"
-      , "  FROM " <> offChainVoteFetchErrorTableN
-      , "  WHERE NOT EXISTS ("
-      , "    SELECT 1 FROM " <> offChainVoteDataTableN <> " ocvd"
-      , "    WHERE ocvd.voting_anchor_id = " <> offChainVoteFetchErrorTableN <> ".voting_anchor_id"
-      , "  )"
-      , "  GROUP BY voting_anchor_id"
-      , ")"
-      , "SELECT ocpfe.fetch_time, va.id, va.data_hash, va.url, va.type, ocpfe.retry_count"
-      , " FROM " <> votingAnchorTableN <> " va"
-      , " INNER JOIN " <> offChainVoteFetchErrorTableN <> " ocpfe ON ocpfe.voting_anchor_id = va.id"
-      , " WHERE ocpfe.id IN (SELECT max_id FROM latest_errors)"
-      , " AND va.type != 'constitution'"
-      , " ORDER BY ocpfe.id ASC"
-      , " LIMIT $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH latest_errors AS ("
+          , "  SELECT MAX(id) as max_id"
+          , "  FROM " <> offChainVoteFetchErrorTableN
+          , "  WHERE NOT EXISTS ("
+          , "    SELECT 1 FROM " <> offChainVoteDataTableN <> " ocvd"
+          , "    WHERE ocvd.voting_anchor_id = " <> offChainVoteFetchErrorTableN <> ".voting_anchor_id"
+          , "  )"
+          , "  GROUP BY voting_anchor_id"
+          , ")"
+          , "SELECT ocpfe.fetch_time, va.id, va.data_hash, va.url, va.type, ocpfe.retry_count"
+          , " FROM " <> votingAnchorTableN <> " va"
+          , " INNER JOIN " <> offChainVoteFetchErrorTableN <> " ocpfe ON ocpfe.voting_anchor_id = va.id"
+          , " WHERE ocpfe.id IN (SELECT max_id FROM latest_errors)"
+          , " AND va.type != 'constitution'"
+          , " ORDER BY ocpfe.id ASC"
+          , " LIMIT $1"
+          ]
 
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
 
@@ -282,26 +343,28 @@ queryNewPoolWorkQueueDataStmt =
     offChainPoolDataTableN = tableName (Proxy @SO.OffChainPoolData)
     offChainPoolFetchErrorTableN = tableName (Proxy @SO.OffChainPoolFetchError)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "WITH latest_refs AS ("
-      , "  SELECT MAX(id) as max_id"
-      , "  FROM " <> poolMetadataRefTableN
-      , "  GROUP BY pool_id"
-      , ")"
-      , "SELECT ph.id, pmr.id, pmr.url, pmr.hash"
-      , " FROM " <> poolHashTableN <> " ph"
-      , " INNER JOIN " <> poolMetadataRefTableN <> " pmr ON ph.id = pmr.pool_id"
-      , " WHERE pmr.id IN (SELECT max_id FROM latest_refs)"
-      , " AND NOT EXISTS ("
-      , "   SELECT 1 FROM " <> offChainPoolDataTableN <> " pod"
-      , "   WHERE pod.pmr_id = pmr.id"
-      , " )"
-      , " AND NOT EXISTS ("
-      , "   SELECT 1 FROM " <> offChainPoolFetchErrorTableN <> " pofe"
-      , "   WHERE pofe.pmr_id = pmr.id"
-      , " )"
-      , " LIMIT $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH latest_refs AS ("
+          , "  SELECT MAX(id) as max_id"
+          , "  FROM " <> poolMetadataRefTableN
+          , "  GROUP BY pool_id"
+          , ")"
+          , "SELECT ph.id, pmr.id, pmr.url, pmr.hash"
+          , " FROM " <> poolHashTableN <> " ph"
+          , " INNER JOIN " <> poolMetadataRefTableN <> " pmr ON ph.id = pmr.pool_id"
+          , " WHERE pmr.id IN (SELECT max_id FROM latest_refs)"
+          , " AND NOT EXISTS ("
+          , "   SELECT 1 FROM " <> offChainPoolDataTableN <> " pod"
+          , "   WHERE pod.pmr_id = pmr.id"
+          , " )"
+          , " AND NOT EXISTS ("
+          , "   SELECT 1 FROM " <> offChainPoolFetchErrorTableN <> " pofe"
+          , "   WHERE pofe.pmr_id = pmr.id"
+          , " )"
+          , " LIMIT $1"
+          ]
 
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
 
@@ -327,24 +390,26 @@ queryOffChainPoolWorkQueueDataStmt =
     offChainPoolFetchErrorTableN = tableName (Proxy @SO.OffChainPoolFetchError)
     offChainPoolDataTableN = tableName (Proxy @SO.OffChainPoolData)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "WITH latest_errors AS ("
-      , "  SELECT MAX(id) as max_id"
-      , "  FROM " <> offChainPoolFetchErrorTableN <> " pofe"
-      , "  WHERE NOT EXISTS ("
-      , "    SELECT 1 FROM " <> offChainPoolDataTableN <> " pod"
-      , "    WHERE pod.pmr_id = pofe.pmr_id"
-      , "  )"
-      , "  GROUP BY pool_id"
-      , ")"
-      , "SELECT pofe.fetch_time, pofe.pmr_id, pmr.url, pmr.hash, ph.id, pofe.retry_count"
-      , " FROM " <> poolHashTableN <> " ph"
-      , " INNER JOIN " <> poolMetadataRefTableN <> " pmr ON ph.id = pmr.pool_id"
-      , " INNER JOIN " <> offChainPoolFetchErrorTableN <> " pofe ON pofe.pmr_id = pmr.id"
-      , " WHERE pofe.id IN (SELECT max_id FROM latest_errors)"
-      , " ORDER BY pofe.id ASC"
-      , " LIMIT $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH latest_errors AS ("
+          , "  SELECT MAX(id) as max_id"
+          , "  FROM " <> offChainPoolFetchErrorTableN <> " pofe"
+          , "  WHERE NOT EXISTS ("
+          , "    SELECT 1 FROM " <> offChainPoolDataTableN <> " pod"
+          , "    WHERE pod.pmr_id = pofe.pmr_id"
+          , "  )"
+          , "  GROUP BY pool_id"
+          , ")"
+          , "SELECT pofe.fetch_time, pofe.pmr_id, pmr.url, pmr.hash, ph.id, pofe.retry_count"
+          , " FROM " <> poolHashTableN <> " ph"
+          , " INNER JOIN " <> poolMetadataRefTableN <> " pmr ON ph.id = pmr.pool_id"
+          , " INNER JOIN " <> offChainPoolFetchErrorTableN <> " pofe ON pofe.pmr_id = pmr.id"
+          , " WHERE pofe.id IN (SELECT max_id FROM latest_errors)"
+          , " ORDER BY pofe.id ASC"
+          , " LIMIT $1"
+          ]
 
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
 
@@ -400,7 +465,6 @@ insertOffChainVoteData offChainVoteData = do
       pure $ Just (entityKey entity)
     else pure Nothing
 
-
 insertBulkOffChainVoteDataStmt :: HsqlStmt.Statement [SO.OffChainVoteData] [Id.OffChainVoteDataId]
 insertBulkOffChainVoteDataStmt =
   insertBulk
@@ -422,8 +486,8 @@ insertBulkOffChainVoteDataStmt =
 
 insertBulkOffChainVoteData :: MonadIO m => [SO.OffChainVoteData] -> DbAction m [Id.OffChainVoteDataId]
 insertBulkOffChainVoteData offChainVoteData = do
-    runDbSession (mkCallInfo "insertBulkOffChainVoteData") $
-      HsqlS.statement offChainVoteData insertBulkOffChainVoteDataStmt
+  runDbSession (mkCallInfo "insertBulkOffChainVoteData") $
+    HsqlS.statement offChainVoteData insertBulkOffChainVoteDataStmt
 
 --------------------------------------------------------------------------------
 insertOffChainVoteDrepDataStmt :: HsqlStmt.Statement SO.OffChainVoteDrepData (Entity SO.OffChainVoteDrepData)
@@ -463,7 +527,6 @@ insertBulkOffChainVoteDrepData offChainVoteDrepData =
   runDbSession (mkCallInfo "insertBulkOffChainVoteDrepData") $
     HsqlS.statement offChainVoteDrepData insertBulkOffChainVoteDrepDataStmt
 
-
 --------------------------------------------------------------------------------
 queryNewVoteWorkQueueDataStmt :: HsqlStmt.Statement Int [(Id.VotingAnchorId, ByteString, VoteUrl, AnchorType)]
 queryNewVoteWorkQueueDataStmt =
@@ -473,20 +536,22 @@ queryNewVoteWorkQueueDataStmt =
     offChainVoteDataTableN = tableName (Proxy @SO.OffChainVoteData)
     offChainVoteFetchErrorTableN = tableName (Proxy @SO.OffChainVoteFetchError)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT id, data_hash, url, type"
-      , " FROM " <> votingAnchorTableN <> " va"
-      , " WHERE NOT EXISTS ("
-      , "   SELECT 1 FROM " <> offChainVoteDataTableN <> " ocvd"
-      , "   WHERE ocvd.voting_anchor_id = va.id"
-      , " )"
-      , " AND va.type != 'constitution'"
-      , " AND NOT EXISTS ("
-      , "   SELECT 1 FROM " <> offChainVoteFetchErrorTableN <> " ocvfe"
-      , "   WHERE ocvfe.voting_anchor_id = va.id"
-      , " )"
-      , " LIMIT $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id, data_hash, url, type"
+          , " FROM " <> votingAnchorTableN <> " va"
+          , " WHERE NOT EXISTS ("
+          , "   SELECT 1 FROM " <> offChainVoteDataTableN <> " ocvd"
+          , "   WHERE ocvd.voting_anchor_id = va.id"
+          , " )"
+          , " AND va.type != 'constitution'"
+          , " AND NOT EXISTS ("
+          , "   SELECT 1 FROM " <> offChainVoteFetchErrorTableN <> " ocvfe"
+          , "   WHERE ocvfe.voting_anchor_id = va.id"
+          , " )"
+          , " LIMIT $1"
+          ]
 
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
 

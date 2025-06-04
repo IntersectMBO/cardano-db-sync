@@ -23,18 +23,18 @@ module Cardano.DbSync (
   SimplifiedOffChainPoolData (..),
   extractSyncOptions,
 ) where
+
 import Control.Monad.Extra (whenJust)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
-import Database.Persist.Postgresql (ConnectionString, withPostgresqlConn)
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection.Setting as HsqlSet
 import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
 import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
-import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Connection.Setting as HsqlSet
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
@@ -55,7 +55,6 @@ import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util.Constraint (queryIsJsonbInSchema)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Async
@@ -114,7 +113,12 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     then logInfo trce "All user indexes were created"
     else logInfo trce "New user indexes were not created. They may be created later if necessary."
 
-  let dbConnectionSetting = Db.toConnectionSetting pgConfig
+  dbConnectionSetting <- case Db.toConnectionSetting pgConfig of
+    Left err -> do
+      let syncNodeErr = SNErrPGConfig ("Invalid database connection setting: " <> err)
+      logError trce $ show syncNodeErr
+      throwIO syncNodeErr
+    Right setting -> pure setting
 
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
@@ -169,20 +173,24 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConf
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
   -- Our main thread
   bracket
-    (runOrThrowIO $ HsqlC.acquire [dbConnSetting])
-    release
-    (\dbConn -> do
+    (acquireDbConnection [dbConnSetting])
+    HsqlC.release
+    ( \dbConn -> do
         runOrThrowIO $ runExceptT $ do
-          let dbEnv = Db.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile)
+          let isLogingEnabled = dncEnableDbLogging syncNodeConfigFromFile
+              dbEnv =
+                if isLogingEnabled
+                  then Db.DbEnv dbConn isLogingEnabled (Just trce)
+                  else Db.DbEnv dbConn isLogingEnabled Nothing
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- queryIsJsonbInSchema dbEnv
+          isJsonbInSchema <- liftDbError $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
                 trce
                 dbEnv
-                dbConnString
+                -- dbConnString
                 syncOptions
                 genCfg
                 syncNodeConfigFromFile
@@ -201,7 +209,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConf
           liftIO $ runConsumedTxOutMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations pool trce
+            Db.noLedgerMigrations dbEnv trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread
@@ -304,8 +312,8 @@ startupReport trce aop params = do
 
 txOutConfigToTableType :: TxOutConfig -> DB.TxOutVariantType
 txOutConfigToTableType config = case config of
-  TxOutEnable (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
-  TxOutDisable -> DB.TxOutCore
-  TxOutConsumed _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
-  TxOutConsumedPrune _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
-  TxOutConsumedBootstrap _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
+  TxOutEnable (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+  TxOutDisable -> DB.TxOutVariantCore
+  TxOutConsumed _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+  TxOutConsumedPrune _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+  TxOutConsumedBootstrap _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore

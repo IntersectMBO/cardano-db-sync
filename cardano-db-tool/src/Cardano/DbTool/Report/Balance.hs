@@ -1,54 +1,28 @@
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbTool.Report.Balance (
   reportBalance,
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Reader (ReaderT)
-import Data.Fixed (Micro)
 import qualified Data.List as List
 import Data.Maybe (catMaybes)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import qualified Data.Text.IO as Text
-import Database.Esqueleto.Experimental (
-  SqlBackend,
-  Value (..),
-  from,
-  innerJoin,
-  just,
-  on,
-  select,
-  sum_,
-  table,
-  val,
-  where_,
-  (&&.),
-  (<=.),
-  (==.),
-  (^.),
-  type (:&) ((:&)),
- )
-
-{- HLINT ignore "Redundant ^." -}
-{- HLINT ignore "Fuse on/on" -}
 
 reportBalance :: TxOutVariantType -> [Text] -> IO ()
 reportBalance txOutVariantType saddr = do
-  xs <- catMaybes <$> runDbNoLoggingEnv (mapM (queryStakeAddressBalance txOutVariantType) saddr)
+  xs <- catMaybes <$> DB.runDbNoLoggingEnv (mapM (queryStakeAddressBalance txOutVariantType) saddr)
   renderBalances xs
 
 -- -------------------------------------------------------------------------------------------------
 
 data Balance = Balance
-  { balAddressId :: !StakeAddressId
+  { balAddressId :: !DB.StakeAddressId
   , balAddress :: !Text
   , balInputs :: !Ada
   , balOutputs :: !Ada
@@ -61,25 +35,18 @@ data Balance = Balance
 
 queryStakeAddressBalance :: MonadIO m => TxOutVariantType -> Text -> DB.DbAction m (Maybe Balance)
 queryStakeAddressBalance txOutVariantType address = do
-  mSaId <- queryStakeAddressId
+  mSaId <- DB.queryStakeAddressId address
   case mSaId of
     Nothing -> pure Nothing
     Just saId -> Just <$> queryBalance saId
   where
-    queryStakeAddressId :: MonadIO m => DB.DbAction m (Maybe StakeAddressId)
-    queryStakeAddressId = do
-      res <- select $ do
-        saddr <- from $ table @StakeAddress
-        where_ (saddr ^. StakeAddressView ==. val address)
-        pure (saddr ^. StakeAddressId)
-      pure $ fmap unValue (listToMaybe res)
-
-    queryBalance :: MonadIO m => StakeAddressId -> DB.DbAction m Balance
+    queryBalance :: MonadIO m => DB.StakeAddressId -> DB.DbAction m Balance
     queryBalance saId = do
       inputs <- queryInputs saId
       (outputs, fees, deposit) <- queryOutputs saId
-      rewards <- queryRewardsSum saId
-      withdrawals <- queryWithdrawals saId
+      currentEpoch <- DB.queryLatestEpochNoFromBlock
+      rewards <- DB.queryRewardsSum saId currentEpoch
+      withdrawals <- DB.queryWithdrawalsSum saId
       pure $
         Balance
           { balAddressId = saId
@@ -93,75 +60,15 @@ queryStakeAddressBalance txOutVariantType address = do
           , balTotal = inputs - outputs + rewards - withdrawals
           }
 
-    queryInputs :: MonadIO m => StakeAddressId -> DB.DbAction m Ada
+    queryInputs :: MonadIO m => DB.StakeAddressId -> DB.DbAction m Ada
     queryInputs saId = case txOutVariantType of
-      TxOutVariantCore -> do
-        res <- select $ do
-          txo <- from $ table @C.TxOut
-          where_ (txo ^. C.TxOutStakeAddressId ==. just (val saId))
-          pure (sum_ (txo ^. C.TxOutValue))
-        pure $ unValueSumAda (listToMaybe res)
-      TxOutVariantAddress -> do
-        res <- select $ do
-          (txo :& addr) <-
-            from
-              $ table @V.TxOut
-                `innerJoin` table @V.Address
-              `on` (\(txo :& addr) -> txo ^. V.TxOutAddressId ==. addr ^. V.AddressId)
-          where_ (addr ^. V.AddressStakeAddressId ==. just (val saId))
-          pure (sum_ (txo ^. V.TxOutValue))
-        pure $ unValueSumAda (listToMaybe res)
+      TxOutVariantCore -> DB.queryInputsSumCore saId
+      TxOutVariantAddress -> DB.queryInputsSumAddress saId
 
-    queryRewardsSum :: MonadIO m => StakeAddressId -> DB.DbAction m Ada
-    queryRewardsSum saId = do
-      currentEpoch <- queryLatestEpochNoFromBlock
-      res <- select $ do
-        rwd <- from $ table @Reward
-        where_ (rwd ^. RewardAddrId ==. val saId)
-        where_ (rwd ^. RewardSpendableEpoch <=. val currentEpoch)
-        pure (sum_ (rwd ^. RewardAmount))
-      pure $ unValueSumAda (listToMaybe res)
-
-    queryWithdrawals :: MonadIO m => StakeAddressId -> DB.DbAction m Ada
-    queryWithdrawals saId = do
-      res <- select $ do
-        wdrl <- from $ table @Withdrawal
-        where_ (wdrl ^. WithdrawalAddrId ==. val saId)
-        pure (sum_ (wdrl ^. WithdrawalAmount))
-      pure $ unValueSumAda (listToMaybe res)
-
-    queryOutputs :: MonadIO m => StakeAddressId -> DB.DbAction m (Ada, Ada, Ada)
+    queryOutputs :: MonadIO m => DB.StakeAddressId -> DB.DbAction m (Ada, Ada, Ada)
     queryOutputs saId = case txOutVariantType of
-      TxOutVariantCore -> do
-        res <- select $ do
-          (txOut :& tx :& _txIn) <-
-            from
-              $ table @C.TxOut
-                `innerJoin` table @Tx
-              `on` (\(txOut :& tx) -> txOut ^. C.TxOutTxId ==. tx ^. TxId)
-                `innerJoin` table @TxIn
-              `on` (\(txOut :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. C.TxOutIndex)
-          where_ (txOut ^. C.TxOutStakeAddressId ==. just (val saId))
-          pure (sum_ (txOut ^. C.TxOutValue), sum_ (tx ^. TxFee), sum_ (tx ^. TxDeposit))
-        pure $ maybe (0, 0, 0) convert (listToMaybe res)
-      TxOutVariantAddress -> do
-        res <- select $ do
-          (txOut :& addr :& tx :& _txIn) <-
-            from
-              $ table @V.TxOut
-                `innerJoin` table @V.Address
-              `on` (\(txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
-                `innerJoin` table @Tx
-              `on` (\(txOut :& _addr :& tx) -> txOut ^. V.TxOutTxId ==. tx ^. TxId)
-                `innerJoin` table @TxIn
-              `on` (\(txOut :& _addr :& tx :& txIn) -> txIn ^. TxInTxOutId ==. tx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. V.TxOutIndex)
-          where_ (addr ^. V.AddressStakeAddressId ==. just (val saId))
-          pure (sum_ (txOut ^. V.TxOutValue), sum_ (tx ^. TxFee), sum_ (tx ^. TxDeposit))
-        pure $ maybe (0, 0, 0) convert (listToMaybe res)
-
-    convert :: (Value (Maybe Micro), Value (Maybe Micro), Value (Maybe Micro)) -> (Ada, Ada, Ada)
-    convert (Value mval, Value mfee, Value mdep) =
-      (maybe 0 lovelaceToAda mval, maybe 0 lovelaceToAda mfee, maybe 0 lovelaceToAda mdep)
+      TxOutVariantCore -> DB.queryOutputsCore saId
+      TxOutVariantAddress -> DB.queryOutputsAddress saId
 
 renderBalances :: [Balance] -> IO ()
 renderBalances xs = do

@@ -20,11 +20,11 @@ import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), mkCallInfo, runDbSession)
-import Cardano.Db.Statement.Function.Insert (insert)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
 import Cardano.Db.Statement.Function.Query (existsById)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), validateColumn)
-import Cardano.Db.Types (DbAction, DbCallInfo (..), hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
+import Cardano.Db.Types (DbAction, DbCallInfo (..), DbLovelace, hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
 
 --------------------------------------------------------------------------------
 -- Committee
@@ -275,6 +275,26 @@ insertDrepRegistration :: MonadIO m => SGV.DrepRegistration -> DbAction m Id.Dre
 insertDrepRegistration drepRegistration = do
   entity <- runDbSession (mkCallInfo "insertDrepRegistration") $ HsqlSes.statement drepRegistration insertDrepRegistrationStmt
   pure $ entityKey entity
+
+insertBulkDrepDistrStmt :: HsqlStmt.Statement [SGV.DrepDistr] ()
+insertBulkDrepDistrStmt =
+  insertBulk
+    extractDrepDistr
+    SGV.drepDistrBulkEncoder
+    NoResultBulk
+  where
+    extractDrepDistr :: [SGV.DrepDistr] -> ([Id.DrepHashId], [Word64], [Word64], [Maybe Word64])
+    extractDrepDistr xs =
+      ( map SGV.drepDistrHashId xs
+      , map SGV.drepDistrAmount xs
+      , map SGV.drepDistrEpochNo xs
+      , map SGV.drepDistrActiveUntil xs
+      )
+
+insertBulkDrepDistr :: MonadIO m => [SGV.DrepDistr] -> DbAction m ()
+insertBulkDrepDistr drepDistrs = do
+  runDbSession (mkCallInfo "insertBulkDrepDistr") $
+    HsqlSes.statement drepDistrs insertBulkDrepDistrStmt
 
 -- | QUERY
 queryDrepHashSpecialStmt ::
@@ -530,6 +550,7 @@ insertTreasury treasury = do
   entity <- runDbSession (mkCallInfo "insertTreasury") $ HsqlSes.statement treasury insertTreasuryStmt
   pure $ entityKey entity
 
+--------------------------------------------------------------------------------
 insertTreasuryWithdrawalStmt :: HsqlStmt.Statement SGV.TreasuryWithdrawal (Entity SGV.TreasuryWithdrawal)
 insertTreasuryWithdrawalStmt =
   insert
@@ -542,6 +563,26 @@ insertTreasuryWithdrawal treasuryWithdrawal = do
     runDbSession (mkCallInfo "insertTreasuryWithdrawal") $
       HsqlSes.statement treasuryWithdrawal insertTreasuryWithdrawalStmt
   pure $ entityKey entity
+
+--------------------------------------------------------------------------------
+insertBulkTreasuryWithdrawalStmt :: HsqlStmt.Statement [SGV.TreasuryWithdrawal] ()
+insertBulkTreasuryWithdrawalStmt =
+  insertBulk
+    extractTreasuryWithdrawal
+    SGV.treasuryWithdrawalBulkEncoder
+    NoResultBulk
+  where
+    extractTreasuryWithdrawal :: [SGV.TreasuryWithdrawal] -> ([Id.GovActionProposalId], [Id.StakeAddressId], [DbLovelace])
+    extractTreasuryWithdrawal xs =
+      ( map SGV.treasuryWithdrawalGovActionProposalId xs
+      , map SGV.treasuryWithdrawalStakeAddressId xs
+      , map SGV.treasuryWithdrawalAmount xs
+      )
+
+insertBulkTreasuryWithdrawal :: MonadIO m => [SGV.TreasuryWithdrawal] -> DbAction m ()
+insertBulkTreasuryWithdrawal treasuryWithdrawals = do
+  runDbSession (mkCallInfo "insertBulkTreasuryWithdrawal") $
+    HsqlSes.statement treasuryWithdrawals insertBulkTreasuryWithdrawalStmt
 
 --------------------------------------------------------------------------------
 -- Voting

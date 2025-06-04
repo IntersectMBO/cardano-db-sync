@@ -1,24 +1,21 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
-
 {-# OPTIONS_GHC -Wno-x-partial #-}
-{-# LANGUAGE DataKinds #-}
-
 
 module Test.IO.Cardano.Db.Rollback (
   tests,
 ) where
 
 import Cardano.Db
+import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
+import Data.Maybe (fromJust)
 import Data.Word (Word64)
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
-import Cardano.Slotting.Slot (SlotNo (..))
-import Data.Maybe (fromJust)
 
 tests :: TestTree
 tests =

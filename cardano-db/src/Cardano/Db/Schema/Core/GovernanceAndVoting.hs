@@ -14,6 +14,7 @@ import Hasql.Decoders as D
 import Hasql.Encoders as E
 
 import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
   AnchorType,
@@ -25,6 +26,7 @@ import Cardano.Db.Types (
   VoterRole,
   anchorTypeDecoder,
   anchorTypeEncoder,
+  dbLovelaceBulkEncoder,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
   govActionTypeDecoder,
@@ -40,6 +42,7 @@ import Cardano.Db.Types (
   voterRoleDecoder,
   voterRoleEncoder,
  )
+import Contravariant.Extras (contrazip3, contrazip4)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- GOVERNANCE AND VOTING
@@ -181,6 +184,14 @@ drepDistrEncoder =
     , drepDistrEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , drepDistrActiveUntil >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     ]
+
+drepDistrBulkEncoder :: E.Params ([Id.DrepHashId], [Word64], [Word64], [Maybe Word64])
+drepDistrBulkEncoder =
+  contrazip4
+    (bulkEncoder $ E.nonNullable $ Id.getDrepHashId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
+    (bulkEncoder $ E.nullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: delegation_vote
@@ -634,10 +645,10 @@ committeeRegistrationEncoder =
 -- Table Name: committeede_registration
 -- Description: Contains information about the deregistration of committee members, including their public keys and other identifying information.
 data CommitteeDeRegistration = CommitteeDeRegistration
-  { committeeDeRegistration_TxId :: !Id.TxId -- noreference
-  , committeeDeRegistration_CertIndex :: !Word16
-  , committeeDeRegistration_VotingAnchorId :: !(Maybe Id.VotingAnchorId) -- noreference
-  , committeeDeRegistration_ColdKeyId :: !Id.CommitteeHashId -- noreference
+  { committeeDeRegistrationTxId :: !Id.TxId -- noreference
+  , committeeDeRegistrationCertIndex :: !Word16
+  , committeeDeRegistrationVotingAnchorId :: !(Maybe Id.VotingAnchorId) -- noreference
+  , committeeDeRegistrationColdKeyId :: !Id.CommitteeHashId -- noreference
   }
   deriving (Eq, Show, Generic)
 
@@ -653,10 +664,10 @@ entityCommitteeDeRegistrationDecoder =
 committeeDeRegistrationDecoder :: D.Row CommitteeDeRegistration
 committeeDeRegistrationDecoder =
   CommitteeDeRegistration
-    <$> Id.idDecoder Id.TxId -- committeeDeRegistration_TxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeDeRegistration_CertIndex
-    <*> Id.maybeIdDecoder Id.VotingAnchorId -- committeeDeRegistration_VotingAnchorId
-    <*> Id.idDecoder Id.CommitteeHashId -- committeeDeRegistration_ColdKeyId
+    <$> Id.idDecoder Id.TxId -- committeeDeRegistrationTxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeDeRegistrationCertIndex
+    <*> Id.maybeIdDecoder Id.VotingAnchorId -- committeeDeRegistrationVotingAnchorId
+    <*> Id.idDecoder Id.CommitteeHashId -- committeeDeRegistrationColdKeyId
 
 entityCommitteeDeRegistrationEncoder :: E.Params (Entity CommitteeDeRegistration)
 entityCommitteeDeRegistrationEncoder =
@@ -668,10 +679,10 @@ entityCommitteeDeRegistrationEncoder =
 committeeDeRegistrationEncoder :: E.Params CommitteeDeRegistration
 committeeDeRegistrationEncoder =
   mconcat
-    [ committeeDeRegistration_TxId >$< Id.idEncoder Id.getTxId
-    , committeeDeRegistration_CertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , committeeDeRegistration_VotingAnchorId >$< Id.maybeIdEncoder Id.getVotingAnchorId
-    , committeeDeRegistration_ColdKeyId >$< Id.idEncoder Id.getCommitteeHashId
+    [ committeeDeRegistrationTxId >$< Id.idEncoder Id.getTxId
+    , committeeDeRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , committeeDeRegistrationVotingAnchorId >$< Id.maybeIdEncoder Id.getVotingAnchorId
+    , committeeDeRegistrationColdKeyId >$< Id.idEncoder Id.getCommitteeHashId
     ]
 
 -- |
@@ -910,6 +921,13 @@ treasuryWithdrawalEncoder =
     , treasuryWithdrawalStakeAddressId >$< Id.idEncoder Id.getStakeAddressId
     , treasuryWithdrawalAmount >$< dbLovelaceEncoder
     ]
+
+treasuryWithdrawalBulkEncoder :: E.Params ([Id.GovActionProposalId], [Id.StakeAddressId], [DbLovelace])
+treasuryWithdrawalBulkEncoder =
+  contrazip3
+    (bulkEncoder $ E.nonNullable $ Id.getGovActionProposalId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ Id.getStakeAddressId >$< E.int8)
+    (bulkEncoder dbLovelaceBulkEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
