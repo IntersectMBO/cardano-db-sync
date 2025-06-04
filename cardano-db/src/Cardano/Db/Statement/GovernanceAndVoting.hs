@@ -308,13 +308,11 @@ queryDrepHashSpecialStmt targetValue =
     table = tableName (Proxy @a)
     rawCol = validateColumn @a "raw"
     viewCol = validateColumn @a "view"
-    idCol = validateColumn @a "id"
 
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT "
-          , idCol
+          [ "SELECT id"
           , " FROM "
           , table
           , " WHERE "
@@ -417,7 +415,6 @@ setGovActionStateNullStmt columnName =
           , " IS NOT NULL AND "
           , columnName
           , " > $1"
-          , " RETURNING xmax != 0 AS changed"
           ]
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
     decoder = HsqlD.rowsAffected
