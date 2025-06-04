@@ -21,7 +21,7 @@ import Prelude ()
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter _ _ -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter _ _ -> do
     void $ forgeNext interpreter mockBlock0
     void $ forgeNext interpreter mockBlock1
     block <- forgeNext interpreter mockBlock2

@@ -104,6 +104,7 @@ insertConfig = do
           , sioPoolStats = PoolStatsConfig False
           , sioJsonType = JsonTypeDisable
           , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+          , sioDbDebug = False
           }
 
   dncInsertOptions cfg @?= expected

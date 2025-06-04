@@ -23,6 +23,8 @@ import Cardano.Db.Types (
   dbInt65Encoder,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
+  maybeDbLovelaceDecoder,
+  maybeDbLovelaceEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
   syncStateDecoder,
@@ -38,6 +40,7 @@ import Data.WideWord.Word128 (Word128)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Contravariant.Extras (contrazip4)
@@ -86,8 +89,8 @@ epochDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochTxCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochBlkCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochNo
-    <*> D.column (D.nonNullable D.timestamptz) -- epochStartTime
-    <*> D.column (D.nonNullable D.timestamptz) -- epochEndTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochStartTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochEndTime
 
 entityEpochEncoder :: E.Params (Entity Epoch)
 entityEpochEncoder =
@@ -104,8 +107,8 @@ epochEncoder =
     , epochTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochBlkCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochStartTime >$< E.param (E.nonNullable E.timestamptz)
-    , epochEndTime >$< E.param (E.nonNullable E.timestamptz)
+    , epochStartTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
+    , epochEndTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -133,7 +136,6 @@ data EpochParam = EpochParam
   , epochParamMinUtxoValue :: !DbLovelace -- sqltype=lovelace
   , epochParamMinPoolCost :: !DbLovelace -- sqltype=lovelace
   , epochParamNonce :: !(Maybe ByteString) -- sqltype=hash32type
-  , epochParamCoinsPerUtxoSize :: !(Maybe DbLovelace) -- sqltype=lovelace
   , epochParamCostModelId :: !(Maybe CostModelId) -- noreference
   , epochParamPriceMem :: !(Maybe Double)
   , epochParamPriceStep :: !(Maybe Double)
@@ -146,11 +148,11 @@ data EpochParam = EpochParam
   , epochParamMaxCollateralInputs :: !(Maybe Word16) -- sqltype=word31type
   , epochParamBlockId :: !BlockId -- noreference -- The first block where these parameters are valid.
   , epochParamExtraEntropy :: !(Maybe ByteString) -- sqltype=hash32type
+  , epochParamCoinsPerUtxoSize :: !(Maybe DbLovelace) -- sqltype=lovelace
   , epochParamPvtMotionNoConfidence :: !(Maybe Double)
   , epochParamPvtCommitteeNormal :: !(Maybe Double)
   , epochParamPvtCommitteeNoConfidence :: !(Maybe Double)
   , epochParamPvtHardForkInitiation :: !(Maybe Double)
-  , epochParamPvtppSecurityGroup :: !(Maybe Double)
   , epochParamDvtMotionNoConfidence :: !(Maybe Double)
   , epochParamDvtCommitteeNormal :: !(Maybe Double)
   , epochParamDvtCommitteeNoConfidence :: !(Maybe Double)
@@ -167,6 +169,7 @@ data EpochParam = EpochParam
   , epochParamGovActionDeposit :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamDrepDeposit :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamPvtppSecurityGroup :: !(Maybe Double)
   , epochParamMinFeeRefScriptCostPerByte :: !(Maybe Double)
   }
   deriving (Eq, Show, Generic)
@@ -202,7 +205,6 @@ epochParamDecoder =
     <*> dbLovelaceDecoder -- epochParamMinUtxoValue
     <*> dbLovelaceDecoder -- epochParamMinPoolCost
     <*> D.column (D.nullable D.bytea) -- epochParamNonce
-    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- epochParamCoinsPerUtxoSize
     <*> maybeIdDecoder CostModelId -- epochParamCostModelId
     <*> D.column (D.nullable D.float8) -- epochParamPriceMem
     <*> D.column (D.nullable D.float8) -- epochParamPriceStep
@@ -215,11 +217,12 @@ epochParamDecoder =
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- epochParamMaxCollateralInputs
     <*> idDecoder BlockId -- epochParamBlockId
     <*> D.column (D.nullable D.bytea) -- epochParamExtraEntropy
+    <*> maybeDbLovelaceDecoder -- epochParamCoinsPerUtxoSize
+    -- <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- epochParamCoinsPerUtxoSize
     <*> D.column (D.nullable D.float8) -- epochParamPvtMotionNoConfidence
     <*> D.column (D.nullable D.float8) -- epochParamPvtCommitteeNormal
     <*> D.column (D.nullable D.float8) -- epochParamPvtCommitteeNoConfidence
     <*> D.column (D.nullable D.float8) -- epochParamPvtHardForkInitiation
-    <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- epochParamDvtMotionNoConfidence
     <*> D.column (D.nullable D.float8) -- epochParamDvtCommitteeNormal
     <*> D.column (D.nullable D.float8) -- epochParamDvtCommitteeNoConfidence
@@ -236,6 +239,7 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamGovActionDeposit
     <*> maybeDbWord64Decoder -- epochParamDrepDeposit
     <*> maybeDbWord64Decoder -- epochParamDrepActivity
+    <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
 
 entityEpochParamEncoder :: E.Params (Entity EpochParam)
@@ -267,7 +271,6 @@ epochParamEncoder =
     , epochParamMinUtxoValue >$< dbLovelaceEncoder
     , epochParamMinPoolCost >$< dbLovelaceEncoder
     , epochParamNonce >$< E.param (E.nullable E.bytea)
-    , epochParamCoinsPerUtxoSize >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
     , epochParamCostModelId >$< maybeIdEncoder getCostModelId
     , epochParamPriceMem >$< E.param (E.nullable E.float8)
     , epochParamPriceStep >$< E.param (E.nullable E.float8)
@@ -280,11 +283,11 @@ epochParamEncoder =
     , epochParamMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , epochParamBlockId >$< idEncoder getBlockId
     , epochParamExtraEntropy >$< E.param (E.nullable E.bytea)
+    , epochParamCoinsPerUtxoSize >$< maybeDbLovelaceEncoder
     , epochParamPvtMotionNoConfidence >$< E.param (E.nullable E.float8)
     , epochParamPvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , epochParamPvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
     , epochParamPvtHardForkInitiation >$< E.param (E.nullable E.float8)
-    , epochParamPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , epochParamDvtMotionNoConfidence >$< E.param (E.nullable E.float8)
     , epochParamDvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , epochParamDvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
@@ -301,6 +304,7 @@ epochParamEncoder =
     , epochParamGovActionDeposit >$< maybeDbWord64Encoder
     , epochParamDrepDeposit >$< maybeDbWord64Encoder
     , epochParamDrepActivity >$< maybeDbWord64Encoder
+    , epochParamPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , epochParamMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
     ]
 
@@ -318,7 +322,14 @@ data EpochState = EpochState
   deriving (Eq, Show, Generic)
 
 type instance Key EpochState = EpochStateId
-instance DbInfo EpochState
+
+instance DbInfo EpochState where
+  unnestParamTypes _ =
+    [ ("committee_id", "bigint[]")
+    , ("no_confidence_id", "bigint[]")
+    , ("constitution_id", "bigint[]")
+    , ("epoch_no", "bigint[]")
+    ]
 
 entityEpochStateDecoder :: D.Row (Entity EpochState)
 entityEpochStateDecoder =
@@ -373,6 +384,7 @@ data EpochSyncTime = EpochSyncTime
 type instance Key EpochSyncTime = EpochSyncTimeId
 instance DbInfo EpochSyncTime where
   uniqueFields _ = ["no"]
+  enumFields _ = [("state", "syncstatetype")]
 
 entityEpochSyncTimeDecoder :: D.Row (Entity EpochSyncTime)
 entityEpochSyncTimeDecoder =
@@ -624,6 +636,7 @@ data CostModel = CostModel
 type instance Key CostModel = CostModelId
 instance DbInfo CostModel where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["costs"]
 
 entityCostModelDecoder :: D.Row (Entity CostModel)
 entityCostModelDecoder =

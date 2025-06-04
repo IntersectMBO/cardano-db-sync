@@ -6,10 +6,7 @@
 
 module Cardano.Db.Statement.Function.Core (
   runDbSession,
-  mkCallInfo,
-  mkCallSite,
-  -- runPipelinedSession,
-  -- runDbActionWith,
+  mkDbCallStack,
   bulkEncoder,
   ResultType (..),
   ResultTypeBulk (..),
@@ -17,8 +14,8 @@ module Cardano.Db.Statement.Function.Core (
 where
 
 import Cardano.BM.Trace (logDebug)
-import Cardano.Db.Error (CallSite (..), DbError (..))
-import Cardano.Db.Types (DbAction (..), DbCallInfo (..), DbEnv (..))
+import Cardano.Db.Error (DbCallStack (..), DbError (..))
+import Cardano.Db.Types (DbAction (..), DbEnv (..))
 import Cardano.Prelude (MonadError (..), MonadIO (..), Text, ask, for_, when)
 import qualified Data.Text as Text
 import Data.Time (diffUTCTime, getCurrentTime)
@@ -38,7 +35,7 @@ import qualified Hasql.Session as HsqlS
 -- operations.
 --
 -- ==== Parameters
--- * @DbCallInfo@: Call site information for debugging and logging.
+-- * @DbCallStack@: Call site information for debugging and logging.
 -- * @Session a@: The `Hasql` session to execute (can be a regular session or pipeline).
 --
 -- ==== Returns
@@ -47,30 +44,32 @@ import qualified Hasql.Session as HsqlS
 -- ==== Examples
 -- ```
 -- -- Regular session:
--- result <- runDbSession (mkCallInfo "operation") $
+-- result <- runDbSession (mkDbCallStack "operation") $
 --   HsqlS.statement record statement
 --
 -- -- Pipeline session:
--- results <- runDbSession (mkCallInfo "batchOperation") $
+-- results <- runDbSession (mkDbCallStack "batchOperation") $
 --   HsqlS.pipeline $ do
 --     r1 <- HsqlP.statement input1 statement1
 --     r2 <- HsqlP.statement input2 statement2
 --     pure (r1, r2)
 -- ```
-runDbSession :: MonadIO m => DbCallInfo -> HsqlS.Session a -> DbAction m a
-runDbSession DbCallInfo {..} session = DbAction $ do
+runDbSession :: MonadIO m => DbCallStack -> HsqlS.Session a -> DbAction m a
+runDbSession dbCallStack@DbCallStack {..} session = DbAction $ do
   dbEnv <- ask
   let logMsg msg =
         when (dbEnableLogging dbEnv) $
           for_ (dbTracer dbEnv) $
             \tracer -> liftIO $ logDebug tracer msg
       locationInfo =
-        " at "
-          <> csModule dciCallSite
+        " Function: "
+          <> dbCsFncName
+          <> " at "
+          <> dbCsModule
           <> ":"
-          <> csFile dciCallSite
+          <> dbCsFile
           <> ":"
-          <> Text.pack (show $ csLine dciCallSite)
+          <> Text.pack (show dbCsLine)
 
   if dbEnableLogging dbEnv
     then do
@@ -78,7 +77,7 @@ runDbSession DbCallInfo {..} session = DbAction $ do
       result <- run dbEnv
       end <- liftIO getCurrentTime
       let duration = diffUTCTime end start
-      logMsg $ "Query: " <> dciName <> locationInfo <> " in " <> Text.pack (show duration)
+      logMsg $ "Query: " <> dbCsFncName <> locationInfo <> " in " <> Text.pack (show duration)
       pure result
     else run dbEnv
   where
@@ -86,18 +85,8 @@ runDbSession DbCallInfo {..} session = DbAction $ do
       result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
       case result of
         Left sessionErr ->
-          throwError $ DbError dciCallSite "Database query failed: " (Just sessionErr)
+          throwError $ DbError dbCallStack "Database query failed" (Just sessionErr)
         Right val -> pure val
-
--- | Creates a `DbCallInfo` with a function name and call site.
---
--- ==== Parameters
--- * @name@: The name of the function or database operation being performed.
---
--- ==== Returns
--- * @DbCallInfo@: A call information record with operation name and location metadata.
-mkCallInfo :: HasCallStack => Text -> DbCallInfo
-mkCallInfo name = DbCallInfo name mkCallSite
 
 -- | Extracts call site information from the current call stack.
 --
@@ -105,15 +94,16 @@ mkCallInfo name = DbCallInfo name mkCallSite
 -- details.
 --
 -- ==== Returns
--- * @CallSite@: A record containing module name, file path, and line number
-mkCallSite :: HasCallStack => CallSite
-mkCallSite =
+-- * @DbCallStack@: A record containing module name, file path, and line number
+mkDbCallStack :: HasCallStack => Text -> DbCallStack
+mkDbCallStack name =
   case reverse (getCallStack callStack) of
     (_, srcLoc) : _ ->
-      CallSite
-        { csModule = Text.pack $ srcLocModule srcLoc
-        , csFile = Text.pack $ srcLocFile srcLoc
-        , csLine = srcLocStartLine srcLoc
+      DbCallStack
+        { dbCsFncName = name
+        , dbCsModule = Text.pack $ srcLocModule srcLoc
+        , dbCsFile = Text.pack $ srcLocFile srcLoc
+        , dbCsLine = srcLocStartLine srcLoc
         }
     [] -> error "No call stack info"
 

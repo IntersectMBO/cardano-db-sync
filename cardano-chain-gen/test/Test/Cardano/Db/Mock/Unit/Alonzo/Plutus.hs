@@ -61,7 +61,7 @@ import Control.Monad (void)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
-import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, withFullConfig, withFullConfigAndDropDB)
+import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, withFullConfig, withFullConfigDropDb)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -82,7 +82,7 @@ import Test.Tasty.HUnit (Assertion)
 ----------------------------------------------------------------------------------------------------------
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -271,7 +271,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -394,7 +394,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfigAndDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
       let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)

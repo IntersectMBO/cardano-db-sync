@@ -4,47 +4,47 @@ module Cardano.DbTool.Validate.TotalSupply (
   validateTotalSupplyDecreasing,
 ) where
 
-import Cardano.Db
+import qualified Cardano.Db as DB
 import Cardano.DbTool.UtxoSet (utxoSetSum)
 import Cardano.DbTool.Validate.Util
 import Data.Word (Word64)
 import System.Random (randomRIO)
 
 data Accounting = Accounting
-  { accFees :: Ada
-  , accDeposit :: Ada
-  , accWithdrawals :: Ada
-  , accSupply :: Ada
+  { accFees :: DB.Ada
+  , accDeposit :: DB.Ada
+  , accWithdrawals :: DB.Ada
+  , accSupply :: DB.Ada
   }
 
 data TestParams = TestParams
   { testBlockNo :: Word64
-  , genesisSupply :: Ada
+  , genesisSupply :: DB.Ada
   }
 
-genTestParameters :: TxOutVariantType -> IO TestParams
+genTestParameters :: DB.TxOutVariantType -> IO TestParams
 genTestParameters txOutVariantType = do
-  mlatest <- runDbNoLoggingEnv queryLatestBlockNo
+  mlatest <- DB.runDbNoLoggingEnv DB.queryLatestBlockNo
   case mlatest of
     Nothing -> error "Cardano.DbTool.Validation: Empty database"
     Just latest ->
       TestParams
         <$> randomRIO (1, latest - 1)
-        <*> runDbNoLoggingEnv (queryGenesisSupply txOutVariantType)
+        <*> DB.runDbNoLoggingEnv (DB.queryGenesisSupply txOutVariantType)
 
-queryInitialSupply :: TxOutVariantType -> Word64 -> IO Accounting
+queryInitialSupply :: DB.TxOutVariantType -> Word64 -> IO Accounting
 queryInitialSupply txOutVariantType blkNo =
   -- Run all queries in a single transaction.
-  runDbNoLoggingEnv $
+  DB.runDbNoLoggingEnv $
     Accounting
-      <$> queryFeesUpToBlockNo blkNo
-      <*> queryDepositUpToBlockNo blkNo
-      <*> queryWithdrawalsUpToBlockNo blkNo
-      <*> fmap2 utxoSetSum (queryUtxoAtBlockNo txOutVariantType) blkNo
+      <$> DB.queryFeesUpToBlockNo blkNo
+      <*> DB.queryDepositUpToBlockNo blkNo
+      <*> DB.queryWithdrawalsUpToBlockNo blkNo
+      <*> fmap2 utxoSetSum (DB.queryUtxoAtBlockId txOutVariantType) (DB.BlockId $ fromIntegral blkNo)
 
 -- | Validate that the total supply is decreasing.
 -- This is only true for the Byron error where transaction fees are burnt.
-validateTotalSupplyDecreasing :: TxOutVariantType -> IO ()
+validateTotalSupplyDecreasing :: DB.TxOutVariantType -> IO ()
 validateTotalSupplyDecreasing txOutVariantType = do
   test <- genTestParameters txOutVariantType
 

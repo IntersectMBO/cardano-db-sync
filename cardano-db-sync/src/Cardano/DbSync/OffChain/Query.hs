@@ -27,6 +27,7 @@ import Cardano.Db (
   VotingAnchor,
   VotingAnchorId,
  )
+import qualified Cardano.Db as DB
 import Cardano.DbSync.OffChain.FetchQueue (newRetry, retryAgain)
 import Cardano.DbSync.Types (OffChainPoolWorkQueue (..), OffChainVoteWorkQueue (..))
 import Cardano.Prelude hiding (from, groupBy, on, retry)
@@ -34,7 +35,6 @@ import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
 import System.Random.Shuffle (shuffleM)
-import qualified Cardano.Db as DB
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Query OffChain VoteData

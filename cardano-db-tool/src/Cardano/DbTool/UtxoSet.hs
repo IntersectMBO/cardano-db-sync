@@ -6,7 +6,7 @@ module Cardano.DbTool.UtxoSet (
 ) where
 
 import Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
-import Cardano.Db
+import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Prelude (textShow)
@@ -20,7 +20,7 @@ import Data.Word (Word64)
 import System.Exit (exitSuccess)
 import System.IO (IOMode (..), withFile)
 
-utxoSetAtSlot :: TxOutVariantType -> Word64 -> IO ()
+utxoSetAtSlot :: DB.TxOutVariantType -> Word64 -> IO ()
 utxoSetAtSlot txOutVariantType slotNo = do
   (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot txOutVariantType slotNo
 
@@ -59,12 +59,12 @@ utxoSetAtSlot txOutVariantType slotNo = do
       writeUtxos ("utxo-reject-" ++ show slotNo ++ ".json") reject
       putStrLn ""
 
-aggregateUtxos :: [UtxoQueryResult] -> [(Text, Word64)]
+aggregateUtxos :: [DB.UtxoQueryResult] -> [(Text, Word64)]
 aggregateUtxos xs =
   List.sortOn (Text.length . fst)
     . Map.toList
     . Map.fromListWith (+)
-    $ map (\result -> (utxoAddress result, getTxOutValue $ utxoTxOutW result)) xs
+    $ map (\result -> (DB.utxoAddress result, getTxOutValue $ DB.utxoTxOutW result)) xs
 
 isRedeemTextAddress :: Text -> Bool
 isRedeemTextAddress addr =
@@ -82,20 +82,20 @@ partitionUtxos =
     accept (addr, _) =
       Text.length addr <= 180 && not (isRedeemTextAddress addr)
 
-queryAtSlot :: TxOutVariantType -> Word64 -> IO (Ada, [UtxoQueryResult], Ada, Either LookupFail UTCTime)
+queryAtSlot :: DB.TxOutVariantType -> Word64 -> IO (DB.Ada, [DB.UtxoQueryResult], DB.Ada, (Either DB.DbError UTCTime))
 queryAtSlot txOutVariantType slotNo =
   -- Run the following queries in a single transaction.
-  runDbNoLoggingEnv $ do
+  DB.runDbNoLoggingEnv $ do
     (,,,)
-      <$> queryGenesisSupply txOutVariantType
-      <*> queryUtxoAtSlotNo txOutVariantType slotNo
-      <*> queryFeesUpToSlotNo slotNo
-      <*> querySlotUtcTime slotNo
+      <$> DB.queryGenesisSupply txOutVariantType
+      <*> DB.queryUtxoAtSlotNo txOutVariantType slotNo
+      <*> DB.queryFeesUpToSlotNo slotNo
+      <*> DB.querySlotUtcTimeEither slotNo
 
-reportSlotDate :: Word64 -> Either a UTCTime -> IO ()
+reportSlotDate :: Word64 -> Either DB.DbError UTCTime -> IO ()
 reportSlotDate slotNo eUtcTime = do
   case eUtcTime of
-    Left _ -> putStrLn "\nDatabase not initialized or not accessible"
+    Left err -> putStrLn $ "\nDatabase not initialized or not accessible: " <> show err
     Right time -> putStrLn $ "\nSlot number " ++ show slotNo ++ " will occur at " ++ show time ++ ".\n"
   exitSuccess
 
@@ -112,14 +112,14 @@ showUtxo (addr, value) =
     , "    }"
     ]
 
-utxoSetSum :: [UtxoQueryResult] -> Ada
+utxoSetSum :: [DB.UtxoQueryResult] -> DB.Ada
 utxoSetSum xs =
-  word64ToAda . sum $ map (getTxOutValue . utxoTxOutW) xs
+  DB.word64ToAda . sum $ map (getTxOutValue . DB.utxoTxOutW) xs
 
-getTxOutValue :: TxOutW -> Word64
+getTxOutValue :: DB.TxOutW -> Word64
 getTxOutValue wrapper = case wrapper of
-  VCTxOutW txOut -> unDbLovelace $ C.txOutValue txOut
-  VATxOutW txOut _ -> unDbLovelace $ V.txOutValue txOut
+  DB.VCTxOutW txOut -> DB.unDbLovelace $ VC.txOutCoreValue txOut
+  DB.VATxOutW txOut _ -> DB.unDbLovelace $ VA.txOutAddressValue txOut
 
 writeUtxos :: FilePath -> [(Text, Word64)] -> IO ()
 writeUtxos fname xs = do

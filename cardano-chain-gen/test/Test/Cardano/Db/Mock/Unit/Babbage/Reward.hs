@@ -34,7 +34,7 @@ import Control.Monad (forM_, void)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, stopDBSync, withFullConfig, withFullConfigDropDB)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, stopDBSync, withFullConfig, withFullConfigDropDb)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillEpochPercentage,
   fillEpochs,
@@ -59,7 +59,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
-  withFullConfigDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 

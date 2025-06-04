@@ -58,7 +58,7 @@ basicPruneWithAddress = performBasicPrune True
 
 performBasicPrune :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performBasicPrune useTxOutAddress = do
-  withCustomConfigDropDB args (Just $ configPruneForceTxIn useTxOutAddress) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb args (Just $ configPruneForceTxIn useTxOutAddress) cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
@@ -98,7 +98,7 @@ pruneWithSimpleRollbackWithAddress = performPruneWithSimpleRollback True
 
 performPruneWithSimpleRollback :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performPruneWithSimpleRollback useTxOutAddress =
-  withCustomConfigAndDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
     -- Forge some blocks
     blk0 <- forgeNext interpreter mockBlock0
@@ -106,6 +106,7 @@ performPruneWithSimpleRollback useTxOutAddress =
     atomically $ addBlock mockServer blk0
 
     startDBSync dbSync
+
     atomically $ addBlock mockServer blk1
 
     -- Create some payment transactions
@@ -141,7 +142,7 @@ pruneWithFullTxRollbackWithAddress = performPruneWithFullTxRollback True
 
 performPruneWithFullTxRollback :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performPruneWithFullTxRollback useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
     -- Forge a block
@@ -186,7 +187,7 @@ pruningShouldKeepSomeTxWithAddress = performPruningShouldKeepSomeTx True
 
 performPruningShouldKeepSomeTx :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performPruningShouldKeepSomeTx useTxOutAddress = do
-  withCustomConfigDropDB cmdLineArgs (Just $ configPrune useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configPrune useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
     -- Forge some blocks
@@ -222,7 +223,7 @@ pruneAndRollBackOneBlockWithAddress = performPruneAndRollBackOneBlock True
 
 performPruneAndRollBackOneBlock :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performPruneAndRollBackOneBlock useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
@@ -268,7 +269,7 @@ noPruneAndRollBackWithAddress = performNoPruneAndRollBack True
 
 performNoPruneAndRollBack :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performNoPruneAndRollBack useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configConsume useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configConsume useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
@@ -314,7 +315,7 @@ pruneSameBlockWithAddress = performPruneSameBlock True
 
 performPruneSameBlock :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performPruneSameBlock useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
@@ -357,7 +358,7 @@ noPruneSameBlockWithAddress = performNoPruneSameBlock True
 
 performNoPruneSameBlock :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performNoPruneSameBlock useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configConsume useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configConsume useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -395,7 +396,7 @@ migrateAndPruneRestartWithAddress = performMigrateAndPruneRestart True
 
 performMigrateAndPruneRestart :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performMigrateAndPruneRestart useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configConsume useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configConsume useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -424,7 +425,7 @@ pruneRestartMissingFlagWithAddress = performPruneRestartMissingFlag True
 
 performPruneRestartMissingFlag :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performPruneRestartMissingFlag useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configPruneForceTxIn useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -453,7 +454,7 @@ bootstrapRestartMissingFlagWithAddress = performBootstrapRestartMissingFlag True
 
 performBootstrapRestartMissingFlag :: Bool -> IOManager -> [(Text, Text)] -> Assertion
 performBootstrapRestartMissingFlag useTxOutAddress =
-  withCustomConfigDropDB cmdLineArgs (Just $ configBootstrap useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configBootstrap useTxOutAddress) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -476,7 +477,7 @@ performBootstrapRestartMissingFlag useTxOutAddress =
 
 populateDbRestartWithAddressConfig :: IOManager -> [(Text, Text)] -> Assertion
 populateDbRestartWithAddressConfig =
-  withCustomConfigDropDB cmdLineArgs (Just $ configConsume False) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDb cmdLineArgs (Just $ configConsume False) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks

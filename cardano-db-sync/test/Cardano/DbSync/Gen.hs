@@ -86,6 +86,7 @@ syncNodeConfig loggingCfg =
     <*> Gen.element [RequiresNoMagic, RequiresMagic]
     <*> Gen.bool
     <*> Gen.bool
+    <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
     <*> Gen.maybe (Gen.double (Range.linearFrac 0 1))
     <*> (GenesisFile <$> filePath)
@@ -131,6 +132,7 @@ syncInsertOptions =
     <*> (PoolStatsConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
     <*> (RemoveJsonbFromSchemaConfig <$> Gen.bool)
+    <*> Gen.bool
 
 txOutConfig :: Gen TxOutConfig
 txOutConfig =

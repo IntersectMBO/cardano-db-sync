@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -5,7 +6,6 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE ApplicativeDo #-}
 
 module Cardano.DbSync.OffChain (
   insertOffChainPoolResults,
@@ -36,12 +36,12 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
+import GHC.IO.Exception (userError)
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Pipeline as HsqlP
+import qualified Hasql.Session as HsqlSes
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.TLS (tlsManagerSettings)
-import qualified Hasql.Session as HsqlSes
-import qualified Hasql.Pipeline as HsqlP
-import qualified Hasql.Connection as HsqlC
-import GHC.IO.Exception (userError)
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Load OffChain Work Queue
@@ -164,19 +164,24 @@ insertOffChainVoteResults trce resultQueue = do
             allReferences = concatMap (\(_, acc, id) -> offChainVoteReferences acc id) metadataIds
             allExternalUpdates = concatMap (\(_, acc, id) -> offChainVoteExternalUpdates acc id) metadataIds
         -- Execute all bulk inserts in a pipeline
-        DB.runDbSession (DB.mkCallInfo "insertRelatedDataPipeline") $
+        DB.runDbSession (DB.mkDbCallStack "insertRelatedDataPipeline") $
           HsqlSes.pipeline $ do
             -- Insert all related data in one pipeline
             unless (null allGovActions) $
-              void $ HsqlP.statement allGovActions DB.insertBulkOffChainVoteGovActionDataStmt
+              void $
+                HsqlP.statement allGovActions DB.insertBulkOffChainVoteGovActionDataStmt
             unless (null allDrepData) $
-              void $ HsqlP.statement allDrepData DB.insertBulkOffChainVoteDrepDataStmt
+              void $
+                HsqlP.statement allDrepData DB.insertBulkOffChainVoteDrepDataStmt
             unless (null allAuthors) $
-              void $ HsqlP.statement allAuthors DB.insertBulkOffChainVoteAuthorsStmt
+              void $
+                HsqlP.statement allAuthors DB.insertBulkOffChainVoteAuthorsStmt
             unless (null allReferences) $
-              void $ HsqlP.statement allReferences DB.insertBulkOffChainVoteReferencesStmt
+              void $
+                HsqlP.statement allReferences DB.insertBulkOffChainVoteReferencesStmt
             unless (null allExternalUpdates) $
-              void $ HsqlP.statement allExternalUpdates DB.insertBulkOffChainVoteExternalUpdatesStmt
+              void $
+                HsqlP.statement allExternalUpdates DB.insertBulkOffChainVoteExternalUpdatesStmt
             pure ()
 
     -- Helper function to insert metadata and get back IDs
@@ -185,8 +190,9 @@ insertOffChainVoteResults trce resultQueue = do
       -- Extract just the metadata for insert
       let metadata = map fst metadataWithAccessors
       -- Insert and get IDs
-      ids <- DB.runDbSession (DB.mkCallInfo "insertMetadataWithIds") $
-        HsqlSes.statement metadata DB.insertBulkOffChainVoteDataStmt
+      ids <-
+        DB.runDbSession (DB.mkDbCallStack "insertMetadataWithIds") $
+          HsqlSes.statement metadata DB.insertBulkOffChainVoteDataStmt
 
       -- Return original data with IDs
       pure $ zipWith (\(md, acc) id -> (md, acc, id)) metadataWithAccessors ids
@@ -194,7 +200,7 @@ insertOffChainVoteResults trce resultQueue = do
     -- Bulk insert for errors (you'll need to create this statement)
     insertBulkOffChainVoteFetchErrors :: MonadIO m => [DB.OffChainVoteFetchError] -> DB.DbAction m ()
     insertBulkOffChainVoteFetchErrors errors =
-      DB.runDbSession (DB.mkCallInfo "insertBulkOffChainVoteFetchErrors") $
+      DB.runDbSession (DB.mkDbCallStack "insertBulkOffChainVoteFetchErrors") $
         HsqlSes.statement errors DB.insertBulkOffChainVoteFetchErrorStmt
 
 logInsertOffChainResults ::
@@ -216,29 +222,6 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Run OffChain threads
 ---------------------------------------------------------------------------------------------------------------------------------
--- runFetchOffChainPoolThread :: SyncEnv -> IO ()
--- runFetchOffChainPoolThread syncEnv = do
---   -- if dissable gov is active then don't run voting anchor thread
---   when (ioOffChainPoolData iopts) $ do
---     logInfo trce "Running Offchain Pool fetch thread"
---     runIohkLogging trce $
---       withPostgresqlConn (envConnectionString syncEnv) $
---         \backendPool -> liftIO $
---           forever $ do
---             tDelay
---             -- load the offChain vote work queue using the db
---             _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) backendPool
---             poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue syncEnv)
---             manager <- Http.newManager tlsManagerSettings
---             now <- liftIO Time.getPOSIXTime
---             mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
---   where
---     trce = getTrace syncEnv
---     iopts = getInsertOptions syncEnv
-
---     queuePoolInsert :: OffChainPoolResult -> IO ()
---     queuePoolInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
-
 runFetchOffChainPoolThread :: SyncEnv -> SyncNodeConfig -> IO ()
 runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
   -- if disable gov is active then don't run voting anchor thread
@@ -252,19 +235,20 @@ runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
     bracket
       (DB.acquireConnection [connSetting])
       HsqlC.release
-      (\dbConn -> forever $ do
-        -- Create a new DbEnv for this thread
-        let dbEnv = DB.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile) $ Just trce
-        -- Create a new SyncEnv with the new DbEnv but preserving all other fields
-            threadSyncEnv = syncEnv { envDbEnv = dbEnv }
-        tDelay
-        -- load the offChain vote work queue using the db
-        _ <- DB.runDbIohkLogging trce dbEnv $
-               loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
-        poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
-        manager <- Http.newManager tlsManagerSettings
-        now <- liftIO Time.getPOSIXTime
-        mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
+      ( \dbConn -> forever $ do
+          -- Create a new DbEnv for this thread
+          let dbEnv = DB.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile) $ Just trce
+              -- Create a new SyncEnv with the new DbEnv but preserving all other fields
+              threadSyncEnv = syncEnv {envDbEnv = dbEnv}
+          tDelay
+          -- load the offChain vote work queue using the db
+          _ <-
+            DB.runDbIohkLoggingEither trce dbEnv $
+              loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
+          poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
+          manager <- Http.newManager tlsManagerSettings
+          now <- liftIO Time.getPOSIXTime
+          mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
       )
   where
     trce = getTrace syncEnv
@@ -286,20 +270,21 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
     bracket
       (DB.acquireConnection [connSetting])
       HsqlC.release
-      (\dbConn -> do
-        -- Create a new DbEnv for this thread
-        let dbEnv = DB.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile) $ Just trce
-        -- Create a new SyncEnv with the new DbEnv but preserving all other fields
-        let threadSyncEnv = syncEnv { envDbEnv = dbEnv }
-        -- Use the thread-specific SyncEnv for all operations
-        forever $ do
-          tDelay
-          -- load the offChain vote work queue using the db
-          _ <- DB.runDbIohkLogging trce dbEnv $
+      ( \dbConn -> do
+          -- Create a new DbEnv for this thread
+          let dbEnv = DB.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile) $ Just trce
+          -- Create a new SyncEnv with the new DbEnv but preserving all other fields
+          let threadSyncEnv = syncEnv {envDbEnv = dbEnv}
+          -- Use the thread-specific SyncEnv for all operations
+          forever $ do
+            tDelay
+            -- load the offChain vote work queue using the db
+            _ <-
+              DB.runDbIohkLoggingEither trce dbEnv $
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
-          voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
-          now <- liftIO Time.getPOSIXTime
-          mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
+            voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
+            now <- liftIO Time.getPOSIXTime
+            mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
       )
   where
     trce = getTrace syncEnv
@@ -308,29 +293,6 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
 
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
-
--- runFetchOffChainVoteThread :: SyncEnv -> IO ()
--- runFetchOffChainVoteThread syncEnv = do
---   -- if dissable gov is active then don't run voting anchor thread
---   when (ioGov iopts) $ do
---     logInfo trce "Running Offchain Vote Anchor fetch thread"
---     runIohkLogging trce $
---       withPostgresqlConn (envConnectionString syncEnv) $
---         \backendVote -> liftIO $
---           forever $ do
---             tDelay
---             -- load the offChain vote work queue using the db
---             _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
---             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
---             now <- liftIO Time.getPOSIXTime
---             mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
---   where
---     trce = getTrace syncEnv
---     iopts = getInsertOptions syncEnv
---     gateways = dncIpfsGateway $ envSyncNodeConfig syncEnv
-
---     queueVoteInsert :: OffChainVoteResult -> IO ()
---     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
 
 -- 5 minute sleep in milliseconds
 tDelay :: IO ()

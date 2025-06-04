@@ -70,7 +70,7 @@ writeEpochBlockDiffToCache ::
   DB.DbAction m ()
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
-    NoCache -> throwError $ DB.DbError DB.mkCallSite "writeEpochBlockDiffToCache: Cache is NoCache" Nothing
+    NoCache -> throwError $ DB.DbError (DB.mkDbCallStack "writeEpochBlockDiffToCache") "Cache is NoCache" Nothing
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
@@ -92,12 +92,12 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    NoCache -> throwError $ DB.DbError DB.mkCallSite "writeToMapEpochCache: Cache is NoCache" Nothing
+    NoCache -> throwError $ DB.DbError (DB.mkDbCallStack "writeToMapEpochCache") "Cache is NoCache" Nothing
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
-        Nothing -> throwError $ DB.DbError DB.mkCallSite "writeToMapEpochCache: No epochInternalEpochCache" Nothing
+        Nothing -> throwError $ DB.DbError (DB.mkDbCallStack "writeToMapEpochCache") "No epochInternalEpochCache" Nothing
         Just ei -> do
           cE <- liftIO $ readTVarIO (cEpoch ci)
           let currentBlockId = ebdBlockId ei

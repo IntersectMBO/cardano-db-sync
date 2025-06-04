@@ -87,13 +87,19 @@ multiAssetInsertEncoder =
 -- Description: Contains information about the minting of multi-assets, including the quantity of the asset and the transaction in which it was minted.
 data MaTxMint = MaTxMint
   { maTxMintQuantity :: !DbInt65 -- sqltype=int65type
-  , maTxMintIdent :: !MultiAssetId -- noreference
   , maTxMintTxId :: !TxId -- noreference
+  , maTxMintIdent :: !MultiAssetId -- noreference
   }
   deriving (Eq, Show, Generic)
 
 type instance Key MaTxMint = MaTxMintId
-instance DbInfo MaTxMint
+
+instance DbInfo MaTxMint where
+  unnestParamTypes _ =
+    [ ("quantity", "bigint[]")
+    , ("tx_id", "bigint[]")
+    , ("ident", "bigint[]")
+    ]
 
 entityMaTxMintDecoder :: D.Row (Entity MaTxMint)
 entityMaTxMintDecoder =
@@ -105,8 +111,8 @@ maTxMintDecoder :: D.Row MaTxMint
 maTxMintDecoder =
   MaTxMint
     <$> D.column (D.nonNullable dbInt65Decoder)
-    <*> idDecoder MultiAssetId
     <*> idDecoder TxId
+    <*> idDecoder MultiAssetId
 
 entityMaTxMintEncoder :: E.Params (Entity MaTxMint)
 entityMaTxMintEncoder =
@@ -119,13 +125,13 @@ maTxMintEncoder :: E.Params MaTxMint
 maTxMintEncoder =
   mconcat
     [ maTxMintQuantity >$< E.param (E.nonNullable dbInt65Encoder)
-    , maTxMintIdent >$< idEncoder getMultiAssetId
     , maTxMintTxId >$< idEncoder getTxId
+    , maTxMintIdent >$< idEncoder getMultiAssetId
     ]
 
-maTxMintBulkEncoder :: E.Params ([DbInt65], [MultiAssetId], [TxId])
+maTxMintBulkEncoder :: E.Params ([DbInt65], [TxId], [MultiAssetId])
 maTxMintBulkEncoder =
   contrazip3
     (bulkEncoder $ E.nonNullable dbInt65Encoder)
-    (bulkEncoder $ E.nonNullable $ getMultiAssetId >$< E.int8)
     (bulkEncoder $ E.nonNullable $ getTxId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ getMultiAssetId >$< E.int8)

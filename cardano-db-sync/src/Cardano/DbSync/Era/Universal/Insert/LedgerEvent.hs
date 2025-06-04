@@ -21,7 +21,6 @@ import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
 import Cardano.DbSync.Era.Universal.Epoch (insertPoolDepositRefunds, insertProposalRefunds, insertRewardRests, insertRewards)
 import Cardano.DbSync.Era.Universal.Insert.GovAction
 import Cardano.DbSync.Era.Universal.Validate (validateEpochRewards)
-import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -29,11 +28,8 @@ import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Database.Persist.SqlBackend.Internal
-import Database.Persist.SqlBackend.Internal.StatementCache
 
 --------------------------------------------------------------------------------------------
 -- Insert LedgerEvents
@@ -43,7 +39,7 @@ insertNewEpochLedgerEvents ::
   SyncEnv ->
   EpochNo ->
   [LedgerEvent] ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
@@ -64,14 +60,12 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     handler ::
       MonadIO m =>
       LedgerEvent ->
-      ExceptT SyncNodeError (DB.DbAction m) ()
+      DB.DbAction m ()
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
-          lift $
-            insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
-          sqlBackend <- lift ask
-          persistantCacheSize <- liftIO $ statementCacheSize $ connStmtMap sqlBackend
+          insertEpochSyncTime en (toSyncState ss) (envEpochSyncTime syncEnv)
+          persistantCacheSize <- DB.queryStatementCacheSize
           liftIO . logInfo tracer $ "Persistant SQL Statement Cache size is " <> textShow persistantCacheSize
           stats <- liftIO $ textShowStats cache
           liftIO . logInfo tracer $ stats
@@ -89,9 +83,9 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           let rewards = Map.toList $ Generic.unRewards rwd
           insertRewards syncEnv ntw (subFromCurrentEpoch 1) (EpochNo $ curEpoch + 1) cache rewards
         LedgerRestrainedRewards e rwd creds ->
-          lift $ adjustEpochRewards tracer ntw cache e rwd creds
+          adjustEpochRewards tracer ntw cache e rwd creds
         LedgerTotalRewards _e rwd ->
-          lift $ validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+          validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo enacted dropped expired uncl -> do
@@ -104,7 +98,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           insertProposalRefunds tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache refunded -- TODO: check if they are disjoint to avoid double entries.
           forM_ enacted $ \gar -> do
             gaId <- resolveGovActionProposal cache (garGovActionId gar)
-            lift $ void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
+            void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
             whenJust (garMTreasury gar) $ \treasuryMap -> do
               let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
               insertRewardRests tracer ntw (subFromCurrentEpoch 1) currentEpochNo cache (Map.toList rewards)

@@ -1,23 +1,12 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 #if __GLASGOW_HASKELL__ >= 908
 {-# OPTIONS_GHC -Wno-x-partial #-}
 #endif
 
-import Cardano.Db (
-  EntityField (..),
-  OffChainPoolData,
-  PoolHashId,
-  PoolMetaHash (..),
-  PoolMetadataRef,
-  PoolRetire,
-  PoolUrl (..),
-  runDbNoLoggingEnv,
-  unValue4,
- )
+import qualified Cardano.Db as DB
 import Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
   parseOffChainUrl,
@@ -29,25 +18,11 @@ import Cardano.DbSync.Types (
 import Control.Monad (foldM)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Except.Extra (runExceptT)
-import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import Data.Ord (Down (..))
 import Data.Text (Text)
-import Database.Esqueleto.Experimental (
-  SqlBackend,
-  from,
-  innerJoin,
-  notExists,
-  on,
-  select,
-  table,
-  where_,
-  (:&) ((:&)),
-  (==.),
-  (^.),
- )
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 
@@ -57,7 +32,7 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 main :: IO ()
 main = do
   manager <- Http.newManager tlsManagerSettings
-  xs <- runDbNoLoggingEnv queryTestOffChainData
+  xs <- DB.runDbNoLoggingEnv queryTestOffChainData
   putStrLn $ "testOffChainPoolDataFetch: " ++ show (length xs) ++ " tests to run."
   tfs <- foldM (testOne manager) emptyTestFailure xs
   reportTestFailures tfs
@@ -76,14 +51,16 @@ main = do
         Right _ ->
           pure accum
 
--- -------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------
 
+-- Keep all the data types the same
 data TestOffChain = TestOffChain
   { toTicker :: !Text
-  , toUrl :: !PoolUrl
-  , toHash :: !PoolMetaHash
+  , toUrl :: !DB.PoolUrl
+  , toHash :: !DB.PoolMetaHash
   }
 
+-- Keep all the error handling types and functions the same
 data TestFailure = TestFailure
   { tfHashMismatch :: !Word
   , tfDataTooLong :: !Word
@@ -98,6 +75,24 @@ data TestFailure = TestFailure
   , tfConnectionFailure :: !Word
   , tfOtherError :: !Word
   }
+
+queryTestOffChainData :: MonadIO m => DB.DbAction m [TestOffChain]
+queryTestOffChainData = do
+  res <- DB.queryTestOffChainData
+  pure . organise $ map convert res
+  where
+    convert :: (Text, DB.PoolUrl, ByteString, DB.PoolHashId) -> (DB.PoolHashId, TestOffChain)
+    convert (tname, url, hash, poolId) =
+      ( poolId
+      , TestOffChain
+          { toTicker = tname
+          , toUrl = url
+          , toHash = DB.PoolMetaHash hash
+          }
+      )
+
+    organise :: [(DB.PoolHashId, TestOffChain)] -> [TestOffChain]
+    organise = map (List.head . map snd . List.sortOn (Down . fst)) . List.groupOn fst
 
 classifyFetchError :: TestFailure -> OffChainFetchError -> TestFailure
 classifyFetchError tf fe =
@@ -134,36 +129,3 @@ reportTestFailures tf = do
     , "  Timeout : " ++ show (tfTimeout tf)
     , "  ConnectionFailure : " ++ show (tfConnectionFailure tf)
     ]
-
--- reportTestOffChain :: TestOffChain -> IO ()
--- reportTestOffChain tof = Text.putStrLn $ mconcat [ toTicker tof, " ", unPoolUrl (toUrl tof) ]
-
-queryTestOffChainData :: MonadIO m => DB.DbAction m [TestOffChain]
-queryTestOffChainData = do
-  res <- select $ do
-    (pod :& pmr) <-
-      from $
-        table @OffChainPoolData
-          `innerJoin` table @PoolMetadataRef
-            `on` (\(pod :& pmr) -> pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId)
-    where_ $ notExists (from (table @PoolRetire) >>= \pr -> where_ (pod ^. OffChainPoolDataPoolId ==. pr ^. PoolRetireHashId))
-    pure
-      ( pod ^. OffChainPoolDataTickerName
-      , pmr ^. PoolMetadataRefUrl
-      , pmr ^. PoolMetadataRefHash
-      , pod ^. OffChainPoolDataPoolId
-      )
-  pure . organise $ map (convert . unValue4) res
-  where
-    convert :: (Text, PoolUrl, ByteString, PoolHashId) -> (PoolHashId, TestOffChain)
-    convert (tname, url, hash, poolId) =
-      ( poolId
-      , TestOffChain
-          { toTicker = tname
-          , toUrl = url
-          , toHash = PoolMetaHash hash
-          }
-      )
-
-    organise :: [(PoolHashId, TestOffChain)] -> [TestOffChain]
-    organise = map (List.head . map snd . List.sortOn (Down . fst)) . List.groupOn fst

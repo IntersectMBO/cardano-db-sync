@@ -1,8 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.DbEvent (
   DbEvent (..),
   ThreadChannels (..),
+  liftDbIO,
+  liftDbError,
+  acquireDbConnection,
   blockingFlushDbEventQueue,
   lengthDbEventQueue,
   mkDbApply,
@@ -14,12 +18,16 @@ module Cardano.DbSync.DbEvent (
   runAndSetDone,
 ) where
 
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.Types
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, newEmptyTMVarIO, newTVarIO, readTVar, readTVarIO, takeTMVar, writeTVar)
 import qualified Control.Concurrent.STM as STM
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection.Setting as HsqlSet
 import Ouroboros.Network.Block (BlockNo, Tip (..))
 import qualified Ouroboros.Network.Point as Point
 
@@ -33,6 +41,27 @@ data ThreadChannels = ThreadChannels
   { tcQueue :: TBQueue DbEvent
   , tcDoneInit :: !(StrictTVar IO Bool)
   }
+
+liftDbIO :: IO a -> ExceptT SyncNodeError IO a
+liftDbIO action = do
+  result <- liftIO $ try action
+  case result of
+    Left dbErr -> throwError $ SNErrDatabase dbErr
+    Right val -> pure val
+
+liftDbError :: ExceptT DB.DbError IO a -> ExceptT SyncNodeError IO a
+liftDbError dbAction = do
+  result <- liftIO $ runExceptT dbAction
+  case result of
+    Left dbErr -> throwError $ SNErrDatabase dbErr
+    Right val -> pure val
+
+acquireDbConnection :: [HsqlSet.Setting] -> IO HsqlC.Connection
+acquireDbConnection settings = do
+  result <- HsqlC.acquire settings
+  case result of
+    Left connErr -> throwIO $ SNErrDatabase $ DB.DbError (DB.mkDbCallStack "acquireDbConnection") (show connErr) Nothing
+    Right conn -> pure conn
 
 mkDbApply :: CardanoBlock -> DbEvent
 mkDbApply = DbApplyBlock

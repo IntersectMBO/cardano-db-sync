@@ -26,10 +26,10 @@ import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..))
 import qualified Cardano.Db.Schema.Variants as SV
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (mkCallInfo, runDbSession)
-import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
-import Cardano.Db.Statement.Function.Query (queryMinRefId)
-import Cardano.Db.Statement.Types (DbInfo (..))
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Delete (deleteWhereCount, deleteWhereCountWithNotNull)
+import Cardano.Db.Statement.MinIds (queryMinRefId, queryMinRefIdNullable) -- Import from MinIds
+import Cardano.Db.Statement.Types (DbInfo (..), tableName)
 import Cardano.Db.Types (DbAction)
 
 -- This creates a pipeline for multiple delete operations
@@ -42,7 +42,7 @@ runDeletePipeline ::
   [(Text.Text, HsqlSes.Session Int64)] ->
   DbAction m [(Text.Text, Int64)]
 runDeletePipeline opName operations = do
-  runDbSession (mkCallInfo opName) $ do
+  runDbSession (mkDbCallStack opName) $ do
     forM operations $ \(tName, deleteSession) -> do
       count <- deleteSession
       pure (tName, count)
@@ -67,197 +67,6 @@ prepareDelete fieldName value operator encoder =
         HsqlSes.statement value $
           deleteWhereCount @a fieldName operator encoder
    in (tName, deleteSession)
-
-deleteTablesAfterBlockId ::
-  forall m.
-  MonadIO m =>
-  SV.TxOutVariantType ->
-  Id.BlockId ->
-  Maybe Id.TxId ->
-  MinIdsWrapper ->
-  DbAction m (Int64, [(Text.Text, Int64)])
-deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
-  let blockIdEncoder = Id.idEncoder Id.getBlockId
-
-  -- Create a pipeline for initial deletions
-  initialLogs <-
-    runDeletePipeline
-      "initialDelete"
-      [ prepareDelete @SCE.AdaPots "block_id" blkId ">=" blockIdEncoder
-      , prepareDelete @SCB.ReverseIndex "block_id" blkId ">=" blockIdEncoder
-      , prepareDelete @SCE.EpochParam "block_id" blkId ">=" blockIdEncoder
-      ]
-
-  -- Handle off-chain related deletions
-  mvaId <-
-    queryMinRefId @SCG.VotingAnchor
-      "block_id"
-      blkId
-      blockIdEncoder
-      (Id.idDecoder Id.VotingAnchorId)
-
-  offChainLogs <- case mvaId of
-    Nothing -> pure []
-    Just vaId -> do
-      -- For VotingAnchorId, we need the correct encoder
-      let vaIdEncoder = Id.idEncoder Id.getVotingAnchorId
-
-      mocvdId <-
-        queryMinRefId @SCO.OffChainVoteData
-          "voting_anchor_id"
-          vaId
-          vaIdEncoder
-          (Id.idDecoder Id.OffChainVoteDataId)
-
-      logsVoting <- case mocvdId of
-        Nothing -> pure []
-        Just ocvdId -> do
-          -- For OffChainVoteDataId, we need the correct encoder
-          let ocvdIdEncoder = Id.idEncoder Id.getOffChainVoteDataId
-              offChainVoteDataId = "off_chain_vote_data_id"
-
-          runDeletePipeline
-            "voteDataDelete"
-            [ prepareDelete @SCO.OffChainVoteGovActionData offChainVoteDataId ocvdId ">=" ocvdIdEncoder
-            , prepareDelete @SCO.OffChainVoteDrepData offChainVoteDataId ocvdId ">=" ocvdIdEncoder
-            , prepareDelete @SCO.OffChainVoteAuthor offChainVoteDataId ocvdId ">=" ocvdIdEncoder
-            , prepareDelete @SCO.OffChainVoteReference offChainVoteDataId ocvdId ">=" ocvdIdEncoder
-            , prepareDelete @SCO.OffChainVoteExternalUpdate offChainVoteDataId ocvdId ">=" ocvdIdEncoder
-            ]
-
-      offChain <-
-        runDeletePipeline
-          "anchorDelete"
-          [ prepareDelete @SCO.OffChainVoteData "voting_anchor_id" vaId ">=" vaIdEncoder
-          , prepareDelete @SCO.OffChainVoteFetchError "voting_anchor_id" vaId ">=" vaIdEncoder
-          , prepareDelete @SCG.VotingAnchor "id" vaId ">=" vaIdEncoder
-          ]
-      pure $ logsVoting <> offChain
-  -- Additional deletions based on TxId and minimum IDs
-  afterTxIdLogs <- deleteTablesAfterTxId txOutVariantType mtxId minIdsW
-  -- Final block deletions
-  blockLogs <-
-    runDeletePipeline
-      "blockDelete"
-      [prepareDelete @SCB.Block "id" blkId ">=" blockIdEncoder]
-  -- Aggregate and return all logs
-  pure (sum $ map snd blockLogs, initialLogs <> blockLogs <> offChainLogs <> afterTxIdLogs)
-
-deleteTablesAfterTxId ::
-  forall m.
-  MonadIO m =>
-  SV.TxOutVariantType ->
-  Maybe Id.TxId ->
-  MinIdsWrapper ->
-  DbAction m [(Text.Text, Int64)]
-deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
-  let txIdEncoder = Id.idEncoder Id.getTxId
-
-  -- Handle deletions and log accumulation from MinIdsWrapper
-  minIdsLogs <- case minIdsW of
-    CMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) -> do
-      let operations =
-            catMaybes
-              [ fmap (\txInId -> prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)) mtxInId
-              , prepareTypedDelete @VC.TxOutCore "id" mtxOutId SV.unwrapTxOutIdCore (Id.idEncoder Id.getTxOutCoreId)
-              , prepareTypedDelete @VC.MaTxOutCore "id" mmaTxOutId SV.unwrapMaTxOutIdCore (Id.idEncoder Id.getMaTxOutCoreId)
-              ]
-      if null operations
-        then pure []
-        else runDeletePipeline "cMinIdsDelete" operations
-    VMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) -> do
-      let operations =
-            catMaybes
-              [ fmap (\txInId -> prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)) mtxInId
-              , prepareTypedDelete @VA.TxOutAddress "id" mtxOutId SV.unwrapTxOutIdAddress (Id.idEncoder Id.getTxOutAddressId)
-              , prepareTypedDelete @VA.MaTxOutAddress "id" mmaTxOutId SV.unwrapMaTxOutIdAddress (Id.idEncoder Id.getMaTxOutAddressId)
-              ]
-      if null operations
-        then pure []
-        else runDeletePipeline "vMinIdsDelete" operations
-
-  -- Handle deletions and log accumulation using the specified TxId
-  txIdLogs <- case mtxId of
-    Nothing -> pure [] -- If no TxId is provided, skip further deletions
-    Just txId -> do
-      -- Create a pipeline for transaction-related deletions
-      result <-
-        runDeletePipeline
-          "txRelatedDelete"
-          [ case txOutVariantType of
-              SV.TxOutVariantCore -> prepareDelete @VC.CollateralTxOutCore "tx_id" txId ">=" txIdEncoder
-              SV.TxOutVariantAddress -> prepareDelete @VA.CollateralTxOutAddress "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.CollateralTxIn "tx_in_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.ReferenceTxIn "tx_in_id" txId ">=" txIdEncoder
-          , prepareDelete @SCP.PoolRetire "announced_tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCS.StakeRegistration "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCS.StakeDeregistration "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCS.Delegation "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.TxMetadata "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.Withdrawal "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCE.Treasury "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCE.Reserve "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCE.PotTransfer "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCM.MaTxMint "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.Redeemer "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.Script "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.Datum "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.RedeemerData "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.ExtraKeyWitness "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCB.TxCbor "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCG.ParamProposal "registered_tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCG.DelegationVote "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCG.CommitteeRegistration "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCG.CommitteeDeRegistration "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCG.DrepRegistration "tx_id" txId ">=" txIdEncoder
-          , prepareDelete @SCG.VotingProcedure "tx_id" txId ">=" txIdEncoder
-          ]
-
-      -- Handle GovActionProposal related deletions if present
-      mgaId <- queryMinRefId @SCG.GovActionProposal "tx_id" txId txIdEncoder (Id.idDecoder Id.GovActionProposalId)
-      gaLogs <- case mgaId of
-        Nothing -> pure [] -- No GovActionProposal ID found, skip this step
-        Just gaId -> do
-          let gaIdEncoder = Id.idEncoder Id.getGovActionProposalId
-          runDeletePipeline
-            "govActionDelete"
-            [ prepareDelete @SCG.TreasuryWithdrawal "gov_action_proposal_id" gaId ">=" gaIdEncoder
-            , prepareDelete @SCG.Committee "gov_action_proposal_id" gaId ">=" gaIdEncoder
-            , prepareDelete @SCG.Constitution "gov_action_proposal_id" gaId ">=" gaIdEncoder
-            , prepareDelete @SCG.GovActionProposal "id" gaId ">=" gaIdEncoder
-            ]
-
-      -- Handle PoolMetadataRef related deletions if present
-      minPmr <- queryMinRefId @SCP.PoolMetadataRef "registered_tx_id" txId txIdEncoder (Id.idDecoder Id.PoolMetadataRefId)
-      pmrLogs <- case minPmr of
-        Nothing -> pure [] -- No PoolMetadataRef ID found, skip this step
-        Just pmrId -> do
-          let pmrIdEncoder = Id.idEncoder Id.getPoolMetadataRefId
-          runDeletePipeline
-            "poolMetadataRefDelete"
-            [ prepareDelete @SCO.OffChainPoolData "pmr_id" pmrId ">=" pmrIdEncoder
-            , prepareDelete @SCO.OffChainPoolFetchError "pmr_id" pmrId ">=" pmrIdEncoder
-            , prepareDelete @SCP.PoolMetadataRef "id" pmrId ">=" pmrIdEncoder
-            ]
-
-      -- Handle PoolUpdate related deletions if present
-      minPoolUpdate <- queryMinRefId @SCP.PoolUpdate "registered_tx_id" txId txIdEncoder (Id.idDecoder Id.PoolUpdateId)
-      poolUpdateLogs <- case minPoolUpdate of
-        Nothing -> pure [] -- No PoolUpdate ID found, skip this step
-        Just puid -> do
-          let puidEncoder = Id.idEncoder Id.getPoolUpdateId
-          runDeletePipeline
-            "poolUpdateDelete"
-            [ prepareDelete @SCP.PoolOwner "pool_update_id" puid ">=" puidEncoder
-            , prepareDelete @SCP.PoolRelay "update_id" puid ">=" puidEncoder
-            , prepareDelete @SCP.PoolUpdate "id" puid ">=" puidEncoder
-            ]
-      -- Final deletions for the given TxId
-      txLogs <- runDeletePipeline "" [prepareOnlyDelete @SCB.Tx "id" txId ">=" txIdEncoder]
-      -- Combine all logs from the operations above
-      pure $ result <> gaLogs <> pmrLogs <> poolUpdateLogs <> txLogs
-  -- Return the combined logs of all operations
-  pure $ minIdsLogs <> txIdLogs
 
 -- Creates a delete statement that returns count
 onlyDeleteStmt ::
@@ -307,3 +116,332 @@ prepareTypedDelete fieldName mWrappedId unwrapper encoder =
       case unwrapper wrappedId of
         Nothing -> Nothing
         Just i -> Just (prepareOnlyDelete @a fieldName i ">=" encoder)
+
+-----------------------------------------------------------------------------------------------------------------
+
+deleteTablesAfterBlockId ::
+  forall m.
+  MonadIO m =>
+  SV.TxOutVariantType ->
+  Id.BlockId ->
+  Maybe Id.TxId ->
+  MinIdsWrapper ->
+  DbAction m (Int64, [(Text.Text, Int64)])
+deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
+  let blockIdEncoder = Id.idEncoder Id.getBlockId
+
+  -- Execute initial deletions sequentially
+  let initialDeleteOps =
+        [ prepareDelete @SCE.AdaPots "block_id" blkId ">=" blockIdEncoder
+        , prepareDelete @SCB.ReverseIndex "block_id" blkId ">=" blockIdEncoder
+        , prepareDelete @SCE.EpochParam "block_id" blkId ">=" blockIdEncoder
+        ]
+  initialLogs <- forM initialDeleteOps $ \(tableN, deleteSession) -> do
+    count <- runDbSession (mkDbCallStack $ "deleteInitial" <> tableN) deleteSession
+    pure (tableN, count)
+
+  -- Handle off-chain related deletions
+  mvaId <-
+    queryMinRefId @SCG.VotingAnchor
+      "block_id"
+      blkId
+      blockIdEncoder
+
+  offChainLogs <- case mvaId of
+    Nothing -> pure []
+    Just vaId -> do
+      -- vaId is now raw Int64, so create encoder for Int64
+      let vaIdEncoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+
+      mocvdId <-
+        queryMinRefId @SCO.OffChainVoteData
+          "voting_anchor_id"
+          vaId
+          vaIdEncoder
+
+      logsVoting <- case mocvdId of
+        Nothing -> pure []
+        Just ocvdId -> do
+          -- ocvdId is raw Int64, so create encoder for Int64
+          let ocvdIdEncoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+              offChainVoteDataId = "off_chain_vote_data_id"
+              voteDataDeleteOps =
+                [ prepareDelete @SCO.OffChainVoteGovActionData offChainVoteDataId ocvdId ">=" ocvdIdEncoder
+                , prepareDelete @SCO.OffChainVoteDrepData offChainVoteDataId ocvdId ">=" ocvdIdEncoder
+                , prepareDelete @SCO.OffChainVoteAuthor offChainVoteDataId ocvdId ">=" ocvdIdEncoder
+                , prepareDelete @SCO.OffChainVoteReference offChainVoteDataId ocvdId ">=" ocvdIdEncoder
+                , prepareDelete @SCO.OffChainVoteExternalUpdate offChainVoteDataId ocvdId ">=" ocvdIdEncoder
+                ]
+          forM voteDataDeleteOps $ \(tableN, deleteSession) -> do
+            count <- runDbSession (mkDbCallStack $ "deleteVoteData" <> tableN) deleteSession
+            pure (tableN, count)
+
+      -- Execute anchor deletions sequentially (after vote data is deleted)
+      let anchorDeleteOps =
+            [ prepareDelete @SCO.OffChainVoteData "voting_anchor_id" vaId ">=" vaIdEncoder
+            , prepareDelete @SCO.OffChainVoteFetchError "voting_anchor_id" vaId ">=" vaIdEncoder
+            , prepareDelete @SCG.VotingAnchor "id" vaId ">=" vaIdEncoder
+            ]
+      offChain <- forM anchorDeleteOps $ \(tableN, deleteSession) -> do
+        count <- runDbSession (mkDbCallStack $ "deleteAnchor" <> tableN) deleteSession
+        pure (tableN, count)
+
+      pure $ logsVoting <> offChain
+
+  -- Additional deletions based on TxId and minimum IDs (this is already sequential)
+  afterTxIdLogs <- deleteTablesAfterTxId txOutVariantType mtxId minIdsW
+
+  -- Final block deletion (delete block last since everything references it)
+  let (tableN, deleteSession) = prepareDelete @SCB.Block "id" blkId ">=" blockIdEncoder
+  blockCount <- runDbSession (mkDbCallStack "deleteBlock") deleteSession
+  let blockLogs = [(tableN, blockCount)]
+
+  -- Aggregate and return all logs
+  pure (sum $ map snd blockLogs, initialLogs <> blockLogs <> offChainLogs <> afterTxIdLogs)
+
+-----------------------------------------------------------------------------------------------------------------
+
+deleteTablesAfterTxId ::
+  forall m.
+  MonadIO m =>
+  SV.TxOutVariantType ->
+  Maybe Id.TxId ->
+  MinIdsWrapper ->
+  DbAction m [(Text.Text, Int64)]
+deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
+  -- Handle MinIdsWrapper deletions (keep existing sequential logic unchanged)
+  minIdsLogs <- case minIdsW of
+    CMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) -> do
+      -- Step 1: Delete TxIn records first
+      txInLogs <- case mtxInId of
+        Nothing -> pure []
+        Just txInId -> do
+          let (tableN, deleteSession) = prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)
+          count <- runDbSession (mkDbCallStack "deleteTxInAfterTxInId") deleteSession
+          pure [(tableN, count)]
+
+      -- Step 2: Delete TxOut records second (after TxIn references are gone)
+      txOutLogs <- case prepareTypedDelete @VC.TxOutCore "id" mtxOutId SV.unwrapTxOutIdCore (Id.idEncoder Id.getTxOutCoreId) of
+        Nothing -> pure []
+        Just (tableN, deleteSession) -> do
+          count <- runDbSession (mkDbCallStack "deleteTxOutCoreAfterTxOutId") deleteSession
+          pure [(tableN, count)]
+
+      -- Step 3: Delete MaTxOut records third (after TxOut references are gone)
+      maTxOutLogs <- case prepareTypedDelete @VC.MaTxOutCore "id" mmaTxOutId SV.unwrapMaTxOutIdCore (Id.idEncoder Id.getMaTxOutCoreId) of
+        Nothing -> pure []
+        Just (tableN, deleteSession) -> do
+          count <- runDbSession (mkDbCallStack "deleteMaTxOutCoreAfterMaTxOutId") deleteSession
+          pure [(tableN, count)]
+
+      pure $ concat [txInLogs, txOutLogs, maTxOutLogs]
+    VMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) -> do
+      -- Step 1: Delete TxIn records first
+      txInLogs <- case mtxInId of
+        Nothing -> pure []
+        Just txInId -> do
+          let (tableN, deleteSession) = prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)
+          count <- runDbSession (mkDbCallStack "deleteTxInAfterTxInId") deleteSession
+          pure [(tableN, count)]
+
+      -- Step 2: Delete TxOut records second (after TxIn references are gone)
+      txOutLogs <- case prepareTypedDelete @VA.TxOutAddress "id" mtxOutId SV.unwrapTxOutIdAddress (Id.idEncoder Id.getTxOutAddressId) of
+        Nothing -> pure []
+        Just (tableN, deleteSession) -> do
+          count <- runDbSession (mkDbCallStack "deleteTxOutAddressAfterTxOutId") deleteSession
+          pure [(tableN, count)]
+
+      -- Step 3: Delete MaTxOut records third (after TxOut references are gone)
+      maTxOutLogs <- case prepareTypedDelete @VA.MaTxOutAddress "id" mmaTxOutId SV.unwrapMaTxOutIdAddress (Id.idEncoder Id.getMaTxOutAddressId) of
+        Nothing -> pure []
+        Just (tableN, deleteSession) -> do
+          count <- runDbSession (mkDbCallStack "deleteMaTxOutAddressAfterMaTxOutId") deleteSession
+          pure [(tableN, count)]
+
+      pure $ concat [txInLogs, txOutLogs, maTxOutLogs]
+
+  -- Handle deletions using the TxId with correct queryDeleteAndLog logic
+  txIdLogs <- case mtxId of
+    Nothing -> pure []
+    Just txId -> do
+      -- Execute transaction-related deletions using queryDeleteAndLog pattern
+      let deleteOperations = case txOutVariantType of
+            SV.TxOutVariantCore ->
+              [ prepareQueryDeleteAndLogTx @VC.CollateralTxOutCore "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.CollateralTxIn "tx_in_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.ReferenceTxIn "tx_in_id" txId
+              , prepareQueryDeleteAndLogTx @SCP.PoolRetire "announced_tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCS.StakeRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCS.StakeDeregistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCS.Delegation "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.TxMetadata "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Withdrawal "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCE.Treasury "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCE.Reserve "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCE.PotTransfer "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCM.MaTxMint "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Redeemer "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Script "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Datum "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.RedeemerData "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.ExtraKeyWitness "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.TxCbor "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.ParamProposal "registered_tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.DelegationVote "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.CommitteeRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.CommitteeDeRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.DrepRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.VotingProcedure "tx_id" txId
+              ]
+            SV.TxOutVariantAddress ->
+              [ prepareQueryDeleteAndLogTx @VA.CollateralTxOutAddress "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.CollateralTxIn "tx_in_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.ReferenceTxIn "tx_in_id" txId
+              , prepareQueryDeleteAndLogTx @SCP.PoolRetire "announced_tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCS.StakeRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCS.StakeDeregistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCS.Delegation "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.TxMetadata "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Withdrawal "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCE.Treasury "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCE.Reserve "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCE.PotTransfer "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCM.MaTxMint "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Redeemer "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Script "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.Datum "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.RedeemerData "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.ExtraKeyWitness "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.TxCbor "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.ParamProposal "registered_tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.DelegationVote "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.CommitteeRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.CommitteeDeRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.DrepRegistration "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCG.VotingProcedure "tx_id" txId
+              ]
+
+      -- Execute deletions sequentially, filtering out Nothing results
+      maybeOps <- sequence deleteOperations
+      let actualOps = catMaybes maybeOps
+      result <- forM actualOps $ \(tableN, deleteSession) -> do
+        count <- runDbSession (mkDbCallStack $ "queryDelete" <> tableN) deleteSession
+        pure (tableN, count)
+
+      -- Handle GovActionProposal related deletions
+      mgaId <- queryMinRefId @SCG.GovActionProposal "tx_id" txId (Id.idEncoder Id.getTxId)
+      gaLogs <- case mgaId of
+        Nothing -> pure []
+        Just gaId -> do
+          -- gaId is raw Int64, so create encoder for Int64
+          let gaIdEncoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+              gaDeleteOps =
+                [ prepareQueryDeleteAndLog @SCG.TreasuryWithdrawal "gov_action_proposal_id" gaId gaIdEncoder
+                , prepareQueryThenNull @SCG.Committee "gov_action_proposal_id" gaId gaIdEncoder
+                , prepareQueryThenNull @SCG.Constitution "gov_action_proposal_id" gaId gaIdEncoder
+                , prepareQueryDeleteAndLog @SCG.GovActionProposal "id" gaId gaIdEncoder
+                ]
+          maybeGaOps <- sequence gaDeleteOps
+          let actualGaOps = catMaybes maybeGaOps
+          forM actualGaOps $ \(tableN, deleteSession) -> do
+            count <- runDbSession (mkDbCallStack $ "deleteGA" <> tableN) deleteSession
+            pure (tableN, count)
+
+      -- Handle PoolMetadataRef related deletions
+      minPmr <- queryMinRefId @SCP.PoolMetadataRef "registered_tx_id" txId (Id.idEncoder Id.getTxId)
+      pmrLogs <- case minPmr of
+        Nothing -> pure []
+        Just pmrId -> do
+          -- pmrId is raw Int64, so create encoder for Int64
+          let pmrIdEncoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+              pmrDeleteOps =
+                [ prepareQueryDeleteAndLog @SCO.OffChainPoolData "pmr_id" pmrId pmrIdEncoder
+                , prepareQueryDeleteAndLog @SCO.OffChainPoolFetchError "pmr_id" pmrId pmrIdEncoder
+                , prepareQueryDeleteAndLog @SCP.PoolMetadataRef "id" pmrId pmrIdEncoder
+                ]
+          maybepmrOps <- sequence pmrDeleteOps
+          let actualPmrOps = catMaybes maybepmrOps
+          forM actualPmrOps $ \(tableN, deleteSession) -> do
+            count <- runDbSession (mkDbCallStack $ "deletePMR" <> tableN) deleteSession
+            pure (tableN, count)
+
+      -- Handle PoolUpdate related deletions
+      minPoolUpdate <- queryMinRefId @SCP.PoolUpdate "registered_tx_id" txId (Id.idEncoder Id.getTxId)
+      poolUpdateLogs <- case minPoolUpdate of
+        Nothing -> pure []
+        Just puid -> do
+          -- puid is raw Int64, so create encoder for Int64
+          let puidEncoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+              puDeleteOps =
+                [ prepareQueryDeleteAndLog @SCP.PoolOwner "pool_update_id" puid puidEncoder
+                , prepareQueryDeleteAndLog @SCP.PoolRelay "update_id" puid puidEncoder
+                , prepareQueryDeleteAndLog @SCP.PoolUpdate "id" puid puidEncoder
+                ]
+          maybePuOps <- sequence puDeleteOps
+          let actualPuOps = catMaybes maybePuOps
+          forM actualPuOps $ \(tableN, deleteSession) -> do
+            count <- runDbSession (mkDbCallStack $ "deletePU" <> tableN) deleteSession
+            pure (tableN, count)
+
+      -- Final Tx deletion using direct delete (since we want to delete the tx itself)
+      let (tableN, deleteSession) = prepareOnlyDelete @SCB.Tx "id" txId ">=" (Id.idEncoder Id.getTxId)
+      txCount <- runDbSession (mkDbCallStack "deleteTx") deleteSession
+      let txLogs = [(tableN, txCount)]
+
+      pure $ result <> gaLogs <> pmrLogs <> poolUpdateLogs <> txLogs
+
+  -- Return combined logs
+  pure $ minIdsLogs <> txIdLogs
+
+-----------------------------------------------------------------------------------------------------------------
+
+prepareQueryDeleteAndLog ::
+  forall a b m.
+  (DbInfo a, MonadIO m) =>
+  Text.Text -> -- Foreign key field name (e.g. "tx_id")
+  b -> -- Foreign key value (e.g. txId)
+  HsqlE.Params b -> -- Encoder for the foreign key
+  DbAction m (Maybe (Text.Text, HsqlSes.Session Int64))
+prepareQueryDeleteAndLog fkField fkValue fkEncoder = do
+  -- Step 1: Find minimum record ID that references the foreign key
+  mRecordId <- queryMinRefId @a fkField fkValue fkEncoder
+  case mRecordId of
+    Nothing -> pure Nothing -- No records to delete
+    Just recordId -> do
+      -- Step 2: Prepare to delete records where id >= recordId
+      let tName = tableName (Proxy @a)
+          deleteSession =
+            HsqlSes.statement recordId $
+              deleteWhereCount @a "id" ">=" (HsqlE.param $ HsqlE.nonNullable HsqlE.int8)
+      pure $ Just (tName, deleteSession)
+
+-- Even cleaner - make a helper for the common TxId case
+prepareQueryDeleteAndLogTx ::
+  forall a m.
+  (DbInfo a, MonadIO m) =>
+  Text.Text -> -- Foreign key field name (e.g. "tx_id")
+  Id.TxId -> -- TxId value
+  DbAction m (Maybe (Text.Text, HsqlSes.Session Int64))
+prepareQueryDeleteAndLogTx fkField txId =
+  prepareQueryDeleteAndLog @a fkField txId (Id.idEncoder Id.getTxId)
+
+-- Helper for queryThenNull pattern (for nullable foreign keys)
+prepareQueryThenNull ::
+  forall a b m.
+  (DbInfo a, MonadIO m) =>
+  Text.Text -> -- Foreign key field name (e.g. "gov_action_proposal_id")
+  b -> -- Foreign key value
+  HsqlE.Params b -> -- Encoder for the foreign key
+  DbAction m (Maybe (Text.Text, HsqlSes.Session Int64))
+prepareQueryThenNull fkField fkValue fkEncoder = do
+  -- Step 1: Find minimum record ID that references the foreign key (nullable version)
+  mRecordId <- queryMinRefIdNullable @a fkField fkValue fkEncoder
+  case mRecordId of
+    Nothing -> pure Nothing -- No records to delete
+    Just recordId -> do
+      -- Step 2: Prepare to delete records where id >= recordId AND fkField IS NOT NULL
+      let tName = tableName (Proxy @a)
+          deleteSession =
+            HsqlSes.statement recordId $
+              deleteWhereCountWithNotNull @a "id" fkField (HsqlE.param $ HsqlE.nonNullable HsqlE.int8)
+      pure $ Just (tName, deleteSession)

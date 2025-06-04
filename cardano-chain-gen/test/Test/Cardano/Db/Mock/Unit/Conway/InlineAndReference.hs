@@ -40,7 +40,7 @@ import Prelude (head, (!!))
 
 unlockDatumOutput :: IOManager -> [(Text, Text)] -> Assertion
 unlockDatumOutput =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block

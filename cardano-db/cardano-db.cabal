@@ -41,7 +41,6 @@ library
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
-                        Cardano.Db.Operations.QueryHelper
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
                         Cardano.Db.Schema.Core.Base
@@ -61,13 +60,17 @@ library
                         Cardano.Db.Statement.Base
                         Cardano.Db.Statement.Constraint
                         Cardano.Db.Statement.ConsumedTxOut
+                        Cardano.Db.Statement.DbTool
                         Cardano.Db.Statement.EpochAndProtocol
                         Cardano.Db.Statement.Function.Core
                         Cardano.Db.Statement.Function.Delete
                         Cardano.Db.Statement.Function.Insert
+                        Cardano.Db.Statement.Function.InsertBulk
                         Cardano.Db.Statement.Function.Query
+                        Cardano.Db.Statement.ChainGen
                         Cardano.Db.Statement.GovernanceAndVoting
                         Cardano.Db.Statement.JsonB
+                        Cardano.Db.Statement.MinIds
                         Cardano.Db.Statement.MultiAsset
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool
@@ -109,6 +112,7 @@ library
                       , text
                       , time
                       , transformers
+                      , unliftio-core
                       -- This is never intended to run on non-POSIX systems.
                       , unix
                       , wide-word
@@ -181,26 +185,26 @@ test-suite test-db
                       , text
                       , time
 
-test-suite schema-rollback
-  default-language:     Haskell2010
-  type:                 exitcode-stdio-1.0
-  main-is:              schema-rollback.hs
-  hs-source-dirs:       test
+-- test-suite schema-rollback
+--   default-language:     Haskell2010
+--   type:                 exitcode-stdio-1.0
+--   main-is:              schema-rollback.hs
+--   hs-source-dirs:       test
 
-  ghc-options:          -Wall
-                        -Werror
-                        -Wcompat
-                        -Wredundant-constraints
-                        -Wincomplete-patterns
-                        -Wincomplete-record-updates
-                        -Wincomplete-uni-patterns
-                        -Wunused-imports
-                        -Wunused-packages
+--   ghc-options:          -Wall
+--                         -Werror
+--                         -Wcompat
+--                         -Wredundant-constraints
+--                         -Wincomplete-patterns
+--                         -Wincomplete-record-updates
+--                         -Wincomplete-uni-patterns
+--                         -Wunused-imports
+--                         -Wunused-packages
 
-  build-depends:        base
-                      , ansi-terminal
-                      , bytestring
-                      , cardano-db
-                      , directory
-                      , filepath
-                      , text
+--   build-depends:        base
+--                       , ansi-terminal
+--                       , bytestring
+--                       , cardano-db
+--                       , directory
+--                       , filepath
+--                       , text

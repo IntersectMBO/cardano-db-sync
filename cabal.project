@@ -85,6 +85,12 @@ if impl (ghc >= 9.12)
     -- https://github.com/kapralVV/Unique/issues/11
     , Unique:hashable
 
+    -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
+    , pipes-safe:base
+
+    -- https://github.com/haskell-hvr/int-cast/issues/10
+    , int-cast:base
+
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
 -- when using the "cabal" wrapper script provided by nix-shell.
 -- --------------------------- 8< --------------------------

@@ -1,24 +1,20 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
-
-{-# OPTIONS_GHC -Wno-x-partial #-}
-{-# LANGUAGE DataKinds #-}
-
 
 module Test.IO.Cardano.Db.Rollback (
   tests,
 ) where
 
 import Cardano.Db
+import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO)
+import Data.Maybe (fromJust)
 import Data.Word (Word64)
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
-import Cardano.Slotting.Slot (SlotNo (..))
-import Data.Maybe (fromJust)
 
 tests :: TestTree
 tests =
@@ -70,7 +66,7 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-createAndInsertBlocks :: MonadIO m => Word64 -> DbAction m ()
+createAndInsertBlocks :: (MonadIO m) => Word64 -> DbAction m ()
 createAndInsertBlocks blockCount =
   void $ loop (0, Nothing, Nothing)
   where
@@ -136,7 +132,10 @@ createAndInsertBlocks blockCount =
           -- Insert Txs here to test that they are cascade deleted when the blocks
           -- they are associcated with are deleted.
 
-          txId <- head <$> mapM insertTx (mkTxs blkId 8)
+          txIds <- mapM insertTx (mkTxs blkId 8)
+          let txId = case txIds of
+                (x:_) -> x
+                [] -> error "mkTxs returned empty list" -- This shouldn't happen with mkTxs blkId 8
           void $ insertTxIn (TxIn txId txOutId 0 Nothing)
           void $ insertTxOut (mkTxOutVariantCore blkId txId)
         _otherwise -> pure ()

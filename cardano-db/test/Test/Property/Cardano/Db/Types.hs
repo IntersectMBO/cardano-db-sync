@@ -105,16 +105,17 @@ prop_AssetFingerprint =
 prop_roundtrip_DbInt65 :: Property
 prop_roundtrip_DbInt65 =
   H.withTests 5000 . H.property $ do
-    -- Generate both positive and negative values
-    posInt64 <- H.forAll $ Gen.int64 (Range.linear 0 maxBound)
-    negInt64 <- H.forAll $ Gen.int64 (Range.linear minBound (-1))
+    i64 <- H.forAll $ Gen.int64 (Range.linearFrom 0 minBound maxBound)
+    let i65 = toDbInt65 i64
+    fromDbInt65 i65 === i64
 
-    let i65pos = toDbInt65 posInt64
-    let i65neg = toDbInt65 negInt64
-
-    -- Test roundtrip conversion
-    runDbInt65Roundtrip i65pos === i65pos
-    runDbInt65Roundtrip i65neg === i65neg
+prop_DbInt65_edge_cases :: Property
+prop_DbInt65_edge_cases = H.property $ do
+  fromDbInt65 (toDbInt65 minBound) === minBound
+  fromDbInt65 (toDbInt65 maxBound) === maxBound
+  fromDbInt65 (toDbInt65 0) === 0
+  fromDbInt65 (toDbInt65 (-1)) === (-1)
+  fromDbInt65 (toDbInt65 1) === 1
 
 -- Test DbLovelace roundtrip conversion
 prop_roundtrip_DbLovelace :: Property

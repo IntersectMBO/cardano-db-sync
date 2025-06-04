@@ -31,7 +31,6 @@ import Cardano.Client.Subscription (Decision (..), MuxTrace, SubscriptionParams 
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
-import Cardano.DbSync.Database
 import Cardano.DbSync.DbEvent
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics

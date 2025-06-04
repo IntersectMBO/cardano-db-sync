@@ -14,9 +14,9 @@ import qualified Hasql.Statement as HsqlStmt
 import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
-import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
-import Cardano.Db.Statement.Types (Entity (..))
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Insert (insert)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Types (DbAction, DbInt65)
 
 --------------------------------------------------------------------------------
@@ -24,18 +24,16 @@ import Cardano.Db.Types (DbAction, DbInt65)
 --------------------------------------------------------------------------------
 
 -- | INSERT --------------------------------------------------------------------
-insertMultiAssetStmt :: HsqlStmt.Statement SMA.MultiAsset (Entity SMA.MultiAsset)
+insertMultiAssetStmt :: HsqlStmt.Statement SMA.MultiAsset Id.MultiAssetId
 insertMultiAssetStmt =
   insert
     SMA.multiAssetEncoder
-    (WithResult $ HsqlD.singleRow SMA.entityMultiAssetDecoder)
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MultiAssetId)
 
 insertMultiAsset :: MonadIO m => SMA.MultiAsset -> DbAction m Id.MultiAssetId
-insertMultiAsset multiAsset = do
-  entity <-
-    runDbSession (mkCallInfo "insertMultiAsset") $
-      HsqlSes.statement multiAsset insertMultiAssetStmt
-  pure $ entityKey entity
+insertMultiAsset multiAsset =
+  runDbSession (mkDbCallStack "insertMultiAsset") $
+    HsqlSes.statement multiAsset insertMultiAssetStmt
 
 -- | QUERY -------------------------------------------------------------------
 queryMultiAssetIdStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Id.MultiAssetId)
@@ -58,43 +56,40 @@ queryMultiAssetIdStmt =
 
 queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Id.MultiAssetId)
 queryMultiAssetId policy assetName =
-  runDbSession (mkCallInfo "queryMultiAssetId") $
+  runDbSession (mkDbCallStack "queryMultiAssetId") $
     HsqlSes.statement (policy, assetName) queryMultiAssetIdStmt
 
 --------------------------------------------------------------------------------
 -- MaTxMint
 --------------------------------------------------------------------------------
-insertMaTxMintStmt :: HsqlStmt.Statement SMA.MaTxMint (Entity SMA.MaTxMint)
+insertMaTxMintStmt :: HsqlStmt.Statement SMA.MaTxMint Id.MaTxMintId
 insertMaTxMintStmt =
   insert
     SMA.maTxMintEncoder
-    (WithResult $ HsqlD.singleRow SMA.entityMaTxMintDecoder)
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MaTxMintId)
 
 insertMaTxMint :: MonadIO m => SMA.MaTxMint -> DbAction m Id.MaTxMintId
-insertMaTxMint maTxMint = do
-  entity <- runDbSession (mkCallInfo "insertMaTxMint") $ HsqlSes.statement maTxMint insertMaTxMintStmt
-  pure $ entityKey entity
+insertMaTxMint maTxMint =
+  runDbSession (mkDbCallStack "insertMaTxMint") $ HsqlSes.statement maTxMint insertMaTxMintStmt
 
-insertBulkMaTxMintStmt :: HsqlStmt.Statement [SMA.MaTxMint] [Entity MaTxMint]
+insertBulkMaTxMintStmt :: HsqlStmt.Statement [SMA.MaTxMint] [Id.MaTxMintId]
 insertBulkMaTxMintStmt =
   insertBulk
     extractMaTxMint
     SMA.maTxMintBulkEncoder
-    (WithResultBulk (HsqlD.rowList SMA.entityMaTxMintDecoder))
+    (WithResultBulk (HsqlD.rowList $ Id.idDecoder Id.MaTxMintId))
   where
-    extractMaTxMint :: [MaTxMint] -> ([DbInt65], [Id.MultiAssetId], [Id.TxId])
+    extractMaTxMint :: [MaTxMint] -> ([DbInt65], [Id.TxId], [Id.MultiAssetId])
     extractMaTxMint xs =
       ( map SMA.maTxMintQuantity xs
-      , map SMA.maTxMintIdent xs
       , map SMA.maTxMintTxId xs
+      , map SMA.maTxMintIdent xs
       )
 
 insertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
-insertBulkMaTxMint maTxMints = do
-  ids <-
-    runDbSession (mkCallInfo "insertBulkMaTxMint") $
-      HsqlSes.statement maTxMints insertBulkMaTxMintStmt
-  pure $ map entityKey ids
+insertBulkMaTxMint maTxMints =
+  runDbSession (mkDbCallStack "insertBulkMaTxMint") $
+    HsqlSes.statement maTxMints insertBulkMaTxMintStmt
 
 -- These tables handle multi-asset (native token) data.
 

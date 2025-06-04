@@ -18,10 +18,10 @@ import Cardano.DbSync.Types (StakeCred)
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Prelude hiding (from, groupBy, on)
 import Cardano.Slotting.Slot (EpochNo (..))
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import Data.List (unzip4)
 import Data.List.Extra (chunksOf)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}
@@ -34,7 +34,6 @@ import Data.List.Extra (chunksOf)
 -- been de-registered and not reregistered and then delete all rewards for those addresses and that
 -- epoch.
 
--- Update the adjustEpochRewards function to use bulk operations
 adjustEpochRewards ::
   MonadIO m =>
   Trace IO Text ->

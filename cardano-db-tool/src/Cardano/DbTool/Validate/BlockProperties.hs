@@ -9,39 +9,20 @@ module Cardano.DbTool.Validate.BlockProperties (
   validateBlockProperties,
 ) where
 
-import Cardano.Db hiding (queryBlockTxCount)
+import qualified Cardano.Db as DB
 import Cardano.DbTool.Validate.Util
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
-import Data.Maybe (mapMaybe)
 import Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
 import Data.Word (Word64)
-import Database.Esqueleto.Experimental (
-  SqlBackend,
-  asc,
-  desc,
-  from,
-  just,
-  limit,
-  orderBy,
-  select,
-  table,
-  unValue,
-  val,
-  where_,
-  (>.),
-  (^.),
- )
 import qualified System.Random as Random
 
 {- HLINT ignore "Reduce duplication" -}
 
 validateBlockProperties :: IO ()
 validateBlockProperties = do
-  blkCount <- fromIntegral <$> runDbNoLoggingEnv queryBlockCount
+  blkCount <- fromIntegral <$> DB.runDbNoLoggingEnv DB.queryBlockCount
   validateBlockTimesInPast
   validataBlockNosContiguous blkCount
   validateTimestampsOrdered blkCount
@@ -52,7 +33,7 @@ validateBlockTimesInPast :: IO ()
 validateBlockTimesInPast = do
   putStrF "All block times are in the past: "
   now <- Time.getCurrentTime
-  xs <- runDbNoLoggingEnv $ queryBlocksTimeAfters now
+  xs <- DB.runDbNoLoggingEnv $ DB.queryBlocksTimeAfters now
   if List.null xs
     then putStrLn $ greenText "ok"
     else error $ redText (reportFailures xs)
@@ -80,7 +61,7 @@ validataBlockNosContiguous blkCount = do
       ++ " .. "
       ++ show (startBlock + testBlocks)
       ++ "] are contiguous: "
-  blockNos <- runDbNoLoggingEnv $ queryBlockNoList startBlock testBlocks
+  blockNos <- DB.runDbNoLoggingEnv $ DB.queryBlockNoList startBlock testBlocks
   case checkContinguous blockNos of
     Nothing -> putStrLn $ greenText "ok"
     Just xs -> error $ redText "failed: " ++ show xs
@@ -106,43 +87,10 @@ validateTimestampsOrdered blkCount = do
       ++ " .. "
       ++ show (startBlock + testBlocks)
       ++ "] are ordered: "
-  ts <- runDbNoLoggingEnv $ queryBlockTimestamps startBlock testBlocks
+  ts <- DB.runDbNoLoggingEnv $ DB.queryBlockTimestamps startBlock testBlocks
   if List.nubOrd ts == ts
     then putStrLn $ greenText "ok"
     else error $ redText "failed: " ++ show ts
   where
     testBlocks :: Word64
     testBlocks = 100000
-
--- -------------------------------------------------------------------------------------------------
-
-queryBlockNoList :: MonadIO m => Word64 -> Word64 -> DB.DbAction m [Word64]
-queryBlockNoList start count = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust (blk ^. BlockBlockNo))
-    where_ (blk ^. BlockBlockNo >. just (val start))
-    orderBy [asc (blk ^. BlockBlockNo)]
-    limit (fromIntegral count)
-    pure (blk ^. BlockBlockNo)
-  pure $ mapMaybe unValue res
-
-queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> DB.DbAction m [UTCTime]
-queryBlockTimestamps start count = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (isJust (blk ^. BlockBlockNo))
-    where_ (blk ^. BlockBlockNo >. just (val start))
-    orderBy [asc (blk ^. BlockBlockNo)]
-    limit (fromIntegral count)
-    pure (blk ^. BlockTime)
-  pure $ map unValue res
-
-queryBlocksTimeAfters :: MonadIO m => UTCTime -> DB.DbAction m [(Maybe Word64, Maybe Word64, UTCTime)]
-queryBlocksTimeAfters now = do
-  res <- select $ do
-    blk <- from $ table @Block
-    where_ (blk ^. BlockTime >. val now)
-    orderBy [desc (blk ^. BlockTime)]
-    pure (blk ^. BlockEpochNo, blk ^. BlockBlockNo, blk ^. BlockTime)
-  pure $ map unValue3 res

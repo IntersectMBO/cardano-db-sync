@@ -31,7 +31,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime)
-import Database.Persist.Postgresql (ConnectionString)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 
@@ -39,8 +38,8 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 data SyncEnv = SyncEnv
   { envDbEnv :: !DB.DbEnv
   , envCache :: !CacheStatus
-  , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
+  , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
   , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
