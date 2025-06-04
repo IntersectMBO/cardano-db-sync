@@ -23,7 +23,7 @@ configRemoveJsonbFromSchemaEnabled = do
     threadDelay 7_000_000
     assertEqQuery
       dbSync
-      DB.queryJsonbInSchemaExists
+      DB.queryJsonbInSchemaExistsTest
       False
       "There should be no jsonb data types in database if option is enabled"
     checkStillRuns dbSync
@@ -41,7 +41,7 @@ configRemoveJsonbFromSchemaDisabled = do
       threadDelay 7_000_000
       assertEqQuery
         dbSync
-        DB.queryJsonbInSchemaExists
+        DB.queryJsonbInSchemaExistsTest
         True
         "There should be jsonb types in database if option is disabled"
       checkStillRuns dbSync
@@ -57,7 +57,7 @@ configJsonbInSchemaShouldRemoveThenAdd =
     threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
-      DB.queryJsonbInSchemaExists
+      DB.queryJsonbInSchemaExistsTest
       False
       "There should be no jsonb types in database if option has been enabled"
     stopDBSync dbSyncEnv
@@ -75,7 +75,7 @@ configJsonbInSchemaShouldRemoveThenAdd =
     threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
-      DB.queryJsonbInSchemaExists
+      DB.queryJsonbInSchemaExistsTest
       True
       "There should be jsonb types in database if option has been disabled"
     -- Expected to fail

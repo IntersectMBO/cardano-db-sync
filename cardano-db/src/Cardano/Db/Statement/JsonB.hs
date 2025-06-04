@@ -6,7 +6,7 @@
 module Cardano.Db.Statement.JsonB where
 
 import Cardano.Prelude (ExceptT, MonadError (..))
-import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import qualified Hasql.Connection as HsqlC
@@ -16,9 +16,10 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
-import Cardano.Db.Statement.Function.Core (mkCallSite, runDbSession, mkCallInfo)
+import Cardano.Db.Statement.Function.Core (mkCallInfo, mkCallSite, runDbSession)
 import Cardano.Db.Types (DbAction)
-
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TextEnc
 
 --------------------------------------------------------------------------------
 -- Enable JSONB for specific fields in the schema
@@ -58,7 +59,7 @@ enableJsonbInSchemaStmt = do
       ]
 
 enableJsonbInSchema :: MonadIO m => DbAction m ()
-enableJsonbInSchema  =
+enableJsonbInSchema =
   runDbSession (mkCallInfo "enableJsonbInSchema") $
     HsqlSes.statement () enableJsonbInSchemaStmt
 
@@ -99,35 +100,47 @@ disableJsonbInSchemaStmt =
       ]
 
 disableJsonbInSchema :: MonadIO m => DbAction m ()
-disableJsonbInSchema  =
+disableJsonbInSchema =
   runDbSession (mkCallInfo "disableJsonbInSchema") $
     HsqlSes.statement () disableJsonbInSchemaStmt
 
-
--- | Check if the JSONB column exists in the schema used for tests
-queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
-queryJsonbInSchemaExists conn = do
-  result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
-  case result of
-    Left err -> throwError $ DbError mkCallSite "queryJsonbInSchemaExists" $ Just err
-    Right countRes -> pure $ countRes == 1
+-- | Check if the JSONB column exists in the schema
+jsonbSchemaStatement :: HsqlStmt.Statement () Int64
+jsonbSchemaStatement =
+  HsqlStmt.Statement
+    query
+    HsqlE.noParams
+    decoder
+    True
   where
-    jsonbSchemaStatement :: HsqlStmt.Statement () Int64
-    jsonbSchemaStatement =
-      HsqlStmt.Statement
-        query
-        HsqlE.noParams -- No parameters needed
-        decoder
-        True -- Prepared statement
     query =
-      "SELECT COUNT(*) \
-      \FROM information_schema.columns \
-      \WHERE table_name = 'tx_metadata' \
-      \AND column_name = 'json' \
-      \AND data_type = 'jsonb';"
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)"
+          , " FROM information_schema.columns"
+          , " WHERE table_name = 'tx_metadata'"
+          , " AND column_name = 'json'"
+          , " AND data_type = 'jsonb'"
+          ]
 
     decoder :: HsqlD.Result Int64
     decoder =
       HsqlD.singleRow $
         HsqlD.column $
           HsqlD.nonNullable HsqlD.int8
+
+-- Original function for direct connection use
+queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
+queryJsonbInSchemaExists conn = do
+  result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
+  case result of
+    Left err -> throwError $ DbError mkCallSite "queryJsonbInSchemaExists" $ Just err
+    Right countRes -> pure $ countRes == 1
+
+-- Test function using DbAction monad
+queryJsonbInSchemaExistsTest :: MonadIO m => DbAction m Bool
+queryJsonbInSchemaExistsTest = do
+  result <-
+    runDbSession (mkCallInfo "queryJsonbInSchemaExists") $
+      HsqlSes.statement () jsonbSchemaStatement
+  pure $ result == 1

@@ -14,16 +14,14 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache
-import Cardano.DbSync.Era.Util
+import Cardano.DbSync.DbEvent (liftDbIO)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.ByteString.Short as SBS
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
@@ -34,10 +32,10 @@ rollbackFromBlockNo ::
   MonadIO m =>
   SyncEnv ->
   BlockNo ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 rollbackFromBlockNo syncEnv blkNo = do
-  nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
-  mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
+  nBlocks <- DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
+  mres <- DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   whenJust mres $ \(blockId, epochNo) -> do
     liftIO
       . logInfo trce
@@ -47,15 +45,15 @@ rollbackFromBlockNo syncEnv blkNo = do
         , " numbered equal to or greater than "
         , textShow blkNo
         ]
-    lift $ do
-      deletedBlockCount <- DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
-      when (deletedBlockCount > 0) $ do
-        -- We use custom constraints to improve input speeds when syncing.
-        -- If they don't already exists we add them here as once a rollback has happened
-        -- we always need the constraints.
-        addConstraintsIfNotExist syncEnv trce
 
-    lift $ rollbackCache cache blockId
+    deletedBlockCount <- DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
+    when (deletedBlockCount > 0) $ do
+      -- We use custom constraints to improve input speeds when syncing.
+      -- If they don't already exists we add them here as once a rollback has happened
+      -- we always need the constraints.
+      addConstraintsIfNotExist syncEnv trce
+
+    rollbackCache cache blockId
 
     liftIO . logInfo trce $ "Blocks deleted"
   where
@@ -63,17 +61,17 @@ rollbackFromBlockNo syncEnv blkNo = do
     cache = envCache syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
 
-prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
+prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> ExceptT SyncNodeError IO Bool
 prepareRollback syncEnv point serverTip =
-  DB.runDbIohkNoLogging (envDbEnv syncEnv) $ runExceptT action
+  liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) action
   where
     trce = getTrace syncEnv
 
-    action :: MonadIO m => ExceptT SyncNodeError (DB.DbAction m) Bool
+    action :: MonadIO m => DB.DbAction m Bool
     action = do
       case getPoint point of
         Origin -> do
-          nBlocks <- lift DB.queryCountSlotNo
+          nBlocks <- DB.queryCountSlotNo
           if nBlocks == 0
             then do
               liftIO . logInfo trce $ "Starting from Genesis"
@@ -89,10 +87,8 @@ prepareRollback syncEnv point serverTip =
                   , textShow serverTip
                   ]
         At blk -> do
-          nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
-          mBlockNo <-
-            liftLookupFail "Rollback.prepareRollback" $
-              DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+          nBlocks <- DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
+          mBlockNo <- DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
           liftIO
             . logInfo trce
             $ mconcat

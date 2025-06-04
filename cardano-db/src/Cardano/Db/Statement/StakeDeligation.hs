@@ -1,10 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ApplicativeDo #-}
 
 module Cardano.Db.Statement.StakeDeligation where
 
@@ -19,17 +19,18 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import qualified Cardano.Db.Schema.Core.Base as SCB
+import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.StakeDeligation as SS
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession, bulkEncoder)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, mkCallInfo, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertCheckUnique)
-import Cardano.Db.Statement.Function.Query (countAll, adaSumDecoder)
+import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), validateColumn)
-import Cardano.Db.Types (DbAction, DbLovelace, RewardSource, Ada, rewardSourceDecoder, dbLovelaceDecoder, rewardSourceEncoder)
+import Cardano.Db.Types (Ada, DbAction, DbLovelace, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Credential (Ptr (..))
+import Contravariant.Extras (contrazip2, contrazip4)
 import qualified Hasql.Pipeline as HsqlP
-import Contravariant.Extras (contrazip4, contrazip2)
 
 --------------------------------------------------------------------------------
 -- Deligation
@@ -173,6 +174,29 @@ insertBulkEpochStakeProgress epochStakeProgresses =
   runDbSession (mkCallInfo "insertBulkEpochStakeProgress") $
     HsqlSes.statement epochStakeProgresses insertBulkEpochStakeProgressStmt
 
+updateStakeProgressCompletedStmt :: HsqlStmt.Statement Word64 ()
+updateStakeProgressCompletedStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    tableN = tableName (Proxy @SS.EpochStakeProgress)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "INSERT INTO " <> tableN <> " (epoch_no, completed)"
+          , " VALUES ($1, TRUE)"
+          , " ON CONFLICT (epoch_no)"
+          , " DO UPDATE SET completed = TRUE"
+          ]
+
+    encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder = HsqlD.noResult
+
+updateStakeProgressCompleted :: MonadIO m => Word64 -> DbAction m ()
+updateStakeProgressCompleted epoch =
+  runDbSession (mkCallInfo "updateStakeProgressCompleted") $
+    HsqlSes.statement epoch updateStakeProgressCompletedStmt
+
 --------------------------------------------------------------------------------
 -- Reward
 --------------------------------------------------------------------------------
@@ -238,16 +262,18 @@ queryRewardMapDataStmt =
     rewardTableN = tableName (Proxy @SS.Reward)
     stakeAddressTableN = tableName (Proxy @SS.StakeAddress)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT sa.hash_raw, r.type, r.amount"
-      , " FROM " <> rewardTableN <> " r"
-      , " INNER JOIN " <> stakeAddressTableN <> " sa ON r.addr_id = sa.id"
-      , " WHERE r.spendable_epoch = $1"
-      , " AND r.type != 'deposit-refund'"
-      , " AND r.type != 'treasury'"
-      , " AND r.type != 'reserves'"
-      , " ORDER BY sa.hash_raw DESC"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT sa.hash_raw, r.type, r.amount"
+          , " FROM " <> rewardTableN <> " r"
+          , " INNER JOIN " <> stakeAddressTableN <> " sa ON r.addr_id = sa.id"
+          , " WHERE r.spendable_epoch = $1"
+          , " AND r.type != 'deposit-refund'"
+          , " AND r.type != 'treasury'"
+          , " AND r.type != 'reserves'"
+          , " ORDER BY sa.hash_raw DESC"
+          ]
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
 
     decoder = HsqlD.rowList $ do
@@ -261,32 +287,34 @@ queryRewardMapData epochNo =
   runDbSession (mkCallInfo "queryRewardMapData") $
     HsqlSes.statement epochNo queryRewardMapDataStmt
 
-
 -- Bulk delete statement
 deleteRewardsBulkStmt :: HsqlStmt.Statement ([Id.StakeAddressId], [RewardSource], [Word64], [Id.PoolHashId]) ()
 deleteRewardsBulkStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
     rewardTableN = tableName (Proxy @SS.Reward)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "WITH to_delete AS ("
-      , "  SELECT r.id"
-      , "  FROM " <> rewardTableN <> " r"
-      , "  JOIN UNNEST($1, $2, $3, $4) AS t(addr_id, reward_type, epoch, pool_id)"
-      , "  ON r.addr_id = t.addr_id"
-      , "  AND r.type = t.reward_type"
-      , "  AND r.spendable_epoch = t.epoch"
-      , "  AND r.pool_id = t.pool_id"
-      , ")"
-      , "DELETE FROM " <> rewardTableN
-      , " WHERE id IN (SELECT id FROM to_delete)"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH to_delete AS ("
+          , "  SELECT r.id"
+          , "  FROM " <> rewardTableN <> " r"
+          , "  JOIN UNNEST($1, $2, $3, $4) AS t(addr_id, reward_type, epoch, pool_id)"
+          , "  ON r.addr_id = t.addr_id"
+          , "  AND r.type = t.reward_type"
+          , "  AND r.spendable_epoch = t.epoch"
+          , "  AND r.pool_id = t.pool_id"
+          , ")"
+          , "DELETE FROM " <> rewardTableN
+          , " WHERE id IN (SELECT id FROM to_delete)"
+          ]
 
-    encoder = contrazip4
-      (bulkEncoder $ Id.idBulkEncoder Id.getStakeAddressId)
-      (bulkEncoder $ HsqlE.nonNullable rewardSourceEncoder)
-      (bulkEncoder $ HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
-      (bulkEncoder $ Id.idBulkEncoder Id.getPoolHashId)
+    encoder =
+      contrazip4
+        (bulkEncoder $ Id.idBulkEncoder Id.getStakeAddressId)
+        (bulkEncoder $ HsqlE.nonNullable rewardSourceEncoder)
+        (bulkEncoder $ HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
+        (bulkEncoder $ Id.idBulkEncoder Id.getPoolHashId)
 
 -- Public API function
 deleteRewardsBulk ::
@@ -303,14 +331,17 @@ deleteOrphanedRewardsBulkStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
     rewardTableN = tableName (Proxy @SS.Reward)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "DELETE FROM " <> rewardTableN
-      , " WHERE spendable_epoch = $1"
-      , " AND addr_id = ANY($2)"
-      ]
-    encoder = contrazip2
-      (fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8))
-      (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray (Id.idBulkEncoder Id.getStakeAddressId))
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "DELETE FROM " <> rewardTableN
+          , " WHERE spendable_epoch = $1"
+          , " AND addr_id = ANY($2)"
+          ]
+    encoder =
+      contrazip2
+        (fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8))
+        (HsqlE.param $ HsqlE.nonNullable $ HsqlE.foldableArray (Id.idBulkEncoder Id.getStakeAddressId))
 
 -- | Delete orphaned rewards in bulk
 deleteOrphanedRewardsBulk ::
@@ -493,11 +524,13 @@ queryAddressInfoRewardsStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     rewardTableN = tableName (Proxy @SS.Reward)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT COALESCE(SUM(amount), 0)"
-      , " FROM " <> rewardTableN
-      , " WHERE addr_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(amount), 0)"
+          , " FROM " <> rewardTableN
+          , " WHERE addr_id = $1"
+          ]
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.singleRow adaSumDecoder
 
@@ -506,24 +539,29 @@ queryAddressInfoWithdrawalsStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     withdrawalTableN = tableName (Proxy @SCB.Withdrawal)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT COALESCE(SUM(amount), 0)"
-      , " FROM " <> withdrawalTableN
-      , " WHERE addr_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(amount), 0)"
+          , " FROM " <> withdrawalTableN
+          , " WHERE addr_id = $1"
+          ]
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.singleRow adaSumDecoder
 
+---------------------------------------------------------------------------
 queryAddressInfoViewStmt :: HsqlStmt.Statement Id.StakeAddressId (Maybe Text.Text)
 queryAddressInfoViewStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     stakeAddrTableN = tableName (Proxy @SS.StakeAddress)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT view"
-      , " FROM " <> stakeAddrTableN
-      , " WHERE id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT view"
+          , " FROM " <> stakeAddrTableN
+          , " WHERE id = $1"
+          ]
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowMaybe $ HsqlD.column (HsqlD.nonNullable HsqlD.text)
 
@@ -536,6 +574,40 @@ queryAddressInfoData addrId =
       withdrawals <- HsqlP.statement addrId queryAddressInfoWithdrawalsStmt
       view <- HsqlP.statement addrId queryAddressInfoViewStmt
       pure (rewards, withdrawals, view)
+
+---------------------------------------------------------------------------
+
+-- | Query reward for specific stake address and epoch
+queryRewardForEpochStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe DbLovelace)
+queryRewardForEpochStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        , snd >$< Id.idEncoder Id.getStakeAddressId
+        ]
+    decoder = HsqlD.rowMaybe dbLovelaceDecoder
+    stakeAddressTable = tableName (Proxy @SS.StakeAddress)
+    rewardTable = tableName (Proxy @SS.Reward)
+    epochTable = tableName (Proxy @SEP.Epoch)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT rwd.amount"
+          , " FROM " <> stakeAddressTable <> " saddr"
+          , " INNER JOIN " <> rewardTable <> " rwd ON saddr.id = rwd.addr_id"
+          , " INNER JOIN " <> epochTable <> " ep ON ep.no = rwd.earned_epoch"
+          , " WHERE ep.no = $1"
+          , " AND saddr.id = $2"
+          , " ORDER BY ep.no ASC"
+          ]
+
+queryRewardForEpoch :: MonadIO m => Word64 -> Id.StakeAddressId -> DbAction m (Maybe DbLovelace)
+queryRewardForEpoch epochNo saId =
+  runDbSession (mkCallInfo "queryRewardForEpoch") $
+    HsqlSes.statement (epochNo, saId) queryRewardForEpochStmt
+
 ---------------------------------------------------------------------------
 -- StakeDeregistration
 ---------------------------------------------------------------------------

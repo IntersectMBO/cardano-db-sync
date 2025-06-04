@@ -26,6 +26,7 @@ import Hasql.Encoders as E
 -- import Cardano.Db.Schema.Orphans ()
 
 import Cardano.Db.Schema.Ids
+import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
@@ -42,7 +43,6 @@ import Cardano.Db.Types (
   scriptTypeDecoder,
   scriptTypeEncoder,
  )
-import qualified Cardano.Db.Schema.Ids as Id
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.

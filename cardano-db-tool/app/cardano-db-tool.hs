@@ -231,7 +231,7 @@ pForceIndexes =
 pTxOutVariantType :: Parser TxOutVariantType
 pTxOutVariantType =
   Opt.flag
-    TxOutCore
+    TxOutVariantCore
     TxOutVariantAddress
     ( Opt.long "use-tx-out-address"
         <> Opt.help "Use the TxOut address variant schema"

@@ -73,7 +73,7 @@ import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (NonEmpty ((:|)), ReaderT, panic, stderr, textShow)
+import Cardano.Prelude (NonEmpty ((:|)), panic, stderr, textShow, throwIO)
 import Cardano.SMASH.Server.PoolDataLayer
 import Control.Concurrent.Async (Async, async, cancel, poll)
 import Control.Concurrent.STM (atomically)
@@ -87,12 +87,10 @@ import Control.Concurrent.STM.TMVar (
 import Control.Exception (SomeException, bracket)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
+import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
-import Database.Persist.Postgresql (createPostgresqlPool)
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Byron.Ledger.Mempool ()
 import Ouroboros.Consensus.Config (TopLevelConfig)
@@ -235,7 +233,12 @@ queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
   pgconfig <- runOrThrowIO $ DB.readPGPass (enpPGPassSource $ dbSyncParams env)
-  pool <- runNoLoggingT $ createPostgresqlPool (DB.toConnectionSetting pgconfig) 1 -- Pool size of 1 for tests
+  connSetting <- case DB.toConnectionSetting pgconfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+
+  -- Create the Hasql connection pool (using port as pool identifier, similar to your server)
+  pool <- DB.createHasqlConnectionPool [connSetting] 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
       nullTracer

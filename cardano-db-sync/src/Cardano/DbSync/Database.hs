@@ -79,7 +79,7 @@ runDbThread syncEnv metricsSetters queue = do
         Right Done -> pure () -- Stop processing
 
     -- Handle the case where the syncing thread has restarted
-    handleRestart :: TMVar (LatestPoints, CurrentTip) -> IO ()
+    handleRestart :: StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo) -> IO ()
     handleRestart resultVar = do
       logInfo tracer "Chain Sync client thread has restarted"
       latestPoints <- getLatestPoints syncEnv
@@ -153,7 +153,7 @@ runActions syncEnv actions = do
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          deletedAllBlocks <- newExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
+          deletedAllBlocks <- prepareRollback syncEnv chainSyncPoint serverTip
           points <- lift $ rollbackLedger syncEnv chainSyncPoint
 
           -- Ledger state always rollbacks at least back to the 'point' given by the Node.

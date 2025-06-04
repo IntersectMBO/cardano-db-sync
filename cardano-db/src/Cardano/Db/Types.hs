@@ -102,8 +102,10 @@ module Cardano.Db.Types where
 import Cardano.BM.Trace (Trace)
 import Cardano.Db.Error (CallSite (..), DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadError, MonadReader)
+import Cardano.Prelude (Bifunctor (..), MonadError, MonadIO (..), MonadReader)
 import qualified Codec.Binary.Bech32 as Bech32
+import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
 import Data.Aeson.Encoding (unsafeToEncoding)
@@ -127,8 +129,6 @@ import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import Quiet (Quiet (..))
-import Control.Monad.Trans.Except (ExceptT)
-import Control.Monad.Trans.Reader (ReaderT)
 
 ----------------------------------------------------------------------------
 -- DbAction
@@ -161,6 +161,7 @@ data DbEnv = DbEnv
 ----------------------------------------------------------------------------
 -- Other types
 ----------------------------------------------------------------------------
+
 -- | Convert a `Scientific` to `Ada`.
 newtype Ada = Ada
   { unAda :: Micro
@@ -239,6 +240,9 @@ newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
 
 dbLovelaceEncoder :: HsqlE.Params DbLovelace
 dbLovelaceEncoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+
+dbLovelaceBulkEncoder :: HsqlE.NullableOrNot HsqlE.Value DbLovelace
+dbLovelaceBulkEncoder = HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
 
 dbLovelaceValueEncoder :: HsqlE.NullableOrNot HsqlE.Value DbLovelace
 dbLovelaceValueEncoder = HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8

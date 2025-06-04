@@ -3,7 +3,7 @@
 
 module Cardano.Db.Statement.Pool where
 
-import Cardano.Prelude (ByteString, MonadIO, Proxy (..), Word64, Int64)
+import Cardano.Prelude (ByteString, Int64, MonadIO, Proxy (..), Word64)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -16,11 +16,11 @@ import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertIfUnique)
 import Cardano.Db.Statement.Function.Query (existsById, existsWhereByColumn)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (CertNo (..), DbAction, DbWord64, PoolCert (..), PoolCertAction (..))
-import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 
 --------------------------------------------------------------------------------
 -- DelistedPool
@@ -64,9 +64,9 @@ queryDelistedPools =
 existsDelistedPoolStmt :: HsqlStmt.Statement ByteString Bool
 existsDelistedPoolStmt =
   existsWhereByColumn
-    @SCP.DelistedPool  -- Specify the type explicitly
-    "hash_raw"     -- Column to match on
-    (HsqlE.param (HsqlE.nonNullable HsqlE.bytea))  -- ByteString encoder
+    @SCP.DelistedPool -- Specify the type explicitly
+    "hash_raw" -- Column to match on
+    (HsqlE.param (HsqlE.nonNullable HsqlE.bytea)) -- ByteString encoder
     (WithResult $ HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool))
 
 -- Updated function that takes a ByteString
@@ -80,14 +80,16 @@ deleteDelistedPoolStmt :: HsqlStmt.Statement ByteString Int64
 deleteDelistedPoolStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "WITH deleted AS ("
-      , "  DELETE FROM delisted_pool"
-      , "  WHERE hash_raw = $1"
-      , "  RETURNING *"
-      , ")"
-      , "SELECT COUNT(*)::bigint FROM deleted"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH deleted AS ("
+          , "  DELETE FROM delisted_pool"
+          , "  WHERE hash_raw = $1"
+          , "  RETURNING *"
+          , ")"
+          , "SELECT COUNT(*)::bigint FROM deleted"
+          ]
 
     encoder = id >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
@@ -97,7 +99,6 @@ deleteDelistedPool poolHash =
   runDbSession (mkCallInfo "deleteDelistedPool") $ do
     count <- HsqlSes.statement poolHash deleteDelistedPoolStmt
     pure $ count > 0
-
 
 --------------------------------------------------------------------------------
 -- PoolHash
@@ -240,21 +241,6 @@ insertBulkPoolStat poolStats = do
     HsqlSes.statement poolStats insertBulkPoolStatStmt
 
 --------------------------------------------------------------------------------
--- PoolUpdate
---------------------------------------------------------------------------------
-
-insertPoolUpdateStmt :: HsqlStmt.Statement SCP.PoolUpdate (Entity SCP.PoolUpdate)
-insertPoolUpdateStmt =
-  insert
-    SCP.poolUpdateEncoder
-    (WithResult $ HsqlD.singleRow SCP.entityPoolUpdateDecoder)
-
-insertPoolUpdate :: MonadIO m => SCP.PoolUpdate -> DbAction m Id.PoolUpdateId
-insertPoolUpdate poolUpdate = do
-  entity <- runDbSession (mkCallInfo "insertPoolUpdate") $ HsqlSes.statement poolUpdate insertPoolUpdateStmt
-  pure $ entityKey entity
-
---------------------------------------------------------------------------------
 -- PoolOwner
 --------------------------------------------------------------------------------
 
@@ -296,14 +282,16 @@ queryRetiredPoolsStmt =
     txN = tableName (Proxy @SCB.Tx)
     blockN = tableName (Proxy @SCB.Block)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT ph.hash_raw, pr.retiring_epoch, blk.block_no, tx.block_index, pr.cert_index"
-      , " FROM " <> poolRetireN <> " pr"
-      , " INNER JOIN " <> poolHashN <> " ph ON pr.hash_id = ph.id"
-      , " INNER JOIN " <> txN <> " tx ON pr.announced_tx_id = tx.id"
-      , " INNER JOIN " <> blockN <> " blk ON tx.block_id = blk.id"
-      , " WHERE ($1::bytea IS NULL OR ph.hash_raw = $1)"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT ph.hash_raw, pr.retiring_epoch, blk.block_no, tx.block_index, pr.cert_index"
+          , " FROM " <> poolRetireN <> " pr"
+          , " INNER JOIN " <> poolHashN <> " ph ON pr.hash_id = ph.id"
+          , " INNER JOIN " <> txN <> " tx ON pr.announced_tx_id = tx.id"
+          , " INNER JOIN " <> blockN <> " blk ON tx.block_id = blk.id"
+          , " WHERE ($1::bytea IS NULL OR ph.hash_raw = $1)"
+          ]
 
     encoder = HsqlE.param (HsqlE.nullable HsqlE.bytea)
 
@@ -313,11 +301,12 @@ queryRetiredPoolsStmt =
       blkNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
       txIndex <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       retIndex <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      pure $ PoolCert
-        { pcHash = hsh
-        , pcCertAction = Retirement retEpoch
-        , pcCertNo = CertNo blkNo txIndex retIndex
-        }
+      pure $
+        PoolCert
+          { pcHash = hsh
+          , pcCertAction = Retirement retEpoch
+          , pcCertNo = CertNo blkNo txIndex retIndex
+          }
 
 queryRetiredPools :: MonadIO m => Maybe ByteString -> DbAction m [PoolCert]
 queryRetiredPools mPoolHash =
@@ -326,6 +315,19 @@ queryRetiredPools mPoolHash =
 
 --------------------------------------------------------------------------------
 -- PoolUpdate
+--------------------------------------------------------------------------------
+
+insertPoolUpdateStmt :: HsqlStmt.Statement SCP.PoolUpdate (Entity SCP.PoolUpdate)
+insertPoolUpdateStmt =
+  insert
+    SCP.poolUpdateEncoder
+    (WithResult $ HsqlD.singleRow SCP.entityPoolUpdateDecoder)
+
+insertPoolUpdate :: MonadIO m => SCP.PoolUpdate -> DbAction m Id.PoolUpdateId
+insertPoolUpdate poolUpdate = do
+  entity <- runDbSession (mkCallInfo "insertPoolUpdate") $ HsqlSes.statement poolUpdate insertPoolUpdateStmt
+  pure $ entityKey entity
+
 --------------------------------------------------------------------------------
 
 -- Check if there are other PoolUpdates in the same blocks for the same pool
