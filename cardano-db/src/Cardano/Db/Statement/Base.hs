@@ -70,7 +70,6 @@ insertCheckUniqueBlock stakeAddress =
       HsqlSes.statement stakeAddress insertCheckUniqueBlockStmt
     pure $ entityKey entity
 
-
 -- | QUERIES -------------------------------------------------------------------
 queryBlockHashBlockNoStmt :: HsqlStmt.Statement ByteString [Word64]
 queryBlockHashBlockNoStmt =
@@ -128,11 +127,12 @@ querySlotUtcTimeStmt =
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
     decoder = HsqlD.rowMaybe (HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz))
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT time"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE slot_no = $1"
           ]
 
@@ -147,6 +147,15 @@ querySlotUtcTime slotNo = do
   where
     callInfo = mkCallInfo "querySlotUtcTime"
     errorMsg = "slot_no not found with number: " <> Text.pack (show slotNo)
+
+querySlotUtcTimeEither :: MonadIO m => Word64 -> DbAction m (Either DbError UTCTime)
+querySlotUtcTimeEither slotNo = do
+  result <- runDbSession callInfo $ HsqlSes.statement slotNo querySlotUtcTimeStmt
+  case result of
+    Just time -> pure $ Right time
+    Nothing -> pure $ Left $ DbError mkCallSite ("Slot not found for slot_no: " <> Text.pack (show slotNo)) Nothing
+  where
+    callInfo = mkCallInfo "querySlotUtcTimeEither"
 
 --------------------------------------------------------------------------------
 -- counting blocks after a specific BlockNo with >= operator
@@ -377,17 +386,30 @@ queryBlockIdStmt =
   where
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.BlockId)
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT id"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE hash = $1"
           ]
 
-queryBlockId :: MonadIO m => ByteString -> DbAction m (Maybe Id.BlockId)
-queryBlockId hash = do
-  runDbSession callInfo $ HsqlSes.statement hash queryBlockIdStmt
+queryBlockId :: MonadIO m => ByteString -> Text.Text -> DbAction m Id.BlockId
+queryBlockId hash errMsg = do
+  result <- runDbSession callInfo $ HsqlSes.statement hash queryBlockIdStmt
+  case result of
+    Just blockId -> pure blockId
+    Nothing -> throwError $ DbError mkCallSite ("Block not found for hash: " <> errMsg) Nothing
+  where
+    callInfo = mkCallInfo "queryBlockId"
+
+queryBlockIdEither :: MonadIO m => ByteString -> Text.Text -> DbAction m (Either DbError Id.BlockId)
+queryBlockIdEither hash errMsg = do
+  result <- runDbSession callInfo $ HsqlSes.statement hash queryBlockIdStmt
+  case result of
+    Just blockId -> pure $ Right blockId
+    Nothing -> pure $ Left $ DbError mkCallSite ("Block not found for hash: " <> errMsg) Nothing
   where
     callInfo = mkCallInfo "queryBlockId"
 
@@ -396,11 +418,12 @@ queryBlocksForCurrentEpochNoStmt :: HsqlStmt.Statement () (Maybe Word64)
 queryBlocksForCurrentEpochNoStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT MAX(epoch_no)"
-          , " FROM block"
+          , " FROM " <> blockTable
           ]
 
     decoder =
@@ -417,11 +440,12 @@ queryLatestBlockStmt :: HsqlStmt.Statement () (Maybe SCB.Block)
 queryLatestBlockStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT *"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE slot_no IS NOT NULL"
           , " ORDER BY slot_no DESC"
           , " LIMIT 1"
@@ -438,11 +462,12 @@ queryLatestEpochNoFromBlockStmt :: HsqlStmt.Statement () Word64
 queryLatestEpochNoFromBlockStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT COALESCE(epoch_no, 0)::bigint"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE slot_no IS NOT NULL"
           , " ORDER BY epoch_no DESC"
           , " LIMIT 1"
@@ -463,11 +488,12 @@ queryLatestBlockIdStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.BlockId)
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT id"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " ORDER BY slot_no DESC"
           , " LIMIT 1"
           ]
@@ -668,18 +694,19 @@ queryGenesisStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
     decoder = HsqlD.rowList (Id.idDecoder Id.BlockId)
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT id"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE previous_id IS NULL"
           ]
 
-queryGenesis :: MonadIO m => DbAction m Id.BlockId
-queryGenesis = do
+queryGenesis :: MonadIO m => Text.Text -> DbAction m Id.BlockId
+queryGenesis errMsg = do
   let callInfo = mkCallInfo "queryGenesis"
-      errorMsg = "Multiple Genesis blocks found"
+      errorMsg = "Multiple Genesis blocks found: " <> errMsg
 
   result <- runDbSession callInfo $ HsqlSes.statement () queryGenesisStmt
   case result of
@@ -691,11 +718,12 @@ queryLatestBlockNoStmt :: HsqlStmt.Statement () (Maybe Word64)
 queryLatestBlockNoStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT block_no"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE block_no IS NOT NULL"
           , " ORDER BY block_no DESC"
           , " LIMIT 1"
@@ -715,11 +743,12 @@ querySlotNosGreaterThanStmt :: HsqlStmt.Statement Word64 [SlotNo]
 querySlotNosGreaterThanStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT slot_no"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE slot_no > $1"
           , " ORDER BY slot_no DESC"
           ]
@@ -740,11 +769,12 @@ querySlotNosStmt :: HsqlStmt.Statement () [SlotNo]
 querySlotNosStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
+    blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT slot_no"
-          , " FROM block"
+          , " FROM " <> blockTable
           , " WHERE slot_no IS NOT NULL"
           , " ORDER BY slot_no DESC"
           ]
@@ -782,7 +812,10 @@ queryPreviousSlotNo slotNo =
   runDbSession (mkCallInfo "queryPreviousSlotNo") $
     HsqlSes.statement slotNo queryPreviousSlotNoStmt
 
--- | DELETE --------------------------------------------------------------------
+-----------------------------------------------------------------------------------
+-- DELETE
+-----------------------------------------------------------------------------------
+
 deleteBlocksBlockIdStmt :: HsqlStmt.Statement (Id.BlockId, Word64, Bool) Int64
 deleteBlocksBlockIdStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -988,16 +1021,17 @@ insertDatum datum = do
   pure $ entityKey entity
 
 -- | QUERY ---------------------------------------------------------------------
-
 queryDatumStmt :: HsqlStmt.Statement ByteString (Maybe Id.DatumId)
 queryDatumStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT id"
-      , " FROM datum"
-      , " WHERE hash = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id"
+          , " FROM datum"
+          , " WHERE hash = $1"
+          ]
     encoder = id >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     decoder = HsqlD.rowMaybe $ Id.idDecoder Id.DatumId
 
@@ -1088,14 +1122,15 @@ queryMetaStmt =
           ]
 
 {-# INLINEABLE queryMeta #-}
-queryMeta :: MonadIO m => DbAction m SCB.Meta
+queryMeta :: MonadIO m => DbAction m (Either DbError SCB.Meta)
 queryMeta = do
   let callInfo = mkCallInfo "queryMeta"
   result <- runDbSession callInfo $ HsqlSes.statement () queryMetaStmt
   case result of
-    [] -> throwError $ DbError (dciCallSite callInfo) "Meta table is empty" Nothing
-    [m] -> pure m
-    _otherwise -> throwError $ DbError (dciCallSite callInfo) "Multiple rows in meta table" Nothing
+    -- TODO: Cmdv - At the call site this case would return `pure ()`
+    [] -> pure $ Left $ DbError (dciCallSite callInfo) "Meta table is empty" Nothing
+    [m] -> pure $ Right m
+    _otherwise -> pure $ Left $ DbError (dciCallSite callInfo) "Multiple rows in meta table" Nothing
 
 --------------------------------------------------------------------------------
 -- ReferenceTxIn
@@ -1293,6 +1328,8 @@ insertSlotLeader slotLeader = do
   entity <- runDbSession (mkCallInfo "insertSlotLeader") $ HsqlSes.statement slotLeader insertSlotLeaderStmt
   pure $ entityKey entity
 
+--------------------------------------------------------------------------------
+-- TxCbor
 --------------------------------------------------------------------------------
 insertTxCborStmt :: HsqlStmt.Statement SCB.TxCbor (Entity SCB.TxCbor)
 insertTxCborStmt =
@@ -1577,21 +1614,22 @@ queryWithdrawalAddressesStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
     withdrawalTableN = tableName (Proxy @SCB.Withdrawal)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT DISTINCT addr_id"
-      , " FROM " <> withdrawalTableN
-      , " ORDER BY addr_id ASC"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT DISTINCT addr_id"
+          , " FROM " <> withdrawalTableN
+          , " ORDER BY addr_id ASC"
+          ]
 
-    decoder = HsqlD.rowList $
-      HsqlD.column (HsqlD.nonNullable (Id.StakeAddressId <$> HsqlD.int8))
+    decoder =
+      HsqlD.rowList $
+        HsqlD.column (HsqlD.nonNullable (Id.StakeAddressId <$> HsqlD.int8))
 
 queryWithdrawalAddresses :: MonadIO m => DbAction m [Id.StakeAddressId]
 queryWithdrawalAddresses =
   runDbSession (mkCallInfo "queryWithdrawalAddresses") $
     HsqlSes.statement () queryWithdrawalAddressesStmt
-
-
 
 -- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
 

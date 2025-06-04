@@ -17,14 +17,13 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), MinIds (..))
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
-import Cardano.DbSync.Error
 import Cardano.Prelude
 import qualified Data.List as List
 import qualified Data.Text as Text
@@ -161,21 +160,23 @@ insertReverseIndex ::
   MonadIO m =>
   DB.BlockId ->
   DB.MinIdsWrapper ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertReverseIndex blockId minIdsWrapper =
   case minIdsWrapper of
     DB.CMinIdsWrapper minIds ->
-      void . lift . DB.insertReverseIndex $
-        DB.ReverseIndex
-          { DB.reverseIndexBlockId = blockId
-          , DB.reverseIndexMinIds = DB.minIdsCoreToText minIds
-          }
+      void $
+        DB.insertReverseIndex $
+          DB.ReverseIndex
+            { DB.reverseIndexBlockId = blockId
+            , DB.reverseIndexMinIds = DB.minIdsCoreToText minIds
+            }
     DB.VMinIdsWrapper minIds ->
-      void . lift . DB.insertReverseIndex $
-        DB.ReverseIndex
-          { DB.reverseIndexBlockId = blockId
-          , DB.reverseIndexMinIds = DB.minIdsAddressToText minIds
-          }
+      void $
+        DB.insertReverseIndex $
+          DB.ReverseIndex
+            { DB.reverseIndexBlockId = blockId
+            , DB.reverseIndexMinIds = DB.minIdsAddressToText minIds
+            }
 
 -- | If we can't resolve from the db, we fall back to the provided outputs
 -- This happens the input consumes an output introduced in the same block.
@@ -188,21 +189,21 @@ resolveTxInputs ::
   Generic.TxIn ->
   DB.DbAction m (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
 resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
-    qres <-
-      case (hasConsumed, needsValue) of
-        (_, True) -> convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
-        (False, _) -> convertnotFoundCache <$> queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
-        (True, False) -> convertFoundTxOutId <$> resolveInputTxOutId syncEnv txIn
-    case qres of
-      Right result -> pure result
-      Left err ->
-        case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
-          (Nothing, _, _) ->
-            throwError err
-          (Just eutxo, True, True) ->
-            pure $ convertFoundValue (etoTxOut eutxo)
-          (Just eutxo, _, _) ->
-            pure $ convertnotFound (etoTxOut eutxo)
+  qres <-
+    case (hasConsumed, needsValue) of
+      (_, True) -> convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
+      (False, _) -> convertnotFoundCache <$> queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
+      (True, False) -> convertFoundTxOutId <$> resolveInputTxOutId syncEnv txIn
+  case qres of
+    Right result -> pure result
+    Left err ->
+      case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
+        (Nothing, _, _) ->
+          throwError err
+        (Just eutxo, True, True) ->
+          pure $ convertFoundValue (etoTxOut eutxo)
+        (Just eutxo, _, _) ->
+          pure $ convertnotFound (etoTxOut eutxo)
   where
     convertnotFoundCache :: DB.TxId -> Either err (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertnotFoundCache txId = Right (txIn, txId, Left txIn, Nothing)

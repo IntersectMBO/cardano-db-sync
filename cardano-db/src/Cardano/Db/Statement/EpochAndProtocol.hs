@@ -88,8 +88,9 @@ queryAdaPotsId blockId =
 -- AdaPots query function used in tests
 queryAdaPotsIdTest :: MonadIO m => Id.BlockId -> DbAction m (Maybe SEnP.AdaPots)
 queryAdaPotsIdTest blockId = do
-  mEntityAdaPots <- runDbSession (mkCallInfo "queryAdaPotsId") $
-    HsqlSes.statement blockId queryAdaPotsIdStmt
+  mEntityAdaPots <-
+    runDbSession (mkCallInfo "queryAdaPotsId") $
+      HsqlSes.statement blockId queryAdaPotsIdStmt
   pure $ entityVal <$> mEntityAdaPots
 
 --------------------------------------------------------------------------------
@@ -375,30 +376,6 @@ replaceEpoch epochId epoch =
     HsqlSes.statement (epochId, epoch) replaceEpochStmt
 
 --------------------------------------------------------------------------------
--- EpochStake
---------------------------------------------------------------------------------
--- insertBulkEpochStakeStmt :: HsqlStmt.Statement [SSD.EpochStake] ()
--- insertBulkEpochStakeStmt =
---   insertBulk
---     extractEpochStake
---     SSD.epochStakeBulkEncoder
---     NoResultBulk
---   where
---     extractEpochStake :: [SSD.EpochStake] -> ([Id.StakeAddressId], [Id.PoolHashId], [DbLovelace], [Word64])
---     extractEpochStake xs =
---       ( map SSD.epochStakeAddrId xs
---       , map SSD.epochStakePoolId xs
---       , map SSD.epochStakeAmount xs
---       , map SSD.epochStakeEpochNo xs
---       )
-
--- insertBulkEpochStake :: MonadIO m => [SSD.EpochStake] -> DbAction m ()
--- insertBulkEpochStake epochStakes =
---   void $
---     runDbSession (mkCallInfo "insertBulkEpochStake") $
---       HsqlSes.statement epochStakes insertBulkEpochStakeStmt
-
---------------------------------------------------------------------------------
 -- EpochState
 --------------------------------------------------------------------------------
 insertEpochStateStmt :: HsqlStmt.Statement SEnP.EpochState (Entity SEnP.EpochState)
@@ -450,15 +427,15 @@ insertPotTransfer potTransfer = do
 --------------------------------------------------------------------------------
 -- Reserve
 --------------------------------------------------------------------------------
-insertRervedStmt :: HsqlStmt.Statement SEnP.Reserve (Entity SEnP.Reserve)
-insertRervedStmt =
+insertReserveStmt :: HsqlStmt.Statement SEnP.Reserve (Entity SEnP.Reserve)
+insertReserveStmt =
   insert
     SEnP.reserveEncoder
     (WithResult $ HsqlD.singleRow SEnP.entityReserveDecoder)
 
-insertRerved :: MonadIO m => SEnP.Reserve -> DbAction m Id.ReserveId
-insertRerved reserve = do
-  entity <- runDbSession (mkCallInfo "insertRerved") $ HsqlSes.statement reserve insertRervedStmt
+insertReserve :: MonadIO m => SEnP.Reserve -> DbAction m Id.ReserveId
+insertReserve reserve = do
+  entity <- runDbSession (mkCallInfo "insertReserve") $ HsqlSes.statement reserve insertReserveStmt
   pure $ entityKey entity
 
 -- Epoch And Protocol Parameters

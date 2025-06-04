@@ -52,6 +52,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 -- Rollbacks make everything harder and the same applies to caching.
@@ -251,9 +252,9 @@ queryPoolKeyWithCache cache cacheUA hsh =
                       Map.insert hsh phId
               pure $ Right phId
 
-
 insertAddressUsingCache ::
-  MonadIO m =>CacheStatus ->
+  MonadIO m =>
+  CacheStatus ->
   CacheAction ->
   ByteString ->
   VA.Address ->
@@ -410,10 +411,11 @@ queryPrevBlockWithCache ::
   MonadIO m =>
   CacheStatus ->
   ByteString ->
-  DB.DbAction m (Maybe DB.BlockId)
-queryPrevBlockWithCache cache hsh =
+  Text.Text ->
+  DB.DbAction m DB.BlockId
+queryPrevBlockWithCache cache hsh errMsg =
   case cache of
-    NoCache -> DB.queryBlockId hsh
+    NoCache -> DB.queryBlockId hsh errMsg
     ActiveCache ci -> do
       mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
       case mCachedPrev of
@@ -422,17 +424,17 @@ queryPrevBlockWithCache cache hsh =
           if cachedHash == hsh
             then do
               liftIO $ hitPBlock (cStats ci)
-              pure $ Just cachedBlockId
+              pure cachedBlockId
             else queryFromDb ci
         Nothing -> queryFromDb ci
   where
     queryFromDb ::
       MonadIO m =>
       CacheInternal ->
-      DB.DbAction m (Maybe DB.BlockId)
+      DB.DbAction m DB.BlockId
     queryFromDb ci = do
       liftIO $ missPrevBlock (cStats ci)
-      DB.queryBlockId hsh
+      DB.queryBlockId hsh errMsg
 
 queryTxIdWithCache ::
   MonadIO m =>

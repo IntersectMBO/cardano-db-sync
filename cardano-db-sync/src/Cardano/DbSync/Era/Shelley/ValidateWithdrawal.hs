@@ -3,6 +3,7 @@
 -- {-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbSync.Era.Shelley.ValidateWithdrawal where
+
 --   validateRewardWithdrawals,
 -- ) where
 

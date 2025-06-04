@@ -51,6 +51,7 @@ data SyncNodeError
   | SNErrAlonzoConfig !FilePath !Text
   | SNErrConwayConfig !FilePath !Text
   | SNErrCardanoConfig !Text
+  | SNErrPGConfig !String
   | SNErrInsertGenesis !String
   | SNErrLedgerState !String
   | SNErrNodeConfig NodeConfigError
@@ -124,6 +125,7 @@ instance Show SyncNodeError where
           , "   "
           , show err
           ]
+      SNErrPGConfig err -> "Error SNErrPGConfig: " <> err
       SNErrInsertGenesis err -> "Error SNErrInsertGenesis: " <> err
       SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
       SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err

@@ -49,7 +49,6 @@ import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
-import Cardano.Mock.Query (queryMultiAssetCount)
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
@@ -104,18 +103,18 @@ simpleScript =
     getOutFields txOut =
       case txOut of
         DB.VCTxOutW txOut' ->
-          ( C.txOutAddress txOut'
-          , C.txOutAddressHasScript txOut'
-          , C.txOutValue txOut'
-          , C.txOutDataHash txOut'
+          ( C.txOutCoreAddress txOut'
+          , C.txOutCoreAddressHasScript txOut'
+          , C.txOutCoreValue txOut'
+          , C.txOutCoreDataHash txOut'
           )
         DB.VATxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
               ( V.addressAddress address
               , V.addressHasScript address
-              , V.txOutValue txOut'
-              , V.txOutDataHash txOut'
+              , V.txOutAddressValue txOut'
+              , V.txOutAddressDataHash txOut'
               )
             Nothing -> error "conwaySimpleScript: expected an address"
 
@@ -792,7 +791,7 @@ swapMultiAssets =
     -- Verify script counts
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (2, 6, 1, 2, 4, 2, 0, 0)
-    assertEqBackoff dbSync queryMultiAssetCount 4 [] "Expected multi-assets"
+    assertEqBackoff dbSync DB.queryMultiAssetCount 4 [] "Expected multi-assets"
   where
     testLabel = "conwaySwapMultiAssets"
 
@@ -825,7 +824,7 @@ swapMultiAssetsDisabled =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 1
     -- Verify multi-assets
-    assertEqBackoff dbSync queryMultiAssetCount 0 [] "Unexpected multi-assets"
+    assertEqBackoff dbSync DB.queryMultiAssetCount 0 [] "Unexpected multi-assets"
   where
     args =
       initCommandLineArgs

@@ -20,8 +20,8 @@ import Text.Read (read)
 import Cardano.Db.Schema.Core.Base (TxIn)
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..), TxOutVariantType (..))
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Db.Statement.Function.Query (queryMinRefId)
 import Cardano.Db.Statement.Types (DbInfo, Key)
 import Cardano.Db.Types (DbAction)
@@ -127,11 +127,10 @@ minIdsCoreToText minIds =
   where
     txOutIdCoreToText :: TxOutIdW -> Text
     txOutIdCoreToText (VCTxOutIdW txOutId) = Text.pack . show $ Id.getTxOutCoreId txOutId
-    txOutIdCoreToText _ = ""  -- Skip non-core IDs
-
+    txOutIdCoreToText _ = "" -- Skip non-core IDs
     maTxOutIdCoreToText :: MaTxOutIdW -> Text
     maTxOutIdCoreToText (CMaTxOutIdW maTxOutId) = Text.pack . show $ Id.getMaTxOutCoreId maTxOutId
-    maTxOutIdCoreToText _ = ""  -- Skip non-core IDs
+    maTxOutIdCoreToText _ = "" -- Skip non-core IDs
 
 minIdsAddressToText :: MinIds -> Text
 minIdsAddressToText minIds =
@@ -144,11 +143,10 @@ minIdsAddressToText minIds =
   where
     txOutIdAddressToText :: TxOutIdW -> Text
     txOutIdAddressToText (VATxOutIdW txOutId) = Text.pack . show $ Id.getTxOutAddressId txOutId
-    txOutIdAddressToText _ = ""  -- Skip non-variant IDs
-
+    txOutIdAddressToText _ = "" -- Skip non-variant IDs
     maTxOutIdAddressToText :: MaTxOutIdW -> Text
     maTxOutIdAddressToText (VMaTxOutIdW maTxOutId) = Text.pack . show $ Id.getMaTxOutAddressId maTxOutId
-    maTxOutIdAddressToText _ = ""  -- Skip non-variant IDs
+    maTxOutIdAddressToText _ = "" -- Skip non-variant IDs
 
 --------------------------------------------------------------------------------
 minIdsToText :: MinIdsWrapper -> Text

@@ -29,13 +29,13 @@ import qualified Hasql.Statement as HsqlStmt
 import Cardano.Db.Error (DbError (..), logAndThrowIO)
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Variants (TxOutIdW (..), TxOutVariantType (..))
+import Cardano.Db.Schema.Variants.TxOutAddress (TxOutAddress)
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
 import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.Db.Statement.Base (insertExtraMigration, queryAllExtraMigrations)
 import Cardano.Db.Statement.Function.Core (bulkEncoder, mkCallInfo, mkCallSite, runDbSession)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (DbAction, ExtraMigration (..), MigrationValues (..), PruneConsumeMigration (..), processMigrationValues)
-import Cardano.Db.Schema.Variants.TxOutAddress (TxOutAddress)
 
 data ConsumedTriplet = ConsumedTriplet
   { ctTxOutTxId :: !Id.TxId -- The txId of the txOut
@@ -790,6 +790,15 @@ queryTxOutConsumedCountStmt =
           ]
 
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+
+queryTxOutConsumedCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
+queryTxOutConsumedCount = \case
+  TxOutVariantCore ->
+    runDbSession (mkCallInfo "queryTxOutConsumedCount") $
+      HsqlSes.statement () (queryTxOutConsumedCountStmt @C.TxOutCore)
+  TxOutVariantAddress ->
+    runDbSession (mkCallInfo "queryTxOutConsumedCount") $
+      HsqlSes.statement () (queryTxOutConsumedCountStmt @V.TxOutAddress)
 
 --------------------------------------------------------------------------------
 

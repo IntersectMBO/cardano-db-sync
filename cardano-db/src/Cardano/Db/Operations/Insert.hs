@@ -66,7 +66,7 @@ module Cardano.Db.Operations.Insert (
 -- insertDelistedPool,
 -- insertExtraMigration,
 -- insertEpochStakeProgress,
--- updateSetComplete,
+-- updateStakeProgressCompleted,
 -- updateGovActionEnacted,
 -- updateGovActionRatified,
 -- updateGovActionDropped,
@@ -204,8 +204,8 @@ module Cardano.Db.Operations.Insert (
 --   DB.DbAction m ()
 -- insertManyDrepDistr = insertManyCheckUnique "Many DrepDistr"
 
--- updateSetComplete :: MonadIO m => Word64 -> DB.DbAction m ()
--- updateSetComplete epoch = do
+-- updateStakeProgressCompleted :: MonadIO m => Word64 -> DB.DbAction m ()
+-- updateStakeProgressCompleted epoch = do
 --   upsertWhere (EpochStakeProgress epoch True) [EpochStakeProgressCompleted Database.Persist.=. True] [EpochStakeProgressEpochNo Database.Persist.==. epoch]
 
 -- replaceAdaPots :: MonadIO m => BlockId -> AdaPots -> DB.DbAction m Bool

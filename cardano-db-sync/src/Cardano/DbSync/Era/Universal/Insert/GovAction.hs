@@ -37,8 +37,6 @@ import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
-import Cardano.DbSync.Era.Util (liftLookupFail)
-import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
@@ -55,20 +53,18 @@ import Cardano.Ledger.DRep (DRepState (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
-import Cardano.Ledger.Shelley.API (Coin (..))
+import Cardano.Ledger.Shelley.API (Coin (..), RewardAccount)
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
 
 insertGovActionProposal ::
   forall m.
-  (MonadIO m, MonadBaseControl IO m) =>
+  MonadIO m =>
   Trace IO Text ->
   CacheStatus ->
   DB.BlockId ->
@@ -76,43 +72,41 @@ insertGovActionProposal ::
   Maybe EpochNo ->
   Maybe (ConwayGovState StandardConway) ->
   (Word64, (GovActionId StandardCrypto, ProposalProcedure StandardConway)) ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, pp)) = do
-  addrId <-
-    lift $ queryOrInsertRewardAccount trce cache UpdateCache $ pProcReturnAddr pp
-  votingAnchorId <- lift $ insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
-  mParamProposalId <- lift $
+  addrId <- queryOrInsertRewardAccount trce cache UpdateCache $ pProcReturnAddr pp
+  votingAnchorId <- insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
+  mParamProposalId <-
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
-      _ -> pure Nothing
+      _otherwise -> pure Nothing
   prevGovActionDBId <- case mprevGovAction of
     Nothing -> pure Nothing
     Just prevGovActionId -> Just <$> resolveGovActionProposal cache prevGovActionId
   govActionProposalId <-
-    lift $
-      DB.insertGovActionProposal $
-        DB.GovActionProposal
-          { DB.govActionProposalTxId = txId
-          , DB.govActionProposalIndex = index
-          , DB.govActionProposalPrevGovActionProposal = prevGovActionDBId
-          , DB.govActionProposalDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
-          , DB.govActionProposalReturnAddress = addrId
-          , DB.govActionProposalExpiration = (\epochNum -> unEpochNo epochNum + 1) <$> govExpiresAt
-          , DB.govActionProposalVotingAnchorId = Just votingAnchorId
-          , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
-          , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode (pProcGovAction pp)
-          , DB.govActionProposalParamProposal = mParamProposalId
-          , DB.govActionProposalRatifiedEpoch = Nothing
-          , DB.govActionProposalEnactedEpoch = Nothing
-          , DB.govActionProposalDroppedEpoch = Nothing
-          , DB.govActionProposalExpiredEpoch = Nothing
-          }
+    DB.insertGovActionProposal $
+      DB.GovActionProposal
+        { DB.govActionProposalTxId = txId
+        , DB.govActionProposalIndex = index
+        , DB.govActionProposalPrevGovActionProposal = prevGovActionDBId
+        , DB.govActionProposalDeposit = Generic.coinToDbLovelace $ pProcDeposit pp
+        , DB.govActionProposalReturnAddress = addrId
+        , DB.govActionProposalExpiration = (\epochNum -> unEpochNo epochNum + 1) <$> govExpiresAt
+        , DB.govActionProposalVotingAnchorId = Just votingAnchorId
+        , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
+        , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode (pProcGovAction pp)
+        , DB.govActionProposalParamProposal = mParamProposalId
+        , DB.govActionProposalRatifiedEpoch = Nothing
+        , DB.govActionProposalEnactedEpoch = Nothing
+        , DB.govActionProposalDroppedEpoch = Nothing
+        , DB.govActionProposalExpiredEpoch = Nothing
+        }
   case pProcGovAction pp of
-    TreasuryWithdrawals mp _ -> lift $ mapM_ (insertTreasuryWithdrawal govActionProposalId) (Map.toList mp)
-    UpdateCommittee {} -> lift $ insertNewCommittee govActionProposalId
-    NewConstitution _ constitution -> lift $ void $ insertConstitution blkId (Just govActionProposalId) constitution
-    _ -> pure ()
+    TreasuryWithdrawals mp _ -> insertTreasuryWithdrawalsBulk govActionProposalId (Map.toList mp)
+    UpdateCommittee {} -> insertNewCommittee govActionProposalId
+    NewConstitution _ constitution -> void $ insertConstitution blkId (Just govActionProposalId) constitution
+    _otherwise -> pure ()
   where
     mprevGovAction :: Maybe (GovActionId StandardCrypto) = case pProcGovAction pp of
       ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
@@ -120,17 +114,28 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
       NoConfidence prv -> unGovPurposeId <$> strictMaybeToMaybe prv
       UpdateCommittee prv _ _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       NewConstitution prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
-      _ -> Nothing
+      _otherwise -> Nothing
 
-    insertTreasuryWithdrawal gaId (rwdAcc, coin) = do
-      addrId <-
-        queryOrInsertRewardAccount trce cache UpdateCache rwdAcc
-      DB.insertTreasuryWithdrawal $
-        DB.TreasuryWithdrawal
-          { DB.treasuryWithdrawalGovActionProposalId = gaId
-          , DB.treasuryWithdrawalStakeAddressId = addrId
-          , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
-          }
+    -- Bulk insert treasury withdrawals
+    insertTreasuryWithdrawalsBulk ::
+      DB.GovActionProposalId ->
+      [(RewardAccount StandardCrypto, Coin)] ->
+      DB.DbAction m ()
+    insertTreasuryWithdrawalsBulk _ [] = pure ()
+    insertTreasuryWithdrawalsBulk gaId withdrawals = do
+      -- Bulk resolve all reward accounts
+      let rewardAccounts = map fst withdrawals
+      addrIds <- mapM (queryOrInsertRewardAccount trce cache UpdateCache) rewardAccounts
+      -- Create treasury withdrawals with resolved IDs
+      let treasuryWithdrawals = zipWith createTreasuryWithdrawal addrIds (map snd withdrawals)
+      DB.insertBulkTreasuryWithdrawal treasuryWithdrawals
+      where
+        createTreasuryWithdrawal addrId coin =
+          DB.TreasuryWithdrawal
+            { DB.treasuryWithdrawalGovActionProposalId = gaId
+            , DB.treasuryWithdrawalStakeAddressId = addrId
+            , DB.treasuryWithdrawalAmount = Generic.coinToDbLovelace coin
+            }
 
     insertNewCommittee ::
       DB.GovActionProposalId ->
@@ -142,7 +147,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
           other ->
             liftIO $ logWarning trce $ textShow other <> ": Failed to find committee for " <> textShow pp
 
-insertCommittee :: (MonadIO m, MonadBaseControl IO m) => Maybe DB.GovActionProposalId -> Committee StandardConway -> DB.DbAction m DB.CommitteeId
+insertCommittee :: MonadIO m => Maybe DB.GovActionProposalId -> Committee StandardConway -> DB.DbAction m DB.CommitteeId
 insertCommittee mgapId committee = do
   committeeId <- insertCommitteeDB
   mapM_ (insertNewMember committeeId) (Map.toList $ committeeMembers committee)
@@ -173,13 +178,12 @@ resolveGovActionProposal ::
   MonadIO m =>
   CacheStatus ->
   GovActionId StandardCrypto ->
-  ExceptT SyncNodeError (DB.DbAction m) DB.GovActionProposalId
+  DB.DbAction m DB.GovActionProposalId
 resolveGovActionProposal cache gaId = do
   let txId = gaidTxId gaId
-  gaTxId <- liftLookupFail "resolveGovActionProposal.queryTxId" $ queryTxIdWithCache cache txId
+  gaTxId <- queryTxIdWithCache cache txId
   let (GovActionIx index) = gaidGovActionIx gaId
-  liftLookupFail "resolveGovActionProposal.queryGovActionProposalId" $
-    DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
+  DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::
   MonadIO m =>
@@ -249,7 +253,7 @@ insertParamProposal blkId txId pp = do
       , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
       }
 
-insertConstitution :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> DB.DbAction m DB.ConstitutionId
+insertConstitution :: MonadIO m => DB.BlockId -> Maybe DB.GovActionProposalId -> Constitution StandardConway -> DB.DbAction m DB.ConstitutionId
 insertConstitution blockId mgapId constitution = do
   votingAnchorId <- insertVotingAnchor blockId DB.ConstitutionAnchor $ constitutionAnchor constitution
   DB.insertConstitution $
@@ -263,40 +267,39 @@ insertConstitution blockId mgapId constitution = do
 -- VOTING PROCEDURES
 --------------------------------------------------------------------------------------
 insertVotingProcedures ::
-  (MonadIO m, MonadBaseControl IO m) =>
+  MonadIO m =>
   Trace IO Text ->
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   (Voter StandardCrypto, [(GovActionId StandardCrypto, VotingProcedure StandardConway)]) ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertVotingProcedures trce cache blkId txId (voter, actions) =
   mapM_ (insertVotingProcedure trce cache blkId txId voter) (zip [0 ..] actions)
 
 insertVotingProcedure ::
-  (MonadIO m, MonadBaseControl IO m) =>
+  MonadIO m =>
   Trace IO Text ->
   CacheStatus ->
   DB.BlockId ->
   DB.TxId ->
   Voter StandardCrypto ->
   (Word16, (GovActionId StandardCrypto, VotingProcedure StandardConway)) ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
   govActionId <- resolveGovActionProposal cache gaId
-  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ lift . insertVotingAnchor blkId DB.VoteAnchor
+  votingAnchorId <- whenMaybe (strictMaybeToMaybe $ vProcAnchor vp) $ insertVotingAnchor blkId DB.VoteAnchor
   (mCommitteeVoterId, mDRepVoter, mStakePoolVoter) <- case voter of
     CommitteeVoter cred -> do
-      khId <- lift $ insertCommitteeHash cred
+      khId <- insertCommitteeHash cred
       pure (Just khId, Nothing, Nothing)
     DRepVoter cred -> do
-      drep <- lift $ insertCredDrepHash cred
+      drep <- insertCredDrepHash cred
       pure (Nothing, Just drep, Nothing)
     StakePoolVoter poolkh -> do
-      poolHashId <- lift $ queryPoolKeyOrInsert "insertVotingProcedure" trce cache UpdateCache False poolkh
+      poolHashId <- queryPoolKeyOrInsert "insertVotingProcedure" trce cache UpdateCache False poolkh
       pure (Nothing, Nothing, Just poolHashId)
   void
-    . lift
     . DB.insertVotingProcedure
     $ DB.VotingProcedure
       { DB.votingProcedureTxId = txId
@@ -311,9 +314,9 @@ insertVotingProcedure trce cache blkId txId voter (index, (gaId, vp)) = do
       , DB.votingProcedureInvalid = Nothing
       }
 
-insertVotingAnchor :: (MonadIO m, MonadBaseControl IO m) => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> DB.DbAction m DB.VotingAnchorId
+insertVotingAnchor :: MonadIO m => DB.BlockId -> DB.AnchorType -> Anchor StandardCrypto -> DB.DbAction m DB.VotingAnchorId
 insertVotingAnchor blockId anchorType anchor =
-  DB.insertAnchor $
+  DB.insertVotingAnchor $
     DB.VotingAnchor
       { DB.votingAnchorBlockId = blockId
       , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
@@ -336,7 +339,7 @@ insertDrep :: MonadIO m => DRep StandardCrypto -> DB.DbAction m DB.DrepHashId
 insertDrep = \case
   DRepCredential cred -> insertCredDrepHash cred
   DRepAlwaysAbstain -> DB.insertDrepHashAlwaysAbstain
-  DRepAlwaysNoConfidence -> DB.insertAlwaysNoConfidence
+  DRepAlwaysNoConfidence -> DB.insertDrepHashAlwaysNoConfidence
 
 insertCredDrepHash :: MonadIO m => Ledger.Credential 'DRepRole StandardCrypto -> DB.DbAction m DB.DrepHashId
 insertCredDrepHash cred = do
@@ -352,7 +355,7 @@ insertCredDrepHash cred = do
 insertDrepDistr :: forall m. MonadIO m => EpochNo -> PulsingSnapshot StandardConway -> DB.DbAction m ()
 insertDrepDistr e pSnapshot = do
   drepsDB <- mapM mkEntry (Map.toList $ psDRepDistr pSnapshot)
-  DB.insertManyDrepDistr drepsDB
+  DB.insertBulkDrepDistr drepsDB
   where
     mkEntry :: (DRep StandardCrypto, Ledger.CompactForm Coin) -> DB.DbAction m DB.DrepDistr
     mkEntry (drep, coin) = do
@@ -389,11 +392,11 @@ updateRatified ::
   CacheStatus ->
   EpochNo ->
   [GovActionState StandardConway] ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 updateRatified cache epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal cache $ gasId action
-    lift $ DB.updateGovActionRatified gaId (unEpochNo epochNo)
+    DB.updateGovActionRatified gaId (unEpochNo epochNo)
 
 updateExpired ::
   forall m.
@@ -401,11 +404,11 @@ updateExpired ::
   CacheStatus ->
   EpochNo ->
   [GovActionId StandardCrypto] ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 updateExpired cache epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal cache action
-    lift $ DB.updateGovActionExpired gaId (unEpochNo epochNo)
+    DB.updateGovActionExpired gaId (unEpochNo epochNo)
 
 updateDropped ::
   forall m.
@@ -413,11 +416,11 @@ updateDropped ::
   CacheStatus ->
   EpochNo ->
   [GovActionId StandardCrypto] ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 updateDropped cache epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
     gaId <- resolveGovActionProposal cache action
-    lift $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
+    DB.updateGovActionDropped gaId (unEpochNo epochNo)
 
 insertUpdateEnacted ::
   forall m.
@@ -427,22 +430,22 @@ insertUpdateEnacted ::
   DB.BlockId ->
   EpochNo ->
   ConwayGovState StandardConway ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertUpdateEnacted trce cache blkId epochNo enactedState = do
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
   constitutionId <- handleConstitution
   void $
-    lift $
-      DB.insertEpochState
-        DB.EpochState
-          { DB.epochStateCommitteeId = mcommitteeId
-          , DB.epochStateNoConfidenceId = mnoConfidenceGaId
-          , DB.epochStateConstitutionId = Just constitutionId
-          , DB.epochStateEpochNo = unEpochNo epochNo
-          }
+    DB.insertEpochState
+      DB.EpochState
+        { DB.epochStateCommitteeId = mcommitteeId
+        , DB.epochStateNoConfidenceId = mnoConfidenceGaId
+        , DB.epochStateConstitutionId = Just constitutionId
+        , DB.epochStateEpochNo = unEpochNo epochNo
+        }
   where
     govIds = govStatePrevGovActionIds enactedState
 
+    handleCommittee :: DB.DbAction m (Maybe DB.CommitteeId, Maybe DB.GovActionProposalId)
     handleCommittee = do
       mCommitteeGaId <- case strictMaybeToMaybe (grCommittee govIds) of
         Nothing -> pure Nothing
@@ -453,10 +456,10 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
         (Nothing, Nothing) -> pure (Nothing, Nothing)
         (Nothing, Just committee) -> do
           -- No enacted proposal means we're after conway genesis territory
-          committeeIds <- lift $ DB.queryProposalCommittee Nothing
+          committeeIds <- DB.queryProposalCommittee Nothing
           case committeeIds of
             [] -> do
-              committeeId <- lift $ insertCommittee Nothing committee
+              committeeId <- insertCommittee Nothing committee
               pure (Just committeeId, Nothing)
             (committeeId : _rest) ->
               pure (Just committeeId, Nothing)
@@ -464,7 +467,7 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
           -- No committee with enacted action means it's a no confidence action.
           pure (Nothing, Just committeeGaId)
         (Just committeeGaId, Just committee) -> do
-          committeeIds <- lift $ DB.queryProposalCommittee (Just committeeGaId)
+          committeeIds <- DB.queryProposalCommittee (Just committeeGaId)
           case committeeIds of
             [] -> do
               -- This should never happen. Having a committee and an enacted action, means
@@ -481,17 +484,18 @@ insertUpdateEnacted trce cache blkId epochNo enactedState = do
             (committeeId : _rest) ->
               pure (Just committeeId, Nothing)
 
+    handleConstitution :: DB.DbAction m DB.ConstitutionId
     handleConstitution = do
       mConstitutionGaId <- case strictMaybeToMaybe (grConstitution govIds) of
         Nothing -> pure Nothing
         Just prevId ->
           fmap Just <$> resolveGovActionProposal cache $ unGovPurposeId prevId
 
-      constitutionIds <- lift $ DB.queryProposalConstitution mConstitutionGaId
+      constitutionIds <- DB.queryProposalConstitution mConstitutionGaId
       case constitutionIds of
         -- The first case can only happen once on the first Conway epoch.
         -- On next epochs there will be at least one constitution, so the query will return something.
-        [] -> lift $ insertConstitution blkId Nothing (cgsConstitution enactedState)
+        [] -> insertConstitution blkId Nothing (cgsConstitution enactedState)
         constitutionId : rest -> do
           unless (null rest) $
             liftIO $

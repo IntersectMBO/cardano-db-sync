@@ -21,9 +21,9 @@ module Cardano.Db.Operations.TxOut.TxOutInsert where
 -- insertCollateralTxOut :: MonadIO m => CollateralTxOutW -> DB.DbAction m CollateralTxOutIdW
 -- insertCollateralTxOut collateralTxOutW =
 --   case collateralTxOutW of
---     CCollateralTxOutW txOut -> do
+--     VCCollateralTxOutW txOut -> do
 --       val <- insertUnchecked "CollateralTxOut" txOut
---       pure $ CCollateralTxOutIdW val
+--       pure $ VCCollateralTxOutIdW val
 --     VCollateralTxOutW txOut -> do
 --       val <- insertUnchecked "CollateralTxOut" txOut
---       pure $ VCollateralTxOutIdW val
+--       pure $ VACollateralTxOutIdW val

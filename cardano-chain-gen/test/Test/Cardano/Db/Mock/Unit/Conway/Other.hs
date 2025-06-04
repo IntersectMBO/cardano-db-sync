@@ -23,7 +23,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Other (
   forkParam,
 ) where
 
-import qualified Cardano.Db as Db
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.Ledger.BaseTypes (EpochNo (..))
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
@@ -37,9 +37,8 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
 import Cardano.Mock.Forging.Types
-import Cardano.Mock.Query (queryParamProposalFromEpoch, queryVersionMajorFromEpoch)
 import Cardano.Prelude hiding (from)
-import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
+import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), toDbPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.List (last)
 import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
@@ -359,7 +358,7 @@ poolDelist =
 
     -- Delist the pool
     let poolKeyHash = resolvePool (PoolIndexNew 0) state'
-        poolId = dbToServantPoolId (unKeyHashRaw poolKeyHash)
+        poolId = toDbPoolId (unKeyHashRaw poolKeyHash)
     poolLayer <- getPoolLayer dbSync
     void $ dlAddDelistedPool poolLayer poolId
 
@@ -496,9 +495,12 @@ forkParam =
   where
     testLabel = "conwayForkParam"
     configDir = babbageConfigDir
-    queryCurrentMajVer interpreter = queryVersionMajorFromEpoch =<< getEpochNo interpreter
+    queryCurrentMajVer interpreter = do
+      epochNo <- getEpochNo interpreter
+      mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
+      pure $ DB.epochParamProtocolMajor <$> mEpochParam
     queryMajVerProposal interpreter = do
       epochNo <- getEpochNo interpreter
-      prop <- queryParamProposalFromEpoch epochNo
-      pure (Db.paramProposalProtocolMajor =<< prop)
+      prop <- DB.queryParamProposalWithEpochNo epochNo
+      pure (DB.paramProposalProtocolMajor =<< prop)
     getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
