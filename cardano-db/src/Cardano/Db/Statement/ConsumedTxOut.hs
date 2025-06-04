@@ -29,13 +29,12 @@ import qualified Hasql.Statement as HsqlStmt
 import Cardano.Db.Error (DbError (..), logAndThrowIO)
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Variants (TxOutIdW (..), TxOutVariantType (..))
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variants.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Base (insertExtraMigration, queryAllExtraMigrations)
-import Cardano.Db.Statement.Function.Core (bulkEncoder, mkCallInfo, mkCallSite, runDbSession)
+import Cardano.Db.Statement.Function.Core (bulkEncoder, mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (DbAction, ExtraMigration (..), MigrationValues (..), PruneConsumeMigration (..), processMigrationValues)
-import Cardano.Db.Schema.Variants.TxOutAddress (TxOutAddress)
 
 data ConsumedTriplet = ConsumedTriplet
   { ctTxOutTxId :: !Id.TxId -- The txId of the txOut
@@ -93,13 +92,13 @@ runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
 
   -- Can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
   when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $ do
-    let msg = msgName <> "The use of the config 'tx_out.use_address_table' can only be carried out on a non populated database."
-    liftIO $ throwIO $ DbError mkCallSite msg Nothing
+    let msg = "The use of the config 'tx_out.use_address_table' can only be carried out on a non populated database."
+    liftIO $ throwIO $ DbError (mkDbCallStack msgName) msg Nothing
 
   -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
   when (not isTxOutVariant && isTxOutAddressSet) $ do
-    let msg = msgName <> "The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
-    liftIO $ throwIO $ DbError mkCallSite msg Nothing
+    let msg = "The configuration option 'tx_out.use_address_table' was previously set and the database updated. Unfortunately reverting this isn't possible."
+    liftIO $ throwIO $ DbError (mkDbCallStack msgName) msg Nothing
 
   -- Has the user given txout address config && the migration wasn't previously set
   when (isTxOutVariant && not isTxOutAddressSet) $ do
@@ -108,8 +107,8 @@ runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
 
   -- First check if pruneTxOut flag is missing and it has previously been used
   when (isPruneTxOutPreviouslySet migrationValues && not (pcmPruneTxOut pcm)) $ do
-    let msg = msgName <> "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync should still have this flag activated. Otherwise, it is considered bad usage and can cause crashes."
-    liftIO $ throwIO $ DbError mkCallSite msg Nothing
+    let msg = "If --prune-tx-out flag is enabled and then db-sync is stopped all future executions of db-sync should still have this flag activated. Otherwise, it is considered bad usage and can cause crashes."
+    liftIO $ throwIO $ DbError (mkDbCallStack msgName) msg Nothing
 
   handleMigration migrationValues
   where
@@ -166,15 +165,15 @@ queryTxOutIsNullStmt tName =
 -- | Check if the tx_out table is empty (null)
 queryTxOutIsNull :: MonadIO m => TxOutVariantType -> DbAction m Bool
 queryTxOutIsNull = \case
-  TxOutVariantCore -> pure False
-  TxOutVariantAddress -> queryTxOutIsNullImpl @TxOutAddress
+  TxOutVariantCore -> queryTxOutIsNullImpl @SVC.TxOutCore
+  TxOutVariantAddress -> queryTxOutIsNullImpl @SVA.TxOutAddress
 
 -- | Implementation of queryTxOutIsNull using DbInfo
 queryTxOutIsNullImpl :: forall a m. (DbInfo a, MonadIO m) => DbAction m Bool
 queryTxOutIsNullImpl = do
   let tName = tableName (Proxy @a)
       stmt = queryTxOutIsNullStmt tName
-  runDbSession (mkCallInfo "queryTxOutIsNull") $
+  runDbSession (mkDbCallStack "queryTxOutIsNull") $
     HsqlSes.statement () stmt
 
 --------------------------------------------------------------------------------
@@ -197,7 +196,7 @@ updateTxOutAndCreateAddress trce = do
     runStep :: MonadIO m => Text.Text -> Text.Text -> DbAction m ()
     runStep stepDesc sql = do
       let sqlBS = TextEnc.encodeUtf8 sql
-      runDbSession (mkCallInfo "updateTxOutAndCreateAddress") $ HsqlSes.sql sqlBS
+      runDbSession (mkDbCallStack "updateTxOutAndCreateAddress") $ HsqlSes.sql sqlBS
       liftIO $ logInfo trce $ "updateTxOutAndCreateAddress: " <> stepDesc
 
     dropViewsQuery =
@@ -315,15 +314,15 @@ updateTxOutConsumedByTxIdUnique ::
   ConsumedTriplet ->
   DbAction m ()
 updateTxOutConsumedByTxIdUnique txOutVariantType triplet = do
-  let callInfo = mkCallInfo "updateTxOutConsumedByTxIdUnique"
+  let dbCallStack = mkDbCallStack "updateTxOutConsumedByTxIdUnique"
 
   case txOutVariantType of
     TxOutVariantCore ->
-      runDbSession callInfo $
-        HsqlSes.statement triplet (updateTxOutConsumedStmt @C.TxOutCore)
+      runDbSession dbCallStack $
+        HsqlSes.statement triplet (updateTxOutConsumedStmt @SVC.TxOutCore)
     TxOutVariantAddress ->
-      runDbSession callInfo $
-        HsqlSes.statement triplet (updateTxOutConsumedStmt @V.TxOutAddress)
+      runDbSession dbCallStack $
+        HsqlSes.statement triplet (updateTxOutConsumedStmt @SVA.TxOutAddress)
 
 -- | Update page entries from a list of ConsumedTriplet
 updatePageEntries ::
@@ -349,7 +348,7 @@ createConsumedIndexTxOut ::
   MonadIO m =>
   DbAction m ()
 createConsumedIndexTxOut =
-  runDbSession (mkCallInfo "createConsumedIndexTxOut") $
+  runDbSession (mkDbCallStack "createConsumedIndexTxOut") $
     HsqlSes.statement () createConsumedIndexTxOutStmt
 
 --------------------------------------------------------------------------------
@@ -380,7 +379,7 @@ createPruneConstraintTxOut ::
   MonadIO m =>
   DbAction m ()
 createPruneConstraintTxOut =
-  runDbSession (mkCallInfo "createPruneConstraintTxOut") $
+  runDbSession (mkDbCallStack "createPruneConstraintTxOut") $
     HsqlSes.statement () createPruneConstraintTxOutStmt
 
 --------------------------------------------------------------------------------
@@ -392,7 +391,7 @@ getInputPage ::
   Word64 ->
   DbAction m [ConsumedTriplet]
 getInputPage offset =
-  runDbSession (mkCallInfo "getInputPage") $
+  runDbSession (mkDbCallStack "getInputPage") $
     HsqlSes.statement offset getInputPageStmt
 
 -- | Statement to get a page of inputs from tx_in table
@@ -458,7 +457,7 @@ findMaxTxInIdStmt =
 
 findMaxTxInId :: MonadIO m => Word64 -> DbAction m (Either Text.Text Id.TxId)
 findMaxTxInId blockNoDiff =
-  runDbSession (mkCallInfo "findMaxTxInId") $
+  runDbSession (mkDbCallStack "findMaxTxInId") $
     HsqlSes.statement blockNoDiff findMaxTxInIdStmt
 
 --------------------------------------------------------------------------------
@@ -475,9 +474,11 @@ deleteConsumedBeforeTxStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "DELETE FROM " <> tableN
-          , " WHERE consumed_by_tx_id <= $1"
-          , " RETURNING 1"
+          [ "WITH deleted AS ("
+          , "  DELETE FROM " <> tableN
+          , "  WHERE consumed_by_tx_id <= $1"
+          , "  RETURNING 1"
+          , ") SELECT COUNT(*) FROM deleted"
           ]
 
     encoder = HsqlE.param $ HsqlE.nullable $ Id.getTxId >$< HsqlE.int8
@@ -491,13 +492,13 @@ deleteConsumedBeforeTx ::
   Id.TxId ->
   DbAction m ()
 deleteConsumedBeforeTx trce txOutVariantType txId =
-  runDbSession (mkCallInfo "deleteConsumedBeforeTx") $ do
+  runDbSession (mkDbCallStack "deleteConsumedBeforeTx") $ do
     countDeleted <- case txOutVariantType of
       TxOutVariantCore ->
-        HsqlSes.statement (Just txId) (deleteConsumedBeforeTxStmt @C.TxOutCore)
+        HsqlSes.statement (Just txId) (deleteConsumedBeforeTxStmt @SVC.TxOutCore)
       TxOutVariantAddress ->
-        HsqlSes.statement (Just txId) (deleteConsumedBeforeTxStmt @V.TxOutAddress)
-    liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
+        HsqlSes.statement (Just txId) (deleteConsumedBeforeTxStmt @SVA.TxOutAddress)
+    liftIO $ logInfo trce $ "deleteConsumedBeforeTx: Deleted " <> textShow countDeleted <> " tx_out"
 
 -- Delete consumed tx outputs
 deleteConsumedTxOut ::
@@ -510,7 +511,7 @@ deleteConsumedTxOut ::
 deleteConsumedTxOut trce txOutVariantType blockNoDiff = do
   maxTxIdResult <- findMaxTxInId blockNoDiff
   case maxTxIdResult of
-    Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
+    Left errMsg -> liftIO $ logInfo trce $ "deleteConsumedTxOut: No tx_out was deleted: " <> errMsg
     Right txId -> deleteConsumedBeforeTx trce txOutVariantType txId
 
 --------------------------------------------------------------------------------
@@ -557,12 +558,12 @@ deletePageEntries ::
   DbAction m ()
 deletePageEntries txOutVariantType entries =
   unless (null entries) $
-    runDbSession (mkCallInfo "deletePageEntries") $ do
+    runDbSession (mkDbCallStack "deletePageEntries") $ do
       case txOutVariantType of
         TxOutVariantCore ->
-          HsqlSes.statement entries (deletePageEntriesStmt @C.TxOutCore)
+          HsqlSes.statement entries (deletePageEntriesStmt @SVC.TxOutCore)
         TxOutVariantAddress ->
-          HsqlSes.statement entries (deletePageEntriesStmt @V.TxOutAddress)
+          HsqlSes.statement entries (deletePageEntriesStmt @SVA.TxOutAddress)
 
 --------------------------------------------------------------------------------
 
@@ -691,10 +692,10 @@ updateListTxOutConsumedByTxId = mapM_ (uncurry updateTxOutConsumedByTxId)
     updateTxOutConsumedByTxId txOutId txId =
       case txOutId of
         VCTxOutIdW txOutCoreId ->
-          runDbSession (mkCallInfo "updateTxOutConsumedByTxId") $
+          runDbSession (mkDbCallStack "updateTxOutConsumedByTxId") $
             HsqlSes.statement (txOutCoreId, Just txId) updateTxOutConsumedByTxIdCore
         VATxOutIdW txOutAddressId ->
-          runDbSession (mkCallInfo "updateTxOutConsumedByTxId") $
+          runDbSession (mkDbCallStack "updateTxOutConsumedByTxId") $
             HsqlSes.statement (txOutAddressId, Just txId) updateTxOutConsumedByTxIdAddress
 
 -- | Statement to update Core TxOut consumed_by_tx_id field by ID
@@ -703,7 +704,7 @@ updateTxOutConsumedByTxIdCore ::
 updateTxOutConsumedByTxIdCore =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
-    tableN = tableName (Proxy @C.TxOutCore)
+    tableN = tableName (Proxy @SVC.TxOutCore)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
@@ -724,7 +725,7 @@ updateTxOutConsumedByTxIdAddress ::
 updateTxOutConsumedByTxIdAddress =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
-    tableN = tableName (Proxy @V.TxOutAddress)
+    tableN = tableName (Proxy @SVA.TxOutAddress)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
@@ -764,11 +765,11 @@ queryTxOutConsumedNullCountStmt =
 queryTxOutConsumedNullCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
 queryTxOutConsumedNullCount = \case
   TxOutVariantCore ->
-    runDbSession (mkCallInfo "queryTxOutConsumedNullCount") $
-      HsqlSes.statement () (queryTxOutConsumedNullCountStmt @C.TxOutCore)
+    runDbSession (mkDbCallStack "queryTxOutConsumedNullCount") $
+      HsqlSes.statement () (queryTxOutConsumedNullCountStmt @SVC.TxOutCore)
   TxOutVariantAddress ->
-    runDbSession (mkCallInfo "queryTxOutConsumedNullCount") $
-      HsqlSes.statement () (queryTxOutConsumedNullCountStmt @V.TxOutAddress)
+    runDbSession (mkDbCallStack "queryTxOutConsumedNullCount") $
+      HsqlSes.statement () (queryTxOutConsumedNullCountStmt @SVA.TxOutAddress)
 
 --------------------------------------------------------------------------------
 
@@ -790,6 +791,15 @@ queryTxOutConsumedCountStmt =
           ]
 
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+
+queryTxOutConsumedCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
+queryTxOutConsumedCount = \case
+  TxOutVariantCore ->
+    runDbSession (mkDbCallStack "queryTxOutConsumedCount") $
+      HsqlSes.statement () (queryTxOutConsumedCountStmt @SVC.TxOutCore)
+  TxOutVariantAddress ->
+    runDbSession (mkDbCallStack "queryTxOutConsumedCount") $
+      HsqlSes.statement () (queryTxOutConsumedCountStmt @SVA.TxOutAddress)
 
 --------------------------------------------------------------------------------
 
@@ -816,8 +826,8 @@ queryWrongConsumedByStmt =
 queryWrongConsumedBy :: MonadIO m => TxOutVariantType -> DbAction m Word64
 queryWrongConsumedBy = \case
   TxOutVariantCore ->
-    runDbSession (mkCallInfo "queryWrongConsumedBy") $
-      HsqlSes.statement () (queryWrongConsumedByStmt @C.TxOutCore)
+    runDbSession (mkDbCallStack "queryWrongConsumedBy") $
+      HsqlSes.statement () (queryWrongConsumedByStmt @SVC.TxOutCore)
   TxOutVariantAddress ->
-    runDbSession (mkCallInfo "queryWrongConsumedBy") $
-      HsqlSes.statement () (queryWrongConsumedByStmt @V.TxOutAddress)
+    runDbSession (mkDbCallStack "queryWrongConsumedBy") $
+      HsqlSes.statement () (queryWrongConsumedByStmt @SVA.TxOutAddress)

@@ -16,8 +16,7 @@ import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
 
 import Cardano.Db
-import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore(..))
-
+import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore (..))
 
 tests :: TestTree
 tests =

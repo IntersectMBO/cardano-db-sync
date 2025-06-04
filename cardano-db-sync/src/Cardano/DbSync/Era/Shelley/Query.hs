@@ -6,8 +6,9 @@
 module Cardano.DbSync.Era.Shelley.Query (
   resolveStakeAddress,
   resolveInputTxOutId,
+  resolveInputTxOutIdEither,
   resolveInputValue,
-  resolveInputTxOutIdValue,
+  resolveInputTxOutIdValueEither,
   queryResolveInputCredentials,
 ) where
 
@@ -20,17 +21,21 @@ import Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 resolveStakeAddress :: MonadIO m => ByteString -> DB.DbAction m (Maybe DB.StakeAddressId)
 resolveStakeAddress = DB.queryStakeAddress
 
-resolveInputTxOutId :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (DB.TxId, DB.TxOutIdW)
+resolveInputTxOutIdEither :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW))
+resolveInputTxOutIdEither syncEnv txIn =
+  DB.queryTxOutIdEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+
+resolveInputTxOutId :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW))
 resolveInputTxOutId syncEnv txIn =
-  DB.queryTxOutId (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+  DB.queryTxOutIdEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 resolveInputValue :: MonadIO m => Generic.TxIn -> DB.DbAction m (DB.TxId, DB.DbLovelace)
 resolveInputValue txIn =
   DB.queryTxOutValue (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
-resolveInputTxOutIdValue :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (DB.TxId, DB.TxOutIdW, DB.DbLovelace)
-resolveInputTxOutIdValue syncEnv txIn =
-  DB.queryTxOutIdValue (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+resolveInputTxOutIdValueEither :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
+resolveInputTxOutIdValueEither syncEnv txIn =
+  DB.queryTxOutIdValueEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryResolveInputCredentials :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Maybe ByteString)
 queryResolveInputCredentials syncEnv txIn = do

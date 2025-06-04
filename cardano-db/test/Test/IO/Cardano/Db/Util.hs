@@ -26,7 +26,7 @@ import Data.Word (Word64)
 import Text.Printf (printf)
 
 import Cardano.Db
-import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore(..))
+import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore (..))
 
 assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =

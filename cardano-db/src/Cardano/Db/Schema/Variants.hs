@@ -41,13 +41,13 @@ data MaTxOutIdW
 -- CollateralTxOutW
 --------------------------------------------------------------------------------
 data CollateralTxOutW
-  = CCollateralTxOutW !VC.CollateralTxOutCore
-  | VCollateralTxOutW !VA.CollateralTxOutAddress
+  = VCCollateralTxOutW !VC.CollateralTxOutCore
+  | VACollateralTxOutW !VA.CollateralTxOutAddress
   deriving (Eq, Show)
 
 data CollateralTxOutIdW
-  = CCollateralTxOutIdW !Id.CollateralTxOutCoreId
-  | VCollateralTxOutIdW !Id.CollateralTxOutAddressId
+  = VCCollateralTxOutIdW !Id.CollateralTxOutCoreId
+  | VACollateralTxOutIdW !Id.CollateralTxOutAddressId
   deriving (Eq, Show)
 
 --------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ unwrapMaTxOutIdAddress _ = Nothing
 -- convertCollateralTxOutIdCore = mapMaybe unwrapCollateralTxOutIdCore
 
 unwrapCollateralTxOutIdCore :: CollateralTxOutIdW -> Maybe Id.CollateralTxOutCoreId
-unwrapCollateralTxOutIdCore (CCollateralTxOutIdW iD) = Just iD
+unwrapCollateralTxOutIdCore (VCCollateralTxOutIdW iD) = Just iD
 unwrapCollateralTxOutIdCore _ = Nothing
 
 -- --------------------------------------------------------------------------------
@@ -109,7 +109,7 @@ unwrapCollateralTxOutIdCore _ = Nothing
 -- convertCollateralTxOutIdAddress = mapMaybe unwrapCollateralTxOutIdAddress
 
 unwrapCollateralTxOutIdAddress :: CollateralTxOutIdW -> Maybe Id.CollateralTxOutAddressId
-unwrapCollateralTxOutIdAddress (VCollateralTxOutIdW iD) = Just iD
+unwrapCollateralTxOutIdAddress (VACollateralTxOutIdW iD) = Just iD
 unwrapCollateralTxOutIdAddress _ = Nothing
 
 --------------------------------------------------------------------------------

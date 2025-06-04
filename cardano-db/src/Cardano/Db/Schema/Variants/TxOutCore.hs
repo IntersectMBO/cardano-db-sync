@@ -22,17 +22,17 @@ import qualified Hasql.Encoders as E
 -- TxOut
 -----------------------------------------------------------------------------------------------
 data TxOutCore = TxOutCore
-  { txOutCoreAddress :: !Text
-  , txOutCoreAddressHasScript :: !Bool
-  , txOutCoreDataHash :: !(Maybe ByteString)
-  , txOutCoreConsumedByTxId :: !(Maybe Id.TxId)
+  { txOutCoreTxId :: !Id.TxId
   , txOutCoreIndex :: !Word64
-  , txOutCoreInlineDatumId :: !(Maybe Id.DatumId)
+  , txOutCoreAddress :: !Text
+  , txOutCoreAddressHasScript :: !Bool
   , txOutCorePaymentCred :: !(Maybe ByteString)
-  , txOutCoreReferenceScriptId :: !(Maybe Id.ScriptId)
   , txOutCoreStakeAddressId :: !(Maybe Id.StakeAddressId)
-  , txOutCoreTxId :: !Id.TxId
   , txOutCoreValue :: !DbLovelace
+  , txOutCoreDataHash :: !(Maybe ByteString)
+  , txOutCoreInlineDatumId :: !(Maybe Id.DatumId)
+  , txOutCoreReferenceScriptId :: !(Maybe Id.ScriptId)
+  , txOutCoreConsumedByTxId :: !(Maybe Id.TxId)
   }
   deriving (Eq, Show, Generic)
 
@@ -42,18 +42,31 @@ instance DbInfo TxOutCore where
   tableName _ = "tx_out"
   columnNames _ =
     NE.fromList
-      [ "address"
-      , "address_has_script"
-      , "data_hash"
-      , "consumed_by_tx_id"
+      [ "tx_id"
       , "index"
-      , "inline_datum_id"
+      , "address"
+      , "address_has_script"
       , "payment_cred"
-      , "reference_script_id"
       , "stake_address_id"
-      , "tx_id"
       , "value"
+      , "data_hash"
+      , "inline_datum_id"
+      , "reference_script_id"
+      , "consumed_by_tx_id"
       ]
+  unnestParamTypes _ =
+    [ ("tx_id", "bigint[]")
+    , ("index", "bigint[]")
+    , ("address", "text[]")
+    , ("address_has_script", "boolean[]")
+    , ("payment_cred", "bytea[]")
+    , ("stake_address_id", "bigint[]")
+    , ("value", "numeric[]")
+    , ("data_hash", "bytea[]")
+    , ("inline_datum_id", "bigint[]")
+    , ("reference_script_id", "bigint[]")
+    , ("consumed_by_tx_id", "bigint[]")
+    ]
 
 entityTxOutCoreDecoder :: D.Row (Entity TxOutCore)
 entityTxOutCoreDecoder =
@@ -64,48 +77,48 @@ entityTxOutCoreDecoder =
 txOutCoreDecoder :: D.Row TxOutCore
 txOutCoreDecoder =
   TxOutCore
-    <$> D.column (D.nonNullable D.text) -- txOutCoreAddress
-    <*> D.column (D.nonNullable D.bool) -- txOutCoreAddressHasScript
-    <*> D.column (D.nullable D.bytea) -- txOutCoreDataHash
-    <*> Id.maybeIdDecoder Id.TxId -- txOutCoreConsumedByTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txOutCoreIndex
-    <*> Id.maybeIdDecoder Id.DatumId -- txOutCoreInlineDatumId
-    <*> D.column (D.nullable D.bytea) -- txOutCorePaymentCred
-    <*> Id.maybeIdDecoder Id.ScriptId -- txOutCoreReferenceScriptId
-    <*> Id.maybeIdDecoder Id.StakeAddressId -- txOutCoreStakeAddressId
-    <*> Id.idDecoder Id.TxId -- txOutCoreTxId
-    <*> dbLovelaceDecoder -- txOutCoreValue
+    <$> Id.idDecoder Id.TxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8)
+    <*> D.column (D.nonNullable D.text)
+    <*> D.column (D.nonNullable D.bool)
+    <*> D.column (D.nullable D.bytea)
+    <*> Id.maybeIdDecoder Id.StakeAddressId
+    <*> dbLovelaceDecoder
+    <*> D.column (D.nullable D.bytea)
+    <*> Id.maybeIdDecoder Id.DatumId
+    <*> Id.maybeIdDecoder Id.ScriptId
+    <*> Id.maybeIdDecoder Id.TxId
 
 txOutCoreEncoder :: E.Params TxOutCore
 txOutCoreEncoder =
   mconcat
-    [ txOutCoreAddress >$< E.param (E.nonNullable E.text)
-    , txOutCoreAddressHasScript >$< E.param (E.nonNullable E.bool)
-    , txOutCoreDataHash >$< E.param (E.nullable E.bytea)
-    , txOutCoreConsumedByTxId >$< Id.maybeIdEncoder Id.getTxId
+    [ txOutCoreTxId >$< Id.idEncoder Id.getTxId
     , txOutCoreIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , txOutCoreInlineDatumId >$< Id.maybeIdEncoder Id.getDatumId
+    , txOutCoreAddress >$< E.param (E.nonNullable E.text)
+    , txOutCoreAddressHasScript >$< E.param (E.nonNullable E.bool)
     , txOutCorePaymentCred >$< E.param (E.nullable E.bytea)
-    , txOutCoreReferenceScriptId >$< Id.maybeIdEncoder Id.getScriptId
     , txOutCoreStakeAddressId >$< Id.maybeIdEncoder Id.getStakeAddressId
-    , txOutCoreTxId >$< Id.idEncoder Id.getTxId
     , txOutCoreValue >$< dbLovelaceEncoder
+    , txOutCoreDataHash >$< E.param (E.nullable E.bytea)
+    , txOutCoreInlineDatumId >$< Id.maybeIdEncoder Id.getDatumId
+    , txOutCoreReferenceScriptId >$< Id.maybeIdEncoder Id.getScriptId
+    , txOutCoreConsumedByTxId >$< Id.maybeIdEncoder Id.getTxId
     ]
 
-txOutCoreBulkEncoder :: E.Params ([Text], [Bool], [Maybe ByteString], [Maybe Id.TxId], [Word64], [Maybe Id.DatumId], [Maybe ByteString], [Maybe Id.ScriptId], [Maybe Id.StakeAddressId], [Id.TxId], [DbLovelace])
+txOutCoreBulkEncoder :: E.Params ([Id.TxId], [Word64], [Text], [Bool], [Maybe ByteString], [Maybe Id.StakeAddressId], [DbLovelace], [Maybe ByteString], [Maybe Id.DatumId], [Maybe Id.ScriptId], [Maybe Id.TxId])
 txOutCoreBulkEncoder =
   contrazip11
+    (bulkEncoder $ E.nonNullable $ Id.getTxId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
     (bulkEncoder $ E.nonNullable E.text)
     (bulkEncoder $ E.nonNullable E.bool)
     (bulkEncoder $ E.nullable E.bytea)
-    (bulkEncoder $ E.nullable $ Id.getTxId >$< E.int8)
-    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
-    (bulkEncoder $ E.nullable $ Id.getDatumId >$< E.int8)
-    (bulkEncoder $ E.nullable E.bytea)
-    (bulkEncoder $ E.nullable $ Id.getScriptId >$< E.int8)
     (bulkEncoder $ E.nullable $ Id.getStakeAddressId >$< E.int8)
-    (bulkEncoder $ E.nonNullable $ Id.getTxId >$< E.int8)
     (bulkEncoder dbLovelaceValueEncoder)
+    (bulkEncoder $ E.nullable E.bytea)
+    (bulkEncoder $ E.nullable $ Id.getDatumId >$< E.int8)
+    (bulkEncoder $ E.nullable $ Id.getScriptId >$< E.int8)
+    (bulkEncoder $ E.nullable $ Id.getTxId >$< E.int8)
 
 -----------------------------------------------------------------------------------------------
 -- CollateralTxOut
@@ -185,9 +198,9 @@ collateralTxOutCoreEncoder =
 -- MultiAssetTxOut
 -----------------------------------------------------------------------------------------------
 data MaTxOutCore = MaTxOutCore
-  { maTxOutCoreIdent :: !Id.MultiAssetId
-  , maTxOutCoreQuantity :: !DbWord64
+  { maTxOutCoreQuantity :: !DbWord64
   , maTxOutCoreTxOutId :: !Id.TxOutCoreId
+  , maTxOutCoreIdent :: !Id.MultiAssetId
   }
   deriving (Eq, Show, Generic)
 
@@ -197,9 +210,9 @@ instance DbInfo MaTxOutCore where
   tableName _ = "ma_tx_out"
   columnNames _ =
     NE.fromList
-      [ "ident"
-      , "quantity"
+      [ "quantity"
       , "tx_out_id"
+      , "ident"
       ]
 
 entityMaTxOutCoreDecoder :: D.Row (Entity MaTxOutCore)
@@ -211,24 +224,24 @@ entityMaTxOutCoreDecoder =
 maTxOutCoreDecoder :: D.Row MaTxOutCore
 maTxOutCoreDecoder =
   MaTxOutCore
-    <$> Id.idDecoder Id.MultiAssetId -- maTxOutCoreIdent
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutCoreQuantity
+    <$> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutCoreQuantity
     <*> Id.idDecoder Id.TxOutCoreId -- maTxOutCoreTxOutId
+    <*> Id.idDecoder Id.MultiAssetId -- maTxOutCoreIdent
 
 maTxOutCoreEncoder :: E.Params MaTxOutCore
 maTxOutCoreEncoder =
   mconcat
-    [ maTxOutCoreIdent >$< Id.idEncoder Id.getMultiAssetId
-    , maTxOutCoreQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    [ maTxOutCoreQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , maTxOutCoreTxOutId >$< Id.idEncoder Id.getTxOutCoreId
+    , maTxOutCoreIdent >$< Id.idEncoder Id.getMultiAssetId
     ]
 
-maTxOutCoreBulkEncoder :: E.Params ([Id.MultiAssetId], [DbWord64], [Id.TxOutCoreId])
+maTxOutCoreBulkEncoder :: E.Params ([DbWord64], [Id.TxOutCoreId], [Id.MultiAssetId])
 maTxOutCoreBulkEncoder =
   contrazip3
-    (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8)
     (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     (bulkEncoder $ E.nonNullable $ Id.getTxOutCoreId >$< E.int8)
+    (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8)
 
 -- share
 --   [ mkPersist sqlSettings

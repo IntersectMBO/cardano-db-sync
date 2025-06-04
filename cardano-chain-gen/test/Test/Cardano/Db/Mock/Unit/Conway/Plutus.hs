@@ -37,8 +37,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
+import qualified Cardano.Db.Schema.Variants.TxOutCore as C
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Hashes (extractHash)
@@ -49,11 +49,10 @@ import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
-import Cardano.Mock.Query (queryMultiAssetCount)
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
-import GHVC.Base (error)
+import GHC.Base (error)
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Network.Block (genesisPoint)
 import Test.Cardano.Db.Mock.Config (
@@ -66,7 +65,7 @@ import Test.Cardano.Db.Mock.Config (
   txOutVariantTypeFromConfig,
   withCustomConfig,
   withFullConfig,
-  withFullConfigDropDB,
+  withFullConfigDropDb,
  )
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
@@ -78,7 +77,7 @@ import Prelude (head, tail, (!!))
 ------------------------------------------------------------------------------
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
@@ -104,18 +103,18 @@ simpleScript =
     getOutFields txOut =
       case txOut of
         DB.VCTxOutW txOut' ->
-          ( VC.txOutAddress txOut'
-          , VC.txOutAddressHasScript txOut'
-          , VC.txOutValue txOut'
-          , VC.txOutDataHash txOut'
+          ( C.txOutCoreAddress txOut'
+          , C.txOutCoreAddressHasScript txOut'
+          , C.txOutCoreValue txOut'
+          , C.txOutCoreDataHash txOut'
           )
         DB.VATxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
-              ( VA.addressAddress address
-              , VA.addressHasScript address
-              , VA.txOutValue txOut'
-              , VA.txOutDataHash txOut'
+              ( V.addressAddress address
+              , V.addressHasScript address
+              , V.txOutAddressValue txOut'
+              , V.txOutAddressDataHash txOut'
               )
             Nothing -> error "conwaySimpleScript: expected an address"
 
@@ -501,7 +500,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a transaction with a registration cert
@@ -670,7 +669,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a multi-asset script
@@ -792,7 +791,7 @@ swapMultiAssets =
     -- Verify script counts
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (2, 6, 1, 2, 4, 2, 0, 0)
-    assertEqBackoff dbSync queryMultiAssetCount 4 [] "Expected multi-assets"
+    assertEqBackoff dbSync DB.queryMultiAssetCount 4 [] "Expected multi-assets"
   where
     testLabel = "conwaySwapMultiAssets"
 
@@ -825,7 +824,7 @@ swapMultiAssetsDisabled =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 1
     -- Verify multi-assets
-    assertEqBackoff dbSync queryMultiAssetCount 0 [] "Unexpected multi-assets"
+    assertEqBackoff dbSync DB.queryMultiAssetCount 0 [] "Unexpected multi-assets"
   where
     args =
       initCommandLineArgs

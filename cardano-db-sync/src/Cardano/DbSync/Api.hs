@@ -44,35 +44,12 @@ module Cardano.DbSync.Api (
   generateNewEpochEvents,
   logDbState,
   convertToPoint,
-) where
+)
+where
 
-import Cardano.Prelude
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
-import Control.Concurrent.Class.MonadSTM.Strict (
-  newTBQueueIO,
-  newTVarIO,
-  readTVar,
-  readTVarIO,
-  writeTVar,
- )
-import Control.Monad.Trans.Maybe (MaybeT (..))
-import qualified Data.Strict.Maybe as Strict
-import Data.Time.Clock (getCurrentTime)
-import Database.Persist.Postgresql (ConnectionString)
-import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
-import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
-import Ouroboros.Network.Block (BlockNo (..), Point (..))
-import Ouroboros.Network.Magic (NetworkMagic (..))
-import qualified Ouroboros.Network.Point as Point
-
-
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
@@ -93,6 +70,27 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+import Control.Concurrent.Class.MonadSTM.Strict (
+  newTBQueueIO,
+  newTVarIO,
+  readTVar,
+  readTVarIO,
+  writeTVar,
+ )
+import Control.Monad.Trans.Maybe (MaybeT (..))
+import qualified Data.Strict.Maybe as Strict
+import Data.Time.Clock (getCurrentTime)
+import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
+import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
+import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
+import Ouroboros.Network.Block (BlockNo (..), Point (..))
+import Ouroboros.Network.Magic (NetworkMagic (..))
+import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -310,7 +308,6 @@ getCurrentTipBlockNo env = do
 mkSyncEnvFromConfig ::
   Trace IO Text ->
   DB.DbEnv ->
-  ConnectionString ->
   SyncOptions ->
   GenesisConfig ->
   SyncNodeConfig ->
@@ -318,7 +315,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce dbEnv connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runDelayedMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -346,7 +343,6 @@ mkSyncEnvFromConfig trce dbEnv connectionString syncOptions genCfg syncNodeConfi
             <$> mkSyncEnv
               trce
               dbEnv
-              connectionString
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
@@ -354,12 +350,11 @@ mkSyncEnvFromConfig trce dbEnv connectionString syncOptions genCfg syncNodeConfi
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
               syncNodeConfigFromFile
               syncNodeParams
-              runMigrationFnc
+              runDelayedMigrationFnc
 
 mkSyncEnv ::
   Trace IO Text ->
   DB.DbEnv ->
-  ConnectionString ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
   Ledger.Network ->
@@ -369,7 +364,8 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
+mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runDelayedMigrationFnc = do
+  dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
       then
@@ -418,8 +414,8 @@ mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemSta
       { envDbEnv = dbEnv
       , envBootstrap = bootstrapVar
       , envCache = cache
-      , envConnectionString = connectionString
       , envConsistentLevel = consistentLevelVar
+      , envDbConstraints = dbCNamesVar
       , envCurrentEpochNo = epochVar
       , envEpochSyncTime = epochSyncTime
       , envIndexes = indexesVar
@@ -430,14 +426,13 @@ mkSyncEnv trce dbEnv connectionString syncOptions protoInfo nw nwMagic systemSta
       , envOffChainVoteResultQueue = oarq
       , envOffChainVoteWorkQueue = oawq
       , envOptions = syncOptions
-      , envRunDelayedMigration = runMigrationFnc
+      , envRunDelayedMigration = runDelayedMigrationFnc
       , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }
   where
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
-
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]

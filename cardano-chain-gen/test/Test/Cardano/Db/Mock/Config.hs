@@ -50,11 +50,12 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
-  withFullConfigDropDB,
+  withFullConfigDropDb,
+  withFullConfigDropDbLog,
   withFullConfigLog,
-  withCustomConfigDropDBLog,
+  withCustomConfigDropDbLog,
   withCustomConfig,
-  withCustomConfigDropDB,
+  withCustomConfigDropDb,
   withCustomConfigLog,
   withFullConfig',
   replaceConfigFile,
@@ -73,7 +74,7 @@ import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (NonEmpty ((:|)), ReaderT, panic, stderr, textShow)
+import Cardano.Prelude (NonEmpty ((:|)), panic, stderr, textShow, throwIO)
 import Cardano.SMASH.Server.PoolDataLayer
 import Control.Concurrent.Async (Async, async, cancel, poll)
 import Control.Concurrent.STM (atomically)
@@ -87,12 +88,10 @@ import Control.Concurrent.STM.TMVar (
 import Control.Exception (SomeException, bracket)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
+import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
-import Database.Persist.Postgresql (createPostgresqlPool)
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Byron.Ledger.Mempool ()
 import Ouroboros.Consensus.Config (TopLevelConfig)
@@ -212,7 +211,7 @@ startDBSync env = do
     Just _a -> error "db-sync already running"
     Nothing -> do
       let appliedRunDbSync = partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
-      -- we async the fully applied runDbSync here ad put it into the thread
+      -- we async the fully applied runDbSync here and put it into the thread
       asyncApplied <- async appliedRunDbSync
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
 
@@ -230,12 +229,18 @@ getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
-queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
+queryDBSync env = do
+  DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
   pgconfig <- runOrThrowIO $ DB.readPGPass (enpPGPassSource $ dbSyncParams env)
-  pool <- runNoLoggingT $ createPostgresqlPool (DB.toConnectionSetting pgconfig) 1 -- Pool size of 1 for tests
+  connSetting <- case DB.toConnectionSetting pgconfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+
+  -- Create the Hasql connection pool (using port as pool identifier, similar to your server)
+  pool <- DB.createHasqlConnectionPool [connSetting] 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
       nullTracer
@@ -401,7 +406,7 @@ withFullConfig =
     Nothing
 
 -- this function needs to be used where the schema needs to be rebuilt
-withFullConfigDropDB ::
+withFullConfigDropDb ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -410,11 +415,31 @@ withFullConfigDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigDropDB =
+withFullConfigDropDb =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
         , shouldLog = False
+        , shouldDropDB = True
+        }
+    )
+    initCommandLineArgs
+    Nothing
+
+withFullConfigDropDbLog ::
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigDropDbLog =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = True
         , shouldDropDB = True
         }
     )
@@ -462,7 +487,7 @@ withCustomConfig =
         }
     )
 
-withCustomConfigDropDB ::
+withCustomConfigDropDb ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -474,7 +499,7 @@ withCustomConfigDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigDropDB =
+withCustomConfigDropDb =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -505,7 +530,7 @@ withCustomConfigLog =
         }
     )
 
-withCustomConfigDropDBLog ::
+withCustomConfigDropDbLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -517,7 +542,7 @@ withCustomConfigDropDBLog ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigDropDBLog =
+withCustomConfigDropDbLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -557,7 +582,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
       then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce params cfg' True
+  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
@@ -578,6 +603,14 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
           if null tableNames || shouldDropDB
             then void . hSilence [stderr] $ DB.recreateDB pgPass
             else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
+
+          -- Run migrations synchronously first
+          runMigrationsOnly
+            migr
+            trce
+            (syncNodeParams cfg)
+            syncNodeConfig
+
           action interpreter mockServer dbSyncEnv
   where
     mutableDir = mkMutableDir testLabelFilePath

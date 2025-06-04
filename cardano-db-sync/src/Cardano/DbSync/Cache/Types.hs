@@ -143,7 +143,7 @@ textShowStats (ActiveCache ic) = do
   address <- readTVarIO (cAddress ic)
   pure $
     mconcat
-      [ "\nCache Statistics:"
+      [ "\n----------------------- Cache Statistics: -----------------------"
       , "\n  Caches Optimised: " <> textShow isCacheOptimised
       , textCacheSection "Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
       , textMapSection "Pools" pools (poolsHits stats) (poolsQueries stats)
@@ -152,6 +152,7 @@ textShowStats (ActiveCache ic) = do
       , textLruSection "Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
       , textPrevBlockSection stats
       , textFifoSection "TxId" txIds (txIdsHits stats) (txIdsQueries stats)
+      , "\n-----------------------------------------------------------------"
       ]
   where
     textCacheSection title cacheLru cacheStable hits queries =

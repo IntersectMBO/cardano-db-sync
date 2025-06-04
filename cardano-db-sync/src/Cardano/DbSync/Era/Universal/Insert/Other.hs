@@ -27,7 +27,6 @@ import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
-import Cardano.DbSync.Error
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -51,8 +50,8 @@ insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
   tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
   scriptHash <- findScriptHash
   rid <-
-      DB.insertRedeemer
-      $ DB.Redeemer
+    DB.insertRedeemer $
+      DB.Redeemer
         { DB.redeemerTxId = txId
         , DB.redeemerUnitMem = Generic.txRedeemerMem redeemer
         , DB.redeemerUnitSteps = Generic.txRedeemerSteps redeemer
@@ -87,8 +86,8 @@ insertRedeemerData tracer txId txd = do
     Just redeemerDataId -> pure redeemerDataId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertDatum: Column 'value' in table 'datum' " $ Generic.txDataValue txd
-      DB.insertRedeemerData
-        $ DB.RedeemerData
+      DB.insertRedeemerData $
+        DB.RedeemerData
           { DB.redeemerDataHash = Generic.dataHashToBytes $ Generic.txDataHash txd
           , DB.redeemerDataTxId = txId
           , DB.redeemerDataValue = value
@@ -104,21 +103,20 @@ insertDatum ::
   CacheStatus ->
   DB.TxId ->
   Generic.PlutusData ->
-  ExceptT SyncNodeError (DB.DbAction m) DB.DatumId
+  DB.DbAction m DB.DatumId
 insertDatum tracer cache txId txd = do
-  mDatumId <- lift $ queryDatum cache $ Generic.txDataHash txd
+  mDatumId <- queryDatum cache $ Generic.txDataHash txd
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
       value <- safeDecodeToJson tracer "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
-      lift $
-        insertDatumAndCache cache (Generic.txDataHash txd) $
-          DB.Datum
-            { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
-            , DB.datumTxId = txId
-            , DB.datumValue = value
-            , DB.datumBytes = Generic.txDataBytes txd
-            }
+      insertDatumAndCache cache (Generic.txDataHash txd) $
+        DB.Datum
+          { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
+          , DB.datumTxId = txId
+          , DB.datumValue = value
+          , DB.datumBytes = Generic.txDataBytes txd
+          }
 
 insertWithdrawals ::
   MonadIO m =>
@@ -127,11 +125,11 @@ insertWithdrawals ::
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertWithdrawals tracer cache txId redeemers txWdrl = do
   addrId <-
-    lift $ queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
-  void . lift . DB.insertWithdrawal $
+    queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
+  void . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
       , DB.withdrawalTxId = txId
@@ -207,10 +205,9 @@ insertExtraKeyWitness ::
   Trace IO Text ->
   DB.TxId ->
   ByteString ->
-  ExceptT SyncNodeError (DB.DbAction m) ()
+  DB.DbAction m ()
 insertExtraKeyWitness _tracer txId keyHash = do
   void
-    . lift
     . DB.insertExtraKeyWitness
     $ DB.ExtraKeyWitness
       { DB.extraKeyWitnessHash = keyHash

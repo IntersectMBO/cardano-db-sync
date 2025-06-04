@@ -51,6 +51,7 @@ data SyncNodeError
   | SNErrAlonzoConfig !FilePath !Text
   | SNErrConwayConfig !FilePath !Text
   | SNErrCardanoConfig !Text
+  | SNErrPGConfig !String
   | SNErrInsertGenesis !String
   | SNErrLedgerState !String
   | SNErrNodeConfig NodeConfigError
@@ -60,6 +61,7 @@ data SyncNodeError
   | SNErrDatabaseRollBackLedger !String
   | SNErrDatabaseValConstLevel !String
   | SNErrJsonbInSchema !String
+  | SNErrRollback !String
 
 instance Exception SyncNodeError
 
@@ -124,6 +126,7 @@ instance Show SyncNodeError where
           , "   "
           , show err
           ]
+      SNErrPGConfig err -> "Error SNErrPGConfig: " <> err
       SNErrInsertGenesis err -> "Error SNErrInsertGenesis: " <> err
       SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
       SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err
@@ -133,6 +136,7 @@ instance Show SyncNodeError where
       SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
       SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
       SNErrJsonbInSchema err -> "Error SNErrJsonbInSchema: " <> show err
+      SNErrRollback err -> "Error SNErrRollback: " <> show err
 
 data NodeConfigError
   = NodeConfigParseError !String

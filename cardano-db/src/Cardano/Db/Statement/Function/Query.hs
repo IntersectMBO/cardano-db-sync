@@ -11,7 +11,7 @@
 
 module Cardano.Db.Statement.Function.Query where
 
-import Cardano.Prelude (MonadIO, Proxy (..), Word64, fromMaybe)
+import Cardano.Prelude (MonadIO, Proxy (..), Word64, fromMaybe, listToMaybe)
 import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
@@ -22,7 +22,7 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
-import Cardano.Db.Statement.Function.Core (ResultType (..), mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key, validateColumn)
 import Cardano.Db.Types (Ada (..), DbAction, lovelaceToAda)
 
@@ -72,6 +72,25 @@ selectByField fieldName paramEncoder entityDecoder =
     )
     paramEncoder -- Direct use of paramEncoder
     (HsqlD.rowMaybe entityDecoder)
+    True
+
+selectByFieldFirst ::
+  forall a b.
+  (DbInfo a) =>
+  Text.Text -> -- Field name
+  HsqlE.Params b -> -- Parameter encoder
+  HsqlD.Row (Entity a) -> -- Entity decoder
+  HsqlStmt.Statement b (Maybe (Entity a))
+selectByFieldFirst fieldName paramEncoder entityDecoder =
+  HsqlStmt.Statement
+    ( TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT * FROM " <> tableName (Proxy @a)
+          , " WHERE " <> fieldName <> " = $1"
+          ]
+    )
+    paramEncoder
+    (listToMaybe <$> HsqlD.rowList entityDecoder)
     True
 
 -- | Checks if a record with a specific ID exists in a table.
@@ -187,7 +206,7 @@ existsWhereByColumn colName encoder resultType =
 -- @
 -- replaceVotingAnchor :: MonadIO m => VotingAnchorId -> VotingAnchor -> DbAction m ()
 -- replaceVotingAnchor key record =
---   runDbSession (mkCallInfo "replaceVotingAnchor") $
+--   runDbSession (mkDbCallStack "replaceVotingAnchor") $
 --     HsqlStmt.statement (key, record) $ replaceRecord
 --       @VotingAnchor
 --       (idEncoder getVotingAnchorId)
@@ -234,11 +253,11 @@ replaceRecord keyEnc recordEnc =
 -- queryTxOutUnspentCount txOutVariantType =
 --   case txOutVariantType of
 --     TxOutVariantCore ->
---       runDbSession (mkCallInfo "queryTxOutUnspentCountCore") $
+--       runDbSession (mkDbCallStack "queryTxOutUnspentCountCore") $
 --         HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
 --
 --     TxOutVariantAddress ->
---       runDbSession (mkCallInfo "queryTxOutUnspentCountAddress") $
+--       runDbSession (mkDbCallStack "queryTxOutUnspentCountAddress") $
 --         HsqlSes.statement () (countWhere @TxOutAddress "consumed_by_tx_id" "IS NULL")
 -- @
 countWhere ::
@@ -299,7 +318,7 @@ parameterisedCountWhere colName condition encoder =
 -- @
 -- queryTableCount :: MonadIO m => DbAction m Word64
 -- queryTableCount =
---   runDbSession (mkCallInfo "queryTableCount") $
+--   runDbSession (mkDbCallStack "queryTableCount") $
 --     HsqlSes.statement () (countAll @TxOutCore)
 -- @
 countAll ::
@@ -320,150 +339,26 @@ countAll =
           ]
 
 ---------------------------------------------------------------------------
--- REFERENCE ID QUERIES
----------------------------------------------------------------------------
-
--- | Find the minimum ID in a table
-queryMinRefIdStmt ::
-  forall a b.
-  (DbInfo a) =>
-  -- | Field name to filter on
-  Text.Text ->
-  -- | Parameter encoder
-  HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  HsqlStmt.Statement b (Maybe (Key a))
-queryMinRefIdStmt fieldName encoder keyDecoder =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    validCol = validateColumn @a fieldName
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id"
-          , " FROM " <> tableName (Proxy @a)
-          , " WHERE " <> validCol <> " >= $1"
-          , " ORDER BY id ASC"
-          , " LIMIT 1"
-          ]
-    decoder = HsqlD.rowMaybe keyDecoder
-
-queryMinRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
-  -- | Field name
-  Text.Text ->
-  -- | Value to compare against
-  b ->
-  -- | Parameter encoder
-  HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  DbAction m (Maybe (Key a))
-queryMinRefId fieldName value encoder keyDecoder =
-  runDbSession (mkCallInfo "queryMinRefId") $
-    HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder keyDecoder)
-
----------------------------------------------------------------------------
-queryMinRefIdNullableStmt ::
-  forall a b.
-  (DbInfo a) =>
-  -- | Field name to filter on
-  Text.Text ->
-  -- | Parameter encoder
-  HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  HsqlStmt.Statement b (Maybe (Key a))
-queryMinRefIdNullableStmt fieldName encoder keyDecoder =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    validCol = validateColumn @a fieldName
-    decoder = HsqlD.rowMaybe keyDecoder
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id"
-          , " FROM " <> tableName (Proxy @a)
-          , " WHERE " <> validCol <> " IS NOT NULL"
-          , " AND " <> validCol <> " >= $1"
-          , " ORDER BY id ASC"
-          , " LIMIT 1"
-          ]
-
-queryMinRefIdNullable ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
-  -- | Field name
-  Text.Text ->
-  -- | Value to compare against
-  b ->
-  -- | Parameter encoder
-  HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  DbAction m (Maybe (Key a))
-queryMinRefIdNullable fieldName value encoder keyDecoder =
-  runDbSession (mkCallInfo "queryMinRefIdNullable") $
-    HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder keyDecoder)
-
----------------------------------------------------------------------------
-queryMaxRefIdStmt ::
-  forall a b.
-  (DbInfo a) =>
-  -- | Field name to filter on
-  Text.Text ->
-  -- | Equal or strictly less
-  Bool ->
-  -- | Parameter encoder
-  HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  HsqlStmt.Statement b (Maybe (Key a))
-queryMaxRefIdStmt fieldName eq encoder keyDecoder =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    validCol = validateColumn @a fieldName
-    op = if eq then "<=" else "<"
-    decoder = HsqlD.rowMaybe keyDecoder
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id"
-          , " FROM " <> tableName (Proxy @a)
-          , " WHERE " <> validCol <> " " <> op <> " $1"
-          , " ORDER BY id DESC"
-          , " LIMIT 1"
-          ]
-
-queryMaxRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
-  -- | Field name
-  Text.Text ->
-  -- | Value to compare against
-  b ->
-  -- | Equal or strictly less
-  Bool ->
-  -- | Parameter encoder
-  HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  DbAction m (Maybe (Key a))
-queryMaxRefId fieldName value eq encoder keyDecoder =
-  runDbSession (mkCallInfo "queryMaxRefId") $
-    HsqlSes.statement value (queryMaxRefIdStmt @a fieldName eq encoder keyDecoder)
-
----------------------------------------------------------------------------
 -- QUERY HELPERS
 ---------------------------------------------------------------------------
+
+queryStatementCacheStmt :: HsqlStmt.Statement () Int
+queryStatementCacheStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql = "SELECT count(*) FROM pg_prepared_statements"
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+
+queryStatementCacheSize :: MonadIO m => DbAction m Int
+queryStatementCacheSize =
+  runDbSession (mkDbCallStack "queryStatementCacheSize") $
+    HsqlSes.statement () queryStatementCacheStmt
 
 -- Decoder for Ada amounts from database int8 values
 adaDecoder :: HsqlD.Row Ada
 adaDecoder = do
   amount <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
-  pure $ lovelaceToAda (MkFixed $ fromIntegral amount)
+  pure $ lovelaceToAda (fromIntegral amount)
 
 -- Decoder for summed Ada amounts with null handling
 adaSumDecoder :: HsqlD.Row Ada

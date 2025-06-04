@@ -18,12 +18,11 @@ import Test.Tasty.HUnit (Assertion ())
 
 configRemoveJsonbFromSchemaEnabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaEnabled = do
-  withCustomConfigDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
     startDBSync dbSync
-    threadDelay 7_000_000
     assertEqQuery
       dbSync
-      DB.queryJsonbInSchemaExists
+      DB.queryJsonbInSchemaExistsTest
       False
       "There should be no jsonb data types in database if option is enabled"
     checkStillRuns dbSync
@@ -35,13 +34,12 @@ configRemoveJsonbFromSchemaEnabled = do
 
 configRemoveJsonbFromSchemaDisabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaDisabled = do
-  withCustomConfigDropDB args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
     \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
-      threadDelay 7_000_000
       assertEqQuery
         dbSync
-        DB.queryJsonbInSchemaExists
+        DB.queryJsonbInSchemaExistsTest
         True
         "There should be jsonb types in database if option is disabled"
       checkStillRuns dbSync
@@ -52,12 +50,11 @@ configRemoveJsonbFromSchemaDisabled = do
 
 configJsonbInSchemaShouldRemoveThenAdd :: IOManager -> [(Text, Text)] -> Assertion
 configJsonbInSchemaShouldRemoveThenAdd =
-  withCustomConfigDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
-    threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
-      DB.queryJsonbInSchemaExists
+      DB.queryJsonbInSchemaExistsTest
       False
       "There should be no jsonb types in database if option has been enabled"
     stopDBSync dbSyncEnv
@@ -72,10 +69,9 @@ configJsonbInSchemaShouldRemoveThenAdd =
                   }
             }
     startDBSync newDbSyncEnv
-    threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
-      DB.queryJsonbInSchemaExists
+      DB.queryJsonbInSchemaExistsTest
       True
       "There should be jsonb types in database if option has been disabled"
     -- Expected to fail

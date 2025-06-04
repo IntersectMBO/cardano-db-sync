@@ -26,6 +26,8 @@ import Hasql.Encoders as E
 -- import Cardano.Db.Schema.Orphans ()
 
 import Cardano.Db.Schema.Ids
+import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
@@ -42,7 +44,6 @@ import Cardano.Db.Types (
   scriptTypeDecoder,
   scriptTypeEncoder,
  )
-import qualified Cardano.Db.Schema.Ids as Id
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
@@ -101,7 +102,7 @@ blockDecoder =
     <*> maybeIdDecoder BlockId -- blockPreviousId
     <*> idDecoder SlotLeaderId -- blockSlotLeaderId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockSize
-    <*> D.column (D.nonNullable D.timestamptz) -- blockTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- blockTime
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockTxCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- blockProtoMajor
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- blockProtoMinor
@@ -119,14 +120,15 @@ entityBlockEncoder =
 blockEncoder :: E.Params Block
 blockEncoder =
   mconcat
-    [ blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    [ blockHash >$< E.param (E.nonNullable E.bytea)
+    , blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockEpochSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockBlockNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockPreviousId >$< maybeIdEncoder getBlockId
     , blockSlotLeaderId >$< idEncoder getSlotLeaderId
     , blockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , blockTime >$< E.param (E.nonNullable E.timestamptz)
+    , blockTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , blockTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockProtoMajor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , blockProtoMinor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
@@ -222,7 +224,15 @@ data TxMetadata = TxMetadata
   deriving (Eq, Show, Generic)
 
 type instance Key TxMetadata = TxMetadataId
-instance DbInfo TxMetadata
+
+instance DbInfo TxMetadata where
+  jsonbFields _ = ["json"]
+  unnestParamTypes _ =
+    [ ("key", "bigint[]")
+    , ("json", "text[]")
+    , ("bytes", "bytea[]")
+    , ("tx_id", "bigint[]")
+    ]
 
 entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
 entityTxMetadataDecoder =
@@ -275,7 +285,14 @@ data TxIn = TxIn
   deriving (Show, Eq, Generic)
 
 type instance Key TxIn = TxInId
-instance DbInfo TxIn
+
+instance DbInfo TxIn where
+  unnestParamTypes _ =
+    [ ("tx_in_id", "bigint[]")
+    , ("tx_out_id", "bigint[]")
+    , ("tx_out_index", "bigint[]")
+    , ("redeemer_id", "bigint[]")
+    ]
 
 entityTxInDecoder :: D.Row (Entity TxIn)
 entityTxInDecoder =
@@ -493,6 +510,7 @@ data Datum = Datum
 type instance Key Datum = DatumId
 instance DbInfo Datum where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["value"]
 
 entityDatumDecoder :: D.Row (Entity Datum)
 entityDatumDecoder =
@@ -539,8 +557,11 @@ data Script = Script
   deriving (Eq, Show, Generic)
 
 type instance Key Script = ScriptId
+
 instance DbInfo Script where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["json"]
+  enumFields _ = [("type", "scripttype")]
 
 entityScriptDecoder :: D.Row (Entity Script)
 entityScriptDecoder =
@@ -599,7 +620,9 @@ data Redeemer = Redeemer
   deriving (Eq, Show, Generic)
 
 type instance Key Redeemer = RedeemerId
-instance DbInfo Redeemer
+
+instance DbInfo Redeemer where
+  enumFields _ = [("purpose", "scriptpurposetype")]
 
 entityRedeemerDecoder :: D.Row (Entity Redeemer)
 entityRedeemerDecoder =
@@ -654,6 +677,7 @@ data RedeemerData = RedeemerData
 type instance Key RedeemerData = RedeemerDataId
 instance DbInfo RedeemerData where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["value"]
 
 entityRedeemerDataDecoder :: D.Row (Entity RedeemerData)
 entityRedeemerDataDecoder =
@@ -844,7 +868,7 @@ entityMetaDecoder =
 metaDecoder :: D.Row Meta
 metaDecoder =
   Meta
-    <$> D.column (D.nonNullable D.timestamptz) -- metaStartTime
+    <$> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- metaStartTime
     <*> D.column (D.nonNullable D.text) -- metaNetworkName
     <*> D.column (D.nonNullable D.text) -- metaVersion
 
@@ -858,7 +882,7 @@ entityMetaEncoder =
 metaEncoder :: E.Params Meta
 metaEncoder =
   mconcat
-    [ metaStartTime >$< E.param (E.nonNullable E.timestamptz)
+    [ metaStartTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , metaNetworkName >$< E.param (E.nonNullable E.text)
     , metaVersion >$< E.param (E.nonNullable E.text)
     ]

@@ -1,18 +1,15 @@
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbTool.Report.StakeReward.Latest (
   reportEpochStakeRewards,
   reportLatestStakeRewards,
 ) where
 
-import Cardano.Db
+import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Cardano.Prelude (textShow)
-import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.List as List
 import Data.Maybe (catMaybes)
 import Data.Ord (Down (..))
@@ -21,139 +18,68 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Time.Clock (UTCTime)
 import Data.Word (Word64)
-import Database.Esqueleto.Experimental (
-  SqlBackend,
-  Value (..),
-  asc,
-  desc,
-  from,
-  innerJoin,
-  limit,
-  max_,
-  on,
-  orderBy,
-  select,
-  table,
-  unSqlBackendKey,
-  val,
-  where_,
-  (<=.),
-  (==.),
-  (^.),
-  type (:&) ((:&)),
- )
 import Text.Printf (printf)
 
 reportEpochStakeRewards :: Word64 -> [Text] -> IO ()
 reportEpochStakeRewards epochNum saddr = do
-  xs <- catMaybes <$> runDbNoLoggingEnv (mapM (queryEpochStakeRewards epochNum) saddr)
+  xs <- catMaybes <$> DB.runDbNoLoggingEnv (mapM (queryEpochStakeRewards epochNum) saddr)
   renderRewards xs
 
 reportLatestStakeRewards :: [Text] -> IO ()
 reportLatestStakeRewards saddr = do
-  xs <- catMaybes <$> runDbNoLoggingEnv (mapM queryLatestStakeRewards saddr)
+  xs <- catMaybes <$> DB.runDbNoLoggingEnv (mapM queryLatestStakeRewards saddr)
   renderRewards xs
 
--- -------------------------------------------------------------------------------------------------
-
 data EpochReward = EpochReward
-  { erAddressId :: !StakeAddressId
+  { erAddressId :: !DB.StakeAddressId
   , erEpochNo :: !Word64
   , erDate :: !UTCTime
   , erAddress :: !Text
   , erPoolId :: !Word64
   , erPoolTicker :: !Text
-  , erReward :: !Ada
-  , erDelegated :: !Ada
+  , erReward :: !DB.Ada
+  , erDelegated :: !DB.Ada
   , erPercent :: !Double
   }
 
 queryEpochStakeRewards :: MonadIO m => Word64 -> Text -> DB.DbAction m (Maybe EpochReward)
 queryEpochStakeRewards epochNum address = do
-  mdel <- queryDelegation address epochNum
-  maybe (pure Nothing) ((fmap . fmap) Just (queryReward epochNum address)) mdel
+  mdel <- DB.queryDelegationForEpoch address epochNum
+  case mdel of
+    Nothing -> pure Nothing
+    Just delegation -> Just <$> queryReward epochNum address delegation
 
 queryLatestStakeRewards :: MonadIO m => Text -> DB.DbAction m (Maybe EpochReward)
 queryLatestStakeRewards address = do
-  epochNum <- queryLatestMemberRewardEpochNo
-  mdel <- queryDelegation address epochNum
-  maybe (pure Nothing) ((fmap . fmap) Just (queryReward epochNum address)) mdel
-  where
-    -- Find the latest epoch where member rewards have been distributed.
-    -- Can't use the Reward table for this because that table may have been partially
-    -- populated for the next epcoh.
-    queryLatestMemberRewardEpochNo :: MonadIO m => DB.DbAction m Word64
-    queryLatestMemberRewardEpochNo = do
-      res <- select $ do
-        blk <- from $ table @Block
-        where_ (isJust $ blk ^. BlockEpochNo)
-        pure $ max_ (blk ^. BlockEpochNo)
-      pure $ maybe 0 (pred . pred) (join $ unValue =<< listToMaybe res)
-
-queryDelegation ::
-  MonadIO m =>
-  Text ->
-  Word64 ->
-  DB.DbAction m (Maybe (StakeAddressId, UTCTime, DbLovelace, PoolHashId))
-queryDelegation address epochNum = do
-  res <- select $ do
-    (ep :& es :& saddr) <-
-      from $
-        table @Epoch
-          `innerJoin` table @EpochStake
-            `on` (\(ep :& es) -> ep ^. EpochNo ==. es ^. EpochStakeEpochNo)
-          `innerJoin` table @StakeAddress
-            `on` (\(_ep :& es :& saddr) -> saddr ^. StakeAddressId ==. es ^. EpochStakeAddrId)
-
-    where_ (saddr ^. StakeAddressView ==. val address)
-    where_ (es ^. EpochStakeEpochNo <=. val epochNum)
-    orderBy [desc (es ^. EpochStakeEpochNo)]
-    limit 1
-    pure
-      ( es ^. EpochStakeAddrId
-      , ep ^. EpochEndTime
-      , es ^. EpochStakeAmount
-      , es ^. EpochStakePoolId
-      )
-  pure $ fmap unValue4 (listToMaybe res)
+  epochNum <- DB.queryLatestMemberRewardEpochNo
+  mdel <- DB.queryDelegationForEpoch address epochNum
+  case mdel of
+    Nothing -> pure Nothing
+    Just delegation -> Just <$> queryReward epochNum address delegation
 
 queryReward ::
   MonadIO m =>
   Word64 ->
   Text ->
-  (StakeAddressId, UTCTime, DbLovelace, PoolHashId) ->
+  (DB.StakeAddressId, UTCTime, DB.DbLovelace, DB.PoolHashId) ->
   DB.DbAction m EpochReward
-queryReward en address (saId, date, DbLovelace delegated, poolId) = do
-  res <- select $ do
-    (ep :& reward :& saddr) <-
-      from $
-        table @Epoch
-          `innerJoin` table @Reward
-            `on` (\(ep :& reward) -> ep ^. EpochNo ==. reward ^. RewardEarnedEpoch)
-          `innerJoin` table @StakeAddress
-            `on` (\(_ep :& reward :& saddr) -> saddr ^. StakeAddressId ==. reward ^. RewardAddrId)
-    where_ (ep ^. EpochNo ==. val en)
-    where_ (saddr ^. StakeAddressId ==. val saId)
-    orderBy [asc (ep ^. EpochNo)]
-    pure (reward ^. RewardAmount)
-  mtn <- select $ do
-    pod <- from $ table @OffChainPoolData
-    where_ (pod ^. OffChainPoolDataPoolId ==. val poolId)
-    -- Use the `id` column as a proxy for time where larger `id` means later time.
-    orderBy [desc (pod ^. OffChainPoolDataId)]
-    pure (pod ^. OffChainPoolDataTickerName)
+queryReward en address (saId, date, DB.DbLovelace delegated, poolId) = do
+  mRewardAmount <- DB.queryRewardAmount en saId
+  mPoolTicker <- DB.queryPoolTicker poolId
 
-  let reward = maybe 0 (unDbLovelace . unValue) (listToMaybe res)
+  let reward = maybe 0 DB.unDbLovelace mRewardAmount
+      poolTicker = maybe "???" id mPoolTicker
+
   pure $
     EpochReward
       { erAddressId = saId
-      , erPoolId = fromIntegral $ unSqlBackendKey (unPoolHashKey poolId)
-      , erPoolTicker = maybe "???" unValue (listToMaybe mtn)
+      , erPoolId = fromIntegral $ DB.getPoolHashId poolId
+      , erPoolTicker = poolTicker
       , erEpochNo = en
       , erDate = date
       , erAddress = address
-      , erReward = word64ToAda reward
-      , erDelegated = word64ToAda delegated
+      , erReward = DB.word64ToAda reward
+      , erDelegated = DB.word64ToAda delegated
       , erPercent = rewardPercent reward (if delegated == 0 then Nothing else Just delegated)
       }
 
@@ -172,7 +98,7 @@ renderRewards xs = do
           , separator
           , erAddress er
           , separator
-          , leftPad 14 (renderAda (erDelegated er))
+          , leftPad 14 (DB.renderAda (erDelegated er))
           , separator
           , leftPad 7 (textShow $ erPoolId er)
           , separator
@@ -183,8 +109,8 @@ renderRewards xs = do
           , Text.pack (if erPercent er == 0.0 then "   0.0" else printf "%8.3f" (erPercent er))
           ]
 
-    specialRenderAda :: Ada -> Text
-    specialRenderAda ada = if ada == 0 then "0.0     " else renderAda ada
+    specialRenderAda :: DB.Ada -> Text
+    specialRenderAda ada = if ada == 0 then "0.0     " else DB.renderAda ada
 
 rewardPercent :: Word64 -> Maybe Word64 -> Double
 rewardPercent reward mDelegated =
