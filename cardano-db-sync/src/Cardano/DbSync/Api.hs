@@ -315,7 +315,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runDelayedMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -350,7 +350,7 @@ mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNod
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
               syncNodeConfigFromFile
               syncNodeParams
-              runMigrationFnc
+              runDelayedMigrationFnc
 
 mkSyncEnv ::
   Trace IO Text ->
@@ -364,7 +364,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
+mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runDelayedMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
@@ -426,7 +426,7 @@ mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfig
       , envOffChainVoteResultQueue = oarq
       , envOffChainVoteWorkQueue = oawq
       , envOptions = syncOptions
-      , envRunDelayedMigration = runMigrationFnc
+      , envRunDelayedMigration = runDelayedMigrationFnc
       , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }

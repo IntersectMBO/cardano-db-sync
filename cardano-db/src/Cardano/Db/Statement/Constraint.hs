@@ -7,7 +7,7 @@ module Cardano.Db.Statement.Constraint where
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo)
 import Cardano.Db.Schema.Core.StakeDeligation (EpochStake, Reward)
-import Cardano.Db.Statement.Function.Core (mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (DbAction)
 import Cardano.Prelude (Proxy (..), liftIO)
@@ -86,7 +86,7 @@ dropConstraintStmt tbName constraintName =
 -- | Check if a constraint exists
 queryHasConstraint :: MonadIO m => ConstraintNameDB -> DbAction m Bool
 queryHasConstraint (ConstraintNameDB cname) =
-  runDbSession (mkCallInfo "queryHasConstraint") $
+  runDbSession (mkDbCallStack "queryHasConstraint") $
     HsqlSess.statement cname queryHasConstraintStmt
 
 -- | Generic function to add a unique constraint to any table with DbInfo
@@ -98,7 +98,7 @@ alterTableAddUniqueConstraint ::
   [FieldNameDB] ->
   DbAction m ()
 alterTableAddUniqueConstraint proxy (ConstraintNameDB cname) fields =
-  runDbSession (mkCallInfo "alterTableAddUniqueConstraint") $
+  runDbSession (mkDbCallStack "alterTableAddUniqueConstraint") $
     HsqlSess.statement () $
       addUniqueConstraintStmt tbName cname fieldNames
   where
@@ -113,7 +113,7 @@ alterTableDropConstraint ::
   ConstraintNameDB ->
   DbAction m ()
 alterTableDropConstraint proxy (ConstraintNameDB cname) =
-  runDbSession (mkCallInfo "alterTableDropConstraint") $
+  runDbSession (mkDbCallStack "alterTableDropConstraint") $
     HsqlSess.statement () $
       dropConstraintStmt tbName cname
   where

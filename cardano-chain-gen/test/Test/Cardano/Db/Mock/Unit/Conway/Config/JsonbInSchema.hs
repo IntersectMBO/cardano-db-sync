@@ -20,7 +20,6 @@ configRemoveJsonbFromSchemaEnabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaEnabled = do
   withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
     startDBSync dbSync
-    threadDelay 7_000_000
     assertEqQuery
       dbSync
       DB.queryJsonbInSchemaExistsTest
@@ -38,7 +37,6 @@ configRemoveJsonbFromSchemaDisabled = do
   withCustomConfigAndDropDB args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
     \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
-      threadDelay 7_000_000
       assertEqQuery
         dbSync
         DB.queryJsonbInSchemaExistsTest
@@ -54,7 +52,6 @@ configJsonbInSchemaShouldRemoveThenAdd :: IOManager -> [(Text, Text)] -> Asserti
 configJsonbInSchemaShouldRemoveThenAdd =
   withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
-    threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
       DB.queryJsonbInSchemaExistsTest
@@ -72,7 +69,6 @@ configJsonbInSchemaShouldRemoveThenAdd =
                   }
             }
     startDBSync newDbSyncEnv
-    threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
       DB.queryJsonbInSchemaExistsTest

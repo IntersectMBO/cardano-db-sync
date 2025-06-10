@@ -140,7 +140,6 @@ module Cardano.Db.Operations.Delete (
 --     pure [("GovActionProposal Nulled", a + b + c + e)]
 --   pure $ countLogs <> nullLogs
 
--- TODO: CMDV
 -- deleteTablesAfterBlockId ::
 --   MonadIO m =>
 --   TxOutVariantType ->

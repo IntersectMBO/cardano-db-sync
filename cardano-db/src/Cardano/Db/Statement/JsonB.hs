@@ -5,7 +5,7 @@
 
 module Cardano.Db.Statement.JsonB where
 
-import Cardano.Prelude (ExceptT, MonadError (..))
+import Cardano.Prelude (ExceptT, MonadError (..), forM_)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
@@ -16,7 +16,7 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
-import Cardano.Db.Statement.Function.Core (mkCallInfo, mkCallSite, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Types (DbAction)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -24,27 +24,34 @@ import qualified Data.Text.Encoding as TextEnc
 --------------------------------------------------------------------------------
 -- Enable JSONB for specific fields in the schema
 --------------------------------------------------------------------------------
-enableJsonbInSchemaStmt :: HsqlStmt.Statement () ()
-enableJsonbInSchemaStmt = do
-  HsqlStmt.Statement
-    ( mconcat $
-        zipWith
-          ( \s i ->
-              (if i > (0 :: Integer) then "; " else "")
-                <> "ALTER TABLE "
-                <> fst s
-                <> " ALTER COLUMN "
-                <> snd s
-                <> " TYPE jsonb USING "
-                <> snd s
-                <> "::jsonb"
-          )
-          jsonbColumns
-          [0 ..]
-    )
-    HsqlE.noParams
-    HsqlD.noResult
-    True
+-- enableJsonbInSchemaStmt :: HsqlStmt.Statement () ()
+-- enableJsonbInSchemaStmt = do
+--   HsqlStmt.Statement
+--     ( mconcat $
+--         zipWith
+--           ( \s i ->
+--               (if i > (0 :: Integer) then "; " else "")
+--                 <> "ALTER TABLE "
+--                 <> fst s
+--                 <> " ALTER COLUMN "
+--                 <> snd s
+--                 <> " TYPE jsonb USING "
+--                 <> snd s
+--                 <> "::jsonb"
+--           )
+--           jsonbColumns
+--           [0 ..]
+--     )
+--     HsqlE.noParams
+--     HsqlD.noResult
+--     True
+
+enableJsonbInSchema :: MonadIO m => DbAction m ()
+enableJsonbInSchema =
+  runDbSession (mkDbCallStack "enableJsonbInSchema") $ do
+    forM_ jsonbColumns $ \(table, column) ->
+      HsqlSes.sql $
+        "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE jsonb USING " <> column <> "::jsonb"
   where
     jsonbColumns :: [(ByteString, ByteString)]
     jsonbColumns =
@@ -58,33 +65,15 @@ enableJsonbInSchemaStmt = do
       , ("off_chain_vote_data", "json")
       ]
 
-enableJsonbInSchema :: MonadIO m => DbAction m ()
-enableJsonbInSchema =
-  runDbSession (mkCallInfo "enableJsonbInSchema") $
-    HsqlSes.statement () enableJsonbInSchemaStmt
-
 --------------------------------------------------------------------------------
 -- Disable JSONB for specific fields in the schema
 --------------------------------------------------------------------------------
-disableJsonbInSchemaStmt :: HsqlStmt.Statement () ()
-disableJsonbInSchemaStmt =
-  HsqlStmt.Statement
-    ( mconcat $
-        zipWith
-          ( \columnDef i ->
-              (if i > (0 :: Integer) then "; " else "")
-                <> "ALTER TABLE "
-                <> fst columnDef
-                <> " ALTER COLUMN "
-                <> snd columnDef
-                <> " TYPE VARCHAR"
-          )
-          jsonColumnsToRevert
-          [0 ..]
-    )
-    HsqlE.noParams
-    HsqlD.noResult
-    True
+disableJsonbInSchema :: MonadIO m => DbAction m ()
+disableJsonbInSchema =
+  runDbSession (mkDbCallStack "disableJsonbInSchema") $ do
+    forM_ jsonColumnsToRevert $ \(table, column) ->
+      HsqlSes.sql $
+        "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE VARCHAR"
   where
     -- List of table and column pairs to convert back from JSONB
     jsonColumnsToRevert :: [(ByteString, ByteString)]
@@ -98,11 +87,6 @@ disableJsonbInSchemaStmt =
       , ("off_chain_pool_data", "json")
       , ("off_chain_vote_data", "json")
       ]
-
-disableJsonbInSchema :: MonadIO m => DbAction m ()
-disableJsonbInSchema =
-  runDbSession (mkCallInfo "disableJsonbInSchema") $
-    HsqlSes.statement () disableJsonbInSchemaStmt
 
 -- | Check if the JSONB column exists in the schema
 jsonbSchemaStatement :: HsqlStmt.Statement () Int64
@@ -134,13 +118,13 @@ queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
 queryJsonbInSchemaExists conn = do
   result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
   case result of
-    Left err -> throwError $ DbError mkCallSite "queryJsonbInSchemaExists" $ Just err
+    Left err -> throwError $ DbError (mkDbCallStack "queryJsonbInSchemaExists") "" $ Just err
     Right countRes -> pure $ countRes == 1
 
 -- Test function using DbAction monad
 queryJsonbInSchemaExistsTest :: MonadIO m => DbAction m Bool
 queryJsonbInSchemaExistsTest = do
   result <-
-    runDbSession (mkCallInfo "queryJsonbInSchemaExists") $
+    runDbSession (mkDbCallStack "queryJsonbInSchemaExists") $
       HsqlSes.statement () jsonbSchemaStatement
   pure $ result == 1

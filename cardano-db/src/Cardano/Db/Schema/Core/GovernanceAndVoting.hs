@@ -264,7 +264,9 @@ data GovActionProposal = GovActionProposal
   deriving (Eq, Show, Generic)
 
 type instance Key GovActionProposal = Id.GovActionProposalId
-instance DbInfo GovActionProposal
+
+instance DbInfo GovActionProposal where
+  jsonbFields _ = ["description"]
 
 entityGovActionProposalDecoder :: D.Row (Entity GovActionProposal)
 entityGovActionProposalDecoder =
@@ -392,8 +394,10 @@ data VotingAnchor = VotingAnchor
   deriving (Eq, Show, Generic)
 
 type instance Key VotingAnchor = Id.VotingAnchorId
+
 instance DbInfo VotingAnchor where
   uniqueFields _ = ["data_hash", "url", "type"]
+  enumFields _ = [("type", "anchorType")]
 
 entityVotingAnchorDecoder :: D.Row (Entity VotingAnchor)
 entityVotingAnchorDecoder =

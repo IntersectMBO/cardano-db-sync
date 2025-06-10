@@ -2,7 +2,7 @@
 
 module Cardano.Db.Error (
   -- AsDbError (..),
-  CallSite (..),
+  DbCallStack (..),
   DbError (..),
   runOrThrowIODb,
   runOrThrowIO,
@@ -21,18 +21,19 @@ import qualified Data.Text.Encoding as Text
 import qualified Hasql.Session as HsqlSes
 
 data DbError = DbError
-  { dbErrorCallSite :: !CallSite
+  { dbErrorDbCallStack :: !DbCallStack
   , dbErrorMessage :: !Text
-  , dbErrorCause :: !(Maybe HsqlSes.SessionError) -- Now a Maybe
+  , dbErrorCause :: !(Maybe HsqlSes.SessionError)
   }
   deriving (Show, Eq)
 
 instance Exception DbError
 
-data CallSite = CallSite
-  { csModule :: !Text
-  , csFile :: !Text
-  , csLine :: !Int
+data DbCallStack = DbCallStack
+  { dbCsFncName :: !Text
+  , dbCsModule :: !Text
+  , dbCsFile :: !Text
+  , dbCsLine :: !Int
   }
   deriving (Show, Eq)
 

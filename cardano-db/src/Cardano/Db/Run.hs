@@ -37,7 +37,7 @@ import Prelude (error, userError)
 
 import Cardano.Db.Error (DbError (..), runOrThrowIO)
 import Cardano.Db.PGConfig
-import Cardano.Db.Statement.Function.Core (mkCallInfo, mkCallSite, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Types (DbAction (..), DbEnv (..))
 import qualified Data.Text as Text
 
@@ -74,14 +74,13 @@ transactionCommit = do
   dbEnv <- ask
   result <- liftIO $ HsqlSes.run commitTransaction (dbConnection dbEnv)
   case result of
-    Left err -> throwError $ DbError mkCallSite ("Error committing transaction: " <> Text.pack (show err)) Nothing
+    Left err -> throwError $ DbError (mkDbCallStack "transactionCommit") ("Error committing transaction: " <> Text.pack (show err)) Nothing
     Right _ -> pure ()
 
 -----------------------------------------------------------------------------------------
 -- Run DB actions
 -----------------------------------------------------------------------------------------
 
--- | Run a DB action logging via iohk-monitoring-framework.
 runDbIohkLogging :: MonadUnliftIO m => Trace IO Text -> DbEnv -> DbAction (LoggingT m) a -> m a
 runDbIohkLogging tracer dbEnv@DbEnv {..} action = do
   runIohkLogging tracer $ do
@@ -98,7 +97,6 @@ runDbIohkLogging tracer dbEnv@DbEnv {..} action = do
         commitAction dbConnection
         pure val
 
--- | Run a DB action with NoLoggingT.
 runDbIohkNoLogging :: MonadIO m => DbEnv -> DbAction (NoLoggingT m) a -> m a
 runDbIohkNoLogging dbEnv@DbEnv {..} action = do
   runNoLoggingT $ do
@@ -124,8 +122,15 @@ runPoolDbIohkLogging ::
   m a
 runPoolDbIohkLogging connPool tracer action = do
   conn <- liftIO $ withResource connPool pure
-  let dbEnv = DbEnv conn True (Just tracer)
+  let dbEnv = mkDbEnv conn
   runDbIohkLogging tracer dbEnv action
+  where
+    mkDbEnv conn =
+      DbEnv
+        { dbConnection = conn
+        , dbEnableLogging = True
+        , dbTracer = Just tracer
+        }
 
 -- | Run a DB action with loggingT.
 runIohkLogging :: Trace IO Text -> LoggingT m a -> m a
@@ -161,7 +166,7 @@ runDbActionIO dbEnv action = do
 
 createTransactionCheckpoint :: MonadIO m => DbAction m ()
 createTransactionCheckpoint =
-  runDbSession (mkCallInfo "createTransactionCheckpoint") beginTransaction
+  runDbSession (mkDbCallStack "createTransactionCheckpoint") beginTransaction
 
 -- | Run a DB action without any logging, mainly for tests.
 runDbNoLoggingEnv :: MonadIO m => DbAction m a -> m a

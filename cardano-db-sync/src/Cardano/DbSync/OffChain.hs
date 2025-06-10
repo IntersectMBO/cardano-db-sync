@@ -164,7 +164,7 @@ insertOffChainVoteResults trce resultQueue = do
             allReferences = concatMap (\(_, acc, id) -> offChainVoteReferences acc id) metadataIds
             allExternalUpdates = concatMap (\(_, acc, id) -> offChainVoteExternalUpdates acc id) metadataIds
         -- Execute all bulk inserts in a pipeline
-        DB.runDbSession (DB.mkCallInfo "insertRelatedDataPipeline") $
+        DB.runDbSession (DB.mkDbCallStack "insertRelatedDataPipeline") $
           HsqlSes.pipeline $ do
             -- Insert all related data in one pipeline
             unless (null allGovActions) $
@@ -191,7 +191,7 @@ insertOffChainVoteResults trce resultQueue = do
       let metadata = map fst metadataWithAccessors
       -- Insert and get IDs
       ids <-
-        DB.runDbSession (DB.mkCallInfo "insertMetadataWithIds") $
+        DB.runDbSession (DB.mkDbCallStack "insertMetadataWithIds") $
           HsqlSes.statement metadata DB.insertBulkOffChainVoteDataStmt
 
       -- Return original data with IDs
@@ -200,7 +200,7 @@ insertOffChainVoteResults trce resultQueue = do
     -- Bulk insert for errors (you'll need to create this statement)
     insertBulkOffChainVoteFetchErrors :: MonadIO m => [DB.OffChainVoteFetchError] -> DB.DbAction m ()
     insertBulkOffChainVoteFetchErrors errors =
-      DB.runDbSession (DB.mkCallInfo "insertBulkOffChainVoteFetchErrors") $
+      DB.runDbSession (DB.mkDbCallStack "insertBulkOffChainVoteFetchErrors") $
         HsqlSes.statement errors DB.insertBulkOffChainVoteFetchErrorStmt
 
 logInsertOffChainResults ::

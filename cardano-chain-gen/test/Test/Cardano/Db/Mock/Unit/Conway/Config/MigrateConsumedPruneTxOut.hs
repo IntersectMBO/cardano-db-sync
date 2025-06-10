@@ -106,6 +106,7 @@ performPruneWithSimpleRollback useTxOutAddress =
     atomically $ addBlock mockServer blk0
 
     startDBSync dbSync
+
     atomically $ addBlock mockServer blk1
 
     -- Create some payment transactions

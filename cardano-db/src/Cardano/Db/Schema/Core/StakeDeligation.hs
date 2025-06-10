@@ -35,9 +35,10 @@ import Cardano.Db.Types (
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
--- |
+-----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: stake_address
 -- Description: Contains information about stakeholder addresses.
+-----------------------------------------------------------------------------------------------------------------------------------
 data StakeAddress = StakeAddress -- Can be an address of a script hash
   { stakeAddressHashRaw :: !ByteString -- sqltype=addr29type
   , stakeAddressView :: !Text
@@ -78,10 +79,9 @@ stakeAddressEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: stake_registration
 -- Description: Contains information about stakeholder registrations.
+-----------------------------------------------------------------------------------------------------------------------------------
 data StakeRegistration = StakeRegistration
   { stakeRegistrationAddrId :: !StakeAddressId -- noreference
   , stakeRegistrationCertIndex :: !Word16
@@ -127,11 +127,8 @@ stakeRegistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: stake_deregistration
 -- Description: Contains information about stakeholder deregistrations.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data StakeDeregistration = StakeDeregistration
   { stakeDeregistrationAddrId :: !StakeAddressId -- noreference
@@ -178,11 +175,8 @@ stakeDeregistrationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: delegation
 -- Description:Contains information about stakeholder delegations, including the stakeholder's address and the pool to which they are delegating.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data Delegation = Delegation
   { delegationAddrId :: !StakeAddressId -- noreference
@@ -235,14 +229,11 @@ delegationEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: reward
 -- Description: Reward, Stake and Treasury need to be obtained from the ledger state.
 --   The reward for each stake address and. This is not a balance, but a reward amount and the
 --   epoch in which the reward was earned.
 --   This table should never get rolled back.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data Reward = Reward
   { rewardAddrId :: !StakeAddressId -- noreference
@@ -302,11 +293,8 @@ rewardBulkEncoder =
     (bulkEncoder $ idBulkEncoder getPoolHashId)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: reward_rest
 -- Description: Contains information about the remaining reward for each stakeholder.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data RewardRest = RewardRest
   { rewardRestAddrId :: !StakeAddressId -- noreference
@@ -318,7 +306,9 @@ data RewardRest = RewardRest
   deriving (Show, Eq, Generic)
 
 type instance Key RewardRest = RewardRestId
-instance DbInfo RewardRest
+
+instance DbInfo RewardRest where
+  enumFields _ = [("type", "rewardtype"), ("amount", "lovelace")]
 
 entityRewardRestDecoder :: D.Row (Entity RewardRest)
 entityRewardRestDecoder =
@@ -361,12 +351,9 @@ rewardRestBulkEncoder =
     (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: epoch_stake
 -- Description: Contains information about the stake of each stakeholder in each epoch.
 --   This table should never get rolled back
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data EpochStake = EpochStake
   { epochStakeAddrId :: !StakeAddressId -- noreference
@@ -421,11 +408,8 @@ epochStakeBulkEncoder =
     (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- |
 -- Table Name: epoch_stake_progress
 -- Description: Contains information about the progress of the epoch stake calculation.
-
 -----------------------------------------------------------------------------------------------------------------------------------
 data EpochStakeProgress = EpochStakeProgress
   { epochStakeProgressEpochNo :: !Word64 -- sqltype=word31type

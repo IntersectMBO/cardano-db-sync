@@ -23,7 +23,7 @@ import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 -- @
 -- deleteInvalidRecords :: MonadIO m => DbAction m ()
 -- deleteInvalidRecords =
---   runDbSession (mkCallInfo "deleteInvalidRecords") $
+--   runDbSession (mkDbCallStack "deleteInvalidRecords") $
 --     HsqlSes.statement () (deleteWhere @Record "status" "= 'INVALID'")
 -- @
 deleteWhere ::
@@ -77,7 +77,7 @@ parameterisedDeleteWhere colName condition encoder =
 -- @
 -- deleteTxOutRecords :: MonadIO m => DbAction m Int64
 -- deleteTxOutRecords =
---   runDbSession (mkCallInfo "deleteTxOutRecords") $
+--   runDbSession (mkDbCallStack "deleteTxOutRecords") $
 --     HsqlSes.statement () (deleteWhereCount @TxOutCore "id" ">=" HsqlE.noParams)
 -- @
 deleteWhereCount ::
@@ -122,7 +122,7 @@ deleteWhereCount colName condition encoder =
 -- @
 -- truncateTable :: MonadIO m => DbAction m ()
 -- truncateTable =
---   runDbSession (mkCallInfo "truncateTable") $
+--   runDbSession (mkDbCallStack "truncateTable") $
 --     HsqlSes.statement () (deleteAll @MyTable)
 -- @
 deleteAll ::
@@ -144,7 +144,7 @@ deleteAll =
 -- @
 -- truncateAndCount :: MonadIO m => DbAction m Int64
 -- truncateAndCount =
---   runDbSession (mkCallInfo "truncateAndCount") $
+--   runDbSession (mkDbCallStack "truncateAndCount") $
 --     HsqlSes.statement () (deleteAllCount @MyTable)
 -- @
 deleteAllCount ::
