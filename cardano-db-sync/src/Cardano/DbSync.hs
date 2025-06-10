@@ -17,6 +17,7 @@ module Cardano.DbSync (
   SocketPath (..),
   Db.MigrationDir (..),
   runDbSyncNode,
+  runMigrationsOnly,
   runDbSync,
   -- For testing and debugging
   OffChainFetchError (..),
@@ -67,19 +68,19 @@ runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
     abortOnPanic <- hasAbortOnPanicEnv
     startupReport trce abortOnPanic params
 
-    runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic
+    -- Run initial migrations synchronously first
+    runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile
 
-runDbSync ::
-  MetricSetters ->
+    runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic
+
+-- Extract just the initial migration logic (no indexes)
+runMigrationsOnly ::
   [(Text, Text)] ->
-  IOManager ->
   Trace IO Text ->
   SyncNodeParams ->
   SyncNodeConfig ->
-  -- Should abort on panic
-  Bool ->
   IO ()
-runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFile abortOnPanic = do
+runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile = do
   logInfo trce $ textShow syncOpts
 
   -- Read the PG connection info
@@ -97,9 +98,11 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         msg <- Db.getMaintenancePsqlConf pgConfig
         logInfo trce $ "Running database migrations in mode " <> textShow mode
         logInfo trce msg
-        when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
+        -- No index warning here - runMigrationsOnly never runs indexes
         Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
-  (ranMigrations, unofficial) <- if enpForceIndexes params then runMigration Db.Full else runMigration Db.Initial
+
+  -- Always run Initial mode only - never indexes
+  (ranMigrations, unofficial) <- runMigration Db.Initial
   unless (null unofficial) $
     logWarning trce $
       "Unofficial migration scripts found: "
@@ -109,9 +112,27 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
     then logInfo trce "All migrations were executed"
     else logInfo trce "Some migrations were not executed. They need to run when syncing has started."
 
-  if enpForceIndexes params
-    then logInfo trce "All user indexes were created"
-    else logInfo trce "New user indexes were not created. They may be created later if necessary."
+  logInfo trce "New user indexes were not created. They may be created later if necessary."
+  where
+    dbMigrationDir :: Db.MigrationDir
+    dbMigrationDir = enpMigrationDir params
+    syncOpts = extractSyncOptions params False syncNodeConfigFromFile
+    txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
+
+runDbSync ::
+  MetricSetters ->
+  IOManager ->
+  Trace IO Text ->
+  SyncNodeParams ->
+  SyncNodeConfig ->
+  -- Should abort on panic
+  Bool ->
+  IO ()
+runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic = do
+  logInfo trce $ textShow syncOpts
+
+  -- Read the PG connection info
+  pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
 
   dbConnectionSetting <- case Db.toConnectionSetting pgConfig of
     Left err -> do
@@ -123,20 +144,30 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
   -- For testing and debugging.
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
+
+  -- This runMigration is ONLY for delayed migrations during sync (like indexes)
+  let runDelayedMigration mode = do
+        msg <- Db.getMaintenancePsqlConf pgConfig
+        logInfo trce $ "Running database migrations in mode " <> textShow mode
+        logInfo trce msg
+        when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
+        Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
+
   runSyncNode
     metricsSetters
     trce
     iomgr
     dbConnectionSetting
-    (void . runMigration)
+    (void . runDelayedMigration)
     syncNodeConfigFromFile
     params
     syncOpts
   where
     dbMigrationDir :: Db.MigrationDir
     dbMigrationDir = enpMigrationDir params
+    syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
+    txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
 
-    indexesMsg :: Text
     indexesMsg =
       mconcat
         [ "Creating Indexes. This may require an extended period of time to perform."
@@ -145,10 +176,6 @@ runDbSync metricsSetters knownMigrations iomgr trce params syncNodeConfigFromFil
         , " some of these indexes, you can stop db-sync, delete or modify any migration-4-* files"
         , " in the schema directory and restart it."
         ]
-
-    syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
-
-    txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
 
 runSyncNode ::
   MetricSetters ->
@@ -162,7 +189,7 @@ runSyncNode ::
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -190,12 +217,11 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runMigrationFnc syncNodeConf
               mkSyncEnvFromConfig
                 trce
                 dbEnv
-                -- dbConnString
                 syncOptions
                 genCfg
                 syncNodeConfigFromFile
                 syncNodeParams
-                runMigrationFnc
+                runDelayedMigrationFnc
 
           -- Warn the user that jsonb datatypes are being removed from the database schema.
           when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do

@@ -119,7 +119,8 @@ entityBlockEncoder =
 blockEncoder :: E.Params Block
 blockEncoder =
   mconcat
-    [ blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    [ blockHash >$< E.param (E.nonNullable E.bytea)
+    , blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockEpochSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockBlockNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
@@ -222,7 +223,9 @@ data TxMetadata = TxMetadata
   deriving (Eq, Show, Generic)
 
 type instance Key TxMetadata = TxMetadataId
-instance DbInfo TxMetadata
+
+instance DbInfo TxMetadata where
+  jsonbFields _ = ["json"]
 
 entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
 entityTxMetadataDecoder =
@@ -493,6 +496,7 @@ data Datum = Datum
 type instance Key Datum = DatumId
 instance DbInfo Datum where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["value"]
 
 entityDatumDecoder :: D.Row (Entity Datum)
 entityDatumDecoder =
@@ -539,8 +543,11 @@ data Script = Script
   deriving (Eq, Show, Generic)
 
 type instance Key Script = ScriptId
+
 instance DbInfo Script where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["json"]
+  enumFields _ = [("type", "scripttype")]
 
 entityScriptDecoder :: D.Row (Entity Script)
 entityScriptDecoder =
@@ -654,6 +661,7 @@ data RedeemerData = RedeemerData
 type instance Key RedeemerData = RedeemerDataId
 instance DbInfo RedeemerData where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["value"]
 
 entityRedeemerDataDecoder :: D.Row (Entity RedeemerData)
 entityRedeemerDataDecoder =

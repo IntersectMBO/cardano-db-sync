@@ -22,7 +22,7 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
-import Cardano.Db.Statement.Function.Core (ResultType (..), mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key, validateColumn)
 import Cardano.Db.Types (Ada (..), DbAction, lovelaceToAda)
 
@@ -187,7 +187,7 @@ existsWhereByColumn colName encoder resultType =
 -- @
 -- replaceVotingAnchor :: MonadIO m => VotingAnchorId -> VotingAnchor -> DbAction m ()
 -- replaceVotingAnchor key record =
---   runDbSession (mkCallInfo "replaceVotingAnchor") $
+--   runDbSession (mkDbCallStack "replaceVotingAnchor") $
 --     HsqlStmt.statement (key, record) $ replaceRecord
 --       @VotingAnchor
 --       (idEncoder getVotingAnchorId)
@@ -234,11 +234,11 @@ replaceRecord keyEnc recordEnc =
 -- queryTxOutUnspentCount txOutVariantType =
 --   case txOutVariantType of
 --     TxOutVariantCore ->
---       runDbSession (mkCallInfo "queryTxOutUnspentCountCore") $
+--       runDbSession (mkDbCallStack "queryTxOutUnspentCountCore") $
 --         HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
 --
 --     TxOutVariantAddress ->
---       runDbSession (mkCallInfo "queryTxOutUnspentCountAddress") $
+--       runDbSession (mkDbCallStack "queryTxOutUnspentCountAddress") $
 --         HsqlSes.statement () (countWhere @TxOutAddress "consumed_by_tx_id" "IS NULL")
 -- @
 countWhere ::
@@ -299,7 +299,7 @@ parameterisedCountWhere colName condition encoder =
 -- @
 -- queryTableCount :: MonadIO m => DbAction m Word64
 -- queryTableCount =
---   runDbSession (mkCallInfo "queryTableCount") $
+--   runDbSession (mkDbCallStack "queryTableCount") $
 --     HsqlSes.statement () (countAll @TxOutCore)
 -- @
 countAll ::
@@ -362,7 +362,7 @@ queryMinRefId ::
   HsqlD.Row (Key a) ->
   DbAction m (Maybe (Key a))
 queryMinRefId fieldName value encoder keyDecoder =
-  runDbSession (mkCallInfo "queryMinRefId") $
+  runDbSession (mkDbCallStack "queryMinRefId") $
     HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder keyDecoder)
 
 ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ queryMinRefIdNullable ::
   HsqlD.Row (Key a) ->
   DbAction m (Maybe (Key a))
 queryMinRefIdNullable fieldName value encoder keyDecoder =
-  runDbSession (mkCallInfo "queryMinRefIdNullable") $
+  runDbSession (mkDbCallStack "queryMinRefIdNullable") $
     HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder keyDecoder)
 
 ---------------------------------------------------------------------------
@@ -452,7 +452,7 @@ queryMaxRefId ::
   HsqlD.Row (Key a) ->
   DbAction m (Maybe (Key a))
 queryMaxRefId fieldName value eq encoder keyDecoder =
-  runDbSession (mkCallInfo "queryMaxRefId") $
+  runDbSession (mkDbCallStack "queryMaxRefId") $
     HsqlSes.statement value (queryMaxRefIdStmt @a fieldName eq encoder keyDecoder)
 
 ---------------------------------------------------------------------------
@@ -468,14 +468,14 @@ queryStatementCacheStmt =
 
 queryStatementCacheSize :: MonadIO m => DbAction m Int
 queryStatementCacheSize =
-  runDbSession (mkCallInfo "queryStatementCacheSize") $
+  runDbSession (mkDbCallStack "queryStatementCacheSize") $
     HsqlSes.statement () queryStatementCacheStmt
 
 -- Decoder for Ada amounts from database int8 values
 adaDecoder :: HsqlD.Row Ada
 adaDecoder = do
   amount <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
-  pure $ lovelaceToAda (MkFixed $ fromIntegral amount)
+  pure $ lovelaceToAda (fromIntegral amount)
 
 -- Decoder for summed Ada amounts with null handling
 adaSumDecoder :: HsqlD.Row Ada

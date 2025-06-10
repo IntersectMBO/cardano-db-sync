@@ -60,7 +60,7 @@ acquireDbConnection :: [HsqlSet.Setting] -> IO HsqlC.Connection
 acquireDbConnection settings = do
   result <- HsqlC.acquire settings
   case result of
-    Left connErr -> throwIO $ SNErrDatabase $ DB.DbError DB.mkCallSite ("acquireDbConnection: " <> show connErr) Nothing
+    Left connErr -> throwIO $ SNErrDatabase $ DB.DbError (DB.mkDbCallStack "acquireDbConnection") (show connErr) Nothing
     Right conn -> pure conn
 
 mkDbApply :: CardanoBlock -> DbEvent

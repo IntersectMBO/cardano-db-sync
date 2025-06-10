@@ -45,8 +45,10 @@ data OffChainPoolData = OffChainPoolData
   deriving (Eq, Show, Generic)
 
 type instance Key OffChainPoolData = Id.OffChainPoolDataId
+
 instance DbInfo OffChainPoolData where
   uniqueFields _ = ["pool_id", "prm_id"]
+  jsonbFields _ = ["json"]
 
 entityOffChainPoolDataDecoder :: D.Row (Entity OffChainPoolData)
 entityOffChainPoolDataDecoder =
@@ -151,8 +153,10 @@ data OffChainVoteData = OffChainVoteData
   deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteData = Id.OffChainVoteDataId
+
 instance DbInfo OffChainVoteData where
   uniqueFields _ = ["hash", "voting_anchor_id"]
+  jsonbFields _ = ["json"]
 
 entityOffChainVoteDataDecoder :: D.Row (Entity OffChainVoteData)
 entityOffChainVoteDataDecoder =

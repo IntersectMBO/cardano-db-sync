@@ -207,7 +207,7 @@ startDBSync env = do
     Just _a -> error "db-sync already running"
     Nothing -> do
       let appliedRunDbSync = partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
-      -- we async the fully applied runDbSync here ad put it into the thread
+      -- we async the fully applied runDbSync here and put it into the thread
       asyncApplied <- async appliedRunDbSync
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
 
@@ -225,7 +225,8 @@ getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
-queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
+queryDBSync env = do
+  DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
@@ -557,7 +558,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
       then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce params cfg' True
+  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
@@ -578,6 +579,14 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
           if null tableNames || shouldDropDB
             then void . hSilence [stderr] $ DB.recreateDB pgPass
             else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
+
+          -- Run migrations synchronously first
+          runMigrationsOnly
+            migr
+            trce
+            (syncNodeParams cfg)
+            syncNodeConfig
+
           action interpreter mockServer dbSyncEnv
   where
     mutableDir = mkMutableDir testLabelFilePath

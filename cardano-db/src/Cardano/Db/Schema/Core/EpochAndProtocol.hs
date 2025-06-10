@@ -373,6 +373,7 @@ data EpochSyncTime = EpochSyncTime
 type instance Key EpochSyncTime = EpochSyncTimeId
 instance DbInfo EpochSyncTime where
   uniqueFields _ = ["no"]
+  enumFields _ = [("state", "syncstatetype")]
 
 entityEpochSyncTimeDecoder :: D.Row (Entity EpochSyncTime)
 entityEpochSyncTimeDecoder =
@@ -426,7 +427,9 @@ data AdaPots = AdaPots
   deriving (Show, Eq, Generic)
 
 type instance Key AdaPots = AdaPotsId
-instance DbInfo AdaPots
+
+instance DbInfo AdaPots where
+  uniqueFields _ = ["block_id"]
 
 entityAdaPotsDecoder :: D.Row (Entity AdaPots)
 entityAdaPotsDecoder =
@@ -624,6 +627,7 @@ data CostModel = CostModel
 type instance Key CostModel = CostModelId
 instance DbInfo CostModel where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["costs"]
 
 entityCostModelDecoder :: D.Row (Entity CostModel)
 entityCostModelDecoder =

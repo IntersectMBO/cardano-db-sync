@@ -3,13 +3,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Statement.Types where
 
@@ -61,6 +61,16 @@ class Typeable a => DbInfo a where
      in case fieldNames of
           [] -> error "No fields found"
           ns -> NE.fromList $ map (fieldToColumnWithType typeName) ns
+
+  -- | Column names that can be of the type jsonb.
+  jsonbFields :: Proxy a -> [Text]
+  default jsonbFields :: Proxy a -> [Text]
+  jsonbFields _ = []
+
+  -- \| Column names that have an enum type.
+  enumFields :: Proxy a -> [(Text, Text)] -- (column_name, enum_type)
+  default enumFields :: Proxy a -> [(Text, Text)]
+  enumFields _ = []
 
   uniqueFields ::
     Proxy a ->

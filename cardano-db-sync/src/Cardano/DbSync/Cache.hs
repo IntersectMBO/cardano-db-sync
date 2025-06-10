@@ -20,6 +20,7 @@ module Cardano.DbSync.Cache (
   insertAddressUsingCache,
   insertStakeAddress,
   queryStakeAddrWithCache,
+  queryTxIdWithCacheEither,
   queryTxIdWithCache,
   rollbackCache,
   optimiseCaches,
@@ -224,7 +225,7 @@ queryPoolKeyWithCache cache cacheUA hsh =
     NoCache -> do
       mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
       case mPhId of
-        Nothing -> pure $ Left $ DB.DbError DB.mkCallSite "queryPoolKeyWithCache: NoCache queryPoolHashId" Nothing
+        Nothing -> pure $ Left $ DB.DbError (DB.mkDbCallStack "queryPoolKeyWithCache") "NoCache queryPoolHashId" Nothing
         Just phId -> pure $ Right phId
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cPools ci)
@@ -242,7 +243,7 @@ queryPoolKeyWithCache cache cacheUA hsh =
           liftIO $ missPools (cStats ci)
           mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
           case mPhId of
-            Nothing -> throwError $ DB.DbError DB.mkCallSite "queryPoolKeyWithCache: ActiveCache queryPoolHashId" Nothing
+            Nothing -> throwError $ DB.DbError (DB.mkDbCallStack "queryPoolKeyWithCache") "ActiveCache queryPoolHashId" Nothing
             Just phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
               when (shouldCache cacheUA) $
@@ -406,6 +407,16 @@ queryMAWithCache cache policyId asset =
       let !policyBs = Generic.unScriptHash $ policyID policyId
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
+
+queryTxIdWithCacheEither ::
+  MonadIO m =>
+  CacheStatus ->
+  Ledger.TxId StandardCrypto ->
+  DB.DbAction m (Either DB.DbError DB.TxId)
+queryTxIdWithCacheEither cache txIdLedger = do
+  catchError
+    (Right <$> queryTxIdWithCache cache txIdLedger)
+    (pure . Left)
 
 queryPrevBlockWithCache ::
   MonadIO m =>
