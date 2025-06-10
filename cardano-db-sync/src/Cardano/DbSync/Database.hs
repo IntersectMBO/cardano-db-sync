@@ -67,7 +67,8 @@ runDbThread syncEnv metricsSetters queue = do
     -- Process a list of actions
     processActions :: [DbEvent] -> IO ()
     processActions actions = do
-      result <- runExceptT $ runActions syncEnv actions -- runActions is where we start inserting information we recieve from the node.
+      -- runActions is where we start inserting information we recieve from the node.
+      result <- runExceptT $ runActions syncEnv actions
 
       -- Update metrics with the latest block information
       updateBlockMetrics
@@ -95,46 +96,6 @@ runDbThread syncEnv metricsSetters queue = do
       whenJust mBlock $ \block -> do
         setDbBlockHeight metricsSetters $ bBlockNo block
         setDbSlotHeight metricsSetters $ bSlotNo block
-
--- runDbThread ::
---   SyncEnv ->
---   MetricSetters ->
---   ThreadChannels ->
---   IO ()
--- runDbThread syncEnv metricsSetters queue = do
---   logInfo trce "Running DB thread"
---   logException trce "runDBThread: " loop
---   logInfo trce "Shutting down DB thread"
---   where
---     trce = getTrace syncEnv
---     loop = do
---       xs <- blockingFlushDbEventQueue queue
-
---       when (length xs > 1) $ do
---         logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
-
---       case hasRestart xs of
---         Nothing -> do
---           eNextState <- runExceptT $ runActions syncEnv xs
-
---           mBlock <- getDbLatestBlockInfo (envDbEnv syncEnv)
---           whenJust mBlock $ \block -> do
---             setDbBlockHeight metricsSetters $ bBlockNo block
---             setDbSlotHeight metricsSetters $ bSlotNo block
-
---           case eNextState of
---             Left err -> logError trce $ show err
---             Right Continue -> loop
---             Right Done -> pure ()
---         Just resultVar -> do
---           -- In this case the syncing thread has restarted, so ignore all blocks that are not
---           -- inserted yet.
---           logInfo trce "Chain Sync client thread has restarted"
---           latestPoints <- getLatestPoints syncEnv
---           currentTip <- getCurrentTipBlockNo syncEnv
---           logDbState syncEnv
---           atomically $ putTMVar resultVar (latestPoints, currentTip)
---           loop
 
 -- | Run the list of 'DbEvent's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.

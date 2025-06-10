@@ -26,7 +26,7 @@ import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..))
 import qualified Cardano.Db.Schema.Variants as SV
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (mkCallInfo, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
 import Cardano.Db.Statement.Function.Query (queryMinRefId)
 import Cardano.Db.Statement.Types (DbInfo (..))
@@ -42,7 +42,7 @@ runDeletePipeline ::
   [(Text.Text, HsqlSes.Session Int64)] ->
   DbAction m [(Text.Text, Int64)]
 runDeletePipeline opName operations = do
-  runDbSession (mkCallInfo opName) $ do
+  runDbSession (mkDbCallStack opName) $ do
     forM operations $ \(tName, deleteSession) -> do
       count <- deleteSession
       pure (tName, count)

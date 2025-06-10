@@ -18,9 +18,8 @@ import Test.Tasty.HUnit (Assertion ())
 
 configRemoveJsonbFromSchemaEnabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaEnabled = do
-  withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
     startDBSync dbSync
-    threadDelay 7_000_000
     assertEqQuery
       dbSync
       DB.queryJsonbInSchemaExistsTest
@@ -35,10 +34,9 @@ configRemoveJsonbFromSchemaEnabled = do
 
 configRemoveJsonbFromSchemaDisabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaDisabled = do
-  withCustomConfigAndDropDB args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
     \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
-      threadDelay 7_000_000
       assertEqQuery
         dbSync
         DB.queryJsonbInSchemaExistsTest
@@ -52,9 +50,8 @@ configRemoveJsonbFromSchemaDisabled = do
 
 configJsonbInSchemaShouldRemoveThenAdd :: IOManager -> [(Text, Text)] -> Assertion
 configJsonbInSchemaShouldRemoveThenAdd =
-  withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
-    threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
       DB.queryJsonbInSchemaExistsTest
@@ -72,7 +69,6 @@ configJsonbInSchemaShouldRemoveThenAdd =
                   }
             }
     startDBSync newDbSyncEnv
-    threadDelay 7_000_000
     assertEqQuery
       dbSyncEnv
       DB.queryJsonbInSchemaExistsTest

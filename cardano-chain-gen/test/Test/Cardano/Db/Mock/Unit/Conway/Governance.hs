@@ -51,7 +51,7 @@ import qualified Prelude
 
 drepDistr :: IOManager -> [(Text, Text)] -> Assertion
 drepDistr =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote

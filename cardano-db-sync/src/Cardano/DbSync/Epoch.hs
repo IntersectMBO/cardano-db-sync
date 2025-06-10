@@ -225,7 +225,7 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
       newEpoch <- DB.queryCalcEpochEntry $ ebdEpochNo currentEpC
       writeToMapEpochCache syncEnv cache newEpoch
     -- There will always be a EpochBlockDiff at this point in time
-    (_, _) -> throwError $ DB.DbError DB.mkCallSite "handleEpochCachingWhenSyncing: No caches available to update cache" Nothing
+    (_, _) -> throwError $ DB.DbError (DB.mkDbCallStack "handleEpochCachingWhenSyncing") "No caches available to update cache" Nothing
 
 -----------------------------------------------------------------------------------------------------
 -- Helper functions

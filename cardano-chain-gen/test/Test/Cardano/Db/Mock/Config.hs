@@ -50,12 +50,12 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
-  withFullConfigAndDropDB,
-  withFullConfigAndLogs,
-  withCustomConfigAndLogsAndDropDB,
+  withFullConfigDropDb,
+  withFullConfigLog,
+  withCustomConfigDropDbLog,
   withCustomConfig,
-  withCustomConfigAndDropDB,
-  withCustomConfigAndLogs,
+  withCustomConfigDropDb,
+  withCustomConfigLog,
   withFullConfig',
   replaceConfigFile,
   txOutVariantTypeFromConfig,
@@ -210,7 +210,7 @@ startDBSync env = do
     Just _a -> error "db-sync already running"
     Nothing -> do
       let appliedRunDbSync = partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
-      -- we async the fully applied runDbSync here ad put it into the thread
+      -- we async the fully applied runDbSync here and put it into the thread
       asyncApplied <- async appliedRunDbSync
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
 
@@ -228,7 +228,8 @@ getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
-queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
+queryDBSync env = do
+  DB.runWithConnectionNoLogging (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
@@ -404,7 +405,7 @@ withFullConfig =
     Nothing
 
 -- this function needs to be used where the schema needs to be rebuilt
-withFullConfigAndDropDB ::
+withFullConfigDropDb ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -413,7 +414,7 @@ withFullConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndDropDB =
+withFullConfigDropDb =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -424,7 +425,7 @@ withFullConfigAndDropDB =
     initCommandLineArgs
     Nothing
 
-withFullConfigAndLogs ::
+withFullConfigLog ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -433,7 +434,7 @@ withFullConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndLogs =
+withFullConfigLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -465,7 +466,7 @@ withCustomConfig =
         }
     )
 
-withCustomConfigAndDropDB ::
+withCustomConfigDropDb ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -477,7 +478,7 @@ withCustomConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndDropDB =
+withCustomConfigDropDb =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -487,7 +488,7 @@ withCustomConfigAndDropDB =
     )
 
 -- This is a usefull function to be able to see logs from DBSync when writing/debuging tests
-withCustomConfigAndLogs ::
+withCustomConfigLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -499,7 +500,7 @@ withCustomConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogs =
+withCustomConfigLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -508,7 +509,7 @@ withCustomConfigAndLogs =
         }
     )
 
-withCustomConfigAndLogsAndDropDB ::
+withCustomConfigDropDbLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -520,7 +521,7 @@ withCustomConfigAndLogsAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogsAndDropDB =
+withCustomConfigDropDbLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -560,7 +561,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
       then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce params cfg' True
+  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
@@ -581,6 +582,14 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
           if null tableNames || shouldDropDB
             then void . hSilence [stderr] $ DB.recreateDB pgPass
             else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
+
+          -- Run migrations synchronously first
+          runMigrationsOnly
+            migr
+            trce
+            (syncNodeParams cfg)
+            syncNodeConfig
+
           action interpreter mockServer dbSyncEnv
   where
     mutableDir = mkMutableDir testLabelFilePath

@@ -68,7 +68,7 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
     liftIO $ logError tracer $ show SNErrIgnoreShelleyInitiation
     throwError SNErrIgnoreShelleyInitiation
 
-  if False -- Replace with your logging condition
+  if DB.dbEnableLogging $ envDbEnv syncEnv
     then liftDbIO $ DB.runDbIohkLogging tracer (envDbEnv syncEnv) (insertAction prunes)
     else liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) (insertAction prunes)
   where
@@ -97,7 +97,7 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
               count <- DB.queryBlockCount
               when (count > 0) $
                 throwError $
-                  DB.DbError DB.mkCallSite (show err <> " Genesis data mismatch. count " <> textShow count) Nothing
+                  DB.DbError (DB.mkDbCallStack "insertAction") (show err <> " Genesis data mismatch. count " <> textShow count) Nothing
               void $ DB.insertMeta metaRecord
 
           when (hasInitialFunds || hasStakes) $ do
@@ -161,6 +161,7 @@ validateGenesisDistribution ::
   DB.DbAction m ()
 validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount = do
   let tracer = getTrace syncEnv
+      dbCallStack = DB.mkDbCallStack "validateGenesisDistribution"
       txOutVariantType = getTxOutVariantType syncEnv
   liftIO $ logInfo tracer "Validating Genesis distribution"
 
@@ -173,7 +174,7 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   when (DB.metaStartTime meta /= configStartTime cfg) $
     throwError $
       DB.DbError
-        DB.mkCallSite
+        dbCallStack
         ( Text.concat
             [ "Shelley: Mismatch chain start time. Config value "
             , textShow (configStartTime cfg)
@@ -186,7 +187,7 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   when (DB.metaNetworkName meta /= networkName) $
     throwError $
       DB.DbError
-        DB.mkCallSite
+        dbCallStack
         ( Text.concat
             [ "Shelley.validateGenesisDistribution: Provided network name "
             , networkName
@@ -200,7 +201,7 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   when (txCount /= expectedTxCount) $
     throwError $
       DB.DbError
-        DB.mkCallSite
+        dbCallStack
         ( Text.concat
             [ "Shelley.validateGenesisDistribution: Expected initial block to have "
             , textShow expectedTxCount
@@ -215,7 +216,7 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   when (expectedSupply /= totalSupply && not prunes) $
     throwError $
       DB.DbError
-        DB.mkCallSite
+        dbCallStack
         ( Text.concat
             [ "Shelley.validateGenesisDistribution: Expected total supply to be "
             , textShow expectedSupply

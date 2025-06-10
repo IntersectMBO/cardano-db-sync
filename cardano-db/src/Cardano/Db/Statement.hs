@@ -7,6 +7,7 @@ module Cardano.Db.Statement (
   module Cardano.Db.Statement.Function.Core,
   module Cardano.Db.Statement.Function.Delete,
   module Cardano.Db.Statement.Function.Insert,
+  module Cardano.Db.Statement.Function.InsertBulk,
   module Cardano.Db.Statement.Function.Query,
   module Cardano.Db.Statement.GovernanceAndVoting,
   module Cardano.Db.Statement.ChainGen,
@@ -28,6 +29,7 @@ import Cardano.Db.Statement.EpochAndProtocol
 import Cardano.Db.Statement.Function.Core
 import Cardano.Db.Statement.Function.Delete
 import Cardano.Db.Statement.Function.Insert
+import Cardano.Db.Statement.Function.InsertBulk
 import Cardano.Db.Statement.Function.Query
 import Cardano.Db.Statement.GovernanceAndVoting
 import Cardano.Db.Statement.JsonB

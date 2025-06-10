@@ -5,6 +5,8 @@ module Cardano.Db.Schema.Types where
 
 import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Encoding.Error as TextError
 import GHC.Generics (Generic)
 import qualified Hasql.Decoders as HsqlD
 import Quiet (Quiet (..))
@@ -36,3 +38,6 @@ newtype PoolUrl = PoolUrl {unPoolUrl :: Text}
 
 poolUrlDecoder :: HsqlD.Value PoolUrl
 poolUrlDecoder = PoolUrl <$> HsqlD.text
+
+textDecoder :: HsqlD.Value Text
+textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))

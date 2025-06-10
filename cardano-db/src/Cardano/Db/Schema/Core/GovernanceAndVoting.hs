@@ -154,6 +154,12 @@ data DrepDistr = DrepDistr
 type instance Key DrepDistr = Id.DrepDistrId
 instance DbInfo DrepDistr where
   uniqueFields _ = ["hash_id", "epoch_no"]
+  unnestParamTypes _ =
+    [ ("hash_id", "bigint[]")
+    , ("amount", "bigint[]")
+    , ("epoch_no", "bigint[]")
+    , ("active_until", "bigint[]")
+    ]
 
 entityDrepDistrDecoder :: D.Row (Entity DrepDistr)
 entityDrepDistrDecoder =
@@ -264,7 +270,9 @@ data GovActionProposal = GovActionProposal
   deriving (Eq, Show, Generic)
 
 type instance Key GovActionProposal = Id.GovActionProposalId
-instance DbInfo GovActionProposal
+
+instance DbInfo GovActionProposal where
+  jsonbFields _ = ["description"]
 
 entityGovActionProposalDecoder :: D.Row (Entity GovActionProposal)
 entityGovActionProposalDecoder =
@@ -392,8 +400,10 @@ data VotingAnchor = VotingAnchor
   deriving (Eq, Show, Generic)
 
 type instance Key VotingAnchor = Id.VotingAnchorId
+
 instance DbInfo VotingAnchor where
   uniqueFields _ = ["data_hash", "url", "type"]
+  enumFields _ = [("type", "anchorType")]
 
 entityVotingAnchorDecoder :: D.Row (Entity VotingAnchor)
 entityVotingAnchorDecoder =
@@ -892,7 +902,13 @@ data TreasuryWithdrawal = TreasuryWithdrawal
   deriving (Eq, Show, Generic)
 
 type instance Key TreasuryWithdrawal = Id.TreasuryWithdrawalId
-instance DbInfo TreasuryWithdrawal
+
+instance DbInfo TreasuryWithdrawal where
+  unnestParamTypes _ =
+    [ ("gov_action_proposal_id", "bigint[]")
+    , ("stake_address_id", "bigint[]")
+    , ("amount", "bigint[]")
+    ]
 
 entityTreasuryWithdrawalDecoder :: D.Row (Entity TreasuryWithdrawal)
 entityTreasuryWithdrawalDecoder =

@@ -119,7 +119,8 @@ entityBlockEncoder =
 blockEncoder :: E.Params Block
 blockEncoder =
   mconcat
-    [ blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    [ blockHash >$< E.param (E.nonNullable E.bytea)
+    , blockEpochNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockEpochSlotNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , blockBlockNo >$< E.param (E.nullable $ fromIntegral >$< E.int8)
@@ -222,7 +223,15 @@ data TxMetadata = TxMetadata
   deriving (Eq, Show, Generic)
 
 type instance Key TxMetadata = TxMetadataId
-instance DbInfo TxMetadata
+
+instance DbInfo TxMetadata where
+  jsonbFields _ = ["json"]
+  unnestParamTypes _ =
+    [ ("key", "bigint[]")
+    , ("json", "text[]")
+    , ("bytes", "bytea[]")
+    , ("tx_id", "bigint[]")
+    ]
 
 entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
 entityTxMetadataDecoder =
@@ -275,7 +284,14 @@ data TxIn = TxIn
   deriving (Show, Eq, Generic)
 
 type instance Key TxIn = TxInId
-instance DbInfo TxIn
+
+instance DbInfo TxIn where
+  unnestParamTypes _ =
+    [ ("tx_in_id", "bigint[]")
+    , ("tx_out_id", "bigint[]")
+    , ("tx_out_index", "bigint[]")
+    , ("redeemer_id", "bigint[]")
+    ]
 
 entityTxInDecoder :: D.Row (Entity TxIn)
 entityTxInDecoder =
@@ -493,6 +509,7 @@ data Datum = Datum
 type instance Key Datum = DatumId
 instance DbInfo Datum where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["value"]
 
 entityDatumDecoder :: D.Row (Entity Datum)
 entityDatumDecoder =
@@ -539,8 +556,11 @@ data Script = Script
   deriving (Eq, Show, Generic)
 
 type instance Key Script = ScriptId
+
 instance DbInfo Script where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["json"]
+  enumFields _ = [("type", "scripttype")]
 
 entityScriptDecoder :: D.Row (Entity Script)
 entityScriptDecoder =
@@ -599,7 +619,9 @@ data Redeemer = Redeemer
   deriving (Eq, Show, Generic)
 
 type instance Key Redeemer = RedeemerId
-instance DbInfo Redeemer
+
+instance DbInfo Redeemer where
+  enumFields _ = [("purpose", "scriptpurposetype")]
 
 entityRedeemerDecoder :: D.Row (Entity Redeemer)
 entityRedeemerDecoder =
@@ -654,6 +676,7 @@ data RedeemerData = RedeemerData
 type instance Key RedeemerData = RedeemerDataId
 instance DbInfo RedeemerData where
   uniqueFields _ = ["hash"]
+  jsonbFields _ = ["value"]
 
 entityRedeemerDataDecoder :: D.Row (Entity RedeemerData)
 entityRedeemerDataDecoder =

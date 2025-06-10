@@ -96,7 +96,16 @@ data PoolStat = PoolStat
   deriving (Eq, Show, Generic)
 
 type instance Key PoolStat = Id.PoolStatId
-instance DbInfo PoolStat
+
+instance DbInfo PoolStat where
+  unnestParamTypes _ =
+    [ ("pool_hash_id", "bigint[]")
+    , ("epoch_no", "bigint[]")
+    , ("number_of_blocks", "bigint[]")
+    , ("number_of_delegators", "bigint[]")
+    , ("stake", "bigint[]")
+    , ("voting_power", "bigint[]")
+    ]
 
 entityPoolStatDecoder :: D.Row (Entity PoolStat)
 entityPoolStatDecoder =
@@ -151,13 +160,13 @@ data PoolUpdate = PoolUpdate
   , poolUpdateCertIndex :: !Word16
   , poolUpdateVrfKeyHash :: !ByteString -- sqltype=hash32type
   , poolUpdatePledge :: !DbLovelace -- sqltype=lovelace
-  , poolUpdateRewardAddrId :: !Id.StakeAddressId -- noreference
   , poolUpdateActiveEpochNo :: !Word64
   , poolUpdateMetaId :: !(Maybe Id.PoolMetadataRefId) -- noreference
   , poolUpdateMargin :: !Double -- sqltype=percentage????
   , poolUpdateFixedCost :: !DbLovelace -- sqltype=lovelace
-  , poolUpdateDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
   , poolUpdateRegisteredTxId :: !Id.TxId -- noreference -- Slot number in which the pool was registered.
+  , poolUpdateRewardAddrId :: !Id.StakeAddressId -- noreference
+  , poolUpdateDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
   }
   deriving (Eq, Show, Generic)
 
@@ -177,13 +186,13 @@ poolUpdateDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolUpdateCertIndex (Word16)
     <*> D.column (D.nonNullable D.bytea) -- poolUpdateVrfKeyHash
     <*> dbLovelaceDecoder -- poolUpdatePledge
-    <*> Id.idDecoder Id.StakeAddressId -- poolUpdateRewardAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolUpdateActiveEpochNo
     <*> Id.maybeIdDecoder Id.PoolMetadataRefId -- poolUpdateMetaId
     <*> D.column (D.nonNullable D.float8) -- poolUpdateMargin
     <*> dbLovelaceDecoder -- poolUpdateFixedCost
-    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- poolUpdateDeposit
     <*> Id.idDecoder Id.TxId -- poolUpdateRegisteredTxId
+    <*> Id.idDecoder Id.StakeAddressId -- poolUpdateRewardAddrId
+    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- poolUpdateDeposit
 
 entityPoolUpdateEncoder :: E.Params (Entity PoolUpdate)
 entityPoolUpdateEncoder =
@@ -199,13 +208,13 @@ poolUpdateEncoder =
     , poolUpdateCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , poolUpdateVrfKeyHash >$< E.param (E.nonNullable E.bytea)
     , poolUpdatePledge >$< dbLovelaceEncoder
-    , poolUpdateRewardAddrId >$< Id.idEncoder Id.getStakeAddressId
     , poolUpdateActiveEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , poolUpdateMetaId >$< Id.maybeIdEncoder Id.getPoolMetadataRefId
     , poolUpdateMargin >$< E.param (E.nonNullable E.float8)
     , poolUpdateFixedCost >$< dbLovelaceEncoder
-    , poolUpdateDeposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
     , poolUpdateRegisteredTxId >$< Id.idEncoder Id.getTxId
+    , poolUpdateRewardAddrId >$< Id.idEncoder Id.getStakeAddressId
+    , poolUpdateDeposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

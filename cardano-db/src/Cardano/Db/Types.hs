@@ -12,7 +12,6 @@ module Cardano.Db.Types where
 
 -- (
 --   DbAction (..),
---   DbCallInfo (..),
 --   DbEnv (..),
 --   Ada (..),
 --   AnchorType (..),
@@ -100,7 +99,7 @@ module Cardano.Db.Types where
 --
 
 import Cardano.BM.Trace (Trace)
-import Cardano.Db.Error (CallSite (..), DbError (..))
+import Cardano.Db.Error (DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
 import Cardano.Prelude (Bifunctor (..), MonadError, MonadIO (..), MonadReader)
 import qualified Codec.Binary.Bech32 as Bech32
@@ -119,7 +118,7 @@ import Data.Either (fromRight)
 import Data.Fixed (Micro, showFixed)
 import Data.Functor.Contravariant ((>$<))
 import Data.Int (Int64)
-import Data.Scientific (Scientific)
+import Data.Scientific (Scientific (..))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.WideWord (Word128 (..))
@@ -145,13 +144,8 @@ newtype DbAction m a = DbAction
     )
 
 ----------------------------------------------------------------------------
--- DbCallInfo
+-- DbEnv
 ----------------------------------------------------------------------------
-data DbCallInfo = DbCallInfo
-  { dciName :: !Text
-  , dciCallSite :: !CallSite
-  }
-
 data DbEnv = DbEnv
   { dbConnection :: !HsqlCon.Connection
   , dbEnableLogging :: !Bool
@@ -177,7 +171,7 @@ instance ToJSON Ada where
   -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
   toEncoding (Ada ada) =
     unsafeToEncoding $
-      Builder.string8 $ -- convert ByteString to Aeson's
+      Builder.string8 $ -- convert ByteString to Aeson's -- convert ByteString to Aeson's -- convert ByteString to Aeson's -- convert ByteString to Aeson's
         showFixed True ada -- convert String to ByteString using Latin1 encoding
         -- convert Micro to String chopping off trailing zeros
 
@@ -223,15 +217,16 @@ dbInt65Encoder = fromDbInt65 >$< HsqlE.int8
 toDbInt65 :: Int64 -> DbInt65
 toDbInt65 n
   | n >= 0 = DbInt65 (fromIntegral n)
-  | n == minBound = DbInt65 (setBit 0 63)  -- Special: magnitude 0 + sign bit = minBound
+  | n == minBound = DbInt65 (setBit 0 63) -- Special: magnitude 0 + sign bit = minBound
   | otherwise = DbInt65 (setBit (fromIntegral (abs n)) 63)
 
 fromDbInt65 :: DbInt65 -> Int64
 fromDbInt65 (DbInt65 w) =
   if testBit w 63
-    then let magnitude = clearBit w 63
-         in if magnitude == 0
-            then minBound  -- Special: magnitude 0 + sign bit = minBound
+    then
+      let magnitude = clearBit w 63
+       in if magnitude == 0
+            then minBound -- Special: magnitude 0 + sign bit = minBound
             else negate (fromIntegral magnitude)
     else fromIntegral w
 
@@ -364,18 +359,18 @@ scriptTypeDecoder :: HsqlD.Value ScriptType
 scriptTypeDecoder = HsqlD.enum $ \case
   "multisig" -> Just MultiSig
   "timelock" -> Just Timelock
-  "plutusv1" -> Just PlutusV1
-  "plutusv2" -> Just PlutusV2
-  "plutusv3" -> Just PlutusV3
+  "plutusV1" -> Just PlutusV1
+  "plutusV2" -> Just PlutusV2
+  "plutusV3" -> Just PlutusV3
   _ -> Nothing
 
 scriptTypeEncoder :: HsqlE.Value ScriptType
 scriptTypeEncoder = HsqlE.enum $ \case
   MultiSig -> "multisig"
   Timelock -> "timelock"
-  PlutusV1 -> "plutusv1"
-  PlutusV2 -> "plutusv2"
-  PlutusV3 -> "plutusv3"
+  PlutusV1 -> "plutusV1"
+  PlutusV2 -> "plutusV2"
+  PlutusV3 -> "plutusV3"
 
 --------------------------------------------------------------------------------
 data PoolCertAction
@@ -614,17 +609,11 @@ integerToDbInt65 i
 --     then PosInt65 (fromIntegral i)
 --     else NegInt65 (fromIntegral $ negate i)
 
-word128Decoder :: HsqlD.Value Word128
-word128Decoder = HsqlD.composite $ do
-  hi <- HsqlD.field (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-  lo <- HsqlD.field (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-  pure $ Word128 hi lo
-
 word128Encoder :: HsqlE.Value Word128
-word128Encoder =
-  HsqlE.composite $
-    HsqlE.field (HsqlE.nonNullable $ fromIntegral . word128Hi64 >$< HsqlE.int8)
-      <> HsqlE.field (HsqlE.nonNullable $ fromIntegral . word128Lo64 >$< HsqlE.int8)
+word128Encoder = fromInteger . toInteger >$< HsqlE.numeric
+
+word128Decoder :: HsqlD.Value Word128
+word128Decoder = fromInteger . fromIntegral . coefficient <$> HsqlD.numeric
 
 lovelaceToAda :: Micro -> Ada
 lovelaceToAda ll =

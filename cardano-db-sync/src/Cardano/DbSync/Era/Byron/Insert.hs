@@ -62,9 +62,7 @@ insertByronBlock syncEnv firstBlockOfEpoch blk details = do
     Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
-  when
-    (getSyncStatus details == SyncFollowing)
-    DB.createTransactionCheckpoint
+  -- TODO: CMDV - need to look if I can change the insert logic using hasql
   pure res
 
 insertABOBBoundary ::
@@ -278,7 +276,7 @@ insertByronTx' ::
 insertByronTx' syncEnv blkId tx blockIndex = do
   resolvedInputs <- mapM (resolveTxInputs txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
   valFee <- case calculateTxFee (Byron.taTx tx) resolvedInputs of
-    Left err -> throwError $ DB.DbError DB.mkCallSite ("insertByronTx': " <> show (annotateTx err)) Nothing
+    Left err -> throwError $ DB.DbError (DB.mkDbCallStack "insertByronTx'") (show (annotateTx err)) Nothing
     Right vf -> pure vf
   txId <-
     DB.insertTx $
@@ -410,12 +408,14 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) =
       , DB.txInRedeemerId = Nothing
       }
 
--- -----------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 resolveTxInputs :: (MonadIO m) => DB.TxOutVariantType -> Byron.TxIn -> DB.DbAction m (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
 resolveTxInputs txOutVariantType txIn@(Byron.TxInUtxo txHash index) = do
-  res <- DB.queryTxOutIdValue txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
-  pure $ convert res
+  result <- DB.queryTxOutIdValueEither txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
+  case result of
+    Right res -> pure $ convert res
+    Left err -> throwError err
   where
     convert :: (DB.TxId, DB.TxOutIdW, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
     convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)

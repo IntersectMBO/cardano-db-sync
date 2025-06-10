@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -47,6 +48,7 @@ import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
@@ -217,10 +219,12 @@ insertEpochStake ::
   DB.DbAction m ()
 insertEpochStake syncEnv nw epochNo stakeChunk = do
   let cache = envCache syncEnv
+  DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbStakes <- mapM (mkStake cache) stakeChunk
   let chunckDbStakes = splittRecordsEvery 100000 dbStakes
+
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbStakes $ \dbs -> DB.insertBulkEpochStake dbs
+  forM_ chunckDbStakes $ \dbs -> DB.insertBulkEpochStake dbConstraintEpochStake dbs
   where
     mkStake ::
       MonadIO m =>
@@ -252,9 +256,10 @@ insertRewards ::
   DB.DbAction m ()
 insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
+  DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   let chunckDbRewards = splittRecordsEvery 100000 dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> DB.insertBulkRewards rws
+  forM_ chunckDbRewards $ \rws -> DB.insertBulkRewards dbConstraintEpochStake rws
   where
     mkRewards ::
       MonadIO m =>
