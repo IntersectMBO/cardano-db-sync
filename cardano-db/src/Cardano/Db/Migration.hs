@@ -396,7 +396,7 @@ readStageFromFilename fn =
 noLedgerMigrations :: SqlBackend -> Trace IO Text -> IO ()
 noLedgerMigrations backend trce = do
   void $ runDbIohkLogging backend trce $ do
-    rawExecute "update redeemer set fee = null" []
+    rawExecute "update redeemer set fee = null where fee is not null" []
     rawExecute "delete from reward" []
     rawExecute "delete from epoch_stake" []
     rawExecute "delete from ada_pots" []
