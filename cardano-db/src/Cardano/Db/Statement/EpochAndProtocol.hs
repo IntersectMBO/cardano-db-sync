@@ -18,11 +18,11 @@ import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEnP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertReplace)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (countAll, replace, selectByField)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (DbAction (..), DbLovelace (..))
 import Data.WideWord (Word128 (..))
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- CostModel

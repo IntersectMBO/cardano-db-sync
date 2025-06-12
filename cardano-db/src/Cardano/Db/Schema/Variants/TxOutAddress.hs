@@ -15,10 +15,10 @@ import qualified Hasql.Decoders as D
 import qualified Hasql.Encoders as E
 
 import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Schema.Types (textDecoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
-import Cardano.Db.Schema.Types (textDecoder)
 
 -----------------------------------------------------------------------------------------------
 -- TxOutAddress

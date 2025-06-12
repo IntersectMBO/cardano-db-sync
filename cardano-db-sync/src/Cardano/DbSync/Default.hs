@@ -204,7 +204,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $
-          liftIO $ runIndexMigrations syncEnv
+          liftIO $
+            runIndexMigrations syncEnv
 
     isWithinTwoMin :: SlotDetails -> Bool
     isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing

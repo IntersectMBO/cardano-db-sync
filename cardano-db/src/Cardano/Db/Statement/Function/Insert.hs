@@ -99,42 +99,43 @@ mkInsert removeJsonb encoder resultType =
 -- * @resultType@: Whether to return a result (usually it's newly generated id) and decoder.
 -- * @statement@: The prepared statement that can be executed.
 insertReplace ::
- forall a r.
- DbInfo a =>
- HsqlE.Params a -> -- Encoder for record (without ID)
- ResultType r r -> -- Whether to return result and decoder
- HsqlS.Statement a r -- Returns the prepared statement
+  forall a r.
+  DbInfo a =>
+  HsqlE.Params a -> -- Encoder for record (without ID)
+  ResultType r r -> -- Whether to return result and decoder
+  HsqlS.Statement a r -- Returns the prepared statement
 insertReplace encoder resultType =
- case validateUniqueConstraints (Proxy @a) of
-   Left err -> error err
-   Right [] -> error $ "insertReplace: No unique constraints defined for " <> show (typeRep (Proxy @a))
-   Right uniqueCols -> HsqlS.Statement sql encoder decoder True
-     where
-       (decoder, returnClause) = case resultType of
-         NoResult -> (HsqlD.noResult, "")
-         WithResult dec -> (dec, " RETURNING id")
+  case validateUniqueConstraints (Proxy @a) of
+    Left err -> error err
+    Right [] -> error $ "insertReplace: No unique constraints defined for " <> show (typeRep (Proxy @a))
+    Right uniqueCols -> HsqlS.Statement sql encoder decoder True
+      where
+        (decoder, returnClause) = case resultType of
+          NoResult -> (HsqlD.noResult, "")
+          WithResult dec -> (dec, " RETURNING id")
 
-       table = tableName (Proxy @a)
-       allColNames = NE.toList $ columnNames (Proxy @a)
-       genFields = generatedFields (Proxy @a)
-       colNames = filter (`notElem` genFields) allColNames
-       columns = Text.intercalate ", " colNames
-       castParams = buildCastParameters False (Proxy @a)  -- Always use False since removeJsonb not needed
+        table = tableName (Proxy @a)
+        allColNames = NE.toList $ columnNames (Proxy @a)
+        genFields = generatedFields (Proxy @a)
+        colNames = filter (`notElem` genFields) allColNames
+        columns = Text.intercalate ", " colNames
+        castParams = buildCastParameters False (Proxy @a) -- Always use False since removeJsonb not needed
 
-       -- Create SET clause for all non-generated columns
-       updateAllFields = Text.intercalate ", " $
-         map (\col -> col <> " = EXCLUDED." <> col) colNames
+        -- Create SET clause for all non-generated columns
+        updateAllFields =
+          Text.intercalate ", " $
+            map (\col -> col <> " = EXCLUDED." <> col) colNames
 
-       sql =
-         TextEnc.encodeUtf8 $
-           Text.concat
-             [ "INSERT INTO " <> table
-             , " (" <> columns <> ")"
-             , " VALUES (" <> castParams <> ")"
-             , " ON CONFLICT (" <> Text.intercalate ", " uniqueCols <> ")"
-             , " DO UPDATE SET " <> updateAllFields
-             , returnClause
-             ]
+        sql =
+          TextEnc.encodeUtf8 $
+            Text.concat
+              [ "INSERT INTO " <> table
+              , " (" <> columns <> ")"
+              , " VALUES (" <> castParams <> ")"
+              , " ON CONFLICT (" <> Text.intercalate ", " uniqueCols <> ")"
+              , " DO UPDATE SET " <> updateAllFields
+              , returnClause
+              ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
 

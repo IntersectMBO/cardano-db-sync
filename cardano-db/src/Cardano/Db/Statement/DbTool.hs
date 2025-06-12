@@ -21,18 +21,18 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import qualified Cardano.Db.Schema.Core as SC
+import qualified Cardano.Db.Schema.Core as SVC
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Variants (TxOutVariantType (..), UtxoQueryResult (..), TxOutW (..))
+import Cardano.Db.Schema.Variants (TxOutVariantType (..), TxOutW (..), UtxoQueryResult (..))
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Query (adaDecoder)
 import Cardano.Db.Statement.Types (tableName)
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, dbLovelaceDecoder, lovelaceToAda)
-import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
-import qualified Cardano.Db.Schema.Core as SVC
-import Data.Fixed (Fixed(..))
+import Data.Fixed (Fixed (..))
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool Epcoh
@@ -43,10 +43,11 @@ queryDelegationForEpochStmt :: HsqlStmt.Statement (Text.Text, Word64) (Maybe (Id
 queryDelegationForEpochStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
-    encoder = mconcat
-      [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
-      , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-      ]
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
+        , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        ]
     decoder = HsqlD.rowMaybe $ do
       addrId <- Id.idDecoder Id.StakeAddressId
       endTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
@@ -56,16 +57,18 @@ queryDelegationForEpochStmt =
     epochTable = tableName (Proxy @SC.Epoch)
     epochStakeTable = tableName (Proxy @SC.EpochState)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT es.addr_id, ep.end_time, es.amount, es.pool_id"
-      , " FROM " <> epochTable <> " ep"
-      , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
-      , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
-      , " WHERE saddr.view = $1"
-      , " AND es.epoch_no <= $2"
-      , " ORDER BY es.epoch_no DESC"
-      , " LIMIT 1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT es.addr_id, ep.end_time, es.amount, es.pool_id"
+          , " FROM " <> epochTable <> " ep"
+          , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
+          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
+          , " WHERE saddr.view = $1"
+          , " AND es.epoch_no <= $2"
+          , " ORDER BY es.epoch_no DESC"
+          , " LIMIT 1"
+          ]
 
 queryDelegationForEpoch :: MonadIO m => Text.Text -> Word64 -> DbAction m (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
 queryDelegationForEpoch address epochNum =
@@ -76,76 +79,84 @@ queryDelegationForEpoch address epochNum =
 
 queryBlockNoListStmt :: HsqlStmt.Statement (Word64, Word64) [Word64]
 queryBlockNoListStmt =
- HsqlStmt.Statement sql encoder decoder True
- where
-   blockTableN = tableName (Proxy @SCB.Block)
-   sql = TextEnc.encodeUtf8 $ Text.concat
-     [ "SELECT block_no"
-     , " FROM " <> blockTableN
-     , " WHERE block_no IS NOT NULL"
-     , " AND block_no > $1"
-     , " ORDER BY block_no ASC"
-     , " LIMIT $2"
-     ]
-   encoder = mconcat
-     [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-     , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-     ]
-   decoder = HsqlD.rowList (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT block_no"
+          , " FROM " <> blockTableN
+          , " WHERE block_no IS NOT NULL"
+          , " AND block_no > $1"
+          , " ORDER BY block_no ASC"
+          , " LIMIT $2"
+          ]
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        ]
+    decoder = HsqlD.rowList (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
 
 queryBlockNoList :: MonadIO m => Word64 -> Word64 -> DbAction m [Word64]
 queryBlockNoList start count =
- runDbSession (mkDbCallStack "queryBlockNoList") $
-   HsqlSes.statement (start, count) queryBlockNoListStmt
+  runDbSession (mkDbCallStack "queryBlockNoList") $
+    HsqlSes.statement (start, count) queryBlockNoListStmt
 
 ------------------------------------------------------------------------------------------------------------
 queryBlockTimestampsStmt :: HsqlStmt.Statement (Word64, Word64) [UTCTime]
 queryBlockTimestampsStmt =
- HsqlStmt.Statement sql encoder decoder True
- where
-   blockTableN = tableName (Proxy @SCB.Block)
-   sql = TextEnc.encodeUtf8 $ Text.concat
-     [ "SELECT time"
-     , " FROM " <> blockTableN
-     , " WHERE block_no IS NOT NULL"
-     , " AND block_no > $1"
-     , " ORDER BY block_no ASC"
-     , " LIMIT $2"
-     ]
-   encoder = mconcat
-     [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-     , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-     ]
-   decoder = HsqlD.rowList (HsqlD.column $ HsqlD.nonNullable HsqlD.timestamptz)
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT time"
+          , " FROM " <> blockTableN
+          , " WHERE block_no IS NOT NULL"
+          , " AND block_no > $1"
+          , " ORDER BY block_no ASC"
+          , " LIMIT $2"
+          ]
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        ]
+    decoder = HsqlD.rowList (HsqlD.column $ HsqlD.nonNullable HsqlD.timestamptz)
 
 queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> DbAction m [UTCTime]
 queryBlockTimestamps start count =
- runDbSession (mkDbCallStack "queryBlockTimestamps") $
-   HsqlSes.statement (start, count) queryBlockTimestampsStmt
+  runDbSession (mkDbCallStack "queryBlockTimestamps") $
+    HsqlSes.statement (start, count) queryBlockTimestampsStmt
 
 ------------------------------------------------------------------------------------------------------------
 queryBlocksTimeAftersStmt :: HsqlStmt.Statement UTCTime [(Maybe Word64, Maybe Word64, UTCTime)]
 queryBlocksTimeAftersStmt =
- HsqlStmt.Statement sql encoder decoder True
- where
-   blockTableN = tableName (Proxy @SCB.Block)
-   sql = TextEnc.encodeUtf8 $ Text.concat
-     [ "SELECT epoch_no, block_no, time"
-     , " FROM " <> blockTableN
-     , " WHERE time > $1"
-     , " ORDER BY time DESC"
-     ]
-   encoder = HsqlE.param (HsqlE.nonNullable HsqlE.timestamptz)
-   decoder = HsqlD.rowList $ do
-     epochNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
-     blockNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
-     time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
-     pure (epochNo, blockNo, time)
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT epoch_no, block_no, time"
+          , " FROM " <> blockTableN
+          , " WHERE time > $1"
+          , " ORDER BY time DESC"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.timestamptz)
+    decoder = HsqlD.rowList $ do
+      epochNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
+      blockNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
+      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      pure (epochNo, blockNo, time)
 
 queryBlocksTimeAfters :: MonadIO m => UTCTime -> DbAction m [(Maybe Word64, Maybe Word64, UTCTime)]
 queryBlocksTimeAfters now =
- runDbSession (mkDbCallStack "queryBlocksTimeAfters") $
-   HsqlSes.statement now queryBlocksTimeAftersStmt
+  runDbSession (mkDbCallStack "queryBlocksTimeAfters") $
+    HsqlSes.statement now queryBlocksTimeAftersStmt
 
 ------------------------------------------------------------------------------------------------------------
 queryLatestMemberRewardEpochNoStmt :: HsqlStmt.Statement () (Maybe Word64)
@@ -154,16 +165,19 @@ queryLatestMemberRewardEpochNoStmt =
   where
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
     blockTable = tableName (Proxy @SCB.Block)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT MAX(" <> blockTable <> ".epoch_no)"
-      , " FROM " <> blockTable
-      , " WHERE " <> blockTable <> ".epoch_no IS NOT NULL"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT MAX(" <> blockTable <> ".epoch_no)"
+          , " FROM " <> blockTable
+          , " WHERE " <> blockTable <> ".epoch_no IS NOT NULL"
+          ]
 
 queryLatestMemberRewardEpochNo :: MonadIO m => DbAction m Word64
 queryLatestMemberRewardEpochNo = do
-  result <- runDbSession (mkDbCallStack "queryLatestMemberRewardEpochNo") $
-    HsqlSes.statement () queryLatestMemberRewardEpochNoStmt
+  result <-
+    runDbSession (mkDbCallStack "queryLatestMemberRewardEpochNo") $
+      HsqlSes.statement () queryLatestMemberRewardEpochNoStmt
   pure $ maybe 0 (\x -> if x >= 2 then x - 2 else 0) result
 
 --------------------------------------------------------------------------------
@@ -173,23 +187,26 @@ queryRewardAmountStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe D
 queryRewardAmountStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
-    encoder = mconcat
-      [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-      , snd >$< Id.idEncoder Id.getStakeAddressId
-      ]
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        , snd >$< Id.idEncoder Id.getStakeAddressId
+        ]
     decoder = HsqlD.rowMaybe dbLovelaceDecoder
     epochTable = tableName (Proxy @SC.Epoch)
     rewardTable = tableName (Proxy @SC.Reward)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT reward.amount"
-      , " FROM " <> epochTable <> " ep"
-      , " INNER JOIN " <> rewardTable <> " reward ON ep.no = reward.earned_epoch"
-      , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = reward.addr_id"
-      , " WHERE ep.no = $1"
-      , " AND saddr.id = $2"
-      , " ORDER BY ep.no ASC"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT reward.amount"
+          , " FROM " <> epochTable <> " ep"
+          , " INNER JOIN " <> rewardTable <> " reward ON ep.no = reward.earned_epoch"
+          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = reward.addr_id"
+          , " WHERE ep.no = $1"
+          , " AND saddr.id = $2"
+          , " ORDER BY ep.no ASC"
+          ]
 
 queryRewardAmount :: MonadIO m => Word64 -> Id.StakeAddressId -> DbAction m (Maybe DbLovelace)
 queryRewardAmount epochNo saId =
@@ -203,10 +220,11 @@ queryDelegationHistoryStmt :: HsqlStmt.Statement (Text.Text, Word64) [(Id.StakeA
 queryDelegationHistoryStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
-    encoder = mconcat
-      [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
-      , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-      ]
+    encoder =
+      mconcat
+        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
+        , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        ]
     decoder = HsqlD.rowList $ do
       addrId <- Id.idDecoder Id.StakeAddressId
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
@@ -217,14 +235,16 @@ queryDelegationHistoryStmt =
     epochTable = tableName (Proxy @SC.Epoch)
     epochStakeTable = tableName (Proxy @SC.EpochStake)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT es.addr_id, es.epoch_no, ep.end_time, es.amount, es.pool_id"
-      , " FROM " <> epochTable <> " ep"
-      , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
-      , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
-      , " WHERE saddr.view = $1"
-      , " AND es.epoch_no <= $2"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT es.addr_id, es.epoch_no, ep.end_time, es.amount, es.pool_id"
+          , " FROM " <> epochTable <> " ep"
+          , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
+          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
+          , " WHERE saddr.view = $1"
+          , " AND es.epoch_no <= $2"
+          ]
 
 queryDelegationHistory :: MonadIO m => Text.Text -> Word64 -> DbAction m [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
 queryDelegationHistory address maxEpoch =
@@ -247,11 +267,13 @@ queryAdaPotsSumStmt =
   where
     adaPotsTableN = tableName (Proxy @SC.AdaPots)
 
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT epoch_no, "
-      , "(treasury + reserves + rewards + utxo + deposits_stake + deposits_drep + deposits_proposal + fees) as total_sum"
-      , " FROM " <> adaPotsTableN
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT epoch_no, "
+          , "(treasury + reserves + rewards + utxo + deposits_stake + deposits_drep + deposits_proposal + fees) as total_sum"
+          , " FROM " <> adaPotsTableN
+          ]
 
     decoder = HsqlD.rowList $ do
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
@@ -269,26 +291,28 @@ queryAdaPotsSum =
 
 queryPoolsWithoutOwnersStmt :: HsqlStmt.Statement () Int
 queryPoolsWithoutOwnersStmt =
- HsqlStmt.Statement sql HsqlE.noParams decoder True
- where
-   poolUpdateTableN = tableName (Proxy @SCP.PoolUpdate)
-   poolOwnerTableN = tableName (Proxy @SCP.PoolOwner)
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    poolUpdateTableN = tableName (Proxy @SCP.PoolUpdate)
+    poolOwnerTableN = tableName (Proxy @SCP.PoolOwner)
 
-   sql = TextEnc.encodeUtf8 $ Text.concat
-     [ "SELECT COUNT(*)::int"
-     , " FROM " <> poolUpdateTableN <> " pupd"
-     , " WHERE NOT EXISTS ("
-     , "   SELECT 1 FROM " <> poolOwnerTableN <> " powner"
-     , "   WHERE pupd.id = powner.pool_update_id"
-     , " )"
-     ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::int"
+          , " FROM " <> poolUpdateTableN <> " pupd"
+          , " WHERE NOT EXISTS ("
+          , "   SELECT 1 FROM " <> poolOwnerTableN <> " powner"
+          , "   WHERE pupd.id = powner.pool_update_id"
+          , " )"
+          ]
 
-   decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
 
 queryPoolsWithoutOwners :: MonadIO m => DbAction m Int
 queryPoolsWithoutOwners =
- runDbSession (mkDbCallStack "queryPoolsWithoutOwners") $
-   HsqlSes.statement () queryPoolsWithoutOwnersStmt
+  runDbSession (mkDbCallStack "queryPoolsWithoutOwners") $
+    HsqlSes.statement () queryPoolsWithoutOwnersStmt
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool TxOut
@@ -298,9 +322,11 @@ queryUtxoAtSlotNoStmt :: HsqlStmt.Statement Word64 (Maybe Id.BlockId)
 queryUtxoAtSlotNoStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT id FROM block WHERE slot_no = $1 LIMIT 1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id FROM block WHERE slot_no = $1 LIMIT 1"
+          ]
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.BlockId)
 
@@ -509,11 +535,13 @@ queryStakeAddressIdStmt =
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.text)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.StakeAddressId)
     stakeAddressTable = tableName (Proxy @SVC.StakeAddress)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT id"
-      , " FROM " <> stakeAddressTable
-      , " WHERE view = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id"
+          , " FROM " <> stakeAddressTable
+          , " WHERE view = $1"
+          ]
 
 queryStakeAddressId :: MonadIO m => Text.Text -> DbAction m (Maybe Id.StakeAddressId)
 queryStakeAddressId address =
@@ -521,6 +549,7 @@ queryStakeAddressId address =
     HsqlSes.statement address queryStakeAddressIdStmt
 
 --------------------------------------------------------------------------------
+
 -- | Query input transactions for Core variant
 queryInputTransactionsCoreStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsCoreStmt =
@@ -535,13 +564,15 @@ queryInputTransactionsCoreStmt =
     txTable = tableName (Proxy @SVC.Tx)
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
     blockTable = tableName (Proxy @SVC.Block)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> txOutCoreTable <> ".value"
-      , " FROM " <> txTable
-      , " INNER JOIN " <> txOutCoreTable <> " ON " <> txOutCoreTable <> ".tx_id = " <> txTable <> ".id"
-      , " INNER JOIN " <> blockTable <> " ON " <> txTable <> ".block_id = " <> blockTable <> ".id"
-      , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> txOutCoreTable <> ".value"
+          , " FROM " <> txTable
+          , " INNER JOIN " <> txOutCoreTable <> " ON " <> txOutCoreTable <> ".tx_id = " <> txTable <> ".id"
+          , " INNER JOIN " <> blockTable <> " ON " <> txTable <> ".block_id = " <> blockTable <> ".id"
+          , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
+          ]
 
 queryInputTransactionsCore :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsCore saId =
@@ -549,6 +580,7 @@ queryInputTransactionsCore saId =
     HsqlSes.statement saId queryInputTransactionsCoreStmt
 
 --------------------------------------------------------------------------------
+
 -- | Query input transactions for Address variant
 queryInputTransactionsAddressStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsAddressStmt =
@@ -564,14 +596,16 @@ queryInputTransactionsAddressStmt =
     txOutAddressTable = tableName (Proxy @SVA.TxOutAddress)
     addressTable = tableName (Proxy @SVA.Address)
     blockTable = tableName (Proxy @SVC.Block)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> txOutAddressTable <> ".value"
-      , " FROM " <> txTable
-      , " INNER JOIN " <> txOutAddressTable <> " ON " <> txOutAddressTable <> ".tx_id = " <> txTable <> ".id"
-      , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
-      , " INNER JOIN " <> blockTable <> " ON " <> txTable <> ".block_id = " <> blockTable <> ".id"
-      , " WHERE " <> addressTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> txOutAddressTable <> ".value"
+          , " FROM " <> txTable
+          , " INNER JOIN " <> txOutAddressTable <> " ON " <> txOutAddressTable <> ".tx_id = " <> txTable <> ".id"
+          , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
+          , " INNER JOIN " <> blockTable <> " ON " <> txTable <> ".block_id = " <> blockTable <> ".id"
+          , " WHERE " <> addressTable <> ".stake_address_id = $1"
+          ]
 
 queryInputTransactionsAddress :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsAddress saId =
@@ -579,6 +613,7 @@ queryInputTransactionsAddress saId =
     HsqlSes.statement saId queryInputTransactionsAddressStmt
 
 --------------------------------------------------------------------------------
+
 -- | Query withdrawal transactions
 queryWithdrawalTransactionsStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryWithdrawalTransactionsStmt =
@@ -593,13 +628,15 @@ queryWithdrawalTransactionsStmt =
     txTable = tableName (Proxy @SVC.Tx)
     blockTable = tableName (Proxy @SVC.Block)
     withdrawalTable = tableName (Proxy @SVC.Withdrawal)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> withdrawalTable <> ".amount"
-      , " FROM " <> txTable
-      , " INNER JOIN " <> blockTable <> " ON " <> txTable <> ".block_id = " <> blockTable <> ".id"
-      , " INNER JOIN " <> withdrawalTable <> " ON " <> withdrawalTable <> ".tx_id = " <> txTable <> ".id"
-      , " WHERE " <> withdrawalTable <> ".addr_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> withdrawalTable <> ".amount"
+          , " FROM " <> txTable
+          , " INNER JOIN " <> blockTable <> " ON " <> txTable <> ".block_id = " <> blockTable <> ".id"
+          , " INNER JOIN " <> withdrawalTable <> " ON " <> withdrawalTable <> ".tx_id = " <> txTable <> ".id"
+          , " WHERE " <> withdrawalTable <> ".addr_id = $1"
+          ]
 
 queryWithdrawalTransactions :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryWithdrawalTransactions saId =
@@ -607,6 +644,7 @@ queryWithdrawalTransactions saId =
     HsqlSes.statement saId queryWithdrawalTransactionsStmt
 
 --------------------------------------------------------------------------------
+
 -- | Query output transactions for Core variant
 queryOutputTransactionsCoreStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsCoreStmt =
@@ -622,15 +660,17 @@ queryOutputTransactionsCoreStmt =
     txTable = tableName (Proxy @SVC.Tx)
     txInTable = tableName (Proxy @SVC.TxIn)
     blockTable = tableName (Proxy @SVC.Block)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT txOutTx.hash, " <> blockTable <> ".time, " <> txOutCoreTable <> ".value"
-      , " FROM " <> txOutCoreTable
-      , " INNER JOIN " <> txTable <> " txInTx ON " <> txOutCoreTable <> ".tx_id = txInTx.id"
-      , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = txInTx.id AND " <> txInTable <> ".tx_out_index = " <> txOutCoreTable <> ".index"
-      , " INNER JOIN " <> txTable <> " txOutTx ON txOutTx.id = " <> txInTable <> ".tx_in_id"
-      , " INNER JOIN " <> blockTable <> " ON txOutTx.block_id = " <> blockTable <> ".id"
-      , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT txOutTx.hash, " <> blockTable <> ".time, " <> txOutCoreTable <> ".value"
+          , " FROM " <> txOutCoreTable
+          , " INNER JOIN " <> txTable <> " txInTx ON " <> txOutCoreTable <> ".tx_id = txInTx.id"
+          , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = txInTx.id AND " <> txInTable <> ".tx_out_index = " <> txOutCoreTable <> ".index"
+          , " INNER JOIN " <> txTable <> " txOutTx ON txOutTx.id = " <> txInTable <> ".tx_in_id"
+          , " INNER JOIN " <> blockTable <> " ON txOutTx.block_id = " <> blockTable <> ".id"
+          , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
+          ]
 
 queryOutputTransactionsCore :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsCore saId =
@@ -638,6 +678,7 @@ queryOutputTransactionsCore saId =
     HsqlSes.statement saId queryOutputTransactionsCoreStmt
 
 --------------------------------------------------------------------------------
+
 -- | Query output transactions for Address variant
 queryOutputTransactionsAddressStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsAddressStmt =
@@ -654,16 +695,18 @@ queryOutputTransactionsAddressStmt =
     txTable = tableName (Proxy @SVC.Tx)
     txInTable = tableName (Proxy @SVC.TxIn)
     blockTable = tableName (Proxy @SVC.Block)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT txOutTx.hash, " <> blockTable <> ".time, " <> txOutAddressTable <> ".value"
-      , " FROM " <> txOutAddressTable
-      , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
-      , " INNER JOIN " <> txTable <> " txInTx ON " <> txOutAddressTable <> ".tx_id = txInTx.id"
-      , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = txInTx.id AND " <> txInTable <> ".tx_out_index = " <> txOutAddressTable <> ".index"
-      , " INNER JOIN " <> txTable <> " txOutTx ON txOutTx.id = " <> txInTable <> ".tx_in_id"
-      , " INNER JOIN " <> blockTable <> " ON txOutTx.block_id = " <> blockTable <> ".id"
-      , " WHERE " <> addressTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT txOutTx.hash, " <> blockTable <> ".time, " <> txOutAddressTable <> ".value"
+          , " FROM " <> txOutAddressTable
+          , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
+          , " INNER JOIN " <> txTable <> " txInTx ON " <> txOutAddressTable <> ".tx_id = txInTx.id"
+          , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = txInTx.id AND " <> txInTable <> ".tx_out_index = " <> txOutAddressTable <> ".index"
+          , " INNER JOIN " <> txTable <> " txOutTx ON txOutTx.id = " <> txInTable <> ".tx_in_id"
+          , " INNER JOIN " <> blockTable <> " ON txOutTx.block_id = " <> blockTable <> ".id"
+          , " WHERE " <> addressTable <> ".stake_address_id = $1"
+          ]
 
 queryOutputTransactionsAddress :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsAddress saId =
@@ -681,11 +724,13 @@ queryInputsSumCoreStmt =
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT COALESCE(SUM(" <> txOutCoreTable <> ".value), 0)::bigint"
-      , " FROM " <> txOutCoreTable
-      , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(" <> txOutCoreTable <> ".value), 0)::bigint"
+          , " FROM " <> txOutCoreTable
+          , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
+          ]
 
 queryInputsSumCore :: MonadIO m => Id.StakeAddressId -> DbAction m Ada
 queryInputsSumCore saId =
@@ -702,12 +747,14 @@ queryInputsSumAddressStmt =
     encoder = Id.idEncoder Id.getStakeAddressId
     txOutAddressTable = tableName (Proxy @SVA.TxOutAddress)
     addressTable = tableName (Proxy @SVA.Address)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT COALESCE(SUM(" <> txOutAddressTable <> ".value), 0)::bigint"
-      , " FROM " <> txOutAddressTable
-      , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
-      , " WHERE " <> addressTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(" <> txOutAddressTable <> ".value), 0)::bigint"
+          , " FROM " <> txOutAddressTable
+          , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
+          , " WHERE " <> addressTable <> ".stake_address_id = $1"
+          ]
 
 queryInputsSumAddress :: MonadIO m => Id.StakeAddressId -> DbAction m Ada
 queryInputsSumAddress saId =
@@ -721,17 +768,20 @@ queryRewardsSumStmt :: HsqlStmt.Statement (Id.StakeAddressId, Word64) Ada
 queryRewardsSumStmt =
   HsqlStmt.Statement sql encoder (HsqlD.singleRow adaDecoder) True
   where
-    encoder = mconcat
-      [ fst >$< Id.idEncoder Id.getStakeAddressId
-      , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-      ]
+    encoder =
+      mconcat
+        [ fst >$< Id.idEncoder Id.getStakeAddressId
+        , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        ]
     rewardTable = tableName (Proxy @SVC.Reward)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT COALESCE(SUM(" <> rewardTable <> ".amount), 0)::bigint"
-      , " FROM " <> rewardTable
-      , " WHERE " <> rewardTable <> ".addr_id = $1"
-      , " AND " <> rewardTable <> ".spendable_epoch <= $2"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(" <> rewardTable <> ".amount), 0)::bigint"
+          , " FROM " <> rewardTable
+          , " WHERE " <> rewardTable <> ".addr_id = $1"
+          , " AND " <> rewardTable <> ".spendable_epoch <= $2"
+          ]
 
 queryRewardsSum :: MonadIO m => Id.StakeAddressId -> Word64 -> DbAction m Ada
 queryRewardsSum saId currentEpoch =
@@ -747,11 +797,13 @@ queryWithdrawalsSumStmt =
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     withdrawalTable = tableName (Proxy @SVC.Withdrawal)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT COALESCE(SUM(" <> withdrawalTable <> ".amount), 0)::bigint"
-      , " FROM " <> withdrawalTable
-      , " WHERE " <> withdrawalTable <> ".addr_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(SUM(" <> withdrawalTable <> ".amount), 0)::bigint"
+          , " FROM " <> withdrawalTable
+          , " WHERE " <> withdrawalTable <> ".addr_id = $1"
+          ]
 
 queryWithdrawalsSum :: MonadIO m => Id.StakeAddressId -> DbAction m Ada
 queryWithdrawalsSum saId =
@@ -778,17 +830,19 @@ queryOutputsCoreStmt =
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
     txTable = tableName (Proxy @SVC.Tx)
     txInTable = tableName (Proxy @SVC.TxIn)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT"
-      , "  COALESCE(SUM(" <> txOutCoreTable <> ".value), 0)::bigint,"
-      , "  COALESCE(SUM(" <> txTable <> ".fee), 0)::bigint,"
-      , "  COALESCE(SUM(" <> txTable <> ".deposit), 0)::bigint"
-      , " FROM " <> txOutCoreTable
-      , " INNER JOIN " <> txTable <> " ON " <> txOutCoreTable <> ".tx_id = " <> txTable <> ".id"
-      , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = " <> txTable <> ".id"
-      , "   AND " <> txInTable <> ".tx_out_index = " <> txOutCoreTable <> ".index"
-      , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT"
+          , "  COALESCE(SUM(" <> txOutCoreTable <> ".value), 0)::bigint,"
+          , "  COALESCE(SUM(" <> txTable <> ".fee), 0)::bigint,"
+          , "  COALESCE(SUM(" <> txTable <> ".deposit), 0)::bigint"
+          , " FROM " <> txOutCoreTable
+          , " INNER JOIN " <> txTable <> " ON " <> txOutCoreTable <> ".tx_id = " <> txTable <> ".id"
+          , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = " <> txTable <> ".id"
+          , "   AND " <> txInTable <> ".tx_out_index = " <> txOutCoreTable <> ".index"
+          , " WHERE " <> txOutCoreTable <> ".stake_address_id = $1"
+          ]
 
 queryOutputsCore :: MonadIO m => Id.StakeAddressId -> DbAction m (Ada, Ada, Ada)
 queryOutputsCore saId =
@@ -816,18 +870,20 @@ queryOutputsAddressStmt =
     addressTable = tableName (Proxy @SVA.Address)
     txTable = tableName (Proxy @SVC.Tx)
     txInTable = tableName (Proxy @SVC.TxIn)
-    sql = TextEnc.encodeUtf8 $ Text.concat
-      [ "SELECT"
-      , "  COALESCE(SUM(" <> txOutAddressTable <> ".value), 0)::bigint,"
-      , "  COALESCE(SUM(" <> txTable <> ".fee), 0)::bigint,"
-      , "  COALESCE(SUM(" <> txTable <> ".deposit), 0)::bigint"
-      , " FROM " <> txOutAddressTable
-      , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
-      , " INNER JOIN " <> txTable <> " ON " <> txOutAddressTable <> ".tx_id = " <> txTable <> ".id"
-      , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = " <> txTable <> ".id"
-      , "   AND " <> txInTable <> ".tx_out_index = " <> txOutAddressTable <> ".index"
-      , " WHERE " <> addressTable <> ".stake_address_id = $1"
-      ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT"
+          , "  COALESCE(SUM(" <> txOutAddressTable <> ".value), 0)::bigint,"
+          , "  COALESCE(SUM(" <> txTable <> ".fee), 0)::bigint,"
+          , "  COALESCE(SUM(" <> txTable <> ".deposit), 0)::bigint"
+          , " FROM " <> txOutAddressTable
+          , " INNER JOIN " <> addressTable <> " ON " <> txOutAddressTable <> ".address_id = " <> addressTable <> ".id"
+          , " INNER JOIN " <> txTable <> " ON " <> txOutAddressTable <> ".tx_id = " <> txTable <> ".id"
+          , " INNER JOIN " <> txInTable <> " ON " <> txInTable <> ".tx_out_id = " <> txTable <> ".id"
+          , "   AND " <> txInTable <> ".tx_out_index = " <> txOutAddressTable <> ".index"
+          , " WHERE " <> addressTable <> ".stake_address_id = $1"
+          ]
 
 queryOutputsAddress :: MonadIO m => Id.StakeAddressId -> DbAction m (Ada, Ada, Ada)
 queryOutputsAddress saId =
@@ -838,24 +894,26 @@ queryOutputsAddress saId =
 
 queryEpochBlockNumbersStmt :: HsqlStmt.Statement Word64 [(Word64, Word64)]
 queryEpochBlockNumbersStmt =
- HsqlStmt.Statement sql encoder decoder True
- where
-   blockTableN = tableName (Proxy @SCB.Block)
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
 
-   sql = TextEnc.encodeUtf8 $ Text.concat
-     [ "SELECT COALESCE(block_no, 0), tx_count"
-     , " FROM " <> blockTableN
-     , " WHERE epoch_no = $1"
-     ]
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COALESCE(block_no, 0), tx_count"
+          , " FROM " <> blockTableN
+          , " WHERE epoch_no = $1"
+          ]
 
-   encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
 
-   decoder = HsqlD.rowList $ do
-     blockNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-     txCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-     pure (blockNo, txCount)
+    decoder = HsqlD.rowList $ do
+      blockNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      txCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      pure (blockNo, txCount)
 
 queryEpochBlockNumbers :: MonadIO m => Word64 -> DbAction m [(Word64, Word64)]
 queryEpochBlockNumbers epoch =
- runDbSession (mkDbCallStack "queryEpochBlockNumbers") $
-   HsqlSes.statement epoch queryEpochBlockNumbersStmt
+  runDbSession (mkDbCallStack "queryEpochBlockNumbers") $
+    HsqlSes.statement epoch queryEpochBlockNumbersStmt
