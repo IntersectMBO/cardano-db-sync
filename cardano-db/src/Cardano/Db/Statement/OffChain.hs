@@ -24,12 +24,12 @@ import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (countAll)
 import Cardano.Db.Statement.GovernanceAndVoting (queryVotingAnchorIdExists)
 import Cardano.Db.Statement.Pool (queryPoolHashIdExistsStmt, queryPoolMetadataRefIdExistsStmt)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (AnchorType, DbAction, VoteUrl, anchorTypeDecoder, voteUrlDecoder)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- OffChainPoolData

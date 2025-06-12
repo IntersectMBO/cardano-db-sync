@@ -4,11 +4,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Cardano.DbSync.Era.Universal.Epoch (
   insertOnNewEpoch,
@@ -48,9 +48,9 @@ import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 
 {- HLINT ignore "Use readTVarIO" -}
 

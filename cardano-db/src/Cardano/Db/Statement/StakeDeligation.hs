@@ -24,7 +24,7 @@ import qualified Cardano.Db.Schema.Core.StakeDeligation as SS
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnoreWithConstraint, insertBulkMaybeIgnore)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 import Cardano.Db.Types (Ada, DbAction, DbLovelace, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
@@ -74,7 +74,8 @@ queryDelegationScript =
 -- | INSERT --------------------------------------------------------------------
 insertBulkEpochStakeStmt :: Bool -> HsqlStmt.Statement [SS.EpochStake] ()
 insertBulkEpochStakeStmt dbConstraintEpochStake =
-  insertBulkMaybeIgnore dbConstraintEpochStake
+  insertBulkMaybeIgnore
+    dbConstraintEpochStake
     extractEpochStake
     SS.epochStakeBulkEncoder
     NoResultBulk
@@ -90,8 +91,8 @@ insertBulkEpochStakeStmt dbConstraintEpochStake =
 insertBulkEpochStake :: MonadIO m => Bool -> [SS.EpochStake] -> DbAction m ()
 insertBulkEpochStake dbConstraintEpochStake epochStakes =
   runDbSession (mkDbCallStack "insertBulkEpochStake") $
-    HsqlSes.statement epochStakes $ insertBulkEpochStakeStmt dbConstraintEpochStake
-
+    HsqlSes.statement epochStakes $
+      insertBulkEpochStakeStmt dbConstraintEpochStake
 
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -206,14 +207,18 @@ updateStakeProgressCompleted epoch =
 insertBulkRewardsStmt :: Bool -> HsqlStmt.Statement [SS.Reward] ()
 insertBulkRewardsStmt dbConstraintRewards =
   if dbConstraintRewards
-    then insertBulkMaybeIgnoreWithConstraint True "unique_reward"
-      extractReward
-      SS.rewardBulkEncoder
-      NoResultBulk
-    else insertBulk
-      extractReward
-      SS.rewardBulkEncoder
-      NoResultBulk
+    then
+      insertBulkMaybeIgnoreWithConstraint
+        True
+        "unique_reward"
+        extractReward
+        SS.rewardBulkEncoder
+        NoResultBulk
+    else
+      insertBulk
+        extractReward
+        SS.rewardBulkEncoder
+        NoResultBulk
   where
     extractReward :: [SS.Reward] -> ([Id.StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Id.PoolHashId])
     extractReward xs =
@@ -227,7 +232,8 @@ insertBulkRewardsStmt dbConstraintRewards =
 insertBulkRewards :: MonadIO m => Bool -> [SS.Reward] -> DbAction m ()
 insertBulkRewards dbConstraintRewards rewards =
   runDbSession (mkDbCallStack "insertBulkRewards") $
-    HsqlSes.statement rewards $ insertBulkRewardsStmt dbConstraintRewards
+    HsqlSes.statement rewards $
+      insertBulkRewardsStmt dbConstraintRewards
 
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64

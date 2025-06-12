@@ -16,8 +16,8 @@ import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert)
-import Cardano.Db.Types (DbAction, DbInt65)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
+import Cardano.Db.Types (DbAction, DbInt65)
 
 --------------------------------------------------------------------------------
 -- MultiAsset

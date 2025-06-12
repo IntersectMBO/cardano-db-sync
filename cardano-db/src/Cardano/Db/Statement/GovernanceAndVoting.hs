@@ -22,10 +22,10 @@ import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (existsById)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 import Cardano.Db.Types (DbAction, DbLovelace, hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- Committee

@@ -26,10 +26,10 @@ import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteAllCount, parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (adaDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (entityVal))
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, DbWord64, dbLovelaceDecoder)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- TxOut
@@ -766,7 +766,7 @@ queryScriptOutputs txOutVariantType =
       txOuts <-
         runDbSession (mkDbCallStack "queryScriptOutputsCore") $
           HsqlSes.statement () queryScriptOutputsCoreStmt
-      pure $ map (VCTxOutW . entityVal)  txOuts
+      pure $ map (VCTxOutW . entityVal) txOuts
     TxOutVariantAddress -> do
       results <-
         runDbSession (mkDbCallStack "queryScriptOutputsVariant") $

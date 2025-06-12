@@ -623,7 +623,6 @@ type instance Key Redeemer = RedeemerId
 instance DbInfo Redeemer where
   enumFields _ = [("purpose", "scriptpurposetype")]
 
-
 entityRedeemerDecoder :: D.Row (Entity Redeemer)
 entityRedeemerDecoder =
   Entity

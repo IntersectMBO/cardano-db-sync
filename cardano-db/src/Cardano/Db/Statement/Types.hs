@@ -75,18 +75,18 @@ class Typeable a => DbInfo a where
     let allCols = NE.toList $ columnNames p
         genFields = generatedFields p
         invalidFields = filter (`notElem` allCols) genFields
-    in if null invalidFields
-       then Right ()
-       else Left $ "Generated fields not found in columns for " <> show (typeRep p) <> ": " <> show invalidFields
+     in if null invalidFields
+          then Right ()
+          else Left $ "Generated fields not found in columns for " <> show (typeRep p) <> ": " <> show invalidFields
 
   -- | Validates that the unique constraints are valid columns in the table.
   -- If there are no unique constraints, this function will return successfully with [].
-  validateUniqueConstraints ::  Proxy a -> Either String [Text.Text]
+  validateUniqueConstraints :: Proxy a -> Either String [Text.Text]
   validateUniqueConstraints p =
     let colNames = NE.toList $ columnNames p
         constraints = uniqueFields p
         invalidConstraints = filter (`notElem` colNames) constraints
-    in if null invalidConstraints
+     in if null invalidConstraints
           then Right constraints
           else Left $ "Invalid unique constraint columns: " ++ show invalidConstraints
 
@@ -113,12 +113,10 @@ class Typeable a => DbInfo a where
   default bulkUniqueFields :: Proxy a -> [Text]
   bulkUniqueFields _ = []
 
-
--- | Column names and their pg_array type. Used for UNNEST statements.
+  -- \| Column names and their pg_array type. Used for UNNEST statements.
   unnestParamTypes :: Proxy a -> [(Text, Text)] -- (column_name, pg_array_type)
   default unnestParamTypes :: Proxy a -> [(Text, Text)]
   unnestParamTypes _ = []
-
 
 -- | Convert a field name to a column name
 fieldToColumnWithType :: String -> String -> Text

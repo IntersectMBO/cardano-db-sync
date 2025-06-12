@@ -7,7 +7,7 @@
 module Cardano.Db.Statement.Function.InsertBulk (
   -- * Core Functions
   insertBulkWith,
-  ConflictStrategy(..),
+  ConflictStrategy (..),
 
   -- * Convenience Functions
   insertBulk,
@@ -34,23 +34,23 @@ import Data.Functor.Contravariant (contramap)
 
 -- | Conflict handling strategies for bulk operations
 data ConflictStrategy
-  = NoConflict                        -- No conflict handling (fastest)
-  | IgnoreWithColumns [Text.Text]          -- ON CONFLICT (columns) DO NOTHING
-  | IgnoreWithConstraint Text.Text         -- ON CONFLICT ON CONSTRAINT name DO NOTHING
-  | ReplaceWithColumns [Text.Text]         -- ON CONFLICT (columns) DO UPDATE SET
-  | ReplaceWithConstraint Text.Text        -- ON CONFLICT ON CONSTRAINT name DO UPDATE SET
+  = NoConflict -- No conflict handling (fastest)
+  | IgnoreWithColumns [Text.Text] -- ON CONFLICT (columns) DO NOTHING
+  | IgnoreWithConstraint Text.Text -- ON CONFLICT ON CONSTRAINT name DO NOTHING
+  | ReplaceWithColumns [Text.Text] -- ON CONFLICT (columns) DO UPDATE SET
+  | ReplaceWithConstraint Text.Text -- ON CONFLICT ON CONSTRAINT name DO UPDATE SET
 
 -- | Unified bulk insert function - handles all conflict scenarios
 -- This is the core function that all other bulk functions use
 insertBulkWith ::
   forall a b r.
   (DbInfo a) =>
-  ConflictStrategy ->              -- How to handle conflicts
-  Bool ->                          -- Whether jsonb casting is present in current schema
-  ([a] -> b) ->                    -- field extractor
-  HsqlE.Params b ->                -- encoder
-  ResultTypeBulk r ->              -- result type
-  HsqlS.Statement [a] r            -- returns a statement
+  ConflictStrategy -> -- How to handle conflicts
+  Bool -> -- Whether jsonb casting is present in current schema
+  ([a] -> b) -> -- field extractor
+  HsqlE.Params b -> -- encoder
+  ResultTypeBulk r -> -- result type
+  HsqlS.Statement [a] r -- returns a statement
 insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
   case validateGeneratedFields (Proxy @a) of
     Left err -> error err
@@ -64,7 +64,7 @@ insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
         enumFields' = enumFields (Proxy @a)
         paramTypes = unnestParamTypes (Proxy @a)
 
-        unnestParams = Text.intercalate ", " $ zipWith mkParam [1..] colNames
+        unnestParams = Text.intercalate ", " $ zipWith mkParam [1 ..] colNames
           where
             mkParam i col = "$" <> Text.pack (show (i :: Int)) <> getArrayType col
             getArrayType col = case lookup col paramTypes of
@@ -89,13 +89,15 @@ insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
           IgnoreWithConstraint name ->
             " ON CONFLICT ON CONSTRAINT " <> name <> " DO NOTHING"
           ReplaceWithColumns cols ->
-            let updateFields = Text.intercalate ", " $
-                  map (\col -> col <> " = EXCLUDED." <> col) colNames
-            in " ON CONFLICT (" <> Text.intercalate ", " cols <> ") DO UPDATE SET " <> updateFields
+            let updateFields =
+                  Text.intercalate ", " $
+                    map (\col -> col <> " = EXCLUDED." <> col) colNames
+             in " ON CONFLICT (" <> Text.intercalate ", " cols <> ") DO UPDATE SET " <> updateFields
           ReplaceWithConstraint name ->
-            let updateFields = Text.intercalate ", " $
-                  map (\col -> col <> " = EXCLUDED." <> col) colNames
-            in " ON CONFLICT ON CONSTRAINT " <> name <> " DO UPDATE SET " <> updateFields
+            let updateFields =
+                  Text.intercalate ", " $
+                    map (\col -> col <> " = EXCLUDED." <> col) colNames
+             in " ON CONFLICT ON CONSTRAINT " <> name <> " DO UPDATE SET " <> updateFields
 
         (decoder, shouldReturnId) = case returnIds of
           NoResultBulk -> (HsqlD.noResult, "")
@@ -130,7 +132,7 @@ insertBulk = insertBulkWith NoConflict False
 insertBulkJsonb ::
   forall a b r.
   (DbInfo a) =>
-  Bool ->                          -- removeJsonb flag
+  Bool -> -- removeJsonb flag
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
@@ -157,9 +159,9 @@ insertBulkIgnore extract enc returnIds =
         Right autoConstraints ->
           let bulkConstraints = bulkUniqueFields p
               allConstraints = if null autoConstraints then bulkConstraints else autoConstraints
-          in if null allConstraints
-             then NoConflict
-             else IgnoreWithColumns allConstraints
+           in if null allConstraints
+                then NoConflict
+                else IgnoreWithColumns allConstraints
 
 -- | Auto-detect constraints and replace on conflict
 insertBulkReplace ::
@@ -183,9 +185,9 @@ insertBulkReplace extract enc returnIds =
         Right autoConstraints ->
           let bulkConstraints = bulkUniqueFields p
               allConstraints = if null autoConstraints then bulkConstraints else autoConstraints
-          in if null allConstraints
-             then NoConflict
-             else IgnoreWithColumns allConstraints
+           in if null allConstraints
+                then NoConflict
+                else IgnoreWithColumns allConstraints
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- PERFORMANCE-OPTIMIZED FUNCTIONS FOR ManualDbConstraints PATTERN
@@ -196,7 +198,7 @@ insertBulkReplace extract enc returnIds =
 insertBulkMaybeIgnore ::
   forall a b r.
   (DbInfo a) =>
-  Bool ->                          -- Whether constraint exists (from ManualDbConstraints)
+  Bool -> -- Whether constraint exists (from ManualDbConstraints)
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
@@ -204,18 +206,18 @@ insertBulkMaybeIgnore ::
 insertBulkMaybeIgnore constraintExists extract enc returnIds =
   if constraintExists
     then insertBulkWith conflictStrategy False extract enc returnIds
-    else insertBulk extract enc returnIds  -- Fastest when no constraint exists
+    else insertBulk extract enc returnIds -- Fastest when no constraint exists
   where
     conflictStrategy = case uniqueFields (Proxy @a) of
-      [] -> IgnoreWithConstraint (autoConstraintName (Proxy @a))  -- For generated columns
-      cols -> IgnoreWithColumns cols                              -- For normal columns
+      [] -> IgnoreWithConstraint (autoConstraintName (Proxy @a)) -- For generated columns
+      cols -> IgnoreWithColumns cols -- For normal columns
 
 -- | Version that allows custom constraint name (for special cases)
 insertBulkMaybeIgnoreWithConstraint ::
   forall a b r.
   (DbInfo a) =>
-  Bool ->                          -- Whether constraint exists
-  Text.Text ->                          -- Custom constraint name
+  Bool -> -- Whether constraint exists
+  Text.Text -> -- Custom constraint name
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
