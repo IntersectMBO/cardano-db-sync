@@ -5,121 +5,109 @@
 
 module Cardano.Db.Operations.Other.JsonbQuery where
 
-import Cardano.Db.Error (LookupFail (..))
-import Control.Exception.Lifted (handle, throwIO)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Reader (ReaderT)
+-- import Cardano.Prelude (ExceptT, MonadError (..))
+-- import Control.Monad.IO.Class (liftIO)
+-- import Data.ByteString (ByteString)
+-- import Data.Int (Int64)
+-- import qualified Hasql.Connection as HsqlC
+-- import qualified Hasql.Decoders as HsqlD
+-- import qualified Hasql.Encoders as HsqlE
+-- import qualified Hasql.Session as HsqlS
+-- import qualified Hasql.Statement as HsqlS
 
-import Database.Esqueleto.Experimental
-import Database.PostgreSQL.Simple (SqlError)
+-- import Cardano.Db.Error (DbError (..))
+-- import Cardano.Db.Statement.Function.Core (mkDbCallStack)
 
-enableJsonbInSchema ::
-  forall m.
-  ( MonadBaseControl IO m
-  , MonadIO m
-  ) =>
-  ReaderT SqlBackend m ()
-enableJsonbInSchema = do
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE tx_metadata ALTER COLUMN json TYPE jsonb USING json::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE script ALTER COLUMN json TYPE jsonb USING json::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE datum ALTER COLUMN value TYPE jsonb USING value::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE redeemer_data ALTER COLUMN value TYPE jsonb USING value::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE cost_model ALTER COLUMN costs TYPE jsonb USING costs::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE gov_action_proposal ALTER COLUMN description TYPE jsonb USING description::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE off_chain_pool_data ALTER COLUMN json TYPE jsonb USING json::jsonb"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE off_chain_vote_data ALTER COLUMN json TYPE jsonb USING json::jsonb"
-      []
+-- enableJsonbInSchema :: HsqlS.Statement () ()
+-- enableJsonbInSchema = do
+--   HsqlS.Statement
+--     ( mconcat $
+--         zipWith
+--           ( \s i ->
+--               (if i > (0 :: Integer) then "; " else "")
+--                 <> "ALTER TABLE "
+--                 <> fst s
+--                 <> " ALTER COLUMN "
+--                 <> snd s
+--                 <> " TYPE jsonb USING "
+--                 <> snd s
+--                 <> "::jsonb"
+--           )
+--           jsonbColumns
+--           [0 ..]
+--     )
+--     HsqlE.noParams
+--     HsqlD.noResult
+--     True
+--   where
+--     jsonbColumns :: [(ByteString, ByteString)]
+--     jsonbColumns =
+--       [ ("tx_metadata", "json")
+--       , ("script", "json")
+--       , ("datum", "value")
+--       , ("redeemer_data", "value")
+--       , ("cost_model", "costs")
+--       , ("gov_action_proposal", "description")
+--       , ("off_chain_pool_data", "json")
+--       , ("off_chain_vote_data", "json")
+--       ]
 
-disableJsonbInSchema ::
-  forall m.
-  ( MonadBaseControl IO m
-  , MonadIO m
-  ) =>
-  ReaderT SqlBackend m ()
-disableJsonbInSchema = do
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE tx_metadata ALTER COLUMN json TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE script ALTER COLUMN json TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE datum ALTER COLUMN value TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE redeemer_data ALTER COLUMN value TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE cost_model ALTER COLUMN costs TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE gov_action_proposal ALTER COLUMN description TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE off_chain_pool_data ALTER COLUMN json TYPE VARCHAR"
-      []
-  handle exceptHandler $
-    rawExecute
-      "ALTER TABLE off_chain_vote_data ALTER COLUMN json TYPE VARCHAR"
-      []
+-- disableJsonbInSchema :: HsqlS.Statement () ()
+-- disableJsonbInSchema =
+--   HsqlS.Statement
+--     ( mconcat $
+--         zipWith
+--           ( \columnDef i ->
+--               (if i > (0 :: Integer) then "; " else "")
+--                 <> "ALTER TABLE "
+--                 <> fst columnDef
+--                 <> " ALTER COLUMN "
+--                 <> snd columnDef
+--                 <> " TYPE VARCHAR"
+--           )
+--           jsonColumnsToRevert
+--           [0 ..]
+--     )
+--     HsqlE.noParams
+--     HsqlD.noResult
+--     True
+--   where
+--     -- List of table and column pairs to convert back from JSONB
+--     jsonColumnsToRevert :: [(ByteString, ByteString)]
+--     jsonColumnsToRevert =
+--       [ ("tx_metadata", "json")
+--       , ("script", "json")
+--       , ("datum", "value")
+--       , ("redeemer_data", "value")
+--       , ("cost_model", "costs")
+--       , ("gov_action_proposal", "description")
+--       , ("off_chain_pool_data", "json")
+--       , ("off_chain_vote_data", "json")
+--       ]
 
-queryJsonbInSchemaExists ::
-  (MonadIO m) =>
-  ReaderT SqlBackend m Bool
-queryJsonbInSchemaExists = do
-  isjsonb <- rawSql query []
-  pure $ case isjsonb of
-    [Single (1 :: Int)] -> True
-    _other -> False
-  where
-    tableName = "'tx_metadata'"
-    columnName = "'json'"
-    -- check if the column is of type jsonb
-    query =
-      mconcat
-        [ "SELECT COUNT(*) FROM information_schema.columns "
-        , "WHERE table_name ="
-        , tableName
-        , "AND column_name ="
-        , columnName
-        , "AND data_type = 'jsonb';"
-        ]
+-- queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
+-- queryJsonbInSchemaExists conn = do
+--   result <- liftIO $ HsqlS.run (HsqlS.statement () jsonbSchemaStatement) conn
+--   case result of
+--     Left err -> throwError $ DbError (mkDbCallStack "queryJsonbInSchemaExists") "" $ Just err
+--     Right countRes -> pure $ countRes == 1
+--   where
+--     jsonbSchemaStatement :: HsqlS.Statement () Int64
+--     jsonbSchemaStatement =
+--       HsqlS.Statement
+--         query
+--         HsqlE.noParams -- No parameters needed
+--         decoder
+--         True -- Prepared statement
+--     query =
+--       "SELECT COUNT(*) \
+--       \FROM information_schema.columns \
+--       \WHERE table_name = 'tx_metadata' \
+--       \AND column_name = 'json' \
+--       \AND data_type = 'jsonb';"
 
-exceptHandler ::
-  forall m a.
-  MonadIO m =>
-  SqlError ->
-  ReaderT SqlBackend m a
-exceptHandler e =
-  liftIO $ throwIO (DBRJsonbInSchema $ show e)
+--     decoder :: HsqlD.Result Int64
+--     decoder =
+--       HsqlD.singleRow $
+--         HsqlD.column $
+--           HsqlD.nonNullable HsqlD.int8

@@ -31,7 +31,6 @@ module Cardano.DbSync.Cache.Types (
 ) where
 
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOut as V
 import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
@@ -83,7 +82,7 @@ data CacheInternal = CacheInternal
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
-  , cAddress :: !(StrictTVar IO (LRUCache ByteString V.AddressId))
+  , cAddress :: !(StrictTVar IO (LRUCache ByteString DB.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache (Ledger.TxId StandardCrypto) DB.TxId))
   }
 
@@ -145,7 +144,7 @@ textShowStats (ActiveCache ic) = do
   address <- readTVarIO (cAddress ic)
   pure $
     mconcat
-      [ "\nCache Statistics:"
+      [ "\n----------------------- Cache Statistics: -----------------------"
       , "\n  Caches Optimised: " <> textShow isCacheOptimised
       , textCacheSection "Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
       , textMapSection "Pools" pools (poolsHits stats) (poolsQueries stats)

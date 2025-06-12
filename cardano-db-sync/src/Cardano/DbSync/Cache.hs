@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Cache (
@@ -21,6 +20,7 @@ module Cardano.DbSync.Cache (
   insertAddressUsingCache,
   insertStakeAddress,
   queryStakeAddrWithCache,
+  queryTxIdWithCacheEither,
   queryTxIdWithCache,
   rollbackCache,
   optimiseCaches,
@@ -32,15 +32,13 @@ module Cardano.DbSync.Cache (
 
 import Cardano.BM.Trace
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
-import Cardano.DbSync.Era.Util
-import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (Network)
@@ -53,10 +51,9 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVarIO,
   writeTVar,
  )
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
-import Database.Persist.Postgresql (SqlBackend)
+import qualified Data.Text as Text
 import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 -- Rollbacks make everything harder and the same applies to caching.
@@ -74,7 +71,7 @@ import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
-rollbackCache :: MonadIO m => CacheStatus -> DB.BlockId -> ReaderT SqlBackend m ()
+rollbackCache :: MonadIO m => CacheStatus -> DB.BlockId -> DB.DbAction m ()
 rollbackCache NoCache _ = pure ()
 rollbackCache (ActiveCache cache) blockId = do
   liftIO $ do
@@ -86,7 +83,7 @@ rollbackCache (ActiveCache cache) blockId = do
 -- | When syncing and we get within 2 minutes of the tip, we can optimise the caches
 -- and set the flag to True on ActiveCache.leaving the following caches as they are:
 -- cPools, cPrevBlock, Cstats, cEpoch
-optimiseCaches :: MonadIO m => CacheStatus -> ReaderT SqlBackend m ()
+optimiseCaches :: MonadIO m => CacheStatus -> DB.DbAction m ()
 optimiseCaches cache =
   case cache of
     NoCache -> pure ()
@@ -110,36 +107,39 @@ getCacheStatistics cs =
     ActiveCache ci -> readTVarIO (cStats ci)
 
 queryOrInsertRewardAccount ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   CacheStatus ->
   CacheAction ->
   Ledger.RewardAccount StandardCrypto ->
-  ReaderT SqlBackend m DB.StakeAddressId
+  DB.DbAction m DB.StakeAddressId
 queryOrInsertRewardAccount trce cache cacheUA rewardAddr = do
   eiAddrId <- queryStakeAddrWithCacheRetBs trce cache cacheUA rewardAddr
   case eiAddrId of
-    Left (_err, bs) -> insertStakeAddress rewardAddr (Just bs)
-    Right addrId -> pure addrId
+    Just addrId -> pure addrId
+    Nothing -> do
+      -- TODO: Cmdv is this the right byteString?
+      let bs = Ledger.serialiseRewardAccount rewardAddr
+      insertStakeAddress rewardAddr (Just bs)
 
 queryOrInsertStakeAddress ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   CacheStatus ->
   CacheAction ->
   Network ->
   StakeCred ->
-  ReaderT SqlBackend m DB.StakeAddressId
+  DB.DbAction m DB.StakeAddressId
 queryOrInsertStakeAddress trce cache cacheUA nw cred =
   queryOrInsertRewardAccount trce cache cacheUA $ Ledger.RewardAccount nw cred
 
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Ledger.RewardAccount StandardCrypto ->
   Maybe ByteString ->
-  ReaderT SqlBackend m DB.StakeAddressId
+  DB.DbAction m DB.StakeAddressId
 insertStakeAddress rewardAddr stakeCredBs = do
   DB.insertStakeAddress $
     DB.StakeAddress
@@ -158,9 +158,9 @@ queryStakeAddrWithCache ::
   CacheAction ->
   Network ->
   StakeCred ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.StakeAddressId)
+  DB.DbAction m (Maybe DB.StakeAddressId)
 queryStakeAddrWithCache trce cache cacheUA nw cred =
-  mapLeft fst <$> queryStakeAddrWithCacheRetBs trce cache cacheUA (Ledger.RewardAccount nw cred)
+  queryStakeAddrWithCacheRetBs trce cache cacheUA (Ledger.RewardAccount nw cred)
 
 queryStakeAddrWithCacheRetBs ::
   forall m.
@@ -169,13 +169,13 @@ queryStakeAddrWithCacheRetBs ::
   CacheStatus ->
   CacheAction ->
   Ledger.RewardAccount StandardCrypto ->
-  ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
+  DB.DbAction m (Maybe DB.StakeAddressId)
 queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred) = do
   let bs = Ledger.serialiseRewardAccount ra
   case cache of
-    NoCache -> rsStkAdrrs bs
+    NoCache -> resolveStakeAddress bs
     ActiveCache ci -> do
-      withCacheOptimisationCheck ci (rsStkAdrrs bs) $ do
+      withCacheOptimisationCheck ci (resolveStakeAddress bs) $ do
         stakeCache <- liftIO $ readTVarIO (cStake ci)
         case queryStakeCache cred stakeCache of
           Just (addrId, stakeCache') -> do
@@ -183,16 +183,16 @@ queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred
             case cacheUA of
               EvictAndUpdateCache -> do
                 liftIO $ atomically $ writeTVar (cStake ci) $ deleteStakeCache cred stakeCache'
-                pure $ Right addrId
+                pure $ Just addrId
               _other -> do
                 liftIO $ atomically $ writeTVar (cStake ci) stakeCache'
-                pure $ Right addrId
+                pure $ Just addrId
           Nothing -> do
-            queryRes <- mapLeft (,bs) <$> resolveStakeAddress bs
+            queryRes <- resolveStakeAddress bs
             liftIO $ missCreds (cStats ci)
             case queryRes of
-              Left _ -> pure queryRes
-              Right stakeAddrsId -> do
+              Nothing -> pure queryRes
+              Just stakeAddrsId -> do
                 let !stakeCache' = case cacheUA of
                       UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
                       UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
@@ -200,9 +200,7 @@ queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred
                 liftIO $
                   atomically $
                     writeTVar (cStake ci) stakeCache'
-                pure $ Right stakeAddrsId
-  where
-    rsStkAdrrs bs = mapLeft (,bs) <$> resolveStakeAddress bs
+                pure $ Just stakeAddrsId
 
 -- | True if it was found in LRU
 queryStakeCache :: StakeCred -> StakeCache -> Maybe (DB.StakeAddressId, StakeCache)
@@ -221,13 +219,13 @@ queryPoolKeyWithCache ::
   CacheStatus ->
   CacheAction ->
   PoolKeyHash ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.PoolHashId)
+  DB.DbAction m (Either DB.DbError DB.PoolHashId)
 queryPoolKeyWithCache cache cacheUA hsh =
   case cache of
     NoCache -> do
       mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
       case mPhId of
-        Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
+        Nothing -> pure $ Left $ DB.DbError (DB.mkDbCallStack "queryPoolKeyWithCache") "NoCache queryPoolHashId" Nothing
         Just phId -> pure $ Right phId
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cPools ci)
@@ -245,7 +243,7 @@ queryPoolKeyWithCache cache cacheUA hsh =
           liftIO $ missPools (cStats ci)
           mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
           case mPhId of
-            Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
+            Nothing -> throwError $ DB.DbError (DB.mkDbCallStack "queryPoolKeyWithCache") "ActiveCache queryPoolHashId" Nothing
             Just phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
               when (shouldCache cacheUA) $
@@ -256,12 +254,12 @@ queryPoolKeyWithCache cache cacheUA hsh =
               pure $ Right phId
 
 insertAddressUsingCache ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   CacheStatus ->
   CacheAction ->
   ByteString ->
-  V.Address ->
-  ReaderT SqlBackend m V.AddressId
+  VA.Address ->
+  DB.DbAction m DB.AddressId
 insertAddressUsingCache cache cacheUA addrRaw vAdrs = do
   case cache of
     NoCache -> do
@@ -311,11 +309,11 @@ insertAddressUsingCache cache cacheUA addrRaw vAdrs = do
               LRU.insert addrRaw addrId
 
 insertPoolKeyWithCache ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   CacheStatus ->
   CacheAction ->
   PoolKeyHash ->
-  ReaderT SqlBackend m DB.PoolHashId
+  DB.DbAction m DB.PoolHashId
 insertPoolKeyWithCache cache cacheUA pHash =
   case cache of
     NoCache ->
@@ -351,14 +349,14 @@ insertPoolKeyWithCache cache cacheUA pHash =
           pure phId
 
 queryPoolKeyOrInsert ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Text ->
   Trace IO Text ->
   CacheStatus ->
   CacheAction ->
   Bool ->
   PoolKeyHash ->
-  ReaderT SqlBackend m DB.PoolHashId
+  DB.DbAction m DB.PoolHashId
 queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
   pk <- queryPoolKeyWithCache cache cacheUA hsh
   case pk of
@@ -383,7 +381,7 @@ queryMAWithCache ::
   CacheStatus ->
   PolicyID StandardCrypto ->
   AssetName ->
-  ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
+  DB.DbAction m (Either (ByteString, ByteString) DB.MultiAssetId)
 queryMAWithCache cache policyId asset =
   case cache of
     NoCache -> queryDb
@@ -410,15 +408,25 @@ queryMAWithCache cache policyId asset =
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
 
+queryTxIdWithCacheEither ::
+  MonadIO m =>
+  CacheStatus ->
+  Ledger.TxId StandardCrypto ->
+  DB.DbAction m (Either DB.DbError DB.TxId)
+queryTxIdWithCacheEither cache txIdLedger = do
+  catchError
+    (Right <$> queryTxIdWithCache cache txIdLedger)
+    (pure . Left)
+
 queryPrevBlockWithCache ::
   MonadIO m =>
-  Text ->
   CacheStatus ->
   ByteString ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
-queryPrevBlockWithCache msg cache hsh =
+  Text.Text ->
+  DB.DbAction m DB.BlockId
+queryPrevBlockWithCache cache hsh errMsg =
   case cache of
-    NoCache -> liftLookupFail msg $ DB.queryBlockId hsh
+    NoCache -> DB.queryBlockId hsh errMsg
     ActiveCache ci -> do
       mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
       case mCachedPrev of
@@ -434,16 +442,16 @@ queryPrevBlockWithCache msg cache hsh =
     queryFromDb ::
       MonadIO m =>
       CacheInternal ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
+      DB.DbAction m DB.BlockId
     queryFromDb ci = do
       liftIO $ missPrevBlock (cStats ci)
-      liftLookupFail msg $ DB.queryBlockId hsh
+      DB.queryBlockId hsh errMsg
 
 queryTxIdWithCache ::
   MonadIO m =>
   CacheStatus ->
   Ledger.TxId StandardCrypto ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
+  DB.DbAction m DB.TxId
 queryTxIdWithCache cache txIdLedger = do
   case cache of
     -- Direct database query if no cache.
@@ -452,24 +460,19 @@ queryTxIdWithCache cache txIdLedger = do
       withCacheOptimisationCheck ci qTxHash $ do
         -- Read current cache state.
         cacheTx <- liftIO $ readTVarIO (cTxIds ci)
-
         case FIFO.lookup txIdLedger cacheTx of
           -- Cache hit, return the transaction ID.
           Just txId -> do
             liftIO $ hitTxIds (cStats ci)
-            pure $ Right txId
+            pure txId
           -- Cache miss.
           Nothing -> do
-            eTxId <- qTxHash
+            txId <- qTxHash
             liftIO $ missTxIds (cStats ci)
-            case eTxId of
-              Right txId -> do
-                -- Update cache.
-                liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
-                -- Return ID after updating cache.
-                pure $ Right txId
-              -- Return lookup failure.
-              Left _ -> pure $ Left $ DB.DbLookupTxHash txHash
+            -- Update cache.
+            liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
+            -- Return ID after updating cache.
+            pure txId
   where
     txHash = Generic.unTxHash txIdLedger
     qTxHash = DB.queryTxId txHash
@@ -485,10 +488,10 @@ tryUpdateCacheTx (ActiveCache ci) ledgerTxId txId =
 tryUpdateCacheTx _ _ _ = pure ()
 
 insertBlockAndCache ::
-  (MonadIO m, MonadBaseControl IO m) =>
+  MonadIO m =>
   CacheStatus ->
   DB.Block ->
-  ReaderT SqlBackend m DB.BlockId
+  DB.DbAction m DB.BlockId
 insertBlockAndCache cache block =
   case cache of
     NoCache -> insBlck
@@ -506,7 +509,7 @@ queryDatum ::
   MonadIO m =>
   CacheStatus ->
   DataHash ->
-  ReaderT SqlBackend m (Maybe DB.DatumId)
+  DB.DbAction m (Maybe DB.DatumId)
 queryDatum cache hsh = do
   case cache of
     NoCache -> queryDtm
@@ -527,11 +530,11 @@ queryDatum cache hsh = do
 
 -- This assumes the entry is not cached.
 insertDatumAndCache ::
-  (MonadIO m, MonadBaseControl IO m) =>
+  MonadIO m =>
   CacheStatus ->
   DataHash ->
   DB.Datum ->
-  ReaderT SqlBackend m DB.DatumId
+  DB.DbAction m DB.DatumId
 insertDatumAndCache cache hsh dt = do
   datumId <- DB.insertDatum dt
   case cache of

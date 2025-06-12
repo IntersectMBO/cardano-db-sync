@@ -68,7 +68,6 @@ library
                       , cardano-prelude
                       , containers
                       , contra-tracer
-                      , esqueleto
                       , extra
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
