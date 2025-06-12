@@ -197,16 +197,13 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
         if withinTwoMin || tookSnapshot
-          then do
-            DB.transactionCommit
-            pure True
+          then do pure True
           else pure False
       when withinHalfHour $ do
         bootStrapMaybe syncEnv
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
-        unless ranIndexes $ do
-          unless commited DB.transactionCommit
+        unless ranIndexes $
           liftIO $ runIndexMigrations syncEnv
 
     isWithinTwoMin :: SlotDetails -> Bool

@@ -32,7 +32,7 @@ import Prelude (last)
 
 simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 simpleRollback =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1

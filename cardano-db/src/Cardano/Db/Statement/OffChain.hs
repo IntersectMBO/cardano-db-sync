@@ -23,12 +23,13 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
-import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertCheckUnique)
+import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.Query (countAll)
 import Cardano.Db.Statement.GovernanceAndVoting (queryVotingAnchorIdExists)
 import Cardano.Db.Statement.Pool (queryPoolHashIdExistsStmt, queryPoolMetadataRefIdExistsStmt)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (AnchorType, DbAction, VoteUrl, anchorTypeDecoder, voteUrlDecoder)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- OffChainPoolData
@@ -470,15 +471,15 @@ insertBulkOffChainVoteDataStmt =
     SO.offChainVoteDataBulkEncoder
     (WithResultBulk $ Id.idBulkDecoder Id.OffChainVoteDataId)
   where
-    extractOffChainVoteData :: [SO.OffChainVoteData] -> ([Id.VotingAnchorId], [ByteString], [Text], [Maybe Text], [Text], [ByteString], [Maybe Text], [Maybe Bool])
+    extractOffChainVoteData :: [SO.OffChainVoteData] -> ([Id.VotingAnchorId], [ByteString], [Text], [ByteString], [Maybe Text], [Text], [Maybe Text], [Maybe Bool])
     extractOffChainVoteData xs =
       ( map SO.offChainVoteDataVotingAnchorId xs
       , map SO.offChainVoteDataHash xs
-      , map SO.offChainVoteDataLanguage xs
-      , map SO.offChainVoteDataComment xs
       , map SO.offChainVoteDataJson xs
       , map SO.offChainVoteDataBytes xs
       , map SO.offChainVoteDataWarning xs
+      , map SO.offChainVoteDataLanguage xs
+      , map SO.offChainVoteDataComment xs
       , map SO.offChainVoteDataIsValid xs
       )
 

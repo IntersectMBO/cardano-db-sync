@@ -50,12 +50,12 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
-  withFullConfigAndDropDB,
-  withFullConfigAndLogs,
-  withCustomConfigAndLogsAndDropDB,
+  withFullConfigDropDb,
+  withFullConfigLog,
+  withCustomConfigDropDbLog,
   withCustomConfig,
-  withCustomConfigAndDropDB,
-  withCustomConfigAndLogs,
+  withCustomConfigDropDb,
+  withCustomConfigLog,
   withFullConfig',
   replaceConfigFile,
   txOutVariantTypeFromConfig,
@@ -402,7 +402,7 @@ withFullConfig =
     Nothing
 
 -- this function needs to be used where the schema needs to be rebuilt
-withFullConfigAndDropDB ::
+withFullConfigDropDb ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -411,7 +411,7 @@ withFullConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndDropDB =
+withFullConfigDropDb =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -422,7 +422,7 @@ withFullConfigAndDropDB =
     initCommandLineArgs
     Nothing
 
-withFullConfigAndLogs ::
+withFullConfigLog ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -431,7 +431,7 @@ withFullConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndLogs =
+withFullConfigLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -463,7 +463,7 @@ withCustomConfig =
         }
     )
 
-withCustomConfigAndDropDB ::
+withCustomConfigDropDb ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -475,7 +475,7 @@ withCustomConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndDropDB =
+withCustomConfigDropDb =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -485,7 +485,7 @@ withCustomConfigAndDropDB =
     )
 
 -- This is a usefull function to be able to see logs from DBSync when writing/debuging tests
-withCustomConfigAndLogs ::
+withCustomConfigLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -497,7 +497,7 @@ withCustomConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogs =
+withCustomConfigLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -506,7 +506,7 @@ withCustomConfigAndLogs =
         }
     )
 
-withCustomConfigAndLogsAndDropDB ::
+withCustomConfigDropDbLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -518,7 +518,7 @@ withCustomConfigAndLogsAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogsAndDropDB =
+withCustomConfigDropDbLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True

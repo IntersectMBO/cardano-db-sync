@@ -62,9 +62,7 @@ insertByronBlock syncEnv firstBlockOfEpoch blk details = do
     Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
   -- Serializing things during syncing can drastically slow down full sync
   -- times (ie 10x or more).
-  when
-    (getSyncStatus details == SyncFollowing)
-    DB.createTransactionCheckpoint
+  -- TODO: CMDV - need to look if I can change the insert logic using hasql
   pure res
 
 insertABOBBoundary ::

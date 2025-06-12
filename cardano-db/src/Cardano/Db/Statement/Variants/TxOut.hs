@@ -25,10 +25,11 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteAllCount, parameterisedDeleteWhere)
-import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
+import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Statement.Function.Query (adaDecoder, countAll)
-import Cardano.Db.Statement.Types (DbInfo (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (entityVal))
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, DbWord64, dbLovelaceDecoder)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- TxOut
@@ -72,30 +73,30 @@ insertBulkCoreTxOutStmt =
   where
     extractCoreTxOutValues ::
       [SVC.TxOutCore] ->
-      ( [Text]
+      ( [Id.TxId]
+      , [Word64]
+      , [Text]
       , [Bool]
       , [Maybe ByteString]
-      , [Maybe Id.TxId]
-      , [Word64]
-      , [Maybe Id.DatumId]
-      , [Maybe ByteString]
-      , [Maybe Id.ScriptId]
       , [Maybe Id.StakeAddressId]
-      , [Id.TxId]
       , [DbLovelace]
+      , [Maybe ByteString]
+      , [Maybe Id.DatumId]
+      , [Maybe Id.ScriptId]
+      , [Maybe Id.TxId]
       )
     extractCoreTxOutValues xs =
-      ( map SVC.txOutCoreAddress xs
-      , map SVC.txOutCoreAddressHasScript xs
-      , map SVC.txOutCoreDataHash xs
-      , map SVC.txOutCoreConsumedByTxId xs
+      ( map SVC.txOutCoreTxId xs
       , map SVC.txOutCoreIndex xs
-      , map SVC.txOutCoreInlineDatumId xs
+      , map SVC.txOutCoreAddress xs
+      , map SVC.txOutCoreAddressHasScript xs
       , map SVC.txOutCorePaymentCred xs
-      , map SVC.txOutCoreReferenceScriptId xs
       , map SVC.txOutCoreStakeAddressId xs
-      , map SVC.txOutCoreTxId xs
       , map SVC.txOutCoreValue xs
+      , map SVC.txOutCoreDataHash xs
+      , map SVC.txOutCoreInlineDatumId xs
+      , map SVC.txOutCoreReferenceScriptId xs
+      , map SVC.txOutCoreConsumedByTxId xs
       )
 
 insertBulkAddressTxOutStmt :: HsqlStmt.Statement [SVA.TxOutAddress] [Id.TxOutAddressId]
@@ -577,14 +578,14 @@ insertBulkCoreMaTxOutStmt =
   where
     extractCoreMaTxOutValues ::
       [SVC.MaTxOutCore] ->
-      ( [Id.MultiAssetId]
-      , [DbWord64]
+      ( [DbWord64]
       , [Id.TxOutCoreId]
+      , [Id.MultiAssetId]
       )
     extractCoreMaTxOutValues xs =
-      ( map SVC.maTxOutCoreIdent xs
-      , map SVC.maTxOutCoreQuantity xs
+      ( map SVC.maTxOutCoreQuantity xs
       , map SVC.maTxOutCoreTxOutId xs
+      , map SVC.maTxOutCoreIdent xs
       )
 
 insertBulkAddressMaTxOutStmt :: HsqlStmt.Statement [SVA.MaTxOutAddress] [Id.MaTxOutAddressId]
@@ -731,7 +732,7 @@ queryAddressOutputs txOutVariantType addr =
         HsqlSes.statement addr queryAddressOutputsVariantStmt
 
 --------------------------------------------------------------------------------
-queryScriptOutputsCoreStmt :: HsqlStmt.Statement () [SVC.TxOutCore]
+queryScriptOutputsCoreStmt :: HsqlStmt.Statement () [Entity SVC.TxOutCore]
 queryScriptOutputsCoreStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
@@ -742,7 +743,7 @@ queryScriptOutputsCoreStmt =
           , " FROM tx_out"
           , " WHERE address_has_script = TRUE"
           ]
-    decoder = HsqlD.rowList SVC.txOutCoreDecoder
+    decoder = HsqlD.rowList SVC.entityTxOutCoreDecoder
 
 queryScriptOutputsVariantStmt :: HsqlStmt.Statement () [(SVA.TxOutAddress, SVA.Address)]
 queryScriptOutputsVariantStmt =
@@ -765,7 +766,7 @@ queryScriptOutputs txOutVariantType =
       txOuts <-
         runDbSession (mkDbCallStack "queryScriptOutputsCore") $
           HsqlSes.statement () queryScriptOutputsCoreStmt
-      pure $ map VCTxOutW txOuts
+      pure $ map (VCTxOutW . entityVal)  txOuts
     TxOutVariantAddress -> do
       results <-
         runDbSession (mkDbCallStack "queryScriptOutputsVariant") $
