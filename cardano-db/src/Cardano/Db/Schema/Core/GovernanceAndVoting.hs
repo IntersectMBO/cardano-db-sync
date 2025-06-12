@@ -154,6 +154,12 @@ data DrepDistr = DrepDistr
 type instance Key DrepDistr = Id.DrepDistrId
 instance DbInfo DrepDistr where
   uniqueFields _ = ["hash_id", "epoch_no"]
+  unnestParamTypes _ =
+    [ ("hash_id", "bigint[]")
+    , ("amount", "bigint[]")
+    , ("epoch_no", "bigint[]")
+    , ("active_until", "bigint[]")
+    ]
 
 entityDrepDistrDecoder :: D.Row (Entity DrepDistr)
 entityDrepDistrDecoder =
@@ -896,7 +902,13 @@ data TreasuryWithdrawal = TreasuryWithdrawal
   deriving (Eq, Show, Generic)
 
 type instance Key TreasuryWithdrawal = Id.TreasuryWithdrawalId
-instance DbInfo TreasuryWithdrawal
+
+instance DbInfo TreasuryWithdrawal where
+  unnestParamTypes _ =
+    [ ("gov_action_proposal_id", "bigint[]")
+    , ("stake_address_id", "bigint[]")
+    , ("amount", "bigint[]")
+    ]
 
 entityTreasuryWithdrawalDecoder :: D.Row (Entity TreasuryWithdrawal)
 entityTreasuryWithdrawalDecoder =

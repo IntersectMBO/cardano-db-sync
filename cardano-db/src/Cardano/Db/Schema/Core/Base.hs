@@ -226,6 +226,12 @@ type instance Key TxMetadata = TxMetadataId
 
 instance DbInfo TxMetadata where
   jsonbFields _ = ["json"]
+  unnestParamTypes _ =
+    [ ("key", "bigint[]")
+    , ("json", "text[]")
+    , ("bytes", "bytea[]")
+    , ("tx_id", "bigint[]")
+    ]
 
 entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
 entityTxMetadataDecoder =
@@ -278,7 +284,14 @@ data TxIn = TxIn
   deriving (Show, Eq, Generic)
 
 type instance Key TxIn = TxInId
-instance DbInfo TxIn
+
+instance DbInfo TxIn where
+  unnestParamTypes _ =
+    [ ("tx_in_id", "bigint[]")
+    , ("tx_out_id", "bigint[]")
+    , ("tx_out_index", "bigint[]")
+    , ("redeemer_id", "bigint[]")
+    ]
 
 entityTxInDecoder :: D.Row (Entity TxIn)
 entityTxInDecoder =
@@ -606,7 +619,10 @@ data Redeemer = Redeemer
   deriving (Eq, Show, Generic)
 
 type instance Key Redeemer = RedeemerId
-instance DbInfo Redeemer
+
+instance DbInfo Redeemer where
+  enumFields _ = [("purpose", "scriptpurposetype")]
+
 
 entityRedeemerDecoder :: D.Row (Entity Redeemer)
 entityRedeemerDecoder =

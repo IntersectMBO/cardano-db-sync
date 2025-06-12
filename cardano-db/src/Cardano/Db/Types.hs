@@ -150,7 +150,6 @@ data DbEnv = DbEnv
   { dbConnection :: !HsqlCon.Connection
   , dbEnableLogging :: !Bool
   , dbTracer :: !(Maybe (Trace IO Text))
-  -- , dbRemoveJsonbFromSchema :: !Bool
   }
 
 ----------------------------------------------------------------------------

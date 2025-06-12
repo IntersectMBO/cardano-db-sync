@@ -8,6 +8,8 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import qualified Hasql.Decoders as HsqlD
 import Quiet (Quiet (..))
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Encoding.Error as TextError
 
 newtype AddressHash -- Length (28 bytes) enforced by Postgres
   = AddressHash {unAddressHash :: ByteString}
@@ -36,3 +38,6 @@ newtype PoolUrl = PoolUrl {unPoolUrl :: Text}
 
 poolUrlDecoder :: HsqlD.Value PoolUrl
 poolUrlDecoder = PoolUrl <$> HsqlD.text
+
+textDecoder :: HsqlD.Value Text
+textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))

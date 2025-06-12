@@ -15,8 +15,9 @@ import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
-import Cardano.Db.Statement.Function.Insert (insert, insertBulk)
+import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Types (DbAction, DbInt65)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 
 --------------------------------------------------------------------------------
 -- MultiAsset
@@ -78,11 +79,11 @@ insertBulkMaTxMintStmt =
     SMA.maTxMintBulkEncoder
     (WithResultBulk (HsqlD.rowList $ Id.idDecoder Id.MaTxMintId))
   where
-    extractMaTxMint :: [MaTxMint] -> ([DbInt65], [Id.MultiAssetId], [Id.TxId])
+    extractMaTxMint :: [MaTxMint] -> ([DbInt65], [Id.TxId], [Id.MultiAssetId])
     extractMaTxMint xs =
       ( map SMA.maTxMintQuantity xs
-      , map SMA.maTxMintIdent xs
       , map SMA.maTxMintTxId xs
+      , map SMA.maTxMintIdent xs
       )
 
 insertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]

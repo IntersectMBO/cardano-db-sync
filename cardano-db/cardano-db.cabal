@@ -66,6 +66,7 @@ library
                         Cardano.Db.Statement.Function.Core
                         Cardano.Db.Statement.Function.Delete
                         Cardano.Db.Statement.Function.Insert
+                        Cardano.Db.Statement.Function.InsertBulk
                         Cardano.Db.Statement.Function.Query
                         Cardano.Db.Statement.ChainGen
                         Cardano.Db.Statement.GovernanceAndVoting

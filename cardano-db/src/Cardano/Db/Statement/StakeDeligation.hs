@@ -23,7 +23,8 @@ import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.StakeDeligation as SS
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, mkDbCallStack, runDbSession)
-import Cardano.Db.Statement.Function.Insert (insert, insertBulk, insertCheckUnique)
+import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
+import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnoreWithConstraint, insertBulkMaybeIgnore)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 import Cardano.Db.Types (Ada, DbAction, DbLovelace, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
@@ -71,9 +72,9 @@ queryDelegationScript =
 --------------------------------------------------------------------------------
 
 -- | INSERT --------------------------------------------------------------------
-insertBulkEpochStakeStmt :: HsqlStmt.Statement [SS.EpochStake] ()
-insertBulkEpochStakeStmt =
-  insertBulk
+insertBulkEpochStakeStmt :: Bool -> HsqlStmt.Statement [SS.EpochStake] ()
+insertBulkEpochStakeStmt dbConstraintEpochStake =
+  insertBulkMaybeIgnore dbConstraintEpochStake
     extractEpochStake
     SS.epochStakeBulkEncoder
     NoResultBulk
@@ -86,10 +87,11 @@ insertBulkEpochStakeStmt =
       , map SS.epochStakeEpochNo xs
       )
 
-insertBulkEpochStake :: MonadIO m => [SS.EpochStake] -> DbAction m ()
-insertBulkEpochStake epochStakes =
+insertBulkEpochStake :: MonadIO m => Bool -> [SS.EpochStake] -> DbAction m ()
+insertBulkEpochStake dbConstraintEpochStake epochStakes =
   runDbSession (mkDbCallStack "insertBulkEpochStake") $
-    HsqlSes.statement epochStakes insertBulkEpochStakeStmt
+    HsqlSes.statement epochStakes $ insertBulkEpochStakeStmt dbConstraintEpochStake
+
 
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -201,27 +203,31 @@ updateStakeProgressCompleted epoch =
 --------------------------------------------------------------------------------
 
 -- | INSERT ---------------------------------------------------------------------
-insertBulkRewardsStmt :: HsqlStmt.Statement [SS.Reward] ()
-insertBulkRewardsStmt =
-  insertBulk
-    extractReward
-    SS.rewardBulkEncoder
-    NoResultBulk
+insertBulkRewardsStmt :: Bool -> HsqlStmt.Statement [SS.Reward] ()
+insertBulkRewardsStmt dbConstraintRewards =
+  if dbConstraintRewards
+    then insertBulkMaybeIgnoreWithConstraint True "unique_reward"
+      extractReward
+      SS.rewardBulkEncoder
+      NoResultBulk
+    else insertBulk
+      extractReward
+      SS.rewardBulkEncoder
+      NoResultBulk
   where
-    extractReward :: [SS.Reward] -> ([Id.StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64], [Id.PoolHashId])
+    extractReward :: [SS.Reward] -> ([Id.StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Id.PoolHashId])
     extractReward xs =
       ( map SS.rewardAddrId xs
       , map SS.rewardType xs
       , map SS.rewardAmount xs
-      , map SS.rewardEarnedEpoch xs
       , map SS.rewardSpendableEpoch xs
       , map SS.rewardPoolId xs
       )
 
-insertBulkRewards :: MonadIO m => [SS.Reward] -> DbAction m ()
-insertBulkRewards rewards =
+insertBulkRewards :: MonadIO m => Bool -> [SS.Reward] -> DbAction m ()
+insertBulkRewards dbConstraintRewards rewards =
   runDbSession (mkDbCallStack "insertBulkRewards") $
-    HsqlSes.statement rewards insertBulkRewardsStmt
+    HsqlSes.statement rewards $ insertBulkRewardsStmt dbConstraintRewards
 
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -292,20 +298,15 @@ deleteRewardsBulkStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
     rewardTableN = tableName (Proxy @SS.Reward)
+
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "WITH to_delete AS ("
-          , "  SELECT r.id"
-          , "  FROM " <> rewardTableN <> " r"
-          , "  JOIN UNNEST($1, $2, $3, $4) AS t(addr_id, reward_type, epoch, pool_id)"
-          , "  ON r.addr_id = t.addr_id"
-          , "  AND r.type = t.reward_type"
-          , "  AND r.spendable_epoch = t.epoch"
-          , "  AND r.pool_id = t.pool_id"
+          [ "DELETE FROM " <> rewardTableN
+          , " WHERE (addr_id, type, spendable_epoch, pool_id) IN ("
+          , "  SELECT addr_id, reward_type::rewardtype, epoch, pool_id"
+          , "  FROM UNNEST($1::bigint[], $2::text[], $3::bigint[], $4::bigint[]) AS t(addr_id, reward_type, epoch, pool_id)"
           , ")"
-          , "DELETE FROM " <> rewardTableN
-          , " WHERE id IN (SELECT id FROM to_delete)"
           ]
 
     encoder =
@@ -362,12 +363,11 @@ insertBulkRewardRestsStmt =
     SS.rewardRestBulkEncoder
     NoResultBulk
   where
-    extractRewardRest :: [SS.RewardRest] -> ([Id.StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
+    extractRewardRest :: [SS.RewardRest] -> ([Id.StakeAddressId], [RewardSource], [DbLovelace], [Word64])
     extractRewardRest xs =
       ( map SS.rewardRestAddrId xs
       , map SS.rewardRestType xs
       , map SS.rewardRestAmount xs
-      , map SS.rewardRestEarnedEpoch xs
       , map SS.rewardRestSpendableEpoch xs
       )
 
@@ -614,7 +614,7 @@ queryDeregistrationScriptStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT *"
+          [ "SELECT addr_id, cert_index, epoch_no, tx_id, redeemer_id"
           , " FROM " <> tableN
           , " WHERE redeemer_id IS NOT NULL"
           ]

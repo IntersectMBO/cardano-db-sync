@@ -4,7 +4,7 @@
 
 module Cardano.Db.Schema.Core.StakeDeligation where
 
-import Contravariant.Extras (contrazip2, contrazip4, contrazip5, contrazip6)
+import Contravariant.Extras (contrazip2, contrazip4, contrazip5)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Text (Text)
@@ -27,6 +27,7 @@ import Cardano.Db.Types (
   rewardSourceDecoder,
   rewardSourceEncoder,
  )
+import Cardano.Db.Schema.Types (textDecoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -60,7 +61,7 @@ stakeAddressDecoder :: D.Row StakeAddress
 stakeAddressDecoder =
   StakeAddress
     <$> D.column (D.nonNullable D.bytea) -- stakeAddressHashRaw
-    <*> D.column (D.nonNullable D.text) -- stakeAddressView
+    <*> D.column (D.nonNullable textDecoder) -- stakeAddressView
     <*> D.column (D.nullable D.bytea) -- stakeAddressScriptHash
 
 entityStakeAddressEncoder :: E.Params (Entity StakeAddress)
@@ -86,8 +87,8 @@ data StakeRegistration = StakeRegistration
   { stakeRegistrationAddrId :: !StakeAddressId -- noreference
   , stakeRegistrationCertIndex :: !Word16
   , stakeRegistrationEpochNo :: !Word64 -- sqltype=word31type
-  , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
   , stakeRegistrationTxId :: !TxId -- noreference
+  , stakeRegistrationDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
   }
   deriving (Eq, Show, Generic)
 
@@ -106,8 +107,8 @@ stakeRegistrationDecoder =
     <$> idDecoder StakeAddressId -- stakeRegistrationAddrId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- stakeRegistrationCertIndex
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- stakeRegistrationEpochNo
-    <*> maybeDbLovelaceDecoder -- stakeRegistrationDeposit
     <*> idDecoder TxId -- stakeRegistrationTxId
+    <*> maybeDbLovelaceDecoder -- stakeRegistrationDeposit
 
 entityStakeRegistrationEncoder :: E.Params (Entity StakeRegistration)
 entityStakeRegistrationEncoder =
@@ -122,8 +123,8 @@ stakeRegistrationEncoder =
     [ stakeRegistrationAddrId >$< idEncoder getStakeAddressId
     , stakeRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , stakeRegistrationEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , stakeRegistrationDeposit >$< maybeDbLovelaceEncoder
     , stakeRegistrationTxId >$< idEncoder getTxId
+    , stakeRegistrationDeposit >$< maybeDbLovelaceEncoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -239,37 +240,28 @@ data Reward = Reward
   { rewardAddrId :: !StakeAddressId -- noreference
   , rewardType :: !RewardSource -- sqltype=rewardtype
   , rewardAmount :: !DbLovelace -- sqltype=lovelace
-  , rewardEarnedEpoch :: !Word64 -- generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
   , rewardSpendableEpoch :: !Word64
   , rewardPoolId :: !PoolHashId -- noreference
+  , rewardEarnedEpoch :: !Word64 -- generated="((CASE WHEN (type='refund') then spendable_epoch else (CASE WHEN spendable_epoch >= 2 then spendable_epoch-2 else 0 end) end) STORED)"
   }
   deriving (Show, Eq, Generic)
 
 type instance Key Reward = RewardId
-instance DbInfo Reward
 
-entityRewardDecoder :: D.Row (Entity Reward)
-entityRewardDecoder =
-  Entity
-    <$> idDecoder RewardId
-    <*> rewardDecoder
+instance DbInfo Reward where
+  enumFields _ = [("type", "rewardtype"), ("amount", "lovelace")]
+  generatedFields _ = ["earned_epoch"]
+  unnestParamTypes _ = [("addr_id", "bigint[]"), ("type", "text[]"), ("amount", "bigint[]"), ("spendable_epoch", "bigint[]"), ("pool_id", "bigint[]")]
 
 rewardDecoder :: D.Row Reward
 rewardDecoder =
   Reward
-    <$> idDecoder StakeAddressId -- rewardAddrId
-    <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardType
-    <*> dbLovelaceDecoder -- rewardAmount
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardEarnedEpoch
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardSpendableEpoch
-    <*> idDecoder PoolHashId -- rewardPoolId
-
-entityRewardEncoder :: E.Params (Entity Reward)
-entityRewardEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getRewardId
-    , entityVal >$< rewardEncoder
-    ]
+    <$> idDecoder StakeAddressId -- addr_id
+    <*> D.column (D.nonNullable rewardSourceDecoder) -- type
+    <*> dbLovelaceDecoder -- amount
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- spendable_epoch
+    <*> idDecoder PoolHashId -- pool_id
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- earned_epoch (generated)
 
 rewardEncoder :: E.Params Reward
 rewardEncoder =
@@ -277,18 +269,16 @@ rewardEncoder =
     [ rewardAddrId >$< idEncoder getStakeAddressId
     , rewardType >$< E.param (E.nonNullable rewardSourceEncoder)
     , rewardAmount >$< dbLovelaceEncoder
-    , rewardEarnedEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , rewardSpendableEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , rewardPoolId >$< idEncoder getPoolHashId
     ]
 
-rewardBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64], [PoolHashId])
+rewardBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [PoolHashId])
 rewardBulkEncoder =
-  contrazip6
+  contrazip5
     (bulkEncoder $ idBulkEncoder getStakeAddressId)
     (bulkEncoder $ E.nonNullable rewardSourceEncoder)
     (bulkEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
-    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
     (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
     (bulkEncoder $ idBulkEncoder getPoolHashId)
 
@@ -300,8 +290,8 @@ data RewardRest = RewardRest
   { rewardRestAddrId :: !StakeAddressId -- noreference
   , rewardRestType :: !RewardSource -- sqltype=rewardtype
   , rewardRestAmount :: !DbLovelace -- sqltype=lovelace
-  , rewardRestEarnedEpoch :: !Word64 -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
   , rewardRestSpendableEpoch :: !Word64
+  , rewardRestEarnedEpoch :: !Word64 -- generated="(CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)"
   }
   deriving (Show, Eq, Generic)
 
@@ -309,6 +299,13 @@ type instance Key RewardRest = RewardRestId
 
 instance DbInfo RewardRest where
   enumFields _ = [("type", "rewardtype"), ("amount", "lovelace")]
+  generatedFields _ = ["earned_epoch"]
+  unnestParamTypes _ =
+    [ ("addr_id", "bigint[]")
+    , ("type", "text[]")
+    , ("amount", "bigint[]")
+    , ("spendable_epoch", "bigint[]")
+    ]
 
 entityRewardRestDecoder :: D.Row (Entity RewardRest)
 entityRewardRestDecoder =
@@ -322,8 +319,8 @@ rewardRestDecoder =
     <$> idDecoder StakeAddressId -- rewardRestAddrId
     <*> D.column (D.nonNullable rewardSourceDecoder) -- rewardRestType
     <*> dbLovelaceDecoder -- rewardRestAmount
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestEarnedEpoch
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestSpendableEpoch
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- rewardRestEarnedEpoch
 
 entityRewardRestEncoder :: E.Params (Entity RewardRest)
 entityRewardRestEncoder =
@@ -337,17 +334,15 @@ rewardRestEncoder =
   mconcat
     [ rewardRestType >$< E.param (E.nonNullable rewardSourceEncoder)
     , rewardRestAmount >$< dbLovelaceEncoder
-    , rewardRestEarnedEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , rewardRestSpendableEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
-rewardRestBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [Word64])
+rewardRestBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64])
 rewardRestBulkEncoder =
-  contrazip5
+  contrazip4
     (bulkEncoder $ idBulkEncoder getStakeAddressId)
     (bulkEncoder $ E.nonNullable rewardSourceEncoder)
     (bulkEncoder $ E.nonNullable $ fromIntegral . unDbLovelace >$< E.int8)
-    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
     (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -367,7 +362,15 @@ data EpochStake = EpochStake
 -- `applyAndInsertBlockMaybe` at a more optimal time.
 
 type instance Key EpochStake = EpochStakeId
-instance DbInfo EpochStake
+
+instance DbInfo EpochStake where
+  bulkUniqueFields _ = ["addr_id", "pool_id", "epoch_no"]
+  unnestParamTypes _ =
+    [ ("addr_id", "bigint[]")
+    , ("pool_id", "bigint[]")
+    , ("amount", "bigint[]")
+    , ("epoch_no", "bigint[]")
+    ]
 
 entityEpochStakeDecoder :: D.Row (Entity EpochStake)
 entityEpochStakeDecoder =
@@ -418,8 +421,13 @@ data EpochStakeProgress = EpochStakeProgress
   deriving (Show, Eq, Generic)
 
 type instance Key EpochStakeProgress = EpochStakeProgressId
+
 instance DbInfo EpochStakeProgress where
   uniqueFields _ = ["epoch_no"]
+  unnestParamTypes _ =
+    [ ("epoch_no", "bigint[]")
+    , ("completed", "boolean[]")
+    ]
 
 entityEpochStakeProgressDecoder :: D.Row (Entity EpochStakeProgress)
 entityEpochStakeProgressDecoder =

@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 
 module Cardano.Db.Statement.ChainGen where
@@ -18,7 +20,7 @@ import qualified Cardano.Db.Schema.Core.MultiAsset as MultiAsset
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SCE
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SCG
 import qualified Cardano.Db.Schema.Core.Base as SCB
-import Cardano.Db.Types (DbAction, RewardSource, rewardSourceDecoder, Ada, word64ToAda)
+import Cardano.Db.Types (DbAction (..), RewardSource, rewardSourceDecoder, Ada, word64ToAda)
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Data.Text as Text
 import Data.Functor.Contravariant ((>$<))
@@ -28,6 +30,8 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants as SV
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import Cardano.Db.Statement.Function.Query (countAll, countWhere, parameterisedCountWhere)
+import qualified Data.List.NonEmpty as NE
+import Prelude hiding (length, show)
 
 
 queryCheckMigrationsStmt :: HsqlStmt.Statement () Int32
@@ -791,3 +795,66 @@ queryPoolRelayCount :: MonadIO m => DbAction m Word64
 queryPoolRelayCount =
   runDbSession (mkDbCallStack "countPoolRelay") $
     HsqlSes.statement () (countAll @SCP.PoolRelay)
+
+------------------------------------------------------------------------------
+-- Database Column Order Information
+------------------------------------------------------------------------------
+
+data ColumnInfo = ColumnInfo
+  { columnName :: !Text
+  , ordinalPosition :: !Int
+  } deriving (Show, Eq)
+
+-- | Simple column comparison result
+data ColumnComparisonResult = ColumnComparisonResult
+  { ccrTableName :: !Text
+  , ccrTypeName :: !Text
+  , ccrExpectedColumns :: ![Text]  -- From columnNames
+  , ccrDatabaseColumns :: ![Text]  -- From database ordinal_position order
+  } deriving (Show, Eq)
+
+-- | Get the actual column order from the database
+getTableColumnOrderStmt :: Text -> HsqlStmt.Statement () [ColumnInfo]
+getTableColumnOrderStmt tableN =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql = TextEnc.encodeUtf8 $
+      Text.concat
+        [ "SELECT column_name, ordinal_position "
+        , "FROM information_schema.columns "
+        , "WHERE table_name = '" <> tableN <> "' "
+        , "ORDER BY ordinal_position"
+        ]
+    decoder = HsqlD.rowList columnInfoDecoder
+
+columnInfoDecoder :: HsqlD.Row ColumnInfo
+columnInfoDecoder =
+  ColumnInfo
+    <$> HsqlD.column (HsqlD.nonNullable HsqlD.text)
+    <*> HsqlD.column (HsqlD.nonNullable (fromIntegral <$> HsqlD.int4))
+
+------------------------------------------------------------------------------
+-- Main Query Function
+------------------------------------------------------------------------------
+
+-- | Compare expected columns with actual database columns
+queryTableColumns :: forall a m. (MonadIO m, DbInfo a) => Proxy a -> DbAction m ColumnComparisonResult
+queryTableColumns proxy = do
+  let table = tableName proxy
+      typeName = Text.pack $ show (typeRep proxy)
+      expectedCols = NE.toList $ columnNames proxy
+
+  -- Get actual database column order
+  columnInfos <- runDbSession (mkDbCallStack "queryTableColumns") $
+    HsqlSes.statement () (getTableColumnOrderStmt table)
+
+  let allDbCols = map columnName columnInfos
+  -- Remove "id" column if present (it's not in columnNames)
+  let dbCols = filter (/= "id") allDbCols
+
+  pure $ ColumnComparisonResult
+    { ccrTableName = table
+    , ccrExpectedColumns = expectedCols
+    , ccrTypeName = typeName
+    , ccrDatabaseColumns = dbCols
+    }

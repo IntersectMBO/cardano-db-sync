@@ -18,7 +18,7 @@ import Test.Tasty.HUnit (Assertion ())
 
 configRemoveJsonbFromSchemaEnabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaEnabled = do
-  withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
     startDBSync dbSync
     assertEqQuery
       dbSync
@@ -34,7 +34,7 @@ configRemoveJsonbFromSchemaEnabled = do
 
 configRemoveJsonbFromSchemaDisabled :: IOManager -> [(Text, Text)] -> Assertion
 configRemoveJsonbFromSchemaDisabled = do
-  withCustomConfigAndDropDB args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
     \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
       assertEqQuery
@@ -50,7 +50,7 @@ configRemoveJsonbFromSchemaDisabled = do
 
 configJsonbInSchemaShouldRemoveThenAdd :: IOManager -> [(Text, Text)] -> Assertion
 configJsonbInSchemaShouldRemoveThenAdd =
-  withCustomConfigAndDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
+  withCustomConfigDropDb args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     assertEqQuery
       dbSyncEnv
