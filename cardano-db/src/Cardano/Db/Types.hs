@@ -101,7 +101,7 @@ module Cardano.Db.Types where
 import Cardano.BM.Trace (Trace)
 import Cardano.Db.Error (DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadError, MonadIO (..), MonadReader)
+import Cardano.Prelude (Bifunctor (..), MonadError, MonadIO (..), MonadReader, fromMaybe)
 import qualified Codec.Binary.Bech32 as Bech32
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Monad.Trans.Reader (ReaderT)
@@ -118,7 +118,7 @@ import Data.Either (fromRight)
 import Data.Fixed (Micro, showFixed)
 import Data.Functor.Contravariant ((>$<))
 import Data.Int (Int64)
-import Data.Scientific (Scientific (..))
+import Data.Scientific (Scientific (..), scientific, toBoundedInteger)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.WideWord (Word128 (..))
@@ -236,22 +236,22 @@ newtype DbLovelace = DbLovelace {unDbLovelace :: Word64}
   deriving (Read, Show) via (Quiet DbLovelace)
 
 dbLovelaceEncoder :: HsqlE.Params DbLovelace
-dbLovelaceEncoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+dbLovelaceEncoder = HsqlE.param $ HsqlE.nonNullable $ (\x -> scientific (toInteger $ unDbLovelace x) 0) >$< HsqlE.numeric
 
 dbLovelaceBulkEncoder :: HsqlE.NullableOrNot HsqlE.Value DbLovelace
-dbLovelaceBulkEncoder = HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+dbLovelaceBulkEncoder = HsqlE.nonNullable $ (\x -> scientific (toInteger $ unDbLovelace x) 0) >$< HsqlE.numeric
 
 dbLovelaceValueEncoder :: HsqlE.NullableOrNot HsqlE.Value DbLovelace
-dbLovelaceValueEncoder = HsqlE.nonNullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+dbLovelaceValueEncoder = HsqlE.nonNullable $ (\x -> scientific (toInteger $ unDbLovelace x) 0) >$< HsqlE.numeric
 
 maybeDbLovelaceEncoder :: HsqlE.Params (Maybe DbLovelace)
-maybeDbLovelaceEncoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbLovelace >$< HsqlE.int8
+maybeDbLovelaceEncoder = HsqlE.param $ HsqlE.nullable $ (\x -> scientific (toInteger $ unDbLovelace x) 0) >$< HsqlE.numeric
 
 dbLovelaceDecoder :: HsqlD.Row DbLovelace
-dbLovelaceDecoder = HsqlD.column (HsqlD.nonNullable (DbLovelace . fromIntegral <$> HsqlD.int8))
+dbLovelaceDecoder = HsqlD.column (HsqlD.nonNullable (DbLovelace . fromMaybe 0 . toBoundedInteger <$> HsqlD.numeric))
 
 maybeDbLovelaceDecoder :: HsqlD.Row (Maybe DbLovelace)
-maybeDbLovelaceDecoder = HsqlD.column (HsqlD.nullable (DbLovelace . fromIntegral <$> HsqlD.int8))
+maybeDbLovelaceDecoder = HsqlD.column (HsqlD.nullable (DbLovelace . fromMaybe 0 . toBoundedInteger <$> HsqlD.numeric))
 
 -- Newtype wrapper around Word64 so we can hand define a PersistentField instance.
 newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
@@ -491,16 +491,16 @@ data Vote = VoteYes | VoteNo | VoteAbstain
 
 voteDecoder :: HsqlD.Value Vote
 voteDecoder = HsqlD.enum $ \case
-  "yes" -> Just VoteYes
-  "no" -> Just VoteNo
-  "abstain" -> Just VoteAbstain
+  "Yes" -> Just VoteYes
+  "No" -> Just VoteNo
+  "Abstain" -> Just VoteAbstain
   _ -> Nothing
 
 voteEncoder :: HsqlE.Value Vote
 voteEncoder = HsqlE.enum $ \case
-  VoteYes -> "yes"
-  VoteNo -> "no"
-  VoteAbstain -> "abstain"
+  VoteYes -> "Yes"
+  VoteNo -> "No"
+  VoteAbstain -> "Abstain"
 
 --------------------------------------------------------------------------------
 data VoterRole = ConstitutionalCommittee | DRep | SPO
@@ -509,16 +509,16 @@ data VoterRole = ConstitutionalCommittee | DRep | SPO
 
 voterRoleDecoder :: HsqlD.Value VoterRole
 voterRoleDecoder = HsqlD.enum $ \case
-  "constitutional-committee" -> Just ConstitutionalCommittee
-  "drep" -> Just DRep
-  "spo" -> Just SPO
+  "ConstitutionalCommittee" -> Just ConstitutionalCommittee
+  "DRep" -> Just DRep
+  "SPO" -> Just SPO
   _ -> Nothing
 
 voterRoleEncoder :: HsqlE.Value VoterRole
 voterRoleEncoder = HsqlE.enum $ \case
-  ConstitutionalCommittee -> "constitutional-committee"
-  DRep -> "drep"
-  SPO -> "spo"
+  ConstitutionalCommittee -> "ConstitutionalCommittee"
+  DRep -> "DRep"
+  SPO -> "SPO"
 
 --------------------------------------------------------------------------------
 
@@ -536,24 +536,24 @@ data GovActionType
 
 govActionTypeDecoder :: HsqlD.Value GovActionType
 govActionTypeDecoder = HsqlD.enum $ \case
-  "parameter-change" -> Just ParameterChange
-  "hard-fork-initiation" -> Just HardForkInitiation
-  "treasury-withdrawals" -> Just TreasuryWithdrawals
-  "no-confidence" -> Just NoConfidence
-  "new-committee" -> Just NewCommitteeType
-  "new-constitution" -> Just NewConstitution
-  "info-action" -> Just InfoAction
+  "ParameterChange" -> Just ParameterChange
+  "HardForkInitiation" -> Just HardForkInitiation
+  "TreasuryWithdrawals" -> Just TreasuryWithdrawals
+  "NoConfidence" -> Just NoConfidence
+  "NewCommittee" -> Just NewCommitteeType
+  "NewConstitution" -> Just NewConstitution
+  "InfoAction" -> Just InfoAction
   _ -> Nothing
 
 govActionTypeEncoder :: HsqlE.Value GovActionType
 govActionTypeEncoder = HsqlE.enum $ \case
-  ParameterChange -> "parameter-change"
-  HardForkInitiation -> "hard-fork-initiation"
-  TreasuryWithdrawals -> "treasury-withdrawals"
-  NoConfidence -> "no-confidence"
-  NewCommitteeType -> "new-committee"
-  NewConstitution -> "new-constitution"
-  InfoAction -> "info-action"
+  ParameterChange -> "ParameterChange"
+  HardForkInitiation -> "HardForkInitiation"
+  TreasuryWithdrawals -> "TreasuryWithdrawals"
+  NoConfidence -> "NoConfidence"
+  NewCommitteeType -> "NewCommittee"
+  NewConstitution -> "NewConstitution"
+  InfoAction -> "InfoAction"
 
 --------------------------------------------------------------------------------
 
@@ -570,21 +570,21 @@ data AnchorType
 
 anchorTypeDecoder :: HsqlD.Value AnchorType
 anchorTypeDecoder = HsqlD.enum $ \case
-  "gov-action" -> Just GovActionAnchor
+  "gov_action" -> Just GovActionAnchor
   "drep" -> Just DrepAnchor
   "other" -> Just OtherAnchor
   "vote" -> Just VoteAnchor
-  "committee-dereg" -> Just CommitteeDeRegAnchor
+  "committee_dereg" -> Just CommitteeDeRegAnchor
   "constitution" -> Just ConstitutionAnchor
   _ -> Nothing
 
 anchorTypeEncoder :: HsqlE.Value AnchorType
 anchorTypeEncoder = HsqlE.enum $ \case
-  GovActionAnchor -> "gov-action"
+  GovActionAnchor -> "gov_action"
   DrepAnchor -> "drep"
   OtherAnchor -> "other"
   VoteAnchor -> "vote"
-  CommitteeDeRegAnchor -> "committee-dereg"
+  CommitteeDeRegAnchor -> "committee_dereg"
   ConstitutionAnchor -> "constitution"
 
 deltaCoinToDbInt65 :: DeltaCoin -> DbInt65

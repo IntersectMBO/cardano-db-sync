@@ -1007,7 +1007,7 @@ deleteBlock txOutVariantType block = do
 -- | INSERT --------------------------------------------------------------------
 insertDatumStmt :: HsqlStmt.Statement SCB.Datum Id.DatumId
 insertDatumStmt =
-  insert
+  insertCheckUnique
     SCB.datumEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DatumId)
 
@@ -1171,7 +1171,7 @@ insertExtraKeyWitness eKeyWitness = do
 --------------------------------------------------------------------------------
 insertMetaStmt :: HsqlStmt.Statement SCB.Meta Id.MetaId
 insertMetaStmt =
-  insert
+  insertCheckUnique
     SCB.metaEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MetaId)
 
@@ -1197,7 +1197,7 @@ insertRedeemer redeemer = do
 --------------------------------------------------------------------------------
 insertRedeemerDataStmt :: HsqlStmt.Statement SCB.RedeemerData Id.RedeemerDataId
 insertRedeemerDataStmt =
-  insert
+  insertCheckUnique
     SCB.redeemerDataEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.RedeemerDataId)
 
@@ -1271,7 +1271,7 @@ querySchemaVersion =
 -- | INSERTS
 insertScriptStmt :: HsqlStmt.Statement SCB.Script Id.ScriptId
 insertScriptStmt =
-  insert
+  insertCheckUnique
     SCB.scriptEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ScriptId)
 
@@ -1448,7 +1448,7 @@ queryFeesUpToSlotNo slotNo =
     HsqlSes.statement slotNo queryFeesUpToSlotNoStmt
 
 --------------------------------------------------------------------------------
-queryInvalidTxStmt :: HsqlStmt.Statement () [SCB.Tx]
+queryInvalidTxStmt :: HsqlStmt.Statement () [Entity SCB.Tx]
 queryInvalidTxStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
@@ -1460,12 +1460,14 @@ queryInvalidTxStmt =
           , " FROM " <> txTableN
           , " WHERE valid_contract = FALSE"
           ]
-    decoder = HsqlD.rowList SCB.txDecoder
+    decoder = HsqlD.rowList SCB.entityTxDecoder
 
 queryInvalidTx :: MonadIO m => DbAction m [SCB.Tx]
-queryInvalidTx =
-  runDbSession (mkDbCallStack "queryInvalidTx") $
-    HsqlSes.statement () queryInvalidTxStmt
+queryInvalidTx = do
+  result <-
+    runDbSession (mkDbCallStack "queryInvalidTx") $
+      HsqlSes.statement () queryInvalidTxStmt
+  pure $ entityVal <$> result
 
 --------------------------------------------------------------------------------
 -- TxIn
