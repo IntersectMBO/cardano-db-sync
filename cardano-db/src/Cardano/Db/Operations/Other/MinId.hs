@@ -100,7 +100,7 @@ textToMinIdsVariant txt =
           }
     _otherwise -> Nothing
 
-minJust :: (Ord a) => Maybe a -> Maybe a -> Maybe a
+minJust :: Ord a => Maybe a -> Maybe a -> Maybe a
 minJust Nothing y = y
 minJust x Nothing = x
 minJust (Just x) (Just y) = Just (min x y)
@@ -109,7 +109,7 @@ minJust (Just x) (Just y) = Just (min x y)
 -- CompleteMinId
 --------------------------------------------------------------------------------
 completeMinId ::
-  (MonadIO m) =>
+  MonadIO m =>
   Maybe TxId ->
   MinIdsWrapper ->
   ReaderT SqlBackend m MinIdsWrapper

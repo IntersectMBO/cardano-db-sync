@@ -6,7 +6,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
@@ -18,13 +17,13 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
 ) where
 
 import Cardano.DbSync.Types
+import Cardano.Ledger.BaseTypes.NonZero (NonZero (..))
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
 import Cardano.Ledger.Credential (Credential)
-import qualified Cardano.Ledger.EpochBoundary as Ledger
-import Cardano.Ledger.Era (EraCrypto)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import qualified Cardano.Ledger.State as Ledger
 import Cardano.Ledger.Val ((<+>))
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
@@ -33,7 +32,7 @@ import qualified Data.VMap as VMap
 import qualified Data.Vector.Generic as VG
 import Lens.Micro
 import Ouroboros.Consensus.Block
-import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Config
 import Ouroboros.Consensus.HardFork.Combinator
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -59,7 +58,7 @@ emptySlice epoch = StakeSlice epoch Map.empty
 getSecurityParameter ::
   ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
-  Word64
+  NonZero Word64
 getSecurityParameter = maxRollbacks . configSecurityParam . pInfoConfig
 
 -- 'sliceIndex' can match the epochBlockNo for every block.
@@ -88,8 +87,8 @@ getStakeSlice pInfo !epochBlockNo els isMigration =
     LedgerStateConway cls -> genericStakeSlice pInfo epochBlockNo cls isMigration
 
 genericStakeSlice ::
-  forall era c blk p.
-  (c ~ StandardCrypto, EraCrypto era ~ c, ConsensusProtocol (BlockProtocol blk)) =>
+  forall era blk p.
+  ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
   Word64 ->
   LedgerState (ShelleyBlock p era) ->
@@ -109,26 +108,26 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
 
     -- On mainnet this is 2160
     k :: Word64
-    k = getSecurityParameter pInfo
+    k = unNonZero $ getSecurityParameter pInfo
 
     -- We use 'ssStakeMark' here. That means that when these values
     -- are added to the database, the epoch number where they become active is the current
     -- epoch plus one.
-    stakeSnapshot :: Ledger.SnapShot c
+    stakeSnapshot :: Ledger.SnapShot
     stakeSnapshot =
       Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
-    delegations :: VMap.KVVector VB VB (Credential 'Staking c, KeyHash 'StakePool c)
+    delegations :: VMap.KVVector VB VB (Credential 'Staking, KeyHash 'StakePool)
     delegations = VMap.unVMap $ Ledger.ssDelegations stakeSnapshot
 
     delegationsLen :: Word64
     delegationsLen = fromIntegral $ VG.length delegations
 
-    stakes :: VMap VB VP (Credential 'Staking c) (Ledger.CompactForm Coin)
+    stakes :: VMap VB VP (Credential 'Staking) (Ledger.CompactForm Coin)
     stakes = Ledger.unStake $ Ledger.ssStake stakeSnapshot
 
-    lookupStake :: Credential 'Staking c -> Maybe Coin
+    lookupStake :: Credential 'Staking -> Maybe Coin
     lookupStake cred = Ledger.fromCompact <$> VMap.lookup cred stakes
 
     -- This is deterministic for the whole epoch and is the constant size of slices
@@ -167,7 +166,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
         , sliceDistr = distribution
         }
       where
-        delegationsSliced :: VMap VB VB (Credential 'Staking c) (KeyHash 'StakePool c)
+        delegationsSliced :: VMap VB VB (Credential 'Staking) (KeyHash 'StakePool)
         delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral actualSize) delegations
 
         distribution :: Map StakeCred (Coin, PoolKeyHash)
@@ -191,7 +190,6 @@ getPoolDistr els =
 
 genericPoolDistr ::
   forall era p.
-  (EraCrypto era ~ StandardCrypto) =>
   LedgerState (ShelleyBlock p era) ->
   (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
 genericPoolDistr lstate =
@@ -200,7 +198,7 @@ genericPoolDistr lstate =
     nes :: Shelley.NewEpochState era
     nes = Consensus.shelleyLedgerState lstate
 
-    stakeMark :: Ledger.SnapShot StandardCrypto
+    stakeMark :: Ledger.SnapShot
     stakeMark = Ledger.ssStakeMark $ Shelley.esSnapshots $ Shelley.nesEs nes
 
     stakePerPool = countStakePerPool (Ledger.ssDelegations stakeMark) (Ledger.ssStake stakeMark)
@@ -208,7 +206,7 @@ genericPoolDistr lstate =
 
 countStakePerPool ::
   VMap VB VB StakeCred PoolKeyHash ->
-  Ledger.Stake StandardCrypto ->
+  Ledger.Stake ->
   Map PoolKeyHash (Coin, Word64)
 countStakePerPool delegs (Ledger.Stake stake) = VMap.foldlWithKey accum Map.empty stake
   where

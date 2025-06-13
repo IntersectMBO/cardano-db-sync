@@ -33,12 +33,12 @@ import Control.Monad.Trans.Except (ExceptT)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
+import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 import Ouroboros.Consensus.Cardano.Node
 import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Ledger.Basics (LedgerConfig)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
@@ -48,14 +48,14 @@ data GenesisConfig
       !Byron.Config
       !ShelleyConfig
       !AlonzoGenesis
-      !(ConwayGenesis StandardCrypto)
+      !ConwayGenesis
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
   case ge of
     GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
-    shelleyProtocolMagicId :: ShelleyGenesis StandardCrypto -> ProtocolMagicId
+    shelleyProtocolMagicId :: ShelleyGenesis -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
 
 readCardanoGenesisConfig ::

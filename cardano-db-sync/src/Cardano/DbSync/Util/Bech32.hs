@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.DbSync.Util.Bech32 (
@@ -12,11 +13,11 @@ module Cardano.DbSync.Util.Bech32 (
 ) where
 
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
-import Cardano.Crypto.VRF.Class (rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
-import Cardano.Ledger.Crypto (StandardCrypto ())
-import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), VerKeyVRF ())
+import Cardano.Crypto.VRF.Class (VerKeyVRF, rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
+import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Prelude
-import Codec.Binary.Bech32
+import Cardano.Protocol.Crypto (StandardCrypto, VRF)
+import Codec.Binary.Bech32 (DecodingError, dataPartFromBytes, dataPartToBytes, decodeLenient, encodeLenient, humanReadablePartFromText)
 import Prelude (id)
 
 -- | Wrap Bech32 deserialisation errors
@@ -48,37 +49,39 @@ deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
     dataPartToBytes' d = maybeToEither DataPartToBytesError $ dataPartToBytes d
 
 -- | Serialise a Verification Key to bech32 address
-serialiseVerKeyVrfToBech32 :: VerKeyVRF StandardCrypto -> Text
+serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF StandardCrypto) -> Text
 serialiseVerKeyVrfToBech32 =
   serialiseToBech32 "vrf_vk" . rawSerialiseVerKeyVRF
 
+-- deriving instance VRFAlgorithm (VRF PraosVRF)
+
 -- | Deserialise a bech32 address to a Verification Key
-deserialiseVerKeyVrfFromBech32 :: Text -> Either DecodeError (VerKeyVRF StandardCrypto)
+deserialiseVerKeyVrfFromBech32 :: Text -> Either DecodeError (VerKeyVRF (VRF StandardCrypto))
 deserialiseVerKeyVrfFromBech32 text =
   deserialiseFromBech32 text >>= deserialiseFromRawBytes'
   where
-    deserialiseFromRawBytes' :: ByteString -> Either DecodeError (VerKeyVRF StandardCrypto)
+    deserialiseFromRawBytes' :: ByteString -> Either DecodeError (VerKeyVRF (VRF StandardCrypto))
     deserialiseFromRawBytes' =
       maybeToRight DecodeFromRawBytesError . rawDeserialiseVerKeyVRF
 
 -- | Serialise stake pool key hash to a bech32 address
-serialiseStakePoolKeyHashToBech32 :: KeyHash 'StakePool StandardCrypto -> Text
+serialiseStakePoolKeyHashToBech32 :: KeyHash 'StakePool -> Text
 serialiseStakePoolKeyHashToBech32 (KeyHash hash) =
   serialiseToBech32 "pool" $ hashToBytes hash
 
 -- | Deserialise a bech32 address to a stake pool key hash
 deserialiseStakePoolKeyHashFromBech32 ::
   Text ->
-  Either DecodeError (KeyHash 'StakePool StandardCrypto)
+  Either DecodeError (KeyHash 'StakePool)
 deserialiseStakePoolKeyHashFromBech32 text =
   deserialiseFromBech32 text >>= deserialiseFromRawBytes'
   where
     deserialiseFromRawBytes' ::
       ByteString ->
-      Either DecodeError (KeyHash 'StakePool StandardCrypto)
+      Either DecodeError (KeyHash 'StakePool)
     deserialiseFromRawBytes' bytes = maybeToRight DecodeFromRawBytesError $ hashFromBytes' bytes
 
-    hashFromBytes' :: ByteString -> Maybe (KeyHash 'StakePool StandardCrypto)
+    hashFromBytes' :: ByteString -> Maybe (KeyHash 'StakePool)
     hashFromBytes' bytes = KeyHash <$> hashFromBytes bytes
 
 -- | Serialise drep bech32 address

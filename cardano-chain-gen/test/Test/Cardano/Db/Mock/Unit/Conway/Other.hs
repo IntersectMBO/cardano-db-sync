@@ -28,9 +28,8 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.Ledger.BaseTypes (EpochNo (..))
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
 import Cardano.Ledger.Core (PoolCert (..))
-import Cardano.Ledger.Credential (StakeCredential ())
-import Cardano.Ledger.Crypto (StandardCrypto ())
-import Cardano.Ledger.Keys (KeyHash (), KeyRole (..))
+import Cardano.Ledger.Credential (StakeCredential)
+import Cardano.Ledger.Keys (KeyHash, KeyRole (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
 import Cardano.Mock.Forging.Interpreter (forgeNext, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
@@ -42,7 +41,7 @@ import Cardano.Prelude hiding (from)
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), dbToServantPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.List (last)
-import Ouroboros.Consensus.Shelley.Eras (StandardConway ())
+import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.Examples (mockBlock0)
@@ -381,9 +380,9 @@ poolDelist =
 
 mkPoolDereg ::
   EpochNo ->
-  [StakeCredential StandardCrypto] ->
-  KeyHash 'StakePool StandardCrypto ->
-  ConwayTxCert StandardConway
+  [StakeCredential] ->
+  KeyHash 'StakePool ->
+  ConwayTxCert ConwayEra
 mkPoolDereg epochNo _ keyHash = ConwayTxCertPool (RetirePool keyHash epochNo)
 
 forkFixedEpoch :: IOManager -> [(Text, Text)] -> Assertion

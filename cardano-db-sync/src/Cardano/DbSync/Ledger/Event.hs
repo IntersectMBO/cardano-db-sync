@@ -34,7 +34,7 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
-import Cardano.Ledger.SafeHash (SafeHash)
+import Cardano.Ledger.Hashes (SafeHash)
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),
@@ -72,19 +72,19 @@ data LedgerEvent
   | LedgerIncrementalRewards !EpochNo !Generic.Rewards
   | LedgerDeltaRewards !EpochNo !Generic.Rewards
   | LedgerRestrainedRewards !EpochNo !Generic.Rewards !(Set StakeCred)
-  | LedgerTotalRewards !EpochNo !(Map StakeCred (Set (Ledger.Reward StandardCrypto)))
+  | LedgerTotalRewards !EpochNo !(Map StakeCred (Set Ledger.Reward))
   | LedgerAdaPots !AdaPots
-  | LedgerGovInfo [GovActionRefunded] [GovActionRefunded] [GovActionRefunded] (Set (GovActionId StandardCrypto))
-  | LedgerDeposits (SafeHash StandardCrypto Ledger.EraIndependentTxBody) Coin
+  | LedgerGovInfo [GovActionRefunded] [GovActionRefunded] [GovActionRefunded] (Set GovActionId)
+  | LedgerDeposits (SafeHash Ledger.EraIndependentTxBody) Coin
   | LedgerStartAtEpoch !EpochNo
   | LedgerNewEpoch !EpochNo !SyncState
   deriving (Eq)
 
 data GovActionRefunded = GovActionRefunded
-  { garGovActionId :: GovActionId StandardCrypto
+  { garGovActionId :: GovActionId
   , garDeposit :: Coin
-  , garReturnAddr :: RewardAccount StandardCrypto
-  , garMTreasury :: Maybe (Map (RewardAccount StandardCrypto) Coin)
+  , garReturnAddr :: RewardAccount
+  , garMTreasury :: Maybe (Map RewardAccount Coin)
   }
   deriving (Eq)
 
@@ -135,50 +135,49 @@ class ConvertLedgerEvent blk where
 instance ConvertLedgerEvent ByronBlock where
   toLedgerEvent _ _ = Nothing
 
-instance ConvertLedgerEvent (ShelleyBlock protocol (ShelleyEra StandardCrypto)) where
+instance ConvertLedgerEvent (ShelleyBlock protocol ShelleyEra) where
   toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositShelley hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventShelley evt hasRewards
 
-instance ConvertLedgerEvent (ShelleyBlock protocol (AllegraEra StandardCrypto)) where
+instance ConvertLedgerEvent (ShelleyBlock protocol AllegraEra) where
   toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositAllegra hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventShelley evt hasRewards
 
-instance ConvertLedgerEvent (ShelleyBlock protocol (MaryEra StandardCrypto)) where
+instance ConvertLedgerEvent (ShelleyBlock protocol MaryEra) where
   toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositAllegra hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventShelley evt hasRewards
 
-instance ConvertLedgerEvent (ShelleyBlock protocol (AlonzoEra StandardCrypto)) where
+instance ConvertLedgerEvent (ShelleyBlock protocol AlonzoEra) where
   toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositsAlonzo hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventShelley evt hasRewards
 
-instance ConvertLedgerEvent (ShelleyBlock protocol (BabbageEra StandardCrypto)) where
+instance ConvertLedgerEvent (ShelleyBlock protocol BabbageEra) where
   toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositsAlonzo hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventShelley evt hasRewards
 
-instance ConvertLedgerEvent (ShelleyBlock protocol (ConwayEra StandardCrypto)) where
+instance ConvertLedgerEvent (ShelleyBlock protocol ConwayEra) where
   toLedgerEvent hasRewards evt =
     case unwrapLedgerEvent evt of
       LEDepositsConway hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventConway evt hasRewards
 
 toLedgerEventShelley ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+  ( Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
   , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
   , Event (Ledger.EraRule "MIR" ledgerera) ~ ShelleyMirEvent ledgerera
   , Event (Ledger.EraRule "EPOCH" ledgerera) ~ ShelleyEpochEvent ledgerera
   , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ ShelleyPoolreapEvent ledgerera
-  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
+  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent
   ) =>
   WrapLedgerEvent (ShelleyBlock protocol ledgerera) ->
   Bool ->
@@ -217,12 +216,11 @@ toLedgerEventShelley evt hasRewards =
     _ -> Nothing
 
 toLedgerEventConway ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
+  ( Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
   , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ConwayNewEpochEvent ledgerera
   , Event (Ledger.EraRule "EPOCH" ledgerera) ~ ConwayEpochEvent ledgerera
   , Event (Ledger.EraRule "POOLREAP" ledgerera) ~ ShelleyPoolreapEvent ledgerera
-  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent (EraCrypto ledgerera)
+  , Event (Ledger.EraRule "RUPD" ledgerera) ~ RupdEvent
   ) =>
   WrapLedgerEvent (ShelleyBlock protocol ledgerera) ->
   Bool ->
@@ -263,7 +261,7 @@ toLedgerEventConway evt hasRewards =
             (Map.keysSet uncl)
     _ -> Nothing
   where
-    toGovActionRefunded :: EraCrypto era ~ StandardCrypto => GovActionState era -> GovActionRefunded
+    toGovActionRefunded :: GovActionState era -> GovActionRefunded
     toGovActionRefunded gas =
       GovActionRefunded
         { garGovActionId = gasId gas
@@ -332,13 +330,13 @@ mkTreasuryReward c =
     }
 
 convertPoolRewards ::
-  Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
+  Map StakeCred (Set Ledger.Reward) ->
   Generic.Rewards
 convertPoolRewards rmap =
   Generic.Rewards $
     map (Set.map convertReward) rmap
   where
-    convertReward :: Ledger.Reward StandardCrypto -> Generic.Reward
+    convertReward :: Ledger.Reward -> Generic.Reward
     convertReward sr =
       Generic.Reward
         { Generic.rewardSource = rewardTypeToSource $ Ledger.rewardType sr
@@ -350,14 +348,13 @@ convertPoolRewards rmap =
 -- Patterns for event access.
 
 pattern LEDepositShelley ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "BBODY" ledgerera) ~ ShelleyBbodyEvent ledgerera
+  ( Event (Ledger.EraRule "BBODY" ledgerera) ~ ShelleyBbodyEvent ledgerera
   , Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ Shelley.ShelleyLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ Shelley.ShelleyUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ Shelley.UtxoEvent ledgerera
   ) =>
-  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
   AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
 pattern LEDepositShelley hsh coin <-
@@ -373,14 +370,13 @@ pattern LEDepositShelley hsh coin <-
       )
 
 pattern LEDepositAllegra ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "BBODY" ledgerera) ~ ShelleyBbodyEvent ledgerera
+  ( Event (Ledger.EraRule "BBODY" ledgerera) ~ ShelleyBbodyEvent ledgerera
   , Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ Shelley.ShelleyLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ Shelley.ShelleyUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ Allegra.AllegraUtxoEvent ledgerera
   ) =>
-  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
   AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
 pattern LEDepositAllegra hsh coin <-
@@ -396,15 +392,14 @@ pattern LEDepositAllegra hsh coin <-
       )
 
 pattern LEDepositsAlonzo ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "BBODY" ledgerera) ~ Alonzo.AlonzoBbodyEvent ledgerera
+  ( Event (Ledger.EraRule "BBODY" ledgerera) ~ Alonzo.AlonzoBbodyEvent ledgerera
   , Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ Shelley.ShelleyLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
   , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Alonzo.AlonzoUtxosEvent ledgerera
   ) =>
-  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
   AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
 pattern LEDepositsAlonzo hsh coin <-
@@ -426,15 +421,14 @@ pattern LEDepositsAlonzo hsh coin <-
       )
 
 pattern LEDepositsConway ::
-  ( EraCrypto ledgerera ~ StandardCrypto
-  , Event (Ledger.EraRule "BBODY" ledgerera) ~ Alonzo.AlonzoBbodyEvent ledgerera
+  ( Event (Ledger.EraRule "BBODY" ledgerera) ~ Alonzo.AlonzoBbodyEvent ledgerera
   , Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ ConwayLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
   , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Conway.ConwayUtxosEvent ledgerera
   ) =>
-  SafeHash StandardCrypto Ledger.EraIndependentTxBody ->
+  SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
   AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
 pattern LEDepositsConway hsh coin <-

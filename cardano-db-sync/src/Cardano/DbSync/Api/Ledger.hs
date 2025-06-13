@@ -29,7 +29,6 @@ import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Ledger.UTxO (UTxO (..))
 import Cardano.Prelude (lift, textShow)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
@@ -91,14 +90,13 @@ storeUTxOFromLedger env st = case ledgerState st of
   where
     trce = getTrace env
     getUTxO st' =
-      unUTxO $ Consensus.shelleyLedgerState st' ^. (nesEsL . esLStateL . lsUTxOStateL . utxosUtxoL)
+      unUTxO $ Consensus.shelleyLedgerState st' ^. (nesEsL . esLStateL . lsUTxOStateL . utxoL)
 
 pageSize :: Int
 pageSize = 100000
 
 storeUTxO ::
-  ( EraCrypto era ~ StandardCrypto
-  , Cardano.Ledger.Core.Value era ~ MaryValue StandardCrypto
+  ( Cardano.Ledger.Core.Value era ~ MaryValue
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
   , BabbageEraTxOut era
@@ -108,7 +106,7 @@ storeUTxO ::
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
-  Map (TxIn StandardCrypto) (BabbageTxOut era) ->
+  Map TxIn (BabbageTxOut era) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxO env mp = do
   liftIO $
@@ -127,8 +125,7 @@ storeUTxO env mp = do
     size = Map.size mp
 
 storePage ::
-  ( EraCrypto era ~ StandardCrypto
-  , Cardano.Ledger.Core.Value era ~ MaryValue StandardCrypto
+  ( Cardano.Ledger.Core.Value era ~ MaryValue
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
   , DBPlutusScript era
@@ -139,7 +136,7 @@ storePage ::
   ) =>
   SyncEnv ->
   Float ->
-  (Int, [(TxIn StandardCrypto, BabbageTxOut era)]) ->
+  (Int, [(TxIn, BabbageTxOut era)]) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storePage syncEnv percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
@@ -154,8 +151,7 @@ storePage syncEnv percQuantum (n, ls) = do
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
 
 prepareTxOut ::
-  ( EraCrypto era ~ StandardCrypto
-  , Cardano.Ledger.Core.Value era ~ MaryValue StandardCrypto
+  ( Cardano.Ledger.Core.Value era ~ MaryValue
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
   , BabbageEraTxOut era
@@ -165,11 +161,11 @@ prepareTxOut ::
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
-  (TxIn StandardCrypto, BabbageTxOut era) ->
+  (TxIn, BabbageTxOut era) ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
-  let genTxOut = fromTxOut index txOut
+  let genTxOut = fromTxOut (fromIntegral index) txOut
   txId <- liftLookupFail "prepareTxOut" $ queryTxIdWithCache cache txIntxId
   insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
   where

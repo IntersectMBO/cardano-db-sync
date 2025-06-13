@@ -27,11 +27,11 @@ import Ouroboros.Consensus.Forecast
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Eras (
-  StandardAlonzo,
-  StandardBabbage,
-  StandardConway,
+  AlonzoEra,
+  BabbageEra,
+  ConwayEra,
+  ShelleyEra,
   StandardCrypto,
-  StandardShelley,
  )
 import Ouroboros.Network.Block (Point)
 
@@ -49,10 +49,10 @@ data MockBlock = MockBlock
   }
 
 data TxEra
-  = TxAlonzo !(Core.Tx StandardAlonzo)
-  | TxBabbage !(Core.Tx StandardBabbage)
-  | TxConway !(Core.Tx StandardConway)
-  | TxShelley !(Core.Tx StandardShelley)
+  = TxAlonzo !(Core.Tx AlonzoEra)
+  | TxBabbage !(Core.Tx BabbageEra)
+  | TxConway !(Core.Tx ConwayEra)
+  | TxShelley !(Core.Tx ShelleyEra)
 
 newtype NodeId = NodeId {unNodeId :: Int}
   deriving (Show)
@@ -77,16 +77,16 @@ data ForgingError
 
 data UTxOIndex era
   = UTxOIndex Int
-  | UTxOAddress !(Addr StandardCrypto)
-  | UTxOInput !(TxIn StandardCrypto)
-  | UTxOPair !(TxIn StandardCrypto, Core.TxOut era)
+  | UTxOAddress !Addr
+  | UTxOInput !TxIn
+  | UTxOPair !(TxIn, Core.TxOut era)
   | UTxOAddressNew !Int
   | UTxOAddressNewWithStake !Int !StakeIndex
   | UTxOAddressNewWithPtr !Int !Ptr
 
 data StakeIndex
   = StakeIndex !Int
-  | StakeAddress !(StakeCredential StandardCrypto)
+  | StakeAddress !StakeCredential
   | StakeIndexNew !Int
   | StakeIndexScript !Bool
   | StakeIndexPoolLeader !PoolIndex
@@ -94,5 +94,5 @@ data StakeIndex
 
 data PoolIndex
   = PoolIndex !Int
-  | PoolIndexId !(KeyHash 'StakePool StandardCrypto)
+  | PoolIndexId !(KeyHash 'StakePool)
   | PoolIndexNew !Int

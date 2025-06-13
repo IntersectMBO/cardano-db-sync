@@ -10,7 +10,6 @@ module Test.Property.Cardano.Db.Types (
 import Cardano.Chain.Common (maxLovelaceVal)
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db
-import Cardano.Ledger.Crypto (StandardCrypto)
 import qualified Cardano.Ledger.Hashes as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
 import qualified Data.Aeson as Aeson
@@ -44,13 +43,13 @@ prop_AssetFingerprint =
   H.withTests 1 . H.property $
     mapM_ (\(p, a, f) -> mkAssetFingerprint (unScriptHash $ policyID p) (unAssetName a) === f) testVectors
   where
-    unScriptHash :: Ledger.ScriptHash StandardCrypto -> ByteString
+    unScriptHash :: Ledger.ScriptHash -> ByteString
     unScriptHash (Ledger.ScriptHash h) = Crypto.hashToBytes h
 
     unAssetName :: AssetName -> ByteString
     unAssetName = SBS.fromShort . assetNameBytes
 
-    testVectors :: [(PolicyID StandardCrypto, AssetName, AssetFingerprint)]
+    testVectors :: [(PolicyID, AssetName, AssetFingerprint)]
     testVectors =
       [
         ( mkPolicyId "7eae28af2208be856f7a119668ae52a49b73725e326dc16579dcc373"
@@ -94,7 +93,7 @@ prop_AssetFingerprint =
         )
       ]
 
-    mkPolicyId :: ByteString -> PolicyID StandardCrypto
+    mkPolicyId :: ByteString -> PolicyID
     mkPolicyId =
       PolicyID
         . Ledger.ScriptHash

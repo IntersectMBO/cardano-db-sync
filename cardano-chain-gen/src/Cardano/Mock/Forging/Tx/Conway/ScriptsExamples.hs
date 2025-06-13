@@ -44,7 +44,7 @@ import Codec.CBOR.Write (toStrictByteString)
 import Codec.Serialise
 import Codec.Serialise.Encoding
 import Data.ByteString.Short
-import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra)
 import qualified PlutusCore.Data as Plutus
 import qualified PlutusLedgerApi.Test.Examples as Plutus
 
@@ -52,25 +52,25 @@ alwaysSucceedsScript :: forall era. AlonzoScript era
 alwaysSucceedsScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysSucceedingNAryFunction 0)
 
 alwaysSucceedsScriptHash :: ScriptHash StandardCrypto
-alwaysSucceedsScriptHash = scriptHash @StandardAlonzo alwaysSucceedsScript
+alwaysSucceedsScriptHash = scriptHash @AlonzoEra alwaysSucceedsScript
 
 alwaysSucceedsScriptAddr :: Addr StandardCrypto
 alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
 
-alwaysSucceedsScriptStake :: StakeCredential StandardCrypto
+alwaysSucceedsScriptStake :: StakeCredential
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 alwaysFailsScript :: forall era. AlonzoScript era
 alwaysFailsScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysFailingNAryFunction 0)
 
 alwaysFailsScriptHash :: ScriptHash StandardCrypto
-alwaysFailsScriptHash = scriptHash @StandardAlonzo alwaysFailsScript
+alwaysFailsScriptHash = scriptHash @AlonzoEra alwaysFailsScript
 
 -- addr_test1wrqvvu0m5jpkgxn3hwfd829hc5kfp0cuq83tsvgk44752dsz4mvrk
 alwaysFailsScriptAddr :: Addr StandardCrypto
 alwaysFailsScriptAddr = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) StakeRefNull
 
-alwaysFailsScriptStake :: StakeCredential StandardCrypto
+alwaysFailsScriptStake :: StakeCredential
 alwaysFailsScriptStake = ScriptHashObj alwaysFailsScriptHash
 
 plutusDataList :: forall era. Era era => Data era
@@ -80,12 +80,12 @@ alwaysMintScript :: forall era. AlonzoScript era
 alwaysMintScript = PlutusScript $ Plutus PlutusV1 (BinaryPlutus $ Plutus.alwaysFailingNAryFunction 1)
 
 alwaysMintScriptHash :: ScriptHash StandardCrypto
-alwaysMintScriptHash = scriptHash @StandardAlonzo alwaysMintScript
+alwaysMintScriptHash = scriptHash @AlonzoEra alwaysMintScript
 
 alwaysMintScriptAddr :: Addr StandardCrypto
 alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRefNull
 
-alwaysMintScriptStake :: StakeCredential StandardCrypto
+alwaysMintScriptStake :: StakeCredential
 alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 
 scriptHash ::

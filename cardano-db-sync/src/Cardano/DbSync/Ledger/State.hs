@@ -10,7 +10,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 #if __GLASGOW_HASKELL__ >= 908
@@ -103,7 +102,7 @@ import Ouroboros.Consensus.Block (
  )
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Cardano.Block (LedgerState (..), StandardConway, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (ConwayEra, LedgerState (..))
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import Ouroboros.Consensus.HardFork.Abstract
@@ -119,6 +118,7 @@ import Ouroboros.Consensus.Ledger.Abstract (
   ledgerTipSlot,
   tickThenReapplyLedgerResult,
  )
+import Ouroboros.Consensus.Ledger.Basics (ComputeLedgerEvents (..))
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -292,14 +292,14 @@ applyBlock env blk = do
     applyToEpochBlockNo _ _ GenesisEpochBlockNo = EpochBlockNo 0
     applyToEpochBlockNo _ _ EBBEpochBlockNo = EpochBlockNo 0
 
-    getDrepState :: ExtLedgerState CardanoBlock -> Maybe (DRepPulsingState StandardConway)
+    getDrepState :: ExtLedgerState CardanoBlock -> Maybe (DRepPulsingState ConwayEra)
     getDrepState ls = ls ^? newEpochStateT . Shelley.newEpochStateDRepPulsingStateL
 
     finaliseDrepDistr :: ExtLedgerState CardanoBlock -> ExtLedgerState CardanoBlock
     finaliseDrepDistr ledger =
-      ledger & newEpochStateT %~ forceDRepPulsingState @StandardConway
+      ledger & newEpochStateT %~ forceDRepPulsingState @ConwayEra
 
-getGovState :: ExtLedgerState CardanoBlock -> Maybe (ConwayGovState StandardConway)
+getGovState :: ExtLedgerState CardanoBlock -> Maybe (ConwayGovState ConwayEra)
 getGovState ls = case ledgerState ls of
   LedgerStateConway cls ->
     Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
@@ -746,17 +746,17 @@ getRegisteredPools st =
 
 getRegisteredPoolShelley ::
   forall p era.
-  EraCrypto era ~ StandardCrypto =>
+  Shelley.EraCertState era =>
   LedgerState (ShelleyBlock p era) ->
   Set.Set PoolKeyHash
 getRegisteredPoolShelley lState =
   Map.keysSet $
-    Shelley.psStakePoolParams $
-      Shelley.certPState $
-        Shelley.lsCertState $
-          Shelley.esLState $
-            Shelley.nesEs $
-              Consensus.shelleyLedgerState lState
+    let certState =
+          Shelley.lsCertState $
+            Shelley.esLState $
+              Shelley.nesEs $
+                Consensus.shelleyLedgerState lState
+     in Shelley.psStakePoolParams $ certState ^. Shelley.certPStateL
 
 ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock -> Either SyncNodeError (Maybe EpochNo)
 ledgerEpochNo env cls =
@@ -779,7 +779,7 @@ tickThenReapplyCheckHash ::
   Either SyncNodeError (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock))
 tickThenReapplyCheckHash cfg block lsb =
   if blockPrevHash block == ledgerTipHash (ledgerState lsb)
-    then Right $ tickThenReapplyLedgerResult cfg block lsb
+    then Right $ tickThenReapplyLedgerResult ComputeLedgerEvents cfg block lsb
     else
       Left $
         SNErrLedgerState $
@@ -862,7 +862,7 @@ findAdaPots = go
 
 -- | Given an committee action id and the current GovState, return the proposed committee.
 -- If it's not a Committee action or is not included in the proposals, return Nothing.
-findProposedCommittee :: GovActionId StandardCrypto -> ConwayGovState StandardConway -> Either Text (Maybe (Committee StandardConway))
+findProposedCommittee :: GovActionId -> ConwayGovState ConwayEra -> Either Text (Maybe (Committee ConwayEra))
 findProposedCommittee gaId cgs = do
   (rootCommittee, updateList) <- findRoot gaId
   computeCommittee rootCommittee updateList
@@ -870,7 +870,7 @@ findProposedCommittee gaId cgs = do
     ps = cgsProposals cgs
     findRoot = findRootRecursively []
 
-    findRootRecursively :: [GovAction StandardConway] -> GovActionId StandardCrypto -> Either Text (StrictMaybe (Committee StandardConway), [GovAction StandardConway])
+    findRootRecursively :: [GovAction ConwayEra] -> GovActionId -> Either Text (StrictMaybe (Committee ConwayEra), [GovAction ConwayEra])
     findRootRecursively acc gid = do
       gas <- fromNothing ("Didn't find proposal " <> textShow gid) $ proposalsLookupId gid ps
       let ga = pProcGovAction (gasProposalProcedure gas)
@@ -883,7 +883,7 @@ findProposedCommittee gaId cgs = do
         UpdateCommittee (Ledger.SJust gpid) _ _ _ -> findRootRecursively (ga : acc) (unGovPurposeId gpid)
         _ -> Left "Found invalid gov action referenced by committee"
 
-    computeCommittee :: StrictMaybe (Committee StandardConway) -> [GovAction StandardConway] -> Either Text (Maybe (Committee StandardConway))
+    computeCommittee :: StrictMaybe (Committee ConwayEra) -> [GovAction ConwayEra] -> Either Text (Maybe (Committee ConwayEra))
     computeCommittee sCommittee actions =
       Ledger.strictMaybeToMaybe <$> foldM applyCommitteeUpdate sCommittee actions
 

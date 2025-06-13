@@ -37,7 +37,7 @@ data ProtoParams = ProtoParams
   , ppKeyDeposit :: !Coin
   , ppPoolDeposit :: !Coin
   , ppMaxEpoch :: !EpochInterval
-  , ppOptialPoolCount :: !Natural
+  , ppOptimalPoolCount :: !Word16
   , ppInfluence :: !Rational
   , ppMonetaryExpandRate :: !UnitInterval
   , ppTreasuryGrowthRate :: !UnitInterval
@@ -112,7 +112,7 @@ getDeposits lstate =
 
 -- -------------------------------------------------------------------------------------------------
 
-fromConwayParams :: PParams StandardConway -> ProtoParams
+fromConwayParams :: PParams ConwayEra -> ProtoParams
 fromConwayParams params =
   ProtoParams
     { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
@@ -123,7 +123,7 @@ fromConwayParams params =
     , ppKeyDeposit = params ^. ppKeyDepositL
     , ppPoolDeposit = params ^. ppPoolDepositL
     , ppMaxEpoch = params ^. ppEMaxL
-    , ppOptialPoolCount = params ^. ppNOptL
+    , ppOptimalPoolCount = params ^. ppNOptL
     , ppInfluence = Ledger.unboundRational $ params ^. ppA0L
     , ppMonetaryExpandRate = params ^. ppRhoL
     , ppTreasuryGrowthRate = params ^. ppTauL
@@ -154,7 +154,7 @@ fromConwayParams params =
     , ppMinFeeRefScriptCostPerByte = Just $ Ledger.unboundRational $ params ^. ppMinFeeRefScriptCostPerByteL
     }
 
-fromBabbageParams :: PParams StandardBabbage -> ProtoParams
+fromBabbageParams :: PParams BabbageEra -> ProtoParams
 fromBabbageParams params =
   ProtoParams
     { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
@@ -165,7 +165,7 @@ fromBabbageParams params =
     , ppKeyDeposit = params ^. ppKeyDepositL
     , ppPoolDeposit = params ^. ppPoolDepositL
     , ppMaxEpoch = params ^. ppEMaxL
-    , ppOptialPoolCount = params ^. ppNOptL
+    , ppOptimalPoolCount = params ^. ppNOptL
     , ppInfluence = Ledger.unboundRational $ params ^. ppA0L
     , ppMonetaryExpandRate = params ^. ppRhoL
     , ppTreasuryGrowthRate = params ^. ppTauL
@@ -196,7 +196,7 @@ fromBabbageParams params =
     , ppMinFeeRefScriptCostPerByte = Nothing
     }
 
-fromAlonzoParams :: PParams StandardAlonzo -> ProtoParams
+fromAlonzoParams :: PParams AlonzoEra -> ProtoParams
 fromAlonzoParams params =
   ProtoParams
     { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
@@ -207,7 +207,7 @@ fromAlonzoParams params =
     , ppKeyDeposit = params ^. ppKeyDepositL
     , ppPoolDeposit = params ^. ppPoolDepositL
     , ppMaxEpoch = params ^. ppEMaxL
-    , ppOptialPoolCount = params ^. ppNOptL
+    , ppOptimalPoolCount = params ^. ppNOptL
     , ppInfluence = Ledger.unboundRational $ params ^. ppA0L
     , ppMonetaryExpandRate = params ^. ppRhoL
     , ppTreasuryGrowthRate = params ^. ppTauL
@@ -249,7 +249,7 @@ fromShelleyParams params =
     , ppKeyDeposit = params ^. ppKeyDepositL
     , ppPoolDeposit = params ^. ppPoolDepositL
     , ppMaxEpoch = params ^. ppEMaxL
-    , ppOptialPoolCount = params ^. ppNOptL
+    , ppOptimalPoolCount = params ^. ppNOptL
     , ppInfluence = Ledger.unboundRational $ params ^. ppA0L
     , ppMonetaryExpandRate = params ^. ppRhoL
     , ppTreasuryGrowthRate = params ^. ppTauL

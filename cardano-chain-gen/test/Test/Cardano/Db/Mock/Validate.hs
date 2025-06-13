@@ -4,7 +4,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Test.Cardano.Db.Mock.Validate (
   assertBlocksCount,
@@ -52,7 +51,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Era
+import Cardano.Ledger.Shelley.LedgerState (EraCertState)
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.SMASH.Server.PoolDataLayer
@@ -208,7 +207,7 @@ assertCurrentEpoch env expected =
     q = queryCurrentEpochNo
 
 assertAddrValues ::
-  (EraCrypto era ~ StandardCrypto, Core.EraTxOut era) =>
+  (EraCertState era, Core.EraTxOut era) =>
   DBSyncEnv ->
   UTxOIndex era ->
   DbLovelace ->
@@ -247,7 +246,7 @@ assertCertCounts env expected =
       pure (registr - 5, deregistr, deleg - 5, withdrawal)
 
 assertRewardCounts ::
-  EraCrypto era ~ StandardCrypto =>
+  EraCertState era =>
   DBSyncEnv ->
   LedgerState (ShelleyBlock p era) ->
   Bool ->
@@ -499,7 +498,7 @@ addPoolCounters :: Num a => (a, a, a, a, a, a) -> (a, a, a, a, a, a) -> (a, a, a
 addPoolCounters (a, b, c, d, e, f) (a', b', c', d', e', f') = (a + a', b + b', c + c', d + d', e + e', f + f')
 
 assertPoolLayerCounters ::
-  EraCrypto era ~ StandardCrypto =>
+  EraCertState era =>
   DBSyncEnv ->
   (Word64, Word64) ->
   [(PoolIndex, (Either DBFail Bool, Bool, Bool))] ->

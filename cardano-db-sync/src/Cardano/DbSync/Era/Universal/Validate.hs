@@ -16,7 +16,6 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Crypto (StandardCrypto)
 import Cardano.Ledger.Shelley.API (Network)
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import Cardano.Prelude hiding (from, on)
@@ -54,7 +53,7 @@ validateEpochRewards ::
   Network ->
   EpochNo ->
   EpochNo ->
-  Map StakeCred (Set (Ledger.Reward StandardCrypto)) ->
+  Map StakeCred (Set Ledger.Reward) ->
   ReaderT SqlBackend m ()
 validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
   actualCount <- Db.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)

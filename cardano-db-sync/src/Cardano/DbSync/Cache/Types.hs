@@ -48,7 +48,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import qualified Data.Map.Strict as Map
 import Data.Time.Clock (UTCTime)
 import Data.WideWord.Word128 (Word128)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
@@ -79,12 +78,12 @@ data CacheInternal = CacheInternal
   , cStake :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
-  , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID StandardCrypto, AssetName) DB.MultiAssetId))
+  , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
   , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString V.AddressId))
-  , cTxIds :: !(StrictTVar IO (FIFOCache (Ledger.TxId StandardCrypto) DB.TxId))
+  , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
   }
 
 data CacheStatistics = CacheStatistics

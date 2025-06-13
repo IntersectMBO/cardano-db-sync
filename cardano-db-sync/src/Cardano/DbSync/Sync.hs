@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -23,10 +24,10 @@ module Cardano.DbSync.Sync (
   runSyncNodeClient,
 ) where
 
-import Cardano.BM.Data.Tracer (ToLogObject (..), ToObject)
+import Cardano.BM.Data.Tracer (ToLogObject (..))
 import Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
-import Cardano.Client.Subscription (subscribe)
+import Cardano.Client.Subscription (Decision (..), MuxTrace, SubscriptionParams (..), SubscriptionTrace, SubscriptionTracers (..), subscribe)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
@@ -40,14 +41,15 @@ import Cardano.DbSync.Util
 import Cardano.Prelude hiding (Meta, Nat, (%))
 import Cardano.Slotting.Slot (WithOrigin (..))
 import qualified Codec.CBOR.Term as CBOR
+import Control.Concurrent.Async (AsyncCancelled (..))
 import Control.Tracer (Tracer)
 import qualified Data.ByteString.Lazy as BSL
 import Data.Functor.Contravariant (contramap)
 import qualified Data.List as List
 import qualified Data.Text as Text
-import Network.Mux (MuxTrace, WithMuxBearer)
-import Network.Mux.Types (MuxMode (..))
-import Network.TypedProtocol.Pipelined (N (..), Nat (Succ, Zero))
+import qualified Network.Mux as Mux
+import Network.TypedProtocol.Peer (N (..), Nat (..))
+
 import Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import Ouroboros.Consensus.Byron.Node ()
 import Ouroboros.Consensus.Cardano.Node ()
@@ -59,7 +61,6 @@ import Ouroboros.Consensus.Network.NodeToClient (
   cTxSubmissionCodec,
   clientCodecs,
  )
-import Ouroboros.Consensus.Node.ErrorPolicy
 import Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, supportedNodeToClientVersions)
 import Ouroboros.Network.Block (
   BlockNo (..),
@@ -70,23 +71,19 @@ import Ouroboros.Network.Block (
   getTipBlockNo,
  )
 import Ouroboros.Network.Driver.Simple (runPipelinedPeer)
-import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx, mkMiniProtocolCbFromPeer)
+import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx)
+import qualified Ouroboros.Network.Mux as Mux
 import Ouroboros.Network.NodeToClient (
-  ClientSubscriptionParams (..),
   ConnectionId,
-  ErrorPolicyTrace (..),
   Handshake,
   IOManager,
   LocalAddress,
-  NetworkSubscriptionTracers (..),
   NodeToClientProtocols (..),
   TraceSendRecv,
-  WithAddr (..),
   localSnocket,
   localStateQueryPeerNull,
   localTxMonitorPeerNull,
   localTxSubmissionPeerNull,
-  networkErrorPolicies,
  )
 import qualified Ouroboros.Network.NodeToClient.Version as Network
 import Ouroboros.Network.Protocol.ChainSync.ClientPipelined (
@@ -108,8 +105,8 @@ import Ouroboros.Network.Protocol.ChainSync.PipelineDecision (
  )
 import Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
+import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
 import qualified Ouroboros.Network.Snocket as Snocket
-import Ouroboros.Network.Subscription (SubscriptionTrace)
 
 runSyncNodeClient ::
   MetricSetters ->
@@ -126,8 +123,8 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
       (localSnocket iomgr)
       (envNetworkMagic syncEnv)
       (supportedNodeToClientVersions (Proxy @CardanoBlock))
-      networkSubscriptionTracers
-      clientSubscriptionParams
+      subscriptionTracers
+      subscriptionParams
       (dbSyncProtocols syncEnv metricsSetters tc codecConfig)
   where
     codecConfig :: CodecConfig CardanoBlock
@@ -136,34 +133,35 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
     --    nonExperimentalVersions =
     --      filter (\a -> Just a <= snd (lastReleasedNodeVersion Proxy)) $ supportedNodeToClientVersions (Proxy @CardanoBlock)
 
-    clientSubscriptionParams =
-      ClientSubscriptionParams
-        { cspAddress = Snocket.localAddressFromPath socketPath
-        , cspConnectionAttemptDelay = Nothing
-        , cspErrorPolicies = networkErrorPolicies <> consensusErrorPolicy (Proxy @CardanoBlock)
+    subscriptionParams =
+      SubscriptionParams
+        { spAddress = Snocket.localAddressFromPath socketPath
+        , spReconnectionDelay = Nothing
+        , spCompleteCb = \case
+            Left e ->
+              case fromException e of
+                Just AsyncCancelled -> Abort
+                _other -> Reconnect
+            Right _ -> Reconnect
         }
 
-    networkSubscriptionTracers =
-      NetworkSubscriptionTracers
-        { nsMuxTracer = muxTracer
-        , nsHandshakeTracer = handshakeTracer
-        , nsErrorPolicyTracer = errorPolicyTracer
-        , nsSubscriptionTracer = subscriptionTracer
+    subscriptionTracers =
+      SubscriptionTracers
+        { stMuxTracer = muxTracer
+        , stHandshakeTracer = handshakeTracer
+        , stSubscriptionTracer = subscriptionTracer
         }
 
-    errorPolicyTracer :: Tracer IO (WithAddr LocalAddress ErrorPolicyTrace)
-    errorPolicyTracer = toLogObject $ appendName "ErrorPolicy" trce
-
-    muxTracer :: (Show peer, ToObject peer) => Tracer IO (WithMuxBearer peer MuxTrace)
+    muxTracer :: Tracer IO (Mux.WithBearer (ConnectionId LocalAddress) MuxTrace)
     muxTracer = toLogObject $ appendName "Mux" trce
 
-    subscriptionTracer :: Tracer IO (Identity (SubscriptionTrace LocalAddress))
+    subscriptionTracer :: Tracer IO (SubscriptionTrace ())
     subscriptionTracer = toLogObject $ appendName "Subscription" trce
 
     handshakeTracer ::
       Tracer
         IO
-        ( WithMuxBearer
+        ( Mux.WithBearer
             (ConnectionId LocalAddress)
             (TraceSendRecv (Handshake Network.NodeToClientVersion CBOR.Term))
         )
@@ -176,7 +174,7 @@ dbSyncProtocols ::
   CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
-  NodeToClientProtocols 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+  NodeToClientProtocols 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
 dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
@@ -184,7 +182,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     , localStateQueryProtocol = localStateQuery
     , localTxMonitorProtocol =
         InitiatorProtocolOnly $
-          mkMiniProtocolCbFromPeer $
+          Mux.mkMiniProtocolCbFromPeer $
             const
               (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
     }
@@ -197,7 +195,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+    localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $
       MiniProtocolCb $ \_ctx channel ->
         liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
@@ -227,33 +225,35 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
           -- would like to restart a protocol on the same mux and thus bearer).
           pure ((), Nothing)
 
-    dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+    dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     dummylocalTxSubmit =
       InitiatorProtocolOnly $
-        mkMiniProtocolCbFromPeer $
+        Mux.mkMiniProtocolCbFromPeer $
           const
             ( Logging.nullTracer
             , cTxSubmissionCodec codecs
             , localTxSubmissionPeerNull
             )
 
-    localStateQuery :: RunMiniProtocolWithMinimalCtx 'InitiatorMode LocalAddress BSL.ByteString IO () Void
+    localStateQuery :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     localStateQuery =
       case envLedgerEnv syncEnv of
         HasLedger _ ->
           InitiatorProtocolOnly $
-            mkMiniProtocolCbFromPeer $
+            Mux.mkMiniProtocolCbFromPeerSt $
               const
                 ( Logging.nullTracer
                 , cStateQueryCodec codecs
+                , LocalStateQuery.StateIdle
                 , localStateQueryPeerNull
                 )
         NoLedger nle ->
           InitiatorProtocolOnly $
-            mkMiniProtocolCbFromPeer $
+            Mux.mkMiniProtocolCbFromPeerSt $
               const
                 ( contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer
                 , cStateQueryCodec codecs
+                , LocalStateQuery.StateIdle
                 , localStateQueryClientPeer $ localStateQueryHandler nle
                 )
 

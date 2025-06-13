@@ -57,7 +57,6 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
 import Database.Persist.Postgresql (SqlBackend)
-import Ouroboros.Consensus.Cardano.Block (StandardCrypto)
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -114,7 +113,7 @@ queryOrInsertRewardAccount ::
   Trace IO Text ->
   CacheStatus ->
   CacheAction ->
-  Ledger.RewardAccount StandardCrypto ->
+  Ledger.RewardAccount ->
   ReaderT SqlBackend m DB.StakeAddressId
 queryOrInsertRewardAccount trce cache cacheUA rewardAddr = do
   eiAddrId <- queryStakeAddrWithCacheRetBs trce cache cacheUA rewardAddr
@@ -137,7 +136,7 @@ queryOrInsertStakeAddress trce cache cacheUA nw cred =
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
   (MonadBaseControl IO m, MonadIO m) =>
-  Ledger.RewardAccount StandardCrypto ->
+  Ledger.RewardAccount ->
   Maybe ByteString ->
   ReaderT SqlBackend m DB.StakeAddressId
 insertStakeAddress rewardAddr stakeCredBs = do
@@ -168,7 +167,7 @@ queryStakeAddrWithCacheRetBs ::
   Trace IO Text ->
   CacheStatus ->
   CacheAction ->
-  Ledger.RewardAccount StandardCrypto ->
+  Ledger.RewardAccount ->
   ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
 queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred) = do
   let bs = Ledger.serialiseRewardAccount ra
@@ -381,7 +380,7 @@ queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
 queryMAWithCache ::
   MonadIO m =>
   CacheStatus ->
-  PolicyID StandardCrypto ->
+  PolicyID ->
   AssetName ->
   ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
 queryMAWithCache cache policyId asset =
@@ -442,7 +441,7 @@ queryPrevBlockWithCache msg cache hsh =
 queryTxIdWithCache ::
   MonadIO m =>
   CacheStatus ->
-  Ledger.TxId StandardCrypto ->
+  Ledger.TxId ->
   ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
 queryTxIdWithCache cache txIdLedger = do
   case cache of
@@ -477,7 +476,7 @@ queryTxIdWithCache cache txIdLedger = do
 tryUpdateCacheTx ::
   MonadIO m =>
   CacheStatus ->
-  Ledger.TxId StandardCrypto ->
+  Ledger.TxId ->
   DB.TxId ->
   m ()
 tryUpdateCacheTx (ActiveCache ci) ledgerTxId txId =

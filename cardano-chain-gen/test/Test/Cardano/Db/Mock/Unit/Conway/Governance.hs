@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 #if __GLASGOW_HASKELL__ >= 908
 {-# OPTIONS_GHC -Wno-x-partial #-}
@@ -26,12 +25,12 @@ import qualified Cardano.Db as Db
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash, unTxHash)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx)
-import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), hashAnchorData, textToUrl)
+import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), textToUrl)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
-import Cardano.Ledger.Core (txIdTx)
-import Cardano.Ledger.SafeHash (SafeToHash (..))
+import Cardano.Ledger.Core (hashAnnotated, txIdTx)
+import Cardano.Ledger.Hashes (SafeToHash (..))
 import Cardano.Mock.ChainSync.Server (IOManager, ServerHandle)
 import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -260,7 +259,7 @@ enactNewCommittee interpreter server = do
   epochs <- Api.fillEpochs interpreter server 2
   pure (blk : epochs)
 
-proposeNewCommittee :: AlonzoTx Consensus.StandardConway
+proposeNewCommittee :: AlonzoTx Consensus.ConwayEra
 proposeNewCommittee =
   Conway.mkAddCommitteeTx Nothing committeeCred
   where
@@ -296,7 +295,7 @@ updateConstitution =
     epoch1 <- initGovernance interpreter server
 
     let newUrl = fromJust (textToUrl 64 "constitution.new")
-        dataHash = hashAnchorData @Consensus.StandardCrypto (AnchorData "constitution content")
+        dataHash = hashAnnotated (AnchorData "constitution content")
         anchor = Governance.Anchor newUrl dataHash
 
     -- Create and vote for a governance proposal

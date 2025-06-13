@@ -97,7 +97,7 @@ querySetNullTxOut txOutTableType mMinTxId = do
         TxOutVariantAddress -> setNull
       where
         setNull ::
-          (MonadIO m) =>
+          MonadIO m =>
           ReaderT SqlBackend m ()
         setNull = do
           case txOutId of

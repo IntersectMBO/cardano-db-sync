@@ -79,7 +79,11 @@ import Data.Aeson.Key (fromText)
 import Data.Aeson.Types (Pair, Parser, typeMismatch)
 import Data.ByteString.Short (ShortByteString (), fromShort, toShort)
 import Data.Default.Class (Default (..))
-import Ouroboros.Consensus.Cardano.CanHardFork (TriggerHardFork (..))
+import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, MaryEra, ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Protocol.Praos (Praos)
+import Ouroboros.Consensus.Protocol.TPraos (TPraos)
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath
@@ -135,12 +139,12 @@ data SyncNodeConfig = SyncNodeConfig
   , dncConwayGenesisFile :: !(Maybe GenesisFile)
   , dncConwayGenesisHash :: !(Maybe GenesisHashConway)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
-  , dncShelleyHardFork :: !TriggerHardFork
-  , dncAllegraHardFork :: !TriggerHardFork
-  , dncMaryHardFork :: !TriggerHardFork
-  , dncAlonzoHardFork :: !TriggerHardFork
-  , dncBabbageHardFork :: !TriggerHardFork
-  , dncConwayHardFork :: !TriggerHardFork
+  , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
+  , dncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
+  , dncMaryHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) MaryEra))
+  , dncAlonzoHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AlonzoEra))
+  , dncBabbageHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
+  , dncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
   , dncInsertOptions :: !SyncInsertOptions
   , dncIpfsGateway :: [Text]
   }

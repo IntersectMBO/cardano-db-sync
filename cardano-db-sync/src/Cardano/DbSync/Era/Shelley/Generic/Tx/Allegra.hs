@@ -45,9 +45,9 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (StandardAllegra, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (AllegraEra)
 
-fromAllegraTx :: (Word64, Core.Tx StandardAllegra) -> Tx
+fromAllegraTx :: (Word64, Core.Tx AllegraEra) -> Tx
 fromAllegraTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -81,7 +81,7 @@ fromAllegraTx (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Allegra does not support treasury donations
     }
   where
-    txBody :: Core.TxBody StandardAllegra
+    txBody :: Core.TxBody AllegraEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
@@ -94,7 +94,7 @@ fromAllegraTx (blkIndex, tx) =
 
 getScripts ::
   forall era.
-  (EraCrypto era ~ StandardCrypto, NativeScript era ~ Timelock era, AllegraEraScript era, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
+  (NativeScript era ~ Timelock era, AllegraEraScript era, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
   ShelleyTx era ->
   [TxScript]
 getScripts tx =
@@ -105,9 +105,9 @@ getScripts tx =
 
 getAuxScripts ::
   forall era.
-  (EraCrypto era ~ StandardCrypto, EraScript era, Script era ~ Timelock era) =>
+  (EraScript era, Script era ~ Timelock era) =>
   StrictMaybe (AllegraTxAuxData era) ->
-  [(ScriptHash StandardCrypto, Timelock era)]
+  [(ScriptHash, Timelock era)]
 getAuxScripts maux =
   case strictMaybeToMaybe maux of
     Nothing -> []
@@ -116,7 +116,7 @@ getAuxScripts maux =
 
 mkTxScript ::
   (NativeScript era ~ Timelock era, AllegraEraScript era) =>
-  (ScriptHash StandardCrypto, Timelock era) ->
+  (ScriptHash, Timelock era) ->
   TxScript
 mkTxScript (hsh, script) =
   TxScript

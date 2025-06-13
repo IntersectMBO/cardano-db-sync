@@ -151,10 +151,10 @@ annotateInvariantTx tx ei =
     EInvInOut inval outval -> EInvTxInOut tx inval outval
     _other -> ei
 
-dbSyncNodeError :: (Monad m) => Text -> ExceptT SyncNodeError m a
+dbSyncNodeError :: Monad m => Text -> ExceptT SyncNodeError m a
 dbSyncNodeError = left . SNErrDefault
 
-dbSyncInvariant :: (Monad m) => Text -> SyncInvariant -> ExceptT SyncNodeError m a
+dbSyncInvariant :: Monad m => Text -> SyncInvariant -> ExceptT SyncNodeError m a
 dbSyncInvariant loc = left . SNErrInvariant loc
 
 renderSyncInvariant :: SyncInvariant -> Text
@@ -174,7 +174,7 @@ renderSyncInvariant ei =
         , textShow tx
         ]
 
-fromEitherSTM :: (Exception e) => Either e a -> STM a
+fromEitherSTM :: Exception e => Either e a -> STM a
 fromEitherSTM = either throwSTM return
 
 bsBase16Encode :: ByteString -> Text
@@ -183,7 +183,7 @@ bsBase16Encode bs =
     Left _ -> Text.pack $ "UTF-8 decode failed for " ++ Show.show bs
     Right txt -> txt
 
-runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
+runOrThrowIO :: forall e a m. MonadIO m => Exception e => m (Either e a) -> m a
 runOrThrowIO ioEither = do
   et <- ioEither
   case et of

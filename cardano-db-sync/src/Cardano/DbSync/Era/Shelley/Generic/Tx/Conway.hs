@@ -25,9 +25,9 @@ import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (StandardConway, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (ConwayEra)
 
-fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx StandardConway) -> Tx
+fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx ConwayEra) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -74,10 +74,10 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = ctbTreasuryDonation txBody
     }
   where
-    txBody :: Core.TxBody StandardConway
+    txBody :: Core.TxBody ConwayEra
     txBody = tx ^. Core.bodyTxL
 
-    txId :: TxId StandardCrypto
+    txId :: TxId
     txId = mkTxId tx
 
     outputs :: [TxOut]
@@ -91,7 +91,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     collIndex :: Word64
     collIndex =
       case txIxFromIntegral (length outputs) of
-        Just (TxIx i) -> i
+        Just (TxIx i) -> fromIntegral i
         Nothing -> fromIntegral (maxBound :: Word16)
 
     -- This is true if second stage contract validation passes.
@@ -105,5 +105,5 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
 
     collInputs = mkCollTxIn txBody
 
-    mkProposalIndex :: Word16 -> a -> (GovActionId StandardCrypto, a)
+    mkProposalIndex :: Word16 -> a -> (GovActionId, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)

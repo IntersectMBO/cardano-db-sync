@@ -25,7 +25,11 @@ import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Yaml as Yaml
-import qualified Ouroboros.Consensus.Cardano.CanHardFork as Shelley
+import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, MaryEra, ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Protocol.Praos (Praos)
+import Ouroboros.Consensus.Protocol.TPraos (TPraos)
+import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
 data NodeConfig = NodeConfig
   { ncProtocol :: !SyncProtocol
@@ -41,17 +45,17 @@ data NodeConfig = NodeConfig
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
   , -- Shelley hardfok parameters
-    ncShelleyHardFork :: !Shelley.TriggerHardFork
+    ncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
   , -- Allegra hardfok parameters
-    ncAllegraHardFork :: !Shelley.TriggerHardFork
+    ncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
   , -- Mary hardfok parameters
-    ncMaryHardFork :: !Shelley.TriggerHardFork
+    ncMaryHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) MaryEra))
   , -- Alonzo hardfok parameters
-    ncAlonzoHardFork :: !Shelley.TriggerHardFork
+    ncAlonzoHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AlonzoEra))
   , -- Babbage hardfok parameters
-    ncBabbageHardFork :: !Shelley.TriggerHardFork
+    ncBabbageHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
   , -- Conway hardfok parameters
-    ncConwayHardFork :: !Shelley.TriggerHardFork
+    ncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
   }
 
 parseNodeConfig :: ByteString -> IO NodeConfig
@@ -106,44 +110,44 @@ instance FromJSON NodeConfig where
           <*> (o .: "LastKnownBlockVersion-Minor")
           <*> (o .: "LastKnownBlockVersion-Alt")
 
-      parseShelleyHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseShelleyHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
       parseShelleyHardForkEpoch o =
         asum
-          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestShelleyHardForkAtEpoch"
-          , pure $ Shelley.TriggerHardForkAtVersion 2 -- Mainnet default
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestShelleyHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
-      parseAllegraHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseAllegraHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
       parseAllegraHardForkEpoch o =
         asum
-          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestAllegraHardForkAtEpoch"
-          , pure $ Shelley.TriggerHardForkAtVersion 3 -- Mainnet default
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestAllegraHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
-      parseMaryHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseMaryHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) MaryEra))
       parseMaryHardForkEpoch o =
         asum
-          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestMaryHardForkAtEpoch"
-          , pure $ Shelley.TriggerHardForkAtVersion 4 -- Mainnet default
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestMaryHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
-      parseAlonzoHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseAlonzoHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AlonzoEra))
       parseAlonzoHardForkEpoch o =
         asum
-          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestAlonzoHardForkAtEpoch"
-          , pure $ Shelley.TriggerHardForkAtVersion 5 -- Mainnet default
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestAlonzoHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
-      parseBabbageHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseBabbageHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
       parseBabbageHardForkEpoch o =
         asum
-          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestBabbageHardForkAtEpoch"
-          , pure $ Shelley.TriggerHardForkAtVersion 7 -- Mainnet default
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestBabbageHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
-      parseConwayHardForkEpoch :: Object -> Parser Shelley.TriggerHardFork
+      parseConwayHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
       parseConwayHardForkEpoch o =
         asum
-          [ Shelley.TriggerHardForkAtEpoch <$> o .: "TestConwayHardForkAtEpoch"
-          , pure $ Shelley.TriggerHardForkAtVersion 9 -- Mainnet default
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestConwayHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
           ]

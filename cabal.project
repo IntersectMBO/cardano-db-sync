@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2024-10-10T00:52:24Z
-  , cardano-haskell-packages 2024-11-26T16:00:26Z
+  , hackage.haskell.org 2025-05-23T06:30:40Z
+  , cardano-haskell-packages 2025-05-16T20:03:45Z
 
 packages:
   cardano-db
@@ -67,34 +67,35 @@ package snap-server
   -- only if the `cardano-node` is compiled with `+rtview`.
   flags: -openssl
 
-allow-newer:
-  , swagger2:aeson
-  -- The version of ouroboros-consensus specified by cardano-node uses an earlier version of
-  -- quickcheck-state-machine that does not compile with ghc-9.10 so we allow a never version
-  -- that builds with ghc-9.10 (and earlier).
-  , ouroboros-consensus:quickcheck-state-machine
+-- ---------------------------------------------------------
 
 constraints:
-  -- STM 2.5.2 is broken: https://github.com/haskell/stm/issues/76
-  , stm >= 2.5.3.1
-  -- Earlier versions do not compile with ghc-9.10.
-  , quickcheck-state-machine ^>= 0.10
+  -- esqueleto >= 3.6 has API chamges
+  , esqueleto ^>= 3.5.11.2
 
--- ---------------------------------------------------------
+  -- New version of `text` exposes a `show` function and in the `node`
+  -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
+  -- then clashes with the `show` in `Prelude`.
+  , text < 2.1.2
+
+  , cardano-node ^>= 10.3
+
+if impl (ghc >= 9.12)
+  allow-newer:
+    -- https://github.com/kapralVV/Unique/issues/11
+    , Unique:hashable
+
+    -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
+    , pipes-safe:base
+
+    -- https://github.com/haskellari/postgresql-simple/issues/152
+    , postgresql-simple:base
+    , postgresql-simple:template-haskell
+    
+    -- https://github.com/haskell-hvr/int-cast/issues/10
+    , int-cast:base
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
 -- when using the "cabal" wrapper script provided by nix-shell.
 -- --------------------------- 8< --------------------------
 -- Please do not put any `source-repository-package` clause above this line.
-
-source-repository-package
-  type: git
-  location: https://github.com/IntersectMBO/cardano-node
-  tag: 36871ba0cd3e86a5dbcfd6878cdb7168bb4e56a1
-  --sha256: sha256-v0q8qHdI6LKc8mP43QZt3UGdTNDQXE0aF6QapvZsTvU=
-  subdir:
-    cardano-node
-    cardano-submit-api
-    trace-dispatcher
-    trace-forward
-    trace-resources

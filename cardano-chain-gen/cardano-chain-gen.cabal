@@ -75,6 +75,7 @@ library
                       , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-ledger-mary
                       , cardano-prelude
+                      , cardano-protocol-tpraos
                       , cardano-slotting
                       , cardano-strict-containers
                       , cborg
@@ -85,6 +86,7 @@ library
                       , extra
                       , mtl
                       , microlens
+                      , network-mux
                       , nothunks
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
@@ -101,6 +103,7 @@ library
                       , strict-stm
                       , text
                       , typed-protocols
+                      , typed-protocols-stateful
 
 test-suite cardano-chain-gen
   type:                 exitcode-stdio-1.0
@@ -182,6 +185,7 @@ test-suite cardano-chain-gen
                       , esqueleto
                       , extra
                       , filepath
+                      , int-cast
                       , silently
                       , stm
                       , strict-stm
