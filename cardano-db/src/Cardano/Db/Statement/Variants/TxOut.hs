@@ -321,7 +321,7 @@ queryTxOutCredentialsCoreStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT tx_out.payment_cred, tx_out.address_has_script"
+          [ "SELECT tx_out.payment_cred"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
           , " WHERE tx_out.index = $2 AND tx.hash = $1"
           ]
@@ -333,7 +333,6 @@ queryTxOutCredentialsCoreStmt =
     decoder =
       HsqlD.rowMaybe $ HsqlD.column (HsqlD.nullable HsqlD.bytea)
 
---------------------------------------------------------------------------------
 queryTxOutCredentialsVariantStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))
 queryTxOutCredentialsVariantStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -341,7 +340,7 @@ queryTxOutCredentialsVariantStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT addr.payment_cred, addr.address_has_script"
+          [ "SELECT addr.payment_cred"
           , " FROM tx"
           , " INNER JOIN tx_out ON tx.id = tx_out.tx_id"
           , " INNER JOIN address addr ON tx_out.address_id = addr.id"
@@ -360,19 +359,19 @@ queryTxOutCredentials ::
   TxOutVariantType ->
   (ByteString, Word64) ->
   DbAction m (Maybe ByteString)
-queryTxOutCredentials txOutVariantType hashIndex@(hash, _) = do
-  let dbCallStack = mkDbCallStack "queryTxOutCredentials"
-      errorMsg = "TxOut not found for hash: " <> Text.pack (show hash)
-
+queryTxOutCredentials txOutVariantType hashIndex = do
+  -- Just return Nothing when not found, don't throw
   result <- case txOutVariantType of
     TxOutVariantCore ->
-      runDbSession dbCallStack $ HsqlSes.statement hashIndex queryTxOutCredentialsCoreStmt
+      runDbSession (mkDbCallStack "queryTxOutCredentials") $
+        HsqlSes.statement hashIndex queryTxOutCredentialsCoreStmt
     TxOutVariantAddress ->
-      runDbSession dbCallStack $ HsqlSes.statement hashIndex queryTxOutCredentialsVariantStmt
+      runDbSession (mkDbCallStack "queryTxOutCredentials") $
+        HsqlSes.statement hashIndex queryTxOutCredentialsVariantStmt
 
   case result of
-    Just credentials -> pure credentials
-    Nothing -> throwError $ DbError dbCallStack errorMsg Nothing
+    Just mPaamentCred -> pure mPaamentCred -- Extract the inner Maybe ByteString
+    Nothing -> pure Nothing
 
 --------------------------------------------------------------------------------
 queryTotalSupplyStmt :: HsqlStmt.Statement () Ada
@@ -463,14 +462,14 @@ deleteMaTxOutCoreAfterIdStmt :: HsqlStmt.Statement Id.MaTxOutCoreId ()
 deleteMaTxOutCoreAfterIdStmt =
   parameterisedDeleteWhere @SVC.MaTxOutCore
     "id"
-    ">= $1"
+    ">="
     (Id.idEncoder Id.getMaTxOutCoreId)
 
 deleteTxOutCoreAfterIdStmt :: HsqlStmt.Statement Id.TxOutCoreId ()
 deleteTxOutCoreAfterIdStmt =
   parameterisedDeleteWhere @SVC.TxOutCore
     "id"
-    ">= $1"
+    ">="
     (Id.idEncoder Id.getTxOutCoreId)
 
 -- Function that uses the core delete statements
@@ -492,14 +491,14 @@ deleteMaTxOutAddressAfterIdStmt :: HsqlStmt.Statement Id.MaTxOutAddressId ()
 deleteMaTxOutAddressAfterIdStmt =
   parameterisedDeleteWhere @SVA.MaTxOutAddress
     "id"
-    ">= $1"
+    ">="
     (Id.idEncoder Id.getMaTxOutAddressId)
 
 deleteTxOutAddressAfterIdStmt :: HsqlStmt.Statement Id.TxOutAddressId ()
 deleteTxOutAddressAfterIdStmt =
   parameterisedDeleteWhere @SVA.TxOutAddress
     "id"
-    ">= $1"
+    ">="
     (Id.idEncoder Id.getTxOutAddressId)
 
 -- Function that uses the address variant delete statements
@@ -699,7 +698,7 @@ queryAddressOutputsCoreStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT COALESCE(SUM(value), 0)::bigint"
+          [ "SELECT COALESCE(SUM(value), 0)"
           , " FROM tx_out"
           , " WHERE address = $1"
           ]
@@ -713,7 +712,7 @@ queryAddressOutputsVariantStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT COALESCE(SUM(tx_out.value), 0)::bigint"
+          [ "SELECT COALESCE(SUM(tx_out.value), 0)"
           , " FROM address"
           , " JOIN tx_out ON tx_out.address_id = address.id"
           , " WHERE address.address = $1"

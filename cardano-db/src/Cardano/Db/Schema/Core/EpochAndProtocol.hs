@@ -23,6 +23,8 @@ import Cardano.Db.Types (
   dbInt65Encoder,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
+  maybeDbLovelaceDecoder,
+  maybeDbLovelaceEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
   syncStateDecoder,
@@ -202,7 +204,7 @@ epochParamDecoder =
     <*> dbLovelaceDecoder -- epochParamMinUtxoValue
     <*> dbLovelaceDecoder -- epochParamMinPoolCost
     <*> D.column (D.nullable D.bytea) -- epochParamNonce
-    <*> maybeIdDecoder CostModelId -- epochParamCostModelId (moved from position 20 to 19)
+    <*> maybeIdDecoder CostModelId -- epochParamCostModelId
     <*> D.column (D.nullable D.float8) -- epochParamPriceMem
     <*> D.column (D.nullable D.float8) -- epochParamPriceStep
     <*> maybeDbWord64Decoder -- epochParamMaxTxExMem
@@ -214,7 +216,8 @@ epochParamDecoder =
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- epochParamMaxCollateralInputs
     <*> idDecoder BlockId -- epochParamBlockId
     <*> D.column (D.nullable D.bytea) -- epochParamExtraEntropy
-    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- epochParamCoinsPerUtxoSize (moved from position 19 to 31)
+    <*> maybeDbLovelaceDecoder -- epochParamCoinsPerUtxoSize
+    -- <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- epochParamCoinsPerUtxoSize
     <*> D.column (D.nullable D.float8) -- epochParamPvtMotionNoConfidence
     <*> D.column (D.nullable D.float8) -- epochParamPvtCommitteeNormal
     <*> D.column (D.nullable D.float8) -- epochParamPvtCommitteeNoConfidence
@@ -235,7 +238,7 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamGovActionDeposit
     <*> maybeDbWord64Decoder -- epochParamDrepDeposit
     <*> maybeDbWord64Decoder -- epochParamDrepActivity
-    <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup (moved from position 36 to 52)
+    <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
 
 entityEpochParamEncoder :: E.Params (Entity EpochParam)
@@ -267,7 +270,7 @@ epochParamEncoder =
     , epochParamMinUtxoValue >$< dbLovelaceEncoder
     , epochParamMinPoolCost >$< dbLovelaceEncoder
     , epochParamNonce >$< E.param (E.nullable E.bytea)
-    , epochParamCostModelId >$< maybeIdEncoder getCostModelId -- moved from position 20 to 19
+    , epochParamCostModelId >$< maybeIdEncoder getCostModelId
     , epochParamPriceMem >$< E.param (E.nullable E.float8)
     , epochParamPriceStep >$< E.param (E.nullable E.float8)
     , epochParamMaxTxExMem >$< maybeDbWord64Encoder
@@ -279,7 +282,7 @@ epochParamEncoder =
     , epochParamMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , epochParamBlockId >$< idEncoder getBlockId
     , epochParamExtraEntropy >$< E.param (E.nullable E.bytea)
-    , epochParamCoinsPerUtxoSize >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8) -- moved from position 19 to 31
+    , epochParamCoinsPerUtxoSize >$< maybeDbLovelaceEncoder
     , epochParamPvtMotionNoConfidence >$< E.param (E.nullable E.float8)
     , epochParamPvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , epochParamPvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
@@ -300,7 +303,7 @@ epochParamEncoder =
     , epochParamGovActionDeposit >$< maybeDbWord64Encoder
     , epochParamDrepDeposit >$< maybeDbWord64Encoder
     , epochParamDrepActivity >$< maybeDbWord64Encoder
-    , epochParamPvtppSecurityGroup >$< E.param (E.nullable E.float8) -- moved from position 36 to 52
+    , epochParamPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , epochParamMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
     ]
 
@@ -434,9 +437,7 @@ data AdaPots = AdaPots
   deriving (Show, Eq, Generic)
 
 type instance Key AdaPots = AdaPotsId
-
-instance DbInfo AdaPots where
-  uniqueFields _ = ["block_id"]
+instance DbInfo AdaPots
 
 entityAdaPotsDecoder :: D.Row (Entity AdaPots)
 entityAdaPotsDecoder =

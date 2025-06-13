@@ -19,7 +19,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertReplace)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
-import Cardano.Db.Statement.Function.Query (countAll, replace, selectByField)
+import Cardano.Db.Statement.Function.Query (countAll, replace, selectByFieldFirst)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (DbAction (..), DbLovelace (..))
 import Data.WideWord (Word128 (..))
@@ -77,7 +77,7 @@ insertAdaPots adaPots =
 
 -- AdaPots query statement
 queryAdaPotsIdStmt :: HsqlStmt.Statement Id.BlockId (Maybe (Entity SEnP.AdaPots))
-queryAdaPotsIdStmt = selectByField "block_id" (Id.idEncoder Id.getBlockId) SEnP.entityAdaPotsDecoder
+queryAdaPotsIdStmt = selectByFieldFirst "block_id" (Id.idEncoder Id.getBlockId) SEnP.entityAdaPotsDecoder
 
 -- AdaPots query function
 queryAdaPotsId :: MonadIO m => Id.BlockId -> DbAction m (Maybe (Entity SEnP.AdaPots))
@@ -122,7 +122,7 @@ replaceAdaPots blockId adapots = do
 --------------------------------------------------------------------------------
 insertEpochStmt :: HsqlStmt.Statement SEnP.Epoch Id.EpochId
 insertEpochStmt =
-  insert
+  insertCheckUnique
     SEnP.epochEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.EpochId)
 

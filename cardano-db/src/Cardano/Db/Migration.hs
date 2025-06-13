@@ -103,19 +103,19 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = 
   ranAll <- case (mLogfiledir, allScripts) of
     (_, []) ->
       error $ "Empty schema dir " ++ show migrationDir
-    (Nothing, schema : scripts) -> do
+    (Nothing, scripts) -> do
+      -- Remove the pattern match that separates first script
       putStrLn "Running:"
-      applyMigration' Nothing stdout schema
-      (scripts', ranAll) <- filterMigrations scripts
+      (scripts', ranAll) <- filterMigrations scripts -- Filter ALL scripts including first
       forM_ scripts' $ applyMigration' Nothing stdout
       putStrLn "Success!"
       pure ranAll
-    (Just logfiledir, schema : scripts) -> do
+    (Just logfiledir, scripts) -> do
+      -- Remove the pattern match here too
       logFilename <- genLogFilename logfiledir
       withFile logFilename AppendMode $ \logHandle -> do
         unless quiet $ putStrLn "Running:"
-        applyMigration' (Just logFilename) logHandle schema
-        (scripts', ranAll) <- filterMigrations scripts
+        (scripts', ranAll) <- filterMigrations scripts -- Filter ALL scripts including first
         forM_ scripts' $ applyMigration' (Just logFilename) logHandle
         unless quiet $ putStrLn "Success!"
         pure ranAll
@@ -212,7 +212,7 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
       exitFailure
 
 -- | Create a database migration.
--- NOTE: This functionality will need to be reimplemented without Persistent.
+-- TODO: Cmdv - This functionality will need to be reimplemented without Persistent.
 -- For now, this serves as a placeholder.
 createMigration :: PGPassSource -> MigrationDir -> TxOutVariantType -> IO (Maybe FilePath)
 createMigration _source (MigrationDir _migdir) _txOutVariantType = do

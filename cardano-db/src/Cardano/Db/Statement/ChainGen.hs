@@ -25,12 +25,13 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Query (countAll, countWhere, parameterisedCountWhere)
-import Cardano.Db.Statement.Types (DbInfo (..), tableName)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), tableName)
 import Cardano.Db.Types (Ada, DbAction (..), RewardSource, rewardSourceDecoder, word64ToAda)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.List.NonEmpty as NE
+import Data.Scientific (toBoundedInteger)
 import qualified Data.Text as Text
-import Prelude hiding (length, show)
+import Prelude hiding (length, show, (.))
 
 queryCheckMigrationsStmt :: HsqlStmt.Statement () Int32
 queryCheckMigrationsStmt =
@@ -43,7 +44,7 @@ queryCheckMigrations =
 
 -------------------------------------------------------------------------------------------------
 
-queryEpochParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe SCE.EpochParam)
+queryEpochParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryEpochParamWithEpochNoStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
@@ -59,17 +60,19 @@ queryEpochParamWithEpochNoStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowMaybe SCE.epochParamDecoder
+    decoder = HsqlD.rowMaybe SCE.entityEpochParamDecoder
 
 -- | Query protocol parameters from @EpochParam@ by epoch number.
 queryEpochParamWithEpochNo :: MonadIO m => Word64 -> DbAction m (Maybe SCE.EpochParam)
-queryEpochParamWithEpochNo epochNo =
-  runDbSession (mkDbCallStack "queryEpochParamWithEpochNo") $
-    HsqlSes.statement epochNo queryEpochParamWithEpochNoStmt
+queryEpochParamWithEpochNo epochNo = do
+  result <-
+    runDbSession (mkDbCallStack "queryEpochParamWithEpochNo") $
+      HsqlSes.statement epochNo queryEpochParamWithEpochNoStmt
+  pure $ entityVal <$> result
 
 ------------------------------------------------------------------------------------------------
 
-queryParamProposalWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe SGV.ParamProposal)
+queryParamProposalWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SGV.ParamProposal))
 queryParamProposalWithEpochNoStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
@@ -85,17 +88,19 @@ queryParamProposalWithEpochNoStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowMaybe SGV.paramProposalDecoder
+    decoder = HsqlD.rowMaybe SGV.entityParamProposalDecoder
 
 -- | Query protocol parameter proposals from @ParamProposal@ by epoch number.
 queryParamProposalWithEpochNo :: MonadIO m => Word64 -> DbAction m (Maybe SGV.ParamProposal)
-queryParamProposalWithEpochNo epochNo =
-  runDbSession (mkDbCallStack "queryParamProposalWithEpochNo") $
-    HsqlSes.statement epochNo queryParamProposalWithEpochNoStmt
+queryParamProposalWithEpochNo epochNo = do
+  result <-
+    runDbSession (mkDbCallStack "queryParamProposalWithEpochNo") $
+      HsqlSes.statement epochNo queryParamProposalWithEpochNoStmt
+  pure $ entityVal <$> result
 
 ------------------------------------------------------------------------------------------------
 
-queryParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe SCE.EpochParam)
+queryParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryParamWithEpochNoStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
@@ -111,12 +116,14 @@ queryParamWithEpochNoStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowMaybe SCE.epochParamDecoder
+    decoder = HsqlD.rowMaybe SCE.entityEpochParamDecoder
 
 queryParamWithEpochNo :: MonadIO m => Word64 -> DbAction m (Maybe SCE.EpochParam)
-queryParamWithEpochNo epochNo =
-  runDbSession (mkDbCallStack "queryParamWithEpochNo") $
-    HsqlSes.statement epochNo queryParamWithEpochNoStmt
+queryParamWithEpochNo epochNo = do
+  result <-
+    runDbSession (mkDbCallStack "queryParamWithEpochNo") $
+      HsqlSes.statement epochNo queryParamWithEpochNoStmt
+  pure $ entityVal <$> result
 
 ------------------------------------------------------------------------------------------------
 
@@ -300,7 +307,7 @@ queryRewardRestsStmt =
 
     decoder = HsqlD.rowList $ do
       rewardType <- HsqlD.column (HsqlD.nonNullable rewardSourceDecoder)
-      amount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      amount <- HsqlD.column (HsqlD.nonNullable (fromMaybe 0 . toBoundedInteger <$> HsqlD.numeric))
       pure (rewardType, amount)
 
 queryRewardRests :: MonadIO m => DbAction m [(RewardSource, Word64)]
@@ -343,9 +350,9 @@ queryVoteCountsStmt =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "SELECT "
-          , "  COUNT(CASE WHEN vote.vote = 'VoteYes' THEN 1 END)::bigint,"
-          , "  COUNT(CASE WHEN vote.vote = 'VoteNo' THEN 1 END)::bigint,"
-          , "  COUNT(CASE WHEN vote.vote = 'VoteAbstain' THEN 1 END)::bigint"
+          , "  COUNT(CASE WHEN vote.vote = 'Yes' THEN 1 END)::bigint," -- Changed from 'VoteYes'
+          , "  COUNT(CASE WHEN vote.vote = 'No' THEN 1 END)::bigint," -- Changed from 'VoteNo'
+          , "  COUNT(CASE WHEN vote.vote = 'Abstain' THEN 1 END)::bigint" -- Changed from 'VoteAbstain'
           , " FROM " <> votingProcedureTableN <> " vote"
           , " INNER JOIN " <> txTableN <> " tx ON vote.tx_id = tx.id"
           , " WHERE tx.hash = $1 AND vote.index = $2"

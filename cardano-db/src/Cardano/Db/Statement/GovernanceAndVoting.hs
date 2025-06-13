@@ -21,7 +21,7 @@ import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
-import Cardano.Db.Statement.Function.Insert (insert)
+import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (existsById)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
@@ -78,7 +78,7 @@ queryProposalCommittee mgapId =
 -- | Insert
 insertCommitteeHashStmt :: HsqlStmt.Statement SGV.CommitteeHash Id.CommitteeHashId
 insertCommitteeHashStmt =
-  insert
+  insertCheckUnique
     SGV.committeeHashEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CommitteeHashId)
 
@@ -206,7 +206,7 @@ insertDelegationVote delegationVote = do
 -- | INSERT
 insertDrepHashStmt :: HsqlStmt.Statement SGV.DrepHash Id.DrepHashId
 insertDrepHashStmt =
-  insert
+  insertCheckUnique
     SGV.drepHashEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DrepHashId)
 
@@ -350,17 +350,15 @@ insertGovActionProposal govActionProposal = do
 
 -- Statement for updateGovActionState
 updateGovActionStateStmt ::
-  -- | Column name to update
   Text.Text ->
-  -- | Whether to return affected rows count
   ResultType Int64 r ->
   HsqlStmt.Statement (Id.GovActionProposalId, Int64) r
 updateGovActionStateStmt columnName resultType =
   HsqlStmt.Statement sql encoder decoder True
   where
-    (decoder, returnClause) = case resultType of
-      NoResult -> (HsqlD.noResult, "")
-      WithResult dec -> (dec, " RETURNING xmax != 0 AS changed")
+    decoder = case resultType of
+      NoResult -> HsqlD.noResult
+      WithResult _ -> HsqlD.rowsAffected
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
@@ -371,7 +369,6 @@ updateGovActionStateStmt columnName resultType =
           , " WHERE id = $1 AND "
           , columnName
           , " IS NULL"
-          , returnClause
           ]
     encoder =
       mconcat
@@ -468,6 +465,8 @@ setNullDropped :: MonadIO m => Word64 -> DbAction m Int64
 setNullDropped eNo =
   runDbSession (mkDbCallStack "setNullDropped") $
     HsqlSes.statement (fromIntegral eNo) setNullDroppedStmt
+
+--------------------------------------------------------------------------------
 
 queryGovActionProposalIdStmt :: HsqlStmt.Statement (Id.TxId, Word64) (Maybe Id.GovActionProposalId)
 queryGovActionProposalIdStmt =
@@ -567,7 +566,7 @@ insertBulkTreasuryWithdrawal treasuryWithdrawals = do
 -- | INSERT
 insertVotingAnchorStmt :: HsqlStmt.Statement SGV.VotingAnchor Id.VotingAnchorId
 insertVotingAnchorStmt =
-  insert
+  insertCheckUnique
     SGV.votingAnchorEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.VotingAnchorId)
 

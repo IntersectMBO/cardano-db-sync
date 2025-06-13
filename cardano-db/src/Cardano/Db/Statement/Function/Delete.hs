@@ -68,7 +68,7 @@ parameterisedDeleteWhere colName condition encoder =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "DELETE FROM " <> tableName (Proxy @a)
-          , " WHERE " <> validCol <> " " <> condition
+          , " WHERE " <> validCol <> " " <> condition <> " $1"
           ]
 
 -- | Creates a statement to delete rows and return the count of deleted rows

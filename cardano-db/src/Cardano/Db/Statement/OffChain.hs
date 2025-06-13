@@ -584,7 +584,7 @@ insertBulkOffChainVoteExternalUpdatesStmt =
 --------------------------------------------------------------------------------
 insertOffChainVoteFetchErrorStmt :: HsqlStmt.Statement SO.OffChainVoteFetchError ()
 insertOffChainVoteFetchErrorStmt =
-  insert
+  insertCheckUnique
     SO.offChainVoteFetchErrorEncoder
     NoResult
 
