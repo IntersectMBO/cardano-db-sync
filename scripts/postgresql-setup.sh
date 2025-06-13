@@ -192,6 +192,7 @@ function restore_snapshot {
 	tar xvf "$1" --directory "$tmp_dir"
 	if test -d "${tmp_dir}/db/" ; then
 	  # New pg_dump format
+	  lstate_gz_file=$(find "${tmp_dir}/" -iname "*.lstate.gz")
 	  if [ -n "${lstate_gz_file:-}" ] ; then
 	    lstate_file=$(basename "${lstate_gz_file}" | sed 's/.gz$//')
 	    gunzip --to-stdout "${lstate_gz_file}" > "$2/${lstate_file}"
