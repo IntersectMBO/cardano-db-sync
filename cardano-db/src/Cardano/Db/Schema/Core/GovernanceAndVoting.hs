@@ -133,7 +133,8 @@ entityDrepRegistrationEncoder =
 drepRegistrationEncoder :: E.Params DrepRegistration
 drepRegistrationEncoder =
   mconcat
-    [ drepRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    [ drepRegistrationTxId >$< Id.idEncoder Id.getTxId
+    , drepRegistrationCertIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , drepRegistrationDeposit >$< E.param (E.nullable E.int8)
     , drepRegistrationDrepHashId >$< Id.idEncoder Id.getDrepHashId
     , drepRegistrationVotingAnchorId >$< Id.maybeIdEncoder Id.getVotingAnchorId
@@ -273,6 +274,7 @@ type instance Key GovActionProposal = Id.GovActionProposalId
 
 instance DbInfo GovActionProposal where
   jsonbFields _ = ["description"]
+  enumFields _ = [("type", "govactiontype")]
 
 entityGovActionProposalDecoder :: D.Row (Entity GovActionProposal)
 entityGovActionProposalDecoder =
@@ -343,7 +345,9 @@ data VotingProcedure = VotingProcedure
   deriving (Eq, Show, Generic)
 
 type instance Key VotingProcedure = Id.VotingProcedureId
-instance DbInfo VotingProcedure
+
+instance DbInfo VotingProcedure where
+  enumFields _ = [("voter_role", "voterrole"), ("vote", "vote")]
 
 entityVotingProcedureDecoder :: D.Row (Entity VotingProcedure)
 entityVotingProcedureDecoder =

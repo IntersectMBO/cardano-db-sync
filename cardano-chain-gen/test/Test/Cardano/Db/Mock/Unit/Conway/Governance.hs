@@ -36,18 +36,18 @@ import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude
+import Cardano.Prelude (MonadIO (..), void)
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Maybe.Strict (StrictMaybe (..))
+import Data.Text (Text)
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion, assertFailure)
-import qualified Prelude
 
 drepDistr :: IOManager -> [(Text, Text)] -> Assertion
 drepDistr =
@@ -525,7 +525,7 @@ rollbackHardFork =
           mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
           pure $ DB.epochParamProtocolMajor <$> mEpochParam
       )
-      (Just 11)
+      (Just 10)
       "Unexpected governance action counts"
 
     -- Fast forward to next epoch

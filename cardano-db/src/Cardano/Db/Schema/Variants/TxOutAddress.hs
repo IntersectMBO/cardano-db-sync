@@ -44,7 +44,7 @@ instance DbInfo TxOutAddress where
     [ ("tx_id", "bigint[]")
     , ("index", "bigint[]")
     , ("stake_address_id", "bigint[]")
-    , ("value", "bigint[]")
+    , ("value", "numeric[]")
     , ("data_hash", "bytea[]")
     , ("inline_datum_id", "bigint[]")
     , ("reference_script_id", "bigint[]")

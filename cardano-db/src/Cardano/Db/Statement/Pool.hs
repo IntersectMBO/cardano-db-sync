@@ -17,7 +17,7 @@ import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
-import Cardano.Db.Statement.Function.Insert (insert, insertIfUnique)
+import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertIfUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (existsById, existsWhereByColumn)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
@@ -28,7 +28,7 @@ import Cardano.Db.Types (CertNo (..), DbAction, DbWord64, PoolCert (..), PoolCer
 --------------------------------------------------------------------------------
 insertDelistedPoolStmt :: HsqlStmt.Statement SCP.DelistedPool Id.DelistedPoolId
 insertDelistedPoolStmt =
-  insert
+  insertCheckUnique
     SCP.delistedPoolEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DelistedPoolId)
 
@@ -104,7 +104,7 @@ deleteDelistedPool poolHash =
 --------------------------------------------------------------------------------
 insertPoolHashStmt :: HsqlStmt.Statement SCP.PoolHash Id.PoolHashId
 insertPoolHashStmt =
-  insert
+  insertCheckUnique
     SCP.poolHashEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.PoolHashId)
 

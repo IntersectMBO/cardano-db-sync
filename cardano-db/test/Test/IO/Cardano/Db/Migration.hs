@@ -21,6 +21,7 @@ import Cardano.Db (
   runOrThrowIODb,
   validateMigrations,
  )
+import qualified Cardano.Db as DB
 import Control.Monad (unless, when)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
@@ -132,6 +133,8 @@ migrationTest :: IO ()
 migrationTest = do
   let schemaDir = MigrationDir "../schema"
   pgConfig <- runOrThrowIODb readPGPassDefault
+  -- Recreate database to ensure clean state for migration testing
+  DB.recreateDB (DB.PGPassCached pgConfig)
   _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial TxOutVariantAddress
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion

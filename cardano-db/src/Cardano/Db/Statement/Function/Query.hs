@@ -11,7 +11,7 @@
 
 module Cardano.Db.Statement.Function.Query where
 
-import Cardano.Prelude (MonadIO, Proxy (..), Word64, fromMaybe)
+import Cardano.Prelude (MonadIO, Proxy (..), Word64, fromMaybe, listToMaybe)
 import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
@@ -72,6 +72,25 @@ selectByField fieldName paramEncoder entityDecoder =
     )
     paramEncoder -- Direct use of paramEncoder
     (HsqlD.rowMaybe entityDecoder)
+    True
+
+selectByFieldFirst ::
+  forall a b.
+  (DbInfo a) =>
+  Text.Text -> -- Field name
+  HsqlE.Params b -> -- Parameter encoder
+  HsqlD.Row (Entity a) -> -- Entity decoder
+  HsqlStmt.Statement b (Maybe (Entity a))
+selectByFieldFirst fieldName paramEncoder entityDecoder =
+  HsqlStmt.Statement
+    ( TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT * FROM " <> tableName (Proxy @a)
+          , " WHERE " <> fieldName <> " = $1"
+          ]
+    )
+    paramEncoder
+    (listToMaybe <$> HsqlD.rowList entityDecoder)
     True
 
 -- | Checks if a record with a specific ID exists in a table.

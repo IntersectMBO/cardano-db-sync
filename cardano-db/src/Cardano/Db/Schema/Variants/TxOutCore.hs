@@ -61,7 +61,7 @@ instance DbInfo TxOutCore where
     , ("address_has_script", "boolean[]")
     , ("payment_cred", "bytea[]")
     , ("stake_address_id", "bigint[]")
-    , ("value", "bigint[]")
+    , ("value", "numeric[]")
     , ("data_hash", "bytea[]")
     , ("inline_datum_id", "bigint[]")
     , ("reference_script_id", "bigint[]")
