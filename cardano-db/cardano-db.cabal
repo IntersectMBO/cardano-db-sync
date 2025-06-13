@@ -41,7 +41,6 @@ library
                         Cardano.Db.Migration
                         Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
-                        Cardano.Db.Operations.QueryHelper
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
                         Cardano.Db.Schema.Core.Base
