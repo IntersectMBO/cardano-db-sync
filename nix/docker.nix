@@ -9,7 +9,7 @@
 
 , bashInteractive, cacert, cardano-cli, cardano-db-sync, cardano-db-tool
 , cardano-smash-server, coreutils, curl, findutils, getconf, glibcLocales
-, gnused, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn, libpqxx
+, gnused, gnutar, gzip, jq, iana-etc, iproute2, iputils, lib, libidn, libpqxx
 , postgresql_17, socat, utillinux
 }:
 
@@ -45,7 +45,7 @@ let
         gzip # Gnuzip
         jq # JSON processor
         iana-etc # IANA protocol and port number assignments
-        iproute # Utilities for controlling TCP/IP networking
+        iproute2 # Utilities for controlling TCP/IP networking
         iputils # Useful utilities for Linux networking
         libidn # Library for internationalized domain names
         libpqxx # A C++ library to access PostgreSQL databases
