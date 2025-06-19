@@ -71,9 +71,6 @@ entrypoint. Possible values are:
  * mainnet
  * preprod
  * preview
- * private
- * sanchonet
- * shelley_qa
 
 #### `POSTGRES_HOST` (required)
 
@@ -202,9 +199,6 @@ entrypoint. Possible values are:
  * mainnet
  * preprod
  * preview
- * private
- * sanchonet
- * shelley_qa
 
 #### `POSTGRES_HOST` (required)
 
