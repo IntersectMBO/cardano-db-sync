@@ -113,9 +113,9 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
       isTxOutAddressSet = isTxOutAddressPreviouslySet migrationValues
 
   -- can only run "use_address_table" on a non populated database but don't throw if the migration was previously set
-  when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
-    throw $
-      DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
+  -- when (isTxOutVariant && not isTxOutNull && not isTxOutAddressSet) $
+  --   throw $
+  --     DBExtraMigration "runExtraMigrations: The use of the config 'tx_out.use_address_table' can only be caried out on a non populated database."
   -- Make sure the config "use_address_table" is there if the migration wasn't previously set in the past
   when (not isTxOutVariant && isTxOutAddressSet) $
     throw $
@@ -123,6 +123,8 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
   -- Has the user given txout address config && the migration wasn't previously set
   when (isTxOutVariant && not isTxOutAddressSet) $ do
     updateTxOutAndCreateAddress trce
+    -- only run the address migration if the tx_out table is not null
+    unless isTxOutNull $ performAddressMigration trce
     insertExtraMigration TxOutAddressPreviouslySet
   -- first check if pruneTxOut flag is missing and it has previously been used
   when (isPruneTxOutPreviouslySet migrationValues && not (pcmPruneTxOut pcm)) $
@@ -433,10 +435,6 @@ updateTxOutAndCreateAddress trc = do
   liftIO $ logInfo trc "updateTxOutAndCreateAddress: Altered collateral_tx_out"
   handle exceptHandler $ rawExecute createAddressTableQuery []
   liftIO $ logInfo trc "updateTxOutAndCreateAddress: Created address table"
-  handle exceptHandler $ rawExecute createIndexPaymentCredQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Created index payment_cred"
-  handle exceptHandler $ rawExecute createIndexRawQuery []
-  liftIO $ logInfo trc "updateTxOutAndCreateAddress: Created index raw"
   liftIO $ logInfo trc "updateTxOutAndCreateAddress: Completed"
   where
     dropViewsQuery =
@@ -448,7 +446,104 @@ updateTxOutAndCreateAddress trc = do
     alterTxOutQuery =
       Text.unlines
         [ "ALTER TABLE \"tx_out\""
-        , "  ADD COLUMN \"address_id\" INT8 NOT NULL,"
+        , "  ADD COLUMN \"address_id\" INT8"
+        ]
+
+    alterCollateralTxOutQuery =
+      Text.unlines
+        [ "ALTER TABLE \"collateral_tx_out\""
+        , "  ADD COLUMN \"address_id\" INT8"
+        ]
+
+    createAddressTableQuery =
+      Text.unlines
+        [ "CREATE TABLE \"address\" ("
+        , "  \"id\" SERIAL8 PRIMARY KEY UNIQUE,"
+        , "  \"address\" VARCHAR NOT NULL,"
+        , "  \"raw\" BYTEA NULL,"
+        , "  \"has_script\" BOOLEAN NOT NULL,"
+        , "  \"payment_cred\" hash28type NULL,"
+        , "  \"stake_address_id\" INT8 NULL"
+        , ")"
+        ]
+
+    exceptHandler :: SqlError -> ReaderT SqlBackend m a
+    exceptHandler e =
+      liftIO $ throwIO (DBCreateAddress $ show e)
+
+performAddressMigration ::
+  forall m.
+  ( MonadBaseControl IO m
+  , MonadIO m
+  ) =>
+  Trace IO Text ->
+  ReaderT SqlBackend m ()
+performAddressMigration trc = do
+  handle exceptHandler $ rawExecute populateAddressFromTxOutQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Populated address table from tx_out"
+  handle exceptHandler $ rawExecute populateAddressFromCollateralTxOutQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Populated address table from collateral_tx_out"
+  handle exceptHandler $ rawExecute updateTxOutAddressIdQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Updated address_id in tx_out"
+  handle exceptHandler $ rawExecute updateCollateralTxOutAddressIdQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Updated address_id in collateral_tx_out"
+  handle exceptHandler $ rawExecute alterTxOutQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Altered tx_out"
+  handle exceptHandler $ rawExecute alterCollateralTxOutQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Altered collateral_tx_out"
+  handle exceptHandler $ rawExecute createIndexPaymentCredQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Created index payment_cred"
+  handle exceptHandler $ rawExecute createIndexRawQuery []
+  liftIO $ logInfo trc "migrateTxOutAddress: Created index raw"
+  liftIO $ logInfo trc "migrateTxOutAddress: Completed"
+  where
+    populateAddressFromTxOutQuery =
+      Text.unlines
+        [ "INSERT INTO address (address, has_script, payment_cred, stake_address_id)"
+        , "SELECT DISTINCT address, address_has_script, payment_cred, stake_address_id"
+        , "FROM tx_out"
+        ]
+
+    populateAddressFromCollateralTxOutQuery =
+      Text.unlines
+        [ "INSERT INTO address (address, has_script, payment_cred, stake_address_id)"
+        , "SELECT DISTINCT c.address, c.address_has_script, c.payment_cred, c.stake_address_id"
+        , "FROM collateral_tx_out c"
+        , "WHERE NOT EXISTS ("
+        , "  SELECT 1 FROM address a"
+        , "  WHERE a.address = c.address"
+        , "    AND a.has_script = c.address_has_script"
+        , "    AND a.payment_cred = c.payment_cred"
+        , "    AND a.stake_address_id = c.stake_address_id"
+        , ")"
+        ]
+
+    updateTxOutAddressIdQuery =
+      Text.unlines
+        [ "UPDATE tx_out"
+        , "SET address_id = a.id"
+        , "FROM address a"
+        , "WHERE tx_out.address = a.address"
+        , "  AND tx_out.address_has_script = a.has_script"
+        , "  AND COALESCE(tx_out.payment_cred, '') = COALESCE(a.payment_cred, '')"
+        , "  AND COALESCE(tx_out.stake_address_id, -1) = COALESCE(a.stake_address_id, -1)"
+        ]
+
+    updateCollateralTxOutAddressIdQuery =
+      Text.unlines
+        [ "UPDATE collateral_tx_out"
+        , "SET address_id = a.id"
+        , "FROM address a"
+        , "WHERE collateral_tx_out.address = a.address"
+        , "  AND collateral_tx_out.address_has_script = a.has_script"
+        , "  AND COALESCE(collateral_tx_out.payment_cred, '') = COALESCE(a.payment_cred, '')"
+        , "  AND COALESCE(collateral_tx_out.stake_address_id, -1) = COALESCE(a.stake_address_id, -1)"
+        ]
+
+    alterTxOutQuery =
+      Text.unlines
+        [ "ALTER TABLE \"tx_out\""
+        , "  ALTER COLUMN \"address_id\" SET NOT NULL,"
         , "  DROP COLUMN \"address\","
         , "  DROP COLUMN \"address_has_script\","
         , "  DROP COLUMN \"payment_cred\""
@@ -457,22 +552,10 @@ updateTxOutAndCreateAddress trc = do
     alterCollateralTxOutQuery =
       Text.unlines
         [ "ALTER TABLE \"collateral_tx_out\""
-        , "  ADD COLUMN \"address_id\" INT8 NOT NULL,"
+        , "  ALTER COLUMN \"address_id\" SET NOT NULL,"
         , "  DROP COLUMN \"address\","
         , "  DROP COLUMN \"address_has_script\","
         , "  DROP COLUMN \"payment_cred\""
-        ]
-
-    createAddressTableQuery =
-      Text.unlines
-        [ "CREATE TABLE \"address\" ("
-        , "  \"id\" SERIAL8 PRIMARY KEY UNIQUE,"
-        , "  \"address\" VARCHAR NOT NULL,"
-        , "  \"raw\" BYTEA NOT NULL,"
-        , "  \"has_script\" BOOLEAN NOT NULL,"
-        , "  \"payment_cred\" hash28type NULL,"
-        , "  \"stake_address_id\" INT8 NULL"
-        , ")"
         ]
 
     createIndexPaymentCredQuery =
@@ -483,7 +566,7 @@ updateTxOutAndCreateAddress trc = do
 
     exceptHandler :: SqlError -> ReaderT SqlBackend m a
     exceptHandler e =
-      liftIO $ throwIO (DBPruneConsumed $ show e)
+      liftIO $ throwIO (DBAddressMigration $ show e)
 
 --------------------------------------------------------------------------------------------------
 -- Delete
