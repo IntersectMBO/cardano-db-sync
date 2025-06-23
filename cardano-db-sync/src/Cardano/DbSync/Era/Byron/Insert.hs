@@ -8,7 +8,7 @@
 
 module Cardano.DbSync.Era.Byron.Insert (
   insertByronBlock,
-  resolveTxInputs,
+  resolveTxInputsByron,
 )
 where
 
@@ -49,6 +49,23 @@ data ValueFee = ValueFee
   , vfFee :: !DbLovelace
   }
 
+-- insertByronBlock ::
+--   (MonadIO m) =>
+--   SyncEnv ->
+--   Bool ->
+--   ByronBlock ->
+--   SlotDetails ->
+--   DB.DbAction m ()
+-- insertByronBlock syncEnv blk blockNo details = do
+--   liftIO $ logInfo (getTrace syncEnv) $ "insertByronBlock: Starting block processing for block " <> textShow blockNo
+--   case blk of
+--     Byron.ABOBBoundary abobBoundary -> do
+--       liftIO $ logInfo (getTrace syncEnv) "insertByronBlock: Processing boundary block"
+--       insertABOBBoundary syncEnv abobBoundary details
+--     Byron.ABOBBlock blk' -> do
+--       liftIO $ logInfo (getTrace syncEnv) $ "insertByronBlock: Processing regular block with " <> textShow (length (Byron.blockPayload blk')) <> " transactions"
+--       insertABlock syncEnv firstBlockOfEpoch blk' details
+
 insertByronBlock ::
   (MonadIO m) =>
   SyncEnv ->
@@ -57,13 +74,9 @@ insertByronBlock ::
   SlotDetails ->
   DB.DbAction m ()
 insertByronBlock syncEnv firstBlockOfEpoch blk details = do
-  res <- case byronBlockRaw blk of
+  case byronBlockRaw blk of
     Byron.ABOBBlock ablk -> insertABlock syncEnv firstBlockOfEpoch ablk details
     Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
-  -- Serializing things during syncing can drastically slow down full sync
-  -- times (ie 10x or more).
-  -- TODO: CMDV - need to look if I can change the insert logic using hasql
-  pure res
 
 insertABOBBoundary ::
   (MonadIO m) =>
@@ -266,6 +279,7 @@ insertByronTx syncEnv blkId tx blockIndex = do
   where
     iopts = getInsertOptions syncEnv
 
+
 insertByronTx' ::
   (MonadIO m) =>
   SyncEnv ->
@@ -274,10 +288,15 @@ insertByronTx' ::
   Word64 ->
   DB.DbAction m Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
-  resolvedInputs <- mapM (resolveTxInputs txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
+  -- Resolve all transaction inputs - any failure will throw via MonadError
+  resolvedInputs <- mapM (resolveTxInputsByron txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
+
+  -- Calculate transaction fee
   valFee <- case calculateTxFee (Byron.taTx tx) resolvedInputs of
     Left err -> throwError $ DB.DbError (DB.mkDbCallStack "insertByronTx'") (show (annotateTx err)) Nothing
     Right vf -> pure vf
+
+  -- Insert the transaction record
   txId <-
     DB.insertTx $
       DB.Tx
@@ -297,6 +316,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
         , DB.txTreasuryDonation = DbLovelace 0
         }
 
+  -- Insert CBOR if enabled
   when (ioTxCBOR iopts) $ do
     void $
       DB.insertTxCbor $
@@ -309,11 +329,16 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- references the output (not sure this can even happen).
   disInOut <- liftIO $ getDisableInOutState syncEnv
   zipWithM_ (insertTxOutByron syncEnv (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
+
+  -- Insert transaction inputs (only if we have resolved inputs and TxIn is not disabled)
   unless (getSkipTxIn syncEnv) $
     mapM_ (insertTxIn tracer txId) resolvedInputs
+
+  -- Update consumed TxOut records if enabled
   whenConsumeOrPruneTxOut syncEnv $
     DB.updateListTxOutConsumedByTxId (prepUpdate txId <$> resolvedInputs)
-  -- fees are being returned so we can sum them and put them in cache to use when updating epochs
+
+  -- Return fee amount for caching/epoch calculations
   pure $ unDbLovelace $ vfFee valFee
   where
     txOutVariantType = getTxOutVariantType syncEnv
@@ -410,12 +435,12 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) =
 
 -------------------------------------------------------------------------------
 
-resolveTxInputs :: (MonadIO m) => DB.TxOutVariantType -> Byron.TxIn -> DB.DbAction m (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
-resolveTxInputs txOutVariantType txIn@(Byron.TxInUtxo txHash index) = do
+resolveTxInputsByron :: (MonadIO m) => DB.TxOutVariantType -> Byron.TxIn -> DB.DbAction m (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
+resolveTxInputsByron txOutVariantType txIn@(Byron.TxInUtxo txHash index) = do
   result <- DB.queryTxOutIdValueEither txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
   case result of
     Right res -> pure $ convert res
-    Left err -> throwError err
+    Left dbErr -> throwError dbErr  -- Use MonadError instead of Either
   where
     convert :: (DB.TxId, DB.TxOutIdW, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
     convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)

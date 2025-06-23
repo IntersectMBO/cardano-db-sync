@@ -6,28 +6,32 @@
 module Cardano.DbSync.Rollback (
   prepareRollback,
   rollbackFromBlockNo,
+  rollbackLedger,
   unsafeRollback,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
-import qualified Cardano.Db as DB
-import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..))
-import Cardano.DbSync.Cache
-import Cardano.DbSync.DbEvent (liftDbIO)
-import Cardano.DbSync.Error
-import Cardano.DbSync.Types
-import Cardano.DbSync.Util
-import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import Cardano.Prelude
-import Control.Monad.Extra (whenJust)
 import qualified Data.ByteString.Short as SBS
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
+import Ouroboros.Consensus.Ledger.Extended
+import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 
--- Rollbacks are done in an Era generic way based on the 'Point' we are
--- rolling back to.
+import Control.Monad.Extra (whenJust)
+import Cardano.BM.Trace (Trace, logInfo, logWarning)
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (SyncEnv (..), LedgerEnv (..))
+import Cardano.DbSync.Cache
+import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO)
+import Cardano.DbSync.Ledger.State
+import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
+import Cardano.DbSync.Types
+import Cardano.DbSync.Util
+import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
+
 rollbackFromBlockNo ::
   MonadIO m =>
   SyncEnv ->
@@ -36,15 +40,14 @@ rollbackFromBlockNo ::
 rollbackFromBlockNo syncEnv blkNo = do
   nBlocks <- DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- DB.queryBlockNoAndEpoch (unBlockNo blkNo)
+  -- Use whenJust like the original - silently skip if block not found
   whenJust mres $ \(blockId, epochNo) -> do
-    liftIO
-      . logInfo trce
-      $ mconcat
-        [ "Deleting "
-        , textShow nBlocks
-        , " numbered equal to or greater than "
-        , textShow blkNo
-        ]
+    liftIO . logInfo trce $ mconcat
+      [ "Deleting "
+      , textShow nBlocks
+      , " numbered equal to or greater than "
+      , textShow blkNo
+      ]
 
     deletedBlockCount <- DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
     when (deletedBlockCount > 0) $ do
@@ -54,54 +57,79 @@ rollbackFromBlockNo syncEnv blkNo = do
       addConstraintsIfNotExist syncEnv trce
 
     rollbackCache cache blockId
-
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace syncEnv
     cache = envCache syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
 
-prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> ExceptT SyncNodeError IO Bool
-prepareRollback syncEnv point serverTip =
-  liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) action
+-- Also fix the error type in prepareRollback
+prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
+prepareRollback syncEnv point serverTip = do
+  DB.runDbIohkNoLogging (envDbEnv syncEnv) $ runExceptT action
   where
     trce = getTrace syncEnv
 
-    action :: MonadIO m => DB.DbAction m Bool
+    action :: MonadIO m => ExceptT SyncNodeError (DB.DbAction m) Bool
     action = do
       case getPoint point of
         Origin -> do
-          nBlocks <- DB.queryCountSlotNo
+          nBlocks <- lift DB.queryCountSlotNo
           if nBlocks == 0
             then do
               liftIO . logInfo trce $ "Starting from Genesis"
+              pure True
             else do
-              liftIO
-                . logInfo trce
-                $ mconcat
-                  [ "Delaying delete of "
-                  , textShow nBlocks
-                  , " while rolling back to genesis."
-                  , " Applying blocks until a new block is found."
-                  , " The node is currently at "
-                  , textShow serverTip
-                  ]
+              liftIO . logInfo trce $ mconcat
+                [ "Delaying delete of "
+                , textShow nBlocks
+                , " while rolling back to genesis."
+                , " Applying blocks until a new block is found."
+                , " The node is currently at "
+                , textShow serverTip
+                ]
+              pure False
         At blk -> do
-          nBlocks <- DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
-          mBlockNo <- DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
-          liftIO
-            . logInfo trce
-            $ mconcat
-              [ "Delaying delete of "
-              , textShow nBlocks
-              , " blocks after "
-              , textShow mBlockNo
-              , " while rolling back to ("
-              , renderPoint point
-              , "). Applying blocks until a new block is found. The node is currently at "
-              , textShow serverTip
-              ]
-      pure False
+          nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
+          mBlockNo <- lift $ DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+          case mBlockNo of
+            Nothing -> throwError $ SNErrRollback "Rollback.prepareRollback: queryBlockHashBlockNo: Block hash not found"
+            Just blockN -> do
+              liftIO . logInfo trce $ mconcat
+                [ "Delaying delete of "
+                , textShow nBlocks
+                , " blocks after "
+                , textShow blockN
+                , " while rolling back to ("
+                , renderPoint point
+                , "). Applying blocks until a new block is found. The node is currently at "
+                , textShow serverTip
+                ]
+              pure False
+
+rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
+rollbackLedger syncEnv point =
+  case envLedgerEnv syncEnv of
+    HasLedger hle -> do
+      mst <- loadLedgerAtPoint hle point
+      case mst of
+        Right st -> do
+          let statePoint = headerStatePoint $ headerState $ clsState st
+          -- This is an extra validation that should always succeed.
+          unless (point == statePoint) $
+            logAndThrowIO (getTrace syncEnv) $
+              SNErrDatabaseRollBackLedger $
+                mconcat
+                  [ "Ledger "
+                  , show statePoint
+                  , " and ChainSync "
+                  , show point
+                  , " don't match."
+                  ]
+          pure Nothing
+        Left lsfs ->
+          Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
+    NoLedger _ -> pure Nothing
 
 -- For testing and debugging.
 unsafeRollback :: Trace IO Text -> DB.TxOutVariantType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())

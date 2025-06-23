@@ -45,6 +45,7 @@ import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Contravariant.Extras (contrazip4)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- EPOCH AND PROTOCOL PARAMETER
@@ -88,8 +89,8 @@ epochDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochTxCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochBlkCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochNo
-    <*> D.column (D.nonNullable D.timestamptz) -- epochStartTime
-    <*> D.column (D.nonNullable D.timestamptz) -- epochEndTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochStartTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochEndTime
 
 entityEpochEncoder :: E.Params (Entity Epoch)
 entityEpochEncoder =
@@ -106,8 +107,8 @@ epochEncoder =
     , epochTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochBlkCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochStartTime >$< E.param (E.nonNullable E.timestamptz)
-    , epochEndTime >$< E.param (E.nonNullable E.timestamptz)
+    , epochStartTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
+    , epochEndTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

@@ -11,12 +11,19 @@ module Cardano.DbSync.Default (
   insertListBlocks,
 ) where
 
-import Cardano.BM.Trace (logInfo)
+import Control.Monad.Logger (LoggingT)
+import qualified Data.ByteString.Short as SBS
+import qualified Data.Set as Set
+import qualified Data.Strict.Maybe as Strict
+import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
+import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
+import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
+
+import Cardano.BM.Trace (logInfo, Trace)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.DbEvent (liftDbIO)
 import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -24,7 +31,7 @@ import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal)
 import Cardano.DbSync.Era.Universal.Epoch (hasEpochStartEvent, hasNewEpochEvent)
 import Cardano.DbSync.Era.Universal.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
-import Cardano.DbSync.Error (SyncNodeError)
+import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.LocalStateQuery
@@ -34,58 +41,51 @@ import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
-import Cardano.Node.Configuration.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
-import Control.Monad.Logger (LoggingT)
-import qualified Data.ByteString.Short as SBS
-import qualified Data.Set as Set
-import qualified Data.Strict.Maybe as Strict
-import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
-import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
-import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
 
 insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
-insertListBlocks synEnv blocks = do
-  runExceptT
-    . liftDbIO
-    $ DB.runDbIohkLogging tracer (envDbEnv synEnv)
-    $ traverse_ (applyAndInsertBlockMaybe synEnv tracer) blocks
+insertListBlocks syncEnv blocks = do
+  result <- DB.runDbIohkLoggingEither tracer (envDbEnv syncEnv) $ do
+    runExceptT $ traverse_ (applyAndInsertBlockMaybe syncEnv tracer) blocks
+  case result of
+    Left dbErr -> pure $ Left $ SNErrDatabase dbErr
+    Right (Left syncErr) -> pure $ Left syncErr
+    Right (Right _) -> pure $ Right ()
   where
-    tracer = getTrace synEnv
+    tracer = getTrace syncEnv
 
+-- This is the simplified version matching the original applyAndInsertBlockMaybe:
 applyAndInsertBlockMaybe ::
   SyncEnv ->
   Trace IO Text ->
   CardanoBlock ->
-  DB.DbAction (LoggingT IO) ()
+  ExceptT SyncNodeError (DB.DbAction (LoggingT IO)) ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
   if bl
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
-      insertBlock syncEnv cblk applyRes False tookSnapshot
+      lift $ insertBlock syncEnv cblk applyRes False tookSnapshot
     else do
-      eiBlockInDbAlreadyId <- DB.queryBlockIdEither (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk) ""
+      eiBlockInDbAlreadyId <- lift $ DB.queryBlockIdEither (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk) ""
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
       -- equal, insert the block and restore consistency between ledger and db.
       case eiBlockInDbAlreadyId of
         Left _ -> do
-          liftIO
-            . logInfo tracer
-            $ mconcat
-              [ "Received block which is not in the db with "
-              , textShow (getHeaderFields cblk)
-              , ". Time to restore consistency."
-              ]
-          rollbackFromBlockNo syncEnv (blockNo cblk)
-          insertBlock syncEnv cblk applyRes True tookSnapshot
+          liftIO . logInfo tracer $ mconcat
+            [ "Received block which is not in the db with "
+            , textShow (getHeaderFields cblk)
+            , ". Time to restore consistency."
+            ]
+          lift $ rollbackFromBlockNo syncEnv (blockNo cblk)
+          lift $ insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
-          replaced <- DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
+          replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
             then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
             else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
@@ -142,8 +142,9 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           isMember
           applyResult
 
-  -- Here we insert the block and it's txs, but in adition we also cache some values which we later
-  -- use when updating the Epoch, thus saving us having to recalulating them later.
+  -- Here we insert the block and it's txs, but in addition we also cache some values which we later
+  -- use when updating the Epoch, thus saving us having to recalculating them later.
+  -- Any TxOut lookup failures will propagate via throwError
   case cblk of
     BlockByron blk ->
       insertByronBlock syncEnv isStartEventOrRollback blk details
@@ -207,10 +208,10 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           liftIO $
             runIndexMigrations syncEnv
 
-    isWithinTwoMin :: SlotDetails -> Bool
-    isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing
-
-    isWithinHalfHour :: SlotDetails -> Bool
-    isWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing
-
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
+
+isWithinTwoMin :: SlotDetails -> Bool
+isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing
+
+isWithinHalfHour :: SlotDetails -> Bool
+isWithinHalfHour sd = isSyncedWithinSeconds sd 1800 == SyncFollowing

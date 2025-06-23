@@ -7,8 +7,6 @@
 module Cardano.Db.Statement.Function.Core (
   runDbSession,
   mkDbCallStack,
-  -- runPipelinedSession,
-  -- runDbActionWith,
   bulkEncoder,
   ResultType (..),
   ResultTypeBulk (..),

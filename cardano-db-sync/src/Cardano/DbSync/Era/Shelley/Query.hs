@@ -29,7 +29,7 @@ resolveInputTxOutIdEither syncEnv txIn =
 
 resolveInputTxOutId :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW))
 resolveInputTxOutId syncEnv txIn =
-  Right <$> DB.queryTxOutId (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+  DB.queryTxOutIdEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 resolveInputValue :: MonadIO m => Generic.TxIn -> DB.DbAction m (DB.TxId, DB.DbLovelace)
 resolveInputValue txIn =

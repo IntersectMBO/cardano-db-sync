@@ -29,7 +29,7 @@ import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 import Cardano.Db.Types (Ada, DbAction, DbLovelace, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Credential (Ptr (..))
+import Cardano.Ledger.Credential (Ptr (..), SlotNo32(..))
 import Contravariant.Extras (contrazip2, contrazip4)
 import qualified Hasql.Pipeline as HsqlP
 
@@ -479,7 +479,7 @@ queryStakeRefPtrStmt =
 
     encoder =
       mconcat
-        [ (\(Ptr (SlotNo s) _ _) -> s) >$< HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
+        [ (\(Ptr (SlotNo32 s) _ _) -> s) >$< HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
         , (\(Ptr _ (TxIx t) _) -> t) >$< HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
         , (\(Ptr _ _ (CertIx c)) -> c) >$< HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
         ]

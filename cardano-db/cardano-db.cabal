@@ -70,6 +70,7 @@ library
                         Cardano.Db.Statement.ChainGen
                         Cardano.Db.Statement.GovernanceAndVoting
                         Cardano.Db.Statement.JsonB
+                        Cardano.Db.Statement.MinIds
                         Cardano.Db.Statement.MultiAsset
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool

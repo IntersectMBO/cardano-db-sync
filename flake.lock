@@ -171,19 +171,11 @@
     "hackageNix": {
       "flake": false,
       "locked": {
-<<<<<<< HEAD
         "lastModified": 1748219218,
         "narHash": "sha256-kKe1cGUGkwp/6704BTKlH4yWTL0wmZugofJU20PcIkA=",
         "owner": "input-output-hk",
         "repo": "hackage.nix",
         "rev": "d3c929097030b8405f983de59ea243018d7cf877",
-=======
-        "lastModified": 1738753148,
-        "narHash": "sha256-51bAmpHmhB8f0kfIgoNa+Bcbo7MEkSksl0U3oEbJOi0=",
-        "owner": "input-output-hk",
-        "repo": "hackage.nix",
-        "rev": "fef267ea152c43844462ef7f06c6056dbd2918be",
->>>>>>> 48e1556e (add more types for the Hasql schema)
         "type": "github"
       },
       "original": {

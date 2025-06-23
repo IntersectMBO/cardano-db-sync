@@ -10,13 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-<<<<<<< HEAD
   , hackage.haskell.org 2025-05-23T06:30:40Z
   , cardano-haskell-packages 2025-05-16T20:03:45Z
-=======
-  , hackage.haskell.org 2025-02-05T12:01:20Z
-  , cardano-haskell-packages 2025-02-04T11:56:25Z
->>>>>>> 38627e31 (make a start to stetting up hasql with db pools)
 
 packages:
   cardano-db

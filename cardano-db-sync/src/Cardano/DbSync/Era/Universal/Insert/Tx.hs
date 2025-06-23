@@ -13,7 +13,19 @@ module Cardano.DbSync.Era.Universal.Insert.Tx (
   insertTxOut,
 ) where
 
+import Control.Monad.Extra (mapMaybeM)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Map.Strict as Map
+import qualified Data.Strict.Maybe as Strict
+
 import Cardano.BM.Trace (Trace)
+import qualified Cardano.Ledger.Address as Ledger
+import Cardano.Ledger.BaseTypes
+import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
+import Cardano.Prelude
+
 import Cardano.Db (DbLovelace (..), DbWord64 (..))
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
@@ -46,16 +58,6 @@ import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
-import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Coin (Coin (..))
-import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
-import Cardano.Prelude
-import Control.Monad.Extra (mapMaybeM)
-import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy.Char8 as LBS
-import qualified Data.Map.Strict as Map
-import qualified Data.Strict.Maybe as Strict
 
 --------------------------------------------------------------------------------------
 -- INSERT TX
@@ -81,27 +83,32 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       hasConsumed = getHasConsumedOrPruneTxOut syncEnv
       txIn = Generic.txInputs tx
   disInOut <- liftIO $ getDisableInOutState syncEnv
+
   -- In some txs and with specific configuration we may be able to find necessary data within the tx body.
   -- In these cases we can avoid expensive queries.
   (resolvedInputs, fees', deposits) <- case (disInOut, mdeposits, unCoin <$> Generic.txFees tx) of
     (True, _, _) -> pure ([], 0, unCoin <$> mdeposits)
     (_, Just deposits, Just fees) -> do
-      (resolvedInputs, _) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
-      pure (resolvedInputs, fees, Just (unCoin deposits))
+      resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
+      let (resolvedInputs', _) = splitLast resolvedInputs
+      pure (resolvedInputs', fees, Just (unCoin deposits))
     (_, Nothing, Just fees) -> do
-      (resolvedInputs, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
+      resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
+      let (resolvedInputs', amounts) = splitLast resolvedInputs
       if any isNothing amounts
-        then pure (resolvedInputs, fees, Nothing)
+        then pure (resolvedInputs', fees, Nothing)
         else
           let !inSum = sum $ map unDbLovelace $ catMaybes amounts
-           in pure (resolvedInputs, fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
+           in pure (resolvedInputs', fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
     (_, _, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
-      (resolvedInsFull, amounts) <- splitLast <$> mapM (resolveTxInputs syncEnv hasConsumed True (fst <$> groupedTxOut grouped)) txIn
-      let !inSum = sum $ map unDbLovelace $ catMaybes amounts
+      resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed True (fst <$> groupedTxOut grouped)) txIn
+      let (resolvedInsFull, amounts) = splitLast resolvedInputs
+          !inSum = sum $ map unDbLovelace $ catMaybes amounts
           !diffSum = if inSum >= outSum then inSum - outSum else 0
           !fees = maybe diffSum (fromIntegral . unCoin) (Generic.txFees tx)
       pure (resolvedInsFull, fromIntegral fees, Just 0)
+
   let fees = fromIntegral fees'
   -- Insert transaction and get txId from the DB.
   !txId <-
@@ -460,8 +467,10 @@ insertCollateralTxIn ::
   Generic.TxIn ->
   DB.DbAction m ()
 insertCollateralTxIn syncEnv _tracer txInId txIn = do
-  let txId = txInTxId txIn
-  txOutId <- queryTxIdWithCache (envCache syncEnv) txId
+  eTxOutId <- queryTxIdWithCache (envCache syncEnv) (txInTxId txIn)
+  txOutId <- case eTxOutId of
+    Right txId -> pure txId
+    Left err -> throwError err
   void
     . DB.insertCollateralTxIn
     $ DB.CollateralTxIn
@@ -478,8 +487,11 @@ insertReferenceTxIn ::
   Generic.TxIn ->
   DB.DbAction m ()
 insertReferenceTxIn syncEnv _tracer txInId txIn = do
-  let txId = txInTxId txIn
-  txOutId <- queryTxIdWithCache (envCache syncEnv) txId
+  etxOutId <- queryTxIdWithCache (envCache syncEnv) (txInTxId txIn)
+  txOutId <- case etxOutId of
+    Right txId -> pure txId
+    Left err -> throwError err
+
   void
     . DB.insertReferenceTxIn
     $ DB.ReferenceTxIn

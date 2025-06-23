@@ -222,29 +222,6 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Run OffChain threads
 ---------------------------------------------------------------------------------------------------------------------------------
--- runFetchOffChainPoolThread :: SyncEnv -> IO ()
--- runFetchOffChainPoolThread syncEnv = do
---   -- if dissable gov is active then don't run voting anchor thread
---   when (ioOffChainPoolData iopts) $ do
---     logInfo trce "Running Offchain Pool fetch thread"
---     runIohkLogging trce $
---       withPostgresqlConn (envConnectionString syncEnv) $
---         \backendPool -> liftIO $
---           forever $ do
---             tDelay
---             -- load the offChain vote work queue using the db
---             _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) backendPool
---             poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue syncEnv)
---             manager <- Http.newManager tlsManagerSettings
---             now <- liftIO Time.getPOSIXTime
---             mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
---   where
---     trce = getTrace syncEnv
---     iopts = getInsertOptions syncEnv
-
---     queuePoolInsert :: OffChainPoolResult -> IO ()
---     queuePoolInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
-
 runFetchOffChainPoolThread :: SyncEnv -> SyncNodeConfig -> IO ()
 runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
   -- if disable gov is active then don't run voting anchor thread
@@ -266,7 +243,7 @@ runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
           tDelay
           -- load the offChain vote work queue using the db
           _ <-
-            DB.runDbIohkLogging trce dbEnv $
+            runExceptT $ DB.runDbIohkLoggingEither trce dbEnv $
               loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
           poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
           manager <- Http.newManager tlsManagerSettings
@@ -303,7 +280,7 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
             tDelay
             -- load the offChain vote work queue using the db
             _ <-
-              DB.runDbIohkLogging trce dbEnv $
+              runExceptT $ DB.runDbIohkLoggingEither trce dbEnv $
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
             now <- liftIO Time.getPOSIXTime
@@ -316,29 +293,6 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
 
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
-
--- runFetchOffChainVoteThread :: SyncEnv -> IO ()
--- runFetchOffChainVoteThread syncEnv = do
---   -- if dissable gov is active then don't run voting anchor thread
---   when (ioGov iopts) $ do
---     logInfo trce "Running Offchain Vote Anchor fetch thread"
---     runIohkLogging trce $
---       withPostgresqlConn (envConnectionString syncEnv) $
---         \backendVote -> liftIO $
---           forever $ do
---             tDelay
---             -- load the offChain vote work queue using the db
---             _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
---             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
---             now <- liftIO Time.getPOSIXTime
---             mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
---   where
---     trce = getTrace syncEnv
---     iopts = getInsertOptions syncEnv
---     gateways = dncIpfsGateway $ envSyncNodeConfig syncEnv
-
---     queueVoteInsert :: OffChainVoteResult -> IO ()
---     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
 
 -- 5 minute sleep in milliseconds
 tDelay :: IO ()

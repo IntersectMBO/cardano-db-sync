@@ -20,7 +20,7 @@ import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SV
 import qualified Cardano.Db.Schema.Core.OffChain as SO
 import qualified Cardano.Db.Schema.Core.Pool as SP
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder)
+import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder, utcTimeAsTimestampEncoder, utcTimeAsTimestampDecoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
@@ -247,12 +247,12 @@ queryOffChainPoolFetchErrorStmt =
     encoder =
       mconcat
         [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
-        , snd >$< HsqlE.param (HsqlE.nullable HsqlE.timestamptz)
+        , snd >$< HsqlE.param (HsqlE.nullable utcTimeAsTimestampEncoder)
         ]
 
     decoder = HsqlD.rowList $ do
       poolId <- Id.idDecoder Id.PoolHashId
-      fetchTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      fetchTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       pmrId <- Id.idDecoder Id.PoolMetadataRefId
       fetchError <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
       retryCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
@@ -321,7 +321,7 @@ queryOffChainVoteWorkQueueDataStmt =
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
 
     decoder = HsqlD.rowList $ do
-      fetchTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      fetchTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       vaId <- HsqlD.column (HsqlD.nonNullable (Id.VotingAnchorId <$> HsqlD.int8))
       vaHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
       url <- HsqlD.column (HsqlD.nonNullable voteUrlDecoder)
@@ -415,7 +415,7 @@ queryOffChainPoolWorkQueueDataStmt =
     encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
 
     decoder = HsqlD.rowList $ do
-      fetchTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      fetchTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       pmrId <- HsqlD.column (HsqlD.nonNullable (Id.PoolMetadataRefId <$> HsqlD.int8))
       url <- HsqlD.column (HsqlD.nonNullable poolUrlDecoder)
       hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)

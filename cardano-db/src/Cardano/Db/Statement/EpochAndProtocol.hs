@@ -23,6 +23,7 @@ import Cardano.Db.Statement.Function.Query (countAll, replace, selectByFieldFirs
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (DbAction (..), DbLovelace (..))
 import Data.WideWord (Word128 (..))
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 
 --------------------------------------------------------------------------------
 -- CostModel
@@ -213,8 +214,8 @@ queryCalcEpochEntryStmt =
     decoder = HsqlD.singleRow $ do
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       blockCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      minTime <- HsqlD.column (HsqlD.nullable HsqlD.timestamptz)
-      maxTime <- HsqlD.column (HsqlD.nullable HsqlD.timestamptz)
+      minTime <- HsqlD.column (HsqlD.nullable utcTimeAsTimestampDecoder)
+      maxTime <- HsqlD.column (HsqlD.nullable utcTimeAsTimestampDecoder)
       outSum <- HsqlD.column (HsqlD.nonNullable HsqlD.int8) -- Decode as single int8
       feeSum <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
       txCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)

@@ -14,6 +14,9 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   mkmaTxOuts,
 ) where
 
+import qualified Data.List as List
+import qualified Data.Text as Text
+
 import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), MinIds (..))
 import qualified Cardano.Db as DB
@@ -25,8 +28,6 @@ import Cardano.DbSync.Cache (queryTxIdWithCacheEither)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.Prelude
-import qualified Data.List as List
-import qualified Data.Text as Text
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -61,6 +62,7 @@ data ExtendedTxOut = ExtendedTxOut
   { etoTxHash :: !ByteString
   , etoTxOut :: !DB.TxOutW
   }
+  deriving (Show)
 
 data ExtendedTxIn = ExtendedTxIn
   { etiTxIn :: !DB.TxIn
@@ -196,11 +198,14 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       (False, _) -> fmap convertnotFoundCache <$> queryTxIdWithCacheEither (envCache syncEnv) (Generic.txInTxId txIn)
       (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutIdEither syncEnv txIn
   case qres of
-    Right result -> pure result -- No need for either/throwError since convertFunctions return the final type
-    Left err ->
+    Right result -> pure result
+    Left _dbErr ->
+      -- The key insight: Don't throw immediately, try in-memory resolution first
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
         (Nothing, _, _) ->
-          throwError err
+          -- Only throw if in-memory resolution also fails
+          throwError $ DB.DbError (DB.mkDbCallStack "resolveTxInputs")
+            ("TxOut not found for TxIn: " <> textShow txIn) Nothing
         (Just eutxo, True, True) ->
           pure $ convertFoundValue (etoTxOut eutxo)
         (Just eutxo, _, _) ->

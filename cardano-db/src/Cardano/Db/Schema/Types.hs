@@ -10,6 +10,10 @@ import qualified Data.Text.Encoding.Error as TextError
 import GHC.Generics (Generic)
 import qualified Hasql.Decoders as HsqlD
 import Quiet (Quiet (..))
+import qualified Hasql.Decoders as D
+import qualified Hasql.Encoders as E
+import Data.Time (UTCTime, utc, localTimeToUTC, utcToLocalTime)
+import Data.Functor.Contravariant ((>$<))
 
 newtype AddressHash -- Length (28 bytes) enforced by Postgres
   = AddressHash {unAddressHash :: ByteString}
@@ -41,3 +45,11 @@ poolUrlDecoder = PoolUrl <$> HsqlD.text
 
 textDecoder :: HsqlD.Value Text
 textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))
+
+-- Custom decoders/encoders that mimic Persistent's UTCTime sqltype=timestamp behavior
+-- Persistent stores UTCTime as timestamp (without timezone) by treating it as LocalTime in UTC
+utcTimeAsTimestampDecoder :: D.Value UTCTime
+utcTimeAsTimestampDecoder = localTimeToUTC utc <$> D.timestamp
+
+utcTimeAsTimestampEncoder :: E.Value UTCTime
+utcTimeAsTimestampEncoder = utcToLocalTime utc >$< E.timestamp
