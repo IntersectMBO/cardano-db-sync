@@ -127,71 +127,75 @@ validateGenesisDistribution ::
   DB.DbAction m ()
 validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid = do
   let dbCallStack = DB.mkDbCallStack "validateGenesisDistribution"
-  metaResult <- DB.queryMeta
-  meta <- case metaResult of
-    Right m -> pure m
-    Left err -> throwError err
+  metaMaybe <- DB.queryMeta
 
-  when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Mismatch chain start time. Config value "
-            , textShow (Byron.configStartTime cfg)
-            , " does not match DB value of "
-            , textShow (DB.metaStartTime meta)
-            ]
-        )
-        Nothing
+  -- Only validate if meta table has data
+  case metaMaybe of
+    Nothing -> do
+      -- Meta table is empty, this is valid for initial startup
+      liftIO $ logInfo tracer "Meta table is empty, skipping genesis validation"
+      pure ()
+    Just meta -> do
+      when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
+        throwError $
+          DB.DbError
+            dbCallStack
+            ( Text.concat
+                [ "Mismatch chain start time. Config value "
+                , textShow (Byron.configStartTime cfg)
+                , " does not match DB value of "
+                , textShow (DB.metaStartTime meta)
+                ]
+            )
+            Nothing
 
-  when (DB.metaNetworkName meta /= networkName) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Provided network name "
-            , networkName
-            , " does not match DB value "
-            , DB.metaNetworkName meta
-            ]
-        )
-        Nothing
+      when (DB.metaNetworkName meta /= networkName) $
+        throwError $
+          DB.DbError
+            dbCallStack
+            ( Text.concat
+                [ "Provided network name "
+                , networkName
+                , " does not match DB value "
+                , DB.metaNetworkName meta
+                ]
+            )
+            Nothing
 
-  txCount <- DB.queryBlockTxCount bid
-  let expectedTxCount = fromIntegral $ length (genesisTxos cfg)
-  when (txCount /= expectedTxCount) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Expected initial block to have "
-            , textShow expectedTxCount
-            , " but got "
-            , textShow txCount
-            ]
-        )
-        Nothing
-  unless disInOut $ do
-    totalSupply <- DB.queryGenesisSupply $ getTxOutVariantType syncEnv
-    case DB.word64ToAda <$> configGenesisSupply cfg of
-      Left err -> throwError $ DB.DbError dbCallStack (textShow err) Nothing
-      Right expectedSupply ->
-        when (expectedSupply /= totalSupply && not prunes) $
-          throwError $
-            DB.DbError
-              dbCallStack
-              ( Text.concat
-                  [ "Expected total supply to be "
-                  , DB.renderAda expectedSupply
-                  , " but got "
-                  , DB.renderAda totalSupply
-                  ]
-              )
-              Nothing
-    liftIO $ do
-      logInfo tracer "Initial genesis distribution present and correct"
-      logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
+      txCount <- DB.queryBlockTxCount bid
+      let expectedTxCount = fromIntegral $ length (genesisTxos cfg)
+      when (txCount /= expectedTxCount) $
+        throwError $
+          DB.DbError
+            dbCallStack
+            ( Text.concat
+                [ "Expected initial block to have "
+                , textShow expectedTxCount
+                , " but got "
+                , textShow txCount
+                ]
+            )
+            Nothing
+      unless disInOut $ do
+        totalSupply <- DB.queryGenesisSupply $ getTxOutVariantType syncEnv
+        case DB.word64ToAda <$> configGenesisSupply cfg of
+          Left err -> throwError $ DB.DbError dbCallStack (textShow err) Nothing
+          Right expectedSupply ->
+            when (expectedSupply /= totalSupply && not prunes) $
+              throwError $
+                DB.DbError
+                  dbCallStack
+                  ( Text.concat
+                      [ "Expected total supply to be "
+                      , DB.renderAda expectedSupply
+                      , " but got "
+                      , DB.renderAda totalSupply
+                      ]
+                  )
+                  Nothing
+        liftIO $ do
+          logInfo tracer "Initial genesis distribution present and correct"
+          logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
 
 -------------------------------------------------------------------------------
 

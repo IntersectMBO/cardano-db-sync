@@ -33,6 +33,7 @@ import Cardano.Db.Statement.Function.Query (adaDecoder)
 import Cardano.Db.Statement.Types (tableName)
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, dbLovelaceDecoder, lovelaceToAda)
 import Data.Fixed (Fixed (..))
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool Epcoh
@@ -50,7 +51,7 @@ queryDelegationForEpochStmt =
         ]
     decoder = HsqlD.rowMaybe $ do
       addrId <- Id.idDecoder Id.StakeAddressId
-      endTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      endTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       poolId <- Id.idDecoder Id.PoolHashId
       pure (addrId, endTime, amount, poolId)
@@ -125,7 +126,7 @@ queryBlockTimestampsStmt =
         [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
         , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
         ]
-    decoder = HsqlD.rowList (HsqlD.column $ HsqlD.nonNullable HsqlD.timestamptz)
+    decoder = HsqlD.rowList (HsqlD.column $ HsqlD.nonNullable utcTimeAsTimestampDecoder)
 
 queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> DbAction m [UTCTime]
 queryBlockTimestamps start count =
@@ -146,11 +147,11 @@ queryBlocksTimeAftersStmt =
           , " WHERE time > $1"
           , " ORDER BY time DESC"
           ]
-    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.timestamptz)
+    encoder = HsqlE.param (HsqlE.nonNullable utcTimeAsTimestampEncoder)
     decoder = HsqlD.rowList $ do
       epochNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
       blockNo <- HsqlD.column (HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
-      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      time <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       pure (epochNo, blockNo, time)
 
 queryBlocksTimeAfters :: MonadIO m => UTCTime -> DbAction m [(Maybe Word64, Maybe Word64, UTCTime)]
@@ -228,7 +229,7 @@ queryDelegationHistoryStmt =
     decoder = HsqlD.rowList $ do
       addrId <- Id.idDecoder Id.StakeAddressId
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      endTime <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      endTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       poolId <- Id.idDecoder Id.PoolHashId
       pure (addrId, epochNo, endTime, amount, poolId)
@@ -558,7 +559,7 @@ queryInputTransactionsCoreStmt =
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
       hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      time <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       value <- dbLovelaceDecoder
       pure (hash, time, value)
     txTable = tableName (Proxy @SVC.Tx)
@@ -589,7 +590,7 @@ queryInputTransactionsAddressStmt =
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
       hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      time <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       value <- dbLovelaceDecoder
       pure (hash, time, value)
     txTable = tableName (Proxy @SVC.Tx)
@@ -622,7 +623,7 @@ queryWithdrawalTransactionsStmt =
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
       hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      time <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       pure (hash, time, amount)
     txTable = tableName (Proxy @SVC.Tx)
@@ -653,7 +654,7 @@ queryOutputTransactionsCoreStmt =
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
       hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      time <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       value <- dbLovelaceDecoder
       pure (hash, time, value)
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
@@ -687,7 +688,7 @@ queryOutputTransactionsAddressStmt =
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
       hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      time <- HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz)
+      time <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       value <- dbLovelaceDecoder
       pure (hash, time, value)
     txOutAddressTable = tableName (Proxy @SVA.TxOutAddress)

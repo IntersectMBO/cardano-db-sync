@@ -61,6 +61,7 @@ data SyncNodeError
   | SNErrDatabaseRollBackLedger !String
   | SNErrDatabaseValConstLevel !String
   | SNErrJsonbInSchema !String
+  | SNErrRollback !String
 
 instance Exception SyncNodeError
 
@@ -135,6 +136,7 @@ instance Show SyncNodeError where
       SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
       SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
       SNErrJsonbInSchema err -> "Error SNErrJsonbInSchema: " <> show err
+      SNErrRollback err -> "Error SNErrRollback: " <> show err
 
 data NodeConfigError
   = NodeConfigParseError !String

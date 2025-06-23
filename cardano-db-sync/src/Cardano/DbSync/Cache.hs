@@ -407,15 +407,46 @@ queryMAWithCache cache policyId asset =
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
 
+-- CORRECT VERSION - match the original cache behavior exactly:
+
 queryTxIdWithCacheEither ::
   MonadIO m =>
   CacheStatus ->
-  Ledger.TxId StandardCrypto ->
+  Ledger.TxId ->  -- Use the original input type
   DB.DbAction m (Either DB.DbError DB.TxId)
 queryTxIdWithCacheEither cache txIdLedger = do
-  catchError
-    (Right <$> queryTxIdWithCache cache txIdLedger)
-    (pure . Left)
+  case cache of
+    -- Direct database query if no cache.
+    NoCache -> qTxHash
+    ActiveCache ci ->
+      withCacheOptimisationCheck ci qTxHash $ do
+        -- Read current cache state.
+        cacheTx <- liftIO $ readTVarIO (cTxIds ci)
+
+        case FIFO.lookup txIdLedger cacheTx of
+          -- Cache hit, return the transaction ID.
+          Just txId -> do
+            liftIO $ hitTxIds (cStats ci)
+            pure $ Right txId
+          -- Cache miss.
+          Nothing -> do
+            eTxId <- qTxHash
+            liftIO $ missTxIds (cStats ci)
+            case eTxId of
+              Right txId -> do
+                -- Update cache.
+                liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
+                -- Return ID after updating cache.
+                pure $ Right txId
+              -- Return lookup failure.
+              Left err -> pure $ Left err
+  where
+    txHash = Generic.unTxHash txIdLedger  -- Convert to ByteString for DB query
+    qTxHash = do
+      result <- DB.queryTxId txHash
+      case result of
+        Just txId -> pure $ Right txId
+        Nothing -> pure $ Left $ DB.DbError (DB.mkDbCallStack "queryTxIdWithCacheEither") "TxId not found" Nothing
 
 queryPrevBlockWithCache ::
   MonadIO m =>
@@ -450,7 +481,7 @@ queryTxIdWithCache ::
   MonadIO m =>
   CacheStatus ->
   Ledger.TxId ->
-  DB.DbAction m DB.TxId
+  DB.DbAction m (Either DB.DbError DB.TxId)
 queryTxIdWithCache cache txIdLedger = do
   case cache of
     -- Direct database query if no cache.
@@ -459,22 +490,32 @@ queryTxIdWithCache cache txIdLedger = do
       withCacheOptimisationCheck ci qTxHash $ do
         -- Read current cache state.
         cacheTx <- liftIO $ readTVarIO (cTxIds ci)
+
         case FIFO.lookup txIdLedger cacheTx of
           -- Cache hit, return the transaction ID.
           Just txId -> do
             liftIO $ hitTxIds (cStats ci)
-            pure txId
+            pure $ Right txId
           -- Cache miss.
           Nothing -> do
-            txId <- qTxHash
+            eTxId <- qTxHash
             liftIO $ missTxIds (cStats ci)
-            -- Update cache.
-            liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
-            -- Return ID after updating cache.
-            pure txId
+            case eTxId of
+              Right txId -> do
+                -- Update cache ONLY on successful lookup.
+                liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
+                -- Return ID after updating cache.
+                pure $ Right txId
+              -- Return lookup failure - DON'T update cache.
+              Left err -> pure $ Left err
   where
     txHash = Generic.unTxHash txIdLedger
-    qTxHash = DB.queryTxId txHash
+    qTxHash = do
+      result <- DB.queryTxId txHash
+      case result of
+        Just txId -> pure $ Right txId
+        Nothing -> pure $ Left $ DB.DbError (DB.mkDbCallStack "queryTxIdWithCacheEither")
+                          ("TxId not found for hash: " <> textShow txHash) Nothing
 
 tryUpdateCacheTx ::
   MonadIO m =>

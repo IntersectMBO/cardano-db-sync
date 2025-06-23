@@ -34,7 +34,6 @@ import qualified Data.Set as Set
 -- been de-registered and not reregistered and then delete all rewards for those addresses and that
 -- epoch.
 
--- Update the adjustEpochRewards function to use bulk operations
 adjustEpochRewards ::
   MonadIO m =>
   Trace IO Text ->

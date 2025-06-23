@@ -92,16 +92,26 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
           liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
           emeta <- DB.queryMeta
           case emeta of
-            Right _ -> pure () -- Metadata already exists
-            Left _ -> do
+            Just _ -> pure () -- Metadata from Shelley era already exists.
+            Nothing -> do
               count <- DB.queryBlockCount
               when (count > 0) $
                 throwError $
                   DB.DbError (DB.mkDbCallStack "insertAction") (show err <> " Genesis data mismatch. count " <> textShow count) Nothing
               void $ DB.insertMeta metaRecord
-
+          -- No reason to insert the artificial block if there are no funds or stakes definitions.
           when (hasInitialFunds || hasStakes) $ do
+            -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
+            -- need this block to attach the genesis distribution transactions to.
+            -- It would be nice to not need this artificial block, but that would
+            -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
+            -- which would be a pain in the neck.
             slid <- DB.insertSlotLeader slotLeaderRecord
+            -- We attach the Genesis Shelley Block after the block with the biggest Slot.
+            -- In most cases this will simply be the Genesis Byron artificial Block,
+            -- since this configuration is used for networks which start from Shelley.
+            -- This means the previous block will have two blocks after it, resulting in a
+            -- tree format, which is unavoidable.
             pid <- DB.queryLatestBlockId
             liftIO $ logInfo tracer $ textShow pid
             bid <- DB.insertBlock (blockRecord pid slid)
@@ -142,6 +152,7 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
         , DB.blockSize = 0
         , DB.blockTime = configStartTime cfg
         , DB.blockTxCount = expectedTxCount
+        -- Genesis block does not have a protocol version, so set this to '0'.
         , DB.blockProtoMajor = 0
         , DB.blockProtoMinor = 0
         , DB.blockVrfKey = Nothing
@@ -165,11 +176,12 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
       txOutVariantType = getTxOutVariantType syncEnv
   liftIO $ logInfo tracer "Validating Genesis distribution"
 
-  -- Handle the Either from queryMeta
-  metaResult <- DB.queryMeta
-  meta <- case metaResult of
-    Right m -> pure m
-    Left err -> throwError err
+  -- During validation, meta MUST exist.
+  metaMaybe <- DB.queryMeta
+  meta <- case metaMaybe of
+    Just m -> pure m
+    Nothing -> throwError $
+      DB.DbError dbCallStack "Meta table is empty during validation - this should not happen" Nothing
 
   when (DB.metaStartTime meta /= configStartTime cfg) $
     throwError $

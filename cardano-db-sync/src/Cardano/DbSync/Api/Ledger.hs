@@ -27,7 +27,7 @@ import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Prelude (textShow)
+import Cardano.Prelude (textShow, MonadError (..))
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -156,7 +156,10 @@ prepareTxOut ::
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut (fromIntegral index) txOut
-  txId <- queryTxIdWithCache cache txIntxId
+  eTxId <- queryTxIdWithCache cache txIntxId
+  txId <- case eTxId of
+    Left err -> throwError err
+    Right tid -> pure tid
   insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
   where
     trce = getTrace syncEnv

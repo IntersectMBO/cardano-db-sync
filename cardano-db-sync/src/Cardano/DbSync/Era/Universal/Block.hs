@@ -92,6 +92,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
+
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need

@@ -119,7 +119,7 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
     -- Bulk insert treasury withdrawals
     insertTreasuryWithdrawalsBulk ::
       DB.GovActionProposalId ->
-      [(RewardAccount StandardCrypto, Coin)] ->
+      [(RewardAccount, Coin)] ->
       DB.DbAction m ()
     insertTreasuryWithdrawalsBulk _ [] = pure ()
     insertTreasuryWithdrawalsBulk gaId withdrawals = do
@@ -180,10 +180,25 @@ resolveGovActionProposal ::
   GovActionId ->
   DB.DbAction m DB.GovActionProposalId
 resolveGovActionProposal cache gaId = do
-  let txId = gaidTxId gaId
-  gaTxId <- queryTxIdWithCache cache txId
+  let govTxId = gaidTxId gaId
+  mGaTxId <- queryTxIdWithCache cache govTxId
+  gaTxId <- case mGaTxId of
+    Right txId -> pure txId
+    Left err -> throwError err
+
   let (GovActionIx index) = gaidGovActionIx gaId
   DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
+
+-- resolveGovActionProposal ::
+--   MonadIO m =>
+--   CacheStatus ->
+--   GovActionId ->
+--   DB.DbAction m DB.GovActionProposalId
+-- resolveGovActionProposal cache gaId = do
+--   let txId = gaidTxId gaId
+--   gaTxId <- queryTxIdWithCache cache txId
+--   let (GovActionIx index) = gaidGovActionIx gaId
+--   DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::
   MonadIO m =>

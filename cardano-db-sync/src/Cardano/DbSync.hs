@@ -31,11 +31,12 @@ import qualified Data.Text as Text
 import Data.Version (showVersion)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Connection.Setting as HsqlSet
-import qualified Ouroboros.Consensus.HardFork.Simple as HardFork
+import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
 import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
+import Control.Concurrent.Async
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
@@ -58,7 +59,6 @@ import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
-import Control.Concurrent.Async
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
@@ -240,15 +240,14 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncN
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
-          liftIO $
-            mapConcurrently_
-              id
-              [ runDbThread syncEnv metricsSetters threadChannels
-              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
-              , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
-              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-              ]
+          liftIO $ race_
+            (runDbThread syncEnv metricsSetters threadChannels)  -- Main App thread
+            (mapConcurrently_ id [                               -- Non-critical threads
+              runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams),
+              runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile,
+              runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile,
+              runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+            ])
     )
   where
     useShelleyInit :: SyncNodeConfig -> Bool

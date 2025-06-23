@@ -7,7 +7,7 @@
 
 module Cardano.Db.Statement.Variants.TxOut where
 
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Text, Word64, fromMaybe)
+import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Text, Word64, fromMaybe)
 import Control.Monad.Extra (whenJust)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
@@ -301,17 +301,15 @@ queryTxOutIdValueEither ::
   (ByteString, Word64) ->
   DbAction m (Either DbError (Id.TxId, TxOutIdW, DbLovelace))
 queryTxOutIdValueEither txOutVariantType hashIndex@(hash, _) = do
-  let dbCallStack = mkDbCallStack "queryTxOutIdValue"
-      errorMsg = "TxOut not found for hash: " <> Text.pack (show hash)
-
-  result <- runDbSession dbCallStack $ HsqlSes.statement hashIndex queryTxOutIdValueStmt
-  case result of
+  result <- runDbSession (mkDbCallStack "queryTxOutIdValue") $
+    HsqlSes.statement hashIndex queryTxOutIdValueStmt
+  pure $ case result of
     Just (txId, rawId, value) ->
-      pure $ Right $ case txOutVariantType of
+      Right $ case txOutVariantType of
         TxOutVariantCore -> (txId, VCTxOutIdW (Id.TxOutCoreId rawId), value)
         TxOutVariantAddress -> (txId, VATxOutIdW (Id.TxOutAddressId rawId), value)
     Nothing ->
-      pure $ Left $ DbError dbCallStack errorMsg Nothing
+      Left $ DbError (mkDbCallStack "queryTxOutIdValueEither") ("TxOut not found for hash: " <> Text.pack (show hash)) Nothing
 
 --------------------------------------------------------------------------------
 queryTxOutCredentialsCoreStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))

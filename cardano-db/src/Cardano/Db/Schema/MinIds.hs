@@ -13,18 +13,10 @@ module Cardano.Db.Schema.MinIds where
 
 import Cardano.Prelude
 import qualified Data.Text as Text
-import qualified Hasql.Decoders as HsqlD
-import qualified Hasql.Encoders as HsqlE
 import Text.Read (read)
 
-import Cardano.Db.Schema.Core.Base (TxIn)
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..), TxOutVariantType (..))
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Query (queryMinRefId)
-import Cardano.Db.Statement.Types (DbInfo, Key)
-import Cardano.Db.Types (DbAction)
 
 --------------------------------------------------------------------------------
 -- MinIds and MinIdsWrapper
@@ -233,105 +225,3 @@ textToMinIds txOutVariantType txt =
           (TxOutVariantAddress, "V") -> Just $ VMinIdsWrapper minIds
           _otherwise -> Nothing
     _otherwise -> Nothing
-
---------------------------------------------------------------------------------
--- CompleteMinId
---------------------------------------------------------------------------------
-completeMinId ::
-  (MonadIO m) =>
-  Maybe Id.TxId ->
-  MinIdsWrapper ->
-  DbAction m MinIdsWrapper
-completeMinId mTxId mIdW = case mIdW of
-  CMinIdsWrapper minIds -> CMinIdsWrapper <$> completeMinIdCore mTxId minIds
-  VMinIdsWrapper minIds -> VMinIdsWrapper <$> completeMinIdVariant mTxId minIds
-
-completeMinIdCore :: MonadIO m => Maybe Id.TxId -> MinIds -> DbAction m MinIds
-completeMinIdCore mTxId minIds = do
-  case mTxId of
-    Nothing -> pure mempty
-    Just txId -> do
-      mTxInId <-
-        whenNothingQueryMinRefId @TxIn
-          (minTxInId minIds)
-          "tx_in_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxInId)
-
-      mTxOutId <-
-        whenNothingQueryMinRefId @VC.TxOutCore
-          (extractCoreTxOutId $ minTxOutId minIds)
-          "tx_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxOutCoreId)
-
-      mMaTxOutId <- case mTxOutId of
-        Nothing -> pure Nothing
-        Just txOutId ->
-          whenNothingQueryMinRefId @VC.MaTxOutCore
-            (extractCoreMaTxOutId $ minMaTxOutId minIds)
-            "tx_out_id"
-            txOutId
-            (Id.idEncoder Id.getTxOutCoreId)
-            (Id.idDecoder Id.MaTxOutCoreId)
-
-      pure $
-        MinIds
-          { minTxInId = mTxInId
-          , minTxOutId = VCTxOutIdW <$> mTxOutId
-          , minMaTxOutId = CMaTxOutIdW <$> mMaTxOutId
-          }
-
-completeMinIdVariant :: MonadIO m => Maybe Id.TxId -> MinIds -> DbAction m MinIds
-completeMinIdVariant mTxId minIds = do
-  case mTxId of
-    Nothing -> pure mempty
-    Just txId -> do
-      mTxInId <-
-        whenNothingQueryMinRefId @TxIn
-          (minTxInId minIds)
-          "tx_in_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxInId)
-
-      mTxOutId <-
-        whenNothingQueryMinRefId @VA.TxOutAddress
-          (extractVariantTxOutId $ minTxOutId minIds)
-          "tx_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxOutAddressId)
-
-      mMaTxOutId <- case mTxOutId of
-        Nothing -> pure Nothing
-        Just txOutId ->
-          whenNothingQueryMinRefId @VA.MaTxOutAddress
-            (extractVariantMaTxOutId $ minMaTxOutId minIds)
-            "tx_out_id"
-            txOutId
-            (Id.idEncoder Id.getTxOutAddressId)
-            (Id.idDecoder Id.MaTxOutAddressId)
-
-      pure $
-        MinIds
-          { minTxInId = mTxInId
-          , minTxOutId = VATxOutIdW <$> mTxOutId
-          , minMaTxOutId = VMaTxOutIdW <$> mMaTxOutId
-          }
-
-whenNothingQueryMinRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
-  Maybe (Key a) -> -- Existing key value
-  Text -> -- Field name
-  b -> -- Value to compare
-  HsqlE.Params b -> -- Encoder for value
-  HsqlD.Row (Key a) -> -- Decoder for key
-  DbAction m (Maybe (Key a))
-whenNothingQueryMinRefId mKey fieldName value encoder keyDecoder =
-  case mKey of
-    Just k -> pure $ Just k
-    Nothing -> queryMinRefId fieldName value encoder keyDecoder

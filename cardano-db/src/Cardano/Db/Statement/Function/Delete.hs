@@ -165,3 +165,35 @@ deleteAllCount =
           , ")"
           , "SELECT COUNT(*)::bigint FROM deleted"
           ]
+
+
+deleteWhereCountWithNotNull ::
+  forall a.
+  (DbInfo a) =>
+  -- | Primary column name (e.g. "id")
+  Text.Text ->
+  -- | Nullable foreign key column name (e.g. "gov_action_proposal_id")
+  Text.Text ->
+  -- | Parameter encoder for the primary column value
+  HsqlE.Params Int64 ->
+  -- | Returns statement that deletes where id >= param AND fk IS NOT NULL
+  HsqlS.Statement Int64 Int64
+deleteWhereCountWithNotNull primaryCol nullableCol encoder =
+  HsqlS.Statement sql encoder decoder True
+  where
+    -- Validate both column names
+    validPrimaryCol = validateColumn @a primaryCol
+    validNullableCol = validateColumn @a nullableCol
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "WITH deleted AS ("
+          , "  DELETE FROM " <> tableName (Proxy @a)
+          , "  WHERE " <> validPrimaryCol <> " >= $1"
+          , "  AND " <> validNullableCol <> " IS NOT NULL"
+          , "  RETURNING *"
+          , ")"
+          , "SELECT COUNT(*)::bigint FROM deleted"
+          ]

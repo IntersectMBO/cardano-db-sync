@@ -29,18 +29,20 @@ import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core as SC
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..), completeMinId, textToMinIds)
+import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..), textToMinIds)
 import Cardano.Db.Schema.Variants (TxOutVariantType)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkJsonb)
-import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll, parameterisedCountWhere, queryMinRefId)
+import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll, parameterisedCountWhere)
 import Cardano.Db.Statement.GovernanceAndVoting (setNullDroppedStmt, setNullEnactedStmt, setNullExpiredStmt, setNullRatifiedStmt)
 import Cardano.Db.Statement.Rollback (deleteTablesAfterBlockId)
 import Cardano.Db.Statement.Types (DbInfo, Entity (..), tableName, validateColumn)
 import Cardano.Db.Statement.Variants.TxOut (querySetNullTxOut)
 import Cardano.Db.Types (Ada (..), DbAction, DbWord64, ExtraMigration, extraDescription)
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
+import Cardano.Db.Statement.MinIds (completeMinId, queryMinRefId)
 
 --------------------------------------------------------------------------------
 -- Block
@@ -120,7 +122,7 @@ querySlotUtcTimeStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-    decoder = HsqlD.rowMaybe (HsqlD.column (HsqlD.nonNullable HsqlD.timestamptz))
+    decoder = HsqlD.rowMaybe (HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder))
     blockTable = tableName (Proxy @SC.Block)
     sql =
       TextEnc.encodeUtf8 $
@@ -152,6 +154,28 @@ querySlotUtcTimeEither slotNo = do
     dbCallStack = mkDbCallStack "querySlotUtcTimeEither"
 
 --------------------------------------------------------------------------------
+queryBlockByIdStmt :: HsqlStmt.Statement Id.BlockId (Maybe (Entity SCB.Block))
+queryBlockByIdStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM " <> tableName (Proxy @SCB.Block)
+          , " WHERE id = $1"
+          ]
+    encoder = Id.idEncoder Id.getBlockId
+    decoder = HsqlD.rowMaybe SCB.entityBlockDecoder
+
+queryBlockById :: MonadIO m => Id.BlockId -> DbAction m (Maybe SCB.Block)
+queryBlockById blockId = do
+  res <- runDbSession (mkDbCallStack "queryBlockSlotAndHash") $
+    HsqlSes.statement blockId queryBlockByIdStmt
+  pure $ entityVal <$> res
+
+--------------------------------------------------------------------------------
+
 -- counting blocks after a specific BlockNo with >= operator
 queryBlockCountAfterEqBlockNoStmt :: HsqlStmt.Statement Word64 Word64
 queryBlockCountAfterEqBlockNoStmt =
@@ -229,6 +253,29 @@ queryBlockNoAndEpoch blkNo =
   runDbSession (mkDbCallStack "queryBlockNoAndEpoch") $
     HsqlSes.statement blkNo $
       queryBlockNoAndEpochStmt @SCB.Block
+
+--------------------------------------------------------------------------------
+queryBlockSlotAndHashStmt :: HsqlStmt.Statement Id.BlockId (Maybe (SlotNo, ByteString))
+queryBlockSlotAndHashStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT slot_no, hash"
+          , " FROM " <> tableName (Proxy @SCB.Block)
+          , " WHERE id = $1"
+          ]
+    encoder = Id.idEncoder Id.getBlockId
+    decoder = HsqlD.rowMaybe $ do
+      slotNo <- SlotNo . fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+      hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      pure (slotNo, hash)
+
+queryBlockSlotAndHash :: MonadIO m => Id.BlockId -> DbAction m (Maybe (SlotNo, ByteString))
+queryBlockSlotAndHash blockId =
+  runDbSession (mkDbCallStack "queryBlockSlotAndHash") $
+    HsqlSes.statement blockId queryBlockSlotAndHashStmt
 
 --------------------------------------------------------------------------------
 queryNearestBlockSlotNoStmt ::
@@ -845,12 +892,14 @@ deleteBlocksBlockId ::
 deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
   mMinIds <- fmap (textToMinIds txOutVariantType =<<) <$> queryReverseIndexBlockId blockId
   (cminIds, completed) <- findMinIdsRec mMinIds mempty
-  mTxId <-
+  mRawTxId <-
     queryMinRefId @SCB.Tx
       "block_id"
       blockId
       (Id.idEncoder Id.getBlockId)
-      (Id.idDecoder Id.TxId)
+  -- Convert raw Int64 to typed TxId for completeMinId
+  let mTxId = Id.TxId <$> mRawTxId
+
   minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
 
   deleteEpochLogs <- deleteUsingEpochNo epochN
@@ -1117,15 +1166,24 @@ queryMetaStmt =
           ]
 
 {-# INLINEABLE queryMeta #-}
-queryMeta :: MonadIO m => DbAction m (Either DbError SCB.Meta)
+queryMeta :: MonadIO m => DbAction m (Maybe SCB.Meta)
 queryMeta = do
   let dbCallStack = mkDbCallStack "queryMeta"
   result <- runDbSession dbCallStack $ HsqlSes.statement () queryMetaStmt
   case result of
-    -- TODO: Cmdv - At the call site this case would return `pure ()`
-    [] -> pure $ Left $ DbError dbCallStack "Meta table is empty" Nothing
-    [m] -> pure $ Right $ entityVal m
-    _otherwise -> pure $ Left $ DbError dbCallStack "Multiple rows in meta table" Nothing
+    [] -> pure Nothing  -- Empty table is valid
+    [m] -> pure $ Just $ entityVal m
+    _otherwise -> throwError $ DbError dbCallStack "Multiple rows in meta table" Nothing
+
+-- queryMeta :: MonadIO m => DbAction m (Either DbError SCB.Meta)
+-- queryMeta = do
+--   let dbCallStack = mkDbCallStack "queryMeta"
+--   result <- runDbSession dbCallStack $ HsqlSes.statement () queryMetaStmt
+--   case result of
+--     -- TODO: Cmdv - At the call site this case would return `pure ()`
+--     [] -> pure $ Left $ DbError dbCallStack "Meta table is empty" Nothing
+--     [m] -> pure $ Right $ entityVal m
+--     _otherwise -> pure $ Left $ DbError dbCallStack "Multiple rows in meta table" Nothing
 
 --------------------------------------------------------------------------------
 -- ReferenceTxIn
@@ -1392,15 +1450,10 @@ queryTxIdStmt = do
           ]
 
 -- | Get the 'TxId' associated with the given hash.
-queryTxId :: MonadIO m => ByteString -> DbAction m Id.TxId
-queryTxId hash = do
-  result <- runDbSession dbCallStack $ HsqlSes.statement hash queryTxIdStmt
-  case result of
-    Just res -> pure res
-    Nothing -> throwError $ DbError dbCallStack errorMsg Nothing
-  where
-    dbCallStack = mkDbCallStack "queryTxId"
-    errorMsg = "Transaction not found with hash: " <> Text.pack (show hash)
+queryTxId :: MonadIO m => ByteString -> DbAction m (Maybe Id.TxId)
+queryTxId txHash =
+  runDbSession (mkDbCallStack "queryTxId") $
+    HsqlSes.statement txHash queryTxIdStmt
 
 --------------------------------------------------------------------------------
 queryFeesUpToBlockNoStmt :: HsqlStmt.Statement Word64 Ada

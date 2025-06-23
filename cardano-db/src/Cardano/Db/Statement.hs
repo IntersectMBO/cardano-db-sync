@@ -12,6 +12,7 @@ module Cardano.Db.Statement (
   module Cardano.Db.Statement.GovernanceAndVoting,
   module Cardano.Db.Statement.ChainGen,
   module Cardano.Db.Statement.JsonB,
+  module Cardano.Db.Statement.MinIds,
   module Cardano.Db.Statement.MultiAsset,
   module Cardano.Db.Statement.OffChain,
   module Cardano.Db.Statement.Pool,
@@ -34,6 +35,7 @@ import Cardano.Db.Statement.Function.Query
 import Cardano.Db.Statement.GovernanceAndVoting
 import Cardano.Db.Statement.JsonB
 import Cardano.Db.Statement.MultiAsset
+import Cardano.Db.Statement.MinIds
 import Cardano.Db.Statement.OffChain
 import Cardano.Db.Statement.Pool
 import Cardano.Db.Statement.StakeDeligation

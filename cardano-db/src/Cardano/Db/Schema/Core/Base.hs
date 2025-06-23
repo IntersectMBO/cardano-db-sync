@@ -43,6 +43,7 @@ import Cardano.Db.Types (
   scriptTypeDecoder,
   scriptTypeEncoder,
  )
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 -- We use camelCase here in the Haskell schema definition and 'persistLowerCase'
 -- specifies that all the table and column names are converted to lower snake case.
@@ -101,7 +102,7 @@ blockDecoder =
     <*> maybeIdDecoder BlockId -- blockPreviousId
     <*> idDecoder SlotLeaderId -- blockSlotLeaderId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockSize
-    <*> D.column (D.nonNullable D.timestamptz) -- blockTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- blockTime
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockTxCount
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- blockProtoMajor
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- blockProtoMinor
@@ -127,7 +128,7 @@ blockEncoder =
     , blockPreviousId >$< maybeIdEncoder getBlockId
     , blockSlotLeaderId >$< idEncoder getSlotLeaderId
     , blockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , blockTime >$< E.param (E.nonNullable E.timestamptz)
+    , blockTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , blockTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockProtoMajor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
     , blockProtoMinor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
@@ -867,7 +868,7 @@ entityMetaDecoder =
 metaDecoder :: D.Row Meta
 metaDecoder =
   Meta
-    <$> D.column (D.nonNullable D.timestamptz) -- metaStartTime
+    <$> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- metaStartTime
     <*> D.column (D.nonNullable D.text) -- metaNetworkName
     <*> D.column (D.nonNullable D.text) -- metaVersion
 
@@ -881,7 +882,7 @@ entityMetaEncoder =
 metaEncoder :: E.Params Meta
 metaEncoder =
   mconcat
-    [ metaStartTime >$< E.param (E.nonNullable E.timestamptz)
+    [ metaStartTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , metaNetworkName >$< E.param (E.nonNullable E.text)
     , metaVersion >$< E.param (E.nonNullable E.text)
     ]

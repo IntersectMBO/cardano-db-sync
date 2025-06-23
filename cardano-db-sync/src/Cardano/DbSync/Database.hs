@@ -4,21 +4,16 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Database (
-  DbEvent (..),
-  ThreadChannels,
-  lengthDbEventQueue,
-  mkDbApply,
   runDbThread,
 ) where
 
 import Cardano.BM.Trace (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), SyncEnv (..))
 import Cardano.DbSync.DbEvent
 import Cardano.DbSync.Default
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
-import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
@@ -27,9 +22,6 @@ import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Except.Extra (newExceptT)
-import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
-import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block (BlockNo, Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
 
@@ -75,7 +67,7 @@ runDbThread syncEnv metricsSetters queue = do
 
       -- Handle the result of running the actions
       case result of
-        Left err -> logError tracer $ "Error: " <> show err
+        Left err -> logError tracer $ show err
         Right Continue -> processQueue -- Continue processing
         Right Done -> pure () -- Stop processing
 
@@ -114,12 +106,11 @@ runActions syncEnv actions = do
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          deletedAllBlocks <- prepareRollback syncEnv chainSyncPoint serverTip
+          -- Fix: prepareRollback now returns IO (Either SyncNodeError Bool), so use ExceptT
+          deletedAllBlocks <- ExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
           points <- lift $ rollbackLedger syncEnv chainSyncPoint
 
-          -- Ledger state always rollbacks at least back to the 'point' given by the Node.
-          -- It needs to rollback even further, if 'points' is not 'Nothing'.
-          -- The db may not rollback to the Node point.
+          -- Keep the same logic as before for consistency levels
           case (deletedAllBlocks, points) of
             (True, Nothing) -> do
               liftIO $ setConsistentLevel syncEnv Consistent
@@ -127,41 +118,18 @@ runActions syncEnv actions = do
             (False, Nothing) -> do
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
               liftIO $ validateConsistentLevel syncEnv chainSyncPoint
-            _anyOtherOption ->
+            _anyOtherOption -> do
               -- No need to validate here
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
           blockNo <- lift $ getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbEvent Continue ys
         (ys, zs) -> do
-          newExceptT $ insertListBlocks syncEnv ys
+          -- Fix: insertListBlocks now returns IO (Either SyncNodeError ()), so use ExceptT
+          ExceptT $ insertListBlocks syncEnv ys
           if null zs
             then pure Continue
             else dbEvent Continue zs
-
-rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
-rollbackLedger syncEnv point =
-  case envLedgerEnv syncEnv of
-    HasLedger hle -> do
-      mst <- loadLedgerAtPoint hle point
-      case mst of
-        Right st -> do
-          let statePoint = headerStatePoint $ headerState $ clsState st
-          -- This is an extra validation that should always succeed.
-          unless (point == statePoint) $
-            logAndThrowIO (getTrace syncEnv) $
-              SNErrDatabaseRollBackLedger $
-                mconcat
-                  [ "Ledger "
-                  , show statePoint
-                  , " and ChainSync "
-                  , show point
-                  , " don't match."
-                  ]
-          pure Nothing
-        Left lsfs ->
-          Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
-    NoLedger _ -> pure Nothing
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
 -- 'Consistent' Level is correct based on the db tip.

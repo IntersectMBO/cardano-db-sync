@@ -25,6 +25,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- OFFCHAIN
@@ -114,7 +115,7 @@ offChainPoolFetchErrorDecoder :: D.Row OffChainPoolFetchError
 offChainPoolFetchErrorDecoder =
   OffChainPoolFetchError
     <$> Id.idDecoder Id.PoolHashId -- offChainPoolFetchErrorPoolId
-    <*> D.column (D.nonNullable D.timestamptz) -- offChainPoolFetchErrorFetchTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- offChainPoolFetchErrorFetchTime
     <*> Id.idDecoder Id.PoolMetadataRefId -- offChainPoolFetchErrorPmrId
     <*> D.column (D.nonNullable D.text) -- offChainPoolFetchErrorFetchError
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainPoolFetchErrorRetryCount
@@ -130,7 +131,7 @@ offChainPoolFetchErrorEncoder :: E.Params OffChainPoolFetchError
 offChainPoolFetchErrorEncoder =
   mconcat
     [ offChainPoolFetchErrorPoolId >$< Id.idEncoder Id.getPoolHashId
-    , offChainPoolFetchErrorFetchTime >$< E.param (E.nonNullable E.timestamptz)
+    , offChainPoolFetchErrorFetchTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , offChainPoolFetchErrorPmrId >$< Id.idEncoder Id.getPoolMetadataRefId
     , offChainPoolFetchErrorFetchError >$< E.param (E.nonNullable E.text)
     , offChainPoolFetchErrorRetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
@@ -586,7 +587,7 @@ offChainVoteFetchErrorDecoder =
   OffChainVoteFetchError
     <$> Id.idDecoder Id.VotingAnchorId -- offChainVoteFetchErrorVotingAnchorId
     <*> D.column (D.nonNullable D.text) -- offChainVoteFetchErrorFetchError
-    <*> D.column (D.nonNullable D.timestamptz) -- offChainVoteFetchErrorFetchTime
+    <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- offChainVoteFetchErrorFetchTime
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- offChainVoteFetchErrorRetryCount
 
 entityOffChainVoteFetchErrorEncoder :: E.Params (Entity OffChainVoteFetchError)
@@ -601,7 +602,7 @@ offChainVoteFetchErrorEncoder =
   mconcat
     [ offChainVoteFetchErrorVotingAnchorId >$< Id.idEncoder Id.getVotingAnchorId
     , offChainVoteFetchErrorFetchError >$< E.param (E.nonNullable E.text)
-    , offChainVoteFetchErrorFetchTime >$< E.param (E.nonNullable E.timestamptz)
+    , offChainVoteFetchErrorFetchTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , offChainVoteFetchErrorRetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
@@ -610,5 +611,5 @@ offChainVoteFetchErrorBulkEncoder =
   contrazip4
     (bulkEncoder (Id.idBulkEncoder Id.getVotingAnchorId))
     (bulkEncoder (E.nonNullable E.text))
-    (bulkEncoder (E.nonNullable E.timestamptz))
+    (bulkEncoder (E.nonNullable utcTimeAsTimestampEncoder))
     (bulkEncoder (E.nonNullable (fromIntegral >$< E.int4)))
