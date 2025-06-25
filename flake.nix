@@ -24,10 +24,6 @@
       url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    # Note[PostgreSQL 17]: This is a workaround to get postgresql_17 from nixpkgs. It's
-    # available in nixpkgs unstable, but has not been updated in haskell.nix yet. Remove
-    # this after the next time haskell.nix updates nixpkgs.
-    nixpkgsUpstream.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs = { self, ... }@inputs:
@@ -40,12 +36,6 @@
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
         let
-          # TODO: Remove me (See Note[PostgreSQL 17]).
-          nixpkgsUpstream = import inputs.nixpkgsUpstream {
-            inherit system;
-            inherit (inputs.haskellNix) config;
-          };
-
           nixpkgs = import inputs.nixpkgs {
             inherit system;
             inherit (inputs.haskellNix) config;
@@ -53,6 +43,14 @@
             overlays =
               builtins.attrValues inputs.iohkNix.overlays ++
               [ inputs.haskellNix.overlay
+
+                (final: prev: {
+                  haskell-nix = prev.haskell-nix // {
+                    extraPkgconfigMappings = prev.haskell-nix.extraPkgconfigMappings // {
+                      "libpq" = [ "libpq" ];
+                    };
+                  };
+                })
 
                 (final: prev: {
                   inherit (project.hsPkgs.cardano-node.components.exes) cardano-node;
@@ -88,18 +86,23 @@
                 })
 
                 (final: prev: {
-                  postgresql = prev.postgresql.overrideAttrs (_:
-                    final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
-                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
-                      LC_CTYPE = "C";
+                  libpq =
+                    final.lib.pipe prev.libpq [
+                      (p: p.override {
+                        gssSupport = false;
+                      })
 
-                      doCheck = false;
-                    });
-                })
-
-                # TODO: Remove me (See Note[PostgreSQL 17])
-                (final: prev: {
-                  postgresql_17 = nixpkgsUpstream.postgresql_17;
+                      (p: p.overrideAttrs (old:
+                        final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
+                          dontDisableStatic = true;
+                          NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                          # without this collate.icu.utf8, and foreign_data will fail.
+                          LC_CTYPE = "C";
+                          # libpq from nixpkgs will either remove static or dynamic 
+                          # libs, but we need to keep them both
+                          postInstall = "";
+                        }))
+                    ];
                 })
               ];
           };
@@ -165,7 +168,7 @@
             crossPlatforms = p:
               lib.optional (system == "x86_64-linux") p.musl64 ++
               lib.optional
-                (system == "x86_64-linux" && config.compiler-nix-name == "ghc966")
+                (system == "x86_64-linux" && config.compiler-nix-name == "ghc967")
                 p.aarch64-multiplatform-musl;
 
             inputMap = {
@@ -179,7 +182,7 @@
                 src = nixpkgs.haskell-nix.sources."hls-2.11";
               };
               hlint = "latest";
-            } // lib.optionalAttrs (config.compiler-nix-name == "ghc966") {
+            } // lib.optionalAttrs (config.compiler-nix-name == "ghc967") {
               weeder = "latest";
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
@@ -242,14 +245,14 @@
               (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
                 (let
                   ghcOptions = [
-                    # Postgresql static is pretty broken in nixpkgs. We can't rely on the
+                    # libpq static is pretty broken in nixpkgs. We can't rely on the
                     # pkg-config, so we have to add the correct libraries ourselves
-                    "-L${pkgs.postgresql}/lib"
-                    "-optl-Wl,-lpgport"
                     "-optl-Wl,-lpgcommon"
+                    "-optl-Wl,-lpgport"
+                    "-optl-Wl,-lm"
 
-                    # Since we aren't using the postgresql pkg-config, it won't
-                    # automatically include OpenSSL
+                    # Since we aren't using pkg-config, it won't automatically include
+                    # OpenSSL
                     "-L${pkgs.openssl.out}/lib"
 
                     # The ordering of -lssl and -lcrypto below is important. Otherwise,
