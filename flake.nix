@@ -159,9 +159,12 @@
             compiler-nix-name = lib.mkDefault "ghc96";
             flake.variants =
               let
-                compilers = [ "ghc98" "ghc910" "ghc912" ];
+                extraCompilers = 
+                  # To avoid excessive jobs, only build for default compiler on macOS
+                  lib.optionals (system == "x86_64-linux")
+                    [ "ghc910" "ghc912" ];
               in
-                lib.genAttrs compilers (c: { compiler-nix-name = c; });
+                lib.genAttrs extraCompilers (c: { compiler-nix-name = c; });
 
             # cardano-cli is needed when building the docker image
             cabalProjectLocal = ''
