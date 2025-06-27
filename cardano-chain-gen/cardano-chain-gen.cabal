@@ -44,7 +44,6 @@ library
                         Cardano.Mock.ChainDB
                         Cardano.Mock.ChainSync.Server
                         Cardano.Mock.ChainSync.State
-                        Cardano.Mock.Query
                         Cardano.Mock.Forging.Crypto
                         Cardano.Mock.Forging.Interpreter
                         Cardano.Mock.Forging.Tx.Alonzo
@@ -65,7 +64,6 @@ library
                       , cardano-binary
                       , cardano-crypto-class
                       , cardano-data
-                      , cardano-db
                       , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
@@ -82,7 +80,6 @@ library
                       , containers
                       , contra-tracer
                       , directory
-                      , esqueleto
                       , extra
                       , mtl
                       , microlens
@@ -148,6 +145,7 @@ test-suite cardano-chain-gen
                         Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema
                         Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut
                         Test.Cardano.Db.Mock.Unit.Conway.Config.Parse
+                        Test.Cardano.Db.Mock.Unit.Conway.Config.Schema
                         Test.Cardano.Db.Mock.Unit.Conway.Governance
                         Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference
                         Test.Cardano.Db.Mock.Unit.Conway.Other
@@ -182,7 +180,6 @@ test-suite cardano-chain-gen
                       , contra-tracer
                       , data-default-class
                       , directory
-                      , esqueleto
                       , extra
                       , filepath
                       , int-cast
@@ -192,7 +189,6 @@ test-suite cardano-chain-gen
                       , tasty
                       , tasty-quickcheck
                       , text
-                      , transformers
                       , transformers-except
                       , tree-diff
                       , tasty-hunit
@@ -200,8 +196,6 @@ test-suite cardano-chain-gen
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
                       , ouroboros-network-api
-                      , persistent
-                      , persistent-postgresql
                       , postgresql-simple
                       , QuickCheck
                       , quickcheck-state-machine:no-vendored-treediff

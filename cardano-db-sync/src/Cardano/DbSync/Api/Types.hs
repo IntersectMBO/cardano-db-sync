@@ -31,15 +31,13 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (UTCTime)
-import Database.Persist.Postgresql (ConnectionString)
-import Database.Persist.Sql (SqlBackend)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Network.Magic (NetworkMagic (..))
 
+-- | SyncEnv is the main environment for the whole application.
 data SyncEnv = SyncEnv
-  { envBackend :: !SqlBackend
+  { envDbEnv :: !DB.DbEnv
   , envCache :: !CacheStatus
-  , envConnectionString :: !ConnectionString
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
@@ -83,7 +81,7 @@ data InsertOptions = InsertOptions
   , ioPoolStats :: !Bool
   , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
-  , ioTxOutTableType :: !DB.TxOutTableType
+  , ioTxOutVariantType :: !DB.TxOutVariantType
   }
   deriving (Show)
 

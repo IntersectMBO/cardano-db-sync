@@ -11,12 +11,14 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
+-- Test migration version roundtrip through file format
 prop_roundtrip_MigrationVersion :: Property
 prop_roundtrip_MigrationVersion =
   H.property $ do
     mv <- H.forAll genMigrationVersion
     H.tripping mv renderMigrationVersionFile parseMigrationVersionFromFile
 
+-- Test that rendered migration version has no spaces
 prop_roundtrip_renderMigrationVersion_no_spaces :: Property
 prop_roundtrip_renderMigrationVersion_no_spaces =
   H.property $ do

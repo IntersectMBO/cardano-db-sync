@@ -19,7 +19,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
   RemoveJsonbFromSchemaConfig (..),
-  TxOutTableTypeConfig (..),
+  TxOutVariantTypeConfig (..),
   SyncNodeConfig (..),
   SyncPreConfig (..),
   SyncInsertConfig (..),
@@ -69,7 +69,7 @@ import qualified Cardano.BM.Data.Configuration as Logging
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (MigrationDir, PGPassSource (..), TxOutTableType (..))
+import Cardano.Db (MigrationDir, PGPassSource (..), TxOutVariantType (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (fail)
@@ -127,6 +127,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncProtocol :: !SyncProtocol
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
   , dncEnableLogging :: !Bool
+  , dncEnableDbLogging :: !Bool
   , dncEnableMetrics :: !Bool
   , dncPrometheusPort :: !Int
   , dncPBftSignatureThreshold :: !(Maybe Double)
@@ -155,6 +156,7 @@ data SyncPreConfig = SyncPreConfig
   , pcNodeConfigFile :: !NodeConfigFile
   , pcEnableFutureGenesis :: !Bool
   , pcEnableLogging :: !Bool
+  , pcEnableDbLogging :: !Bool
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
@@ -189,6 +191,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioDbDebug :: Bool
   }
   deriving (Eq, Show)
 
@@ -267,8 +270,8 @@ newtype RemoveJsonbFromSchemaConfig = RemoveJsonbFromSchemaConfig
   }
   deriving (Eq, Show)
 
-newtype TxOutTableTypeConfig = TxOutTableTypeConfig
-  { unTxOutTableTypeConfig :: TxOutTableType
+newtype TxOutVariantTypeConfig = TxOutVariantTypeConfig
+  { unTxOutVariantTypeConfig :: TxOutVariantType
   }
   deriving (Eq, Show)
 
@@ -388,7 +391,7 @@ isPlutusEnabled PlutusDisable = False
 isPlutusEnabled PlutusEnable = True
 isPlutusEnabled (PlutusScripts _) = True
 
--- -------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 
 instance FromJSON SyncPreConfig where
   parseJSON =
@@ -402,6 +405,7 @@ parseGenSyncNodeConfig o =
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> fmap (fromMaybe True) (o .:? "EnableFutureGenesis")
     <*> o .: "EnableLogging"
+    <*> fmap (fromMaybe False) (o .:? "EnableDbLogging")
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
     <*> o .:? "insert_options" .!= def
@@ -455,6 +459,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj .:? "db_debug" .!= sioDbDebug baseOptions
 
 instance ToJSON SyncInsertConfig where
   toJSON (SyncInsertConfig preset options) =
@@ -476,6 +481,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
+    , toJsonIfSet "db_debug" sioDbDebug
     ]
 
 toJsonIfSet :: ToJSON a => Text -> a -> Maybe Pair
@@ -497,6 +503,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj .:? "db_debug" .!= sioDbDebug def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -513,6 +520,7 @@ instance ToJSON SyncInsertOptions where
       , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
+      , "db_debug" .= sioDbDebug
       ]
 
 instance ToJSON RewardsConfig where
@@ -696,14 +704,14 @@ instance FromJSON RemoveJsonbFromSchemaConfig where
 instance ToJSON RemoveJsonbFromSchemaConfig where
   toJSON = boolToEnableDisable . isRemoveJsonbFromSchemaEnabled
 
-instance FromJSON TxOutTableTypeConfig where
+instance FromJSON TxOutVariantTypeConfig where
   parseJSON = Aeson.withText "use_address_table" $ \v ->
-    case enableDisableToTxOutTableType v of
-      Just g -> pure (TxOutTableTypeConfig g)
+    case enableDisableToTxOutVariantType v of
+      Just g -> pure (TxOutVariantTypeConfig g)
       Nothing -> fail $ "unexpected use_address_table: " <> show v
 
-instance ToJSON TxOutTableTypeConfig where
-  toJSON = addressTypeToEnableDisable . unTxOutTableTypeConfig
+instance ToJSON TxOutVariantTypeConfig where
+  toJSON = addressTypeToEnableDisable . unTxOutVariantTypeConfig
 
 instance FromJSON OffchainPoolDataConfig where
   parseJSON = Aeson.withText "offchain_pool_data" $ \v ->
@@ -742,6 +750,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioDbDebug = False
       }
 
 fullInsertOptions :: SyncInsertOptions
@@ -760,6 +769,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -778,6 +788,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -804,16 +815,17 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioDbDebug = False
     }
 
-addressTypeToEnableDisable :: IsString s => TxOutTableType -> s
+addressTypeToEnableDisable :: IsString s => TxOutVariantType -> s
 addressTypeToEnableDisable TxOutVariantAddress = "enable"
-addressTypeToEnableDisable TxOutCore = "disable"
+addressTypeToEnableDisable TxOutVariantCore = "disable"
 
-enableDisableToTxOutTableType :: (Eq s, IsString s) => s -> Maybe TxOutTableType
-enableDisableToTxOutTableType = \case
+enableDisableToTxOutVariantType :: (Eq s, IsString s) => s -> Maybe TxOutVariantType
+enableDisableToTxOutVariantType = \case
   "enable" -> Just TxOutVariantAddress
-  "disable" -> Just TxOutCore
+  "disable" -> Just TxOutVariantCore
   _ -> Nothing
 
 boolToEnableDisable :: IsString s => Bool -> s

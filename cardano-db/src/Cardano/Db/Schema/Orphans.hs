@@ -8,7 +8,6 @@ import Cardano.Db.Schema.Types (
  )
 import Cardano.Db.Types (
   AnchorType (..),
-  DbInt65 (..),
   DbLovelace (..),
   DbWord64 (..),
   GovActionType (..),
@@ -19,26 +18,23 @@ import Cardano.Db.Types (
   Vote (..),
   VoteUrl (..),
   VoterRole (..),
-  readAnchorType,
-  readDbInt65,
-  readGovActionType,
-  readRewardSource,
-  readScriptPurpose,
-  readScriptType,
-  readSyncState,
-  readVote,
-  readVoterRole,
-  renderAnchorType,
-  renderGovActionType,
-  renderScriptPurpose,
-  renderScriptType,
-  renderSyncState,
-  renderVote,
-  renderVoterRole,
-  showDbInt65,
-  showRewardSource,
+  anchorTypeFromText,
+  anchorTypeToText,
+  govActionTypeFromText,
+  govActionTypeToText,
+  rewardSourceFromText,
+  rewardSourceToText,
+  scriptPurposeFromText,
+  scriptPurposeToText,
+  scriptTypeFromText,
+  scriptTypeToText,
+  syncStateFromText,
+  syncStateToText,
+  voteFromText,
+  voteToText,
+  voterRoleFromText,
+  voterRoleToText,
  )
-import qualified Data.ByteString.Char8 as BS
 import Data.Ratio (denominator, numerator)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -46,24 +42,24 @@ import Data.WideWord.Word128 (Word128)
 import Database.Persist.Class (PersistField (..))
 import Database.Persist.Types (PersistValue (..))
 
-instance PersistField DbInt65 where
-  toPersistValue = PersistText . Text.pack . showDbInt65
-  fromPersistValue (PersistInt64 i) =
-    Right $
-      if i >= 0
-        then PosInt65 (fromIntegral i)
-        else NegInt65 (fromIntegral $ negate i)
-  fromPersistValue (PersistText bs) = Right $ readDbInt65 (Text.unpack bs)
-  fromPersistValue x@(PersistRational r) =
-    if denominator r == 1
-      then
-        Right $
-          if numerator r >= 0
-            then PosInt65 (fromIntegral $ numerator r)
-            else NegInt65 (fromIntegral . numerator $ negate r)
-      else Left $ mconcat ["Failed to parse Haskell type DbInt65: ", Text.pack (show x)]
-  fromPersistValue x =
-    Left $ mconcat ["Failed to parse Haskell type DbInt65: ", Text.pack (show x)]
+-- instance PersistField DbInt65 where
+--   toPersistValue = PersistText . Text.pack . show
+--   fromPersistValue (PersistInt64 i) =
+--     Right $
+--       if i >= 0
+--         then PosInt65 (fromIntegral i)
+--         else NegInt65 (fromIntegral $ negate i)
+--   fromPersistValue (PersistText bs) = Right $ readDbInt65 (Text.unpack bs)
+--   fromPersistValue x@(PersistRational r) =
+--     if denominator r == 1
+--       then
+--         Right $
+--           if numerator r >= 0
+--             then PosInt65 (fromIntegral $ numerator r)
+--             else NegInt65 (fromIntegral . numerator $ negate r)
+--       else Left $ mconcat ["Failed to parse Haskell type DbInt65: ", Text.pack (show x)]
+--   fromPersistValue x =
+--     Left $ mconcat ["Failed to parse Haskell type DbInt65: ", Text.pack (show x)]
 
 instance PersistField DbLovelace where
   toPersistValue = PersistText . Text.pack . show . unDbLovelace
@@ -97,26 +93,26 @@ instance PersistField PoolUrl where
     Left $ mconcat ["Failed to parse Haskell type PoolUrl: ", Text.pack (show x)]
 
 instance PersistField RewardSource where
-  toPersistValue = PersistText . showRewardSource
-  fromPersistValue (PersistLiteral bs) = Right $ readRewardSource (Text.decodeLatin1 bs)
+  toPersistValue = PersistText . rewardSourceToText
+  fromPersistValue (PersistLiteral bs) = Right $ rewardSourceFromText (Text.decodeLatin1 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type RewardSource: ", Text.pack (show x)]
 
 instance PersistField SyncState where
-  toPersistValue = PersistText . renderSyncState
-  fromPersistValue (PersistLiteral bs) = Right $ readSyncState (BS.unpack bs)
+  toPersistValue = PersistText . syncStateToText
+  fromPersistValue (PersistLiteral bs) = Right $ syncStateFromText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type SyncState: ", Text.pack (show x)]
 
 instance PersistField ScriptPurpose where
-  toPersistValue = PersistText . renderScriptPurpose
-  fromPersistValue (PersistLiteral bs) = Right $ readScriptPurpose (BS.unpack bs)
+  toPersistValue = PersistText . scriptPurposeFromText
+  fromPersistValue (PersistLiteral bs) = Right $ scriptPurposeToText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type ScriptPurpose: ", Text.pack (show x)]
 
 instance PersistField ScriptType where
-  toPersistValue = PersistText . renderScriptType
-  fromPersistValue (PersistLiteral bs) = Right $ readScriptType (BS.unpack bs)
+  toPersistValue = PersistText . scriptTypeToText
+  fromPersistValue (PersistLiteral bs) = Right $ scriptTypeFromText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type ScriptType: ", Text.pack (show x)]
 
@@ -138,25 +134,25 @@ instance PersistField VoteUrl where
     Left $ mconcat ["Failed to parse Haskell type VoteUrl: ", Text.pack (show x)]
 
 instance PersistField Vote where
-  toPersistValue = PersistText . renderVote
-  fromPersistValue (PersistLiteral bs) = Right $ readVote (BS.unpack bs)
+  toPersistValue = PersistText . voteToText
+  fromPersistValue (PersistLiteral bs) = Right $ voteFromText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type Vote: ", Text.pack (show x)]
 
 instance PersistField VoterRole where
-  toPersistValue = PersistText . renderVoterRole
-  fromPersistValue (PersistLiteral bs) = Right $ readVoterRole (BS.unpack bs)
+  toPersistValue = PersistText . voterRoleToText
+  fromPersistValue (PersistLiteral bs) = Right $ voterRoleFromText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type VoterRole: ", Text.pack (show x)]
 
 instance PersistField GovActionType where
-  toPersistValue = PersistText . renderGovActionType
-  fromPersistValue (PersistLiteral bs) = Right $ readGovActionType (BS.unpack bs)
+  toPersistValue = PersistText . govActionTypeToText
+  fromPersistValue (PersistLiteral bs) = Right $ govActionTypeFromText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type GovActionType: ", Text.pack (show x)]
 
 instance PersistField AnchorType where
-  toPersistValue = PersistText . renderAnchorType
-  fromPersistValue (PersistLiteral bs) = Right $ readAnchorType (BS.unpack bs)
+  toPersistValue = PersistText . anchorTypeToText
+  fromPersistValue (PersistLiteral bs) = Right $ anchorTypeFromText (Text.decodeUtf8 bs)
   fromPersistValue x =
     Left $ mconcat ["Failed to parse Haskell type AnchorType: ", Text.pack (show x)]
