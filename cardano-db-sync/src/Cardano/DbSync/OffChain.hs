@@ -242,8 +242,7 @@ runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           tDelay
           -- load the offChain vote work queue using the db
-          _ <-
-            runExceptT $ DB.runDbIohkLoggingEither trce dbEnv $
+          _ <- DB.runDbIohkLoggingEither trce dbEnv $
               loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
           poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
           manager <- Http.newManager tlsManagerSettings
@@ -279,8 +278,7 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
           forever $ do
             tDelay
             -- load the offChain vote work queue using the db
-            _ <-
-              runExceptT $ DB.runDbIohkLoggingEither trce dbEnv $
+            _ <- DB.runDbIohkLoggingEither trce dbEnv $
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
             now <- liftIO Time.getPOSIXTime

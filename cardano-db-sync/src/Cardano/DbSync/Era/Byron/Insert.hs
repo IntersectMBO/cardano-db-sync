@@ -279,7 +279,6 @@ insertByronTx syncEnv blkId tx blockIndex = do
   where
     iopts = getInsertOptions syncEnv
 
-
 insertByronTx' ::
   (MonadIO m) =>
   SyncEnv ->
@@ -289,7 +288,11 @@ insertByronTx' ::
   DB.DbAction m Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
   -- Resolve all transaction inputs - any failure will throw via MonadError
-  resolvedInputs <- mapM (resolveTxInputsByron txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
+  resolvedResults <- mapM (resolveTxInputsByron txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
+
+  resolvedInputs <- case sequence resolvedResults of
+    Right inputs -> pure inputs
+    Left dbErr -> throwError dbErr
 
   -- Calculate transaction fee
   valFee <- case calculateTxFee (Byron.taTx tx) resolvedInputs of
@@ -435,14 +438,17 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) =
 
 -------------------------------------------------------------------------------
 
-resolveTxInputsByron :: (MonadIO m) => DB.TxOutVariantType -> Byron.TxIn -> DB.DbAction m (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
+resolveTxInputsByron ::
+  (MonadIO m) =>
+  DB.TxOutVariantType ->
+  Byron.TxIn ->
+  DB.DbAction m (Either DB.DbError (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace))
 resolveTxInputsByron txOutVariantType txIn@(Byron.TxInUtxo txHash index) = do
   result <- DB.queryTxOutIdValueEither txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
-  case result of
-    Right res -> pure $ convert res
-    Left dbErr -> throwError dbErr  -- Use MonadError instead of Either
+  pure $ case result of
+    Right res -> Right $ convert res
+    Left dbErr -> Left dbErr  -- Return Either instead of throwing
   where
-    convert :: (DB.TxId, DB.TxOutIdW, DbLovelace) -> (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
     convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)
 
 calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)] -> Either SyncNodeError ValueFee

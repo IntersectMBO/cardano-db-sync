@@ -198,15 +198,14 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
         if withinTwoMin || tookSnapshot
-          then do pure True
+          then pure True
           else pure False
       when withinHalfHour $ do
         bootStrapMaybe syncEnv
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $
-          liftIO $
-            runIndexMigrations syncEnv
+          liftIO $ runIndexMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
 
