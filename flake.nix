@@ -110,9 +110,18 @@
                         gssSupport = false;
                         perlSupport = false;
                         jitSupport = false;
+                        icuSupport = false;
+                        pamSupport = false;
+                        pythonSupport = false;
+                        tclSupport = false;
                       })
 
                       (p: p.overrideAttrs (old: {
+                        NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                        LC_CTYPE = "C";
+
+                        doCheck = false;
+
                         postPatch = old.postPatch + ''
                           substituteInPlace src/interfaces/libpq/Makefile \
                             --replace-fail "echo 'libpq must not be calling any function which invokes exit'; exit 1;" "echo;"
