@@ -301,8 +301,9 @@ queryTxOutIdValueEither ::
   (ByteString, Word64) ->
   DbAction m (Either DbError (Id.TxId, TxOutIdW, DbLovelace))
 queryTxOutIdValueEither txOutVariantType hashIndex@(hash, _) = do
-  result <- runDbSession (mkDbCallStack "queryTxOutIdValue") $
-    HsqlSes.statement hashIndex queryTxOutIdValueStmt
+  result <-
+    runDbSession (mkDbCallStack "queryTxOutIdValue") $
+      HsqlSes.statement hashIndex queryTxOutIdValueStmt
   pure $ case result of
     Just (txId, rawId, value) ->
       Right $ case txOutVariantType of

@@ -20,7 +20,7 @@ import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SV
 import qualified Cardano.Db.Schema.Core.OffChain as SO
 import qualified Cardano.Db.Schema.Core.Pool as SP
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder, utcTimeAsTimestampEncoder, utcTimeAsTimestampDecoder)
+import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder, utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)

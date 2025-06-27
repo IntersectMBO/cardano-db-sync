@@ -34,8 +34,8 @@ import Cardano.Db.Statement.Function.InsertBulk
 import Cardano.Db.Statement.Function.Query
 import Cardano.Db.Statement.GovernanceAndVoting
 import Cardano.Db.Statement.JsonB
-import Cardano.Db.Statement.MultiAsset
 import Cardano.Db.Statement.MinIds
+import Cardano.Db.Statement.MultiAsset
 import Cardano.Db.Statement.OffChain
 import Cardano.Db.Statement.Pool
 import Cardano.Db.Statement.StakeDeligation

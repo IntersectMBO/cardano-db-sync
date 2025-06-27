@@ -412,7 +412,7 @@ queryMAWithCache cache policyId asset =
 queryTxIdWithCacheEither ::
   MonadIO m =>
   CacheStatus ->
-  Ledger.TxId ->  -- Use the original input type
+  Ledger.TxId -> -- Use the original input type
   DB.DbAction m (Either DB.DbError DB.TxId)
 queryTxIdWithCacheEither cache txIdLedger = do
   case cache of
@@ -441,7 +441,7 @@ queryTxIdWithCacheEither cache txIdLedger = do
               -- Return lookup failure.
               Left err -> pure $ Left err
   where
-    txHash = Generic.unTxHash txIdLedger  -- Convert to ByteString for DB query
+    txHash = Generic.unTxHash txIdLedger -- Convert to ByteString for DB query
     qTxHash = do
       result <- DB.queryTxId txHash
       case result of
@@ -514,8 +514,13 @@ queryTxIdWithCache cache txIdLedger = do
       result <- DB.queryTxId txHash
       case result of
         Just txId -> pure $ Right txId
-        Nothing -> pure $ Left $ DB.DbError (DB.mkDbCallStack "queryTxIdWithCacheEither")
-                          ("TxId not found for hash: " <> textShow txHash) Nothing
+        Nothing ->
+          pure $
+            Left $
+              DB.DbError
+                (DB.mkDbCallStack "queryTxIdWithCacheEither")
+                ("TxId not found for hash: " <> textShow txHash)
+                Nothing
 
 tryUpdateCacheTx ::
   MonadIO m =>

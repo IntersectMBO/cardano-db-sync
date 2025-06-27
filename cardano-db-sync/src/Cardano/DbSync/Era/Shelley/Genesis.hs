@@ -152,8 +152,8 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
         , DB.blockSize = 0
         , DB.blockTime = configStartTime cfg
         , DB.blockTxCount = expectedTxCount
-        -- Genesis block does not have a protocol version, so set this to '0'.
-        , DB.blockProtoMajor = 0
+        , -- Genesis block does not have a protocol version, so set this to '0'.
+          DB.blockProtoMajor = 0
         , DB.blockProtoMinor = 0
         , DB.blockVrfKey = Nothing
         , DB.blockOpCert = Nothing
@@ -180,8 +180,9 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   metaMaybe <- DB.queryMeta
   meta <- case metaMaybe of
     Just m -> pure m
-    Nothing -> throwError $
-      DB.DbError dbCallStack "Meta table is empty during validation - this should not happen" Nothing
+    Nothing ->
+      throwError $
+        DB.DbError dbCallStack "Meta table is empty during validation - this should not happen" Nothing
 
   when (DB.metaStartTime meta /= configStartTime cfg) $
     throwError $

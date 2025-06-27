@@ -13,17 +13,17 @@ module Cardano.DbSync.Rollback (
 import Cardano.Prelude
 import qualified Data.ByteString.Short as SBS
 import Ouroboros.Consensus.HardFork.Combinator.AcrossEras (getOneEraHash)
+import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
+import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
-import Ouroboros.Consensus.Ledger.Extended
-import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
 
-import Control.Monad.Extra (whenJust)
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Control.Monad.Extra (whenJust)
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (SyncEnv (..), LedgerEnv (..))
+import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO)
 import Cardano.DbSync.Ledger.State
@@ -42,12 +42,13 @@ rollbackFromBlockNo syncEnv blkNo = do
   mres <- DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   -- Use whenJust like the original - silently skip if block not found
   whenJust mres $ \(blockId, epochNo) -> do
-    liftIO . logInfo trce $ mconcat
-      [ "Deleting "
-      , textShow nBlocks
-      , " numbered equal to or greater than "
-      , textShow blkNo
-      ]
+    liftIO . logInfo trce $
+      mconcat
+        [ "Deleting "
+        , textShow nBlocks
+        , " numbered equal to or greater than "
+        , textShow blkNo
+        ]
 
     deletedBlockCount <- DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
     when (deletedBlockCount > 0) $ do
@@ -80,14 +81,15 @@ prepareRollback syncEnv point serverTip = do
               liftIO . logInfo trce $ "Starting from Genesis"
               pure True
             else do
-              liftIO . logInfo trce $ mconcat
-                [ "Delaying delete of "
-                , textShow nBlocks
-                , " while rolling back to genesis."
-                , " Applying blocks until a new block is found."
-                , " The node is currently at "
-                , textShow serverTip
-                ]
+              liftIO . logInfo trce $
+                mconcat
+                  [ "Delaying delete of "
+                  , textShow nBlocks
+                  , " while rolling back to genesis."
+                  , " Applying blocks until a new block is found."
+                  , " The node is currently at "
+                  , textShow serverTip
+                  ]
               pure False
         At blk -> do
           nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
@@ -95,16 +97,17 @@ prepareRollback syncEnv point serverTip = do
           case mBlockNo of
             Nothing -> throwError $ SNErrRollback "Rollback.prepareRollback: queryBlockHashBlockNo: Block hash not found"
             Just blockN -> do
-              liftIO . logInfo trce $ mconcat
-                [ "Delaying delete of "
-                , textShow nBlocks
-                , " blocks after "
-                , textShow blockN
-                , " while rolling back to ("
-                , renderPoint point
-                , "). Applying blocks until a new block is found. The node is currently at "
-                , textShow serverTip
-                ]
+              liftIO . logInfo trce $
+                mconcat
+                  [ "Delaying delete of "
+                  , textShow nBlocks
+                  , " blocks after "
+                  , textShow blockN
+                  , " while rolling back to ("
+                  , renderPoint point
+                  , "). Applying blocks until a new block is found. The node is currently at "
+                  , textShow serverTip
+                  ]
               pure False
 
 rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])

@@ -4,16 +4,16 @@
 module Cardano.Db.Schema.Types where
 
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as TextError
+import Data.Time (UTCTime, localTimeToUTC, utc, utcToLocalTime)
 import GHC.Generics (Generic)
-import qualified Hasql.Decoders as HsqlD
-import Quiet (Quiet (..))
 import qualified Hasql.Decoders as D
+import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as E
-import Data.Time (UTCTime, utc, localTimeToUTC, utcToLocalTime)
-import Data.Functor.Contravariant ((>$<))
+import Quiet (Quiet (..))
 
 newtype AddressHash -- Length (28 bytes) enforced by Postgres
   = AddressHash {unAddressHash :: ByteString}

@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wno-x-partial #-}
 
 module Test.IO.Cardano.Db.Rollback (
   tests,
@@ -67,7 +66,7 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-createAndInsertBlocks :: MonadIO m => Word64 -> DbAction m ()
+createAndInsertBlocks :: (MonadIO m) => Word64 -> DbAction m ()
 createAndInsertBlocks blockCount =
   void $ loop (0, Nothing, Nothing)
   where
@@ -133,7 +132,10 @@ createAndInsertBlocks blockCount =
           -- Insert Txs here to test that they are cascade deleted when the blocks
           -- they are associcated with are deleted.
 
-          txId <- head <$> mapM insertTx (mkTxs blkId 8)
+          txIds <- mapM insertTx (mkTxs blkId 8)
+          let txId = case txIds of
+                (x:_) -> x
+                [] -> error "mkTxs returned empty list" -- This shouldn't happen with mkTxs blkId 8
           void $ insertTxIn (TxIn txId txOutId 0 Nothing)
           void $ insertTxOut (mkTxOutCore blkId txId)
         _otherwise -> pure ()

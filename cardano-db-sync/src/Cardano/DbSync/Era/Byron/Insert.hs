@@ -447,7 +447,7 @@ resolveTxInputsByron txOutVariantType txIn@(Byron.TxInUtxo txHash index) = do
   result <- DB.queryTxOutIdValueEither txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
   pure $ case result of
     Right res -> Right $ convert res
-    Left dbErr -> Left dbErr  -- Return Either instead of throwing
+    Left dbErr -> Left dbErr -- Return Either instead of throwing
   where
     convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)
 

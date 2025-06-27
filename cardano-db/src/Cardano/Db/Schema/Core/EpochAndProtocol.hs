@@ -40,12 +40,12 @@ import Data.WideWord.Word128 (Word128)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Contravariant.Extras (contrazip4)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
-import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- EPOCH AND PROTOCOL PARAMETER

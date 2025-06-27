@@ -14,6 +14,7 @@ import Cardano.BM.Data.LogItem (
 import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Trace (Trace)
 import Cardano.Prelude
+import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Logger (
   LogLevel (..),
   LogSource,
@@ -23,25 +24,24 @@ import Control.Monad.Logger (
   runNoLoggingT,
  )
 import Control.Monad.Trans.Resource (MonadUnliftIO)
-import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Tracer (traceWith)
 import Data.Pool (Pool, defaultPoolConfig, newPool, withResource)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Connection.Setting as HsqlConS
-import Language.Haskell.TH.Syntax (Loc)
-import System.Log.FastLogger (LogStr, fromLogStr)
-import Prelude (error, userError)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
 import qualified Hasql.Statement as HsqlStmt
-import qualified Data.Text as Text
+import Language.Haskell.TH.Syntax (Loc)
+import System.Log.FastLogger (LogStr, fromLogStr)
+import Prelude (error, userError)
 
-import Cardano.Db.Error (runOrThrowIO, DbError (..), DbCallStack (..))
+import Cardano.Db.Error (DbCallStack (..), DbError (..), runOrThrowIO)
 import Cardano.Db.PGConfig
-import Cardano.Db.Types (DbAction (..), DbEnv (..))
 import Cardano.Db.Statement.Function.Core (mkDbCallStack)
+import Cardano.Db.Types (DbAction (..), DbEnv (..))
 
 -----------------------------------------------------------------------------------------
 -- Transaction Management
@@ -104,10 +104,11 @@ runDbActionWithIsolation dbEnv isolationLevel action = do
         Left err -> pure (Left err)
         Right _ -> do
           -- Run the action with proper exception handling for interrupts
-          result <- restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv)
-            `onException` do
-              liftIO $ putStrLn ("\n\n Shuting down ... \n\n" :: Text)
-              rollbackTransaction dbEnv
+          result <-
+            restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv)
+              `onException` do
+                liftIO $ putStrLn ("\n\n Shuting down ... \n\n" :: Text)
+                rollbackTransaction dbEnv
           case result of
             Left err -> do
               rollbackTransaction dbEnv
@@ -194,9 +195,9 @@ runDbNoLogging source action = do
     bracket
       (acquireConnection [connSetting])
       HsqlCon.release
-      (\connection -> runInIO $ do
-        let dbEnv = DbEnv connection False Nothing
-        runDbConnWithIsolation action dbEnv RepeatableRead
+      ( \connection -> runInIO $ do
+          let dbEnv = DbEnv connection False Nothing
+          runDbConnWithIsolation action dbEnv RepeatableRead
       )
 
 runDbNoLoggingEnv :: MonadUnliftIO m => DbAction m a -> m a
@@ -211,9 +212,9 @@ runWithConnectionNoLogging source action = do
   bracket
     (acquireConnection [connSetting])
     HsqlCon.release
-    (\connection -> do
-      let dbEnv = DbEnv connection False Nothing
-      runNoLoggingT $ runDbConnWithIsolation action dbEnv RepeatableRead
+    ( \connection -> do
+        let dbEnv = DbEnv connection False Nothing
+        runNoLoggingT $ runDbConnWithIsolation action dbEnv RepeatableRead
     )
 
 -- | Run a DB action with loggingT.

@@ -74,7 +74,6 @@ selectByField fieldName paramEncoder entityDecoder =
     (HsqlD.rowMaybe entityDecoder)
     True
 
-
 selectByFieldFirst ::
   forall a b.
   (DbInfo a) =>
@@ -338,7 +337,6 @@ countAll =
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> table
           ]
-
 
 ---------------------------------------------------------------------------
 -- QUERY HELPERS

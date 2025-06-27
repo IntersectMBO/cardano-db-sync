@@ -19,7 +19,7 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
 
-import Cardano.BM.Trace (logInfo, Trace)
+import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
@@ -76,11 +76,12 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
       -- equal, insert the block and restore consistency between ledger and db.
       case eiBlockInDbAlreadyId of
         Left _ -> do
-          liftIO . logInfo tracer $ mconcat
-            [ "Received block which is not in the db with "
-            , textShow (getHeaderFields cblk)
-            , ". Time to restore consistency."
-            ]
+          liftIO . logInfo tracer $
+            mconcat
+              [ "Received block which is not in the db with "
+              , textShow (getHeaderFields cblk)
+              , ". Time to restore consistency."
+              ]
           lift $ rollbackFromBlockNo syncEnv (blockNo cblk)
           lift $ insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
@@ -205,7 +206,8 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $
-          liftIO $ runIndexMigrations syncEnv
+          liftIO $
+            runIndexMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
 

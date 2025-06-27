@@ -29,7 +29,7 @@ import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 import Cardano.Db.Types (Ada, DbAction, DbLovelace, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Credential (Ptr (..), SlotNo32(..))
+import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
 import Contravariant.Extras (contrazip2, contrazip4)
 import qualified Hasql.Pipeline as HsqlP
 
