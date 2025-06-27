@@ -150,6 +150,9 @@
             echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
           '';
 
+          isCross = pkgs: 
+            with pkgs.haskell-nix.haskellLib; isNativeMusl || isCrossHost;
+
           project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
@@ -220,26 +223,11 @@
                   [ "../schema/*.sql" ];
               })
 
-
               ({ lib, pkgs, config, ... }: {
                   # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
                   # to call out to all kinds of silly tools that GHC doesn't really provide.
                   # For this reason, we try to get away without re-installing lib:ghc for now.
                   reinstallableLibGhc = false;
-                })
-
-              ({ pkgs, ... }:
-                # Database tests
-                let
-                  postgresTest = {
-                    build-tools = [ pkgs.pkgsBuildHost.postgresql_17 ];
-                    inherit preCheck;
-                    inherit postCheck;
-                  };
-                in {
-                  packages.cardano-db.components.tests.test-db = postgresTest;
-                  packages.cardano-chain-gen.components.tests.cardano-chain-gen =
-                    postgresTest;
                 })
 
               (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
@@ -318,6 +306,30 @@
                 ];
               })
 
+              ({ lib, pkgs, ... }:
+                # Database tests
+                let
+                  inherit (pkgs.haskell-nix) haskellLib;
+
+                  postgresTest = {
+                    # Keep postgresql static builds out of shells
+                    build-tools = lib.optional (!isCross pkgs) pkgs.postgresql;
+                    inherit preCheck;
+                    inherit postCheck;
+                  };
+                in {
+                  packages.cardano-db.components.tests.test-db = postgresTest;
+                  packages.cardano-chain-gen.components.tests.cardano-chain-gen =
+                    postgresTest;
+                })
+
+              ({ lib, pkgs, ... }: with pkgs.haskell-nix.haskellLib;
+                # There's no need to run PostgreSQL integration tests on static builds
+                lib.mkIf (isCross pkgs) {
+                  packages.cardano-chain-gen.components.tests.cardano-chain-gen.doCheck = false;
+                  packages.cardano-db.components.tests.test-db.doCheck = false;
+                })
+
               ({ lib, pkgs, config, ... }: lib.mkIf pkgs.hostPlatform.isMacOS {
                 # PostgreSQL tests fail in Hydra on MacOS with:
                 #
@@ -332,6 +344,7 @@
                 packages.cardano-chain-gen.components.tests.cardano-chain-gen.doCheck = false;
                 packages.cardano-db.components.tests.test-db.doCheck = false;
               })
+
             ];
           })).appendOverlays [
             # Collect local package `exe`s
