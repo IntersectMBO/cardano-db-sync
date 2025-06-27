@@ -103,6 +103,22 @@
                           postInstall = "";
                         }))
                     ];
+
+                  postgresql =
+                    final.lib.pipe prev.postgresql [
+                      (p: p.override {
+                        gssSupport = false;
+                        perlSupport = false;
+                        jitSupport = false;
+                      })
+
+                      (p: p.overrideAttrs (old: {
+                        postPatch = old.postPatch + ''
+                          substituteInPlace src/interfaces/libpq/Makefile \
+                            --replace-fail "echo 'libpq must not be calling any function which invokes exit'; exit 1;" "echo;"
+                        '';
+                      }))
+                    ];
                 })
               ];
           };
@@ -236,11 +252,7 @@
                 # Database tests
                 let
                   postgresTest = {
-                    build-tools = [ 
-                      # We don't need the static build of postgresql to run tests, so again we choose
-                      # pkgsBuildBuild
-                      pkgs.pkgsBuildBuild.postgresql
-                    ];
+                    build-tools = [ pkgs.postgresql ];
                     inherit preCheck;
                     inherit postCheck;
                   };
