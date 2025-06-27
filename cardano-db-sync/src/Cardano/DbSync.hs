@@ -25,6 +25,7 @@ module Cardano.DbSync (
   extractSyncOptions,
 ) where
 
+import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
@@ -36,7 +37,6 @@ import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
-import Control.Concurrent.Async
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
@@ -240,14 +240,18 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncN
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
-          liftIO $ race_
-            (runDbThread syncEnv metricsSetters threadChannels)  -- Main App thread
-            (mapConcurrently_ id [                               -- Non-critical threads
-              runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams),
-              runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile,
-              runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile,
-              runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-            ])
+          liftIO $
+            race_
+              (runDbThread syncEnv metricsSetters threadChannels) -- Main App thread
+              ( mapConcurrently_
+                  id
+                  [ -- Non-critical threads
+                    runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+                  , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
+                  , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
+                  , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+                  ]
+              )
     )
   where
     useShelleyInit :: SyncNodeConfig -> Bool

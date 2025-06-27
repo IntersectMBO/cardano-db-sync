@@ -152,6 +152,7 @@ textShowStats (ActiveCache ic) = do
       , textLruSection "Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
       , textPrevBlockSection stats
       , textFifoSection "TxId" txIds (txIdsHits stats) (txIdsQueries stats)
+      , "\n-----------------------------------------------------------------"
       ]
   where
     textCacheSection title cacheLru cacheStable hits queries =

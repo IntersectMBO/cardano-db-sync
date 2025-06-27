@@ -287,7 +287,7 @@ rewardSourceDecoder = HsqlD.enum $ \case
   "member" -> Just RwdMember
   "reserves" -> Just RwdReserves
   "treasury" -> Just RwdTreasury
-  "deposit_refund" -> Just RwdDepositRefund
+  "refund" -> Just RwdDepositRefund
   "proposal_refund" -> Just RwdProposalRefund
   _ -> Nothing
 
@@ -297,7 +297,7 @@ rewardSourceEncoder = HsqlE.enum $ \case
   RwdMember -> "member"
   RwdReserves -> "reserves"
   RwdTreasury -> "treasury"
-  RwdDepositRefund -> "deposit_refund"
+  RwdDepositRefund -> "refund"
   RwdProposalRefund -> "proposal_refund"
 
 --------------------------------------------------------------------------------

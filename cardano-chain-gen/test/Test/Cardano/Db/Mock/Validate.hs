@@ -66,8 +66,8 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Shelley.LedgerState (EraCertState)
 import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Shelley.LedgerState (EraCertState)
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude (MonadIO)

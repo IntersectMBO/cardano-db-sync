@@ -204,8 +204,11 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
         (Nothing, _, _) ->
           -- Only throw if in-memory resolution also fails
-          throwError $ DB.DbError (DB.mkDbCallStack "resolveTxInputs")
-            ("TxOut not found for TxIn: " <> textShow txIn) Nothing
+          throwError $
+            DB.DbError
+              (DB.mkDbCallStack "resolveTxInputs")
+              ("TxOut not found for TxIn: " <> textShow txIn)
+              Nothing
         (Just eutxo, True, True) ->
           pure $ convertFoundValue (etoTxOut eutxo)
         (Just eutxo, _, _) ->

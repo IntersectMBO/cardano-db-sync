@@ -23,9 +23,9 @@ import Hasql.Encoders as E
 
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Orphans ()
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
-import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- OFFCHAIN
@@ -48,7 +48,7 @@ data OffChainPoolData = OffChainPoolData
 type instance Key OffChainPoolData = Id.OffChainPoolDataId
 
 instance DbInfo OffChainPoolData where
-  uniqueFields _ = ["pool_id", "prm_id"]
+  uniqueFields _ = ["pool_id", "pmr_id"]
   jsonbFields _ = ["json"]
 
 entityOffChainPoolDataDecoder :: D.Row (Entity OffChainPoolData)

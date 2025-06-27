@@ -27,7 +27,7 @@ import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Prelude (textShow, MonadError (..))
+import Cardano.Prelude (MonadError (..), textShow)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)

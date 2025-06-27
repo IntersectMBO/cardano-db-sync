@@ -8,7 +8,7 @@
 
 module Cardano.Db.Statement.Rollback where
 
-import Cardano.Prelude (Int64, MonadIO, Proxy (..), forM, catMaybes)
+import Cardano.Prelude (Int64, MonadIO, Proxy (..), catMaybes, forM)
 import qualified Data.Text as Text
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -28,7 +28,7 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount, deleteWhereCountWithNotNull)
-import Cardano.Db.Statement.MinIds (queryMinRefId, queryMinRefIdNullable)  -- Import from MinIds
+import Cardano.Db.Statement.MinIds (queryMinRefId, queryMinRefIdNullable) -- Import from MinIds
 import Cardano.Db.Statement.Types (DbInfo (..), tableName)
 import Cardano.Db.Types (DbAction)
 
@@ -235,7 +235,6 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
           pure [(tableN, count)]
 
       pure $ concat [txInLogs, txOutLogs, maTxOutLogs]
-
     VMinIdsWrapper (MinIds mtxInId mtxOutId mmaTxOutId) -> do
       -- Step 1: Delete TxIn records first
       txInLogs <- case mtxInId of
@@ -411,8 +410,9 @@ prepareQueryDeleteAndLog fkField fkValue fkEncoder = do
     Just recordId -> do
       -- Step 2: Prepare to delete records where id >= recordId
       let tName = tableName (Proxy @a)
-          deleteSession = HsqlSes.statement recordId $
-            deleteWhereCount @a "id" ">=" (HsqlE.param $ HsqlE.nonNullable HsqlE.int8)
+          deleteSession =
+            HsqlSes.statement recordId $
+              deleteWhereCount @a "id" ">=" (HsqlE.param $ HsqlE.nonNullable HsqlE.int8)
       pure $ Just (tName, deleteSession)
 
 -- Even cleaner - make a helper for the common TxId case
@@ -441,6 +441,7 @@ prepareQueryThenNull fkField fkValue fkEncoder = do
     Just recordId -> do
       -- Step 2: Prepare to delete records where id >= recordId AND fkField IS NOT NULL
       let tName = tableName (Proxy @a)
-          deleteSession = HsqlSes.statement recordId $
-            deleteWhereCountWithNotNull @a "id" fkField (HsqlE.param $ HsqlE.nonNullable HsqlE.int8)
+          deleteSession =
+            HsqlSes.statement recordId $
+              deleteWhereCountWithNotNull @a "id" fkField (HsqlE.param $ HsqlE.nonNullable HsqlE.int8)
       pure $ Just (tName, deleteSession)

@@ -30,6 +30,7 @@ import qualified Cardano.Db.Schema.Core as SC
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..), textToMinIds)
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 import Cardano.Db.Schema.Variants (TxOutVariantType)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
@@ -37,12 +38,11 @@ import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkJsonb)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll, parameterisedCountWhere)
 import Cardano.Db.Statement.GovernanceAndVoting (setNullDroppedStmt, setNullEnactedStmt, setNullExpiredStmt, setNullRatifiedStmt)
+import Cardano.Db.Statement.MinIds (completeMinId, queryMinRefId)
 import Cardano.Db.Statement.Rollback (deleteTablesAfterBlockId)
 import Cardano.Db.Statement.Types (DbInfo, Entity (..), tableName, validateColumn)
 import Cardano.Db.Statement.Variants.TxOut (querySetNullTxOut)
 import Cardano.Db.Types (Ada (..), DbAction, DbWord64, ExtraMigration, extraDescription)
-import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
-import Cardano.Db.Statement.MinIds (completeMinId, queryMinRefId)
 
 --------------------------------------------------------------------------------
 -- Block
@@ -170,8 +170,9 @@ queryBlockByIdStmt =
 
 queryBlockById :: MonadIO m => Id.BlockId -> DbAction m (Maybe SCB.Block)
 queryBlockById blockId = do
-  res <- runDbSession (mkDbCallStack "queryBlockSlotAndHash") $
-    HsqlSes.statement blockId queryBlockByIdStmt
+  res <-
+    runDbSession (mkDbCallStack "queryBlockSlotAndHash") $
+      HsqlSes.statement blockId queryBlockByIdStmt
   pure $ entityVal <$> res
 
 --------------------------------------------------------------------------------
@@ -1171,7 +1172,7 @@ queryMeta = do
   let dbCallStack = mkDbCallStack "queryMeta"
   result <- runDbSession dbCallStack $ HsqlSes.statement () queryMetaStmt
   case result of
-    [] -> pure Nothing  -- Empty table is valid
+    [] -> pure Nothing -- Empty table is valid
     [m] -> pure $ Just $ entityVal m
     _otherwise -> throwError $ DbError dbCallStack "Multiple rows in meta table" Nothing
 

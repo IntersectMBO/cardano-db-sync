@@ -25,6 +25,7 @@ import qualified Cardano.Db.Schema.Core as SVC
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Schema.Variants (TxOutVariantType (..), TxOutW (..), UtxoQueryResult (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
@@ -33,7 +34,6 @@ import Cardano.Db.Statement.Function.Query (adaDecoder)
 import Cardano.Db.Statement.Types (tableName)
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, dbLovelaceDecoder, lovelaceToAda)
 import Data.Fixed (Fixed (..))
-import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool Epcoh

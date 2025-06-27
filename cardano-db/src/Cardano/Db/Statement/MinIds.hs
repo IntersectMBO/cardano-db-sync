@@ -21,14 +21,14 @@ import qualified Hasql.Statement as HsqlStmt
 
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.MinIds (MinIds (..), extractCoreTxOutId, extractCoreMaTxOutId, extractVariantTxOutId, extractVariantMaTxOutId)
+import Cardano.Db.Schema.MinIds (MinIds (..), extractCoreMaTxOutId, extractCoreTxOutId, extractVariantMaTxOutId, extractVariantTxOutId)
+import qualified Cardano.Db.Schema.MinIds as SM
 import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (runDbSession, mkDbCallStack)
-import Cardano.Db.Statement.Types (DbInfo (..), Key, validateColumn, tableName)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Types (DbInfo (..), Key, tableName, validateColumn)
 import Cardano.Db.Types (DbAction)
-import qualified Cardano.Db.Schema.MinIds as SM
 
 ---------------------------------------------------------------------------
 -- RAW INT64 QUERIES (for rollback operations)

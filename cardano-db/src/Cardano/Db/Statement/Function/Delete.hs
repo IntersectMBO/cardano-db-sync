@@ -166,7 +166,6 @@ deleteAllCount =
           , "SELECT COUNT(*)::bigint FROM deleted"
           ]
 
-
 deleteWhereCountWithNotNull ::
   forall a.
   (DbInfo a) =>
