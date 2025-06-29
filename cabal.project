@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2025-05-23T06:30:40Z
-  , cardano-haskell-packages 2025-05-16T20:03:45Z
+  , hackage.haskell.org 2025-06-26T20:35:31Z
+  , cardano-haskell-packages 2025-06-25T13:51:34Z
 
 packages:
   cardano-db
@@ -85,15 +85,9 @@ if impl (ghc >= 9.12)
     -- https://github.com/kapralVV/Unique/issues/11
     , Unique:hashable
 
-    -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
-    , pipes-safe:base
-
     -- https://github.com/haskellari/postgresql-simple/issues/152
     , postgresql-simple:base
     , postgresql-simple:template-haskell
-    
-    -- https://github.com/haskell-hvr/int-cast/issues/10
-    , int-cast:base
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
 -- when using the "cabal" wrapper script provided by nix-shell.
