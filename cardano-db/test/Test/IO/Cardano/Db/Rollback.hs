@@ -134,7 +134,7 @@ createAndInsertBlocks blockCount =
 
           txIds <- mapM insertTx (mkTxs blkId 8)
           let txId = case txIds of
-                (x:_) -> x
+                (x : _) -> x
                 [] -> error "mkTxs returned empty list" -- This shouldn't happen with mkTxs blkId 8
           void $ insertTxIn (TxIn txId txOutId 0 Nothing)
           void $ insertTxOut (mkTxOutCore blkId txId)

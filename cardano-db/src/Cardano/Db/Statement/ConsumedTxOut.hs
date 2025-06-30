@@ -10,7 +10,7 @@
 module Cardano.Db.Statement.ConsumedTxOut where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Prelude (Int64, textShow)
+import Cardano.Prelude (ByteString, Int64, textShow)
 import Contravariant.Extras (contrazip2, contrazip3)
 import Control.Exception (throwIO)
 import Control.Monad (unless, when)
@@ -567,36 +567,68 @@ deletePageEntries txOutVariantType entries =
 
 --------------------------------------------------------------------------------
 
--- Statement for updating TxOut entries with consumed_by_tx_id
-updatePageEntriesStmt ::
+-- | Data for bulk consumption using tx hash
+data BulkConsumedByHash = BulkConsumedByHash
+  { bchTxHash :: !ByteString
+  , bchOutputIndex :: !Word64
+  , bchConsumingTxId :: !Id.TxId
+  }
+
+-- | Bulk update consumed_by_tx_id using tx hash + index
+updateConsumedByTxHashBulk ::
+  MonadIO m =>
+  TxOutVariantType ->
+  [BulkConsumedByHash] ->
+  DbAction m ()
+updateConsumedByTxHashBulk txOutVariantType consumedData =
+  unless (null consumedData) $ do
+    let dbCallStack = mkDbCallStack "updateConsumedByTxHashBulk"
+    case txOutVariantType of
+      TxOutVariantCore ->
+        runDbSession dbCallStack $
+          HsqlSes.statement consumedData (updateConsumedByTxHashBulkStmt @SVC.TxOutCore)
+      TxOutVariantAddress ->
+        runDbSession dbCallStack $
+          HsqlSes.statement consumedData (updateConsumedByTxHashBulkStmt @SVA.TxOutAddress)
+
+updateConsumedByTxHashBulkStmt ::
   forall a.
   (DbInfo a) =>
-  HsqlStmt.Statement [ConsumedTriplet] ()
-updatePageEntriesStmt =
+  HsqlStmt.Statement [BulkConsumedByHash] ()
+updateConsumedByTxHashBulkStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
     tableN = tableName (Proxy @a)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "WITH entries AS ("
-          , "  SELECT unnest($1::bigint[]) as tx_out_tx_id,"
-          , "         unnest($2::int[]) as tx_out_index,"
-          , "         unnest($3::bigint[]) as tx_in_tx_id"
+          [ "WITH consumption_data AS ("
+          , "  SELECT unnest($1::bytea[]) as tx_hash,"
+          , "         unnest($2::bigint[]) as output_index,"
+          , "         unnest($3::bigint[]) as consuming_tx_id"
           , ")"
           , "UPDATE " <> tableN
-          , "SET consumed_by_tx_id = entries.tx_in_tx_id"
-          , "WHERE (tx_id, index) IN (SELECT tx_out_tx_id, tx_out_index FROM entries)"
+          , "SET consumed_by_tx_id = consumption_data.consuming_tx_id"
+          , "FROM consumption_data"
+          , "INNER JOIN tx ON tx.hash = consumption_data.tx_hash"
+          , "WHERE " <> tableN <> ".tx_id = tx.id"
+          , "  AND " <> tableN <> ".index = consumption_data.output_index"
           ]
+    encoder = contramap extractBulkData bulkConsumedByHashEncoder
 
-    encoder = contramap extract encodeConsumedTripletBulk
+extractBulkData :: [BulkConsumedByHash] -> ([ByteString], [Word64], [Id.TxId])
+extractBulkData xs =
+  ( map bchTxHash xs
+  , map bchOutputIndex xs
+  , map bchConsumingTxId xs
+  )
 
-    extract :: [ConsumedTriplet] -> ([Id.TxId], [Word64], [Id.TxId])
-    extract xs =
-      ( map ctTxOutTxId xs
-      , map ctTxOutIndex xs
-      , map ctTxInTxId xs
-      )
+bulkConsumedByHashEncoder :: HsqlE.Params ([ByteString], [Word64], [Id.TxId])
+bulkConsumedByHashEncoder =
+  contrazip3
+    (bulkEncoder $ HsqlE.nonNullable HsqlE.bytea)
+    (bulkEncoder $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+    (bulkEncoder $ HsqlE.nonNullable $ Id.getTxId >$< HsqlE.int8)
 
 --------------------------------------------------------------------------------
 

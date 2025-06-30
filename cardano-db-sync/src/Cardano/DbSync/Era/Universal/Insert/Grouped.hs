@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Insert.Grouped (
@@ -17,7 +18,7 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 import qualified Data.List as List
 import qualified Data.Text as Text
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (logWarning)
 import Cardano.Db (DbLovelace (..), MinIds (..))
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
@@ -26,6 +27,7 @@ import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (queryTxIdWithCacheEither)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Shelley.Generic.Util (unTxHash)
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.Prelude
 
@@ -98,9 +100,18 @@ insertBlockGroupedData syncEnv grouped = do
       then pure []
       else DB.insertBulkTxIn $ etiTxIn <$> groupedTxIn grouped
   whenConsumeOrPruneTxOut syncEnv $ do
+    -- Resolve remaining inputs
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
-    updateTuples <- mapM (prepareUpdates tracer) etis
-    DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
+    -- Categorise resolved inputs for bulk vs individual processing
+    let (hashBasedUpdates, idBasedUpdates, failedInputs) = categorizeResolvedInputs etis
+    -- Bulk process hash-based updates
+    unless (null hashBasedUpdates) $ DB.updateConsumedByTxHashBulk txOutVariantType hashBasedUpdates
+    -- Individual process ID-based updates
+    unless (null idBasedUpdates) $ do
+      DB.updateListTxOutConsumedByTxId idBasedUpdates
+    -- Log failures
+    mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
+
   void . DB.insertBulkTxMetadata removeJsonbFromSchema $ groupedTxMetadata grouped
   void . DB.insertBulkMaTxMint $ groupedTxMint grouped
   pure $ makeMinId txInIds txOutIds maTxOutIds
@@ -108,6 +119,24 @@ insertBlockGroupedData syncEnv grouped = do
     tracer = getTrace syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
     removeJsonbFromSchema = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
+
+    categorizeResolvedInputs :: [ExtendedTxIn] -> ([DB.BulkConsumedByHash], [(DB.TxOutIdW, DB.TxId)], [ExtendedTxIn])
+    categorizeResolvedInputs etis =
+      let (hashBased, idBased, failed) = foldr categorizeOne ([], [], []) etis
+       in (hashBased, idBased, failed)
+      where
+        categorizeOne ExtendedTxIn {..} (hAcc, iAcc, fAcc) =
+          case etiTxOutId of
+            Right txOutId ->
+              (hAcc, (txOutId, DB.txInTxInId etiTxIn) : iAcc, fAcc)
+            Left genericTxIn ->
+              let bulkData =
+                    DB.BulkConsumedByHash
+                      { bchTxHash = unTxHash (Generic.txInTxId genericTxIn)
+                      , bchOutputIndex = Generic.txInIndex genericTxIn
+                      , bchConsumingTxId = DB.txInTxInId etiTxIn
+                      }
+               in (bulkData : hAcc, iAcc, fAcc)
 
     makeMinId :: [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
     makeMinId txInIds txOutIds maTxOutIds =
@@ -147,17 +176,6 @@ mkmaTxOuts _txOutVariantType (txOutId, mmtos) = mkmaTxOut <$> mmtos
               , VA.maTxOutAddressQuantity = mmtoQuantity missingMaTx
               , VA.maTxOutAddressTxOutId = txOutId'
               }
-
-prepareUpdates ::
-  MonadIO m =>
-  Trace IO Text ->
-  ExtendedTxIn ->
-  m (Maybe (DB.TxOutIdW, DB.TxId))
-prepareUpdates trce eti = case etiTxOutId eti of
-  Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
-  Left _ -> do
-    liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
-    pure Nothing
 
 insertReverseIndex ::
   MonadIO m =>
