@@ -8,15 +8,21 @@ module Cardano.DbSync.Era.Util (
   safeDecodeToJson,
 ) where
 
-import Cardano.BM.Trace (Trace, logWarning)
-import qualified Cardano.Db as DB
-import Cardano.DbSync.Error
-import Cardano.Prelude
+import Control.Concurrent.Class.MonadSTM.Strict (modifyTVar)
 import Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
+
+import Cardano.BM.Trace (logWarning)
+import Cardano.Prelude
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..), UnicodeNullSource)
+import Cardano.DbSync.Error
 
 liftLookupFail :: Monad m => Text -> m (Either DB.DbError a) -> ExceptT SyncNodeError m a
 liftLookupFail loc =
@@ -33,20 +39,28 @@ safeDecodeUtf8 bs
 containsUnicodeNul :: Text -> Bool
 containsUnicodeNul = Text.isInfixOf "\\u000"
 
-safeDecodeToJson :: MonadIO m => Trace IO Text -> Text -> ByteString -> m (Maybe Text)
-safeDecodeToJson tracer tracePrefix jsonBs = do
+safeDecodeToJson :: MonadIO m => SyncEnv -> UnicodeNullSource -> DB.TxId -> ByteString -> m (Maybe Text)
+safeDecodeToJson syncEnv source txId jsonBs = do
   ejson <- liftIO $ safeDecodeUtf8 jsonBs
   case ejson of
     Left err -> do
-      liftIO . logWarning tracer $
+      liftIO . logWarning (getTrace syncEnv) $
         mconcat
-          [tracePrefix, ": Could not decode to UTF8: ", textShow err]
-      -- We have to insert
+          [show source, ": Could not decode to UTF8: ", textShow err]
       pure Nothing
     Right json ->
-      -- See https://github.com/IntersectMBO/cardano-db-sync/issues/297
       if containsUnicodeNul json
         then do
-          liftIO $ logWarning tracer $ tracePrefix <> "was recorded as null, due to a Unicode NUL character found when trying to parse the json."
+          -- See https://github.com/IntersectMBO/cardano-db-sync/issues/297
+          addUnicodeNullToStats syncEnv source txId
           pure Nothing
         else pure $ Just json
+
+-- | Add a Unicode null character to the epoch statistics.
+addUnicodeNullToStats :: MonadIO m => SyncEnv -> UnicodeNullSource -> DB.TxId -> m ()
+addUnicodeNullToStats syncEnv source txId = liftIO $ do
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats
+      { elsUnicodeNull =
+          Map.insertWith (++) source [txId] (elsUnicodeNull epochStats)
+      }

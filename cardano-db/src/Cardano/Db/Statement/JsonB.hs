@@ -24,28 +24,6 @@ import qualified Data.Text.Encoding as TextEnc
 --------------------------------------------------------------------------------
 -- Enable JSONB for specific fields in the schema
 --------------------------------------------------------------------------------
--- enableJsonbInSchemaStmt :: HsqlStmt.Statement () ()
--- enableJsonbInSchemaStmt = do
---   HsqlStmt.Statement
---     ( mconcat $
---         zipWith
---           ( \s i ->
---               (if i > (0 :: Integer) then "; " else "")
---                 <> "ALTER TABLE "
---                 <> fst s
---                 <> " ALTER COLUMN "
---                 <> snd s
---                 <> " TYPE jsonb USING "
---                 <> snd s
---                 <> "::jsonb"
---           )
---           jsonbColumns
---           [0 ..]
---     )
---     HsqlE.noParams
---     HsqlD.noResult
---     True
-
 enableJsonbInSchema :: MonadIO m => DbAction m ()
 enableJsonbInSchema =
   runDbSession (mkDbCallStack "enableJsonbInSchema") $ do

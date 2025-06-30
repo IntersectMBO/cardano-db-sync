@@ -22,7 +22,6 @@ import Hasql.Decoders as D
 import Hasql.Encoders as E
 
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Types (
   PoolUrl (..),
   unPoolUrl,
@@ -41,10 +40,9 @@ import Cardano.Db.Types (
 -- These tables manage stake pool-related data, including pool registration, updates, and retirements.
 -----------------------------------------------------------------------------------------------------------------------------------
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_hash
 -- Description: A table containing information about pool hashes.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolHash = PoolHash
   { poolHashHashRaw :: !ByteString -- unique hashRaw sqltype=hash28type
   , poolHashView :: !Text
@@ -81,10 +79,9 @@ poolHashEncoder =
     , poolHashView >$< E.param (E.nonNullable E.text) -- poolHashView
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_stat
 -- Description: A table containing information about pool metadata.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolStat = PoolStat
   { poolStatPoolHashId :: !Id.PoolHashId -- noreference
   , poolStatEpochNo :: !Word64 -- sqltype=word31type
@@ -100,11 +97,11 @@ type instance Key PoolStat = Id.PoolStatId
 instance DbInfo PoolStat where
   unnestParamTypes _ =
     [ ("pool_hash_id", "bigint[]")
-    , ("epoch_no", "bigint[]")
-    , ("number_of_blocks", "bigint[]")
-    , ("number_of_delegators", "bigint[]")
-    , ("stake", "bigint[]")
-    , ("voting_power", "bigint[]")
+    , ("epoch_no", "integer[]")
+    , ("number_of_blocks", "numeric[]")
+    , ("number_of_delegators", "numeric[]")
+    , ("stake", "numeric[]")
+    , ("voting_power", "numeric[]")
     ]
 
 entityPoolStatDecoder :: D.Row (Entity PoolStat)
@@ -117,7 +114,7 @@ poolStatDecoder :: D.Row PoolStat
 poolStatDecoder =
   PoolStat
     <$> Id.idDecoder Id.PoolHashId -- poolStatPoolHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolStatEpochNo
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- poolStatEpochNo
     <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatNumberOfBlocks
     <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatNumberOfDelegators
     <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatStake
@@ -134,7 +131,7 @@ poolStatEncoder :: E.Params PoolStat
 poolStatEncoder =
   mconcat
     [ poolStatPoolHashId >$< Id.idEncoder Id.getPoolHashId
-    , poolStatEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , poolStatEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
     , poolStatNumberOfBlocks >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , poolStatNumberOfDelegators >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
     , poolStatStake >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
@@ -151,10 +148,9 @@ poolStatBulkEncoder =
     (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- stake
     (bulkEncoder $ E.nullable $ fromIntegral . unDbWord64 >$< E.numeric) -- voting_power
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_update
 -- Description: A table containing information about pool updates.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolUpdate = PoolUpdate
   { poolUpdateHashId :: !Id.PoolHashId -- noreference
   , poolUpdateCertIndex :: !Word16
@@ -217,10 +213,9 @@ poolUpdateEncoder =
     , poolUpdateDeposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_metadata_ref
 -- Description: A table containing references to pool metadata.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolMetadataRef = PoolMetadataRef
   { poolMetadataRefPoolId :: !Id.PoolHashId -- noreference
   , poolMetadataRefUrl :: !PoolUrl -- sqltype=varchar
@@ -262,10 +257,9 @@ poolMetadataRefEncoder =
     , poolMetadataRefRegisteredTxId >$< Id.idEncoder Id.getTxId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_owner
 -- Description: A table containing information about pool owners.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolOwner = PoolOwner
   { poolOwnerAddrId :: !Id.StakeAddressId -- noreference
   , poolOwnerPoolUpdateId :: !Id.PoolUpdateId -- noreference
@@ -301,10 +295,9 @@ poolOwnerEncoder =
     , poolOwnerPoolUpdateId >$< Id.idEncoder Id.getPoolUpdateId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_retire
 -- Description: A table containing information about pool retirements.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolRetire = PoolRetire
   { poolRetireHashId :: !Id.PoolHashId -- noreference
   , poolRetireCertIndex :: !Word16
@@ -346,10 +339,9 @@ poolRetireEncoder =
     , poolRetireRetiringEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: pool_relay
 -- Description: A table containing information about pool relays.
------------------------------------------------------------------------------------------------------------------------------------
 data PoolRelay = PoolRelay
   { poolRelayUpdateId :: !Id.PoolUpdateId -- noreference
   , poolRelayIpv4 :: !(Maybe Text)
@@ -397,11 +389,9 @@ poolRelayEncoder =
     , poolRelayPort >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: delisted_pool
 -- Description: A table containing a managed list of delisted pools.
------------------------------------------------------------------------------------------------------------------------------------
-
 newtype DelistedPool = DelistedPool
   { delistedPoolHashRaw :: ByteString -- sqltype=hash28type
   }
@@ -432,11 +422,10 @@ entityDelistedPoolEncoder =
 delistedPoolEncoder :: E.Params DelistedPool
 delistedPoolEncoder = delistedPoolHashRaw >$< E.param (E.nonNullable E.bytea)
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: resser_pool_ticker
 -- Description: A table containing a managed list of reserved ticker names.
 -- For now they are grouped under the specific hash of the pool.
------------------------------------------------------------------------------------------------------------------------------------
 data ReservedPoolTicker = ReservedPoolTicker
   { reservedPoolTickerName :: !Text
   , reservedPoolTickerPoolHash :: !ByteString -- sqltype=hash28type

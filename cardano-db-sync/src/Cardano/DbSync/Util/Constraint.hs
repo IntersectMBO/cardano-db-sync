@@ -15,12 +15,11 @@ addConstraintsIfNotExist ::
   MonadIO m =>
   -- | TVar for tracking constraint state
   SyncEnv ->
-  -- | Logger parameter
   Trace IO Text ->
   DB.DbAction m ()
-addConstraintsIfNotExist syncEnv logger = do
-  addStakeConstraintsIfNotExist syncEnv logger
-  addRewardConstraintsIfNotExist syncEnv logger
+addConstraintsIfNotExist syncEnv trce = do
+  addStakeConstraintsIfNotExist syncEnv trce
+  addRewardConstraintsIfNotExist syncEnv trce
 
 -- | Add EpochStake constraints if not exist
 addStakeConstraintsIfNotExist ::
@@ -28,11 +27,11 @@ addStakeConstraintsIfNotExist ::
   SyncEnv ->
   Trace IO Text ->
   DB.DbAction m ()
-addStakeConstraintsIfNotExist syncEnv logger = do
+addStakeConstraintsIfNotExist syncEnv trce = do
   let eDbConstraints = envDbConstraints syncEnv
   mdbc <- liftIO $ readTVarIO eDbConstraints
   unless (dbConstraintEpochStake mdbc) $ do
-    DB.addEpochStakeTableConstraint logger
+    DB.addEpochStakeTableConstraint trce
     liftIO . atomically $
       writeTVar eDbConstraints (mdbc {dbConstraintEpochStake = True})
 
@@ -42,10 +41,10 @@ addRewardConstraintsIfNotExist ::
   SyncEnv ->
   Trace IO Text ->
   DB.DbAction m ()
-addRewardConstraintsIfNotExist syncEnv logger = do
+addRewardConstraintsIfNotExist syncEnv trce = do
   let eDbConstraints = envDbConstraints syncEnv
   mdbc <- liftIO $ readTVarIO eDbConstraints
   unless (dbConstraintRewards mdbc) $ do
-    DB.addRewardTableConstraint logger
+    DB.addRewardTableConstraint trce
     liftIO . atomically $
       writeTVar eDbConstraints (mdbc {dbConstraintRewards = True})

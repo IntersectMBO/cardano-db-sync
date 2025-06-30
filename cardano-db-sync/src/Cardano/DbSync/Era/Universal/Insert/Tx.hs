@@ -2,7 +2,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -31,9 +30,9 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), UnicodeNullSource (..))
 import Cardano.DbSync.Cache (insertAddressUsingCache, queryTxIdWithCache, tryUpdateCacheTx)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metadataValueToJsonNoSchema)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
@@ -139,7 +138,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
   if not (Generic.txValidContract tx)
     then do
-      !txOutsGrouped <- mapM (insertTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
@@ -148,7 +147,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
-      !txOutsGrouped <- mapM (insertTxOut tracer cache iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
 
       !redeemers <-
         Map.fromList
@@ -157,15 +156,15 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
             (mapM (insertRedeemer syncEnv disInOut (fst <$> groupedTxOut grouped) txId) (Generic.txRedeemer tx))
 
       when (ioPlutusExtra iopts) $ do
-        mapM_ (insertDatum tracer cache txId) (Generic.txData tx)
+        mapM_ (insertDatum syncEnv txId) (Generic.txData tx)
         mapM_ (insertCollateralTxIn syncEnv tracer txId) (Generic.txCollateralInputs tx)
         mapM_ (insertReferenceTxIn syncEnv tracer txId) (Generic.txReferenceInputs tx)
-        mapM_ (insertCollateralTxOut tracer cache iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
+        mapM_ (insertCollateralTxOut syncEnv iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
         whenFalseMempty (ioMetadata iopts) $
           insertTxMetadata
-            tracer
+            syncEnv
             txId
             iopts
             (Generic.txMetadata tx)
@@ -173,7 +172,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         (insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers)
         $ Generic.txCertificates tx
       when (ioShelley iopts) $
-        mapM_ (insertWithdrawals tracer cache txId redeemers) $
+        mapM_ (insertWithdrawals syncEnv txId redeemers) $
           Generic.txWithdrawals tx
       when (ioShelley iopts) $
         mapM_ (insertParamProposal blkId txId) $
@@ -181,11 +180,11 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
       maTxMint <-
         whenFalseMempty (ioMultiAssets iopts) $
-          insertMaTxMint tracer cache txId $
+          insertMaTxMint syncEnv txId $
             Generic.txMint tx
 
       when (ioPlutusExtra iopts) $
-        mapM_ (insertScript tracer txId) $
+        mapM_ (insertScript syncEnv txId) $
           Generic.txScripts tx
 
       when (ioPlutusExtra iopts) $
@@ -193,8 +192,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (insertGovActionProposal tracer cache blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
-        mapM_ (insertVotingProcedures tracer cache blkId txId) (Generic.txVotingProcedure tx)
+        mapM_ (insertGovActionProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
       pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
@@ -209,22 +208,21 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 --------------------------------------------------------------------------------------
 insertTxOut ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   DB.DbAction m (ExtendedTxOut, [MissingMaTxOut])
-insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
-  mSaId <- insertStakeAddressRefIfMissing tracer cache addr
+insertTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
+  mSaId <- insertStakeAddressRefIfMissing syncEnv addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
-        insertDatum tracer cache txId
+        insertDatum syncEnv txId
   mScriptId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       whenMaybe mScript $
-        insertScript tracer txId
+        insertScript syncEnv txId
   !txOut <-
     case ioTxOutVariantType iopts of
       DB.TxOutVariantCore ->
@@ -252,7 +250,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
                 , VA.addressPaymentCred = Generic.maybePaymentCred addr
                 , VA.addressStakeAddressId = mSaId
                 }
-        addrId <- insertAddressUsingCache cache UpdateCache (Ledger.serialiseAddr addr) vAddress
+        addrId <- insertAddressUsingCache syncEnv UpdateCache (Ledger.serialiseAddr addr) vAddress
         pure $
           DB.VATxOutW
             (mkTxOutVariant mSaId addrId mDatumId mScriptId)
@@ -262,7 +260,7 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
         case ioTxOutVariantType iopts of
           DB.TxOutVariantCore -> ExtendedTxOut txHash txOut
           DB.TxOutVariantAddress -> ExtendedTxOut txHash txOut
-  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ insertMaTxOuts tracer cache maMap
+  !maTxOuts <- whenFalseMempty (ioMultiAssets iopts) $ insertMaTxOuts syncEnv maMap
   pure (eutxo, maTxOuts)
   where
     hasScript :: Bool
@@ -287,12 +285,12 @@ insertTxOut tracer cache iopts (txId, txHash) (Generic.TxOut index addr value ma
 
 insertTxMetadata ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
   InsertOptions ->
   Maybe (Map Word64 TxMetadataValue) ->
   DB.DbAction m [DB.TxMetadata]
-insertTxMetadata tracer txId inOpts mmetadata = do
+insertTxMetadata syncEnv txId inOpts mmetadata = do
   case mmetadata of
     Nothing -> pure []
     Just metadata -> mapMaybeM prepare $ Map.toList metadata
@@ -318,7 +316,7 @@ insertTxMetadata tracer txId inOpts mmetadata = do
     mkDbTxMetadata (key, md) = do
       let jsonbs = LBS.toStrict $ Aeson.encode (metadataValueToJsonNoSchema md)
           singleKeyCBORMetadata = serialiseTxMetadataToCbor $ Map.singleton key md
-      mjson <- safeDecodeToJson tracer "prepareTxMetadata: Column 'json' in table 'metadata' " jsonbs
+      mjson <- safeDecodeToJson syncEnv PrepareTxMetadata txId jsonbs
       pure $
         Just $
           DB.TxMetadata
@@ -333,12 +331,11 @@ insertTxMetadata tracer txId inOpts mmetadata = do
 --------------------------------------------------------------------------------------
 insertMaTxMint ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   DB.TxId ->
   MultiAsset ->
   DB.DbAction m [DB.MaTxMint]
-insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
+insertMaTxMint syncEnv txId (MultiAsset mintMap) =
   concatMapM prepareOuter $ Map.toList mintMap
   where
     prepareOuter ::
@@ -354,7 +351,7 @@ insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
       (AssetName, Integer) ->
       DB.DbAction m DB.MaTxMint
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- insertMultiAsset syncEnv policy aname
       pure $
         DB.MaTxMint
           { DB.maTxMintIdent = maId
@@ -364,11 +361,10 @@ insertMaTxMint _tracer cache txId (MultiAsset mintMap) =
 
 insertMaTxOuts ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   Map PolicyID (Map AssetName Integer) ->
   DB.DbAction m [MissingMaTxOut]
-insertMaTxOuts _tracer cache maMap =
+insertMaTxOuts syncEnv maMap =
   concatMapM prepareOuter $ Map.toList maMap
   where
     prepareOuter ::
@@ -384,7 +380,7 @@ insertMaTxOuts _tracer cache maMap =
       (AssetName, Integer) ->
       DB.DbAction m MissingMaTxOut
     prepareInner policy (aname, amount) = do
-      maId <- insertMultiAsset cache policy aname
+      maId <- insertMultiAsset syncEnv policy aname
       pure $
         MissingMaTxOut
           { mmtoIdent = maId
@@ -396,22 +392,21 @@ insertMaTxOuts _tracer cache maMap =
 --------------------------------------------------------------------------------------
 insertCollateralTxOut ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
   DB.DbAction m ()
-insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
-  mSaId <- insertStakeAddressRefIfMissing tracer cache addr
+insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
+  mSaId <- insertStakeAddressRefIfMissing syncEnv addr
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
-        insertDatum tracer cache txId
+        insertDatum syncEnv txId
   mScriptId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       whenMaybe mScript $
-        insertScript tracer txId
+        insertScript syncEnv txId
   _ <-
     case ioTxOutVariantType iopts of
       DB.TxOutVariantCore -> do
@@ -439,7 +434,7 @@ insertCollateralTxOut tracer cache iopts (txId, _txHash) (Generic.TxOut index ad
                 , VA.addressPaymentCred = Generic.maybePaymentCred addr
                 , VA.addressStakeAddressId = mSaId
                 }
-        addrId <- insertAddressUsingCache cache UpdateCache (Ledger.serialiseAddr addr) vAddress
+        addrId <- insertAddressUsingCache syncEnv UpdateCache (Ledger.serialiseAddr addr) vAddress
         DB.insertCollateralTxOut $
           DB.VACollateralTxOutW $
             VA.CollateralTxOutAddress
@@ -467,7 +462,7 @@ insertCollateralTxIn ::
   Generic.TxIn ->
   DB.DbAction m ()
 insertCollateralTxIn syncEnv _tracer txInId txIn = do
-  eTxOutId <- queryTxIdWithCache (envCache syncEnv) (txInTxId txIn)
+  eTxOutId <- queryTxIdWithCache syncEnv (txInTxId txIn)
   txOutId <- case eTxOutId of
     Right txId -> pure txId
     Left err -> throwError err
@@ -487,7 +482,7 @@ insertReferenceTxIn ::
   Generic.TxIn ->
   DB.DbAction m ()
 insertReferenceTxIn syncEnv _tracer txInId txIn = do
-  etxOutId <- queryTxIdWithCache (envCache syncEnv) (txInTxId txIn)
+  etxOutId <- queryTxIdWithCache syncEnv (txInTxId txIn)
   txOutId <- case etxOutId of
     Right txId -> pure txId
     Left err -> throwError err

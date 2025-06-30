@@ -196,6 +196,5 @@ test-suite cardano-chain-gen
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
                       , ouroboros-network-api
-                      , postgresql-simple
                       , QuickCheck
                       , quickcheck-state-machine:no-vendored-treediff

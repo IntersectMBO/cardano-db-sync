@@ -10,94 +10,6 @@
 
 module Cardano.Db.Types where
 
--- (
---   DbAction (..),
---   DbEnv (..),
---   Ada (..),
---   AnchorType (..),
---   AssetFingerprint (..),
---   DbLovelace (..),
---   DbInt65 (..),
---   DbWord64 (..),
---   RewardSource (..),
---   SyncState (..),
---   ScriptPurpose (..),
---   ScriptType (..),
---   PoolCertAction (..),
---   PruneConsumeMigration (..),
---   CertNo (..),
---   PoolCert (..),
---   ExtraMigration (..),
---   MigrationValues (..),
---   VoteUrl (..),
---   VoteMetaHash (..),
---   Vote (..),
---   VoterRole (..),
---   GovActionType (..),
---   BootstrapState (..),
---   dbInt65Decoder,
---   dbInt65Encoder,
---   fromDbInt65,
---   rewardSourceDecoder,
---   rewardSourceEncoder,
---   dbLovelaceDecoder,
---   dbLovelaceEncoder,
---   maybeDbLovelaceDecoder,
---   dbLovelaceValueEncoder,
---   maybeDbLovelaceEncoder,
---   dbWord64Decoder,
---   maybeDbWord64Decoder,
---   dbWord64Encoder,
---   maybeDbWord64Encoder,
---   processMigrationValues,
---   isStakeDistrComplete,
---   bootstrapState,
---   extraDescription,
---   deltaCoinToDbInt65,
---   integerToDbInt65,
---   lovelaceToAda,
---   mkAssetFingerprint,
---   renderAda,
---   scientificToAda,
---   rewardSourceFromText,
---   syncStateToText,
---   syncStateFromText,
---   syncStateDecoder,
---   syncStateEncoder,
---   scriptPurposeDecoder,
---   scriptPurposeEncoder,
---   scriptPurposeFromText,
---   scriptPurposeToText,
---   scriptTypeEncoder,
---   scriptTypeDecoder,
---   scriptTypeFromText,
---   scriptTypeToText,
---   rewardSourceToText,
---   voteEncoder,
---   voteDecoder,
---   voterRoleEncoder,
---   voterRoleDecoder,
---   voteToText,
---   voteFromText,
---   voterRoleToText,
---   voterRoleFromText,
---   voteUrlDecoder,
---   voteUrlEncoder,
---   govActionTypeToText,
---   govActionTypeFromText,
---   govActionTypeDecoder,
---   govActionTypeEncoder,
---   anchorTypeToText,
---   anchorTypeFromText,
---   anchorTypeDecoder,
---   anchorTypeEncoder,
---   word64ToAda,
---   word128Decoder,
---   word128Encoder,
---   hardcodedAlwaysAbstain,
---   hardcodedAlwaysNoConfidence,
---
-
 import Cardano.BM.Trace (Trace)
 import Cardano.Db.Error (DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
@@ -171,7 +83,7 @@ instance ToJSON Ada where
   -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
   toEncoding (Ada ada) =
     unsafeToEncoding $
-      Builder.string8 $ -- convert ByteString to Aeson's -- convert ByteString to Aeson's -- convert ByteString to Aeson's -- convert ByteString to Aeson's
+      Builder.string8 $ -- convert ByteString to Aeson's
         showFixed True ada -- convert String to ByteString using Latin1 encoding
         -- convert Micro to String chopping off trailing zeros
 
@@ -596,18 +508,6 @@ integerToDbInt65 i
   | i > fromIntegral (maxBound :: Int64) = error "Integer too large for DbInt65"
   | i < fromIntegral (minBound :: Int64) = error "Integer too small for DbInt65"
   | otherwise = toDbInt65 (fromIntegral i)
-
--- deltaCoinToDbInt65 :: DeltaCoin -> DbInt65
--- deltaCoinToDbInt65 (DeltaCoin dc) =
---   if dc < 0
---     then NegInt65 (fromIntegral $ abs dc)
---     else PosInt65 (fromIntegral dc)
-
--- integerToDbInt65 :: Integer -> DbInt65
--- integerToDbInt65 i =
---   if i >= 0
---     then PosInt65 (fromIntegral i)
---     else NegInt65 (fromIntegral $ negate i)
 
 word128Encoder :: HsqlE.Value Word128
 word128Encoder = fromInteger . toInteger >$< HsqlE.numeric

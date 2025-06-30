@@ -90,9 +90,3 @@ insertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
 insertBulkMaTxMint maTxMints =
   runDbSession (mkDbCallStack "insertBulkMaTxMint") $
     HsqlSes.statement maTxMints insertBulkMaTxMintStmt
-
--- These tables handle multi-asset (native token) data.
-
--- multi_asset
--- ma_tx_mint
--- ma_tx_out

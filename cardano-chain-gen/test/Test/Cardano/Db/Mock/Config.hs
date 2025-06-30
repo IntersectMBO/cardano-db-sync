@@ -50,32 +50,18 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
-  withFullConfigDropDb,
-  withFullConfigDropDbLog,
+  withFullConfigDropDB,
+  withFullConfigDropDBLog,
   withFullConfigLog,
-  withCustomConfigDropDbLog,
+  withCustomConfigDropDBLog,
   withCustomConfig,
-  withCustomConfigDropDb,
+  withCustomConfigDropDB,
   withCustomConfigLog,
   withFullConfig',
   replaceConfigFile,
   txOutVariantTypeFromConfig,
 ) where
 
-import Cardano.Api (NetworkMagic (..))
-import qualified Cardano.Db as DB
-import Cardano.DbSync
-import Cardano.DbSync.Config
-import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error (runOrThrowIO)
-import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
-import Cardano.Mock.ChainSync.Server
-import Cardano.Mock.Forging.Interpreter
-import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
-import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (NonEmpty ((:|)), panic, stderr, textShow, throwIO)
-import Cardano.SMASH.Server.PoolDataLayer
 import Control.Concurrent.Async (Async, async, cancel, poll)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TMVar (
@@ -92,6 +78,11 @@ import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
+import System.Directory (createDirectoryIfMissing, removePathForcibly)
+import System.FilePath.Posix (takeDirectory, (</>))
+import System.IO.Silently (hSilence)
+
+import Cardano.Api (NetworkMagic (..))
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Byron.Ledger.Mempool ()
 import Ouroboros.Consensus.Config (TopLevelConfig)
@@ -100,9 +91,20 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
-import System.Directory (createDirectoryIfMissing, removePathForcibly)
-import System.FilePath.Posix (takeDirectory, (</>))
-import System.IO.Silently (hSilence)
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync
+import Cardano.DbSync.Config
+import Cardano.DbSync.Config.Cardano
+import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
+import Cardano.Mock.ChainSync.Server
+import Cardano.Mock.Forging.Interpreter
+import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
+import Cardano.Node.Types (ProtocolFilepaths (..))
+import Cardano.Prelude (NonEmpty ((:|)), panic, stderr, textShow, throwIO)
+import Cardano.SMASH.Server.PoolDataLayer
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -239,7 +241,7 @@ getPoolLayer env = do
     Left err -> throwIO $ userError err
     Right setting -> pure setting
 
-  -- Create the Hasql connection pool (using port as pool identifier, similar to your server)
+  -- Create the Hasql connection pool, using port as pool identifier
   pool <- DB.createHasqlConnectionPool [connSetting] 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
@@ -406,7 +408,7 @@ withFullConfig =
     Nothing
 
 -- this function needs to be used where the schema needs to be rebuilt
-withFullConfigDropDb ::
+withFullConfigDropDB ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -415,7 +417,7 @@ withFullConfigDropDb ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigDropDb =
+withFullConfigDropDB =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -426,7 +428,7 @@ withFullConfigDropDb =
     initCommandLineArgs
     Nothing
 
-withFullConfigDropDbLog ::
+withFullConfigDropDBLog ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -435,7 +437,7 @@ withFullConfigDropDbLog ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigDropDbLog =
+withFullConfigDropDBLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -487,7 +489,7 @@ withCustomConfig =
         }
     )
 
-withCustomConfigDropDb ::
+withCustomConfigDropDB ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -499,7 +501,7 @@ withCustomConfigDropDb ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigDropDb =
+withCustomConfigDropDB =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -530,7 +532,7 @@ withCustomConfigLog =
         }
     )
 
-withCustomConfigDropDbLog ::
+withCustomConfigDropDBLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -542,7 +544,7 @@ withCustomConfigDropDbLog ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigDropDbLog =
+withCustomConfigDropDBLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True

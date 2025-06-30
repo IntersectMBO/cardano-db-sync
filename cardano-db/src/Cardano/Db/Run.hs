@@ -12,7 +12,7 @@ import Cardano.BM.Data.LogItem (
   mkLOMeta,
  )
 import Cardano.BM.Data.Severity (Severity (..))
-import Cardano.BM.Trace (Trace)
+import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Prelude
 import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Logger (
@@ -84,7 +84,7 @@ sessionErrorToDbError cs sessionErr =
   DbError cs ("Transaction error: " <> Text.pack (show sessionErr)) (Just sessionErr)
 
 -----------------------------------------------------------------------------------------
--- Run DB actions with PROPER INTERRUPT HANDLING
+-- Run DB actions with INTERRUPT HANDLING
 -----------------------------------------------------------------------------------------
 
 -- | Run a DbAction with explicit transaction and isolation level
@@ -103,11 +103,13 @@ runDbActionWithIsolation dbEnv isolationLevel action = do
       case beginResult of
         Left err -> pure (Left err)
         Right _ -> do
-          -- Run the action with proper exception handling for interrupts
+          -- Run the action with exception handling for interrupts
           result <-
             restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv)
               `onException` do
-                liftIO $ putStrLn ("\n\n Shuting down ... \n\n" :: Text)
+                case dbTracer dbEnv of
+                  Just tracer -> logWarning tracer "rolling back transaction, due to interrupt."
+                  Nothing -> pure ()
                 rollbackTransaction dbEnv
           case result of
             Left err -> do
@@ -129,7 +131,6 @@ runDbActionWithIsolation dbEnv isolationLevel action = do
 
     commitTransaction :: DbEnv -> IO (Either DbError ())
     commitTransaction env = do
-      -- logTransactionOp "COMMIT"
       let cs = mkDbCallStack "commitTransaction"
       result <- HsqlS.run (HsqlS.statement () commitTransactionStmt) (dbConnection env)
       pure $ first (sessionErrorToDbError cs) result

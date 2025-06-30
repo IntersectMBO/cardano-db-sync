@@ -6,22 +6,27 @@ module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache (
-  queryPoolKeyWithCache,
-  queryStakeAddrWithCache,
- )
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
-import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
-import Cardano.DbSync.Types (StakeCred)
-import Cardano.Ledger.BaseTypes (Network)
-import Cardano.Prelude hiding (from, groupBy, on)
-import Cardano.Slotting.Slot (EpochNo (..))
 import Data.List (unzip4)
 import Data.List.Extra (chunksOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
+
+import Cardano.BM.Trace (logInfo)
+import Cardano.Prelude hiding (from, groupBy, on)
+import Cardano.Slotting.Slot (EpochNo (..))
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Cache (
+  queryPoolKeyWithCache,
+  queryStakeAddrWithCache,
+ )
+import Cardano.DbSync.Cache.Types (CacheAction (..))
+import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
+import Cardano.DbSync.Types (StakeCred)
+import Cardano.DbSync.Util (maxBulkSize)
+import Cardano.Ledger.BaseTypes (Network)
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}
@@ -36,20 +41,19 @@ import qualified Data.Set as Set
 
 adjustEpochRewards ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
-  CacheStatus ->
   EpochNo ->
   Generic.Rewards ->
   Set StakeCred ->
   DB.DbAction m ()
-adjustEpochRewards trce nw cache epochNo rwds creds = do
+adjustEpochRewards syncEnv nw epochNo rwds creds = do
   let rewardsToDelete =
         [ (cred, rwd)
         | (cred, rewards) <- Map.toList $ Generic.unRewards rwds
         , rwd <- Set.toList rewards
         ]
-  liftIO . logInfo trce $
+  liftIO . logInfo (getTrace syncEnv) $
     mconcat
       [ "Removing "
       , if null rewardsToDelete then "0" else textShow (length rewardsToDelete) <> " rewards and "
@@ -59,29 +63,28 @@ adjustEpochRewards trce nw cache epochNo rwds creds = do
 
   -- Process rewards in batches
   unless (null rewardsToDelete) $ do
-    forM_ (chunksOf maxBatchSize rewardsToDelete) $ \batch -> do
-      params <- prepareRewardsForDeletion trce nw cache epochNo batch
+    forM_ (chunksOf maxBulkSize rewardsToDelete) $ \batch -> do
+      params <- prepareRewardsForDeletion syncEnv nw epochNo batch
       unless (areParamsEmpty params) $
         DB.deleteRewardsBulk params
 
-  -- Handle orphaned rewards in batches too
-  crds <- catMaybes <$> forM (Set.toList creds) (queryStakeAddrWithCache trce cache DoNotUpdateCache nw)
-  forM_ (chunksOf maxBatchSize crds) $ \batch ->
+  -- Handle orphaned rewards in batches
+  crds <- catMaybes <$> forM (Set.toList creds) (queryStakeAddrWithCache syncEnv DoNotUpdateCache nw)
+  forM_ (chunksOf maxBulkSize crds) $ \batch ->
     DB.deleteOrphanedRewardsBulk (unEpochNo epochNo) batch
 
 prepareRewardsForDeletion ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
-  CacheStatus ->
   EpochNo ->
   [(StakeCred, Generic.Reward)] ->
   DB.DbAction m ([DB.StakeAddressId], [DB.RewardSource], [Word64], [DB.PoolHashId])
-prepareRewardsForDeletion trce nw cache epochNo rewards = do
+prepareRewardsForDeletion syncEnv nw epochNo rewards = do
   -- Process each reward to get parameter tuples
   rewardParams <- forM rewards $ \(cred, rwd) -> do
-    mAddrId <- queryStakeAddrWithCache trce cache DoNotUpdateCache nw cred
-    eiPoolId <- queryPoolKeyWithCache cache DoNotUpdateCache (Generic.rewardPool rwd)
+    mAddrId <- queryStakeAddrWithCache syncEnv DoNotUpdateCache nw cred
+    eiPoolId <- queryPoolKeyWithCache syncEnv DoNotUpdateCache (Generic.rewardPool rwd)
     pure $ case (mAddrId, eiPoolId) of
       (Just addrId, Right poolId) ->
         Just (addrId, Generic.rewardSource rwd, unEpochNo epochNo, poolId)
@@ -93,9 +96,6 @@ prepareRewardsForDeletion trce nw cache epochNo rewards = do
     then pure ([], [], [], [])
     else pure $ unzip4 validParams
 
--- Add this helper function
-areParamsEmpty :: ([a], [b], [c], [d]) -> Bool
-areParamsEmpty (as, bs, cs, ds) = null as || null bs || null cs || null ds
-
-maxBatchSize :: Int
-maxBatchSize = 10000
+areParamsEmpty :: ([DB.StakeAddressId], [DB.RewardSource], [Word64], [DB.PoolHashId]) -> Bool
+areParamsEmpty (addrs, types, epochs, pools) =
+  null addrs && null types && null epochs && null pools

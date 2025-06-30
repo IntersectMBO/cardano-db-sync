@@ -26,14 +26,12 @@ import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
--- Original JSON test
 prop_roundtrip_Ada_via_JSON :: Property
 prop_roundtrip_Ada_via_JSON =
   H.withTests 5000 . H.property $ do
     mv <- H.forAll genAda
     H.tripping mv Aeson.encode Aeson.eitherDecode
 
--- Original AssetFingerprint test
 prop_AssetFingerprint :: Property
 prop_AssetFingerprint =
   H.withTests 1 . H.property $

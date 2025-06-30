@@ -12,6 +12,10 @@ module Cardano.DbSync.Era.Byron.Insert (
 )
 where
 
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
@@ -19,6 +23,10 @@ import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
@@ -31,17 +39,11 @@ import Cardano.DbSync.Cache (
   queryPrevBlockWithCache,
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
@@ -50,7 +52,7 @@ data ValueFee = ValueFee
   }
 
 insertByronBlock ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   Bool ->
   ByronBlock ->
@@ -62,16 +64,15 @@ insertByronBlock syncEnv firstBlockOfEpoch blk details = do
     Byron.ABOBBoundary abblk -> insertABOBBoundary syncEnv abblk details
 
 insertABOBBoundary ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   Byron.ABoundaryBlock ByteString ->
   SlotDetails ->
   DB.DbAction m ()
 insertABOBBoundary syncEnv blk details = do
   let tracer = getTrace syncEnv
-      cache = envCache syncEnv
   -- Will not get called in the OBFT part of the Byron era.
-  pbid <- queryPrevBlockWithCache cache (Byron.ebbPrevHash blk) "insertABOBBoundary"
+  pbid <- queryPrevBlockWithCache syncEnv (Byron.ebbPrevHash blk) "insertABOBBoundary"
   let epochNo = unEpochNo $ sdEpochNo details
   slid <-
     DB.insertSlotLeader $
@@ -81,7 +82,7 @@ insertABOBBoundary syncEnv blk details = do
         , DB.slotLeaderDescription = "Epoch boundary slot leader"
         }
   blkId <-
-    insertBlockAndCache cache $
+    insertBlockAndCache syncEnv $
       DB.Block
         { DB.blockHash = Byron.unHeaderHash $ Byron.boundaryHashAnnotated blk
         , DB.blockEpochNo = Just epochNo
@@ -108,7 +109,7 @@ insertABOBBoundary syncEnv blk details = do
   -- If have --dissable-epoch && --dissable-cache then no need to cache data.
   when (soptEpochAndCacheEnabled $ envOptions syncEnv) $
     writeEpochBlockDiffToCache
-      cache
+      (envCache syncEnv)
       EpochBlockDiff
         { ebdBlockId = blkId
         , ebdFees = 0
@@ -128,18 +129,18 @@ insertABOBBoundary syncEnv blk details = do
       ]
 
 insertABlock ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   Bool ->
   Byron.ABlock ByteString ->
   SlotDetails ->
   DB.DbAction m ()
 insertABlock syncEnv firstBlockOfEpoch blk details = do
-  pbid <- queryPrevBlockWithCache cache (Byron.blockPreviousHash blk) "insertABlock"
+  pbid <- queryPrevBlockWithCache syncEnv (Byron.blockPreviousHash blk) "insertABlock"
   slid <- DB.insertSlotLeader $ Byron.mkSlotLeader blk
   let txs = Byron.blockPayload blk
   blkId <-
-    insertBlockAndCache cache $
+    insertBlockAndCache syncEnv $
       DB.Block
         { DB.blockHash = Byron.blockHash blk
         , DB.blockEpochNo = Just $ unEpochNo (sdEpochNo details)
@@ -168,7 +169,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
   -- If have --dissable-epoch && --dissable-cache then no need to cache data.
   when (soptEpochAndCacheEnabled $ envOptions syncEnv) $
     writeEpochBlockDiffToCache
-      cache
+      (envCache syncEnv)
       EpochBlockDiff
         { ebdBlockId = blkId
         , ebdFees = sum txFees
@@ -209,9 +210,6 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
     tracer :: Trace IO Text
     tracer = getTrace syncEnv
 
-    cache :: CacheStatus
-    cache = envCache syncEnv
-
     logger :: Bool -> Trace IO a -> a -> IO ()
     logger followingClosely
       | firstBlockOfEpoch = logInfo
@@ -220,7 +218,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
       | otherwise = logDebug
 
 insertByronTx ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   DB.BlockId ->
   Byron.TxAux ->
@@ -263,7 +261,7 @@ insertByronTx syncEnv blkId tx blockIndex = do
     iopts = getInsertOptions syncEnv
 
 insertByronTx' ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   DB.BlockId ->
   Byron.TxAux ->
@@ -342,7 +340,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
     prepUpdate txId (_, _, txOutId, _) = (txOutId, txId)
 
 insertTxOutByron ::
-  (MonadIO m) =>
+  MonadIO m =>
   SyncEnv ->
   Bool ->
   Bool ->
@@ -371,13 +369,11 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
             , VC.txOutCoreValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
             }
       DB.TxOutVariantAddress -> do
-        addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
+        addrDetailId <- insertAddressUsingCache syncEnv UpdateCache addrRaw vAddress
         void . DB.insertTxOut $ DB.VATxOutW (vTxOut addrDetailId) Nothing
   where
     addrRaw :: ByteString
     addrRaw = serialize' (Byron.txOutAddress txout)
-
-    cache = envCache syncEnv
 
     vTxOut :: DB.AddressId -> VA.TxOutAddress
     vTxOut addrDetailId =
@@ -404,7 +400,7 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
         }
 
 insertTxIn ::
-  (MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   DB.TxId ->
   (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace) ->
@@ -422,7 +418,7 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) =
 -------------------------------------------------------------------------------
 
 resolveTxInputsByron ::
-  (MonadIO m) =>
+  MonadIO m =>
   DB.TxOutVariantType ->
   Byron.TxIn ->
   DB.DbAction m (Either DB.DbError (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace))

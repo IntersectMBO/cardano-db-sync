@@ -1,7 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.Db.Error (
-  -- AsDbError (..),
   DbCallStack (..),
   DbError (..),
   runOrThrowIODb,
@@ -47,7 +46,7 @@ runOrThrowIODb ioEither = do
     Left err -> throwIO err
     Right a -> pure a
 
-runOrThrowIO :: forall e a m. (MonadIO m) => (Exception e) => m (Either e a) -> m a
+runOrThrowIO :: forall e a m. MonadIO m => Exception e => m (Either e a) -> m a
 runOrThrowIO ioEither = do
   et <- ioEither
   case et of

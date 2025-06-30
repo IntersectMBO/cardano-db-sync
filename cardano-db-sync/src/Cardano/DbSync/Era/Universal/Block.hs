@@ -9,9 +9,17 @@
 
 module Cardano.DbSync.Era.Universal.Block (
   insertBlockUniversal,
-) where
+)
+where
+
+import Data.Either.Extra (eitherToMaybe)
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Keys
+import Cardano.Prelude
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
@@ -21,12 +29,6 @@ import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
  )
-import Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.Keys
-import Cardano.Prelude
-import Data.Either.Extra (eitherToMaybe)
-
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -63,13 +65,13 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
   do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.
-      Just pHash -> queryPrevBlockWithCache cache pHash (renderErrorMessage (Generic.blkEra blk))
-    mPhid <- queryPoolKeyWithCache cache UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
+      Just pHash -> queryPrevBlockWithCache syncEnv pHash (renderErrorMessage (Generic.blkEra blk))
+    mPhid <- queryPoolKeyWithCache syncEnv UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
     slid <- DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
-      insertBlockAndCache cache $
+      insertBlockAndCache syncEnv $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo

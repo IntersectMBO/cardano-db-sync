@@ -20,9 +20,9 @@ import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
 
------------------------------------------------------------------------------------------------
--- TxOutAddress
------------------------------------------------------------------------------------------------
+-- |
+-- Table Name: tx_out
+-- Description: Represents the outputs of transactions, including addresses and values.
 data TxOutAddress = TxOutAddress
   { txOutAddressTxId :: !Id.TxId
   , txOutAddressIndex :: !Word64
@@ -110,9 +110,9 @@ txOutAddressBulkEncoder =
     (bulkEncoder $ E.nullable $ Id.getTxId >$< E.int8) -- txOutAddressConsumedByTxId
     (bulkEncoder $ E.nonNullable $ Id.getAddressId >$< E.int8) -- txOutAddressAddressId
 
------------------------------------------------------------------------------------------------
--- CollateralTxOutAddress
------------------------------------------------------------------------------------------------
+-- |
+-- Table Name: collateral_tx_out
+-- Description: Represents collateral transaction outputs, which are used to cover transaction fees in case of failure.
 data CollateralTxOutAddress = CollateralTxOutAddress
   { collateralTxOutAddressTxId :: !Id.TxId
   , collateralTxOutAddressIndex :: !Word64
@@ -176,9 +176,9 @@ collateralTxOutAddressEncoder =
     , collateralTxOutAddressAddressId >$< Id.idEncoder Id.getAddressId
     ]
 
------------------------------------------------------------------------------------------------
--- Address
------------------------------------------------------------------------------------------------
+-- |
+-- Table Name: address
+-- Description: Represents addresses used in transactions, including their raw representation and associated scripts.
 data Address = Address
   { addressAddress :: !Text
   , addressRaw :: !ByteString
@@ -216,9 +216,9 @@ addressEncoder =
     , addressStakeAddressId >$< Id.maybeIdEncoder Id.getStakeAddressId
     ]
 
------------------------------------------------------------------------------------------------
--- MultiAssetTxOut
------------------------------------------------------------------------------------------------
+-- |
+-- Table Name: ma_tx_out
+-- Description: Represents multi-asset transaction outputs, which include various assets and their quantities.
 data MaTxOutAddress = MaTxOutAddress
   { maTxOutAddressIdent :: !Id.MultiAssetId
   , maTxOutAddressQuantity :: !DbWord64

@@ -37,7 +37,7 @@ import Cardano.Db.Types (DbAction)
 -- | Find the minimum ID in a table - returns raw Int64
 queryMinRefIdStmt ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name to filter on
   Text.Text ->
   -- | Parameter encoder
@@ -82,7 +82,7 @@ queryMinRefId fieldName value encoder =
 
 queryMinRefIdNullableStmt ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name to filter on
   Text.Text ->
   -- | Parameter encoder
@@ -129,7 +129,7 @@ queryMinRefIdNullable fieldName value encoder =
 -- | Find the minimum ID in a table - returns typed Key
 queryMinRefIdKeyStmt ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name to filter on
   Text.Text ->
   -- | Parameter encoder
@@ -188,7 +188,7 @@ whenNothingQueryMinRefId mKey fieldName value encoder keyDecoder =
 
 queryMinRefIdNullableKeyStmt ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name to filter on
   Text.Text ->
   -- | Parameter encoder
@@ -234,7 +234,7 @@ queryMinRefIdNullableKey fieldName value encoder keyDecoder =
 
 queryMaxRefIdStmt ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name to filter on
   Text.Text ->
   -- | Equal or strictly less
@@ -283,7 +283,7 @@ queryMaxRefId fieldName value eq encoder keyDecoder =
 ---------------------------------------------------------------------------
 
 completeMinId ::
-  (MonadIO m) =>
+  MonadIO m =>
   Maybe Id.TxId ->
   SM.MinIdsWrapper ->
   DbAction m SM.MinIdsWrapper

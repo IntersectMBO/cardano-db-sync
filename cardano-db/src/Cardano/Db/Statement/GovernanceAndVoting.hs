@@ -285,7 +285,7 @@ insertBulkDrepDistr drepDistrs = do
 -- | QUERY
 queryDrepHashSpecialStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   Text.Text -> -- targetValue
   HsqlStmt.Statement () (Maybe Id.DrepHashId)
 queryDrepHashSpecialStmt targetValue =
@@ -597,23 +597,3 @@ queryVotingAnchorIdExists :: MonadIO m => Id.VotingAnchorId -> DbAction m Bool
 queryVotingAnchorIdExists votingAnchorId =
   runDbSession (mkDbCallStack "queryVotingAnchorIdExists") $
     HsqlSes.statement votingAnchorId queryVotingAnchorIdExistsStmt
-
--- These tables manage governance-related data, including DReps, committees, and voting procedures.
-
--- committee
--- committee_de_registration
--- committee_hash
--- committee_member
--- committee_registration
--- constitution
--- delegation_vote
--- drep_distr
--- drep_hash
--- drep_registration
--- event_info
--- gov_action_proposal
--- new_committee
--- param_proposal
--- treasury_withdrawal
--- voting_anchor
--- voting_procedure

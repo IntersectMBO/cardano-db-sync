@@ -1,6 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbTool.Validate.AdaPots (
   validateSumAdaPots,
@@ -37,8 +36,7 @@ data Accounting = Accounting
 
 queryAdaPotsAccounting :: MonadIO m => DB.DbAction m [Accounting]
 queryAdaPotsAccounting = do
-  adaPotsSums <- DB.queryAdaPotsSum
-  pure $ map convertToAccounting adaPotsSums
+  map convertToAccounting <$> DB.queryAdaPotsSum
   where
     convertToAccounting :: DB.AdaPotsSum -> Accounting
     convertToAccounting aps =

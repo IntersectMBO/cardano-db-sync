@@ -4,8 +4,6 @@ module Cardano.DbTool.Validate.BlockTxs (
   validateEpochBlockTxs,
 ) where
 
--- import Cardano.Db hiding (queryBlockTxCount)
-
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Validate.Util
 import Control.Monad (forM_, when)

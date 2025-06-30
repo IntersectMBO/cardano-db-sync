@@ -119,7 +119,7 @@ queryEpochStakeCount epoch =
 --------------------------------------------------------------------------------
 queryMinMaxEpochStakeStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   Text.Text ->
   HsqlStmt.Statement () (Maybe Word64, Maybe Word64)
 queryMinMaxEpochStakeStmt colName =
@@ -280,7 +280,7 @@ queryRewardMapDataStmt =
           , " FROM " <> rewardTableN <> " r"
           , " INNER JOIN " <> stakeAddressTableN <> " sa ON r.addr_id = sa.id"
           , " WHERE r.spendable_epoch = $1"
-          , " AND r.type != 'deposit-refund'"
+          , " AND r.type != 'refund'"
           , " AND r.type != 'treasury'"
           , " AND r.type != 'reserves'"
           , " ORDER BY sa.hash_raw DESC"
@@ -317,10 +317,10 @@ deleteRewardsBulkStmt =
 
     encoder =
       contrazip4
-        (bulkEncoder $ Id.idBulkEncoder Id.getStakeAddressId)
-        (bulkEncoder $ HsqlE.nonNullable rewardSourceEncoder)
-        (bulkEncoder $ HsqlE.nonNullable (fromIntegral >$< HsqlE.int8))
-        (bulkEncoder $ Id.idBulkEncoder Id.getPoolHashId)
+        (bulkEncoder $ Id.idBulkEncoder Id.getStakeAddressId) -- addr_id
+        (bulkEncoder $ HsqlE.nonNullable rewardSourceEncoder) -- type
+        (bulkEncoder $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8) -- spendable_epoch
+        (bulkEncoder $ Id.idBulkEncoder Id.getPoolHashId) -- pool_id
 
 -- Public API function
 deleteRewardsBulk ::
@@ -631,14 +631,3 @@ queryDeregistrationScript :: MonadIO m => DbAction m [SS.StakeDeregistration]
 queryDeregistrationScript =
   runDbSession (mkDbCallStack "queryDeregistrationScript") $
     HsqlSes.statement () queryDeregistrationScriptStmt
-
--- These tables handle stake addresses, delegation, and reward
-
--- delegation
--- epoch_stake
--- epoch_stake_progress
--- reward
--- reward_rest
--- stake_address
--- stake_deregistration
--- stake_registration

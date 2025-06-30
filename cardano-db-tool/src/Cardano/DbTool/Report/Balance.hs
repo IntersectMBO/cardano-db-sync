@@ -5,8 +5,6 @@ module Cardano.DbTool.Report.Balance (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Control.Monad.IO.Class (MonadIO)

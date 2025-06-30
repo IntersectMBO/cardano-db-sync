@@ -6,7 +6,31 @@
 
 module Cardano.DbSync.Api.Ledger where
 
+import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
+import Control.Monad.Extra
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.List.Extra
+import Data.Map (Map)
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import Lens.Micro
+import Numeric
+
 import Cardano.BM.Trace (logError, logInfo, logWarning)
+import Cardano.Ledger.Allegra.Scripts (Timelock)
+import Cardano.Ledger.Alonzo.Scripts
+import Cardano.Ledger.Babbage.Core
+import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
+import Cardano.Ledger.BaseTypes
+import Cardano.Ledger.Core (Value)
+import Cardano.Ledger.Mary.Value
+import Cardano.Ledger.Shelley.LedgerState
+import Cardano.Ledger.TxIn
+import Cardano.Prelude (MonadError (..), textShow)
+import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
+import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
+import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
@@ -18,28 +42,7 @@ import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
-import Cardano.Ledger.Allegra.Scripts (Timelock)
-import Cardano.Ledger.Alonzo.Scripts
-import Cardano.Ledger.Babbage.Core
-import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
-import Cardano.Ledger.BaseTypes
-import Cardano.Ledger.Core (Value)
-import Cardano.Ledger.Mary.Value
-import Cardano.Ledger.Shelley.LedgerState
-import Cardano.Ledger.TxIn
-import Cardano.Prelude (MonadError (..), textShow)
-import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
-import Control.Monad.Extra
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.List.Extra
-import Data.Map (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
-import Lens.Micro
-import Numeric
-import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
-import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
-import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import Cardano.DbSync.Util (maxBulkSize)
 
 bootStrapMaybe ::
   MonadIO m =>
@@ -86,9 +89,6 @@ storeUTxOFromLedger env st = case ledgerState st of
     getUTxO st' =
       unUTxO $ Consensus.shelleyLedgerState st' ^. (nesEsL . esLStateL . lsUTxOStateL . utxoL)
 
-pageSize :: Int
-pageSize = 100000
-
 storeUTxO ::
   ( Cardano.Ledger.Core.Value era ~ MaryValue
   , Script era ~ AlonzoScript era
@@ -108,12 +108,12 @@ storeUTxO env mp = do
         [ "Inserting "
         , textShow size
         , " tx_out as pages of "
-        , textShow pageSize
+        , textShow maxBulkSize
         ]
-  mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf pageSize . Map.toList $ mp
+  mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf maxBulkSize . Map.toList $ mp
   where
     trce = getTrace env
-    npages = size `div` pageSize
+    npages = size `div` maxBulkSize
     pagePerc :: Float = if npages == 0 then 100.0 else 100.0 / fromIntegral npages
     size = Map.size mp
 
@@ -156,12 +156,10 @@ prepareTxOut ::
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut (fromIntegral index) txOut
-  eTxId <- queryTxIdWithCache cache txIntxId
+  eTxId <- queryTxIdWithCache syncEnv txIntxId
   txId <- case eTxId of
     Left err -> throwError err
     Right tid -> pure tid
-  insertTxOut trce cache iopts (txId, txHashByteString) genTxOut
+  insertTxOut syncEnv iopts (txId, txHashByteString) genTxOut
   where
-    trce = getTrace syncEnv
-    cache = envCache syncEnv
     iopts = soptInsertOptions $ envOptions syncEnv

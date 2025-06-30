@@ -51,7 +51,7 @@ import Test.Tasty.HUnit (Assertion, assertFailure)
 
 drepDistr :: IOManager -> [(Text, Text)] -> Assertion
 drepDistr =
-  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote

@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -10,7 +9,7 @@
 module Cardano.Db.Statement.ConsumedTxOut where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Prelude (Int64, textShow)
+import Cardano.Prelude (ByteString, Int64, textShow)
 import Contravariant.Extras (contrazip2, contrazip3)
 import Control.Exception (throwIO)
 import Control.Monad (unless, when)
@@ -66,16 +65,13 @@ encodeConsumedTripletBulk =
 
 --------------------------------------------------------------------------------
 
-pageSize :: Word64
-pageSize = 100_000
-
---------------------------------------------------------------------------------
-
 -- | Run extra migrations for the database
 runConsumedTxOutMigrations ::
   MonadIO m =>
   -- | Tracer for logging
   Trace IO Text.Text ->
+  -- |  Bulk size
+  Int ->
   -- | TxOut table type being used
   TxOutVariantType ->
   -- | Block number difference
@@ -83,7 +79,7 @@ runConsumedTxOutMigrations ::
   -- | Prune/consume migration config
   PruneConsumeMigration ->
   DbAction m ()
-runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
+runConsumedTxOutMigrations trce bulkSize txOutVariantType blockNoDiff pcm = do
   ems <- queryAllExtraMigrations
   isTxOutNull <- queryTxOutIsNull txOutVariantType
   let migrationValues = processMigrationValues ems pcm
@@ -133,7 +129,7 @@ runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
         (False, True, False) -> do
           liftIO $ logInfo trce $ msgName <> "Running extra migration consumed_tx_out"
           insertExtraMigration ConsumeTxOutPreviouslySet
-          migrateTxOut trce txOutVariantType $ Just migrationValues
+          migrateTxOut bulkSize trce txOutVariantType $ Just migrationValues
 
         -- Prune TxOut
         (_, _, True) -> do
@@ -143,7 +139,7 @@ runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
             then do
               liftIO $ logInfo trce $ msgName <> "Running extra migration prune tx_out"
               deleteConsumedTxOut trce txOutVariantType blockNoDiff
-            else deleteAndUpdateConsumedTxOut trce txOutVariantType migrationValues blockNoDiff
+            else deleteAndUpdateConsumedTxOut bulkSize trce txOutVariantType migrationValues blockNoDiff
 
 --------------------------------------------------------------------------------
 
@@ -246,11 +242,13 @@ updateTxOutAndCreateAddress trce = do
 -- | Migrate tx_out data
 migrateTxOut ::
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   Trace IO Text.Text ->
   TxOutVariantType ->
   Maybe MigrationValues ->
   DbAction m ()
-migrateTxOut trce txOutVariantType mMvs = do
+migrateTxOut pageSize trce txOutVariantType mMvs = do
   whenJust mMvs $ \mvs -> do
     when (pcmConsumedTxOut (pruneConsumeMigration mvs) && not (isTxOutAddressPreviouslySet mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding consumed-by-id Index"
@@ -258,30 +256,32 @@ migrateTxOut trce txOutVariantType mMvs = do
     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
       createPruneConstraintTxOut
-  migrateNextPageTxOut (Just trce) txOutVariantType 0
+  migrateNextPageTxOut pageSize (Just trce) txOutVariantType 0
 
 -- | Process the tx_out table in pages for migration
 migrateNextPageTxOut ::
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   Maybe (Trace IO Text.Text) ->
   TxOutVariantType ->
   Word64 ->
   DbAction m ()
-migrateNextPageTxOut mTrce txOutVariantType offst = do
+migrateNextPageTxOut bulkSize mTrce txOutVariantType offst = do
   whenJust mTrce $ \trce ->
     liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
-  page <- getInputPage offst
+  page <- getInputPage bulkSize offst
   updatePageEntries txOutVariantType page
-  when (fromIntegral (length page) == pageSize) $
-    migrateNextPageTxOut mTrce txOutVariantType $!
-      (offst + pageSize)
+  when (length page == bulkSize) $
+    migrateNextPageTxOut bulkSize mTrce txOutVariantType $!
+      (offst + fromIntegral bulkSize)
 
 --------------------------------------------------------------------------------
 
 -- | Statement to update tx_out consumed_by_tx_id field
 updateTxOutConsumedStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement ConsumedTriplet ()
 updateTxOutConsumedStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
@@ -387,16 +387,18 @@ createPruneConstraintTxOut =
 -- | Get a page of consumed TX inputs
 getInputPage ::
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   -- | Offset
   Word64 ->
   DbAction m [ConsumedTriplet]
-getInputPage offset =
+getInputPage bulkSize offset =
   runDbSession (mkDbCallStack "getInputPage") $
-    HsqlSes.statement offset getInputPageStmt
+    HsqlSes.statement offset (getInputPageStmt bulkSize)
 
 -- | Statement to get a page of inputs from tx_in table
-getInputPageStmt :: HsqlStmt.Statement Word64 [ConsumedTriplet]
-getInputPageStmt =
+getInputPageStmt :: Int -> HsqlStmt.Statement Word64 [ConsumedTriplet]
+getInputPageStmt bulkSize =
   HsqlStmt.Statement sql encoder decoder True
   where
     sql =
@@ -406,7 +408,7 @@ getInputPageStmt =
           , " FROM tx_in"
           , " ORDER BY id"
           , " LIMIT "
-          , Text.pack (show pageSize)
+          , Text.pack (show bulkSize)
           , " OFFSET $1"
           ]
 
@@ -465,7 +467,7 @@ findMaxTxInId blockNoDiff =
 -- Delete consumed tx outputs before a specified tx
 deleteConsumedBeforeTxStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement (Maybe Id.TxId) Int64
 deleteConsumedBeforeTxStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -519,7 +521,7 @@ deleteConsumedTxOut trce txOutVariantType blockNoDiff = do
 -- Statement for deleting TxOut entries
 deletePageEntriesStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement [ConsumedTriplet] ()
 deletePageEntriesStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
@@ -567,36 +569,68 @@ deletePageEntries txOutVariantType entries =
 
 --------------------------------------------------------------------------------
 
--- Statement for updating TxOut entries with consumed_by_tx_id
-updatePageEntriesStmt ::
+-- | Data for bulk consumption using tx hash
+data BulkConsumedByHash = BulkConsumedByHash
+  { bchTxHash :: !ByteString
+  , bchOutputIndex :: !Word64
+  , bchConsumingTxId :: !Id.TxId
+  }
+
+-- | Bulk update consumed_by_tx_id using tx hash + index
+updateConsumedByTxHashBulk ::
+  MonadIO m =>
+  TxOutVariantType ->
+  [BulkConsumedByHash] ->
+  DbAction m ()
+updateConsumedByTxHashBulk txOutVariantType consumedData =
+  unless (null consumedData) $ do
+    let dbCallStack = mkDbCallStack "updateConsumedByTxHashBulk"
+    case txOutVariantType of
+      TxOutVariantCore ->
+        runDbSession dbCallStack $
+          HsqlSes.statement consumedData (updateConsumedByTxHashBulkStmt @SVC.TxOutCore)
+      TxOutVariantAddress ->
+        runDbSession dbCallStack $
+          HsqlSes.statement consumedData (updateConsumedByTxHashBulkStmt @SVA.TxOutAddress)
+
+updateConsumedByTxHashBulkStmt ::
   forall a.
-  (DbInfo a) =>
-  HsqlStmt.Statement [ConsumedTriplet] ()
-updatePageEntriesStmt =
+  DbInfo a =>
+  HsqlStmt.Statement [BulkConsumedByHash] ()
+updateConsumedByTxHashBulkStmt =
   HsqlStmt.Statement sql encoder HsqlD.noResult True
   where
     tableN = tableName (Proxy @a)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "WITH entries AS ("
-          , "  SELECT unnest($1::bigint[]) as tx_out_tx_id,"
-          , "         unnest($2::int[]) as tx_out_index,"
-          , "         unnest($3::bigint[]) as tx_in_tx_id"
+          [ "WITH consumption_data AS ("
+          , "  SELECT unnest($1::bytea[]) as tx_hash,"
+          , "         unnest($2::bigint[]) as output_index,"
+          , "         unnest($3::bigint[]) as consuming_tx_id"
           , ")"
           , "UPDATE " <> tableN
-          , "SET consumed_by_tx_id = entries.tx_in_tx_id"
-          , "WHERE (tx_id, index) IN (SELECT tx_out_tx_id, tx_out_index FROM entries)"
+          , "SET consumed_by_tx_id = consumption_data.consuming_tx_id"
+          , "FROM consumption_data"
+          , "INNER JOIN tx ON tx.hash = consumption_data.tx_hash"
+          , "WHERE " <> tableN <> ".tx_id = tx.id"
+          , "  AND " <> tableN <> ".index = consumption_data.output_index"
           ]
+    encoder = contramap extractBulkData bulkConsumedByHashEncoder
 
-    encoder = contramap extract encodeConsumedTripletBulk
+extractBulkData :: [BulkConsumedByHash] -> ([ByteString], [Word64], [Id.TxId])
+extractBulkData xs =
+  ( map bchTxHash xs
+  , map bchOutputIndex xs
+  , map bchConsumingTxId xs
+  )
 
-    extract :: [ConsumedTriplet] -> ([Id.TxId], [Word64], [Id.TxId])
-    extract xs =
-      ( map ctTxOutTxId xs
-      , map ctTxOutIndex xs
-      , map ctTxInTxId xs
-      )
+bulkConsumedByHashEncoder :: HsqlE.Params ([ByteString], [Word64], [Id.TxId])
+bulkConsumedByHashEncoder =
+  contrazip3
+    (bulkEncoder $ HsqlE.nonNullable HsqlE.bytea)
+    (bulkEncoder $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+    (bulkEncoder $ HsqlE.nonNullable $ Id.getTxId >$< HsqlE.int8)
 
 --------------------------------------------------------------------------------
 
@@ -651,36 +685,38 @@ splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId 
 deleteAndUpdateConsumedTxOut ::
   forall m.
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   Trace IO Text.Text ->
   TxOutVariantType ->
   MigrationValues ->
   Word64 ->
   DbAction m ()
-deleteAndUpdateConsumedTxOut trce txOutVariantType migrationValues blockNoDiff = do
+deleteAndUpdateConsumedTxOut bulkSize trce txOutVariantType migrationValues blockNoDiff = do
   maxTxIdResult <- findMaxTxInId blockNoDiff
   case maxTxIdResult of
     Left errMsg -> do
       liftIO $ logInfo trce $ "No tx_out were deleted as no blocks found: " <> errMsg
       liftIO $ logInfo trce "deleteAndUpdateConsumedTxOut: Now Running extra migration prune tx_out"
-      migrateTxOut trce txOutVariantType $ Just migrationValues
+      migrateTxOut bulkSize trce txOutVariantType $ Just migrationValues
       insertExtraMigration ConsumeTxOutPreviouslySet
     Right maxTxId -> do
       migrateNextPage maxTxId False 0
   where
     migrateNextPage :: Id.TxId -> Bool -> Word64 -> DbAction m ()
     migrateNextPage maxTxId ranCreateConsumedTxOut offst = do
-      pageEntries <- getInputPage offst
+      pageEntries <- getInputPage bulkSize offst
       resPageEntries <- splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId pageEntries
-      when (fromIntegral (length pageEntries) == pageSize) $
+      when (length pageEntries == bulkSize) $
         migrateNextPage maxTxId resPageEntries $!
-          offst + pageSize
+          offst + fromIntegral bulkSize
 
 --------------------------------------------------------------------------------
 
-migrateTxOutDbTool :: MonadIO m => TxOutVariantType -> DbAction m ()
-migrateTxOutDbTool txOutVariantType = do
+migrateTxOutDbTool :: MonadIO m => Int -> TxOutVariantType -> DbAction m ()
+migrateTxOutDbTool bulkSize txOutVariantType = do
   createConsumedIndexTxOut
-  migrateNextPageTxOut Nothing txOutVariantType 0
+  migrateNextPageTxOut bulkSize Nothing txOutVariantType 0
 
 --------------------------------------------------------------------------------
 
@@ -745,7 +781,7 @@ updateTxOutConsumedByTxIdAddress =
 -- | Count of TxOuts with null consumed_by_tx_id
 queryTxOutConsumedNullCountStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement () Word64
 queryTxOutConsumedNullCountStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
@@ -776,7 +812,7 @@ queryTxOutConsumedNullCount = \case
 -- | Count of TxOuts with non-null consumed_by_tx_id
 queryTxOutConsumedCountStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement () Word64
 queryTxOutConsumedCountStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
@@ -806,7 +842,7 @@ queryTxOutConsumedCount = \case
 -- | Statement for querying TxOuts where consumed_by_tx_id equals tx_id
 queryWrongConsumedByStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement () Word64
 queryWrongConsumedByStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True

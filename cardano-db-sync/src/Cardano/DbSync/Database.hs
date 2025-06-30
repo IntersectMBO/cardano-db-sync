@@ -106,11 +106,9 @@ runActions syncEnv actions = do
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          -- Fix: prepareRollback now returns IO (Either SyncNodeError Bool), so use ExceptT
           deletedAllBlocks <- ExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
           points <- lift $ rollbackLedger syncEnv chainSyncPoint
 
-          -- Keep the same logic as before for consistency levels
           case (deletedAllBlocks, points) of
             (True, Nothing) -> do
               liftIO $ setConsistentLevel syncEnv Consistent
@@ -119,13 +117,11 @@ runActions syncEnv actions = do
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
               liftIO $ validateConsistentLevel syncEnv chainSyncPoint
             _anyOtherOption -> do
-              -- No need to validate here
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
           blockNo <- lift $ getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbEvent Continue ys
         (ys, zs) -> do
-          -- Fix: insertListBlocks now returns IO (Either SyncNodeError ()), so use ExceptT
           ExceptT $ insertListBlocks syncEnv ys
           if null zs
             then pure Continue

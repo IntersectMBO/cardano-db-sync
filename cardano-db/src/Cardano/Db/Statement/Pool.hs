@@ -473,15 +473,3 @@ queryReservedTickers :: MonadIO m => DbAction m [SCP.ReservedPoolTicker]
 queryReservedTickers =
   runDbSession (mkDbCallStack "queryReservedTickers") $
     HsqlSes.statement () queryReservedTickersStmt
-
--- These tables manage stake pool-related data, including pool registration, updates, and retirements.
-
--- delisted_pool
--- pool_hash
--- pool_metadata_ref
--- pool_owner
--- pool_relay
--- pool_retire
--- pool_stat
--- pool_update
--- reserved_pool_ticker

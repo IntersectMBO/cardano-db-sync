@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -20,10 +19,9 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
 
 import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Api (getTrace)
-import Cardano.DbSync.Api.Types (SyncEnv)
+import Cardano.DbSync.Api.Types (SyncEnv (..), UnicodeNullSource (..))
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
@@ -47,7 +45,7 @@ insertRedeemer ::
   (Word64, Generic.TxRedeemer) ->
   DB.DbAction m (Word64, DB.RedeemerId)
 insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
-  tdId <- insertRedeemerData tracer txId $ Generic.txRedeemerData redeemer
+  tdId <- insertRedeemerData syncEnv txId $ Generic.txRedeemerData redeemer
   scriptHash <- findScriptHash
   rid <-
     DB.insertRedeemer $
@@ -63,7 +61,6 @@ insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
         }
   pure (rix, rid)
   where
-    tracer = getTrace syncEnv
     findScriptHash ::
       MonadIO m =>
       DB.DbAction m (Maybe ByteString)
@@ -76,16 +73,17 @@ insertRedeemer syncEnv disInOut groupedOutputs txId (rix, redeemer) = do
 
 insertRedeemerData ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
   Generic.PlutusData ->
   DB.DbAction m DB.RedeemerDataId
-insertRedeemerData tracer txId txd = do
+insertRedeemerData syncEnv txId txd = do
   mRedeemerDataId <- DB.queryRedeemerData $ Generic.dataHashToBytes $ Generic.txDataHash txd
   case mRedeemerDataId of
     Just redeemerDataId -> pure redeemerDataId
     Nothing -> do
-      value <- safeDecodeToJson tracer "insertDatum: Column 'value' in table 'datum' " $ Generic.txDataValue txd
+      -- value <- safeDecodeToJson tracer "insertDatum: Column 'value' in table 'datum' " $ Generic.txDataValue txd
+      value <- safeDecodeToJson syncEnv InsertDatum txId (Generic.txDataValue txd)
       DB.insertRedeemerData $
         DB.RedeemerData
           { DB.redeemerDataHash = Generic.dataHashToBytes $ Generic.txDataHash txd
@@ -99,18 +97,18 @@ insertRedeemerData tracer txId txd = do
 --------------------------------------------------------------------------------------------
 insertDatum ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   DB.TxId ->
   Generic.PlutusData ->
   DB.DbAction m DB.DatumId
-insertDatum tracer cache txId txd = do
-  mDatumId <- queryDatum cache $ Generic.txDataHash txd
+insertDatum syncEnv txId txd = do
+  mDatumId <- queryDatum syncEnv $ Generic.txDataHash txd
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
-      value <- safeDecodeToJson tracer "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
-      insertDatumAndCache cache (Generic.txDataHash txd) $
+      -- value <- safeDecodeToJson syncEnv "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
+      value <- safeDecodeToJson syncEnv InsertRedeemerData txId (Generic.txDataValue txd)
+      insertDatumAndCache (envCache syncEnv) (Generic.txDataHash txd) $
         DB.Datum
           { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd
           , DB.datumTxId = txId
@@ -120,15 +118,14 @@ insertDatum tracer cache txId txd = do
 
 insertWithdrawals ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   DB.TxId ->
   Map Word64 DB.RedeemerId ->
   Generic.TxWithdrawal ->
   DB.DbAction m ()
-insertWithdrawals tracer cache txId redeemers txWdrl = do
+insertWithdrawals syncEnv txId redeemers txWdrl = do
   addrId <-
-    queryOrInsertRewardAccount tracer cache UpdateCache $ Generic.txwRewardAccount txWdrl
+    queryOrInsertRewardAccount syncEnv UpdateCache $ Generic.txwRewardAccount txWdrl
   void . DB.insertWithdrawal $
     DB.Withdrawal
       { DB.withdrawalAddrId = addrId
@@ -141,29 +138,28 @@ insertWithdrawals tracer cache txId redeemers txWdrl = do
 -- whether it is newly inserted or it is already there, we retrun the `StakeAddressId`.
 insertStakeAddressRefIfMissing ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   Ledger.Addr ->
   DB.DbAction m (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing trce cache addr =
+insertStakeAddressRefIfMissing syncEnv addr =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
-          Just <$> queryOrInsertStakeAddress trce cache UpdateCache nw cred
+          Just <$> queryOrInsertStakeAddress syncEnv UpdateCache nw cred
         Ledger.StakeRefPtr ptr -> do
           DB.queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing
 
 insertMultiAsset ::
   MonadIO m =>
-  CacheStatus ->
+  SyncEnv ->
   PolicyID ->
   AssetName ->
   DB.DbAction m DB.MultiAssetId
-insertMultiAsset cache policy aName = do
-  mId <- queryMAWithCache cache policy aName
+insertMultiAsset syncEnv policy aName = do
+  mId <- queryMAWithCache syncEnv policy aName
   case mId of
     Right maId -> pure maId
     Left (policyBs, assetNameBs) ->
@@ -176,11 +172,11 @@ insertMultiAsset cache policy aName = do
 
 insertScript ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
   Generic.TxScript ->
   DB.DbAction m DB.ScriptId
-insertScript tracer txId script = do
+insertScript syncEnv txId script = do
   mScriptId <- DB.queryScriptWithId $ Generic.txScriptHash script
   case mScriptId of
     Just scriptId -> pure scriptId
@@ -198,7 +194,8 @@ insertScript tracer txId script = do
   where
     scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
-      maybe (pure Nothing) (safeDecodeToJson tracer "insertScript: Column 'json' in table 'script' ") (Generic.txScriptJson s)
+      -- maybe (pure Nothing) (safeDecodeToJson syncEnv "insertScript: Column 'json' in table 'script' ") (Generic.txScriptJson s)
+      maybe (pure Nothing) (safeDecodeToJson syncEnv InsertScript txId) (Generic.txScriptJson s)
 
 insertExtraKeyWitness ::
   MonadIO m =>

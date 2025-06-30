@@ -13,7 +13,6 @@
 module Cardano.Db.Schema.Core.EpochAndProtocol where
 
 import Cardano.Db.Schema.Ids
-import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Types (
   DbInt65,
   DbLovelace (..),

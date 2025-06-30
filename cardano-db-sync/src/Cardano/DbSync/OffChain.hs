@@ -6,6 +6,9 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Redundant pure" #-}
 
 module Cardano.DbSync.OffChain (
   insertOffChainPoolResults,

@@ -8,7 +8,7 @@ module Cardano.DbTool.Report.StakeReward.Latest (
 
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
-import Cardano.Prelude (textShow)
+import Cardano.Prelude (fromMaybe, textShow)
 import Control.Monad.IO.Class (MonadIO)
 import qualified Data.List as List
 import Data.Maybe (catMaybes)
@@ -68,7 +68,7 @@ queryReward en address (saId, date, DB.DbLovelace delegated, poolId) = do
   mPoolTicker <- DB.queryPoolTicker poolId
 
   let reward = maybe 0 DB.unDbLovelace mRewardAmount
-      poolTicker = maybe "???" id mPoolTicker
+      poolTicker = fromMaybe "???" mPoolTicker
 
   pure $
     EpochReward
