@@ -6,7 +6,15 @@ module Cardano.DbSync.Era.Universal.Adjust (
   adjustEpochRewards,
 ) where
 
+import Data.List (unzip4)
+import Data.List.Extra (chunksOf)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
+
 import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Prelude hiding (from, groupBy, on)
+import Cardano.Slotting.Slot (EpochNo (..))
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
@@ -15,13 +23,8 @@ import Cardano.DbSync.Cache (
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Types (StakeCred)
+import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.Ledger.BaseTypes (Network)
-import Cardano.Prelude hiding (from, groupBy, on)
-import Cardano.Slotting.Slot (EpochNo (..))
-import Data.List (unzip4)
-import Data.List.Extra (chunksOf)
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 
 -- Hlint warns about another version of this operator.
 {- HLINT ignore "Redundant ^." -}
@@ -59,14 +62,14 @@ adjustEpochRewards trce nw cache epochNo rwds creds = do
 
   -- Process rewards in batches
   unless (null rewardsToDelete) $ do
-    forM_ (chunksOf maxBatchSize rewardsToDelete) $ \batch -> do
+    forM_ (chunksOf maxBulkSize rewardsToDelete) $ \batch -> do
       params <- prepareRewardsForDeletion trce nw cache epochNo batch
       unless (areParamsEmpty params) $
         DB.deleteRewardsBulk params
 
-  -- Handle orphaned rewards in batches too
+  -- Handle orphaned rewards in batches
   crds <- catMaybes <$> forM (Set.toList creds) (queryStakeAddrWithCache trce cache DoNotUpdateCache nw)
-  forM_ (chunksOf maxBatchSize crds) $ \batch ->
+  forM_ (chunksOf maxBulkSize crds) $ \batch ->
     DB.deleteOrphanedRewardsBulk (unEpochNo epochNo) batch
 
 prepareRewardsForDeletion ::
@@ -96,6 +99,3 @@ prepareRewardsForDeletion trce nw cache epochNo rewards = do
 -- Add this helper function
 areParamsEmpty :: ([a], [b], [c], [d]) -> Bool
 areParamsEmpty (as, bs, cs, ds) = null as || null bs || null cs || null ds
-
-maxBatchSize :: Int
-maxBatchSize = 10000

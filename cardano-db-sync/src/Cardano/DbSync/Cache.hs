@@ -20,7 +20,6 @@ module Cardano.DbSync.Cache (
   insertAddressUsingCache,
   insertStakeAddress,
   queryStakeAddrWithCache,
-  queryTxIdWithCacheEither,
   queryTxIdWithCache,
   rollbackCache,
   optimiseCaches,
@@ -30,21 +29,6 @@ module Cardano.DbSync.Cache (
   getCacheStatistics,
 ) where
 
-import Cardano.BM.Trace
-import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
-import qualified Cardano.DbSync.Cache.FIFO as FIFO
-import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
-import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import Cardano.DbSync.Era.Shelley.Query
-import Cardano.DbSync.Types
-import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.BaseTypes (Network)
-import Cardano.Ledger.Mary.Value
-import qualified Cardano.Ledger.TxIn as Ledger
-import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
   modifyTVar,
@@ -54,6 +38,23 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
+
+import Cardano.BM.Trace
+import qualified Cardano.Ledger.Address as Ledger
+import Cardano.Ledger.BaseTypes (Network)
+import Cardano.Ledger.Mary.Value
+import qualified Cardano.Ledger.TxIn as Ledger
+import Cardano.Prelude
+
+import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
+import qualified Cardano.DbSync.Cache.FIFO as FIFO
+import qualified Cardano.DbSync.Cache.LRU as LRU
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
+import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
+import Cardano.DbSync.Era.Shelley.Query
+import Cardano.DbSync.Types
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -117,7 +118,6 @@ queryOrInsertRewardAccount trce cache cacheUA rewardAddr = do
   case eiAddrId of
     Just addrId -> pure addrId
     Nothing -> do
-      -- TODO: Cmdv is this the right byteString?
       let bs = Ledger.serialiseRewardAccount rewardAddr
       insertStakeAddress rewardAddr (Just bs)
 
@@ -407,76 +407,6 @@ queryMAWithCache cache policyId asset =
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
 
--- CORRECT VERSION - match the original cache behavior exactly:
-
-queryTxIdWithCacheEither ::
-  MonadIO m =>
-  CacheStatus ->
-  Ledger.TxId -> -- Use the original input type
-  DB.DbAction m (Either DB.DbError DB.TxId)
-queryTxIdWithCacheEither cache txIdLedger = do
-  case cache of
-    -- Direct database query if no cache.
-    NoCache -> qTxHash
-    ActiveCache ci ->
-      withCacheOptimisationCheck ci qTxHash $ do
-        -- Read current cache state.
-        cacheTx <- liftIO $ readTVarIO (cTxIds ci)
-
-        case FIFO.lookup txIdLedger cacheTx of
-          -- Cache hit, return the transaction ID.
-          Just txId -> do
-            liftIO $ hitTxIds (cStats ci)
-            pure $ Right txId
-          -- Cache miss.
-          Nothing -> do
-            eTxId <- qTxHash
-            liftIO $ missTxIds (cStats ci)
-            case eTxId of
-              Right txId -> do
-                -- Update cache.
-                liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
-                -- Return ID after updating cache.
-                pure $ Right txId
-              -- Return lookup failure.
-              Left err -> pure $ Left err
-  where
-    txHash = Generic.unTxHash txIdLedger -- Convert to ByteString for DB query
-    qTxHash = do
-      result <- DB.queryTxId txHash
-      case result of
-        Just txId -> pure $ Right txId
-        Nothing -> pure $ Left $ DB.DbError (DB.mkDbCallStack "queryTxIdWithCacheEither") "TxId not found" Nothing
-
-queryPrevBlockWithCache ::
-  MonadIO m =>
-  CacheStatus ->
-  ByteString ->
-  Text.Text ->
-  DB.DbAction m DB.BlockId
-queryPrevBlockWithCache cache hsh errMsg =
-  case cache of
-    NoCache -> DB.queryBlockId hsh errMsg
-    ActiveCache ci -> do
-      mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
-      case mCachedPrev of
-        -- if the cached block matches the requested hash, we return its db id.
-        Just (cachedBlockId, cachedHash) ->
-          if cachedHash == hsh
-            then do
-              liftIO $ hitPBlock (cStats ci)
-              pure cachedBlockId
-            else queryFromDb ci
-        Nothing -> queryFromDb ci
-  where
-    queryFromDb ::
-      MonadIO m =>
-      CacheInternal ->
-      DB.DbAction m DB.BlockId
-    queryFromDb ci = do
-      liftIO $ missPrevBlock (cStats ci)
-      DB.queryBlockId hsh errMsg
-
 queryTxIdWithCache ::
   MonadIO m =>
   CacheStatus ->
@@ -521,6 +451,35 @@ queryTxIdWithCache cache txIdLedger = do
                 (DB.mkDbCallStack "queryTxIdWithCacheEither")
                 ("TxId not found for hash: " <> textShow txHash)
                 Nothing
+
+queryPrevBlockWithCache ::
+  MonadIO m =>
+  CacheStatus ->
+  ByteString ->
+  Text.Text ->
+  DB.DbAction m DB.BlockId
+queryPrevBlockWithCache cache hsh errMsg =
+  case cache of
+    NoCache -> DB.queryBlockId hsh errMsg
+    ActiveCache ci -> do
+      mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
+      case mCachedPrev of
+        -- if the cached block matches the requested hash, we return its db id.
+        Just (cachedBlockId, cachedHash) ->
+          if cachedHash == hsh
+            then do
+              liftIO $ hitPBlock (cStats ci)
+              pure cachedBlockId
+            else queryFromDb ci
+        Nothing -> queryFromDb ci
+  where
+    queryFromDb ::
+      MonadIO m =>
+      CacheInternal ->
+      DB.DbAction m DB.BlockId
+    queryFromDb ci = do
+      liftIO $ missPrevBlock (cStats ci)
+      DB.queryBlockId hsh errMsg
 
 tryUpdateCacheTx ::
   MonadIO m =>

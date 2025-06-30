@@ -15,11 +15,16 @@ import Control.Monad.Logger (LoggingT)
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
+
+import Cardano.BM.Trace (Trace, logInfo)
+import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
+import Cardano.Ledger.Shelley.AdaPots as Shelley
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
 
-import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
@@ -39,10 +44,6 @@ import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
-import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
-import Cardano.Ledger.Shelley.AdaPots as Shelley
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 
 insertListBlocks ::
   SyncEnv ->
@@ -58,7 +59,6 @@ insertListBlocks syncEnv blocks = do
   where
     tracer = getTrace syncEnv
 
--- This is the simplified version matching the original applyAndInsertBlockMaybe:
 applyAndInsertBlockMaybe ::
   SyncEnv ->
   Trace IO Text ->

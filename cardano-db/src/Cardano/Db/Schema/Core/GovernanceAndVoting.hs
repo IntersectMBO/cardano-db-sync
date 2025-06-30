@@ -49,10 +49,9 @@ import Contravariant.Extras (contrazip3, contrazip4)
 -- These tables manage governance-related data, including DReps, committees, and voting procedures.
 -----------------------------------------------------------------------------------------------------------------------------------
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: drep_hash
 -- Description: Stores hashes of DRep (Decentralized Reputation) records, which are used in governance processes.
------------------------------------------------------------------------------------------------------------------------------------
 data DrepHash = DrepHash
   { drepHashRaw :: !(Maybe ByteString) -- sqltype=hash28type
   , drepHashView :: !Text
@@ -92,10 +91,9 @@ drepHashEncoder =
     , drepHashHasScript >$< E.param (E.nonNullable E.bool)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: drep_registration
 -- Description: Contains details about the registration of DReps, including their public keys and other identifying information.
------------------------------------------------------------------------------------------------------------------------------------
 data DrepRegistration = DrepRegistration
   { drepRegistrationTxId :: !Id.TxId -- noreference
   , drepRegistrationCertIndex :: !Word16
@@ -140,10 +138,9 @@ drepRegistrationEncoder =
     , drepRegistrationVotingAnchorId >$< Id.maybeIdEncoder Id.getVotingAnchorId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: drep_distr
 -- Description: Contains information about the distribution of DRep tokens, including the amount distributed and the epoch in which the distribution occurred.
------------------------------------------------------------------------------------------------------------------------------------
 data DrepDistr = DrepDistr
   { drepDistrHashId :: !Id.DrepHashId -- noreference
   , drepDistrAmount :: !Word64
@@ -200,10 +197,9 @@ drepDistrBulkEncoder =
     (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
     (bulkEncoder $ E.nullable $ fromIntegral >$< E.int8)
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: delegation_vote
 -- Description: Tracks votes cast by stakeholders to delegate their voting rights to other entities within the governance framework.
------------------------------------------------------------------------------------------------------------------------------------
 data DelegationVote = DelegationVote
   { delegationVoteAddrId :: !Id.StakeAddressId -- noreference
   , delegationVoteCertIndex :: !Word16
@@ -248,10 +244,9 @@ delegationVoteEncoder =
     , delegationVoteRedeemerId >$< Id.maybeIdEncoder Id.getRedeemerId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: gov_action_proposal
 -- Description: Contains proposals for governance actions, including the type of action, the amount of the deposit, and the expiration date.
------------------------------------------------------------------------------------------------------------------------------------
 data GovActionProposal = GovActionProposal
   { govActionProposalTxId :: !Id.TxId -- noreference
   , govActionProposalIndex :: !Word64
@@ -326,10 +321,9 @@ govActionProposalEncoder =
     , govActionProposalExpiredEpoch >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: voting_procedure
 -- Description: Defines the procedures and rules governing the voting process, including quorum requirements and tallying mechanisms.
------------------------------------------------------------------------------------------------------------------------------------
 data VotingProcedure = VotingProcedure
   { votingProcedureTxId :: !Id.TxId -- noreference
   , votingProcedureIndex :: !Word16
@@ -391,10 +385,9 @@ votingProcedureEncoder =
     , votingProcedureInvalid >$< Id.maybeIdEncoder Id.getEventInfoId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: voting_anchor
 -- Description: Acts as an anchor point for votes, ensuring they are securely recorded and linked to specific proposals.
------------------------------------------------------------------------------------------------------------------------------------
 data VotingAnchor = VotingAnchor
   { votingAnchorUrl :: !VoteUrl -- sqltype=varchar
   , votingAnchorDataHash :: !ByteString
@@ -439,10 +432,9 @@ votingAnchorEncoder =
     , votingAnchorBlockId >$< Id.idEncoder Id.getBlockId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: constitution
 -- Description: Holds the on-chain constitution, which defines the rules and principles of the blockchain's governance system.
------------------------------------------------------------------------------------------------------------------------------------
 data Constitution = Constitution
   { constitutionGovActionProposalId :: !(Maybe Id.GovActionProposalId) -- noreference
   , constitutionVotingAnchorId :: !Id.VotingAnchorId -- noreference
@@ -481,10 +473,9 @@ constitutionEncoder =
     , constitutionScriptHash >$< E.param (E.nullable E.bytea)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: committee
 -- Description: Contains information about the committee, including the quorum requirements and the proposal being considered.
------------------------------------------------------------------------------------------------------------------------------------
 data Committee = Committee
   { committeeGovActionProposalId :: !(Maybe Id.GovActionProposalId) -- noreference
   , committeeQuorumNumerator :: !Word64

@@ -2,6 +2,7 @@
 
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
+import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.DbTool
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Applicative (optional)
@@ -61,7 +62,7 @@ runCommand cmd =
         void $
           runMigrations pgConfig False mdir mldir Indexes txOutTabletype
     CmdTxOutMigration txOutVariantType -> do
-      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool txOutVariantType
+      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType

@@ -9,9 +9,17 @@
 
 module Cardano.DbSync.Era.Universal.Block (
   insertBlockUniversal,
-) where
+)
+where
+
+import Data.Either.Extra (eitherToMaybe)
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Keys
+import Cardano.Prelude
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
@@ -21,12 +29,6 @@ import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
  )
-import Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.Keys
-import Cardano.Prelude
-import Data.Either.Extra (eitherToMaybe)
-
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic

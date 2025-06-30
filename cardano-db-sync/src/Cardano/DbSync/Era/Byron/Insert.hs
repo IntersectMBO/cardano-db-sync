@@ -12,6 +12,10 @@ module Cardano.DbSync.Era.Byron.Insert (
 )
 where
 
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
@@ -19,6 +23,10 @@ import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
+import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
+
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
@@ -36,35 +44,12 @@ import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 
 -- Trivial local data type for use in place of a tuple.
 data ValueFee = ValueFee
   { vfValue :: !DbLovelace
   , vfFee :: !DbLovelace
   }
-
--- insertByronBlock ::
---   (MonadIO m) =>
---   SyncEnv ->
---   Bool ->
---   ByronBlock ->
---   SlotDetails ->
---   DB.DbAction m ()
--- insertByronBlock syncEnv blk blockNo details = do
---   liftIO $ logInfo (getTrace syncEnv) $ "insertByronBlock: Starting block processing for block " <> textShow blockNo
---   case blk of
---     Byron.ABOBBoundary abobBoundary -> do
---       liftIO $ logInfo (getTrace syncEnv) "insertByronBlock: Processing boundary block"
---       insertABOBBoundary syncEnv abobBoundary details
---     Byron.ABOBBlock blk' -> do
---       liftIO $ logInfo (getTrace syncEnv) $ "insertByronBlock: Processing regular block with " <> textShow (length (Byron.blockPayload blk')) <> " transactions"
---       insertABlock syncEnv firstBlockOfEpoch blk' details
 
 insertByronBlock ::
   (MonadIO m) =>

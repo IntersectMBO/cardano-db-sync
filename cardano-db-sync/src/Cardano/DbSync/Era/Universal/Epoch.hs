@@ -22,19 +22,11 @@ module Cardano.DbSync.Era.Universal.Epoch (
   sumRewardTotal,
 ) where
 
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
+
 import Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Db as DB
-import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
-import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
-import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, insertUpdateEnacted, updateExpired, updateRatified)
-import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
-import Cardano.DbSync.Ledger.Event
-import Cardano.DbSync.Types
-import Cardano.DbSync.Util (whenDefault, whenStrictJust, whenStrictJustDefault)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -48,9 +40,19 @@ import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
+import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, insertUpdateEnacted, updateExpired, updateRatified)
+import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
+import Cardano.DbSync.Ledger.Event
+import Cardano.DbSync.Types
+import Cardano.DbSync.Util (maxBulkSize, whenDefault, whenStrictJust, whenStrictJustDefault)
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -221,7 +223,7 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
   let cache = envCache syncEnv
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbStakes <- mapM (mkStake cache) stakeChunk
-  let chunckDbStakes = splittRecordsEvery 100000 dbStakes
+  let chunckDbStakes = splittRecordsEvery maxBulkSize dbStakes
 
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
   forM_ chunckDbStakes $ \dbs -> DB.insertBulkEpochStake dbConstraintEpochStake dbs
@@ -257,7 +259,7 @@ insertRewards ::
 insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  let chunckDbRewards = splittRecordsEvery 100000 dbRewards
+  let chunckDbRewards = splittRecordsEvery maxBulkSize dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
   forM_ chunckDbRewards $ \rws -> DB.insertBulkRewards dbConstraintEpochStake rws
   where
@@ -307,7 +309,7 @@ insertRewardRests ::
   DB.DbAction m ()
 insertRewardRests trce nw earnedEpoch spendableEpoch cache rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
-  let chunckDbRewards = splittRecordsEvery 100000 dbRewards
+  let chunckDbRewards = splittRecordsEvery maxBulkSize dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
   forM_ chunckDbRewards $ \rws -> DB.insertBulkRewardRests rws
   where

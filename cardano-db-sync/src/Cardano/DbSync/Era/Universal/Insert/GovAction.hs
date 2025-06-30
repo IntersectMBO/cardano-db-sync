@@ -58,6 +58,7 @@ import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import Data.List.Extra (chunksOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Ouroboros.Consensus.Cardano.Block (ConwayEra)
@@ -123,13 +124,17 @@ insertGovActionProposal trce cache blkId txId govExpiresAt mcgs (index, (govId, 
       DB.DbAction m ()
     insertTreasuryWithdrawalsBulk _ [] = pure ()
     insertTreasuryWithdrawalsBulk gaId withdrawals = do
-      -- Bulk resolve all reward accounts
-      let rewardAccounts = map fst withdrawals
-      addrIds <- mapM (queryOrInsertRewardAccount trce cache UpdateCache) rewardAccounts
-      -- Create treasury withdrawals with resolved IDs
-      let treasuryWithdrawals = zipWith createTreasuryWithdrawal addrIds (map snd withdrawals)
-      DB.insertBulkTreasuryWithdrawal treasuryWithdrawals
+      let withdrawalChunks = chunksOf maxBulkSize withdrawals
+      mapM_ processChunk withdrawalChunks
       where
+        processChunk chunk = do
+          -- Bulk resolve all reward accounts for this chunk
+          let rewardAccounts = map fst chunk
+          addrIds <- mapM (queryOrInsertRewardAccount trce cache UpdateCache) rewardAccounts
+          -- Create treasury withdrawals with resolved IDs for this chunk
+          let treasuryWithdrawals = zipWith createTreasuryWithdrawal addrIds (map snd chunk)
+          DB.insertBulkTreasuryWithdrawal treasuryWithdrawals
+
         createTreasuryWithdrawal addrId coin =
           DB.TreasuryWithdrawal
             { DB.treasuryWithdrawalGovActionProposalId = gaId
@@ -188,17 +193,6 @@ resolveGovActionProposal cache gaId = do
 
   let (GovActionIx index) = gaidGovActionIx gaId
   DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
-
--- resolveGovActionProposal ::
---   MonadIO m =>
---   CacheStatus ->
---   GovActionId ->
---   DB.DbAction m DB.GovActionProposalId
--- resolveGovActionProposal cache gaId = do
---   let txId = gaidTxId gaId
---   gaTxId <- queryTxIdWithCache cache txId
---   let (GovActionIx index) = gaidGovActionIx gaId
---   DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::
   MonadIO m =>
@@ -369,9 +363,14 @@ insertCredDrepHash cred = do
 
 insertDrepDistr :: forall m. MonadIO m => EpochNo -> PulsingSnapshot ConwayEra -> DB.DbAction m ()
 insertDrepDistr e pSnapshot = do
-  drepsDB <- mapM mkEntry (Map.toList $ psDRepDistr pSnapshot)
-  DB.insertBulkDrepDistr drepsDB
+  let drepEntries = Map.toList $ psDRepDistr pSnapshot
+      drepChunks = chunksOf maxBulkSize drepEntries
+  mapM_ processChunk drepChunks
   where
+    processChunk chunk = do
+      drepsDB <- mapM mkEntry chunk
+      DB.insertBulkDrepDistr drepsDB
+
     mkEntry :: (DRep, Ledger.CompactForm Coin) -> DB.DbAction m DB.DrepDistr
     mkEntry (drep, coin) = do
       drepId <- insertDrep drep

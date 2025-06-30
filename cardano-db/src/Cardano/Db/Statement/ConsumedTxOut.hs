@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -66,16 +65,13 @@ encodeConsumedTripletBulk =
 
 --------------------------------------------------------------------------------
 
-pageSize :: Word64
-pageSize = 100_000
-
---------------------------------------------------------------------------------
-
 -- | Run extra migrations for the database
 runConsumedTxOutMigrations ::
   MonadIO m =>
   -- | Tracer for logging
   Trace IO Text.Text ->
+  -- |  Bulk size
+  Int ->
   -- | TxOut table type being used
   TxOutVariantType ->
   -- | Block number difference
@@ -83,7 +79,7 @@ runConsumedTxOutMigrations ::
   -- | Prune/consume migration config
   PruneConsumeMigration ->
   DbAction m ()
-runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
+runConsumedTxOutMigrations trce bulkSize txOutVariantType blockNoDiff pcm = do
   ems <- queryAllExtraMigrations
   isTxOutNull <- queryTxOutIsNull txOutVariantType
   let migrationValues = processMigrationValues ems pcm
@@ -133,7 +129,7 @@ runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
         (False, True, False) -> do
           liftIO $ logInfo trce $ msgName <> "Running extra migration consumed_tx_out"
           insertExtraMigration ConsumeTxOutPreviouslySet
-          migrateTxOut trce txOutVariantType $ Just migrationValues
+          migrateTxOut bulkSize trce txOutVariantType $ Just migrationValues
 
         -- Prune TxOut
         (_, _, True) -> do
@@ -143,7 +139,7 @@ runConsumedTxOutMigrations trce txOutVariantType blockNoDiff pcm = do
             then do
               liftIO $ logInfo trce $ msgName <> "Running extra migration prune tx_out"
               deleteConsumedTxOut trce txOutVariantType blockNoDiff
-            else deleteAndUpdateConsumedTxOut trce txOutVariantType migrationValues blockNoDiff
+            else deleteAndUpdateConsumedTxOut bulkSize trce txOutVariantType migrationValues blockNoDiff
 
 --------------------------------------------------------------------------------
 
@@ -246,11 +242,13 @@ updateTxOutAndCreateAddress trce = do
 -- | Migrate tx_out data
 migrateTxOut ::
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   Trace IO Text.Text ->
   TxOutVariantType ->
   Maybe MigrationValues ->
   DbAction m ()
-migrateTxOut trce txOutVariantType mMvs = do
+migrateTxOut pageSize trce txOutVariantType mMvs = do
   whenJust mMvs $ \mvs -> do
     when (pcmConsumedTxOut (pruneConsumeMigration mvs) && not (isTxOutAddressPreviouslySet mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding consumed-by-id Index"
@@ -258,23 +256,25 @@ migrateTxOut trce txOutVariantType mMvs = do
     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
       createPruneConstraintTxOut
-  migrateNextPageTxOut (Just trce) txOutVariantType 0
+  migrateNextPageTxOut pageSize (Just trce) txOutVariantType 0
 
 -- | Process the tx_out table in pages for migration
 migrateNextPageTxOut ::
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   Maybe (Trace IO Text.Text) ->
   TxOutVariantType ->
   Word64 ->
   DbAction m ()
-migrateNextPageTxOut mTrce txOutVariantType offst = do
+migrateNextPageTxOut bulkSize mTrce txOutVariantType offst = do
   whenJust mTrce $ \trce ->
     liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
-  page <- getInputPage offst
+  page <- getInputPage bulkSize offst
   updatePageEntries txOutVariantType page
-  when (fromIntegral (length page) == pageSize) $
-    migrateNextPageTxOut mTrce txOutVariantType $!
-      (offst + pageSize)
+  when (length page == bulkSize) $
+    migrateNextPageTxOut bulkSize mTrce txOutVariantType $!
+      (offst + fromIntegral bulkSize)
 
 --------------------------------------------------------------------------------
 
@@ -387,16 +387,18 @@ createPruneConstraintTxOut =
 -- | Get a page of consumed TX inputs
 getInputPage ::
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   -- | Offset
   Word64 ->
   DbAction m [ConsumedTriplet]
-getInputPage offset =
+getInputPage bulkSize offset =
   runDbSession (mkDbCallStack "getInputPage") $
-    HsqlSes.statement offset getInputPageStmt
+    HsqlSes.statement offset (getInputPageStmt bulkSize)
 
 -- | Statement to get a page of inputs from tx_in table
-getInputPageStmt :: HsqlStmt.Statement Word64 [ConsumedTriplet]
-getInputPageStmt =
+getInputPageStmt :: Int -> HsqlStmt.Statement Word64 [ConsumedTriplet]
+getInputPageStmt bulkSize =
   HsqlStmt.Statement sql encoder decoder True
   where
     sql =
@@ -406,7 +408,7 @@ getInputPageStmt =
           , " FROM tx_in"
           , " ORDER BY id"
           , " LIMIT "
-          , Text.pack (show pageSize)
+          , Text.pack (show bulkSize)
           , " OFFSET $1"
           ]
 
@@ -683,36 +685,38 @@ splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId 
 deleteAndUpdateConsumedTxOut ::
   forall m.
   MonadIO m =>
+  -- | Bulk size
+  Int ->
   Trace IO Text.Text ->
   TxOutVariantType ->
   MigrationValues ->
   Word64 ->
   DbAction m ()
-deleteAndUpdateConsumedTxOut trce txOutVariantType migrationValues blockNoDiff = do
+deleteAndUpdateConsumedTxOut bulkSize trce txOutVariantType migrationValues blockNoDiff = do
   maxTxIdResult <- findMaxTxInId blockNoDiff
   case maxTxIdResult of
     Left errMsg -> do
       liftIO $ logInfo trce $ "No tx_out were deleted as no blocks found: " <> errMsg
       liftIO $ logInfo trce "deleteAndUpdateConsumedTxOut: Now Running extra migration prune tx_out"
-      migrateTxOut trce txOutVariantType $ Just migrationValues
+      migrateTxOut bulkSize trce txOutVariantType $ Just migrationValues
       insertExtraMigration ConsumeTxOutPreviouslySet
     Right maxTxId -> do
       migrateNextPage maxTxId False 0
   where
     migrateNextPage :: Id.TxId -> Bool -> Word64 -> DbAction m ()
     migrateNextPage maxTxId ranCreateConsumedTxOut offst = do
-      pageEntries <- getInputPage offst
+      pageEntries <- getInputPage bulkSize offst
       resPageEntries <- splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId pageEntries
-      when (fromIntegral (length pageEntries) == pageSize) $
+      when (length pageEntries == bulkSize) $
         migrateNextPage maxTxId resPageEntries $!
-          offst + pageSize
+          offst + fromIntegral bulkSize
 
 --------------------------------------------------------------------------------
 
-migrateTxOutDbTool :: MonadIO m => TxOutVariantType -> DbAction m ()
-migrateTxOutDbTool txOutVariantType = do
+migrateTxOutDbTool :: MonadIO m => Int -> TxOutVariantType -> DbAction m ()
+migrateTxOutDbTool bulkSize txOutVariantType = do
   createConsumedIndexTxOut
-  migrateNextPageTxOut Nothing txOutVariantType 0
+  migrateNextPageTxOut bulkSize Nothing txOutVariantType 0
 
 --------------------------------------------------------------------------------
 

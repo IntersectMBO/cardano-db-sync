@@ -12,6 +12,16 @@ module Cardano.DbSync.Api.Types (
   CurrentEpochNo (..),
 ) where
 
+import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar)
+import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
+import qualified Data.Strict.Maybe as Strict
+import Data.Time.Clock (UTCTime)
+import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Network.Magic (NetworkMagic (..))
+
+import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
+import Cardano.Slotting.Slot (EpochNo (..))
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (CacheStatus)
 import Cardano.DbSync.Config.Types (SyncNodeConfig)
@@ -23,16 +33,6 @@ import Cardano.DbSync.Types (
   OffChainVoteResult,
   OffChainVoteWorkQueue,
  )
-import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
-import Cardano.Slotting.Slot (EpochNo (..))
-import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
- )
-import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
-import qualified Data.Strict.Maybe as Strict
-import Data.Time.Clock (UTCTime)
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Network.Magic (NetworkMagic (..))
 
 -- | SyncEnv is the main environment for the whole application.
 data SyncEnv = SyncEnv

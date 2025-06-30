@@ -47,9 +47,34 @@ module Cardano.DbSync.Api (
 )
 where
 
+import Control.Concurrent.Class.MonadSTM.Strict (
+  newTBQueueIO,
+  newTVarIO,
+  readTVar,
+  readTVarIO,
+  writeTVar,
+ )
+import Control.Monad.Trans.Maybe (MaybeT (..))
+import qualified Data.Strict.Maybe as Strict
+import Data.Time.Clock (getCurrentTime)
+
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
+import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
+import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
+import Ouroboros.Network.Block (BlockNo (..), Point (..))
+import Ouroboros.Network.Magic (NetworkMagic (..))
+import qualified Ouroboros.Network.Point as Point
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
@@ -68,29 +93,6 @@ import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), Sna
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Shelley.Genesis as Shelley
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
-import Control.Concurrent.Class.MonadSTM.Strict (
-  newTBQueueIO,
-  newTVarIO,
-  readTVar,
-  readTVarIO,
-  writeTVar,
- )
-import Control.Monad.Trans.Maybe (MaybeT (..))
-import qualified Data.Strict.Maybe as Strict
-import Data.Time.Clock (getCurrentTime)
-import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
-import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
-import Ouroboros.Network.Block (BlockNo (..), Point (..))
-import Ouroboros.Network.Magic (NetworkMagic (..))
-import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -156,6 +158,7 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
   DB.runDbIohkNoLogging (envDbEnv syncEnv) $
     DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
+      maxBulkSize
       txOutVariantType
       (getSafeBlockNoDiff syncEnv)
       pcm

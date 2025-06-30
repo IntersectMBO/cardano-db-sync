@@ -118,7 +118,7 @@ postgresqlPoolDataLayer tracer conn =
         actionsResult <- getCertActions tracer conn (Just poolId)
         case actionsResult of
           Left dbErr -> pure $ Left $ DBFail dbErr
-          Right actions -> pure $ isRegistered (fromDbPoolId poolId) actions
+          Right actions -> pure $ not <$> isRegistered (fromDbPoolId poolId) actions
     , dlGetRetiredPools = do
         actionsResult <- getCertActions tracer conn Nothing
         case actionsResult of

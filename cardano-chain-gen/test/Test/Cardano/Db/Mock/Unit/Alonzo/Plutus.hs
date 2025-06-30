@@ -28,17 +28,24 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Plutus (
   swapMultiAssets,
 ) where
 
+import Control.Monad (void)
+import qualified Data.Map as Map
+import Data.Text (Text)
+import Test.Tasty.HUnit (Assertion)
+
 import qualified Cardano.Crypto.Hash as Crypto
-import Cardano.Db (TxOutVariantType (..))
-import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Plutus.Data (hashData)
 import Cardano.Ledger.SafeHash (extractHash)
 import Cardano.Ledger.Shelley.TxCert
+import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
+
+import Cardano.Db (TxOutVariantType (..))
+import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Cardano.Mock.Forging.Interpreter (withAlonzoLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
@@ -57,10 +64,6 @@ import Cardano.Mock.Forging.Types (
   TxEra (..),
   UTxOIndex (..),
  )
-import Control.Monad (void)
-import qualified Data.Map as Map
-import Data.Text (Text)
-import Ouroboros.Consensus.Cardano.Block (StandardAlonzo)
 import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, withFullConfig, withFullConfigDropDb)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
@@ -75,7 +78,6 @@ import Test.Cardano.Db.Mock.Validate (
   assertEqQuery,
   assertScriptCert,
  )
-import Test.Tasty.HUnit (Assertion)
 
 ----------------------------------------------------------------------------------------------------------
 -- Plutus Spend Scripts
