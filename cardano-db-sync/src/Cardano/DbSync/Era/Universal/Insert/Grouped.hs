@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Insert.Grouped (
@@ -17,17 +18,20 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 import qualified Data.List as List
 import qualified Data.Text as Text
 
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (logWarning)
 import Cardano.Db (DbLovelace (..), MinIds (..))
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.Cache (queryTxIdWithCacheEither)
+import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Shelley.Generic.Util (unTxHash)
 import Cardano.DbSync.Era.Shelley.Query
+import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.Prelude
+import Data.List.Extra (chunksOf)
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -90,24 +94,72 @@ insertBlockGroupedData ::
   DB.DbAction m DB.MinIdsWrapper
 insertBlockGroupedData syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
-  txOutIds <- DB.insertBulkTxOut disInOut $ etoTxOut . fst <$> groupedTxOut grouped
-  let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> groupedTxOut grouped)
-  maTxOutIds <- DB.insertBulkMaTxOut maTxOuts
+
+  let txOutChunks = chunksOf maxBulkSize $ etoTxOut . fst <$> groupedTxOut grouped
+      txInChunks = chunksOf maxBulkSize $ etiTxIn <$> groupedTxIn grouped
+      txMetadataChunks = chunksOf maxBulkSize $ groupedTxMetadata grouped
+      txMintChunks = chunksOf maxBulkSize $ groupedTxMint grouped
+
+  -- Process TxOut chunks
+  txOutIds <- concat <$> mapM (DB.insertBulkTxOut disInOut) txOutChunks
+  let maTxOuts =
+        concatMap (mkmaTxOuts txOutVariantType) $
+          zip txOutIds (snd <$> groupedTxOut grouped)
+      maTxOutChunks = chunksOf maxBulkSize maTxOuts
+
+  -- Process MaTxOut chunks
+  maTxOutIds <- concat <$> mapM DB.insertBulkMaTxOut maTxOutChunks
+
+  -- Process TxIn chunks
   txInIds <-
     if getSkipTxIn syncEnv
       then pure []
-      else DB.insertBulkTxIn $ etiTxIn <$> groupedTxIn grouped
+      else concat <$> mapM DB.insertBulkTxIn txInChunks
+
   whenConsumeOrPruneTxOut syncEnv $ do
+    -- Resolve remaining inputs
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
-    updateTuples <- mapM (prepareUpdates tracer) etis
-    DB.updateListTxOutConsumedByTxId $ catMaybes updateTuples
-  void . DB.insertBulkTxMetadata removeJsonbFromSchema $ groupedTxMetadata grouped
-  void . DB.insertBulkMaTxMint $ groupedTxMint grouped
+    -- Categorise resolved inputs for bulk vs individual processing
+    let (hashBasedUpdates, idBasedUpdates, failedInputs) = categorizeResolvedInputs etis
+        hashUpdateChunks = chunksOf maxBulkSize hashBasedUpdates
+        idUpdateChunks = chunksOf maxBulkSize idBasedUpdates
+
+    -- Bulk process hash-based updates
+    unless (null hashBasedUpdates) $
+      mapM_ (DB.updateConsumedByTxHashBulk txOutVariantType) hashUpdateChunks
+    -- Individual process ID-based updates
+    unless (null idBasedUpdates) $
+      mapM_ DB.updateListTxOutConsumedByTxId idUpdateChunks
+    -- Log failures
+    mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
+
+  -- Process metadata and mint chunks
+  mapM_ (DB.insertBulkTxMetadata removeJsonbFromSchema) txMetadataChunks
+  mapM_ DB.insertBulkMaTxMint txMintChunks
+
   pure $ makeMinId txInIds txOutIds maTxOutIds
   where
     tracer = getTrace syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
     removeJsonbFromSchema = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
+
+    categorizeResolvedInputs :: [ExtendedTxIn] -> ([DB.BulkConsumedByHash], [(DB.TxOutIdW, DB.TxId)], [ExtendedTxIn])
+    categorizeResolvedInputs etis =
+      let (hashBased, idBased, failed) = foldr categorizeOne ([], [], []) etis
+       in (hashBased, idBased, failed)
+      where
+        categorizeOne ExtendedTxIn {..} (hAcc, iAcc, fAcc) =
+          case etiTxOutId of
+            Right txOutId ->
+              (hAcc, (txOutId, DB.txInTxInId etiTxIn) : iAcc, fAcc)
+            Left genericTxIn ->
+              let bulkData =
+                    DB.BulkConsumedByHash
+                      { bchTxHash = unTxHash (Generic.txInTxId genericTxIn)
+                      , bchOutputIndex = Generic.txInIndex genericTxIn
+                      , bchConsumingTxId = DB.txInTxInId etiTxIn
+                      }
+               in (bulkData : hAcc, iAcc, fAcc)
 
     makeMinId :: [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
     makeMinId txInIds txOutIds maTxOutIds =
@@ -148,17 +200,6 @@ mkmaTxOuts _txOutVariantType (txOutId, mmtos) = mkmaTxOut <$> mmtos
               , VA.maTxOutAddressTxOutId = txOutId'
               }
 
-prepareUpdates ::
-  MonadIO m =>
-  Trace IO Text ->
-  ExtendedTxIn ->
-  m (Maybe (DB.TxOutIdW, DB.TxId))
-prepareUpdates trce eti = case etiTxOutId eti of
-  Right txOutId -> pure $ Just (txOutId, DB.txInTxInId (etiTxIn eti))
-  Left _ -> do
-    liftIO $ logWarning trce $ "Failed to find output for " <> Text.pack (show eti)
-    pure Nothing
-
 insertReverseIndex ::
   MonadIO m =>
   DB.BlockId ->
@@ -192,15 +233,35 @@ resolveTxInputs ::
   Generic.TxIn ->
   DB.DbAction m (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
 resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
-  qres <-
-    case (hasConsumed, needsValue) of
-      (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValueEither syncEnv txIn
-      (False, _) -> fmap convertnotFoundCache <$> queryTxIdWithCacheEither (envCache syncEnv) (Generic.txInTxId txIn)
-      (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutIdEither syncEnv txIn
+  qres <- case (hasConsumed, needsValue) of
+    -- No cache (complex query)
+    (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
+    -- Direct query (simple case)
+    (False, _) -> do
+      mTxId <- DB.queryTxId (Generic.unTxHash $ Generic.txInTxId txIn)
+      case mTxId of
+        Just txId -> pure $ Right $ convertnotFoundCache txId
+        Nothing ->
+          throwError $
+            DB.DbError
+              (DB.mkDbCallStack "resolveTxInputs")
+              ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
+              Nothing
+    (True, False) -> do
+      -- Consumed mode use cache
+      eTxId <- queryTxIdWithCache syncEnv (Generic.txInTxId txIn)
+      case eTxId of
+        Right txId -> do
+          -- Now get the TxOutId separately
+          eTxOutId <- DB.resolveInputTxOutIdFromTxId txId (Generic.txInIndex txIn)
+          case eTxOutId of
+            Right txOutId -> pure $ Right $ convertFoundTxOutId (txId, txOutId)
+            Left err -> pure $ Left err
+        Left err -> pure $ Left err
   case qres of
     Right result -> pure result
     Left _dbErr ->
-      -- The key insight: Don't throw immediately, try in-memory resolution first
+      -- Don't throw immediately, try in-memory resolution first
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
         (Nothing, _, _) ->
           -- Only throw if in-memory resolution also fails

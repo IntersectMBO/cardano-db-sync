@@ -28,7 +28,7 @@ import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 -- @
 deleteWhere ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Column name to filter on
   Text.Text ->
   -- | SQL condition to apply (e.g., "IS NULL", ">= $1", "= 'INVALID'")
@@ -52,7 +52,7 @@ deleteWhere colName condition =
 -- | Helper function for parameterized DELETE queries
 parameterisedDeleteWhere ::
   forall a p.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Column name
   Text.Text ->
   -- | Condition with placeholder
@@ -82,7 +82,7 @@ parameterisedDeleteWhere colName condition encoder =
 -- @
 deleteWhereCount ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Column name to filter on
   Text.Text ->
   -- | SQL condition to apply (e.g., "IS NULL", ">=", "=")
@@ -127,7 +127,7 @@ deleteWhereCount colName condition encoder =
 -- @
 deleteAll ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlS.Statement () ()
 deleteAll =
   HsqlS.Statement sql HsqlE.noParams HsqlD.noResult True
@@ -149,7 +149,7 @@ deleteAll =
 -- @
 deleteAllCount ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlS.Statement () Int64
 deleteAllCount =
   HsqlS.Statement sql HsqlE.noParams decoder True
@@ -168,7 +168,7 @@ deleteAllCount =
 
 deleteWhereCountWithNotNull ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Primary column name (e.g. "id")
   Text.Text ->
   -- | Nullable foreign key column name (e.g. "gov_action_proposal_id")

@@ -64,7 +64,6 @@ rollbackFromBlockNo syncEnv blkNo = do
     cache = envCache syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
 
--- Also fix the error type in prepareRollback
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
 prepareRollback syncEnv point serverTip = do
   DB.runDbIohkNoLogging (envDbEnv syncEnv) $ runExceptT action

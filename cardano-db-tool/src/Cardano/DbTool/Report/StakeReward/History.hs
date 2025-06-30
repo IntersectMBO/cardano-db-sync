@@ -7,7 +7,7 @@ module Cardano.DbTool.Report.StakeReward.History (
 
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
-import Cardano.Prelude (textShow)
+import Cardano.Prelude (fromMaybe, textShow)
 import Control.Monad.IO.Class (MonadIO)
 import qualified Data.List as List
 import Data.Text (Text)
@@ -63,7 +63,7 @@ queryHistoryStakeRewards address = do
       mPoolTicker <- DB.queryPoolTicker poolId
 
       let reward = maybe 0 DB.unDbLovelace mReward
-          poolTicker = maybe "???" id mPoolTicker
+          poolTicker = fromMaybe "???" mPoolTicker
 
       pure $
         EpochReward

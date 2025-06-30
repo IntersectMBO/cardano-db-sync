@@ -50,7 +50,7 @@ runDeletePipeline opName operations = do
 -- Function to create a delete session without immediately running it
 prepareDelete ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value
@@ -71,7 +71,7 @@ prepareDelete fieldName value operator encoder =
 -- Creates a delete statement that returns count
 onlyDeleteStmt ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Operator
@@ -84,7 +84,7 @@ onlyDeleteStmt = deleteWhereCount @a
 -- Prepares a delete operation for pipeline
 prepareOnlyDelete ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value
@@ -103,7 +103,7 @@ prepareOnlyDelete fieldName value operator encoder =
 -- Helper for creating delete operations with proper unwrapping
 prepareTypedDelete ::
   forall a b w.
-  (DbInfo a) =>
+  DbInfo a =>
   Text.Text -> -- Field name
   Maybe w -> -- Wrapped ID (Maybe)
   (w -> Maybe b) -> -- Unwrapper function

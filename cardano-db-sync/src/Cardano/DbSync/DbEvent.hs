@@ -33,12 +33,12 @@ import qualified Ouroboros.Network.Point as Point
 
 data DbEvent
   = DbApplyBlock !CardanoBlock
-  | DbRollBackToPoint !CardanoPoint !(Tip CardanoBlock) (StrictTMVar IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo))
-  | DbRestartState (StrictTMVar IO ([(CardanoPoint, Bool)], Point.WithOrigin BlockNo))
+  | DbRollBackToPoint !CardanoPoint !(Tip CardanoBlock) !(StrictTMVar IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo))
+  | DbRestartState !(StrictTMVar IO ([(CardanoPoint, Bool)], Point.WithOrigin BlockNo))
   | DbFinish
 
 data ThreadChannels = ThreadChannels
-  { tcQueue :: TBQueue DbEvent
+  { tcQueue :: !(TBQueue DbEvent)
   , tcDoneInit :: !(StrictTVar IO Bool)
   }
 

@@ -70,9 +70,6 @@ package snap-server
 -- ---------------------------------------------------------
 
 constraints:
-  -- esqueleto >= 3.6 has API chamges
-  , esqueleto ^>= 3.5.11.2
-
   -- New version of `text` exposes a `show` function and in the `node`
   -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
   -- then clashes with the `show` in `Prelude`.

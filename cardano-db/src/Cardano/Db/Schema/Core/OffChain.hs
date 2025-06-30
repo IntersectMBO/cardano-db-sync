@@ -22,7 +22,6 @@ import Hasql.Decoders as D
 import Hasql.Encoders as E
 
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Schema.Orphans ()
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
@@ -85,11 +84,9 @@ offChainPoolDataEncoder =
     , offChainPoolDataPmrId >$< Id.idEncoder Id.getPoolMetadataRefId
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_pool_fetch_error
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
-
 -- The pool metadata fetch error. We duplicate the poolId for easy access.
 -- TODO(KS): Debatable whether we need to persist this between migrations!
 data OffChainPoolFetchError = OffChainPoolFetchError
@@ -137,10 +134,9 @@ offChainPoolFetchErrorEncoder =
     , offChainPoolFetchErrorRetryCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_data
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteData = OffChainVoteData
   { offChainVoteDataVotingAnchorId :: !Id.VotingAnchorId -- noreference
   , offChainVoteDataHash :: !ByteString
@@ -154,8 +150,6 @@ data OffChainVoteData = OffChainVoteData
   deriving (Eq, Show, Generic)
 
 type instance Key OffChainVoteData = Id.OffChainVoteDataId
-
--- ["voting_anchor_id","hash","json","bytes","warning","language","comment","is_valid"]
 
 instance DbInfo OffChainVoteData where
   uniqueFields _ = ["hash", "voting_anchor_id"]
@@ -221,10 +215,9 @@ offChainVoteDataBulkEncoder =
     (bulkEncoder (E.nullable E.text))
     (bulkEncoder (E.nullable E.bool))
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_gov_action_data
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteGovActionData = OffChainVoteGovActionData
   { offChainVoteGovActionDataOffChainVoteDataId :: !Id.OffChainVoteDataId -- noreference
   , offChainVoteGovActionDataTitle :: !Text
@@ -286,10 +279,9 @@ offChainVoteGovActionDataBulkEncoder =
     (bulkEncoder (E.nonNullable E.text))
     (bulkEncoder (E.nonNullable E.text))
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_drep_data
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteDrepData = OffChainVoteDrepData
   { offChainVoteDrepDataOffChainVoteDataId :: !Id.OffChainVoteDataId -- noreference
   , offChainVoteDrepDataPaymentAddress :: !(Maybe Text)
@@ -365,10 +357,9 @@ offChainVoteDrepDataBulkEncoder =
     (bulkEncoder (E.nullable E.text))
     (bulkEncoder (E.nullable E.text))
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_author
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteAuthor = OffChainVoteAuthor
   { offChainVoteAuthorOffChainVoteDataId :: !Id.OffChainVoteDataId -- noreference
   , offChainVoteAuthorName :: !(Maybe Text)
@@ -436,10 +427,9 @@ offChainVoteAuthorBulkEncoder =
     (bulkEncoder $ E.nonNullable E.text)
     (bulkEncoder $ E.nullable E.text)
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_reference
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteReference = OffChainVoteReference
   { offChainVoteReferenceOffChainVoteDataId :: !Id.OffChainVoteDataId -- noreference
   , offChainVoteReferenceLabel :: !Text
@@ -500,10 +490,9 @@ offChainVoteReferenceBulkEncoder =
     (bulkEncoder $ E.nullable E.text)
     (bulkEncoder $ E.nullable E.text)
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_external_update
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteExternalUpdate = OffChainVoteExternalUpdate
   { offChainVoteExternalUpdateOffChainVoteDataId :: !Id.OffChainVoteDataId -- noreference
   , offChainVoteExternalUpdateTitle :: !Text
@@ -554,10 +543,9 @@ offChainVoteExternalUpdatesBulkEncoder =
     (bulkEncoder $ E.nonNullable E.text)
     (bulkEncoder $ E.nonNullable E.text)
 
------------------------------------------------------------------------------------------------------------------------------------
+-- |
 -- Table Name: off_chain_vote_fetch_error
 -- Description:
------------------------------------------------------------------------------------------------------------------------------------
 data OffChainVoteFetchError = OffChainVoteFetchError
   { offChainVoteFetchErrorVotingAnchorId :: !Id.VotingAnchorId -- noreference
   , offChainVoteFetchErrorFetchError :: !Text

@@ -693,7 +693,7 @@ listKnownSnapshots :: HasLedgerEnv -> IO [SnapshotPoint]
 listKnownSnapshots env = do
   inMem <- fmap InMemory <$> listMemorySnapshots env
   onDisk <- fmap OnDisk <$> listLedgerStateFilesOrdered (leDir env)
-  pure $ List.sortOn (Down . getSlotNoSnapshot) (inMem <> onDisk)
+  pure $ List.sortOn (Down . getSlotNoSnapshot) $ inMem <> onDisk
 
 listMemorySnapshots :: HasLedgerEnv -> IO [CardanoPoint]
 listMemorySnapshots env = do

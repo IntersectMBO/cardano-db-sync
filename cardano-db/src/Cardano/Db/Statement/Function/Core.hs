@@ -13,7 +13,7 @@ module Cardano.Db.Statement.Function.Core (
 )
 where
 
-import Cardano.BM.Trace (logDebug)
+import Cardano.BM.Trace (logInfo)
 import Cardano.Db.Error (DbCallStack (..), DbError (..))
 import Cardano.Db.Types (DbAction (..), DbEnv (..))
 import Cardano.Prelude (MonadError (..), MonadIO (..), Text, ask, for_, when)
@@ -60,7 +60,7 @@ runDbSession dbCallStack@DbCallStack {..} session = DbAction $ do
   let logMsg msg =
         when (dbEnableLogging dbEnv) $
           for_ (dbTracer dbEnv) $
-            \tracer -> liftIO $ logDebug tracer msg
+            \tracer -> liftIO $ logInfo tracer msg
       locationInfo =
         " Function: "
           <> dbCsFncName

@@ -1,7 +1,5 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-deprecations #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Cardano.DbSync.OffChain.Query (
   getOffChainVoteData,
@@ -10,22 +8,10 @@ module Cardano.DbSync.OffChain.Query (
 
 import Cardano.Db (
   AnchorType (..),
-  OffChainPoolData,
-  OffChainPoolFetchError,
-  OffChainPoolFetchErrorId,
-  OffChainVoteData,
-  OffChainVoteFetchError,
-  OffChainVoteFetchErrorId,
-  PoolHash,
-  PoolHashId,
   PoolMetaHash (PoolMetaHash),
-  PoolMetadataRef,
-  PoolMetadataRefId,
   PoolUrl,
   VoteMetaHash (..),
   VoteUrl,
-  VotingAnchor,
-  VotingAnchorId,
  )
 import qualified Cardano.Db as DB
 import Cardano.DbSync.OffChain.FetchQueue (newRetry, retryAgain)

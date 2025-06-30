@@ -30,11 +30,12 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Plutus (
   swapMultiAssets,
 ) where
 
+import Control.Monad (void)
+import qualified Data.Map as Map
+import Data.Text (Text)
+import Test.Tasty.HUnit (Assertion)
+
 import qualified Cardano.Crypto.Hash as Crypto
-import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Ledger.Plutus.Data (hashData)
@@ -50,6 +51,13 @@ import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples (
   assetNames,
   plutusDataList,
  )
+import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
+import Ouroboros.Network.Block (genesisPoint)
+
+import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Types (
   MockBlock (..),
@@ -58,12 +66,7 @@ import Cardano.Mock.Forging.Types (
   TxEra (..),
   UTxOIndex (..),
  )
-import Control.Monad (void)
-import qualified Data.Map as Map
-import Data.Text (Text)
-import Ouroboros.Consensus.Cardano.Block (StandardBabbage)
-import Ouroboros.Network.Block (genesisPoint)
-import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, txOutVariantTypeFromConfig, withFullConfig, withFullConfigDropDb)
+import Test.Cardano.Db.Mock.Config (babbageConfigDir, startDBSync, txOutVariantTypeFromConfig, withFullConfig, withFullConfigDropDB)
 import Test.Cardano.Db.Mock.UnifiedApi (
   fillUntilNextEpoch,
   forgeNextAndSubmit,
@@ -80,7 +83,6 @@ import Test.Cardano.Db.Mock.Validate (
   assertNonZeroFeesContract,
   assertScriptCert,
  )
-import Test.Tasty.HUnit (Assertion)
 
 ----------------------------------------------------------------------------------------------------------
 -- Plutus Spend Scripts
@@ -88,7 +90,7 @@ import Test.Tasty.HUnit (Assertion)
 
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfigDropDb babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
@@ -310,7 +312,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfigDropDb babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -433,7 +435,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfigDropDb babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
       let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)

@@ -66,7 +66,7 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-createAndInsertBlocks :: (MonadIO m) => Word64 -> DbAction m ()
+createAndInsertBlocks :: MonadIO m => Word64 -> DbAction m ()
 createAndInsertBlocks blockCount =
   void $ loop (0, Nothing, Nothing)
   where
@@ -125,7 +125,7 @@ createAndInsertBlocks blockCount =
                   0
                   (DbLovelace 0)
 
-            void $ insertTxOut (mkTxOutVariantCore blkId txId)
+            void $ insertTxOut (mkTxOutCore blkId txId)
             pure $ Just txId
       case (indx, mTxOutId) of
         (8, Just txOutId) -> do
@@ -134,9 +134,9 @@ createAndInsertBlocks blockCount =
 
           txIds <- mapM insertTx (mkTxs blkId 8)
           let txId = case txIds of
-                (x:_) -> x
+                (x : _) -> x
                 [] -> error "mkTxs returned empty list" -- This shouldn't happen with mkTxs blkId 8
           void $ insertTxIn (TxIn txId txOutId 0 Nothing)
-          void $ insertTxOut (mkTxOutVariantCore blkId txId)
+          void $ insertTxOut (mkTxOutCore blkId txId)
         _otherwise -> pure ()
       pure (indx + 1, Just blkId, newMTxOutId)

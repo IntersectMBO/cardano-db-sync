@@ -24,6 +24,8 @@ This directory contains various documentation files for setting up, configuring,
 
 10. [Migrations](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/migrations.md) - Details on database migrations for different versions of Cardano DB Sync, including instructions on applying migrations, handling schema changes, and ensuring data integrity during upgrades.
 
+11. [Developer Hasql Instructions](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/hasql.md) - Guide for developers working with the new Hasql implementation, covering the DbAction monad, statement construction patterns, type-safe schema operations, and migration strategies from the previous Persistent ORM to ensure efficient and maintainable database interactions.
+
 11. [Schema](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/schema.md) - Overview of the database schema used by the Cardano DB Sync Node, providing a detailed description of the tables, relationships, and data types used in the database.
 
 12. [Schema Management](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/schema-management.md) - Instructions on managing the database schema and creating migrations, covering tools and techniques for making schema changes and ensuring they are applied correctly.

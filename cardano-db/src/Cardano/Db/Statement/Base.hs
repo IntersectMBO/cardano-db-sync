@@ -6,6 +6,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use tuple-section" #-}
 
 module Cardano.Db.Statement.Base where
 
@@ -14,11 +17,14 @@ import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
 import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Word64, textShow, void)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (partition)
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
+import System.IO (hFlush, stdout)
+
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Pipeline as HsqlPipeL
@@ -43,6 +49,7 @@ import Cardano.Db.Statement.Rollback (deleteTablesAfterBlockId)
 import Cardano.Db.Statement.Types (DbInfo, Entity (..), tableName, validateColumn)
 import Cardano.Db.Statement.Variants.TxOut (querySetNullTxOut)
 import Cardano.Db.Types (Ada (..), DbAction, DbWord64, ExtraMigration, extraDescription)
+import Text.Printf (printf)
 
 --------------------------------------------------------------------------------
 -- Block
@@ -206,7 +213,7 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
 --------------------------------------------------------------------------------
 queryBlockNoStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement Word64 (Maybe Id.BlockId)
 queryBlockNoStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -230,7 +237,7 @@ queryBlockNo blkNo =
 --------------------------------------------------------------------------------
 queryBlockNoAndEpochStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement Word64 (Maybe (Id.BlockId, Word64))
 queryBlockNoAndEpochStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -281,7 +288,7 @@ queryBlockSlotAndHash blockId =
 --------------------------------------------------------------------------------
 queryNearestBlockSlotNoStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement Word64 (Maybe (Id.BlockId, Word64))
 queryNearestBlockSlotNoStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -310,7 +317,7 @@ queryNearestBlockSlotNo slotNo =
 --------------------------------------------------------------------------------
 queryBlockHashStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement ByteString (Maybe (Id.BlockId, Word64))
 queryBlockHashStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -337,7 +344,7 @@ queryBlockHash block =
 --------------------------------------------------------------------------------
 queryMinBlockStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement () (Maybe (Id.BlockId, Word64))
 queryMinBlockStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
@@ -365,7 +372,7 @@ queryMinBlock =
 --------------------------------------------------------------------------------
 queryReverseIndexBlockIdStmt ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlStmt.Statement Id.BlockId [Maybe Text.Text]
 queryReverseIndexBlockIdStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -699,7 +706,7 @@ queryCountSlotNo =
     HsqlSes.statement () queryCountSlotNoStmt
 
 -----------------------------------------------------------------------------------
-queryBlockHeightStmt :: forall a. (DbInfo a) => Text.Text -> HsqlStmt.Statement () (Maybe Word64)
+queryBlockHeightStmt :: forall a. DbInfo a => Text.Text -> HsqlStmt.Statement () (Maybe Word64)
 queryBlockHeightStmt colName =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
@@ -880,60 +887,129 @@ deleteBlocksBlockIdStmt =
           , "SELECT COUNT(*)::bigint FROM deleted"
           ]
 
+-- Progress tracking data type
+data RollbackProgress = RollbackProgress
+  { rpCurrentStep :: !Int
+  , rpTotalSteps :: !Int
+  , rpCurrentPhase :: !Text.Text
+  , rpStartTime :: !UTCTime
+  }
+  deriving (Show)
+
+-- Progress bar rendering
+renderProgressBar :: RollbackProgress -> IO ()
+renderProgressBar progress = do
+  let percentage :: Double
+      percentage = fromIntegral (rpCurrentStep progress) / fromIntegral (rpTotalSteps progress) * 100
+      barWidth = 50
+      filled = round (fromIntegral barWidth * percentage / 100)
+      bar = replicate filled '█' ++ replicate (barWidth - filled) '░'
+
+  putStr $
+    "\r\ESC[K" -- Clear entire line
+      ++ show (rpCurrentStep progress)
+      ++ "/"
+      ++ show (rpTotalSteps progress)
+      ++ " ["
+      ++ bar
+      ++ "] "
+      ++ printf "%.1f%% - " percentage
+      ++ Text.unpack (rpCurrentPhase progress)
+  hFlush stdout
+
 deleteBlocksBlockId ::
   MonadIO m =>
   Trace IO Text.Text ->
   TxOutVariantType ->
   Id.BlockId ->
-  -- | The 'EpochNo' of the block to delete.
   Word64 ->
-  -- | Is ConsumeTxout
   Bool ->
   DbAction m Int64
 deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
-  mMinIds <- fmap (textToMinIds txOutVariantType =<<) <$> queryReverseIndexBlockId blockId
-  (cminIds, completed) <- findMinIdsRec mMinIds mempty
-  mRawTxId <-
-    queryMinRefId @SCB.Tx
-      "block_id"
-      blockId
-      (Id.idEncoder Id.getBlockId)
-  -- Convert raw Int64 to typed TxId for completeMinId
-  let mTxId = Id.TxId <$> mRawTxId
+  startTime <- liftIO getCurrentTime
+  progressRef <- liftIO $ newIORef $ RollbackProgress 0 6 "Initializing..." startTime
 
+  liftIO $ do
+    putStrLn ""
+    renderProgressBar =<< readIORef progressRef
+
+  -- Step 1: Find minimum IDs
+  liftIO $ do
+    writeIORef progressRef . (\p -> p {rpCurrentStep = 1, rpCurrentPhase = "Finding reverse indexes..."}) =<< readIORef progressRef
+    putStrLn "" -- Clear the line for better visibility
+    renderProgressBar =<< readIORef progressRef
+
+  mMinIds <- fmap (textToMinIds txOutVariantType =<<) <$> queryReverseIndexBlockId blockId
+  (cminIds, completed) <- findMinIdsRec progressRef mMinIds mempty
+  mRawTxId <- queryMinRefId @SCB.Tx "block_id" blockId (Id.idEncoder Id.getBlockId)
+  let mTxId = Id.TxId <$> mRawTxId
   minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
 
+  -- Step 2: Delete epoch-related data
+  liftIO $ do
+    writeIORef progressRef . (\p -> p {rpCurrentStep = 2, rpCurrentPhase = "Deleting epoch data..."}) =<< readIORef progressRef
+    renderProgressBar =<< readIORef progressRef
+
   deleteEpochLogs <- deleteUsingEpochNo epochN
+
+  -- Step 3: Delete block-related data
+  liftIO $ do
+    writeIORef progressRef . (\p -> p {rpCurrentStep = 3, rpCurrentPhase = "Deleting block data..."}) =<< readIORef progressRef
+    renderProgressBar =<< readIORef progressRef
+
   (deleteBlockCount, blockDeleteLogs) <- deleteTablesAfterBlockId txOutVariantType blockId mTxId minIds
+
+  -- Step 4: Handle consumed transactions
+  liftIO $ do
+    writeIORef progressRef . (\p -> p {rpCurrentStep = 4, rpCurrentPhase = "Updating consumed transactions..."}) =<< readIORef progressRef
+    renderProgressBar =<< readIORef progressRef
 
   setNullLogs <-
     if isConsumedTxOut
       then querySetNullTxOut txOutVariantType mTxId
       else pure ("ConsumedTxOut is not active so no Nulls set", 0)
 
-  -- log all the deleted rows in the rollback
-  liftIO $ logInfo trce $ mkRollbackSummary (deleteEpochLogs <> blockDeleteLogs) setNullLogs
+  -- Step 5: Generate summary
+  liftIO $ do
+    writeIORef progressRef . (\p -> p {rpCurrentStep = 5, rpCurrentPhase = "Generating summary..."}) =<< readIORef progressRef
+    renderProgressBar =<< readIORef progressRef
+
+  let summary = mkRollbackSummary (deleteEpochLogs <> blockDeleteLogs) setNullLogs
+
+  -- Step 6: Complete
+  endTime <- liftIO getCurrentTime
+  let duration = diffUTCTime endTime startTime
+
+  liftIO $ do
+    writeIORef progressRef . (\p -> p {rpCurrentStep = 6, rpCurrentPhase = "Complete!"}) =<< readIORef progressRef
+    finalProgress <- readIORef progressRef
+    renderProgressBar finalProgress
+    putStrLn $ "\nRollback completed in " ++ show duration
+    logInfo trce summary
+
   pure deleteBlockCount
   where
-    findMinIdsRec :: MonadIO m => [Maybe MinIdsWrapper] -> MinIdsWrapper -> DbAction m (MinIdsWrapper, Bool)
-    findMinIdsRec [] minIds = pure (minIds, True)
-    findMinIdsRec (mMinIds : rest) minIds =
+    findMinIdsRec :: MonadIO m => IORef RollbackProgress -> [Maybe MinIdsWrapper] -> MinIdsWrapper -> DbAction m (MinIdsWrapper, Bool)
+    findMinIdsRec _ [] minIds = pure (minIds, True)
+    findMinIdsRec progressRef (mMinIds : rest) minIds =
       case mMinIds of
         Nothing -> do
-          liftIO $
-            logWarning
-              trce
-              "Failed to find ReverseIndex. Deletion may take longer."
+          liftIO $ putStr "\ESC[A\r\ESC[K" -- Move up one line and clear it
+          liftIO $ putStr "Failed to find ReverseIndex. Deletion may take longer."
+          liftIO $ putStr "\n"
+          liftIO $ renderProgressBar =<< readIORef progressRef
           pure (minIds, False)
         Just minIdDB -> do
           let minIds' = minIds <> minIdDB
           if isComplete minIds'
             then pure (minIds', True)
-            else findMinIdsRec rest minIds'
+            else findMinIdsRec progressRef rest minIds'
 
     isComplete minIdsW = case minIdsW of
       CMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
       VMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
+
+---------------------------------------------------------------------------------
 
 mkRollbackSummary :: [(Text.Text, Int64)] -> (Text.Text, Int64) -> Text.Text
 mkRollbackSummary logs setNullLogs =
@@ -962,13 +1038,14 @@ data DeleteResults = DeleteResults
   , drepDistrCount :: !Int64
   , rewardRestCount :: !Int64
   , poolStatCount :: !Int64
+  , rewardCount :: !Int64
   , enactedNullCount :: !Int64
   , ratifiedNullCount :: !Int64
   , droppedNullCount :: !Int64
   , expiredNullCount :: !Int64
   }
 
-deleteUsingEpochNo :: (MonadIO m) => Word64 -> DbAction m [(Text.Text, Int64)]
+deleteUsingEpochNo :: MonadIO m => Word64 -> DbAction m [(Text.Text, Int64)]
 deleteUsingEpochNo epochN = do
   let dbCallStack = mkDbCallStack "deleteUsingEpochNo"
       epochEncoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
@@ -981,6 +1058,7 @@ deleteUsingEpochNo epochN = do
       c2 <- HsqlPipeL.statement epochN (deleteWhereCount @SC.DrepDistr "epoch_no" ">" epochEncoder)
       c3 <- HsqlPipeL.statement epochN (deleteWhereCount @SC.RewardRest "spendable_epoch" ">" epochEncoder)
       c4 <- HsqlPipeL.statement epochN (deleteWhereCount @SC.PoolStat "epoch_no" ">" epochEncoder)
+      c5 <- HsqlPipeL.statement epochN (deleteWhereCount @SC.Reward "spendable_epoch" ">" epochEncoder)
 
       -- Null operations
       n1 <- HsqlPipeL.statement epochInt64 setNullEnactedStmt
@@ -988,7 +1066,7 @@ deleteUsingEpochNo epochN = do
       n3 <- HsqlPipeL.statement epochInt64 setNullDroppedStmt
       n4 <- HsqlPipeL.statement epochInt64 setNullExpiredStmt
 
-      pure $ DeleteResults c1 c2 c3 c4 n1 n2 n3 n4
+      pure $ DeleteResults c1 c2 c3 c4 c5 n1 n2 n3 n4
 
   -- Collect results
   let
@@ -997,6 +1075,7 @@ deleteUsingEpochNo epochN = do
       , ("DrepDistr", drepDistrCount results)
       , ("RewardRest", rewardRestCount results)
       , ("PoolStat", poolStatCount results)
+      , ("Reward", rewardCount results)
       ]
 
     nullTotal =
@@ -1034,8 +1113,7 @@ deleteBlocksSlotNoNoTrace txOutVariantType slotNo = deleteBlocksSlotNo nullTrace
 
 --------------------------------------------------------------------------------
 deleteBlocksForTests :: MonadIO m => TxOutVariantType -> Id.BlockId -> Word64 -> DbAction m ()
-deleteBlocksForTests txOutVariantType blockId epochN = do
-  void $ deleteBlocksBlockId nullTracer txOutVariantType blockId epochN False
+deleteBlocksForTests txOutVariantType blockId epochN = void $ deleteBlocksBlockId nullTracer txOutVariantType blockId epochN False
 
 --------------------------------------------------------------------------------
 
@@ -1088,7 +1166,7 @@ queryDatum hash =
 --------------------------------------------------------------------------------
 -- ExtraMigration
 --------------------------------------------------------------------------------
-queryAllExtraMigrationsStmt :: forall a. (DbInfo a) => Text.Text -> HsqlStmt.Statement () [ExtraMigration]
+queryAllExtraMigrationsStmt :: forall a. DbInfo a => Text.Text -> HsqlStmt.Statement () [ExtraMigration]
 queryAllExtraMigrationsStmt colName =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
@@ -1134,7 +1212,7 @@ insertBulkTxMetadataStmt removeJsonb =
       )
 
 insertBulkTxMetadata :: MonadIO m => Bool -> [SCB.TxMetadata] -> DbAction m [Id.TxMetadataId]
-insertBulkTxMetadata removeJsonb txMetas = do
+insertBulkTxMetadata removeJsonb txMetas =
   runDbSession (mkDbCallStack "insertBulkTxMetadata") $
     HsqlSes.statement txMetas (insertBulkTxMetadataStmt removeJsonb)
 
@@ -1148,8 +1226,7 @@ insertCollateralTxInStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CollateralTxInId)
 
 insertCollateralTxIn :: MonadIO m => SCB.CollateralTxIn -> DbAction m Id.CollateralTxInId
-insertCollateralTxIn cTxIn = do
-  runDbSession (mkDbCallStack "insertCollateralTxIn") $ HsqlSes.statement cTxIn insertCollateralTxInStmt
+insertCollateralTxIn cTxIn = runDbSession (mkDbCallStack "insertCollateralTxIn") $ HsqlSes.statement cTxIn insertCollateralTxInStmt
 
 --------------------------------------------------------------------------------
 -- Meta
@@ -1176,16 +1253,6 @@ queryMeta = do
     [m] -> pure $ Just $ entityVal m
     _otherwise -> throwError $ DbError dbCallStack "Multiple rows in meta table" Nothing
 
--- queryMeta :: MonadIO m => DbAction m (Either DbError SCB.Meta)
--- queryMeta = do
---   let dbCallStack = mkDbCallStack "queryMeta"
---   result <- runDbSession dbCallStack $ HsqlSes.statement () queryMetaStmt
---   case result of
---     -- TODO: Cmdv - At the call site this case would return `pure ()`
---     [] -> pure $ Left $ DbError dbCallStack "Meta table is empty" Nothing
---     [m] -> pure $ Right $ entityVal m
---     _otherwise -> pure $ Left $ DbError dbCallStack "Multiple rows in meta table" Nothing
-
 --------------------------------------------------------------------------------
 -- ReferenceTxIn
 --------------------------------------------------------------------------------
@@ -1196,8 +1263,7 @@ insertReferenceTxInStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ReferenceTxInId)
 
 insertReferenceTxIn :: MonadIO m => SCB.ReferenceTxIn -> DbAction m Id.ReferenceTxInId
-insertReferenceTxIn rTxIn = do
-  runDbSession (mkDbCallStack "insertReferenceTxIn") $ HsqlSes.statement rTxIn insertReferenceTxInStmt
+insertReferenceTxIn rTxIn = runDbSession (mkDbCallStack "insertReferenceTxIn") $ HsqlSes.statement rTxIn insertReferenceTxInStmt
 
 --------------------------------------------------------------------------------
 insertExtraMigrationStmt :: HsqlStmt.Statement SCB.ExtraMigrations ()
@@ -1222,8 +1288,7 @@ insertExtraKeyWitnessStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ExtraKeyWitnessId)
 
 insertExtraKeyWitness :: MonadIO m => SCB.ExtraKeyWitness -> DbAction m Id.ExtraKeyWitnessId
-insertExtraKeyWitness eKeyWitness = do
-  runDbSession (mkDbCallStack "insertExtraKeyWitness") $ HsqlSes.statement eKeyWitness insertExtraKeyWitnessStmt
+insertExtraKeyWitness eKeyWitness = runDbSession (mkDbCallStack "insertExtraKeyWitness") $ HsqlSes.statement eKeyWitness insertExtraKeyWitnessStmt
 
 --------------------------------------------------------------------------------
 -- Meta
@@ -1235,8 +1300,7 @@ insertMetaStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MetaId)
 
 insertMeta :: MonadIO m => SCB.Meta -> DbAction m Id.MetaId
-insertMeta meta = do
-  runDbSession (mkDbCallStack "insertMeta") $ HsqlSes.statement meta insertMetaStmt
+insertMeta meta = runDbSession (mkDbCallStack "insertMeta") $ HsqlSes.statement meta insertMetaStmt
 
 --------------------------------------------------------------------------------
 -- Redeemer
@@ -1248,8 +1312,7 @@ insertRedeemerStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.RedeemerId)
 
 insertRedeemer :: MonadIO m => SCB.Redeemer -> DbAction m Id.RedeemerId
-insertRedeemer redeemer = do
-  runDbSession (mkDbCallStack "insertRedeemer") $ HsqlSes.statement redeemer insertRedeemerStmt
+insertRedeemer redeemer = runDbSession (mkDbCallStack "insertRedeemer") $ HsqlSes.statement redeemer insertRedeemerStmt
 
 --------------------------------------------------------------------------------
 -- RedeemerData
@@ -1261,8 +1324,7 @@ insertRedeemerDataStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.RedeemerDataId)
 
 insertRedeemerData :: MonadIO m => SCB.RedeemerData -> DbAction m Id.RedeemerDataId
-insertRedeemerData redeemerData = do
-  runDbSession (mkDbCallStack "insertRedeemerData") $ HsqlSes.statement redeemerData insertRedeemerDataStmt
+insertRedeemerData redeemerData = runDbSession (mkDbCallStack "insertRedeemerData") $ HsqlSes.statement redeemerData insertRedeemerDataStmt
 
 --------------------------------------------------------------------------------
 queryRedeemerDataStmt :: HsqlStmt.Statement ByteString (Maybe Id.RedeemerDataId)
@@ -1295,8 +1357,7 @@ insertReverseIndexStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ReverseIndexId)
 
 insertReverseIndex :: MonadIO m => SCB.ReverseIndex -> DbAction m Id.ReverseIndexId
-insertReverseIndex reverseIndex = do
-  runDbSession (mkDbCallStack "insertReverseIndex") $ HsqlSes.statement reverseIndex insertReverseIndexStmt
+insertReverseIndex reverseIndex = runDbSession (mkDbCallStack "insertReverseIndex") $ HsqlSes.statement reverseIndex insertReverseIndexStmt
 
 --------------------------------------------------------------------------------
 
@@ -1335,8 +1396,7 @@ insertScriptStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ScriptId)
 
 insertScript :: MonadIO m => SCB.Script -> DbAction m Id.ScriptId
-insertScript script = do
-  runDbSession (mkDbCallStack "insertScript") $ HsqlSes.statement script insertScriptStmt
+insertScript script = runDbSession (mkDbCallStack "insertScript") $ HsqlSes.statement script insertScriptStmt
 
 -- | QUERIES
 
@@ -1371,8 +1431,7 @@ insertCheckUniqueSlotLeaderStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.SlotLeaderId)
 
 insertSlotLeader :: MonadIO m => SCB.SlotLeader -> DbAction m Id.SlotLeaderId
-insertSlotLeader slotLeader = do
-  runDbSession (mkDbCallStack "insertSlotLeader") $ HsqlSes.statement slotLeader insertCheckUniqueSlotLeaderStmt
+insertSlotLeader slotLeader = runDbSession (mkDbCallStack "insertSlotLeader") $ HsqlSes.statement slotLeader insertCheckUniqueSlotLeaderStmt
 
 --------------------------------------------------------------------------------
 -- TxCbor
@@ -1399,8 +1458,7 @@ insertTxStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxId)
 
 insertTx :: MonadIO m => SCB.Tx -> DbAction m Id.TxId
-insertTx tx = do
-  runDbSession (mkDbCallStack "insertTx") $ HsqlSes.statement tx insertTxStmt
+insertTx tx = runDbSession (mkDbCallStack "insertTx") $ HsqlSes.statement tx insertTxStmt
 
 -- | QUERIES ------------------------------------------------------------------
 
@@ -1436,8 +1494,7 @@ queryWithdrawalsUpToBlockNo blkNo =
 
 --------------------------------------------------------------------------------
 queryTxIdStmt :: HsqlStmt.Statement ByteString (Maybe Id.TxId)
-queryTxIdStmt = do
-  HsqlStmt.Statement sql encoder decoder True
+queryTxIdStmt = HsqlStmt.Statement sql encoder decoder True
   where
     table = tableName (Proxy @SCB.Tx)
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
@@ -1533,8 +1590,7 @@ insertTxInStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxInId)
 
 insertTxIn :: MonadIO m => SCB.TxIn -> DbAction m Id.TxInId
-insertTxIn txIn = do
-  runDbSession (mkDbCallStack "insertTxIn") $ HsqlSes.statement txIn insertTxInStmt
+insertTxIn txIn = runDbSession (mkDbCallStack "insertTxIn") $ HsqlSes.statement txIn insertTxInStmt
 
 --------------------------------------------------------------------------------
 insertBulkTxInStmt :: HsqlStmt.Statement [SCB.TxIn] [Id.TxInId]
@@ -1553,7 +1609,7 @@ insertBulkTxInStmt =
       )
 
 insertBulkTxIn :: MonadIO m => [SCB.TxIn] -> DbAction m [Id.TxInId]
-insertBulkTxIn txIns = do
+insertBulkTxIn txIns =
   runDbSession (mkDbCallStack "insertBulkTxIn") $
     HsqlSes.statement txIns insertBulkTxInStmt
 
@@ -1619,8 +1675,7 @@ insertWithdrawalStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.WithdrawalId)
 
 insertWithdrawal :: MonadIO m => SCB.Withdrawal -> DbAction m Id.WithdrawalId
-insertWithdrawal withdrawal = do
-  runDbSession (mkDbCallStack "insertWithdrawal") $ HsqlSes.statement withdrawal insertWithdrawalStmt
+insertWithdrawal withdrawal = runDbSession (mkDbCallStack "insertWithdrawal") $ HsqlSes.statement withdrawal insertWithdrawalStmt
 
 --------------------------------------------------------------------------------
 -- Statement for querying withdrawals with non-null redeemer_id
@@ -1667,24 +1722,3 @@ queryWithdrawalAddresses :: MonadIO m => DbAction m [Id.StakeAddressId]
 queryWithdrawalAddresses =
   runDbSession (mkDbCallStack "queryWithdrawalAddresses") $
     HsqlSes.statement () queryWithdrawalAddressesStmt
-
--- These tables store fundamental blockchain data, such as blocks, transactions, and UTXOs.
-
--- block
--- collateral_tx_in
--- collateral_tx_out
--- datum
--- extra_key_witness
--- metaa
--- redeemer
--- redeemer_data
--- reference_tx_in
--- reverse_index
--- script
--- slot_leader
--- tx
--- tx_cbor
--- tx_in
--- tx_out
--- utxo_byron_view
--- utxo_view

@@ -15,7 +15,7 @@ module Cardano.DbSync (
   LedgerStateDir (..),
   NetworkName (..),
   SocketPath (..),
-  Db.MigrationDir (..),
+  DB.MigrationDir (..),
   runDbSyncNode,
   runMigrationsOnly,
   runDbSync,
@@ -40,8 +40,10 @@ import Prelude (id)
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
 import qualified Cardano.Crypto as Crypto
+import Cardano.Prelude hiding (Nat, (%))
+import Cardano.Slotting.Slot (EpochNo (..))
+
 import qualified Cardano.Db as DB
-import qualified Cardano.Db as Db
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
 import Cardano.DbSync.Config (configureLogging)
@@ -57,8 +59,6 @@ import Cardano.DbSync.Rollback (unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
-import Cardano.Prelude hiding (Nat, (%))
-import Cardano.Slotting.Slot (EpochNo (..))
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
@@ -84,25 +84,24 @@ runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile = do
   logInfo trce $ textShow syncOpts
 
   -- Read the PG connection info
-  pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
+  pgConfig <- runOrThrowIO (DB.readPGPass $ enpPGPassSource params)
 
-  mErrors <- liftIO $ Db.validateMigrations dbMigrationDir knownMigrations
+  mErrors <- liftIO $ DB.validateMigrations dbMigrationDir knownMigrations
   whenJust mErrors $ \(unknown, stage4orNewStage3) ->
     if stage4orNewStage3
-      then logWarning trce $ Db.renderMigrationValidateError unknown
-      else logError trce $ Db.renderMigrationValidateError unknown
+      then logWarning trce $ DB.renderMigrationValidateError unknown
+      else logError trce $ DB.renderMigrationValidateError unknown
 
   logInfo trce "Schema migration files validated"
 
   let runMigration mode = do
-        msg <- Db.getMaintenancePsqlConf pgConfig
+        msg <- DB.getMaintenancePsqlConf pgConfig
         logInfo trce $ "Running database migrations in mode " <> textShow mode
         logInfo trce msg
-        -- No index warning here - runMigrationsOnly never runs indexes
-        Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
+        DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
 
   -- Always run Initial mode only - never indexes
-  (ranMigrations, unofficial) <- runMigration Db.Initial
+  (ranMigrations, unofficial) <- runMigration DB.Initial
   unless (null unofficial) $
     logWarning trce $
       "Unofficial migration scripts found: "
@@ -114,7 +113,7 @@ runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile = do
 
   logInfo trce "New user indexes were not created. They may be created later if necessary."
   where
-    dbMigrationDir :: Db.MigrationDir
+    dbMigrationDir :: DB.MigrationDir
     dbMigrationDir = enpMigrationDir params
     syncOpts = extractSyncOptions params False syncNodeConfigFromFile
     txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
@@ -132,9 +131,9 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
   logInfo trce $ textShow syncOpts
 
   -- Read the PG connection info
-  pgConfig <- runOrThrowIO (Db.readPGPass $ enpPGPassSource params)
+  pgConfig <- runOrThrowIO (DB.readPGPass $ enpPGPassSource params)
 
-  dbConnectionSetting <- case Db.toConnectionSetting pgConfig of
+  dbConnectionSetting <- case DB.toConnectionSetting pgConfig of
     Left err -> do
       let syncNodeErr = SNErrPGConfig ("Invalid database connection setting: " <> err)
       logError trce $ show syncNodeErr
@@ -147,11 +146,11 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
 
   -- This runMigration is ONLY for delayed migrations during sync (like indexes)
   let runDelayedMigration mode = do
-        msg <- Db.getMaintenancePsqlConf pgConfig
+        msg <- DB.getMaintenancePsqlConf pgConfig
         logInfo trce $ "Running database migrations in mode " <> textShow mode
         logInfo trce msg
-        when (mode `elem` [Db.Indexes, Db.Full]) $ logWarning trce indexesMsg
-        Db.runMigrations pgConfig True dbMigrationDir (Just $ Db.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
+        when (mode `elem` [DB.Indexes, DB.Full]) $ logWarning trce indexesMsg
+        DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
 
   runSyncNode
     metricsSetters
@@ -163,7 +162,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
     params
     syncOpts
   where
-    dbMigrationDir :: Db.MigrationDir
+    dbMigrationDir :: DB.MigrationDir
     dbMigrationDir = enpMigrationDir params
     syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
     txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
@@ -198,7 +197,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncN
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-  -- Our main thread
+  -- The main thread
   bracket
     (acquireDbConnection [dbConnSetting])
     HsqlC.release
@@ -207,8 +206,8 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncN
           let isLogingEnabled = dncEnableDbLogging syncNodeConfigFromFile
               dbEnv =
                 if isLogingEnabled
-                  then Db.DbEnv dbConn isLogingEnabled (Just trce)
-                  else Db.DbEnv dbConn isLogingEnabled Nothing
+                  then DB.DbEnv dbConn isLogingEnabled (Just trce)
+                  else DB.DbEnv dbConn isLogingEnabled Nothing
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftDbError $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
@@ -235,18 +234,18 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncN
           liftIO $ runConsumedTxOutMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations dbEnv trce
+            DB.noLedgerMigrations dbEnv trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
           liftIO $
             race_
-              (runDbThread syncEnv metricsSetters threadChannels) -- Main App thread
+              -- We split the main thread into two parts to allow for graceful shutdown of the main App db thread.
+              (runDbThread syncEnv metricsSetters threadChannels)
               ( mapConcurrently_
                   id
-                  [ -- Non-critical threads
-                    runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+                  [ runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
                   , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
                   , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
                   , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
@@ -335,7 +334,7 @@ extractSyncOptions snp aop snc =
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
   logInfo trce $ mconcat ["Version number: ", Text.pack (showVersion version)]
-  logInfo trce $ mconcat ["Git hash: ", Db.gitRev]
+  logInfo trce $ mconcat ["Git hash: ", DB.gitRev]
   logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
   logInfo trce $ textShow params
 

@@ -16,8 +16,6 @@ module Cardano.DbTool.Report.Transactions (
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Cardano.Prelude (textShow)
@@ -107,6 +105,7 @@ queryInputs txOutVariantType saId = do
 
 queryOutputs :: MonadIO m => TxOutVariantType -> DB.StakeAddressId -> DB.DbAction m [Transaction]
 queryOutputs txOutVariantType saId = do
+  res <- case txOutVariantType of
     TxOutVariantCore -> DB.queryOutputTransactionsCore saId
     TxOutVariantAddress -> DB.queryOutputTransactionsAddress saId
 

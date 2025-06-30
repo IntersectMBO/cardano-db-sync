@@ -171,14 +171,14 @@ instance GRecordFieldNames a => GRecordFieldNames (M1 D c a) where
 instance GRecordFieldNames a => GRecordFieldNames (M1 C c a) where
   gRecordFieldNames _ = gRecordFieldNames (undefined :: a p)
 
-instance (Selector c) => GRecordFieldNames (M1 S c (K1 i a)) where
+instance Selector c => GRecordFieldNames (M1 S c (K1 i a)) where
   gRecordFieldNames m = [selName m]
 
 instance GRecordFieldNames (K1 i c) where
   gRecordFieldNames _ = []
 
 -- | Validate a column name against the list of columns in the table.
-validateColumn :: forall a. (DbInfo a) => Text -> Text
+validateColumn :: forall a. DbInfo a => Text -> Text
 validateColumn colName =
   let cols = "id" : NE.toList (columnNames (Proxy @a))
    in if colName `elem` cols

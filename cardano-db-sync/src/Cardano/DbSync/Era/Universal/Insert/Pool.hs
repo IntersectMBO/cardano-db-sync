@@ -16,17 +16,17 @@ module Cardano.DbSync.Era.Universal.Insert.Pool (
   insertPoolCert,
 ) where
 
-import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (hashToBytes)
 import Cardano.Db (PoolUrl (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache (
   insertPoolKeyWithCache,
   queryOrInsertRewardAccount,
   queryOrInsertStakeAddress,
   queryPoolKeyOrInsert,
  )
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Types (PoolKeyHash)
 import Cardano.DbSync.Util
@@ -44,8 +44,7 @@ type IsPoolMember = PoolKeyHash -> Bool
 
 insertPoolRegister ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
@@ -55,8 +54,8 @@ insertPoolRegister ::
   Word16 ->
   PoolP.PoolParams ->
   DB.DbAction m ()
-insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
-  poolHashId <- insertPoolKeyWithCache cache UpdateCache (PoolP.ppId params)
+insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
+  poolHashId <- insertPoolKeyWithCache syncEnv UpdateCache (PoolP.ppId params)
   mdId <- case strictMaybeToMaybe $ PoolP.ppMetadata params of
     Just md -> Just <$> insertPoolMetaDataRef poolHashId txId md
     Nothing -> pure Nothing
@@ -65,7 +64,7 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
   let epochActivationDelay = if isRegistration then 2 else 3
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
 
-  saId <- queryOrInsertRewardAccount trce cache UpdateCache (adjustNetworkTag $ PoolP.ppRewardAccount params)
+  saId <- queryOrInsertRewardAccount syncEnv UpdateCache (adjustNetworkTag $ PoolP.ppRewardAccount params)
   poolUpdateId <-
     DB.insertPoolUpdate $
       DB.PoolUpdate
@@ -82,7 +81,7 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
         , DB.poolUpdateRegisteredTxId = txId
         }
 
-  mapM_ (insertPoolOwner trce cache network poolUpdateId) $ toList (PoolP.ppOwners params)
+  mapM_ (insertPoolOwner syncEnv network poolUpdateId) $ toList (PoolP.ppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.ppRelays params)
   where
     isPoolRegistration :: MonadIO m => DB.PoolHashId -> DB.DbAction m Bool
@@ -103,15 +102,14 @@ insertPoolRegister trce cache isMember mdeposits network (EpochNo epoch) blkId t
 
 insertPoolRetire ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   DB.TxId ->
-  CacheStatus ->
   EpochNo ->
   Word16 ->
   Ledger.KeyHash 'Ledger.StakePool ->
   DB.DbAction m ()
-insertPoolRetire trce txId cache epochNum idx keyHash = do
-  poolId <- queryPoolKeyOrInsert "insertPoolRetire" trce cache UpdateCache True keyHash
+insertPoolRetire syncEnv txId epochNum idx keyHash = do
+  poolId <- queryPoolKeyOrInsert syncEnv "insertPoolRetire" UpdateCache True keyHash
   void . DB.insertPoolRetire $
     DB.PoolRetire
       { DB.poolRetireHashId = poolId
@@ -137,14 +135,13 @@ insertPoolMetaDataRef poolId txId md =
 
 insertPoolOwner ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   Ledger.Network ->
   DB.PoolUpdateId ->
   Ledger.KeyHash 'Ledger.Staking ->
   DB.DbAction m ()
-insertPoolOwner trce cache network poolUpdateId skh = do
-  saId <- queryOrInsertStakeAddress trce cache UpdateCacheStrong network (Ledger.KeyHashObj skh)
+insertPoolOwner syncEnv network poolUpdateId skh = do
+  saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network (Ledger.KeyHashObj skh)
   void . DB.insertPoolOwner $
     DB.PoolOwner
       { DB.poolOwnerAddrId = saId
@@ -190,8 +187,7 @@ insertPoolRelay updateId relay =
 
 insertPoolCert ::
   MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
@@ -201,7 +197,7 @@ insertPoolCert ::
   Word16 ->
   PoolCert ->
   DB.DbAction m ()
-insertPoolCert tracer cache isMember mdeposits network epoch blkId txId idx pCert =
+insertPoolCert syncEnv isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of
-    RegPool pParams -> insertPoolRegister tracer cache isMember mdeposits network epoch blkId txId idx pParams
-    RetirePool keyHash epochNum -> insertPoolRetire tracer txId cache epochNum idx keyHash
+    RegPool pParams -> insertPoolRegister syncEnv isMember mdeposits network epoch blkId txId idx pParams
+    RetirePool keyHash epochNum -> insertPoolRetire syncEnv txId epochNum idx keyHash

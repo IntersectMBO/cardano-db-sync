@@ -432,18 +432,3 @@ insertReserveStmt =
 insertReserve :: MonadIO m => SEnP.Reserve -> DbAction m Id.ReserveId
 insertReserve reserve =
   runDbSession (mkDbCallStack "insertReserve") $ HsqlSes.statement reserve insertReserveStmt
-
--- Epoch And Protocol Parameters
--- These tables store epoch-specific data and protocol parameters.
-
--- ada_pots
--- cost_model
--- epoch
--- epoch_param
--- epoch_stake
--- epoch_stake_progress
--- epoch_state
--- epoch_sync_time
--- pot_transfer
--- reserve
--- treasury

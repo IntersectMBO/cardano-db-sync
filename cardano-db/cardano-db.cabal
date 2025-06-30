@@ -52,10 +52,7 @@ library
                         Cardano.Db.Schema.Core.StakeDeligation
                         Cardano.Db.Schema.Ids
                         Cardano.Db.Schema.MinIds
-                        Cardano.Db.Schema.Orphans
                         Cardano.Db.Schema.Types
-                        Cardano.Db.Schema.Variants.TxOutUtxoHd
-                        Cardano.Db.Schema.Variants.TxOutUtxoHdAddress
                         Cardano.Db.Statement
                         Cardano.Db.Statement.Base
                         Cardano.Db.Statement.Constraint
@@ -102,7 +99,6 @@ library
                       , iohk-monitoring
                       , memory
                       , monad-logger
-                      , persistent
                       , process
                       , quiet
                       , resource-pool

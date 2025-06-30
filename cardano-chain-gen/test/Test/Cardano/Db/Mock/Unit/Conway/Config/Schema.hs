@@ -27,7 +27,7 @@ import Test.Tasty.HUnit (Assertion, assertBool)
 -- | Test all table schemas for column compatibility
 validateSchemaColumns :: IOManager -> [(Text, Text)] -> Assertion
 validateSchemaColumns =
-  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Setup test data
@@ -108,7 +108,7 @@ validateSchemaColumns =
 
 validateVariantAddressSchemaColumns :: IOManager -> [(Text, Text)] -> Assertion
 validateVariantAddressSchemaColumns =
-  withCustomConfigDropDb args (Just $ configPruneForceTxIn True) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB args (Just $ configPruneForceTxIn True) cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Setup test data
@@ -138,7 +138,7 @@ setupTestData interpreter mockServer dbSync = do
 ------------------------------------------------------------------------------
 
 -- | Validate TxOutCore table column order
-validateCall :: forall a. (DB.DbInfo a) => DBSyncEnv -> Proxy a -> IO ()
+validateCall :: forall a. DB.DbInfo a => DBSyncEnv -> Proxy a -> IO ()
 validateCall dbSync proxy = do
   result <- queryDBSync dbSync $ DB.queryTableColumns proxy
   assertColumnsMatch result

@@ -27,7 +27,7 @@ module Cardano.DbSync.Cache.Types (
 
   -- * CacheStatistics
   CacheStatistics (..),
-  textShowStats,
+  textShowCacheStats,
 ) where
 
 import qualified Cardano.Db as DB
@@ -79,7 +79,6 @@ data CacheInternal = CacheInternal
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
-  , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString DB.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
@@ -130,11 +129,10 @@ data CacheEpoch = CacheEpoch
   }
   deriving (Show)
 
-textShowStats :: CacheStatus -> IO Text
-textShowStats NoCache = pure "No Caches"
-textShowStats (ActiveCache ic) = do
+textShowCacheStats :: CacheStatistics -> CacheStatus -> IO Text
+textShowCacheStats _ NoCache = pure "No Caches"
+textShowCacheStats stats (ActiveCache ic) = do
   isCacheOptimised <- readTVarIO $ cIsCacheOptimised ic
-  stats <- readTVarIO $ cStats ic
   stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
   datums <- readTVarIO (cDatum ic)
@@ -143,21 +141,20 @@ textShowStats (ActiveCache ic) = do
   address <- readTVarIO (cAddress ic)
   pure $
     mconcat
-      [ "\n----------------------- Cache Statistics: -----------------------"
+      [ "\n\nEpoch Cache Statistics: "
       , "\n  Caches Optimised: " <> textShow isCacheOptimised
-      , textCacheSection "Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
-      , textMapSection "Pools" pools (poolsHits stats) (poolsQueries stats)
-      , textLruSection "Datums" datums (datumHits stats) (datumQueries stats)
-      , textLruSection "Addresses" address (addressHits stats) (addressQueries stats)
-      , textLruSection "Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
-      , textPrevBlockSection stats
-      , textFifoSection "TxId" txIds (txIdsHits stats) (txIdsQueries stats)
-      , "\n-----------------------------------------------------------------"
+      , textCacheSection "  Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
+      , textMapSection "  Pools" pools (poolsHits stats) (poolsQueries stats)
+      , textLruSection "  Datums" datums (datumHits stats) (datumQueries stats)
+      , textLruSection "  Addresses" address (addressHits stats) (addressQueries stats)
+      , textLruSection "  Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
+      , textPrevBlockSection
+      , textFifoSection "  TxId" txIds (txIdsHits stats) (txIdsQueries stats)
       ]
   where
     textCacheSection title cacheLru cacheStable hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache sizes: "
         , textShow (Map.size cacheStable)
         , " and "
@@ -167,7 +164,7 @@ textShowStats (ActiveCache ic) = do
 
     textMapSection title cache hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache size: "
         , textShow (Map.size cache)
         , hitMissStats hits queries
@@ -175,7 +172,7 @@ textShowStats (ActiveCache ic) = do
 
     textLruSection title cache hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache capacity: "
         , textShow (LRU.getCapacity cache)
         , ", cache size: "
@@ -185,7 +182,7 @@ textShowStats (ActiveCache ic) = do
 
     textFifoSection title cache hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache size: "
         , textShow (FIFO.getSize cache)
         , ", cache capacity: "
@@ -193,9 +190,9 @@ textShowStats (ActiveCache ic) = do
         , hitMissStats hits queries
         ]
 
-    textPrevBlockSection stats =
+    textPrevBlockSection =
       mconcat
-        [ "\n  Previous Block: "
+        [ "\nPrevious Block: "
         , hitMissStats (prevBlockHits stats) (prevBlockQueries stats)
         ]
 
@@ -225,7 +222,6 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cAddress <- newTVarIO (LRU.empty cacheCapacityAddress)
   cMultiAssets <- newTVarIO (LRU.empty cacheCapacityMultiAsset)
   cPrevBlock <- newTVarIO Nothing
-  cStats <- newTVarIO initCacheStatistics
   cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
@@ -237,7 +233,6 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
       , cDatum = cDatum
       , cMultiAssets = cMultiAssets
       , cPrevBlock = cPrevBlock
-      , cStats = cStats
       , cEpoch = cEpoch
       , cAddress = cAddress
       , cTxIds = cTxIds

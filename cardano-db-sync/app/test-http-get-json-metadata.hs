@@ -53,14 +53,12 @@ main = do
 
 -------------------------------------------------------------------------------------------------
 
--- Keep all the data types the same
 data TestOffChain = TestOffChain
   { toTicker :: !Text
   , toUrl :: !DB.PoolUrl
   , toHash :: !DB.PoolMetaHash
   }
 
--- Keep all the error handling types and functions the same
 data TestFailure = TestFailure
   { tfHashMismatch :: !Word
   , tfDataTooLong :: !Word

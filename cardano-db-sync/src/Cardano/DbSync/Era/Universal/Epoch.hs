@@ -22,19 +22,11 @@ module Cardano.DbSync.Era.Universal.Epoch (
   sumRewardTotal,
 ) where
 
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
+
 import Cardano.BM.Trace (Trace, logInfo)
-import qualified Cardano.Db as DB
-import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus)
-import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
-import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, insertUpdateEnacted, updateExpired, updateRatified)
-import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
-import Cardano.DbSync.Ledger.Event
-import Cardano.DbSync.Types
-import Cardano.DbSync.Util (whenDefault, whenStrictJust, whenStrictJustDefault)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -48,9 +40,19 @@ import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
+import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
+import Cardano.DbSync.Cache.Types (CacheAction (..))
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
+import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCostModel, insertDrepDistr, insertUpdateEnacted, updateExpired, updateRatified)
+import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
+import Cardano.DbSync.Ledger.Event
+import Cardano.DbSync.Types
+import Cardano.DbSync.Util (maxBulkSize, whenDefault, whenStrictJust, whenStrictJustDefault)
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -73,12 +75,12 @@ insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
   spoVoting <- whenStrictJustDefault Map.empty (Generic.neDRepState newEpoch) $ \dreps -> whenDefault Map.empty (ioGov iopts) $ do
     let (drepSnapshot, ratifyState) = finishDRepPulser dreps
     insertDrepDistr epochNo drepSnapshot
-    updateRatified cache epochNo (toList $ rsEnacted ratifyState)
-    updateExpired cache epochNo (toList $ rsExpired ratifyState)
+    updateRatified syncEnv epochNo (toList $ rsEnacted ratifyState)
+    updateExpired syncEnv epochNo (toList $ rsExpired ratifyState)
     pure (Ledger.psPoolDistr drepSnapshot)
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt -> do
     when (ioGov iopts) $ do
-      insertUpdateEnacted tracer cache blkId epochNo enactedSt
+      insertUpdateEnacted syncEnv blkId epochNo enactedSt
   whenStrictJust (Generic.nePoolDistr newEpoch) $ \(poolDistrDeleg, poolDistrNBlocks) ->
     when (ioPoolStats iopts) $ do
       let nothingMap = Map.fromList $ (,Nothing) <$> (Map.keys poolDistrNBlocks <> Map.keys spoVoting)
@@ -98,7 +100,6 @@ insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
         , Generic.votingPower = fromCompact <$> Map.lookup pkh voting
         }
     tracer = getTrace syncEnv
-    cache = envCache syncEnv
     iopts = getInsertOptions syncEnv
 
 insertEpochParam ::
@@ -218,22 +219,20 @@ insertEpochStake ::
   [(StakeCred, (Shelley.Coin, PoolKeyHash))] ->
   DB.DbAction m ()
 insertEpochStake syncEnv nw epochNo stakeChunk = do
-  let cache = envCache syncEnv
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  dbStakes <- mapM (mkStake cache) stakeChunk
-  let chunckDbStakes = splittRecordsEvery 100000 dbStakes
+  dbStakes <- mapM mkStake stakeChunk
+  let chunckDbStakes = splittRecordsEvery maxBulkSize dbStakes
 
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
   forM_ chunckDbStakes $ \dbs -> DB.insertBulkEpochStake dbConstraintEpochStake dbs
   where
     mkStake ::
       MonadIO m =>
-      CacheStatus ->
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
       DB.DbAction m DB.EpochStake
-    mkStake cache (saddr, (coin, pool)) = do
-      saId <- queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
-      poolId <- queryPoolKeyOrInsert "insertEpochStake" trce cache UpdateCache (ioShelley iopts) pool
+    mkStake (saddr, (coin, pool)) = do
+      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
+      poolId <- queryPoolKeyOrInsert syncEnv "insertEpochStake" UpdateCache (ioShelley iopts) pool
       pure $
         DB.EpochStake
           { DB.epochStakeAddrId = saId
@@ -242,7 +241,6 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
           , DB.epochStakeEpochNo = unEpochNo epochNo -- The epoch where this delegation becomes valid.
           }
 
-    trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
 insertRewards ::
@@ -251,22 +249,21 @@ insertRewards ::
   Network ->
   EpochNo ->
   EpochNo ->
-  CacheStatus ->
   [(StakeCred, Set Generic.Reward)] ->
   DB.DbAction m ()
-insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
+insertRewards syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  let chunckDbRewards = splittRecordsEvery 100000 dbRewards
+  let chunckDbRewards = splittRecordsEvery maxBulkSize dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> DB.insertBulkRewards dbConstraintEpochStake rws
+  forM_ chunckDbRewards $ \rws -> DB.insertBulkRewards dbConstraintRewards rws
   where
     mkRewards ::
       MonadIO m =>
       (StakeCred, Set Generic.Reward) ->
       DB.DbAction m [DB.Reward]
     mkRewards (saddr, rset) = do
-      saId <- queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
+      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
       mapM (prepareReward saId) (Set.toList rset)
 
     prepareReward ::
@@ -290,24 +287,22 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch cache rewardsChunk = do
       MonadIO m =>
       PoolKeyHash ->
       DB.DbAction m DB.PoolHashId
-    queryPool poolHash =
-      queryPoolKeyOrInsert "insertRewards" trce cache UpdateCache (ioShelley iopts) poolHash
+    queryPool =
+      queryPoolKeyOrInsert syncEnv "insertRewards" UpdateCache (ioShelley iopts)
 
-    trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
 insertRewardRests ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
   EpochNo ->
   EpochNo ->
-  CacheStatus ->
   [(StakeCred, Set Generic.RewardRest)] ->
   DB.DbAction m ()
-insertRewardRests trce nw earnedEpoch spendableEpoch cache rewardsChunk = do
+insertRewardRests syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
-  let chunckDbRewards = splittRecordsEvery 100000 dbRewards
+  let chunckDbRewards = splittRecordsEvery maxBulkSize dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance
   forM_ chunckDbRewards $ \rws -> DB.insertBulkRewardRests rws
   where
@@ -316,7 +311,7 @@ insertRewardRests trce nw earnedEpoch spendableEpoch cache rewardsChunk = do
       (StakeCred, Set Generic.RewardRest) ->
       DB.DbAction m [DB.RewardRest]
     mkRewards (saddr, rset) = do
-      saId <- queryOrInsertStakeAddress trce cache UpdateCacheStrong nw saddr
+      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
       pure $ map (prepareReward saId) (Set.toList rset)
 
     prepareReward ::
@@ -334,14 +329,13 @@ insertRewardRests trce nw earnedEpoch spendableEpoch cache rewardsChunk = do
 
 insertProposalRefunds ::
   MonadIO m =>
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
   EpochNo ->
   EpochNo ->
-  CacheStatus ->
   [GovActionRefunded] ->
   DB.DbAction m ()
-insertProposalRefunds trce nw earnedEpoch spendableEpoch cache refunds = do
+insertProposalRefunds syncEnv nw earnedEpoch spendableEpoch refunds = do
   dbRewards <- mapM mkReward refunds
   DB.insertBulkRewardRests dbRewards
   where
@@ -350,7 +344,7 @@ insertProposalRefunds trce nw earnedEpoch spendableEpoch cache refunds = do
       GovActionRefunded ->
       DB.DbAction m DB.RewardRest
     mkReward refund = do
-      saId <- queryOrInsertStakeAddress trce cache UpdateCacheStrong nw (raCredential $ garReturnAddr refund)
+      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw (raCredential $ garReturnAddr refund)
       pure $
         DB.RewardRest
           { DB.rewardRestAddrId = saId
@@ -375,7 +369,7 @@ insertPoolDepositRefunds ::
   Generic.Rewards ->
   DB.DbAction m ()
 insertPoolDepositRefunds syncEnv epochNo refunds = do
-  insertRewards syncEnv nw epochNo epochNo (envCache syncEnv) (Map.toList rwds)
+  insertRewards syncEnv nw epochNo epochNo (Map.toList rwds)
   liftIO . logInfo tracer $ "Inserted " <> show (Generic.rewardsCount refunds) <> " deposit refund rewards"
   where
     tracer = getTrace syncEnv
@@ -403,7 +397,7 @@ insertPoolStats syncEnv epochNo mp = do
   where
     preparePoolStat :: (PoolKeyHash, Generic.PoolStats) -> DB.DbAction m DB.PoolStat
     preparePoolStat (pkh, ps) = do
-      poolId <- queryPoolKeyOrInsert "insertPoolStats" trce cache UpdateCache True pkh
+      poolId <- queryPoolKeyOrInsert syncEnv "insertPoolStats" UpdateCache True pkh
       pure
         DB.PoolStat
           { DB.poolStatPoolHashId = poolId
@@ -413,6 +407,3 @@ insertPoolStats syncEnv epochNo mp = do
           , DB.poolStatStake = fromIntegral . Shelley.unCoin $ Generic.stake ps
           , DB.poolStatVotingPower = fromIntegral . Shelley.unCoin <$> Generic.votingPower ps
           }
-
-    cache = envCache syncEnv
-    trce = getTrace syncEnv

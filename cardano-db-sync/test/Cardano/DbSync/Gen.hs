@@ -1,5 +1,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Functor law" #-}
 
 module Cardano.DbSync.Gen (
   -- * Config/Api Type generators
@@ -132,7 +135,6 @@ syncInsertOptions =
     <*> (PoolStatsConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
     <*> (RemoveJsonbFromSchemaConfig <$> Gen.bool)
-    <*> Gen.bool
 
 txOutConfig :: Gen TxOutConfig
 txOutConfig =

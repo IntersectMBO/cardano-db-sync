@@ -28,7 +28,7 @@ import Cardano.Db.Types (Ada (..), DbAction, lovelaceToAda)
 
 replace ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlE.Params (Key a) -> -- ID encoder
   HsqlE.Params a -> -- Record encoder
   HsqlStmt.Statement (Key a, a) ()
@@ -57,7 +57,7 @@ replace keyEncoder recordEncoder =
 
 selectByField ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   Text.Text -> -- Field name
   HsqlE.Params b -> -- Parameter encoder (not Value)
   HsqlD.Row (Entity a) -> -- Entity decoder
@@ -76,7 +76,7 @@ selectByField fieldName paramEncoder entityDecoder =
 
 selectByFieldFirst ::
   forall a b.
-  (DbInfo a) =>
+  DbInfo a =>
   Text.Text -> -- Field name
   HsqlE.Params b -> -- Parameter encoder
   HsqlD.Row (Entity a) -> -- Entity decoder
@@ -172,7 +172,7 @@ existsWhere colName encoder resultType =
 -- @
 existsWhereByColumn ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Column name to filter on
   Text.Text ->
   -- | Parameter encoder for the column value
@@ -214,7 +214,7 @@ existsWhereByColumn colName encoder resultType =
 -- @
 replaceRecord ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   HsqlE.Params (Key a) -> -- Key encoder
   HsqlE.Params a -> -- Record encoder
   HsqlStmt.Statement (Key a, a) () -- Returns a statement to replace a record
@@ -262,7 +262,7 @@ replaceRecord keyEnc recordEnc =
 -- @
 countWhere ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Column name to filter on
   Text.Text ->
   -- | SQL condition to apply (e.g., "IS NULL", "= $1", "> 100")
@@ -288,7 +288,7 @@ countWhere colName condition =
 -- | Creates a statement to count rows matching a parameterized condition
 parameterisedCountWhere ::
   forall a p.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Column name to filter on
   Text.Text ->
   -- | SQL condition with parameter placeholders
@@ -323,7 +323,7 @@ parameterisedCountWhere colName condition encoder =
 -- @
 countAll ::
   forall a.
-  (DbInfo a) =>
+  DbInfo a =>
   -- | Returns a statement that counts all rows
   HsqlStmt.Statement () Word64
 countAll =

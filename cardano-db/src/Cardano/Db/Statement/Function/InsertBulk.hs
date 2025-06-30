@@ -40,11 +40,22 @@ data ConflictStrategy
   | ReplaceWithColumns [Text.Text] -- ON CONFLICT (columns) DO UPDATE SET
   | ReplaceWithConstraint Text.Text -- ON CONFLICT ON CONSTRAINT name DO UPDATE SET
 
--- | Unified bulk insert function - handles all conflict scenarios
--- This is the core function that all other bulk functions use
+-- | Core bulk insert function with configurable conflict handling using UNNEST.
+--
+-- This is the foundation function that all other bulk insert operations use.
+-- Uses PostgreSQL's `UNNEST` to expand arrays into rows for efficient bulk insertion.
+-- Supports various conflict strategies including ignore and replace operations.
+--
+-- ==== Parameters
+-- * @conflictStrategy@: How to handle unique constraint violations.
+-- * @removeJsonb@: Whether JSONB casting is present in current schema.
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulkWith ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   ConflictStrategy -> -- How to handle conflicts
   Bool -> -- Whether jsonb casting is present in current schema
   ([a] -> b) -> -- field extractor
@@ -118,31 +129,62 @@ insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
 -- CONVENIENCE FUNCTIONS
 -----------------------------------------------------------------------------------------------------------------------------------
 
--- | Simple bulk insert (no conflict handling) - FASTEST
+-- | Simple bulk insert without conflict handling - fastest option.
+--
+-- Performs bulk insertion using PostgreSQL's `UNNEST` function without any
+-- conflict resolution. This is the fastest bulk insert option when you're
+-- certain no unique constraint violations will occur.
+--
+-- ==== Parameters
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulk ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
   HsqlS.Statement [a] r
 insertBulk = insertBulkWith NoConflict False
 
--- | Bulk insert with JSONB support
+-- | Bulk insert with JSONB type support using UNNEST.
+--
+-- Similar to `insertBulk` but provides control over JSONB field casting.
+-- Use this when your table contains JSONB columns and you need to handle
+-- schema variations across different database versions.
+--
+-- ==== Parameters
+-- * @removeJsonb@: Whether to skip JSONB casting (for older schemas).
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulkJsonb ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   Bool -> -- removeJsonb flag
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
   HsqlS.Statement [a] r
-insertBulkJsonb removeJsonb = insertBulkWith NoConflict removeJsonb
+insertBulkJsonb = insertBulkWith NoConflict
 
--- | Auto-detect constraints and ignore conflicts
+-- | Bulk insert with automatic conflict detection and ignore strategy.
+--
+-- Automatically detects unique constraints from the table definition and
+-- generates appropriate `ON CONFLICT DO NOTHING` clauses. Falls back to
+-- simple insert if no constraints are defined.
+--
+-- ==== Parameters
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulkIgnore ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
@@ -163,10 +205,20 @@ insertBulkIgnore extract enc returnIds =
                 then NoConflict
                 else IgnoreWithColumns allConstraints
 
--- | Auto-detect constraints and replace on conflict
+-- | Bulk insert with automatic conflict detection and replace strategy.
+--
+-- Automatically detects unique constraints and generates `ON CONFLICT DO UPDATE`
+-- clauses to replace existing records. Requires at least one unique constraint
+-- to be defined in the table schema.
+--
+-- ==== Parameters
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulkReplace ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   ([a] -> b) ->
   HsqlE.Params b ->
   ResultTypeBulk r ->
@@ -193,11 +245,21 @@ insertBulkReplace extract enc returnIds =
 -- PERFORMANCE-OPTIMIZED FUNCTIONS FOR ManualDbConstraints PATTERN
 -----------------------------------------------------------------------------------------------------------------------------------
 
--- | HIGHEST PERFORMANCE bulk insert with conditional conflict handling
--- Uses ManualDbConstraints boolean pattern for maximum efficiency
+-- | High-performance bulk insert with conditional conflict handling.
+--
+-- Optimized for the ManualDbConstraints pattern where constraint existence
+-- is determined at runtime. Uses fastest simple insert when constraints don't
+-- exist, switches to conflict handling only when needed.
+--
+-- ==== Parameters
+-- * @constraintExists@: Runtime flag indicating if constraints are present.
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulkMaybeIgnore ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   Bool -> -- Whether constraint exists (from ManualDbConstraints)
   ([a] -> b) ->
   HsqlE.Params b ->
@@ -212,10 +274,22 @@ insertBulkMaybeIgnore constraintExists extract enc returnIds =
       [] -> IgnoreWithConstraint (autoConstraintName (Proxy @a)) -- For generated columns
       cols -> IgnoreWithColumns cols -- For normal columns
 
--- | Version that allows custom constraint name (for special cases)
+-- | Conditional bulk insert with custom constraint name specification.
+--
+-- Similar to `insertBulkMaybeIgnore` but allows specifying a custom constraint
+-- name for special cases where the auto-derived constraint name doesn't match
+-- the actual database constraint.
+--
+-- ==== Parameters
+-- * @constraintExists@: Runtime flag indicating if constraints are present.
+-- * @constraintName@: Custom name of the constraint to handle conflicts on.
+-- * @extract@: Function to extract fields from a list of records.
+-- * @encoder@: Encoder for the extracted fields.
+-- * @returnIds@: Result type indicating whether to return generated IDs.
+-- * @statement@: The prepared statement that can be executed.
 insertBulkMaybeIgnoreWithConstraint ::
   forall a b r.
-  (DbInfo a) =>
+  DbInfo a =>
   Bool -> -- Whether constraint exists
   Text.Text -> -- Custom constraint name
   ([a] -> b) ->
@@ -231,6 +305,14 @@ insertBulkMaybeIgnoreWithConstraint constraintExists constraintName extract enc 
 -- HELPER FUNCTIONS
 -----------------------------------------------------------------------------------------------------------------------------------
 
--- | Auto-derive constraint name following PostgreSQL convention
+-- | Auto-derives PostgreSQL constraint names following standard conventions.
+--
+-- Generates constraint names in the format "unique_{table_name}" which matches
+-- PostgreSQL's default naming convention for unique constraints. Used internally
+-- by bulk insert functions when constraint names need to be inferred.
+--
+-- ==== Parameters
+-- * @proxy@: Type proxy for the table type.
+-- * @constraintName@: Generated constraint name following PostgreSQL conventions.
 autoConstraintName :: DbInfo a => Proxy a -> Text.Text
 autoConstraintName p = "unique_" <> tableName p

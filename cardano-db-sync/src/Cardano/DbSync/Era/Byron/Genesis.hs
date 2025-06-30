@@ -10,12 +10,20 @@ module Cardano.DbSync.Era.Byron.Genesis (
   insertValidateByronGenesisDist,
 ) where
 
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+
 import Cardano.BM.Trace (Trace, logInfo)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
+import Cardano.Prelude
+import Paths_cardano_db_sync (version)
+
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
@@ -28,12 +36,6 @@ import Cardano.DbSync.DbEvent (liftDbIO)
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
-import Cardano.Prelude
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import Paths_cardano_db_sync (version)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -45,7 +47,7 @@ insertValidateByronGenesisDist ::
 insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  if False
+  if DB.dbEnableLogging $ envDbEnv syncEnv
     then liftDbIO $ DB.runDbIohkLogging tracer (envDbEnv syncEnv) insertAction
     else liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) insertAction
   where
@@ -250,12 +252,10 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
           DB.TxOutVariantAddress -> do
             let addrRaw = serialize' address
                 vAddress = mkVAddress addrRaw
-            addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
+            addrDetailId <- insertAddressUsingCache syncEnv UpdateCache addrRaw vAddress
             void . DB.insertTxOut $
               DB.VATxOutW (mkTxOutAddress txId addrDetailId) Nothing
   where
-    cache = envCache syncEnv
-
     mkTxOutAddress :: DB.TxId -> DB.AddressId -> VA.TxOutAddress
     mkTxOutAddress txId addrDetailId =
       VA.TxOutAddress

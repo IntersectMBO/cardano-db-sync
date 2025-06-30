@@ -1,5 +1,19 @@
 # Revision history for cardano-db-sync
 
+## 13.7.0.0
+
+### Summary
+- Complete migration from Persistent ORM to Hasql for direct PostgreSQL access.
+
+### Performance Improvements
+- 3-4x faster epoch processing: ~30min → ~8min per epoch
+- Improved cache efficiency: Stake address hit rates increased from 57-79% to 89-99%
+- Reduced memory overhead: Eliminated ORM abstraction layer
+
+### Compatibility
+- PostgreSQL schema remains unchanged
+- Existing database instances compatible without migration
+
 ## 13.6.0.5
 - Fix offchain data so it supports files up to 3MB [#1928]
 - Upgrade to PostgreSQL 17

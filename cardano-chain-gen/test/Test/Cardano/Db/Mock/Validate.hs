@@ -4,6 +4,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Test.Cardano.Db.Mock.Validate (
   assertBlocksCount,
@@ -53,9 +54,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Text.Encoding
 import Data.Word (Word64)
-import Database.PostgreSQL.Simple (SqlError (..))
 import Ouroboros.Consensus.Cardano.Block
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import Test.Tasty (TestTree)
@@ -153,20 +152,20 @@ assertBackoff env query delays check errMsg = go delays
 
 assertQuery :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
 assertQuery env query check errMsg = do
-  ma <- try $ queryDBSync env query
+  ma <- try @DB.DbError $ queryDBSync env query
   case ma of
-    Left sqlErr | migrationNotDoneYet (decodeUtf8 $ sqlErrorMsg sqlErr) -> do
+    Left dbErr | migrationNotDoneYet (DB.dbErrorMessage dbErr) -> do
       threadDelay 1_000_000
-      pure $ Just $ show sqlErr
+      pure $ Just $ Text.unpack $ DB.dbErrorMessage dbErr
     Left err -> throwIO err
     Right a | not (check a) -> pure $ Just $ errMsg a
     _ -> pure Nothing
 
 runQuery :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
 runQuery env query = do
-  ma <- try $ queryDBSync env query
+  ma <- try @DB.DbError $ queryDBSync env query
   case ma of
-    Left sqlErr | migrationNotDoneYet (decodeUtf8 $ sqlErrorMsg sqlErr) -> do
+    Left dbErr | migrationNotDoneYet (DB.dbErrorMessage dbErr) -> do
       threadDelay 1_000_000
       runQuery env query
     Left err -> throwIO err

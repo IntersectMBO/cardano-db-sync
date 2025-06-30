@@ -8,6 +8,7 @@ module Cardano.DbSync.Cache.Epoch (
   rollbackMapEpochInCache,
   writeEpochBlockDiffToCache,
   writeToMapEpochCache,
+  withNoCache,
 ) where
 
 import qualified Cardano.Db as DB
@@ -119,3 +120,6 @@ writeToMapEpochCache syncEnv cache latestEpoch = do
 writeToCache :: MonadIO m => CacheInternal -> CacheEpoch -> m ()
 writeToCache ci newCacheEpoch = do
   void $ liftIO $ atomically $ writeTVar (cEpoch ci) newCacheEpoch
+
+withNoCache :: SyncEnv -> SyncEnv
+withNoCache syncEnv = syncEnv {envCache = NoCache}

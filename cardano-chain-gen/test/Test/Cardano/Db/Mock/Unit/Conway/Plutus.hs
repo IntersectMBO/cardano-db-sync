@@ -37,8 +37,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as V
-import qualified Cardano.Db.Schema.Variants.TxOutCore as C
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Hashes (extractHash)
@@ -65,7 +65,7 @@ import Test.Cardano.Db.Mock.Config (
   txOutVariantTypeFromConfig,
   withCustomConfig,
   withFullConfig,
-  withFullConfigDropDb,
+  withFullConfigDropDB,
  )
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
@@ -77,7 +77,7 @@ import Prelude (head, tail, (!!))
 ------------------------------------------------------------------------------
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
@@ -103,18 +103,18 @@ simpleScript =
     getOutFields txOut =
       case txOut of
         DB.VCTxOutW txOut' ->
-          ( C.txOutCoreAddress txOut'
-          , C.txOutCoreAddressHasScript txOut'
-          , C.txOutCoreValue txOut'
-          , C.txOutCoreDataHash txOut'
+          ( VC.txOutCoreAddress txOut'
+          , VC.txOutCoreAddressHasScript txOut'
+          , VC.txOutCoreValue txOut'
+          , VC.txOutCoreDataHash txOut'
           )
         DB.VATxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
-              ( V.addressAddress address
-              , V.addressHasScript address
-              , V.txOutAddressValue txOut'
-              , V.txOutAddressDataHash txOut'
+              ( VA.addressAddress address
+              , VA.addressHasScript address
+              , VA.txOutAddressValue txOut'
+              , VA.txOutAddressDataHash txOut'
               )
             Nothing -> error "conwaySimpleScript: expected an address"
 
@@ -500,7 +500,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a transaction with a registration cert
@@ -669,7 +669,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfigDropDb conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a multi-asset script

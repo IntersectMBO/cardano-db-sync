@@ -5,22 +5,24 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Simple (
   restartDBSync,
 ) where
 
-import Cardano.Ledger.BaseTypes (BlockNo (BlockNo))
-import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
-import Cardano.Mock.Forging.Interpreter (forgeNext)
 import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Control.Monad (void)
 import Data.Text (Text)
+import Test.Tasty.HUnit (Assertion, assertBool)
+
+import Cardano.Ledger.BaseTypes (BlockNo (BlockNo))
 import Ouroboros.Network.Block (blockNo)
-import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, stopDBSync, withFullConfig, withFullConfigDropDb)
+
+import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
+import Cardano.Mock.Forging.Interpreter (forgeNext)
+import Test.Cardano.Db.Mock.Config (alonzoConfigDir, startDBSync, stopDBSync, withFullConfig, withFullConfigDropDB)
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeNextAndSubmit)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
-import Test.Tasty.HUnit (Assertion, assertBool)
 
 forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
 forgeBlocks = do
-  withFullConfigDropDb alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
+  withFullConfigDropDB alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
     _block0 <- forgeNext interpreter mockBlock0
     _block1 <- forgeNext interpreter mockBlock1
     block2 <- forgeNext interpreter mockBlock2
