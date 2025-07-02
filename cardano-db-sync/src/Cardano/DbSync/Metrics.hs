@@ -30,7 +30,7 @@ data Metrics = Metrics
   { mNodeBlockHeight :: !Gauge
   -- ^ The block tip number of the remote node.
   , mDbQueueLength :: !Gauge
-  -- ^ The number of @DbAction@ remaining for the database.
+  -- ^ The number of @DbEvent@ remaining for the database.
   , mDbBlockHeight :: !Gauge
   -- ^ The block tip number in the database.
   , mDbSlotHeight :: !Gauge

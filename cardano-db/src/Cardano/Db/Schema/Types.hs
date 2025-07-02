@@ -1,16 +1,18 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 
-module Cardano.Db.Schema.Types (
-  AddressHash (..),
-  PaymentAddrHash (..),
-  PoolMetaHash (..),
-  PoolUrl (..),
-) where
+module Cardano.Db.Schema.Types where
 
 import Data.ByteString.Char8 (ByteString)
+import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Encoding.Error as TextError
+import Data.Time (UTCTime, localTimeToUTC, utc, utcToLocalTime)
 import GHC.Generics (Generic)
+import qualified Hasql.Decoders as D
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as E
 import Quiet (Quiet (..))
 
 newtype AddressHash -- Length (28 bytes) enforced by Postgres
@@ -37,3 +39,17 @@ newtype PoolMetaHash = PoolMetaHash {unPoolMetaHash :: ByteString}
 newtype PoolUrl = PoolUrl {unPoolUrl :: Text}
   deriving (Eq, Ord, Generic)
   deriving (Show) via (Quiet PoolUrl)
+
+poolUrlDecoder :: HsqlD.Value PoolUrl
+poolUrlDecoder = PoolUrl <$> HsqlD.text
+
+textDecoder :: HsqlD.Value Text
+textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))
+
+-- Custom decoders/encoders that mimic Persistent's UTCTime sqltype=timestamp behavior
+-- Persistent stores UTCTime as timestamp (without timezone) by treating it as LocalTime in UTC
+utcTimeAsTimestampDecoder :: D.Value UTCTime
+utcTimeAsTimestampDecoder = localTimeToUTC utc <$> D.timestamp
+
+utcTimeAsTimestampEncoder :: E.Value UTCTime
+utcTimeAsTimestampEncoder = utcToLocalTime utc >$< E.timestamp

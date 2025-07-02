@@ -56,6 +56,7 @@ syncPreConfig =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
+    <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
     <*> syncInsertConfig
     <*> Gen.list (Range.linear 0 10) (Gen.text (Range.linear 0 100) Gen.unicode)
@@ -84,6 +85,7 @@ syncNodeConfig loggingCfg =
     <*> (NodeConfigFile <$> filePath)
     <*> Gen.constant SyncProtocolCardano
     <*> Gen.element [RequiresNoMagic, RequiresMagic]
+    <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
@@ -131,6 +133,7 @@ syncInsertOptions =
     <*> (PoolStatsConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
     <*> (RemoveJsonbFromSchemaConfig <$> Gen.bool)
+    <*> Gen.bool
 
 txOutConfig :: Gen TxOutConfig
 txOutConfig =

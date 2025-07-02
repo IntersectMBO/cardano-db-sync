@@ -23,6 +23,7 @@ import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
+import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Util
 import Cardano.Prelude
@@ -41,6 +42,7 @@ data SyncInvariant
 
 data SyncNodeError
   = SNErrDefault !Text
+  | SNErrDatabase !DB.DbError
   | SNErrInvariant !Text !SyncInvariant
   | SNEErrBlockMismatch !Word64 !ByteString !ByteString
   | SNErrIgnoreShelleyInitiation
@@ -49,6 +51,7 @@ data SyncNodeError
   | SNErrAlonzoConfig !FilePath !Text
   | SNErrConwayConfig !FilePath !Text
   | SNErrCardanoConfig !Text
+  | SNErrPGConfig !String
   | SNErrInsertGenesis !String
   | SNErrLedgerState !String
   | SNErrNodeConfig NodeConfigError
@@ -58,6 +61,7 @@ data SyncNodeError
   | SNErrDatabaseRollBackLedger !String
   | SNErrDatabaseValConstLevel !String
   | SNErrJsonbInSchema !String
+  | SNErrRollback !String
 
 instance Exception SyncNodeError
 
@@ -65,6 +69,7 @@ instance Show SyncNodeError where
   show =
     \case
       SNErrDefault t -> "Error SNErrDefault: " <> show t
+      SNErrDatabase err -> "Error SNErrDatabase: " <> show err
       SNErrInvariant loc i -> "Error SNErrInvariant: " <> Show.show loc <> ": " <> show (renderSyncInvariant i)
       SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
@@ -121,6 +126,7 @@ instance Show SyncNodeError where
           , "   "
           , show err
           ]
+      SNErrPGConfig err -> "Error SNErrPGConfig: " <> err
       SNErrInsertGenesis err -> "Error SNErrInsertGenesis: " <> err
       SNErrLedgerState err -> "Error SNErrLedgerState: " <> err
       SNErrNodeConfig err -> "Error SNErrNodeConfig: " <> show err
@@ -130,6 +136,7 @@ instance Show SyncNodeError where
       SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
       SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
       SNErrJsonbInSchema err -> "Error SNErrJsonbInSchema: " <> show err
+      SNErrRollback err -> "Error SNErrRollback: " <> show err
 
 data NodeConfigError
   = NodeConfigParseError !String
