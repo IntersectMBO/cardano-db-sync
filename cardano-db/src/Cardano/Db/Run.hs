@@ -108,7 +108,7 @@ runDbActionWithIsolation dbEnv isolationLevel action = do
             restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv)
               `onException` do
                 case dbTracer dbEnv of
-                  Just tracer -> logWarning tracer "rolling back transaction and SHUTTING DOWN.."
+                  Just tracer -> logWarning tracer "rolling back transaction, due to interrupt."
                   Nothing -> pure ()
                 rollbackTransaction dbEnv
           case result of

@@ -7,7 +7,7 @@
 
 module Cardano.Db.Statement.Variants.TxOut where
 
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Text, Word64, fromMaybe, unless)
+import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Text, Word64, fromMaybe, unless, textShow)
 import Control.Monad.Extra (whenJust)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
@@ -392,6 +392,39 @@ queryTxOutId txOutVariantType hashIndex@(hash, _) = do
   where
     dbCallStack = mkDbCallStack "queryTxOutId"
     errorMsg = "TxOut not found for hash: " <> Text.pack (show hash)
+
+--------------------------------------------------------------------------------
+
+queryTxOutIdByTxIdStmt :: HsqlStmt.Statement (Id.TxId, Word64) (Maybe Int64)
+queryTxOutIdByTxIdStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT tx_out.id"
+          , " FROM tx_out"
+          , " WHERE tx_out.tx_id = $1 AND tx_out.index = $2"
+          ]
+
+    encoder =
+      contramap fst (Id.idEncoder Id.getTxId)
+        <> contramap snd (HsqlE.param $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
+
+resolveInputTxOutIdFromTxId ::
+  MonadIO m =>
+  Id.TxId ->
+  Word64 ->
+  DbAction m (Either DbError TxOutIdW)
+resolveInputTxOutIdFromTxId txId index = do
+  result <- runDbSession (mkDbCallStack "resolveInputTxOutIdFromTxId") $
+    HsqlSes.statement (txId, index) queryTxOutIdByTxIdStmt
+  case result of
+    Just txOutId -> pure $ Right $ VCTxOutIdW (Id.TxOutCoreId txOutId) -- Adjust based on your variant
+    Nothing -> pure $ Left $ DbError (mkDbCallStack "resolveInputTxOutIdFromTxId")
+                               ("TxOut not found for txId: " <> textShow txId <> ", index: " <> textShow index)
+                               Nothing
 
 --------------------------------------------------------------------------------
 queryTxOutIdValueStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Id.TxId, Int64, DbLovelace))

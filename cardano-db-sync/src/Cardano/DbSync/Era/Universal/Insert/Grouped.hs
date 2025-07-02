@@ -233,11 +233,28 @@ resolveTxInputs ::
   Generic.TxIn ->
   DB.DbAction m (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
 resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
-  qres <-
-    case (hasConsumed, needsValue) of
-      (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
-      (False, _) -> fmap convertnotFoundCache <$> queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
-      (True, False) -> fmap convertFoundTxOutId <$> resolveInputTxOutId syncEnv txIn
+  qres <- case (hasConsumed, needsValue) of
+    -- No cache (complex query)
+    (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
+     -- Direct query (simple case)
+    (False, _) -> do
+      mTxId <- DB.queryTxId (Generic.unTxHash $ Generic.txInTxId txIn)
+      case mTxId of
+        Just txId -> pure $ Right $ convertnotFoundCache txId
+        Nothing -> throwError $ DB.DbError
+                    (DB.mkDbCallStack "resolveTxInputs")
+                    ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
+                    Nothing
+    (True, False) -> do  -- Consumed mode use cache
+      eTxId <- queryTxIdWithCache (envCache syncEnv) (Generic.txInTxId txIn)
+      case eTxId of
+        Right txId -> do
+          -- Now get the TxOutId separately
+          eTxOutId <- DB.resolveInputTxOutIdFromTxId txId (Generic.txInIndex txIn)
+          case eTxOutId of
+            Right txOutId -> pure $ Right $ convertFoundTxOutId (txId, txOutId)
+            Left err -> pure $ Left err
+        Left err -> pure $ Left err
   case qres of
     Right result -> pure result
     Left _dbErr ->

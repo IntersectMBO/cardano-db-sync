@@ -47,7 +47,7 @@ insertValidateByronGenesisDist ::
 insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
   -- Setting this to True will log all 'Persistent' operations which is great
   -- for debugging, but otherwise *way* too chatty.
-  if False
+  if DB.dbEnableLogging $ envDbEnv syncEnv
     then liftDbIO $ DB.runDbIohkLogging tracer (envDbEnv syncEnv) insertAction
     else liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) insertAction
   where
