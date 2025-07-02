@@ -50,6 +50,11 @@
                       "libpq" = [ "libpq" ];
                     };
                   };
+
+                  haskellBuildUtils = prev.haskellBuildUtils.override {
+                    compiler-nix-name = "ghc96";
+                    index-state = "2025-06-19T03:58:53Z";
+                  };
                 })
 
                 (final: prev: {
