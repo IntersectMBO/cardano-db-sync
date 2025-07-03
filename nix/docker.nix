@@ -10,7 +10,7 @@
 , bashInteractive, cacert, cardano-cli, cardano-db-sync, cardano-db-tool
 , cardano-smash-server, coreutils, curl, findutils, getconf, glibcLocales
 , gnused, gnutar, gzip, jq, iana-etc, iproute, iputils, lib, libidn, libpqxx
-, postgresql_17, socat, utillinux
+, postgresql_17, socat, utillinux, gnugrep, less
 }:
 
 let
@@ -40,6 +40,7 @@ let
         findutils # GNU find
         getconf # get num cpus
         glibcLocales # Locale information for the GNU C Library
+        gnugrep # GNU grep
         gnused # GNU sed
         gnutar # GNU tar
         gzip # Gnuzip
@@ -54,6 +55,7 @@ let
         utillinux # System utilities for Linux
         cardano-cli # tool for interacting with cardano-node
         cardano-db-tool # utilities for creating database snapshots
+        less # Output pager for the psql command in interactive mode
       ];
     };
 
