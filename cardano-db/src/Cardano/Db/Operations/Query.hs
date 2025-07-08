@@ -70,6 +70,8 @@ module Cardano.Db.Operations.Query (
   queryReservedTickers,
   queryDelistedPools,
   queryPoolStatCount,
+  queryPoolStatByEpoch,
+  queryPoolStatDuplicates,
   queryOffChainPoolFetchError,
   existsDelistedPool,
   -- queries used in tools
@@ -110,6 +112,7 @@ import Cardano.Db.Schema.BaseSchema
 import Cardano.Db.Types
 import Cardano.Ledger.BaseTypes (CertIx (..), TxIx (..))
 import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
+import Cardano.Prelude (Int64)
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad.Extra (join, whenJust)
 import Control.Monad.IO.Class (MonadIO)
@@ -125,6 +128,7 @@ import Database.Esqueleto.Experimental (
   Entity (..),
   PersistEntity,
   PersistField,
+  Single (..),
   SqlBackend,
   Value (Value, unValue),
   asc,
@@ -145,6 +149,7 @@ import Database.Esqueleto.Experimental (
   on,
   orderBy,
   persistIdField,
+  rawSql,
   select,
   selectOne,
   sum_,
@@ -929,6 +934,24 @@ queryPoolStatCount = do
     _ <- from $ table @PoolStat
     pure countRows
   pure $ maybe 0 unValue (listToMaybe res)
+
+queryPoolStatByEpoch :: MonadIO m => Word64 -> ReaderT SqlBackend m Word64
+queryPoolStatByEpoch eNo = do
+  res <- select $ do
+    poolStat <- from $ table @PoolStat
+    where_ (poolStat ^. PoolStatEpochNo ==. val (fromIntegral eNo))
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
+
+queryPoolStatDuplicates :: MonadIO m => ReaderT SqlBackend m Word64
+queryPoolStatDuplicates = do
+  res <-
+    rawSql
+      "SELECT COUNT(*) FROM (SELECT pool_hash_id, epoch_no, COUNT(*) as cnt FROM pool_stat GROUP BY pool_hash_id, epoch_no HAVING COUNT(*) > 1) AS duplicates"
+      []
+  case res of
+    [Single c] -> pure $ fromIntegral (c :: Int64)
+    _otherwise -> pure 0
 
 -- Returns also the metadata hash
 queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(OffChainPoolFetchError, ByteString)]
