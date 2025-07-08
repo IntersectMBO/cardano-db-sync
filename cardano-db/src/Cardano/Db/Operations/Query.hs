@@ -69,6 +69,7 @@ module Cardano.Db.Operations.Query (
   queryReservedTicker,
   queryReservedTickers,
   queryDelistedPools,
+  queryPoolStatCount,
   queryOffChainPoolFetchError,
   existsDelistedPool,
   -- queries used in tools
@@ -921,6 +922,13 @@ queryDelistedPools = do
     delistedPool <- from $ table @DelistedPool
     pure $ delistedPool ^. DelistedPoolHashRaw
   pure $ unValue <$> res
+
+queryPoolStatCount :: MonadIO m => ReaderT SqlBackend m Word64
+queryPoolStatCount = do
+  res <- select $ do
+    _ <- from $ table @PoolStat
+    pure countRows
+  pure $ maybe 0 unValue (listToMaybe res)
 
 -- Returns also the metadata hash
 queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> ReaderT SqlBackend m [(OffChainPoolFetchError, ByteString)]
