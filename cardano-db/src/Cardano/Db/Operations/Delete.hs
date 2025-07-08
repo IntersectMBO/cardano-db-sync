@@ -127,7 +127,7 @@ deleteUsingEpochNo epochN = do
         [ onlyDelete "Epoch" [EpochNo ==. epochN]
         , onlyDelete "DrepDistr" [DrepDistrEpochNo >. epochN]
         , onlyDelete "RewardRest" [RewardRestSpendableEpoch >. epochN]
-        , onlyDelete "PoolStat" [PoolStatEpochNo >. epochN]
+        , onlyDelete "PoolStat" [PoolStatEpochNo >=. epochN]
         ]
   nullLogs <- do
     a <- setNullEnacted epochN
