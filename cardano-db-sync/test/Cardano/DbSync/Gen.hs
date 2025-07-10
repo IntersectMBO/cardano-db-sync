@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -62,8 +61,8 @@ syncPreConfig =
 
 syncNodeParams :: MonadGen m => m SyncNodeParams
 syncNodeParams =
-  SyncNodeParams
-    <$> (ConfigFile <$> filePath)
+  SyncNodeParams . ConfigFile
+    <$> filePath
     <*> (SocketPath <$> filePath)
     <*> Gen.maybe (LedgerStateDir <$> filePath)
     <*> (MigrationDir <$> filePath)

@@ -176,7 +176,7 @@ queryTreasuryDonations = do
     txs <- from $ table @Db.Tx
     pure $ sum_ (txs ^. Db.TxTreasuryDonation)
 
-  let total = join (unValue <$> res)
+  let total = unValue =<< res
   pure $ maybe 0 Db.unDbLovelace total
 
 queryVoteCounts ::

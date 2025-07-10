@@ -33,7 +33,7 @@ import qualified Cardano.Mock.Forging.Tx.Conway.Scenarios as Conway
 import Cardano.Mock.Forging.Types
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (atomically)
-import Control.Monad (forM, replicateM)
+import Control.Monad (replicateM)
 import Data.Word (Word64)
 import Ouroboros.Consensus.Cardano.Block (
   BabbageEra,
@@ -63,7 +63,7 @@ forgeNextSkipSlotsFindLeaderAndSubmit interpreter mockServer skipSlots txs' = do
 
 forgeAndSubmitBlocks :: Interpreter -> ServerHandle IO CardanoBlock -> Int -> IO [CardanoBlock]
 forgeAndSubmitBlocks interpreter mockServer blocksToCreate =
-  forM [1 .. blocksToCreate] $ \_ -> forgeNextFindLeaderAndSubmit interpreter mockServer []
+  replicateM blocksToCreate (forgeNextFindLeaderAndSubmit interpreter mockServer [])
 
 withAlonzoFindLeaderAndSubmit ::
   Interpreter ->

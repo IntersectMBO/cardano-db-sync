@@ -100,7 +100,7 @@ parseAppUser line = case Text.breakOn "," line of
         Right $ ApplicationUser (prepareCred user) (prepareCred passwd)
   _ -> Left "Credentials need to be supplied in the form: username,password"
   where
-    prepareCred name = Text.strip name
+    prepareCred = Text.strip
 
 configureLogging :: FilePath -> Text -> IO (Trace IO Text)
 configureLogging fp loggingName = do

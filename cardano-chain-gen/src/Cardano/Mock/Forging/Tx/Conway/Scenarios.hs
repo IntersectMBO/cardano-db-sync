@@ -51,9 +51,10 @@ delegateAndSendBlocks n interpreter = do
     stakeCreds = createStakeCredentials n
     payCreds = createPaymentCredentials n
     addresses =
-      map
-        (\(payCred, stakeCred) -> Addr Testnet payCred (StakeRefBase stakeCred))
-        (zip payCreds stakeCreds)
+      zipWith
+        (\payCred stakeCred -> Addr Testnet payCred (StakeRefBase stakeCred))
+        payCreds
+        stakeCreds
 
 mkRegisterBlocks :: [StakeCredential] -> Interpreter -> IO [CardanoBlock]
 mkRegisterBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txCreds _ ->
@@ -65,7 +66,7 @@ mkRegisterBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txC
 mkDelegateBlocks :: [StakeCredential] -> Interpreter -> IO [CardanoBlock]
 mkDelegateBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txCreds state' ->
   Conway.mkDCertTx
-    (map (mkDelegCert state') $ zip (cycle [0, 1, 2]) txCreds)
+    (zipWith (curry (mkDelegCert state')) (cycle [0, 1, 2]) txCreds)
     (Withdrawals mempty)
     Nothing
   where
