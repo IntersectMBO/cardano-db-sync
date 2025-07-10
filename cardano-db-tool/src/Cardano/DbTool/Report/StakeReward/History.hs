@@ -85,12 +85,12 @@ queryHistoryStakeRewards address = do
     queryDelegation maxEpoch = do
       res <- select $ do
         (ep :& es :& saddr) <-
-          from
-            $ table @Epoch
+          from $
+            table @Epoch
               `innerJoin` table @EpochStake
-            `on` (\(ep :& es) -> ep ^. EpochNo ==. es ^. EpochStakeEpochNo)
+                `on` (\(ep :& es) -> ep ^. EpochNo ==. es ^. EpochStakeEpochNo)
               `innerJoin` table @StakeAddress
-            `on` (\(_ep :& es :& saddr) -> saddr ^. StakeAddressId ==. es ^. EpochStakeAddrId)
+                `on` (\(_ep :& es :& saddr) -> saddr ^. StakeAddressId ==. es ^. EpochStakeAddrId)
         where_ (saddr ^. StakeAddressView ==. val address)
         where_ (es ^. EpochStakeEpochNo <=. val maxEpoch)
         pure
@@ -109,12 +109,12 @@ queryHistoryStakeRewards address = do
     queryReward (saId, en, date, DbLovelace delegated, poolId) = do
       res <- select $ do
         (saddr :& rwd :& ep) <-
-          from
-            $ table @StakeAddress
+          from $
+            table @StakeAddress
               `innerJoin` table @Reward
-            `on` (\(saddr :& rwd) -> saddr ^. StakeAddressId ==. rwd ^. RewardAddrId)
+                `on` (\(saddr :& rwd) -> saddr ^. StakeAddressId ==. rwd ^. RewardAddrId)
               `innerJoin` table @Epoch
-            `on` (\(_saddr :& rwd :& ep) -> ep ^. EpochNo ==. rwd ^. RewardEarnedEpoch)
+                `on` (\(_saddr :& rwd :& ep) -> ep ^. EpochNo ==. rwd ^. RewardEarnedEpoch)
         where_ (ep ^. EpochNo ==. val en)
         where_ (saddr ^. StakeAddressId ==. val saId)
         orderBy [asc (ep ^. EpochNo)]

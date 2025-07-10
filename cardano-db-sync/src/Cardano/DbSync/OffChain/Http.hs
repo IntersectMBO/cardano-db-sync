@@ -174,15 +174,15 @@ httpGetBytes manager request bytesToRead maxBytes url =
                 ( "application/json"
                     `BS.isInfixOf` ct
                     || "application/ld+json"
-                    `BS.isInfixOf` ct
+                      `BS.isInfixOf` ct
                     || "text/plain"
-                    `BS.isInfixOf` ct
+                      `BS.isInfixOf` ct
                     || "binary/octet-stream"
-                    `BS.isInfixOf` ct
+                      `BS.isInfixOf` ct
                     || "application/octet-stream"
-                    `BS.isInfixOf` ct
+                      `BS.isInfixOf` ct
                     || "application/binary"
-                    `BS.isInfixOf` ct
+                      `BS.isInfixOf` ct
                 )
                 . left
                 $ OCFErrBadContentType url (Text.decodeLatin1 ct)

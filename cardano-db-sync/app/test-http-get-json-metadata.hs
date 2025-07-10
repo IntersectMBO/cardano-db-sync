@@ -142,10 +142,10 @@ queryTestOffChainData :: MonadIO m => ReaderT SqlBackend m [TestOffChain]
 queryTestOffChainData = do
   res <- select $ do
     (pod :& pmr) <-
-      from
-        $ table @OffChainPoolData
+      from $
+        table @OffChainPoolData
           `innerJoin` table @PoolMetadataRef
-        `on` (\(pod :& pmr) -> pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId)
+            `on` (\(pod :& pmr) -> pod ^. OffChainPoolDataPmrId ==. pmr ^. PoolMetadataRefId)
     where_ $ notExists (from (table @PoolRetire) >>= \pr -> where_ (pod ^. OffChainPoolDataPoolId ==. pr ^. PoolRetireHashId))
     pure
       ( pod ^. OffChainPoolDataTickerName

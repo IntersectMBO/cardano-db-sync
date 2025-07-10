@@ -829,19 +829,19 @@ getPrices st = case ledgerState $ clsState st of
     Strict.Just
       ( Shelley.nesEs (Consensus.shelleyLedgerState als)
           ^. Shelley.curPParamsEpochStateL
-          . Alonzo.ppPricesL
+            . Alonzo.ppPricesL
       )
   LedgerStateBabbage bls ->
     Strict.Just
       ( Shelley.nesEs (Consensus.shelleyLedgerState bls)
           ^. Shelley.curPParamsEpochStateL
-          . Alonzo.ppPricesL
+            . Alonzo.ppPricesL
       )
   LedgerStateConway bls ->
     Strict.Just
       ( Shelley.nesEs (Consensus.shelleyLedgerState bls)
           ^. Shelley.curPParamsEpochStateL
-          . Alonzo.ppPricesL
+            . Alonzo.ppPricesL
       )
   _ -> Strict.Nothing
 

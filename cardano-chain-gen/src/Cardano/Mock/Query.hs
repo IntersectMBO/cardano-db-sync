@@ -99,10 +99,10 @@ queryDRepDistrAmount ::
 queryDRepDistrAmount drepHash epochNo = do
   res <- selectOne $ do
     (distr :& hash) <-
-      from
-        $ table @Db.DrepDistr
+      from $
+        table @Db.DrepDistr
           `innerJoin` table @Db.DrepHash
-        `on` (\(distr :& hash) -> (hash ^. Db.DrepHashId) ==. (distr ^. Db.DrepDistrHashId))
+            `on` (\(distr :& hash) -> (hash ^. Db.DrepHashId) ==. (distr ^. Db.DrepDistrHashId))
 
     where_ $ hash ^. Db.DrepHashRaw ==. just (val drepHash)
     where_ $ distr ^. Db.DrepDistrEpochNo ==. val epochNo
@@ -141,16 +141,16 @@ queryConstitutionAnchor ::
 queryConstitutionAnchor epochNo = do
   res <- selectOne $ do
     (_ :& anchor :& epochState) <-
-      from
-        $ table @Db.Constitution
+      from $
+        table @Db.Constitution
           `innerJoin` table @Db.VotingAnchor
-        `on` ( \(constit :& anchor) ->
-                (constit ^. Db.ConstitutionVotingAnchorId) ==. (anchor ^. Db.VotingAnchorId)
-             )
+            `on` ( \(constit :& anchor) ->
+                     (constit ^. Db.ConstitutionVotingAnchorId) ==. (anchor ^. Db.VotingAnchorId)
+                 )
           `innerJoin` table @Db.EpochState
-        `on` ( \(constit :& _ :& epoch) ->
-                just (constit ^. Db.ConstitutionId) ==. (epoch ^. Db.EpochStateConstitutionId)
-             )
+            `on` ( \(constit :& _ :& epoch) ->
+                     just (constit ^. Db.ConstitutionId) ==. (epoch ^. Db.EpochStateConstitutionId)
+                 )
 
     where_ (epochState ^. Db.EpochStateEpochNo ==. val epochNo)
 
@@ -194,10 +194,10 @@ queryVoteCounts txHash idx = do
     countVotes v = do
       res <- selectOne $ do
         (vote :& tx) <-
-          from
-            $ table @Db.VotingProcedure
+          from $
+            table @Db.VotingProcedure
               `innerJoin` table @Db.Tx
-            `on` (\(vote :& tx) -> vote ^. Db.VotingProcedureTxId ==. tx ^. Db.TxId)
+                `on` (\(vote :& tx) -> vote ^. Db.VotingProcedureTxId ==. tx ^. Db.TxId)
         where_ $
           vote
             ^. Db.VotingProcedureVote
@@ -226,16 +226,16 @@ queryCommitteeByTxHash ::
 queryCommitteeByTxHash txHash = do
   res <- selectOne $ do
     (committee :& _ :& tx) <-
-      from
-        $ table @Db.Committee
+      from $
+        table @Db.Committee
           `innerJoin` table @Db.GovActionProposal
-        `on` ( \(committee :& govAction) ->
-                committee ^. Db.CommitteeGovActionProposalId ==. just (govAction ^. Db.GovActionProposalId)
-             )
+            `on` ( \(committee :& govAction) ->
+                     committee ^. Db.CommitteeGovActionProposalId ==. just (govAction ^. Db.GovActionProposalId)
+                 )
           `innerJoin` table @Db.Tx
-        `on` ( \(_ :& govAction :& tx) ->
-                govAction ^. Db.GovActionProposalTxId ==. tx ^. Db.TxId
-             )
+            `on` ( \(_ :& govAction :& tx) ->
+                     govAction ^. Db.GovActionProposalTxId ==. tx ^. Db.TxId
+                 )
     where_ (tx ^. Db.TxHash ==. val txHash)
     pure committee
 
@@ -248,20 +248,20 @@ queryCommitteeMemberCountByTxHash ::
 queryCommitteeMemberCountByTxHash txHash = do
   res <- selectOne $ do
     (_ :& committee :& _ :& tx) <-
-      from
-        $ table @Db.CommitteeMember
+      from $
+        table @Db.CommitteeMember
           `innerJoin` table @Db.Committee
-        `on` ( \(member :& committee) ->
-                member ^. Db.CommitteeMemberCommitteeId ==. committee ^. Db.CommitteeId
-             )
+            `on` ( \(member :& committee) ->
+                     member ^. Db.CommitteeMemberCommitteeId ==. committee ^. Db.CommitteeId
+                 )
           `leftJoin` table @Db.GovActionProposal
-        `on` ( \(_ :& committee :& govAction) ->
-                committee ^. Db.CommitteeGovActionProposalId ==. govAction ?. Db.GovActionProposalId
-             )
+            `on` ( \(_ :& committee :& govAction) ->
+                     committee ^. Db.CommitteeGovActionProposalId ==. govAction ?. Db.GovActionProposalId
+                 )
           `leftJoin` table @Db.Tx
-        `on` ( \(_ :& _ :& govAction :& tx) ->
-                govAction ?. Db.GovActionProposalTxId ==. tx ?. Db.TxId
-             )
+            `on` ( \(_ :& _ :& govAction :& tx) ->
+                     govAction ?. Db.GovActionProposalTxId ==. tx ?. Db.TxId
+                 )
 
     where_ $
       case txHash of
