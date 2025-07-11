@@ -33,10 +33,10 @@ validateSumAdaPots = do
   let uniqueCount = List.length $ List.nubOrd (map accSumAdaPots xs)
 
   if
-      | uniqueCount == 0 -> error $ redText "No AdaPots entries found"
-      | length xs == 1 -> putStrLn $ greenText "ok (but only one AdaPots entry found)"
-      | uniqueCount == 1 -> putStrLn $ greenText "ok"
-      | otherwise -> error $ redText (show uniqueCount ++ " unique AdaPots sums (should be 1)")
+    | uniqueCount == 0 -> error $ redText "No AdaPots entries found"
+    | length xs == 1 -> putStrLn $ greenText "ok (but only one AdaPots entry found)"
+    | uniqueCount == 1 -> putStrLn $ greenText "ok"
+    | otherwise -> error $ redText (show uniqueCount ++ " unique AdaPots sums (should be 1)")
 
 -- -----------------------------------------------------------------------------
 

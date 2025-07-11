@@ -78,8 +78,8 @@ readByteStringFromFile fp cfgType =
 -- -------------------------------------------------------------------------------------------------
 
 instance FromJSON NodeConfig where
-  parseJSON v =
-    Aeson.withObject "NodeConfig" parse v
+  parseJSON =
+    Aeson.withObject "NodeConfig" parse
     where
       parse :: Object -> Parser NodeConfig
       parse o =

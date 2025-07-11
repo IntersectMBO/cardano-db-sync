@@ -24,10 +24,6 @@
       url = "github:IntersectMBO/cardano-haskell-packages?ref=repo";
       flake = false;
     };
-    # Note[PostgreSQL 17]: This is a workaround to get postgresql_17 from nixpkgs. It's
-    # available in nixpkgs unstable, but has not been updated in haskell.nix yet. Remove
-    # this after the next time haskell.nix updates nixpkgs.
-    nixpkgsUpstream.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs = { self, ... }@inputs:
@@ -40,12 +36,6 @@
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
         let
-          # TODO: Remove me (See Note[PostgreSQL 17]).
-          nixpkgsUpstream = import inputs.nixpkgsUpstream {
-            inherit system;
-            inherit (inputs.haskellNix) config;
-          };
-
           nixpkgs = import inputs.nixpkgs {
             inherit system;
             inherit (inputs.haskellNix) config;
@@ -53,6 +43,19 @@
             overlays =
               builtins.attrValues inputs.iohkNix.overlays ++
               [ inputs.haskellNix.overlay
+
+                (final: prev: {
+                  haskell-nix = prev.haskell-nix // {
+                    extraPkgconfigMappings = prev.haskell-nix.extraPkgconfigMappings // {
+                      "libpq" = [ "libpq" ];
+                    };
+                  };
+
+                  haskellBuildUtils = prev.haskellBuildUtils.override {
+                    compiler-nix-name = "ghc96";
+                    index-state = "2025-06-19T03:58:53Z";
+                  };
+                })
 
                 (final: prev: {
                   inherit (project.hsPkgs.cardano-node.components.exes) cardano-node;
@@ -77,35 +80,34 @@
                   })
 
                 (final: prev: {
-                  # HLint 3.2.x requires GHC >= 8.10 && < 9.0
-                  hlint = final.haskell-nix.tool "ghc8107" "hlint" {
-                    version = "3.2.7";
+                  hlint = final.haskell-nix.tool "ghc96" "hlint" {
+                    version = "latest";
                   };
 
                   # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
-                  fourmolu = final.haskell-nix.tool "ghc928" "fourmolu" {
-                    version = "0.10.1.0";
-                  };
-
-                  # Weeder 2.2.0 requires GHC >= 8.10 && < 9.0
-                  weeder = final.haskell-nix.tool "ghc8107" "weeder" {
-                    version = "2.2.0";
+                  fourmolu = final.haskell-nix.tool "ghc96" "fourmolu" {
+                    version = "latest";
                   };
                 })
 
                 (final: prev: {
-                  postgresql = prev.postgresql.overrideAttrs (_:
-                    final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
-                      NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
-                      LC_CTYPE = "C";
+                  libpq =
+                    final.lib.pipe prev.libpq [
+                      (p: p.override {
+                        gssSupport = false;
+                      })
 
-                      doCheck = false;
-                    });
-                })
-
-                # TODO: Remove me (See Note[PostgreSQL 17])
-                (final: prev: {
-                  postgresql_17 = nixpkgsUpstream.postgresql_17;
+                      (p: p.overrideAttrs (old:
+                        final.lib.optionalAttrs (final.stdenv.hostPlatform.isMusl) {
+                          dontDisableStatic = true;
+                          NIX_LDFLAGS = "--push-state --as-needed -lstdc++ --pop-state";
+                          # without this collate.icu.utf8, and foreign_data will fail.
+                          LC_CTYPE = "C";
+                          # libpq from nixpkgs will either remove static or dynamic 
+                          # libs, but we need to keep them both
+                          postInstall = "";
+                        }))
+                    ];
                 })
               ];
           };
@@ -153,22 +155,21 @@
             echo "file binary-dist $out/$NAME" > $out/nix-support/hydra-build-products
           '';
 
+          isCross = pkgs: 
+            with pkgs.haskell-nix.haskellLib; isNativeMusl || isCrossHost;
+
           project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
-            compiler-nix-name =
-              if system == "x86_64-linux"
-                then lib.mkDefault "ghc810"
-                else lib.mkDefault "ghc96";
+            compiler-nix-name = lib.mkDefault "ghc96";
             flake.variants =
               let
-                compilers =
-                  if (system == "x86_64-linux") then
-                    ["ghc96" "ghc98" "ghc910"]
-                  else
-                    ["ghc98"];
+                extraCompilers = 
+                  # To avoid excessive jobs, only build for default compiler on macOS
+                  lib.optionals (system == "x86_64-linux")
+                    [ "ghc910" "ghc912" ];
               in
-                lib.genAttrs compilers (c: { compiler-nix-name = c; });
+                lib.genAttrs extraCompilers (c: { compiler-nix-name = c; });
 
             # cardano-cli is needed when building the docker image
             cabalProjectLocal = ''
@@ -178,7 +179,7 @@
             crossPlatforms = p:
               lib.optional (system == "x86_64-linux") p.musl64 ++
               lib.optional
-                (system == "x86_64-linux" && config.compiler-nix-name == "ghc966")
+                (system == "x86_64-linux" && config.compiler-nix-name == "ghc967")
                 p.aarch64-multiplatform-musl;
 
             inputMap = {
@@ -187,38 +188,26 @@
 
             shell.tools = {
               cabal = "latest";
+              fourmolu = "latest";
               haskell-language-server = {
-                src =
-                  if config.compiler-nix-name == "ghc8107" then
-                    nixpkgs.haskell-nix.sources."hls-1.10"
-                  else
-                    nixpkgs.haskell-nix.sources."hls-2.9";
+                src = nixpkgs.haskell-nix.sources."hls-2.11";
               };
+              hlint = "latest";
+            } // lib.optionalAttrs (config.compiler-nix-name == "ghc967") {
+              weeder = "latest";
             };
             # Now we use pkgsBuildBuild, to make sure that even in the cross
             # compilation setting, we don't run into issues where we pick tools
             # for the target.
             shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
               gitAndTools.git
-              hlint
-            ] ++ lib.optionals (config.compiler-nix-name == "ghc8107") [
-              # Weeder requires the GHC version to match HIE files
-              weeder
-            ] ++ lib.optionals (system != "aarch64-darwin") [
-              # TODO: Fourmolu 0.10 is currently failing to build with aarch64-darwin
-              #
-              # Linking dist/build/fourmolu/fourmolu ...
-              # ld: line 269:  2352 Segmentation fault ...
-              # clang-11: error: linker command failed with exit code 139 (use -v to see invocation)
-              # `cc' failed in phase `Linker'. (Exit code: 139)
-              fourmolu
             ];
             shell.withHoogle = true;
             shell.crossPlatforms = _: [];
 
             modules = [
               ({ lib, pkgs, ... }: {
-                package-keys = ["ekg"];
+                package-keys = [ "ekg" ];
                 # Ignore version bounds
                 packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
@@ -242,58 +231,24 @@
                   [ "../schema/*.sql" ];
               })
 
-              ({ lib, config, ... }:
-                # Disable haddock on 8.x
-                lib.mkIf (lib.versionOlder config.compiler.version "9") {
-                  packages.cardano-ledger-alonzo.doHaddock = false;
-                  packages.cardano-ledger-allegra.doHaddock = false;
-                  packages.cardano-ledger-api.doHaddock = false;
-                  packages.cardano-ledger-babbage.doHaddock = false;
-                  packages.cardano-ledger-conway.doHaddock = false;
-                  packages.cardano-ledger-shelley.doHaddock = false;
-                  packages.cardano-protocol-tpraos.doHaddock = false;
-                  packages.fs-api.doHaddock = false;
-                  packages.ouroboros-network-framework.doHaddock = false;
-                  packages.ouroboros-consensus-cardano.doHaddock = false;
-                  packages.ouroboros-consensus.doHaddock = false;
-                  packages.cardano-ledger-core.doHaddock = false;
-                  packages.plutus-ledger-api.doHaddock = false;
-                  packages.wai-extra.doHaddock = false;
-                })
-
-              ({ lib, pkgs, config, ... }:
-                lib.mkIf (lib.versionAtLeast config.compiler.version "9.4") {
+              ({ lib, pkgs, config, ... }: {
                   # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
                   # to call out to all kinds of silly tools that GHC doesn't really provide.
                   # For this reason, we try to get away without re-installing lib:ghc for now.
                   reinstallableLibGhc = false;
                 })
 
-              ({ pkgs, ... }:
-                # Database tests
-                let
-                  postgresTest = {
-                    build-tools = [ pkgs.pkgsBuildHost.postgresql_17 ];
-                    inherit preCheck;
-                    inherit postCheck;
-                  };
-                in {
-                  packages.cardano-db.components.tests.test-db = postgresTest;
-                  packages.cardano-chain-gen.components.tests.cardano-chain-gen =
-                    postgresTest;
-                })
-
               (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
                 (let
                   ghcOptions = [
-                    # Postgresql static is pretty broken in nixpkgs. We can't rely on the
+                    # libpq static is pretty broken in nixpkgs. We can't rely on the
                     # pkg-config, so we have to add the correct libraries ourselves
-                    "-L${pkgs.postgresql}/lib"
-                    "-optl-Wl,-lpgport"
                     "-optl-Wl,-lpgcommon"
+                    "-optl-Wl,-lpgport"
+                    "-optl-Wl,-lm"
 
-                    # Since we aren't using the postgresql pkg-config, it won't
-                    # automatically include OpenSSL
+                    # Since we aren't using pkg-config, it won't automatically include
+                    # OpenSSL
                     "-L${pkgs.openssl.out}/lib"
 
                     # The ordering of -lssl and -lcrypto below is important. Otherwise,
@@ -359,6 +314,30 @@
                 ];
               })
 
+              ({ lib, pkgs, ... }:
+                # Database tests
+                let
+                  inherit (pkgs.haskell-nix) haskellLib;
+
+                  postgresTest = {
+                    # Keep postgresql static builds out of shells
+                    build-tools = lib.optional (!isCross pkgs) pkgs.postgresql;
+                    inherit preCheck;
+                    inherit postCheck;
+                  };
+                in {
+                  packages.cardano-db.components.tests.test-db = postgresTest;
+                  packages.cardano-chain-gen.components.tests.cardano-chain-gen =
+                    postgresTest;
+                })
+
+              ({ lib, pkgs, ... }: with pkgs.haskell-nix.haskellLib;
+                # There's no need to run PostgreSQL integration tests on static builds
+                lib.mkIf (isCross pkgs) {
+                  packages.cardano-chain-gen.components.tests.cardano-chain-gen.doCheck = false;
+                  packages.cardano-db.components.tests.test-db.doCheck = false;
+                })
+
               ({ lib, pkgs, config, ... }: lib.mkIf pkgs.hostPlatform.isMacOS {
                 # PostgreSQL tests fail in Hydra on MacOS with:
                 #
@@ -373,6 +352,7 @@
                 packages.cardano-chain-gen.components.tests.cardano-chain-gen.doCheck = false;
                 packages.cardano-db.components.tests.test-db.doCheck = false;
               })
+
             ];
           })).appendOverlays [
             # Collect local package `exe`s

@@ -136,12 +136,12 @@ queryBadWithdrawals :: MonadIO m => ReaderT SqlBackend m [AddressInfo]
 queryBadWithdrawals = do
   res <- select $ do
     (rwd :& sa :& wdrl) <-
-      from
-        $ table @Db.Reward
+      from $
+        table @Db.Reward
           `innerJoin` table @Db.StakeAddress
-        `on` (\(rwd :& sa) -> rwd ^. Db.RewardAddrId ==. sa ^. Db.StakeAddressId)
+            `on` (\(rwd :& sa) -> rwd ^. Db.RewardAddrId ==. sa ^. Db.StakeAddressId)
           `innerJoin` table @Db.Withdrawal
-        `on` (\(rwd :& _sa :& wdrl) -> rwd ^. Db.RewardAddrId ==. wdrl ^. Db.WithdrawalAddrId)
+            `on` (\(rwd :& _sa :& wdrl) -> rwd ^. Db.RewardAddrId ==. wdrl ^. Db.WithdrawalAddrId)
     groupBy (sa ^. Db.StakeAddressId)
     let sumReward = sum_ (rwd ^. Db.RewardAmount)
         sumWithdraw = sum_ (wdrl ^. Db.WithdrawalAmount)

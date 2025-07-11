@@ -104,12 +104,12 @@ queryRewardMap ::
 queryRewardMap (EpochNo epochNo) = do
   res <- select $ do
     (rwd :& saddr) <-
-      from
-        $ table @Db.Reward
+      from $
+        table @Db.Reward
           `InnerJoin` table @Db.StakeAddress
-        `on` ( \(rwd :& saddr) ->
-                rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId
-             )
+            `on` ( \(rwd :& saddr) ->
+                     rwd ^. Db.RewardAddrId ==. saddr ^. Db.StakeAddressId
+                 )
     where_ (rwd ^. Db.RewardSpendableEpoch ==. val epochNo)
     where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdDepositRefund)
     where_ (not_ $ rwd ^. Db.RewardType ==. val Db.RwdTreasury)

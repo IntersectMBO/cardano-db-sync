@@ -21,13 +21,6 @@
 # - flags:
 #   - {name: -w, within: []} # -w is allowed nowhere
 #
-# - modules:
-#   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
-#   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
-#
-# - functions:
-#   - {name: unsafePerformIO, within: []} # unsafePerformIO can only appear in no modules
-
 
 - modules:
   # If Data.List is imported qualified, it must be as 'List'
@@ -35,18 +28,23 @@
   - {name: [Data.Map.Strict], as: Map}
   - {name: [Data.Set], as: Set}
   - {name: [Data.Text], as: Text}
-  - {name: [Data.ByteString.Char8], as: BS}
-  - {name: [Data.ByteString.Lazy.Char8], as: LBS}
   - {name: [Data.ByteString.Short], as: SBS}
 
-# Banned functions
 - functions:
   - {name: coerce, within: []}
+  - {name: unsafePerformIO, within: []}
 
 # Add custom hints for this project
 #
 # Will suggest replacing "wibbleMany [myvar]" with "wibbleOne myvar"
 # - error: {lhs: "wibbleMany [x]", rhs: wibbleOne x}
+
+# The hints are named by the string they display in warning messages.
+# For example, if you see a warning starting like
+#
+# Main.hs:116:51: Warning: Redundant ==
+#
+# You can refer to that hint with `{name: Redundant ==}` (see below).
 
 # The monad of no return will be here one day
 - error: {lhs: "return x", rhs: pure x}
@@ -62,11 +60,18 @@
 #
 # Generalise map to fmap, ++ to <>
 # - group: {name: generalise, enabled: true}
+#
+# Warn on use of partial functions
+# - group: {name: partial, enabled: true}
 
 
 # Ignore some builtin hints
 # - ignore: {name: Use let}
 # - ignore: {name: Use const, within: SpecialModule} # Only within certain modules
+
+# Fuse on/on conflicts with Esqueleto's `on`
+- ignore: { name: "Fuse on/on" }
+
 
 
 # Define some custom infix operators

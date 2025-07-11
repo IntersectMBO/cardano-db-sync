@@ -78,7 +78,7 @@ instance ToParamSchema PoolId
 instance ToSchema PoolId
 
 instance FromHttpApiData PoolId where
-  parseUrlPiece poolId = parsePoolId poolId
+  parseUrlPiece = parsePoolId
 
 -- Currently deserializing from safe types, unwrapping and wrapping it up again.
 -- The underlying DB representation is HEX.
@@ -277,7 +277,7 @@ instance FromJSON TickerName where
     eitherToMonadFail $ validateTickerName name
 
 instance FromHttpApiData TickerName where
-  parseUrlPiece tickerName = validateTickerName tickerName
+  parseUrlPiece = validateTickerName
 
 eitherToMonadFail :: MonadFail m => Either Text a -> m a
 eitherToMonadFail (Left err) = fail $ toS err

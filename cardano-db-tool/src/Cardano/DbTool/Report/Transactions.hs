@@ -117,36 +117,36 @@ queryInputs txOutTableType saId = do
     -- get the StakeAddressId from the Core TxOut table
     TxOutCore -> select $ do
       (tx :& txOut :& blk) <-
-        from
-          $ table @Tx
+        from $
+          table @Tx
             `innerJoin` table @C.TxOut
-          `on` (\(tx :& txOut) -> txOut ^. C.TxOutTxId ==. tx ^. TxId)
+              `on` (\(tx :& txOut) -> txOut ^. C.TxOutTxId ==. tx ^. TxId)
             `innerJoin` table @Block
-          `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+              `on` (\(tx :& _txOut :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
       where_ (txOut ^. C.TxOutStakeAddressId ==. just (val saId))
       pure (tx ^. TxHash, blk ^. BlockTime, txOut ^. C.TxOutValue)
     -- get the StakeAddressId from the Variant TxOut table
     TxOutVariantAddress -> select $ do
       (tx :& txOut :& addr :& blk) <-
-        from
-          $ table @Tx
+        from $
+          table @Tx
             `innerJoin` table @V.TxOut
-          `on` (\(tx :& txOut) -> txOut ^. V.TxOutTxId ==. tx ^. TxId)
+              `on` (\(tx :& txOut) -> txOut ^. V.TxOutTxId ==. tx ^. TxId)
             `innerJoin` table @V.Address
-          `on` (\(_tx :& txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
+              `on` (\(_tx :& txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
             `innerJoin` table @Block
-          `on` (\(tx :& _txOut :& _addr :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+              `on` (\(tx :& _txOut :& _addr :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
       where_ (addr ^. V.AddressStakeAddressId ==. just (val saId))
       pure (tx ^. TxHash, blk ^. BlockTime, txOut ^. V.TxOutValue)
   -- Reward withdrawals.
   res2 <- select $ do
     (tx :& blk :& wdrl) <-
-      from
-        $ table @Tx
+      from $
+        table @Tx
           `innerJoin` table @Block
-        `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
+            `on` (\(tx :& blk) -> tx ^. TxBlockId ==. blk ^. BlockId)
           `innerJoin` table @Withdrawal
-        `on` (\(tx :& _blk :& wdrl) -> wdrl ^. WithdrawalTxId ==. tx ^. TxId)
+            `on` (\(tx :& _blk :& wdrl) -> wdrl ^. WithdrawalTxId ==. tx ^. TxId)
     where_ (wdrl ^. WithdrawalAddrId ==. val saId)
     pure (tx ^. TxHash, blk ^. BlockTime, wdrl ^. WithdrawalAmount)
   pure $ groupByTxHash (map (convertTx Incoming) res1 ++ map (convertTx Outgoing) res2)
@@ -182,33 +182,33 @@ queryOutputs txOutTableType saId = do
   res <- case txOutTableType of
     TxOutCore -> select $ do
       (txOut :& _txInTx :& _txIn :& txOutTx :& blk) <-
-        from
-          $ table @C.TxOut
+        from $
+          table @C.TxOut
             `innerJoin` table @Tx
-          `on` (\(txOut :& txInTx) -> txOut ^. C.TxOutTxId ==. txInTx ^. TxId)
+              `on` (\(txOut :& txInTx) -> txOut ^. C.TxOutTxId ==. txInTx ^. TxId)
             `innerJoin` table @TxIn
-          `on` (\(txOut :& txInTx :& txIn) -> txIn ^. TxInTxOutId ==. txInTx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. C.TxOutIndex)
+              `on` (\(txOut :& txInTx :& txIn) -> txIn ^. TxInTxOutId ==. txInTx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. C.TxOutIndex)
             `innerJoin` table @Tx
-          `on` (\(_txOut :& _txInTx :& txIn :& txOutTx) -> txOutTx ^. TxId ==. txIn ^. TxInTxInId)
+              `on` (\(_txOut :& _txInTx :& txIn :& txOutTx) -> txOutTx ^. TxId ==. txIn ^. TxInTxInId)
             `innerJoin` table @Block
-          `on` (\(_txOut :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockId ==. blk ^. BlockId)
+              `on` (\(_txOut :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockId ==. blk ^. BlockId)
 
       where_ (txOut ^. C.TxOutStakeAddressId ==. just (val saId))
       pure (txOutTx ^. TxHash, blk ^. BlockTime, txOut ^. C.TxOutValue)
     TxOutVariantAddress -> select $ do
       (txOut :& addr :& _txInTx :& _txIn :& txOutTx :& blk) <-
-        from
-          $ table @V.TxOut
+        from $
+          table @V.TxOut
             `innerJoin` table @V.Address
-          `on` (\(txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
+              `on` (\(txOut :& addr) -> txOut ^. V.TxOutAddressId ==. addr ^. V.AddressId)
             `innerJoin` table @Tx
-          `on` (\(txOut :& _addr :& txInTx) -> txOut ^. V.TxOutTxId ==. txInTx ^. TxId)
+              `on` (\(txOut :& _addr :& txInTx) -> txOut ^. V.TxOutTxId ==. txInTx ^. TxId)
             `innerJoin` table @TxIn
-          `on` (\(txOut :& _addr :& txInTx :& txIn) -> txIn ^. TxInTxOutId ==. txInTx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. V.TxOutIndex)
+              `on` (\(txOut :& _addr :& txInTx :& txIn) -> txIn ^. TxInTxOutId ==. txInTx ^. TxId &&. txIn ^. TxInTxOutIndex ==. txOut ^. V.TxOutIndex)
             `innerJoin` table @Tx
-          `on` (\(_txOut :& _addr :& _txInTx :& txIn :& txOutTx) -> txOutTx ^. TxId ==. txIn ^. TxInTxInId)
+              `on` (\(_txOut :& _addr :& _txInTx :& txIn :& txOutTx) -> txOutTx ^. TxId ==. txIn ^. TxInTxInId)
             `innerJoin` table @Block
-          `on` (\(_txOut :& _addr :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockId ==. blk ^. BlockId)
+              `on` (\(_txOut :& _addr :& _txInTx :& _txIn :& txOutTx :& blk) -> txOutTx ^. TxBlockId ==. blk ^. BlockId)
 
       where_ (addr ^. V.AddressStakeAddressId ==. just (val saId))
       pure (txOutTx ^. TxHash, blk ^. BlockTime, txOut ^. V.TxOutValue)

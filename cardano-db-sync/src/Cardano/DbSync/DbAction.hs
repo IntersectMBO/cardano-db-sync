@@ -56,7 +56,7 @@ waitRestartState tc = do
 waitDoneInit :: ThreadChannels -> IO ()
 waitDoneInit tc = atomically $ do
   isDone <- readTVar (tcDoneInit tc)
-  if isDone then pure () else retry
+  unless isDone retry
 
 runAndSetDone :: ThreadChannels -> IO Bool -> IO Bool
 runAndSetDone tc action = do

@@ -693,7 +693,7 @@ listKnownSnapshots :: HasLedgerEnv -> IO [SnapshotPoint]
 listKnownSnapshots env = do
   inMem <- fmap InMemory <$> listMemorySnapshots env
   onDisk <- fmap OnDisk <$> listLedgerStateFilesOrdered (leDir env)
-  pure $ reverse $ List.sortOn getSlotNoSnapshot $ inMem <> onDisk
+  pure $ List.sortOn (Down . getSlotNoSnapshot) (inMem <> onDisk)
 
 listMemorySnapshots :: HasLedgerEnv -> IO [CardanoPoint]
 listMemorySnapshots env = do
@@ -829,19 +829,19 @@ getPrices st = case ledgerState $ clsState st of
     Strict.Just
       ( Shelley.nesEs (Consensus.shelleyLedgerState als)
           ^. Shelley.curPParamsEpochStateL
-          . Alonzo.ppPricesL
+            . Alonzo.ppPricesL
       )
   LedgerStateBabbage bls ->
     Strict.Just
       ( Shelley.nesEs (Consensus.shelleyLedgerState bls)
           ^. Shelley.curPParamsEpochStateL
-          . Alonzo.ppPricesL
+            . Alonzo.ppPricesL
       )
   LedgerStateConway bls ->
     Strict.Just
       ( Shelley.nesEs (Consensus.shelleyLedgerState bls)
           ^. Shelley.curPParamsEpochStateL
-          . Alonzo.ppPricesL
+            . Alonzo.ppPricesL
       )
   _ -> Strict.Nothing
 

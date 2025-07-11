@@ -114,10 +114,10 @@ queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> Int -> ReaderT SqlBackend 
 queryOffChainVoteWorkQueue _now maxCount = do
   res <- select $ do
     (va :& ocpfe) <-
-      from
-        $ table @VotingAnchor
+      from $
+        table @VotingAnchor
           `innerJoin` table @OffChainVoteFetchError
-        `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
+            `on` (\(va :& ocpfe) -> ocpfe ^. OffChainVoteFetchErrorVotingAnchorId ==. va ^. VotingAnchorId)
     orderBy [asc (ocpfe ^. OffChainVoteFetchErrorId)]
     where_ (just (ocpfe ^. OffChainVoteFetchErrorId) `in_` latestRefs)
     where_ (va ^. VotingAnchorType !=. val ConstitutionAnchor)
@@ -173,10 +173,10 @@ queryNewPoolWorkQueue :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [
 queryNewPoolWorkQueue now maxCount = do
   res <- select $ do
     (ph :& pmr) <-
-      from
-        $ table @PoolHash
+      from $
+        table @PoolHash
           `innerJoin` table @PoolMetadataRef
-        `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
+            `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
     where_ (just (pmr ^. PoolMetadataRefId) `in_` latestRefs)
     where_
       ( notExists $
@@ -224,12 +224,12 @@ queryOffChainPoolWorkQueue :: MonadIO m => UTCTime -> Int -> ReaderT SqlBackend 
 queryOffChainPoolWorkQueue _now maxCount = do
   res <- select $ do
     (ph :& pmr :& pofe) <-
-      from
-        $ table @PoolHash
+      from $
+        table @PoolHash
           `innerJoin` table @PoolMetadataRef
-        `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
+            `on` (\(ph :& pmr) -> ph ^. PoolHashId ==. pmr ^. PoolMetadataRefPoolId)
           `innerJoin` table @OffChainPoolFetchError
-        `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
+            `on` (\(_ph :& pmr :& pofe) -> pofe ^. OffChainPoolFetchErrorPmrId ==. pmr ^. PoolMetadataRefId)
     where_ (just (pofe ^. OffChainPoolFetchErrorId) `in_` latestRefs)
     orderBy [asc (pofe ^. OffChainPoolFetchErrorId)]
     limit $ fromIntegral maxCount
