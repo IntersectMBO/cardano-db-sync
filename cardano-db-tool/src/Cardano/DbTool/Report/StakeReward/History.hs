@@ -40,8 +40,6 @@ import Database.Esqueleto.Experimental (
  )
 import Text.Printf (printf)
 
-{- HLINT ignore "Fuse on/on" -}
-
 reportStakeRewardHistory :: Text -> IO ()
 reportStakeRewardHistory saddr = do
   xs <- runDbNoLoggingEnv (queryHistoryStakeRewards saddr)

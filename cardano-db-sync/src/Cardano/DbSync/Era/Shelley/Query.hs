@@ -21,8 +21,6 @@ import Database.Esqueleto.Experimental (
   SqlBackend,
  )
 
-{- HLINT ignore "Fuse on/on" -}
-
 resolveStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
 resolveStakeAddress addr = queryStakeAddress addr renderByteArray
 

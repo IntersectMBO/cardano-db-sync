@@ -51,7 +51,6 @@ import Database.Esqueleto.Experimental (
   type (:&) ((:&)),
  )
 
-{- HLINT ignore "Fuse on/on" -}
 {- HLINT ignore "Redundant ^." -}
 
 -- Some Queries can accept TxOutVariantType as a parameter, whilst others that return a TxOut related value can't

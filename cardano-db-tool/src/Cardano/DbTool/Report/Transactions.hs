@@ -51,7 +51,6 @@ import Database.Esqueleto.Experimental (
  )
 
 {- HLINT ignore "Redundant ^." -}
-{- HLINT ignore "Fuse on/on" -}
 
 reportTransactions :: TxOutVariantType -> [Text] -> IO ()
 reportTransactions txOutTableType addrs =

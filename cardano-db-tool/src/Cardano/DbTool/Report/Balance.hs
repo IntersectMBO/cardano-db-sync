@@ -38,7 +38,6 @@ import Database.Esqueleto.Experimental (
  )
 
 {- HLINT ignore "Redundant ^." -}
-{- HLINT ignore "Fuse on/on" -}
 
 reportBalance :: TxOutVariantType -> [Text] -> IO ()
 reportBalance txOutTableType saddr = do

@@ -43,8 +43,6 @@ import Database.Esqueleto.Experimental (
  )
 import qualified System.Random as Random
 
-{- HLINT ignore "Fuse on/on" -}
-
 validateTxAccounting :: TxOutVariantType -> IO ()
 validateTxAccounting getTxOutVariantType = do
   txIdRange <- runDbNoLoggingEnv queryTestTxIds
