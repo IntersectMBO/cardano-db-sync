@@ -181,7 +181,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
-    txOutTableType = getTxOutTableType syncEnv
+    txOutTableType = getTxOutVariantType syncEnv
     iopts = getInsertOptions syncEnv
 
     updateEpoch details isNewEpochEvent =

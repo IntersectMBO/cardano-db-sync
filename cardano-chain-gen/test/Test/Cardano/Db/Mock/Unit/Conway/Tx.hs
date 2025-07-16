@@ -124,7 +124,7 @@ consumeSameBlock =
 
 addTxMetadata :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadata = do
-  withCustomConfigAndDropDB args (Just configMetadataEnable) cfgDir testLabel $
+  withCustomConfigDropDB args (Just configMetadataEnable) cfgDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
       -- Add blocks with transactions
@@ -145,7 +145,7 @@ addTxMetadata = do
 
 addTxMetadataWhitelist :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadataWhitelist = do
-  withCustomConfigAndDropDB args (Just configMetadataKeys) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB args (Just configMetadataKeys) cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add blocks with transactions
@@ -169,7 +169,7 @@ addTxMetadataWhitelist = do
 
 addTxMetadataDisabled :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadataDisabled = do
-  withCustomConfigAndDropDB args (Just configMetadataDisable) cfgDir testLabel $
+  withCustomConfigDropDB args (Just configMetadataDisable) cfgDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
       -- Add blocks with transactions

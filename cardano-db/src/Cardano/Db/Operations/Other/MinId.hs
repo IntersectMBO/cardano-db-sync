@@ -11,15 +11,15 @@
 module Cardano.Db.Operations.Other.MinId where
 
 import Cardano.Db.Operations.Query (queryMinRefId)
-import Cardano.Db.Operations.Types (MaTxOutFields (..), TxOutFields (..), TxOutTableType (..))
+import Cardano.Db.Operations.Types (MaTxOutFields (..), TxOutFields (..), TxOutVariantType (..))
 import Cardano.Db.Schema.BaseSchema
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Prelude
 import qualified Data.Text as Text
 import Database.Persist.Sql (PersistEntity, PersistField, SqlBackend, fromSqlKey, toSqlKey)
 
-data MinIds (a :: TxOutTableType) = MinIds
+data MinIds (a :: TxOutVariantType) = MinIds
   { minTxInId :: Maybe TxInId
   , minTxOutId :: Maybe (TxOutIdFor a)
   , minMaTxOutId :: Maybe (MaTxOutIdFor a)
@@ -37,7 +37,7 @@ instance (TxOutFields a, MaTxOutFields a, Ord (TxOutIdFor a), Ord (MaTxOutIdFor 
       }
 
 data MinIdsWrapper
-  = CMinIdsWrapper (MinIds 'TxOutCore)
+  = CMinIdsWrapper (MinIds 'TxOutVariantCore)
   | VMinIdsWrapper (MinIds 'TxOutVariantAddress)
 
 instance Monoid MinIdsWrapper where
@@ -52,13 +52,13 @@ minIdsToText :: MinIdsWrapper -> Text
 minIdsToText (CMinIdsWrapper minIds) = minIdsCoreToText minIds
 minIdsToText (VMinIdsWrapper minIds) = minIdsVariantToText minIds
 
-textToMinIds :: TxOutTableType -> Text -> Maybe MinIdsWrapper
+textToMinIds :: TxOutVariantType -> Text -> Maybe MinIdsWrapper
 textToMinIds txOutTableType txt =
   case txOutTableType of
-    TxOutCore -> CMinIdsWrapper <$> textToMinIdsCore txt
+    TxOutVariantCore -> CMinIdsWrapper <$> textToMinIdsCore txt
     TxOutVariantAddress -> VMinIdsWrapper <$> textToMinIdsVariant txt
 
-minIdsCoreToText :: MinIds 'TxOutCore -> Text
+minIdsCoreToText :: MinIds 'TxOutVariantCore -> Text
 minIdsCoreToText minIds =
   Text.intercalate
     ":"
@@ -76,7 +76,7 @@ minIdsVariantToText minIds =
     , maybe "" (Text.pack . show . fromSqlKey) $ minMaTxOutId minIds
     ]
 
-textToMinIdsCore :: Text -> Maybe (MinIds 'TxOutCore)
+textToMinIdsCore :: Text -> Maybe (MinIds 'TxOutVariantCore)
 textToMinIdsCore txt =
   case Text.split (== ':') txt of
     [tminTxInId, tminTxOutId, tminMaTxOutId] ->
@@ -117,16 +117,16 @@ completeMinId mTxId mIdW = case mIdW of
   CMinIdsWrapper minIds -> CMinIdsWrapper <$> completeMinIdCore mTxId minIds
   VMinIdsWrapper minIds -> VMinIdsWrapper <$> completeMinIdVariant mTxId minIds
 
-completeMinIdCore :: MonadIO m => Maybe TxId -> MinIds 'TxOutCore -> ReaderT SqlBackend m (MinIds 'TxOutCore)
+completeMinIdCore :: MonadIO m => Maybe TxId -> MinIds 'TxOutVariantCore -> ReaderT SqlBackend m (MinIds 'TxOutVariantCore)
 completeMinIdCore mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty
     Just txId -> do
       mTxInId <- whenNothingQueryMinRefId (minTxInId minIds) TxInTxInId txId
-      mTxOutId <- whenNothingQueryMinRefId (minTxOutId minIds) C.TxOutTxId txId
+      mTxOutId <- whenNothingQueryMinRefId (minTxOutId minIds) VC.TxOutTxId txId
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
-        Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) C.MaTxOutTxOutId txOutId
+        Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) VC.MaTxOutTxOutId txOutId
       pure $
         MinIds
           { minTxInId = mTxInId
@@ -140,10 +140,10 @@ completeMinIdVariant mTxId minIds = do
     Nothing -> pure mempty
     Just txId -> do
       mTxInId <- whenNothingQueryMinRefId (minTxInId minIds) TxInTxInId txId
-      mTxOutId <- whenNothingQueryMinRefId (minTxOutId minIds) V.TxOutTxId txId
+      mTxOutId <- whenNothingQueryMinRefId (minTxOutId minIds) VA.TxOutTxId txId
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
-        Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) V.MaTxOutTxOutId txOutId
+        Just txOutId -> whenNothingQueryMinRefId (minMaTxOutId minIds) VA.MaTxOutTxOutId txOutId
       pure $
         MinIds
           { minTxInId = mTxInId

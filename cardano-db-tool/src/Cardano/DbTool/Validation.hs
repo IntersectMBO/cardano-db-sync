@@ -4,7 +4,7 @@ module Cardano.DbTool.Validation (
   runLedgerValidation,
 ) where
 
-import Cardano.Db (TxOutTableType)
+import Cardano.Db (TxOutVariantType)
 import Cardano.DbTool.Validate.AdaPots (validateSumAdaPots)
 import Cardano.DbTool.Validate.BlockProperties (validateBlockProperties)
 import Cardano.DbTool.Validate.BlockTxs (validateEpochBlockTxs)
@@ -15,12 +15,12 @@ import Cardano.DbTool.Validate.TotalSupply (validateTotalSupplyDecreasing)
 import Cardano.DbTool.Validate.TxAccounting (validateTxAccounting)
 import Cardano.DbTool.Validate.Withdrawal (validateWithdrawals)
 
-runDbValidation :: TxOutTableType -> IO ()
+runDbValidation :: TxOutVariantType -> IO ()
 runDbValidation txOutTableType = do
   fastValidations
   slowValidations txOutTableType
 
-runLedgerValidation :: LedgerValidationParams -> TxOutTableType -> IO ()
+runLedgerValidation :: LedgerValidationParams -> TxOutVariantType -> IO ()
 runLedgerValidation =
   validateLedger
 
@@ -32,7 +32,7 @@ fastValidations = do
   validateBlockProperties
   validateSumAdaPots
 
-slowValidations :: TxOutTableType -> IO ()
+slowValidations :: TxOutVariantType -> IO ()
 slowValidations txOutTableType = do
   validateTxAccounting txOutTableType
   validateWithdrawals

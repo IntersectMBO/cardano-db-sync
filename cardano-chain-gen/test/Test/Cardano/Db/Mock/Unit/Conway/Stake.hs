@@ -42,7 +42,7 @@ import Prelude ()
 
 registrationTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationTx =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some registration txs
@@ -231,7 +231,7 @@ stakeAddressPtrUseBefore =
 
 stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge an entire epoch

@@ -4,7 +4,7 @@ module Cardano.DbTool.Report (
   runReport,
 ) where
 
-import Cardano.Db (TxOutTableType)
+import Cardano.Db (TxOutVariantType)
 import Cardano.DbTool.Report.Balance (reportBalance)
 import Cardano.DbTool.Report.StakeReward (
   reportEpochStakeRewards,
@@ -23,7 +23,7 @@ data Report
   | ReportLatestRewards [Text]
   | ReportTransactions [Text]
 
-runReport :: Report -> TxOutTableType -> IO ()
+runReport :: Report -> TxOutVariantType -> IO ()
 runReport report txOutTableType = do
   assertFullySynced
   case report of

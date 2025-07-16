@@ -30,8 +30,8 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
-                        Cardano.Db.Schema.Core.TxOut
-                        Cardano.Db.Schema.Variant.TxOut
+                        Cardano.Db.Schema.Variants.TxOutCore
+                        Cardano.Db.Schema.Variants.TxOutAddress
 
   other-modules:        Cardano.Db.Error
                         Cardano.Db.Git.RevFromGit

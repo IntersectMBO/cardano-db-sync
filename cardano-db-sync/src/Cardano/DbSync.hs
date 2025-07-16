@@ -273,7 +273,7 @@ extractSyncOptions snp aop snc =
         , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance
         , ioRemoveJsonbFromSchema = isRemoveJsonbFromSchemaEnabled (sioRemoveJsonbFromSchema (dncInsertOptions snc))
-        , ioTxOutTableType = ioTxOutTableType'
+        , ioTxOutVariantType = ioTxOutVariantType'
         }
 
     useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable
@@ -287,7 +287,7 @@ extractSyncOptions snp aop snc =
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions $ snc
     isTxOutEnabled' = isTxOutEnabled . sioTxOut . dncInsertOptions $ snc
     forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
-    ioTxOutTableType' = txOutConfigToTableType $ sioTxOut $ dncInsertOptions snc
+    ioTxOutVariantType' = txOutConfigToTableType $ sioTxOut $ dncInsertOptions snc
 
 startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
@@ -296,10 +296,10 @@ startupReport trce aop params = do
   logInfo trce $ mconcat ["Enviroment variable DbSyncAbortOnPanic: ", textShow aop]
   logInfo trce $ textShow params
 
-txOutConfigToTableType :: TxOutConfig -> DB.TxOutTableType
+txOutConfigToTableType :: TxOutConfig -> DB.TxOutVariantType
 txOutConfigToTableType config = case config of
-  TxOutEnable (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
-  TxOutDisable -> DB.TxOutCore
-  TxOutConsumed _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
-  TxOutConsumedPrune _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
-  TxOutConsumedBootstrap _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutCore
+  TxOutEnable (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+  TxOutDisable -> DB.TxOutVariantCore
+  TxOutConsumed _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+  TxOutConsumedPrune _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+  TxOutConsumedBootstrap _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore

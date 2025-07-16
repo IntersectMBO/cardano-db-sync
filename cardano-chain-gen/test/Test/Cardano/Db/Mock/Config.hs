@@ -50,15 +50,15 @@ module Test.Cardano.Db.Mock.Config (
   startDBSync,
   withDBSyncEnv,
   withFullConfig,
-  withFullConfigAndDropDB,
-  withFullConfigAndLogs,
-  withCustomConfigAndLogsAndDropDB,
+  withFullConfigDropDB,
+  withFullConfigLog,
+  withCustomConfigDropDBLog,
   withCustomConfig,
-  withCustomConfigAndDropDB,
-  withCustomConfigAndLogs,
+  withCustomConfigDropDB,
+  withCustomConfigLog,
   withFullConfig',
   replaceConfigFile,
-  txOutTableTypeFromConfig,
+  txOutVariantTypeFromConfig,
 ) where
 
 import Cardano.Api (NetworkMagic (..))
@@ -401,7 +401,7 @@ withFullConfig =
     Nothing
 
 -- this function needs to be used where the schema needs to be rebuilt
-withFullConfigAndDropDB ::
+withFullConfigDropDB ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -410,7 +410,7 @@ withFullConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndDropDB =
+withFullConfigDropDB =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -421,7 +421,7 @@ withFullConfigAndDropDB =
     initCommandLineArgs
     Nothing
 
-withFullConfigAndLogs ::
+withFullConfigLog ::
   -- | config filepath
   FilePath ->
   -- | test label
@@ -430,7 +430,7 @@ withFullConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfigAndLogs =
+withFullConfigLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -462,7 +462,7 @@ withCustomConfig =
         }
     )
 
-withCustomConfigAndDropDB ::
+withCustomConfigDropDB ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -474,7 +474,7 @@ withCustomConfigAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndDropDB =
+withCustomConfigDropDB =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -484,7 +484,7 @@ withCustomConfigAndDropDB =
     )
 
 -- This is a usefull function to be able to see logs from DBSync when writing/debuging tests
-withCustomConfigAndLogs ::
+withCustomConfigLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -496,7 +496,7 @@ withCustomConfigAndLogs ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogs =
+withCustomConfigLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -505,7 +505,7 @@ withCustomConfigAndLogs =
         }
     )
 
-withCustomConfigAndLogsAndDropDB ::
+withCustomConfigDropDBLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
@@ -517,7 +517,7 @@ withCustomConfigAndLogsAndDropDB ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withCustomConfigAndLogsAndDropDB =
+withCustomConfigDropDBLog =
   withFullConfig'
     ( WithConfigArgs
         { hasFingerprint = True
@@ -604,14 +604,14 @@ replaceConfigFile newFilename dbSync@DBSyncEnv {..} = do
     newParams =
       dbSyncParams {enpConfigFile = ConfigFile $ configDir </> newFilename}
 
-txOutTableTypeFromConfig :: DBSyncEnv -> DB.TxOutTableType
-txOutTableTypeFromConfig dbSyncEnv =
+txOutVariantTypeFromConfig :: DBSyncEnv -> DB.TxOutVariantType
+txOutVariantTypeFromConfig dbSyncEnv =
   case sioTxOut $ dncInsertOptions $ dbSyncConfig dbSyncEnv of
-    TxOutDisable -> DB.TxOutCore
+    TxOutDisable -> DB.TxOutVariantCore
     TxOutEnable useTxOutAddress -> getTxOutTT useTxOutAddress
     TxOutConsumed _ useTxOutAddress -> getTxOutTT useTxOutAddress
     TxOutConsumedPrune _ useTxOutAddress -> getTxOutTT useTxOutAddress
     TxOutConsumedBootstrap _ useTxOutAddress -> getTxOutTT useTxOutAddress
   where
-    getTxOutTT :: UseTxOutAddress -> DB.TxOutTableType
-    getTxOutTT value = if unUseTxOutAddress value then DB.TxOutVariantAddress else DB.TxOutCore
+    getTxOutTT :: UseTxOutAddress -> DB.TxOutVariantType
+    getTxOutTT value = if unUseTxOutAddress value then DB.TxOutVariantAddress else DB.TxOutVariantCore

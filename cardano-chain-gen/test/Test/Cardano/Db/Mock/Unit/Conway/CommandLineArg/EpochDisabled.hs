@@ -18,7 +18,7 @@ import Prelude ()
 
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochDisabledArg =
-  withCustomConfigAndDropDB cliArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB cliArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks

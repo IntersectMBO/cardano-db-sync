@@ -37,8 +37,8 @@ module Test.Cardano.Db.Mock.Unit.Conway.Plutus (
 
 import Cardano.Crypto.Hash.Class (hashToBytes)
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Era.Shelley.Generic.Util (renderAddress)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Hashes (extractHash)
@@ -63,10 +63,10 @@ import Test.Cardano.Db.Mock.Config (
   conwayConfigDir,
   initCommandLineArgs,
   startDBSync,
-  txOutTableTypeFromConfig,
+  txOutVariantTypeFromConfig,
   withCustomConfig,
   withFullConfig,
-  withFullConfigAndDropDB,
+  withFullConfigDropDB,
  )
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
@@ -78,9 +78,9 @@ import Prelude (head, tail, (!!))
 ------------------------------------------------------------------------------
 simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    let txOutTableType = txOutTableTypeFromConfig dbSync
+    let txOutTableType = txOutVariantTypeFromConfig dbSync
 
     -- Forge a block with stake credentials
     void $ Api.registerAllStakeCreds interpreter mockServer
@@ -104,18 +104,18 @@ simpleScript =
     getOutFields txOut =
       case txOut of
         DB.CTxOutW txOut' ->
-          ( C.txOutAddress txOut'
-          , C.txOutAddressHasScript txOut'
-          , C.txOutValue txOut'
-          , C.txOutDataHash txOut'
+          ( VC.txOutAddress txOut'
+          , VC.txOutAddressHasScript txOut'
+          , VC.txOutValue txOut'
+          , VC.txOutDataHash txOut'
           )
         DB.VTxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
-              ( V.addressAddress address
-              , V.addressHasScript address
-              , V.txOutValue txOut'
-              , V.txOutDataHash txOut'
+              ( VA.addressAddress address
+              , VA.addressHasScript address
+              , VA.txOutValue txOut'
+              , VA.txOutDataHash txOut'
               )
             Nothing -> error "conwaySimpleScript: expected an address"
 
@@ -501,7 +501,7 @@ multipleScriptsFailedSameBlock =
 
 registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
 registrationScriptTx =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a transaction with a registration cert
@@ -670,7 +670,7 @@ deregistrationsScriptTx'' =
 
 mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
 mintMultiAsset =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a multi-asset script

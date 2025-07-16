@@ -17,8 +17,8 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 import Cardano.BM.Trace (Trace, logWarning)
 import Cardano.Db (DbLovelace (..), MinIds (..), minIdsCoreToText, minIdsVariantToText)
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (queryTxIdWithCache)
@@ -108,12 +108,12 @@ insertBlockGroupedData syncEnv grouped = do
   pure $ makeMinId txInIds txOutIds maTxOutIds
   where
     tracer = getTrace syncEnv
-    txOutTableType = getTxOutTableType syncEnv
+    txOutTableType = getTxOutVariantType syncEnv
 
     makeMinId :: [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
     makeMinId txInIds txOutIds maTxOutIds =
       case txOutTableType of
-        DB.TxOutCore -> do
+        DB.TxOutVariantCore -> do
           DB.CMinIdsWrapper $
             DB.MinIds
               { minTxInId = listToMaybe txInIds
@@ -128,7 +128,7 @@ insertBlockGroupedData syncEnv grouped = do
               , minMaTxOutId = listToMaybe $ DB.convertMaTxOutIdVariant maTxOutIds
               }
 
-mkmaTxOuts :: DB.TxOutTableType -> (DB.TxOutIdW, [MissingMaTxOut]) -> [DB.MaTxOutW]
+mkmaTxOuts :: DB.TxOutVariantType -> (DB.TxOutIdW, [MissingMaTxOut]) -> [DB.MaTxOutW]
 mkmaTxOuts _txOutTableType (txOutId, mmtos) = mkmaTxOut <$> mmtos
   where
     mkmaTxOut :: MissingMaTxOut -> DB.MaTxOutW
@@ -136,17 +136,17 @@ mkmaTxOuts _txOutTableType (txOutId, mmtos) = mkmaTxOut <$> mmtos
       case txOutId of
         DB.CTxOutIdW txOutId' ->
           DB.CMaTxOutW $
-            C.MaTxOut
-              { C.maTxOutIdent = mmtoIdent missingMaTx
-              , C.maTxOutQuantity = mmtoQuantity missingMaTx
-              , C.maTxOutTxOutId = txOutId'
+            VC.MaTxOut
+              { VC.maTxOutIdent = mmtoIdent missingMaTx
+              , VC.maTxOutQuantity = mmtoQuantity missingMaTx
+              , VC.maTxOutTxOutId = txOutId'
               }
         DB.VTxOutIdW txOutId' ->
           DB.VMaTxOutW
-            V.MaTxOut
-              { V.maTxOutIdent = mmtoIdent missingMaTx
-              , V.maTxOutQuantity = mmtoQuantity missingMaTx
-              , V.maTxOutTxOutId = txOutId'
+            VA.MaTxOut
+              { VA.maTxOutIdent = mmtoIdent missingMaTx
+              , VA.maTxOutQuantity = mmtoQuantity missingMaTx
+              , VA.maTxOutTxOutId = txOutId'
               }
 
 prepareUpdates ::
@@ -210,8 +210,8 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn =
 
     convertnotFound :: DB.TxOutW -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertnotFound txOutWrapper = case txOutWrapper of
-      DB.CTxOutW cTxOut -> (txIn, C.txOutTxId cTxOut, Left txIn, Nothing)
-      DB.VTxOutW vTxOut _ -> (txIn, V.txOutTxId vTxOut, Left txIn, Nothing)
+      DB.CTxOutW cTxOut -> (txIn, VC.txOutTxId cTxOut, Left txIn, Nothing)
+      DB.VTxOutW vTxOut _ -> (txIn, VA.txOutTxId vTxOut, Left txIn, Nothing)
 
     convertFoundTxOutId :: (DB.TxId, DB.TxOutIdW) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertFoundTxOutId (txId, txOutId) = (txIn, txId, Right txOutId, Nothing)
@@ -219,8 +219,8 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn =
     -- convertFoundValue :: (DB.TxId, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertFoundValue :: DB.TxOutW -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertFoundValue txOutWrapper = case txOutWrapper of
-      DB.CTxOutW cTxOut -> (txIn, C.txOutTxId cTxOut, Left txIn, Just $ C.txOutValue cTxOut)
-      DB.VTxOutW vTxOut _ -> (txIn, V.txOutTxId vTxOut, Left txIn, Just $ V.txOutValue vTxOut)
+      DB.CTxOutW cTxOut -> (txIn, VC.txOutTxId cTxOut, Left txIn, Just $ VC.txOutValue cTxOut)
+      DB.VTxOutW vTxOut _ -> (txIn, VA.txOutTxId vTxOut, Left txIn, Just $ VA.txOutValue vTxOut)
     -- (txIn, txId, Left txIn, Just lovelace)
 
     convertFoundAll :: (DB.TxId, DB.TxOutIdW, DbLovelace) -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
@@ -256,10 +256,10 @@ resolveScriptHash syncEnv groupedOutputs txIn =
         case resolveInMemory txIn groupedOutputs of
           Nothing -> pure $ Left err
           Just eutxo -> case etoTxOut eutxo of
-            DB.CTxOutW cTxOut -> pure $ Right $ C.txOutPaymentCred cTxOut
+            DB.CTxOutW cTxOut -> pure $ Right $ VC.txOutPaymentCred cTxOut
             DB.VTxOutW _ vAddress -> case vAddress of
               Nothing -> pure $ Left $ DB.DBTxOutVariant "resolveScriptHash: VTxOutW with Nothing address"
-              Just vAddr -> pure $ Right $ V.addressPaymentCred vAddr
+              Just vAddr -> pure $ Right $ VA.addressPaymentCred vAddr
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
 resolveInMemory txIn =
@@ -272,5 +272,5 @@ matches txIn eutxo =
   where
     getTxOutIndex :: DB.TxOutW -> Word64
     getTxOutIndex txOutWrapper = case txOutWrapper of
-      DB.CTxOutW cTxOut -> C.txOutIndex cTxOut
-      DB.VTxOutW vTxOut _ -> V.txOutIndex vTxOut
+      DB.CTxOutW cTxOut -> VC.txOutIndex cTxOut
+      DB.VTxOutW vTxOut _ -> VA.txOutIndex vTxOut

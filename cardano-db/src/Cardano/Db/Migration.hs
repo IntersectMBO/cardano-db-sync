@@ -29,12 +29,12 @@ import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, ha
 import Cardano.Db.Migration.Haskell
 import Cardano.Db.Migration.Version
 import Cardano.Db.Operations.Query
-import Cardano.Db.Operations.Types (TxOutTableType (..))
+import Cardano.Db.Operations.Types (TxOutVariantType (..))
 import Cardano.Db.PGConfig
 import Cardano.Db.Run
 import Cardano.Db.Schema.BaseSchema
-import Cardano.Db.Schema.Core.TxOut (migrateCoreTxOutCardanoDb)
-import Cardano.Db.Schema.Variant.TxOut (migrateVariantAddressCardanoDb)
+import Cardano.Db.Schema.Variants.TxOutAddress (migrateVariantAddressCardanoDb)
+import Cardano.Db.Schema.Variants.TxOutCore (migrateCoreTxOutCardanoDb)
 import Cardano.Prelude (textShow)
 import Control.Exception (Exception, SomeException, handle)
 import Control.Monad.Extra
@@ -106,7 +106,7 @@ data MigrationToRun = Initial | Full | Indexes
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
-runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutTableType -> IO (Bool, [FilePath])
+runMigrations :: PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutVariantType -> IO (Bool, [FilePath])
 runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
   allScripts <- getMigrationScripts migrationDir
   ranAll <- case (mLogfiledir, allScripts) of
@@ -149,12 +149,12 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutTableType = do
 
     filterIndexesFull (mv, _) = do
       case txOutTableType of
-        TxOutCore -> True
+        TxOutVariantCore -> True
         TxOutVariantAddress -> not $ mvStage mv == 4 && mvVersion mv == 1
     filterInitial (mv, _) = mvStage mv < 4
     filterIndexes (mv, _) = do
       case txOutTableType of
-        TxOutCore -> mvStage mv == 4
+        TxOutVariantCore -> mvStage mv == 4
         TxOutVariantAddress -> mvStage mv == 4 && mvVersion mv > 1
 
 -- Build hash for each file found in a directory.
@@ -222,7 +222,7 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
 
 -- | Create a database migration (using functionality built into Persistent). If no
 -- migration is needed return 'Nothing' otherwise return the migration as 'Text'.
-createMigration :: PGPassSource -> MigrationDir -> TxOutTableType -> IO (Maybe FilePath)
+createMigration :: PGPassSource -> MigrationDir -> TxOutVariantType -> IO (Maybe FilePath)
 createMigration source (MigrationDir migdir) txOutTableType = do
   mt <- runDbNoLogging source create
   case mt of
@@ -239,7 +239,7 @@ createMigration source (MigrationDir migdir) txOutTableType = do
       -- handle what type of migration to generate
       statements <-
         case txOutTableType of
-          TxOutCore -> do
+          TxOutVariantCore -> do
             statementsTxOut <- getMigration migrateCoreTxOutCardanoDb
             pure $ statementsBase <> statementsTxOut
           TxOutVariantAddress -> do

@@ -13,8 +13,8 @@ module Cardano.DbSync.Era.Shelley.Genesis (
 
 import Cardano.BM.Trace (Trace, logError, logInfo)
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (insertAddressUsingCache, tryUpdateCacheTx)
@@ -173,7 +173,7 @@ validateGenesisDistribution ::
 validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   runExceptT $ do
     let tracer = getTrace syncEnv
-        txOutTableType = getTxOutTableType syncEnv
+        txOutTableType = getTxOutVariantType syncEnv
     liftIO $ logInfo tracer "Validating Genesis distribution"
     meta <- liftLookupFail "Shelley.validateGenesisDistribution" DB.queryMeta
 
@@ -249,22 +249,22 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
 
   tryUpdateCacheTx (envCache syncEnv) txInId txId
   _ <- insertStakeAddressRefIfMissing trce useNoCache (txOut ^. Core.addrTxOutL)
-  case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
-    DB.TxOutCore ->
+  case ioTxOutVariantType . soptInsertOptions $ envOptions syncEnv of
+    DB.TxOutVariantCore ->
       void . DB.insertTxOut $
         DB.CTxOutW
-          C.TxOut
-            { C.txOutAddress = Generic.renderAddress addr
-            , C.txOutAddressHasScript = hasScript
-            , C.txOutDataHash = Nothing -- No output datum in Shelley Genesis
-            , C.txOutIndex = 0
-            , C.txOutInlineDatumId = Nothing
-            , C.txOutPaymentCred = Generic.maybePaymentCred addr
-            , C.txOutReferenceScriptId = Nothing
-            , C.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
-            , C.txOutTxId = txId
-            , C.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
-            , C.txOutConsumedByTxId = Nothing
+          VC.TxOut
+            { VC.txOutAddress = Generic.renderAddress addr
+            , VC.txOutAddressHasScript = hasScript
+            , VC.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+            , VC.txOutIndex = 0
+            , VC.txOutInlineDatumId = Nothing
+            , VC.txOutPaymentCred = Generic.maybePaymentCred addr
+            , VC.txOutReferenceScriptId = Nothing
+            , VC.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+            , VC.txOutTxId = txId
+            , VC.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+            , VC.txOutConsumedByTxId = Nothing
             }
     DB.TxOutVariantAddress -> do
       addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
@@ -275,28 +275,28 @@ insertTxOuts syncEnv trce blkId (TxIn txInId _, txOut) = do
     hasScript = maybe False Generic.hasCredScript (Generic.getPaymentCred addr)
     addrRaw = serialiseAddr addr
 
-    makeVTxOut :: V.AddressId -> DB.TxId -> V.TxOut
+    makeVTxOut :: VA.AddressId -> DB.TxId -> VA.TxOut
     makeVTxOut addrDetailId txId =
-      V.TxOut
-        { V.txOutAddressId = addrDetailId
-        , V.txOutConsumedByTxId = Nothing
-        , V.txOutDataHash = Nothing -- No output datum in Shelley Genesis
-        , V.txOutIndex = 0
-        , V.txOutInlineDatumId = Nothing
-        , V.txOutReferenceScriptId = Nothing
-        , V.txOutTxId = txId
-        , V.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
-        , V.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+      VA.TxOut
+        { VA.txOutAddressId = addrDetailId
+        , VA.txOutConsumedByTxId = Nothing
+        , VA.txOutDataHash = Nothing -- No output datum in Shelley Genesis
+        , VA.txOutIndex = 0
+        , VA.txOutInlineDatumId = Nothing
+        , VA.txOutReferenceScriptId = Nothing
+        , VA.txOutTxId = txId
+        , VA.txOutValue = Generic.coinToDbLovelace (txOut ^. Core.valueTxOutL)
+        , VA.txOutStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
         }
 
-    vAddress :: V.Address
+    vAddress :: VA.Address
     vAddress =
-      V.Address
-        { V.addressAddress = Generic.renderAddress addr
-        , V.addressRaw = addrRaw
-        , V.addressHasScript = hasScript
-        , V.addressPaymentCred = Generic.maybePaymentCred addr
-        , V.addressStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
+      VA.Address
+        { VA.addressAddress = Generic.renderAddress addr
+        , VA.addressRaw = addrRaw
+        , VA.addressHasScript = hasScript
+        , VA.addressPaymentCred = Generic.maybePaymentCred addr
+        , VA.addressStakeAddressId = Nothing -- No stake addresses in Shelley Genesis
         }
 
 -- Insert pools and delegations coming from Genesis.

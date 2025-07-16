@@ -34,15 +34,15 @@ main = do
 -- -----------------------------------------------------------------------------
 
 data Command
-  = CmdCreateMigration !MigrationDir !TxOutTableType
-  | CmdReport !Report !TxOutTableType
-  | CmdRollback !SlotNo !TxOutTableType
-  | CmdRunMigrations !MigrationDir !Bool !(Maybe LogFileDir) !TxOutTableType
-  | CmdTxOutMigration !TxOutTableType
-  | CmdUtxoSetAtBlock !Word64 !TxOutTableType
+  = CmdCreateMigration !MigrationDir !TxOutVariantType
+  | CmdReport !Report !TxOutVariantType
+  | CmdRollback !SlotNo !TxOutVariantType
+  | CmdRunMigrations !MigrationDir !Bool !(Maybe LogFileDir) !TxOutVariantType
+  | CmdTxOutMigration !TxOutVariantType
+  | CmdUtxoSetAtBlock !Word64 !TxOutVariantType
   | CmdPrepareSnapshot !PrepareSnapshotArgs
-  | CmdValidateDb !TxOutTableType
-  | CmdValidateAddressBalance !LedgerValidationParams !TxOutTableType
+  | CmdValidateDb !TxOutVariantType
+  | CmdValidateAddressBalance !LedgerValidationParams !TxOutVariantType
   | CmdVersion
 
 runCommand :: Command -> IO ()
@@ -68,14 +68,14 @@ runCommand cmd =
     CmdValidateAddressBalance params txOutAddressType -> runLedgerValidation params txOutAddressType
     CmdVersion -> runVersionCommand
 
-runCreateMigration :: MigrationDir -> TxOutTableType -> IO ()
+runCreateMigration :: MigrationDir -> TxOutVariantType -> IO ()
 runCreateMigration mdir txOutTableType = do
   mfp <- createMigration PGPassDefaultEnv mdir txOutTableType
   case mfp of
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
 
-runRollback :: SlotNo -> TxOutTableType -> IO ()
+runRollback :: SlotNo -> TxOutVariantType -> IO ()
 runRollback slotNo txOutTableType =
   print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace txOutTableType slotNo)
 
@@ -111,7 +111,7 @@ pCommand =
             (Opt.progDesc "Create a database migration (only really used by devs).")
       , Opt.command "report" $
           Opt.info
-            (CmdReport <$> pReport <*> pTxOutTableType)
+            (CmdReport <$> pReport <*> pTxOutVariantType)
             (Opt.progDesc "Run a report using data from the database.")
       , Opt.command "rollback" $
           Opt.info
@@ -130,7 +130,7 @@ pCommand =
             )
       , Opt.command "tx_out-migration" $
           Opt.info
-            (CmdTxOutMigration <$> pTxOutTableType)
+            (CmdTxOutMigration <$> pTxOutVariantType)
             ( Opt.progDesc $
                 mconcat
                   [ "Runs the tx_out migration, which adds a new field"
@@ -146,11 +146,11 @@ pCommand =
             (Opt.progDesc "Prepare to create a snapshot pair")
       , Opt.command "validate" $
           Opt.info
-            (CmdValidateDb <$> pTxOutTableType)
+            (CmdValidateDb <$> pTxOutVariantType)
             (Opt.progDesc "Run validation checks against the database.")
       , Opt.command "validate-address-balance" $
           Opt.info
-            (CmdValidateAddressBalance <$> pValidateLedgerParams <*> pTxOutTableType)
+            (CmdValidateAddressBalance <$> pValidateLedgerParams <*> pTxOutVariantType)
             (Opt.progDesc "Run validation checks against the database and the ledger Utxo set.")
       , Opt.command "version" $
           Opt.info
@@ -160,7 +160,7 @@ pCommand =
   where
     pCreateMigration :: Parser Command
     pCreateMigration =
-      CmdCreateMigration <$> pMigrationDir <*> pTxOutTableType
+      CmdCreateMigration <$> pMigrationDir <*> pTxOutVariantType
 
     pRunMigrations :: Parser Command
     pRunMigrations =
@@ -168,7 +168,7 @@ pCommand =
         <$> pMigrationDir
         <*> pForceIndexes
         <*> optional pLogFileDir
-        <*> pTxOutTableType
+        <*> pTxOutVariantType
 
     pRollback :: Parser Command
     pRollback =
@@ -177,7 +177,7 @@ pCommand =
           ( Opt.long "slot"
               <> Opt.help "The slot number to roll back to."
           )
-        <*> pTxOutTableType
+        <*> pTxOutVariantType
 
     pUtxoSetAtBlock :: Parser Command
     pUtxoSetAtBlock =
@@ -186,7 +186,7 @@ pCommand =
           ( Opt.long "slot-no"
               <> Opt.help "The SlotNo."
           )
-        <*> pTxOutTableType
+        <*> pTxOutVariantType
 
     pPrepareSnapshot :: Parser Command
     pPrepareSnapshot =
@@ -228,10 +228,10 @@ pForceIndexes =
           )
     )
 
-pTxOutTableType :: Parser TxOutTableType
-pTxOutTableType =
+pTxOutVariantType :: Parser TxOutVariantType
+pTxOutVariantType =
   Opt.flag
-    TxOutCore
+    TxOutVariantCore
     TxOutVariantAddress
     ( Opt.long "use-tx-out-address"
         <> Opt.help "Use the TxOut address variant schema"
