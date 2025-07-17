@@ -166,7 +166,6 @@ import Database.Persist.Class.PersistQuery (selectList)
 import Database.Persist.Types (SelectOpt (Asc))
 
 {- HLINT ignore "Redundant ^." -}
-{- HLINT ignore "Fuse on/on" -}
 {- HLINT ignore "Reduce duplication" -}
 
 -- If you squint, these Esqueleto queries almost look like SQL queries.

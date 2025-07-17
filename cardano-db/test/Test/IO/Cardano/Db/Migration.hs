@@ -12,7 +12,7 @@ import Cardano.Db (
   MigrationValidateError (..),
   MigrationVersion (..),
   SchemaVersion (..),
-  TxOutTableType (..),
+  TxOutVariantType (..),
   getMigrationScripts,
   querySchemaVersion,
   readPGPassDefault,

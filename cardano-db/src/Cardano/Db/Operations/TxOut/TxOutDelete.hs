@@ -5,9 +5,9 @@
 
 module Cardano.Db.Operations.TxOut.TxOutDelete where
 
-import Cardano.Db.Operations.Types (TxOutTableType (..))
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import Cardano.Db.Operations.Types (TxOutVariantType (..))
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Prelude (Int64)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO)
@@ -23,17 +23,17 @@ import Database.Persist.Sql (
 --------------------------------------------------------------------------------
 -- Delete
 --------------------------------------------------------------------------------
-deleteCoreTxOutTablesAfterTxId :: MonadIO m => Maybe C.TxOutId -> Maybe C.MaTxOutId -> ReaderT SqlBackend m ()
+deleteCoreTxOutTablesAfterTxId :: MonadIO m => Maybe VC.TxOutId -> Maybe VC.MaTxOutId -> ReaderT SqlBackend m ()
 deleteCoreTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
-  whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [C.MaTxOutId >=. maTxOutId]
-  whenJust mtxOutId $ \txOutId -> deleteWhere [C.TxOutId >=. txOutId]
+  whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [VC.MaTxOutId >=. maTxOutId]
+  whenJust mtxOutId $ \txOutId -> deleteWhere [VC.TxOutId >=. txOutId]
 
-deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe V.TxOutId -> Maybe V.MaTxOutId -> ReaderT SqlBackend m ()
+deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe VA.TxOutId -> Maybe VA.MaTxOutId -> ReaderT SqlBackend m ()
 deleteVariantTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
-  whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [V.MaTxOutId >=. maTxOutId]
-  whenJust mtxOutId $ \txOutId -> deleteWhere [V.TxOutId >=. txOutId]
+  whenJust mmaTxOutId $ \maTxOutId -> deleteWhere [VA.MaTxOutId >=. maTxOutId]
+  whenJust mtxOutId $ \txOutId -> deleteWhere [VA.TxOutId >=. txOutId]
 
-deleteTxOut :: MonadIO m => TxOutTableType -> ReaderT SqlBackend m Int64
+deleteTxOut :: MonadIO m => TxOutVariantType -> ReaderT SqlBackend m Int64
 deleteTxOut = \case
-  TxOutCore -> deleteWhereCount ([] :: [Filter C.TxOut])
-  TxOutVariantAddress -> deleteWhereCount ([] :: [Filter V.TxOut])
+  TxOutVariantCore -> deleteWhereCount ([] :: [Filter VC.TxOut])
+  TxOutVariantAddress -> deleteWhereCount ([] :: [Filter VA.TxOut])

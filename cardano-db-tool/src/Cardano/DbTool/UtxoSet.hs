@@ -7,8 +7,8 @@ module Cardano.DbTool.UtxoSet (
 
 import Cardano.Chain.Common (decodeAddressBase58, isRedeemAddress)
 import Cardano.Db
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Prelude (textShow)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
@@ -20,7 +20,7 @@ import Data.Word (Word64)
 import System.Exit (exitSuccess)
 import System.IO (IOMode (..), withFile)
 
-utxoSetAtSlot :: TxOutTableType -> Word64 -> IO ()
+utxoSetAtSlot :: TxOutVariantType -> Word64 -> IO ()
 utxoSetAtSlot txOutTableType slotNo = do
   (genesisSupply, utxoSet, fees, eUtcTime) <- queryAtSlot txOutTableType slotNo
 
@@ -82,7 +82,7 @@ partitionUtxos =
     accept (addr, _) =
       Text.length addr <= 180 && not (isRedeemTextAddress addr)
 
-queryAtSlot :: TxOutTableType -> Word64 -> IO (Ada, [UtxoQueryResult], Ada, Either LookupFail UTCTime)
+queryAtSlot :: TxOutVariantType -> Word64 -> IO (Ada, [UtxoQueryResult], Ada, Either LookupFail UTCTime)
 queryAtSlot txOutTableType slotNo =
   -- Run the following queries in a single transaction.
   runDbNoLoggingEnv $ do
@@ -118,8 +118,8 @@ utxoSetSum xs =
 
 getTxOutValue :: TxOutW -> Word64
 getTxOutValue wrapper = case wrapper of
-  CTxOutW txOut -> unDbLovelace $ C.txOutValue txOut
-  VTxOutW txOut _ -> unDbLovelace $ V.txOutValue txOut
+  CTxOutW txOut -> unDbLovelace $ VC.txOutValue txOut
+  VTxOutW txOut _ -> unDbLovelace $ VA.txOutValue txOut
 
 writeUtxos :: FilePath -> [(Text, Word64)] -> IO ()
 writeUtxos fname xs = do

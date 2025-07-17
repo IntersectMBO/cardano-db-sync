@@ -29,7 +29,7 @@ data LedgerValidationParams = LedgerValidationParams
   , vpAddressUtxo :: !Text
   }
 
-validateLedger :: LedgerValidationParams -> DB.TxOutTableType -> IO ()
+validateLedger :: LedgerValidationParams -> DB.TxOutVariantType -> IO ()
 validateLedger params txOutTableType =
   withIOManager $ \_ -> do
     enc <- readSyncNodeConfig (vpConfigFile params)
@@ -38,7 +38,7 @@ validateLedger params txOutTableType =
     slotNo <- SlotNo <$> DB.runDbNoLoggingEnv DB.queryLatestSlotNo
     validate params txOutTableType genCfg slotNo ledgerFiles
 
-validate :: LedgerValidationParams -> DB.TxOutTableType -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
+validate :: LedgerValidationParams -> DB.TxOutVariantType -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
 validate params txOutTableType genCfg slotNo ledgerFiles =
   go ledgerFiles True
   where
@@ -55,7 +55,7 @@ validate params txOutTableType genCfg slotNo ledgerFiles =
           when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."
           go rest False
 
-validateBalance :: DB.TxOutTableType -> SlotNo -> Text -> CardanoLedgerState -> IO ()
+validateBalance :: DB.TxOutVariantType -> SlotNo -> Text -> CardanoLedgerState -> IO ()
 validateBalance txOutTableType slotNo addr st = do
   balanceDB <- DB.runDbNoLoggingEnv $ DB.queryAddressBalanceAtSlot txOutTableType addr (unSlotNo slotNo)
   let eiBalanceLedger = DB.word64ToAda <$> ledgerAddrBalance addr (ledgerState $ clsState st)

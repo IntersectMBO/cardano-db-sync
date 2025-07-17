@@ -64,7 +64,7 @@ migrateBootstrapUTxO syncEnv = do
     HasLedger lenv -> do
       liftIO $ logInfo trce "Starting UTxO bootstrap migration"
       cls <- liftIO $ readCurrentStateUnsafe lenv
-      count <- lift $ DB.deleteTxOut (getTxOutTableType syncEnv)
+      count <- lift $ DB.deleteTxOut (getTxOutVariantType syncEnv)
       when (count > 0) $
         liftIO $
           logWarning trce $
@@ -146,7 +146,7 @@ storePage syncEnv percQuantum (n, ls) = do
   let maTxOuts = concatMap (mkmaTxOuts txOutTableType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertManyMaTxOut maTxOuts
   where
-    txOutTableType = getTxOutTableType syncEnv
+    txOutTableType = getTxOutVariantType syncEnv
     trce = getTrace syncEnv
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
 

@@ -18,10 +18,10 @@ import Cardano.Db.Error (LookupFail (..), logAndThrowIO)
 import Cardano.Db.Operations.Insert (insertExtraMigration)
 import Cardano.Db.Operations.Query (listToMaybe, queryAllExtraMigrations, queryBlockHeight, queryBlockNo, queryMaxRefId)
 import Cardano.Db.Operations.QueryHelper (isJust)
-import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutTable, TxOutTableType (..), isTxOutVariantAddress)
+import Cardano.Db.Operations.Types (TxOutFields (..), TxOutIdW (..), TxOutTable, TxOutVariantType (..), isTxOutVariantAddress)
 import Cardano.Db.Schema.BaseSchema
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Db.Types (ExtraMigration (..), MigrationValues (..), PruneConsumeMigration (..), processMigrationValues)
 import Cardano.Prelude (textShow, void)
 import Control.Exception (throw)
@@ -55,7 +55,7 @@ data ConsumedTriplet = ConsumedTriplet
 --------------------------------------------------------------------------------------------------
 querySetNullTxOut ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   Maybe TxId ->
   ReaderT SqlBackend m (Text, Int64)
 querySetNullTxOut txOutTableType mMinTxId = do
@@ -72,7 +72,7 @@ querySetNullTxOut txOutTableType mMinTxId = do
     getTxOutConsumedAfter :: MonadIO m => TxId -> ReaderT SqlBackend m [TxOutIdW]
     getTxOutConsumedAfter txId =
       case txOutTableType of
-        TxOutCore -> wrapTxOutIds CTxOutIdW (queryConsumedTxOutIds @'TxOutCore txId)
+        TxOutVariantCore -> wrapTxOutIds CTxOutIdW (queryConsumedTxOutIds @'TxOutVariantCore txId)
         TxOutVariantAddress -> wrapTxOutIds VTxOutIdW (queryConsumedTxOutIds @'TxOutVariantAddress txId)
       where
         wrapTxOutIds constructor = fmap (map constructor)
@@ -93,7 +93,7 @@ querySetNullTxOut txOutTableType mMinTxId = do
     setNullTxOutConsumedAfter :: MonadIO m => TxOutIdW -> ReaderT SqlBackend m ()
     setNullTxOutConsumedAfter txOutId =
       case txOutTableType of
-        TxOutCore -> setNull
+        TxOutVariantCore -> setNull
         TxOutVariantAddress -> setNull
       where
         setNull ::
@@ -101,10 +101,10 @@ querySetNullTxOut txOutTableType mMinTxId = do
           ReaderT SqlBackend m ()
         setNull = do
           case txOutId of
-            CTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Nothing]
-            VTxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Nothing]
+            CTxOutIdW txOutId' -> update txOutId' [VC.TxOutConsumedByTxId =. Nothing]
+            VTxOutIdW txOutId' -> update txOutId' [VA.TxOutConsumedByTxId =. Nothing]
 
-runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> TxOutTableType -> Word64 -> PruneConsumeMigration -> ReaderT SqlBackend m ()
+runExtraMigrations :: (MonadBaseControl IO m, MonadIO m) => Trace IO Text -> TxOutVariantType -> Word64 -> PruneConsumeMigration -> ReaderT SqlBackend m ()
 runExtraMigrations trce txOutTableType blockNoDiff pcm = do
   ems <- queryAllExtraMigrations
   isTxOutNull <- queryTxOutIsNull txOutTableType
@@ -157,13 +157,13 @@ runExtraMigrations trce txOutTableType blockNoDiff pcm = do
               deleteConsumedTxOut trce txOutTableType blockNoDiff
             else deleteAndUpdateConsumedTxOut trce txOutTableType migrationValues blockNoDiff
 
-queryWrongConsumedBy :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+queryWrongConsumedBy :: TxOutVariantType -> MonadIO m => ReaderT SqlBackend m Word64
 queryWrongConsumedBy = \case
-  TxOutCore -> query @'TxOutCore
+  TxOutVariantCore -> query @'TxOutVariantCore
   TxOutVariantAddress -> query @'TxOutVariantAddress
   where
     query ::
-      forall (a :: TxOutTableType) m.
+      forall (a :: TxOutVariantType) m.
       (MonadIO m, TxOutFields a) =>
       ReaderT SqlBackend m Word64
     query = do
@@ -178,13 +178,13 @@ queryWrongConsumedBy = \case
 --------------------------------------------------------------------------------------------------
 
 -- | This is a count of the null consumed_by_tx_id
-queryTxOutConsumedNullCount :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+queryTxOutConsumedNullCount :: TxOutVariantType -> MonadIO m => ReaderT SqlBackend m Word64
 queryTxOutConsumedNullCount = \case
-  TxOutCore -> query @'TxOutCore
+  TxOutVariantCore -> query @'TxOutVariantCore
   TxOutVariantAddress -> query @'TxOutVariantAddress
   where
     query ::
-      forall (a :: TxOutTableType) m.
+      forall (a :: TxOutVariantType) m.
       (MonadIO m, TxOutFields a) =>
       ReaderT SqlBackend m Word64
     query = do
@@ -194,13 +194,13 @@ queryTxOutConsumedNullCount = \case
         pure countRows
       pure $ maybe 0 unValue (listToMaybe res)
 
-queryTxOutConsumedCount :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Word64
+queryTxOutConsumedCount :: TxOutVariantType -> MonadIO m => ReaderT SqlBackend m Word64
 queryTxOutConsumedCount = \case
-  TxOutCore -> query @'TxOutCore
+  TxOutVariantCore -> query @'TxOutVariantCore
   TxOutVariantAddress -> query @'TxOutVariantAddress
   where
     query ::
-      forall (a :: TxOutTableType) m.
+      forall (a :: TxOutVariantType) m.
       (MonadIO m, TxOutFields a) =>
       ReaderT SqlBackend m Word64
     query = do
@@ -210,13 +210,13 @@ queryTxOutConsumedCount = \case
         pure countRows
       pure $ maybe 0 unValue (listToMaybe res)
 
-queryTxOutIsNull :: TxOutTableType -> MonadIO m => ReaderT SqlBackend m Bool
+queryTxOutIsNull :: TxOutVariantType -> MonadIO m => ReaderT SqlBackend m Bool
 queryTxOutIsNull = \case
-  TxOutCore -> pure False
+  TxOutVariantCore -> pure False
   TxOutVariantAddress -> query @'TxOutVariantAddress
   where
     query ::
-      forall (a :: TxOutTableType) m.
+      forall (a :: TxOutVariantType) m.
       (MonadIO m, TxOutFields a) =>
       ReaderT SqlBackend m Bool
     query = do
@@ -236,15 +236,15 @@ updateListTxOutConsumedByTxId ls = do
     updateTxOutConsumedByTxId :: MonadIO m => TxOutIdW -> TxId -> ReaderT SqlBackend m ()
     updateTxOutConsumedByTxId txOutId txId =
       case txOutId of
-        CTxOutIdW txOutId' -> update txOutId' [C.TxOutConsumedByTxId =. Just txId]
-        VTxOutIdW txOutId' -> update txOutId' [V.TxOutConsumedByTxId =. Just txId]
+        CTxOutIdW txOutId' -> update txOutId' [VC.TxOutConsumedByTxId =. Just txId]
+        VTxOutIdW txOutId' -> update txOutId' [VA.TxOutConsumedByTxId =. Just txId]
 
 migrateTxOut ::
   ( MonadBaseControl IO m
   , MonadIO m
   ) =>
   Trace IO Text ->
-  TxOutTableType ->
+  TxOutVariantType ->
   Maybe MigrationValues ->
   ReaderT SqlBackend m ()
 migrateTxOut trce txOutTableType mMvs = do
@@ -257,7 +257,7 @@ migrateTxOut trce txOutTableType mMvs = do
       void createPruneConstraintTxOut
   migrateNextPageTxOut (Just trce) txOutTableType 0
 
-migrateNextPageTxOut :: MonadIO m => Maybe (Trace IO Text) -> TxOutTableType -> Word64 -> ReaderT SqlBackend m ()
+migrateNextPageTxOut :: MonadIO m => Maybe (Trace IO Text) -> TxOutVariantType -> Word64 -> ReaderT SqlBackend m ()
 migrateNextPageTxOut mTrce txOutTableType offst = do
   whenJust mTrce $ \trce ->
     liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
@@ -274,7 +274,7 @@ deleteAndUpdateConsumedTxOut ::
   forall m.
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
-  TxOutTableType ->
+  TxOutVariantType ->
   MigrationValues ->
   Word64 ->
   ReaderT SqlBackend m ()
@@ -303,7 +303,7 @@ splitAndProcessPageEntries ::
   forall m.
   (MonadIO m, MonadBaseControl IO m) =>
   Trace IO Text ->
-  TxOutTableType ->
+  TxOutVariantType ->
   Bool ->
   TxId ->
   [ConsumedTriplet] ->
@@ -343,29 +343,29 @@ shouldCreateConsumedTxOut trce rcc =
 -- | Update
 updatePageEntries ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   [ConsumedTriplet] ->
   ReaderT SqlBackend m ()
 updatePageEntries txOutTableType = mapM_ (updateTxOutConsumedByTxIdUnique txOutTableType)
 
-updateTxOutConsumedByTxIdUnique :: MonadIO m => TxOutTableType -> ConsumedTriplet -> ReaderT SqlBackend m ()
+updateTxOutConsumedByTxIdUnique :: MonadIO m => TxOutVariantType -> ConsumedTriplet -> ReaderT SqlBackend m ()
 updateTxOutConsumedByTxIdUnique txOutTableType ConsumedTriplet {ctTxOutTxId, ctTxOutIndex, ctTxInTxId} =
   case txOutTableType of
-    TxOutCore -> updateWhere [C.TxOutTxId ==. ctTxOutTxId, C.TxOutIndex ==. ctTxOutIndex] [C.TxOutConsumedByTxId =. Just ctTxInTxId]
-    TxOutVariantAddress -> updateWhere [V.TxOutTxId ==. ctTxOutTxId, V.TxOutIndex ==. ctTxOutIndex] [V.TxOutConsumedByTxId =. Just ctTxInTxId]
+    TxOutVariantCore -> updateWhere [VC.TxOutTxId ==. ctTxOutTxId, VC.TxOutIndex ==. ctTxOutIndex] [VC.TxOutConsumedByTxId =. Just ctTxInTxId]
+    TxOutVariantAddress -> updateWhere [VA.TxOutTxId ==. ctTxOutTxId, VA.TxOutIndex ==. ctTxOutIndex] [VA.TxOutConsumedByTxId =. Just ctTxInTxId]
 
 -- this builds up a single delete query using the pageEntries list
 deletePageEntries ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   [ConsumedTriplet] ->
   ReaderT SqlBackend m ()
 deletePageEntries txOutTableType = mapM_ (\ConsumedTriplet {ctTxOutTxId, ctTxOutIndex} -> deleteTxOutConsumed txOutTableType ctTxOutTxId ctTxOutIndex)
 
-deleteTxOutConsumed :: MonadIO m => TxOutTableType -> TxId -> Word64 -> ReaderT SqlBackend m ()
+deleteTxOutConsumed :: MonadIO m => TxOutVariantType -> TxId -> Word64 -> ReaderT SqlBackend m ()
 deleteTxOutConsumed txOutTableType txOutId index = case txOutTableType of
-  TxOutCore -> deleteWhere [C.TxOutTxId ==. txOutId, C.TxOutIndex ==. index]
-  TxOutVariantAddress -> deleteWhere [V.TxOutTxId ==. txOutId, V.TxOutIndex ==. index]
+  TxOutVariantCore -> deleteWhere [VC.TxOutTxId ==. txOutId, VC.TxOutIndex ==. index]
+  TxOutVariantAddress -> deleteWhere [VA.TxOutTxId ==. txOutId, VA.TxOutIndex ==. index]
 
 --------------------------------------------------------------------------------------------------
 -- Raw Queries
@@ -492,7 +492,7 @@ deleteConsumedTxOut ::
   forall m.
   MonadIO m =>
   Trace IO Text ->
-  TxOutTableType ->
+  TxOutVariantType ->
   Word64 ->
   ReaderT SqlBackend m ()
 deleteConsumedTxOut trce txOutTableType blockNoDiff = do
@@ -501,17 +501,17 @@ deleteConsumedTxOut trce txOutTableType blockNoDiff = do
     Left errMsg -> liftIO $ logInfo trce $ "No tx_out was deleted: " <> errMsg
     Right mxtid -> deleteConsumedBeforeTx trce txOutTableType mxtid
 
-deleteConsumedBeforeTx :: MonadIO m => Trace IO Text -> TxOutTableType -> TxId -> ReaderT SqlBackend m ()
+deleteConsumedBeforeTx :: MonadIO m => Trace IO Text -> TxOutVariantType -> TxId -> ReaderT SqlBackend m ()
 deleteConsumedBeforeTx trce txOutTableType txId = do
   countDeleted <- case txOutTableType of
-    TxOutCore -> deleteWhereCount [C.TxOutConsumedByTxId <=. Just txId]
-    TxOutVariantAddress -> deleteWhereCount [V.TxOutConsumedByTxId <=. Just txId]
+    TxOutVariantCore -> deleteWhereCount [VC.TxOutConsumedByTxId <=. Just txId]
+    TxOutVariantAddress -> deleteWhereCount [VA.TxOutConsumedByTxId <=. Just txId]
   liftIO $ logInfo trce $ "Deleted " <> textShow countDeleted <> " tx_out"
 
 --------------------------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------------------------
-migrateTxOutDbTool :: (MonadIO m, MonadBaseControl IO m) => TxOutTableType -> ReaderT SqlBackend m ()
+migrateTxOutDbTool :: (MonadIO m, MonadBaseControl IO m) => TxOutVariantType -> ReaderT SqlBackend m ()
 migrateTxOutDbTool txOutTableType = do
   _ <- createConsumedIndexTxOut
   migrateNextPageTxOut Nothing txOutTableType 0
@@ -565,14 +565,14 @@ countTxIn = do
 
 countConsumed ::
   MonadIO m =>
-  TxOutTableType ->
+  TxOutVariantType ->
   ReaderT SqlBackend m Word64
 countConsumed = \case
-  TxOutCore -> query @'TxOutCore
+  TxOutVariantCore -> query @'TxOutVariantCore
   TxOutVariantAddress -> query @'TxOutVariantAddress
   where
     query ::
-      forall (a :: TxOutTableType) m.
+      forall (a :: TxOutVariantType) m.
       (MonadIO m, TxOutFields a) =>
       ReaderT SqlBackend m Word64
     query = do

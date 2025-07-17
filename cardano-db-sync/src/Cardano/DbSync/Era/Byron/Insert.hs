@@ -20,8 +20,8 @@ import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import Cardano.Db (DbLovelace (..))
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
@@ -324,7 +324,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- fees are being returned so we can sum them and put them in cache to use when updating epochs
   pure $ unDbLovelace $ vfFee valFee
   where
-    txOutTableType = getTxOutTableType syncEnv
+    txOutTableType = getTxOutVariantType syncEnv
     iopts = getInsertOptions syncEnv
 
     tracer :: Trace IO Text
@@ -349,22 +349,22 @@ insertTxOutByron ::
   ReaderT SqlBackend m ()
 insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
   unless bootStrap $
-    case ioTxOutTableType . soptInsertOptions $ envOptions syncEnv of
-      DB.TxOutCore -> do
+    case ioTxOutVariantType . soptInsertOptions $ envOptions syncEnv of
+      DB.TxOutVariantCore -> do
         void . DB.insertTxOut $
           DB.CTxOutW $
-            C.TxOut
-              { C.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-              , C.txOutAddressHasScript = False
-              , C.txOutDataHash = Nothing
-              , C.txOutConsumedByTxId = Nothing
-              , C.txOutIndex = fromIntegral index
-              , C.txOutInlineDatumId = Nothing
-              , C.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
-              , C.txOutReferenceScriptId = Nothing
-              , C.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
-              , C.txOutTxId = txId
-              , C.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+            VC.TxOut
+              { VC.txOutAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+              , VC.txOutAddressHasScript = False
+              , VC.txOutDataHash = Nothing
+              , VC.txOutConsumedByTxId = Nothing
+              , VC.txOutIndex = fromIntegral index
+              , VC.txOutInlineDatumId = Nothing
+              , VC.txOutPaymentCred = Nothing -- Byron does not have a payment credential.
+              , VC.txOutReferenceScriptId = Nothing
+              , VC.txOutStakeAddressId = Nothing -- Byron does not have a stake address.
+              , VC.txOutTxId = txId
+              , VC.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
               }
       DB.TxOutVariantAddress -> do
         addrDetailId <- insertAddressUsingCache cache UpdateCache addrRaw vAddress
@@ -375,28 +375,28 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
 
     cache = envCache syncEnv
 
-    vTxOut :: V.AddressId -> V.TxOut
+    vTxOut :: VA.AddressId -> VA.TxOut
     vTxOut addrDetailId =
-      V.TxOut
-        { V.txOutAddressId = addrDetailId
-        , V.txOutConsumedByTxId = Nothing
-        , V.txOutDataHash = Nothing
-        , V.txOutIndex = fromIntegral index
-        , V.txOutInlineDatumId = Nothing
-        , V.txOutReferenceScriptId = Nothing
-        , V.txOutTxId = txId
-        , V.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
-        , V.txOutStakeAddressId = Nothing
+      VA.TxOut
+        { VA.txOutAddressId = addrDetailId
+        , VA.txOutConsumedByTxId = Nothing
+        , VA.txOutDataHash = Nothing
+        , VA.txOutIndex = fromIntegral index
+        , VA.txOutInlineDatumId = Nothing
+        , VA.txOutReferenceScriptId = Nothing
+        , VA.txOutTxId = txId
+        , VA.txOutValue = DbLovelace (Byron.unsafeGetLovelace $ Byron.txOutValue txout)
+        , VA.txOutStakeAddressId = Nothing
         }
 
-    vAddress :: V.Address
+    vAddress :: VA.Address
     vAddress =
-      V.Address
-        { V.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
-        , V.addressRaw = addrRaw
-        , V.addressHasScript = False
-        , V.addressPaymentCred = Nothing -- Byron does not have a payment credential.
-        , V.addressStakeAddressId = Nothing -- Byron does not have a stake address.
+      VA.Address
+        { VA.addressAddress = Text.decodeUtf8 $ Byron.addrToBase58 (Byron.txOutAddress txout)
+        , VA.addressRaw = addrRaw
+        , VA.addressHasScript = False
+        , VA.addressPaymentCred = Nothing -- Byron does not have a payment credential.
+        , VA.addressStakeAddressId = Nothing -- Byron does not have a stake address.
         }
 
 insertTxIn ::
@@ -416,7 +416,7 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) = 
 
 -- -----------------------------------------------------------------------------
 
-resolveTxInputs :: MonadIO m => DB.TxOutTableType -> Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
+resolveTxInputs :: MonadIO m => DB.TxOutVariantType -> Byron.TxIn -> ExceptT SyncNodeError (ReaderT SqlBackend m) (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
 resolveTxInputs txOutTableType txIn@(Byron.TxInUtxo txHash index) = do
   res <- liftLookupFail "resolveInput" $ DB.queryTxOutIdValue txOutTableType (Byron.unTxHash txHash, fromIntegral index)
   pure $ convert res

@@ -24,7 +24,7 @@ module Cardano.DbSync.Api (
   getPruneInterval,
   whenConsumeOrPruneTxOut,
   whenPruneTxOut,
-  getTxOutTableType,
+  getTxOutVariantType,
   getPruneConsume,
   getHasConsumedOrPruneTxOut,
   getSkipTxIn,
@@ -116,7 +116,7 @@ getIsConsumedFixed env =
     (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutTableType)
     _ -> pure Nothing
   where
-    txOutTableType = getTxOutTableType env
+    txOutTableType = getTxOutVariantType env
     pcm = soptPruneConsumeMigration $ envOptions env
     backend = envBackend env
 
@@ -153,7 +153,7 @@ getPruneConsume = soptPruneConsumeMigration . envOptions
 runExtraMigrationsMaybe :: SyncEnv -> IO ()
 runExtraMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
-      txOutTableType = getTxOutTableType syncEnv
+      txOutTableType = getTxOutVariantType syncEnv
   logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
   DB.runDbIohkNoLogging (envBackend syncEnv) $
     DB.runExtraMigrations
@@ -184,8 +184,8 @@ whenPruneTxOut :: MonadIO m => SyncEnv -> m () -> m ()
 whenPruneTxOut env =
   when (DB.pcmPruneTxOut $ getPruneConsume env)
 
-getTxOutTableType :: SyncEnv -> DB.TxOutTableType
-getTxOutTableType syncEnv = ioTxOutTableType . soptInsertOptions $ envOptions syncEnv
+getTxOutVariantType :: SyncEnv -> DB.TxOutVariantType
+getTxOutVariantType syncEnv = ioTxOutVariantType . soptInsertOptions $ envOptions syncEnv
 
 getHasConsumedOrPruneTxOut :: SyncEnv -> Bool
 getHasConsumedOrPruneTxOut =

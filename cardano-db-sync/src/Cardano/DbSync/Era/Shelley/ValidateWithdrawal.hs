@@ -42,8 +42,6 @@ import Database.Esqueleto.Experimental (
   (^.),
  )
 
-{- HLINT ignore "Fuse on/on" -}
-
 -- For any stake address which has seen a withdrawal, the sum of the withdrawals for that address
 -- should be less than or equal to the sum of the rewards for that address.
 validateRewardWithdrawals ::

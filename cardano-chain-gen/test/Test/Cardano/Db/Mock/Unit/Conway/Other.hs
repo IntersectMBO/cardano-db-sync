@@ -110,7 +110,7 @@ configNoStakes =
 
 poolReg :: IOManager -> [(Text, Text)] -> Assertion
 poolReg =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -387,7 +387,7 @@ mkPoolDereg epochNo _ keyHash = ConwayTxCertPool (RetirePool keyHash epochNo)
 
 forkFixedEpoch :: IOManager -> [(Text, Text)] -> Assertion
 forkFixedEpoch =
-  withFullConfigAndDropDB configDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB configDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add a Babbage tx

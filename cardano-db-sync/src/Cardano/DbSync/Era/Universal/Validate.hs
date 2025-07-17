@@ -44,7 +44,6 @@ import Database.Esqueleto.Experimental (
  )
 import GHC.Err (error)
 
-{- HLINT ignore "Fuse on/on" -}
 {- HLINT ignore "Reduce duplication" -}
 
 validateEpochRewards ::

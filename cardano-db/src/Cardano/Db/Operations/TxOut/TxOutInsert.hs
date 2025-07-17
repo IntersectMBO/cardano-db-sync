@@ -9,8 +9,8 @@ module Cardano.Db.Operations.TxOut.TxOutInsert where
 
 import Cardano.Db.Operations.Insert (insertMany', insertUnchecked)
 import Cardano.Db.Operations.Types (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutW (..))
-import qualified Cardano.Db.Schema.Core.TxOut as C
-import qualified Cardano.Db.Schema.Variant.TxOut as V
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT)
@@ -40,11 +40,11 @@ insertManyTxOut disInOut txOutWs = do
             vals <- insertMany' "insertManyTxOutV" (map extractVariantTxOut txOuts)
             pure $ map VTxOutIdW vals
   where
-    extractCoreTxOut :: TxOutW -> C.TxOut
+    extractCoreTxOut :: TxOutW -> VC.TxOut
     extractCoreTxOut (CTxOutW txOut) = txOut
     extractCoreTxOut (VTxOutW _ _) = error "Unexpected VTxOutW in CoreTxOut list"
 
-    extractVariantTxOut :: TxOutW -> V.TxOut
+    extractVariantTxOut :: TxOutW -> VA.TxOut
     extractVariantTxOut (VTxOutW txOut _) = txOut
     extractVariantTxOut (CTxOutW _) = error "Unexpected CTxOutW in VariantTxOut list"
 
@@ -64,7 +64,7 @@ insertTxOut txOutW = do
 --------------------------------------------------------------------------------
 -- insertAddress - Insert a Address into the database.
 --------------------------------------------------------------------------------
-insertAddress :: (MonadBaseControl IO m, MonadIO m) => V.Address -> ReaderT SqlBackend m V.AddressId
+insertAddress :: (MonadBaseControl IO m, MonadIO m) => VA.Address -> ReaderT SqlBackend m VA.AddressId
 insertAddress = insertUnchecked "insertAddress"
 
 --------------------------------------------------------------------------------
@@ -83,11 +83,11 @@ insertManyMaTxOut maTxOutWs = do
           vals <- insertMany' "Many Variant MaTxOut" (map extractVariantMaTxOut maTxOuts)
           pure $ map VMaTxOutIdW vals
   where
-    extractCoreMaTxOut :: MaTxOutW -> C.MaTxOut
+    extractCoreMaTxOut :: MaTxOutW -> VC.MaTxOut
     extractCoreMaTxOut (CMaTxOutW maTxOut) = maTxOut
     extractCoreMaTxOut (VMaTxOutW _) = error "Unexpected VMaTxOutW in CoreMaTxOut list"
 
-    extractVariantMaTxOut :: MaTxOutW -> V.MaTxOut
+    extractVariantMaTxOut :: MaTxOutW -> VA.MaTxOut
     extractVariantMaTxOut (VMaTxOutW maTxOut) = maTxOut
     extractVariantMaTxOut (CMaTxOutW _) = error "Unexpected CMaTxOutW in VariantMaTxOut list"
 

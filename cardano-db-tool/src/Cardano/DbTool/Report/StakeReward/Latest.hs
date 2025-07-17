@@ -44,8 +44,6 @@ import Database.Esqueleto.Experimental (
  )
 import Text.Printf (printf)
 
-{- HLINT ignore "Fuse on/on" -}
-
 reportEpochStakeRewards :: Word64 -> [Text] -> IO ()
 reportEpochStakeRewards epochNum saddr = do
   xs <- catMaybes <$> runDbNoLoggingEnv (mapM (queryEpochStakeRewards epochNum) saddr)

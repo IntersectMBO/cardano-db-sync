@@ -10,12 +10,12 @@ module Test.IO.Cardano.Db.Util (
   mkBlockHash,
   mkTxHash,
   mkTxs,
-  mkTxOutCore,
+  mkTxOutVariantCore,
   testSlotLeader,
 ) where
 
 import Cardano.Db
-import qualified Cardano.Db.Schema.Core.TxOut as C
+import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Control.Monad (unless)
 import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -36,7 +36,7 @@ assertBool msg bool =
 deleteAllBlocks :: MonadIO m => ReaderT SqlBackend m ()
 deleteAllBlocks = do
   mblkId <- queryMinBlock
-  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutCore)
+  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutVariantCore)
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
@@ -97,20 +97,20 @@ testSlotLeader :: SlotLeader
 testSlotLeader =
   SlotLeader (BS.pack . take 28 $ "test slot leader" ++ replicate 28 ' ') Nothing "Dummy test slot leader"
 
-mkTxOutCore :: BlockId -> TxId -> TxOutW
-mkTxOutCore blkId txId =
+mkTxOutVariantCore :: BlockId -> TxId -> TxOutW
+mkTxOutVariantCore blkId txId =
   let addr = mkAddressHash blkId txId
    in CTxOutW $
-        C.TxOut
-          { C.txOutAddress = Text.pack addr
-          , C.txOutAddressHasScript = False
-          , C.txOutConsumedByTxId = Nothing
-          , C.txOutDataHash = Nothing
-          , C.txOutIndex = 0
-          , C.txOutInlineDatumId = Nothing
-          , C.txOutPaymentCred = Nothing
-          , C.txOutReferenceScriptId = Nothing
-          , C.txOutStakeAddressId = Nothing
-          , C.txOutTxId = txId
-          , C.txOutValue = DbLovelace 1000000000
+        VC.TxOut
+          { VC.txOutAddress = Text.pack addr
+          , VC.txOutAddressHasScript = False
+          , VC.txOutConsumedByTxId = Nothing
+          , VC.txOutDataHash = Nothing
+          , VC.txOutIndex = 0
+          , VC.txOutInlineDatumId = Nothing
+          , VC.txOutPaymentCred = Nothing
+          , VC.txOutReferenceScriptId = Nothing
+          , VC.txOutStakeAddressId = Nothing
+          , VC.txOutTxId = txId
+          , VC.txOutValue = DbLovelace 1000000000
           }

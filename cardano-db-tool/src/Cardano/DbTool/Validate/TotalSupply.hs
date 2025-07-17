@@ -22,7 +22,7 @@ data TestParams = TestParams
   , genesisSupply :: Ada
   }
 
-genTestParameters :: TxOutTableType -> IO TestParams
+genTestParameters :: TxOutVariantType -> IO TestParams
 genTestParameters txOutTableType = do
   mlatest <- runDbNoLoggingEnv queryLatestBlockNo
   case mlatest of
@@ -32,7 +32,7 @@ genTestParameters txOutTableType = do
         <$> randomRIO (1, latest - 1)
         <*> runDbNoLoggingEnv (queryGenesisSupply txOutTableType)
 
-queryInitialSupply :: TxOutTableType -> Word64 -> IO Accounting
+queryInitialSupply :: TxOutVariantType -> Word64 -> IO Accounting
 queryInitialSupply txOutTableType blkNo =
   -- Run all queries in a single transaction.
   runDbNoLoggingEnv $
@@ -44,7 +44,7 @@ queryInitialSupply txOutTableType blkNo =
 
 -- | Validate that the total supply is decreasing.
 -- This is only true for the Byron error where transaction fees are burnt.
-validateTotalSupplyDecreasing :: TxOutTableType -> IO ()
+validateTotalSupplyDecreasing :: TxOutVariantType -> IO ()
 validateTotalSupplyDecreasing txOutTableType = do
   test <- genTestParameters txOutTableType
 

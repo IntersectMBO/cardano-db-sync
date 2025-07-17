@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Cardano.Db (schemaDocs)
-import Cardano.Db.Schema.Core.TxOut (schemaDocsTxOutCore)
-import Cardano.Db.Schema.Variant.TxOut (schemaDocsTxOutVariant)
+import Cardano.Db.Schema.Variants.TxOutAddress (schemaDocsTxOutVariant)
+import Cardano.Db.Schema.Variants.TxOutCore (schemaDocsTxOutVariantCore)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -72,7 +72,7 @@ docBody :: Text
 docBody = do
   coreDocBody <> variantDivider <> variantDocBody
   where
-    coreDocBody = cleanUp $ render markdownTableRenderer (schemaDocs <> schemaDocsTxOutCore)
+    coreDocBody = cleanUp $ render markdownTableRenderer (schemaDocs <> schemaDocsTxOutVariantCore)
     variantDocBody = cleanUp $ render markdownTableRenderer schemaDocsTxOutVariant
     cleanUp = Text.replace "ID:" "Id:" . Text.replace "#" "###"
     variantDivider =

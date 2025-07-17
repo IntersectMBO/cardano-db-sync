@@ -23,7 +23,7 @@ import Prelude ()
 
 simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
 simpleRewards =
-  withFullConfigAndDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
