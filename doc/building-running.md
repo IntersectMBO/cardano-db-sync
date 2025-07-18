@@ -36,15 +36,15 @@ nix run .#mainnet/node
 ```
 
 More detailed instructions on GHC, Cabal, libraries and `cardano-node` setup can be found here:
-- [Installing Cardano Node from source](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/install.md)
-- [Building Cardano Node with nix](https://github.com/IntersectMBO/cardano-node/blob/master/doc/getting-started/building-the-node-using-nix.md)
+- [Installing Cardano Node from source](https://developers.cardano.org/docs/get-started/cardano-node/installing-cardano-node/#building-from-source)
+- [Building Cardano Node with nix](https://developers.cardano.org/docs/get-started/cardano-node/installing-cardano-node/#building-via-nix)
 
 ### Set up and run the db-sync node
 
 - Install secp256k1 library as a prerequisite for building with cabal:
 
 ``` shell
-./scripts/secp256k1-setup.sh ac83be33d0956faf6b7f61a60ab524ef7d6a473a
+./scripts/secp256k1-setup.sh acf5c55ae6a94e5ca847e07def40427547876101
 # Check ./github/workflows/haskell.yml to validate the git sha above.
 
 # On Linux

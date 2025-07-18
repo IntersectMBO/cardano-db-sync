@@ -5,7 +5,7 @@
 This guide assumes you have the following tools:
 
  * [Git](https://git-scm.com/download)
- * [Cardano Node](https://github.com/input-output-hk/cardano-node-wiki/blob/main/docs/getting-started/install.md)
+ * [Cardano Node](https://developers.cardano.org/docs/get-started/cardano-node/installing-cardano-node/)
  * [Cardano DB Sync](installing.md)
 
 ## Download Configuration Files
@@ -13,7 +13,7 @@ This guide assumes you have the following tools:
 Create a directory to store configs
 
 ```bash
-mkdir -p ~/src/cardano-environments/{mainnet,preprod,preview,sanchonet}
+mkdir -p ~/src/cardano-environments/{mainnet,preprod,preview}
 cd ~/src/cardano-environments
 ```
 
@@ -39,7 +39,7 @@ cardano-node run \
     --config ~/src/cardano-environments/config.json
     --topology ~/src/cardano-environments/topology.json \
     --database-path ~/src/cardano-environments/mainnet/db \
-    --socket-path node.socket \
+    --socket-path ~/src/cardano-environments/mainnet/node.socket \
     --host-addr 0.0.0.0 
 ```
 
