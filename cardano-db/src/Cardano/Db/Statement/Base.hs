@@ -17,13 +17,12 @@ import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
 import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Word64, textShow, void)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.IORef (readIORef)
 import Data.List (partition)
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
-import System.IO (hFlush, stdout)
 
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -49,7 +48,7 @@ import Cardano.Db.Statement.Rollback (deleteTablesAfterBlockId)
 import Cardano.Db.Statement.Types (DbInfo, Entity (..), tableName, validateColumn)
 import Cardano.Db.Statement.Variants.TxOut (querySetNullTxOut)
 import Cardano.Db.Types (Ada (..), DbAction, DbWord64, ExtraMigration, extraDescription)
-import Text.Printf (printf)
+import Cardano.Db.Progress (ProgressRef, updateProgress, withProgress, renderProgressBar)
 
 --------------------------------------------------------------------------------
 -- Block
@@ -887,36 +886,6 @@ deleteBlocksBlockIdStmt =
           , "SELECT COUNT(*)::bigint FROM deleted"
           ]
 
--- Progress tracking data type
-data RollbackProgress = RollbackProgress
-  { rpCurrentStep :: !Int
-  , rpTotalSteps :: !Int
-  , rpCurrentPhase :: !Text.Text
-  , rpStartTime :: !UTCTime
-  }
-  deriving (Show)
-
--- Progress bar rendering
-renderProgressBar :: RollbackProgress -> IO ()
-renderProgressBar progress = do
-  let percentage :: Double
-      percentage = fromIntegral (rpCurrentStep progress) / fromIntegral (rpTotalSteps progress) * 100
-      barWidth = 50
-      filled = round (fromIntegral barWidth * percentage / 100)
-      bar = replicate filled '█' ++ replicate (barWidth - filled) '░'
-
-  putStr $
-    "\r\ESC[K" -- Clear entire line
-      ++ show (rpCurrentStep progress)
-      ++ "/"
-      ++ show (rpTotalSteps progress)
-      ++ " ["
-      ++ bar
-      ++ "] "
-      ++ printf "%.1f%% - " percentage
-      ++ Text.unpack (rpCurrentPhase progress)
-  hFlush stdout
-
 deleteBlocksBlockId ::
   MonadIO m =>
   Trace IO Text.Text ->
@@ -927,77 +896,60 @@ deleteBlocksBlockId ::
   DbAction m Int64
 deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
   startTime <- liftIO getCurrentTime
-  progressRef <- liftIO $ newIORef $ RollbackProgress 0 6 "Initializing..." startTime
 
-  liftIO $ do
-    putStrLn ""
-    renderProgressBar =<< readIORef progressRef
+  withProgress 6 "Initializing rollback..." $ \progressRef -> do
 
-  -- Step 1: Find minimum IDs
-  liftIO $ do
-    writeIORef progressRef . (\p -> p {rpCurrentStep = 1, rpCurrentPhase = "Finding reverse indexes..."}) =<< readIORef progressRef
-    putStrLn "" -- Clear the line for better visibility
-    renderProgressBar =<< readIORef progressRef
+    -- Step 1: Find minimum IDs
+    updateProgress progressRef 1 "Finding reverse indexes..."
 
-  mMinIds <- fmap (textToMinIds txOutVariantType =<<) <$> queryReverseIndexBlockId blockId
-  (cminIds, completed) <- findMinIdsRec progressRef mMinIds mempty
-  mRawTxId <- queryMinRefId @SCB.Tx "block_id" blockId (Id.idEncoder Id.getBlockId)
-  let mTxId = Id.TxId <$> mRawTxId
-  minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
+    mMinIds <- fmap (textToMinIds txOutVariantType =<<) <$> queryReverseIndexBlockId blockId
+    (cminIds, completed) <- findMinIdsRec progressRef mMinIds mempty
+    mRawTxId <- queryMinRefId @SCB.Tx "block_id" blockId (Id.idEncoder Id.getBlockId)
+    let mTxId = Id.TxId <$> mRawTxId
+    minIds <- if completed then pure cminIds else completeMinId mTxId cminIds
 
-  -- Step 2: Delete epoch-related data
-  liftIO $ do
-    writeIORef progressRef . (\p -> p {rpCurrentStep = 2, rpCurrentPhase = "Deleting epoch data..."}) =<< readIORef progressRef
-    renderProgressBar =<< readIORef progressRef
+    -- Step 2: Delete epoch-related data
+    updateProgress progressRef 2 "Deleting epoch data..."
+    deleteEpochLogs <- deleteUsingEpochNo epochN
 
-  deleteEpochLogs <- deleteUsingEpochNo epochN
+    -- Step 3: Delete block-related data
+    updateProgress progressRef 3 "Deleting block data..."
+    (deleteBlockCount, blockDeleteLogs) <- deleteTablesAfterBlockId txOutVariantType blockId mTxId minIds
 
-  -- Step 3: Delete block-related data
-  liftIO $ do
-    writeIORef progressRef . (\p -> p {rpCurrentStep = 3, rpCurrentPhase = "Deleting block data..."}) =<< readIORef progressRef
-    renderProgressBar =<< readIORef progressRef
+    -- Step 4: Handle consumed transactions
+    updateProgress progressRef 4 "Updating consumed transactions..."
+    setNullLogs <-
+      if isConsumedTxOut
+        then querySetNullTxOut txOutVariantType mTxId
+        else pure ("ConsumedTxOut is not active so no Nulls set", 0)
 
-  (deleteBlockCount, blockDeleteLogs) <- deleteTablesAfterBlockId txOutVariantType blockId mTxId minIds
+    -- Step 5: Generate summary
+    updateProgress progressRef 5 "Generating summary..."
+    let summary = mkRollbackSummary (deleteEpochLogs <> blockDeleteLogs) setNullLogs
 
-  -- Step 4: Handle consumed transactions
-  liftIO $ do
-    writeIORef progressRef . (\p -> p {rpCurrentStep = 4, rpCurrentPhase = "Updating consumed transactions..."}) =<< readIORef progressRef
-    renderProgressBar =<< readIORef progressRef
+    -- Step 6: Complete
+    updateProgress progressRef 6 "Complete!"
+    endTime <- liftIO getCurrentTime
+    let duration = diffUTCTime endTime startTime
 
-  setNullLogs <-
-    if isConsumedTxOut
-      then querySetNullTxOut txOutVariantType mTxId
-      else pure ("ConsumedTxOut is not active so no Nulls set", 0)
+    liftIO $ do
+      putStrLn $ "\nRollback completed in " ++ show duration
+      logInfo trce summary
 
-  -- Step 5: Generate summary
-  liftIO $ do
-    writeIORef progressRef . (\p -> p {rpCurrentStep = 5, rpCurrentPhase = "Generating summary..."}) =<< readIORef progressRef
-    renderProgressBar =<< readIORef progressRef
-
-  let summary = mkRollbackSummary (deleteEpochLogs <> blockDeleteLogs) setNullLogs
-
-  -- Step 6: Complete
-  endTime <- liftIO getCurrentTime
-  let duration = diffUTCTime endTime startTime
-
-  liftIO $ do
-    writeIORef progressRef . (\p -> p {rpCurrentStep = 6, rpCurrentPhase = "Complete!"}) =<< readIORef progressRef
-    finalProgress <- readIORef progressRef
-    renderProgressBar finalProgress
-    putStrLn $ "\nRollback completed in " ++ show duration
-    logInfo trce summary
-
-  pure deleteBlockCount
+    pure deleteBlockCount
   where
-    findMinIdsRec :: MonadIO m => IORef RollbackProgress -> [Maybe MinIdsWrapper] -> MinIdsWrapper -> DbAction m (MinIdsWrapper, Bool)
+    findMinIdsRec :: MonadIO m => ProgressRef -> [Maybe MinIdsWrapper] -> MinIdsWrapper -> DbAction m (MinIdsWrapper, Bool)
     findMinIdsRec _ [] minIds = pure (minIds, True)
     findMinIdsRec progressRef (mMinIds : rest) minIds =
       case mMinIds of
         Nothing -> do
-          liftIO $ putStr "\ESC[A\r\ESC[K" -- Move up one line and clear it
-          liftIO $ putStr "Failed to find ReverseIndex. Deletion may take longer."
-          liftIO $ putStr "\n"
-          liftIO $ renderProgressBar =<< readIORef progressRef
+          -- Show error message while preserving progress bar
+          liftIO $ do
+            putStr "\ESC[A\r\ESC[K" -- Move up one line and clear it
+            putStr "Failed to find ReverseIndex. Deletion may take longer."
+            putStr "\n"
+            -- Re-render the progress bar to keep it visible
+            renderProgressBar =<< readIORef progressRef
           pure (minIds, False)
         Just minIdDB -> do
           let minIds' = minIds <> minIdDB

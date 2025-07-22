@@ -145,7 +145,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
     void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
 
   -- This runMigration is ONLY for delayed migrations during sync (like indexes)
-  let runDelayedMigration mode = do
+  let runIndexesMigration mode = do
         msg <- DB.getMaintenancePsqlConf pgConfig
         logInfo trce $ "Running database migrations in mode " <> textShow mode
         logInfo trce msg
@@ -157,7 +157,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
     trce
     iomgr
     dbConnectionSetting
-    (void . runDelayedMigration)
+    (void . runIndexesMigration)
     syncNodeConfigFromFile
     params
     syncOpts
@@ -188,7 +188,7 @@ runSyncNode ::
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnSetting runIndexesMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -220,7 +220,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runDelayedMigrationFnc syncN
                 genCfg
                 syncNodeConfigFromFile
                 syncNodeParams
-                runDelayedMigrationFnc
+                runIndexesMigrationFnc
 
           -- Warn the user that jsonb datatypes are being removed from the database schema.
           when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do

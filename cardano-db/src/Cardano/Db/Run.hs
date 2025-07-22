@@ -42,6 +42,8 @@ import Cardano.Db.Error (DbCallStack (..), DbError (..), runOrThrowIO)
 import Cardano.Db.PGConfig
 import Cardano.Db.Statement.Function.Core (mkDbCallStack)
 import Cardano.Db.Types (DbAction (..), DbEnv (..))
+import Cardano.Db.Statement (runDbSession)
+import qualified Hasql.Session as HsqlSess
 
 -----------------------------------------------------------------------------------------
 -- Transaction Management
@@ -72,6 +74,11 @@ beginTransactionStmt isolationLevel =
 commitTransactionStmt :: HsqlStmt.Statement () ()
 commitTransactionStmt =
   HsqlStmt.Statement "COMMIT" HsqlE.noParams HsqlD.noResult True
+
+commitCurrentTransaction :: MonadIO m => DbAction m ()
+commitCurrentTransaction = do
+  runDbSession (mkDbCallStack "commitCurrentTransaction") $
+    HsqlSess.statement () commitTransactionStmt
 
 -- | Rollback transaction
 rollbackTransactionStmt :: HsqlStmt.Statement () ()

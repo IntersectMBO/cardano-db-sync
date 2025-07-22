@@ -205,9 +205,11 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         bootStrapMaybe syncEnv
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
-        unless ranIndexes $
-          liftIO $
-            runIndexMigrations syncEnv
+
+        unless ranIndexes $ do
+          -- We need to commit the transaction as we are going to run indexes migrations
+          DB.commitCurrentTransaction
+          liftIO $ runIndexesMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
 

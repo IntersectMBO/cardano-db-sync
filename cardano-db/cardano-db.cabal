@@ -30,6 +30,7 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
+                        Cardano.Db.Progress
                         Cardano.Db.Schema.Core
                         Cardano.Db.Schema.Variants
                         Cardano.Db.Schema.Variants.TxOutAddress
@@ -85,7 +86,6 @@ library
                       , cardano-crypto-class
                       , cardano-ledger-core
                       , cardano-prelude
-                      , conduit-extra
                       , containers
                       , contra-tracer
                       , contravariant-extras

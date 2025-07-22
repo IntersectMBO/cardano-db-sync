@@ -57,7 +57,7 @@ data SyncEnv = SyncEnv
   , envOffChainVoteWorkQueue :: !(StrictTBQueue IO OffChainVoteWorkQueue)
   , envOptions :: !SyncOptions
   , envSyncNodeConfig :: !SyncNodeConfig
-  , envRunDelayedMigration :: RunMigration
+  , envRunIndexesMigration :: RunMigration
   , envSystemStart :: !SystemStart
   }
 
