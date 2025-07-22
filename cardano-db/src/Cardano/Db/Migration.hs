@@ -25,15 +25,12 @@ module Cardano.Db.Migration (
 ) where
 
 import Cardano.Prelude (textShow)
-import Control.Exception (Exception, SomeException, handle)
+import Control.Exception (Exception)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Logger (NoLoggingT)
-import Control.Monad.Trans.Resource (runResourceT)
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (isDigit)
-import Data.Conduit.Binary (sinkHandle)
-import Data.Conduit.Process (sourceCmdWithConsumer)
 import Data.Either (partitionEithers)
 import Data.List ((\\))
 import qualified Data.List as List
@@ -53,7 +50,6 @@ import System.FilePath (takeExtension, takeFileName, (</>))
 import System.IO (
   Handle,
   IOMode (AppendMode),
-  hFlush,
   hPrint,
   hPutStrLn,
   stdout,
@@ -63,13 +59,14 @@ import Text.Read (readMaybe)
 
 import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
-import Cardano.Db.Migration.Haskell
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
 import Cardano.Db.Run
 import Cardano.Db.Schema.Variants (TxOutVariantType (..))
 import qualified Cardano.Db.Statement.Function.Core as DB
 import qualified Cardano.Db.Types as DB
+import System.Process (readProcessWithExitCode)
+import Cardano.Db.Progress (withProgress, updateProgress)
 
 newtype MigrationDir
   = MigrationDir FilePath
@@ -104,19 +101,32 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = 
     (_, []) ->
       error $ "Empty schema dir " ++ show migrationDir
     (Nothing, scripts) -> do
-      -- Remove the pattern match that separates first script
       putStrLn "Running:"
-      (scripts', ranAll) <- filterMigrations scripts -- Filter ALL scripts including first
-      forM_ scripts' $ applyMigration' Nothing stdout
+      (scripts', ranAll) <- filterMigrations scripts
+
+      -- Replace just this forM_ with progress bar
+      withProgress (length scripts') "Database migrations" $ \progressRef -> do
+        forM_ (zip [1 :: Integer ..] scripts') $ \(i, script) -> do
+          updateProgress progressRef (fromIntegral i) $
+            "Migration " <> Text.pack (show i) <> "/" <> Text.pack (show (length scripts'))
+          applyMigration' Nothing stdout script
+
       putStrLn "Success!"
       pure ranAll
+
     (Just logfiledir, scripts) -> do
-      -- Remove the pattern match here too
       logFilename <- genLogFilename logfiledir
       withFile logFilename AppendMode $ \logHandle -> do
         unless quiet $ putStrLn "Running:"
-        (scripts', ranAll) <- filterMigrations scripts -- Filter ALL scripts including first
-        forM_ scripts' $ applyMigration' (Just logFilename) logHandle
+        (scripts', ranAll) <- filterMigrations scripts
+
+        -- Replace just this forM_ with progress bar
+        withProgress (length scripts') "Database migrations" $ \progressRef -> do
+          forM_ (zip [1 :: Integer ..] scripts') $ \(i, script) -> do
+            updateProgress progressRef (fromIntegral i) $
+              "Migration " <> Text.pack (show i) <> "/" <> Text.pack (show (length scripts'))
+            applyMigration' (Just logFilename) logHandle script
+
         unless quiet $ putStrLn "Success!"
         pure ranAll
   pure (ranAll, map (takeFileName . snd) (filter isUnofficialMigration allScripts))
@@ -169,37 +179,32 @@ validateMigrations migrationDir knownMigrations = do
     stage3or4 = flip elem [3, 4] . readStageFromFilename . Text.unpack . mvFilepath
 
 applyMigration :: MigrationDir -> Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
-applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (version, script) = do
-  -- This assumes that the credentials for 'psql' are already sorted out.
-  -- One way to achive this is via a 'PGPASSFILE' environment variable
-  -- as per the PostgreSQL documentation.
-  let command =
-        List.unwords
-          [ "psql"
-          , Text.unpack (pgcDbname pgconfig)
-          , "--no-password"
-          , "--quiet"
-          , "--username=" <> Text.unpack (pgcUser pgconfig)
-          , "--host=" <> Text.unpack (pgcHost pgconfig)
-          , "--port=" <> Text.unpack (pgcPort pgconfig)
-          , "--no-psqlrc" -- Ignore the ~/.psqlrc file.
-          , "--single-transaction" -- Run the file as a transaction.
-          , "--set ON_ERROR_STOP=on" -- Exit with non-zero on error.
-          , "--file='" ++ location </> script ++ "'"
-          , "2>&1" -- Pipe stderr to stdout.
-          ]
+applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (_, script) = do
   hPutStrLn logHandle $ "Running : " ++ script
   unless quiet $ putStr ("    " ++ script ++ " ... ")
-  hFlush stdout
-  exitCode <-
-    fst
-      <$> handle
-        (errorExit :: SomeException -> IO a)
-        (runResourceT $ sourceCmdWithConsumer command (sinkHandle logHandle))
+  -- hFlush stdout
+
+  let psqlArgs = [ Text.unpack (pgcDbname pgconfig)
+                 , "--no-password"
+                 , "--quiet"
+                 , "--username=" <> Text.unpack (pgcUser pgconfig)
+                 , "--host=" <> Text.unpack (pgcHost pgconfig)
+                 , "--port=" <> Text.unpack (pgcPort pgconfig)
+                 , "--no-psqlrc"
+                 , "--single-transaction"
+                 , "--set", "ON_ERROR_STOP=on"
+                 , "--file=" ++ location </> script
+                 ]
+
+  hPutStrLn logHandle $ "DEBUG: About to execute psql with args: " ++ show psqlArgs
+  (exitCode, stdt, stderr) <- readProcessWithExitCode "psql" psqlArgs ""
+  hPutStrLn logHandle $ "DEBUG: Command completed with exit code: " ++ show exitCode
+  hPutStrLn logHandle $ "Command output: " ++ stdt
+  unless (null stderr) $ hPutStrLn logHandle $ "Command stderr: " ++ stderr
+
   case exitCode of
     ExitSuccess -> do
       unless quiet $ putStrLn "ok"
-      runHaskellMigration (PGPassCached pgconfig) logHandle version
     ExitFailure _ -> errorExit exitCode
   where
     errorExit :: Show e => e -> IO a
@@ -212,8 +217,6 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (ve
       exitFailure
 
 -- | Create a database migration.
--- TODO: Cmdv - This functionality will need to be reimplemented without Persistent.
--- For now, this serves as a placeholder.
 createMigration :: PGPassSource -> MigrationDir -> TxOutVariantType -> IO (Maybe FilePath)
 createMigration _source (MigrationDir _migdir) _txOutVariantType = do
   -- This would need to be completely rewritten to generate migrations manually
