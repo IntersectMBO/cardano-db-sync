@@ -15,9 +15,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Metadata (
   fromShelleyMetadata,
   fromMaryMetadata,
   metadataValueToJsonNoSchema,
-  txMetadataValueToText,
   fromMetadatum,
-  toMetadatum,
 ) where
 
 import qualified Cardano.Ledger.Allegra.TxAuxData as Allegra
@@ -93,14 +91,6 @@ metadataValueToJsonNoSchema = conv
         . Aeson.Text.encodeToLazyText
         $ conv v
 
-txMetadataValueToText :: TxMetadataValue -> Text
-txMetadataValueToText val
-  | (TxMetaMap pairs) <- val = Text.intercalate ", " $ map (\(k, v) -> txMetadataValueToText k <> ": " <> txMetadataValueToText v) pairs
-  | (TxMetaList values) <- val = "[" <> Text.intercalate ", " (map txMetadataValueToText values) <> "]"
-  | (TxMetaNumber num) <- val = Text.pack (show num)
-  | (TxMetaBytes bytes) <- val = Text.decodeUtf8 bytes
-  | (TxMetaText text) <- val = text
-
 -- -------------------------------------------------------------------------------------------------
 
 -- | JSON strings that are base16 encoded and prefixed with 'bytesPrefix' will
@@ -115,11 +105,3 @@ fromMetadatum = \case
   Shelley.S x -> TxMetaText x
   Shelley.List xs -> TxMetaList $ map fromMetadatum xs
   Shelley.Map xs -> TxMetaMap $ map (both fromMetadatum) xs
-
-toMetadatum :: TxMetadataValue -> Shelley.Metadatum
-toMetadatum = \case
-  TxMetaNumber n -> Shelley.I n
-  TxMetaBytes b -> Shelley.B b
-  TxMetaText s -> Shelley.S s
-  TxMetaList xs -> Shelley.List $ map toMetadatum xs
-  TxMetaMap ms -> Shelley.Map $ map (both toMetadatum) ms

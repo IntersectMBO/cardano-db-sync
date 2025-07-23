@@ -7,7 +7,7 @@
 
 module Cardano.Db.Statement.GovernanceAndVoting where
 
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO, Proxy (..), Word64)
+import Cardano.Prelude (Int64, MonadError (..), MonadIO, Proxy (..), Word64)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -23,7 +23,6 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
-import Cardano.Db.Statement.Function.Query (existsById)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 import Cardano.Db.Types (DbAction, DbLovelace, hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
 
@@ -85,27 +84,6 @@ insertCommitteeHashStmt =
 insertCommitteeHash :: MonadIO m => SGV.CommitteeHash -> DbAction m Id.CommitteeHashId
 insertCommitteeHash committeeHash = do
   runDbSession (mkDbCallStack "insertCommitteeHash") $ HsqlSes.statement committeeHash insertCommitteeHashStmt
-
--- | Query
-queryCommitteeHashStmt :: HsqlStmt.Statement ByteString (Maybe Id.CommitteeHashId)
-queryCommitteeHashStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    table = tableName (Proxy @SGV.CommitteeHash)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id FROM " <> table
-          , " WHERE raw = $1"
-          , " LIMIT 1"
-          ]
-    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
-    decoder = HsqlD.singleRow $ Id.maybeIdDecoder Id.CommitteeHashId
-
-queryCommitteeHash :: MonadIO m => ByteString -> DbAction m (Maybe Id.CommitteeHashId)
-queryCommitteeHash hash =
-  runDbSession (mkDbCallStack "queryCommitteeHash") $
-    HsqlSes.statement hash queryCommitteeHashStmt
 
 --------------------------------------------------------------------------------
 -- CommitteeMember
@@ -446,26 +424,6 @@ updateGovActionExpired gaid eNo =
   runDbSession (mkDbCallStack "updateGovActionExpired") $
     HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionExpiredStmt
 
-setNullEnacted :: MonadIO m => Word64 -> DbAction m Int64
-setNullEnacted eNo =
-  runDbSession (mkDbCallStack "setNullEnacted") $
-    HsqlSes.statement (fromIntegral eNo) setNullEnactedStmt
-
-setNullRatified :: MonadIO m => Word64 -> DbAction m Int64
-setNullRatified eNo =
-  runDbSession (mkDbCallStack "setNullRatified") $
-    HsqlSes.statement (fromIntegral eNo) setNullRatifiedStmt
-
-setNullExpired :: MonadIO m => Word64 -> DbAction m Int64
-setNullExpired eNo =
-  runDbSession (mkDbCallStack "setNullExpired") $
-    HsqlSes.statement (fromIntegral eNo) setNullExpiredStmt
-
-setNullDropped :: MonadIO m => Word64 -> DbAction m Int64
-setNullDropped eNo =
-  runDbSession (mkDbCallStack "setNullDropped") $
-    HsqlSes.statement (fromIntegral eNo) setNullDroppedStmt
-
 --------------------------------------------------------------------------------
 
 queryGovActionProposalIdStmt :: HsqlStmt.Statement (Id.TxId, Word64) (Maybe Id.GovActionProposalId)
@@ -528,18 +486,6 @@ insertTreasury treasury = do
   runDbSession (mkDbCallStack "insertTreasury") $ HsqlSes.statement treasury insertTreasuryStmt
 
 --------------------------------------------------------------------------------
-insertTreasuryWithdrawalStmt :: HsqlStmt.Statement SGV.TreasuryWithdrawal Id.TreasuryWithdrawalId
-insertTreasuryWithdrawalStmt =
-  insert
-    SGV.treasuryWithdrawalEncoder
-    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TreasuryWithdrawalId)
-
-insertTreasuryWithdrawal :: MonadIO m => SGV.TreasuryWithdrawal -> DbAction m Id.TreasuryWithdrawalId
-insertTreasuryWithdrawal treasuryWithdrawal = do
-  runDbSession (mkDbCallStack "insertTreasuryWithdrawal") $
-    HsqlSes.statement treasuryWithdrawal insertTreasuryWithdrawalStmt
-
---------------------------------------------------------------------------------
 insertBulkTreasuryWithdrawalStmt :: HsqlStmt.Statement [SGV.TreasuryWithdrawal] ()
 insertBulkTreasuryWithdrawalStmt =
   insertBulk
@@ -585,15 +531,3 @@ insertVotingProcedure :: MonadIO m => SGV.VotingProcedure -> DbAction m Id.Votin
 insertVotingProcedure votingProcedure = do
   runDbSession (mkDbCallStack "insertVotingProcedure") $
     HsqlSes.statement votingProcedure insertVotingProcedureStmt
-
--- | QUERY
-queryVotingAnchorIdExistsStmt :: HsqlStmt.Statement Id.VotingAnchorId Bool
-queryVotingAnchorIdExistsStmt =
-  existsById
-    (Id.idEncoder Id.getVotingAnchorId)
-    (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
-
-queryVotingAnchorIdExists :: MonadIO m => Id.VotingAnchorId -> DbAction m Bool
-queryVotingAnchorIdExists votingAnchorId =
-  runDbSession (mkDbCallStack "queryVotingAnchorIdExists") $
-    HsqlSes.statement votingAnchorId queryVotingAnchorIdExistsStmt

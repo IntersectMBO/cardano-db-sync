@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeApplications #-}
@@ -17,7 +16,6 @@ module Cardano.DbSync.Ledger.Event (
   convertAuxLedgerEvent,
   mkTreasuryReward,
   convertPoolRewards,
-  ledgerEventName,
   splitDeposits,
 ) where
 
@@ -107,21 +105,6 @@ toOrdering ev = case ev of
 
 convertAuxLedgerEvent :: Bool -> OneEraLedgerEvent (CardanoEras StandardCrypto) -> Maybe LedgerEvent
 convertAuxLedgerEvent hasRewards = toLedgerEvent hasRewards . wrappedAuxLedgerEvent
-
-ledgerEventName :: LedgerEvent -> Text
-ledgerEventName le =
-  case le of
-    LedgerMirDist {} -> "LedgerMirDist"
-    LedgerPoolReap {} -> "LedgerPoolReap"
-    LedgerIncrementalRewards {} -> "LedgerIncrementalRewards"
-    LedgerDeltaRewards {} -> "LedgerDeltaRewards"
-    LedgerRestrainedRewards {} -> "LedgerRestrainedRewards"
-    LedgerTotalRewards {} -> "LedgerTotalRewards"
-    LedgerAdaPots {} -> "LedgerAdaPots"
-    LedgerGovInfo {} -> "LedgerGovInfo"
-    LedgerDeposits {} -> "LedgerDeposits"
-    LedgerStartAtEpoch {} -> "LedgerStartAtEpoch"
-    LedgerNewEpoch {} -> "LedgerNewEpoch"
 
 wrappedAuxLedgerEvent ::
   OneEraLedgerEvent (CardanoEras StandardCrypto) ->

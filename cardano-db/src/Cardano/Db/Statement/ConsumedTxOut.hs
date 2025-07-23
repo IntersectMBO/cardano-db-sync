@@ -41,28 +41,6 @@ data ConsumedTriplet = ConsumedTriplet
   , ctTxInTxId :: !Id.TxId -- The txId of the txId
   }
 
-consumedTripletDecoder :: HsqlD.Row ConsumedTriplet
-consumedTripletDecoder =
-  ConsumedTriplet
-    <$> Id.idDecoder Id.TxId -- ctTxOutTxId
-    <*> HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8) -- ctTxOutIndex
-    <*> Id.idDecoder Id.TxId -- ctTxInTxId
-
-consumedTripletEncoder :: HsqlE.Params ConsumedTriplet
-consumedTripletEncoder =
-  mconcat
-    [ ctTxOutTxId >$< Id.idEncoder Id.getTxId
-    , ctTxOutIndex >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-    , ctTxInTxId >$< Id.idEncoder Id.getTxId
-    ]
-
-encodeConsumedTripletBulk :: HsqlE.Params ([Id.TxId], [Word64], [Id.TxId])
-encodeConsumedTripletBulk =
-  contrazip3
-    (bulkEncoder $ HsqlE.nonNullable $ Id.getTxId >$< HsqlE.int8)
-    (bulkEncoder $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-    (bulkEncoder $ HsqlE.nonNullable $ Id.getTxId >$< HsqlE.int8)
-
 --------------------------------------------------------------------------------
 
 -- | Run extra migrations for the database

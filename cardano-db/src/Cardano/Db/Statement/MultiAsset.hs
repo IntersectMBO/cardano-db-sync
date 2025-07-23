@@ -62,15 +62,6 @@ queryMultiAssetId policy assetName =
 --------------------------------------------------------------------------------
 -- MaTxMint
 --------------------------------------------------------------------------------
-insertMaTxMintStmt :: HsqlStmt.Statement SMA.MaTxMint Id.MaTxMintId
-insertMaTxMintStmt =
-  insert
-    SMA.maTxMintEncoder
-    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MaTxMintId)
-
-insertMaTxMint :: MonadIO m => SMA.MaTxMint -> DbAction m Id.MaTxMintId
-insertMaTxMint maTxMint =
-  runDbSession (mkDbCallStack "insertMaTxMint") $ HsqlSes.statement maTxMint insertMaTxMintStmt
 
 insertBulkMaTxMintStmt :: HsqlStmt.Statement [SMA.MaTxMint] [Id.MaTxMintId]
 insertBulkMaTxMintStmt =

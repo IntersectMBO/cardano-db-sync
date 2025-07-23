@@ -199,7 +199,6 @@ library
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
                       , plutus-ledger-api
-                      , pretty-show
                       , prometheus
                       , psqueues
                       , random-shuffle
@@ -217,7 +216,6 @@ library
                       , transformers
                       , transformers-except
                       , typed-protocols
-                      , unix
                       , vector
                       , wide-word
                       , yaml

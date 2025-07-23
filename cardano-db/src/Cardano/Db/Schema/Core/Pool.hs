@@ -31,7 +31,6 @@ import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
   DbLovelace (..),
   DbWord64 (..),
-  dbLovelaceDecoder,
   dbLovelaceEncoder,
  )
 
@@ -52,25 +51,6 @@ data PoolHash = PoolHash
 type instance Key PoolHash = Id.PoolHashId
 instance DbInfo PoolHash where
   uniqueFields _ = ["hash_raw"]
-
-entityPoolHashDecoder :: D.Row (Entity PoolHash)
-entityPoolHashDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolHashId
-    <*> poolHashDecoder
-
-poolHashDecoder :: D.Row PoolHash
-poolHashDecoder =
-  PoolHash
-    <$> D.column (D.nonNullable D.bytea) -- poolHashHashRaw
-    <*> D.column (D.nonNullable D.text) -- poolHashView
-
-entityPoolHashEncoder :: E.Params (Entity PoolHash)
-entityPoolHashEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolHashId
-    , entityVal >$< poolHashEncoder
-    ]
 
 poolHashEncoder :: E.Params PoolHash
 poolHashEncoder =
@@ -104,40 +84,6 @@ instance DbInfo PoolStat where
     , ("voting_power", "numeric[]")
     ]
 
-entityPoolStatDecoder :: D.Row (Entity PoolStat)
-entityPoolStatDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolStatId
-    <*> poolStatDecoder
-
-poolStatDecoder :: D.Row PoolStat
-poolStatDecoder =
-  PoolStat
-    <$> Id.idDecoder Id.PoolHashId -- poolStatPoolHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- poolStatEpochNo
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatNumberOfBlocks
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatNumberOfDelegators
-    <*> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatStake
-    <*> D.column (D.nullable $ DbWord64 . fromIntegral <$> D.int8) -- poolStatVotingPower
-
-entityPoolStatEncoder :: E.Params (Entity PoolStat)
-entityPoolStatEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolStatId
-    , entityVal >$< poolStatEncoder
-    ]
-
-poolStatEncoder :: E.Params PoolStat
-poolStatEncoder =
-  mconcat
-    [ poolStatPoolHashId >$< Id.idEncoder Id.getPoolHashId
-    , poolStatEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
-    , poolStatNumberOfBlocks >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , poolStatNumberOfDelegators >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , poolStatStake >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , poolStatVotingPower >$< E.param (E.nullable $ fromIntegral . unDbWord64 >$< E.int8)
-    ]
-
 poolStatBulkEncoder :: E.Params ([Id.PoolHashId], [Word64], [DbWord64], [DbWord64], [DbWord64], [Maybe DbWord64])
 poolStatBulkEncoder =
   contrazip6
@@ -169,34 +115,6 @@ data PoolUpdate = PoolUpdate
 type instance Key PoolUpdate = Id.PoolUpdateId
 instance DbInfo PoolUpdate
 
-entityPoolUpdateDecoder :: D.Row (Entity PoolUpdate)
-entityPoolUpdateDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolUpdateId
-    <*> poolUpdateDecoder
-
-poolUpdateDecoder :: D.Row PoolUpdate
-poolUpdateDecoder =
-  PoolUpdate
-    <$> Id.idDecoder Id.PoolHashId -- poolUpdateHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolUpdateCertIndex (Word16)
-    <*> D.column (D.nonNullable D.bytea) -- poolUpdateVrfKeyHash
-    <*> dbLovelaceDecoder -- poolUpdatePledge
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolUpdateActiveEpochNo
-    <*> Id.maybeIdDecoder Id.PoolMetadataRefId -- poolUpdateMetaId
-    <*> D.column (D.nonNullable D.float8) -- poolUpdateMargin
-    <*> dbLovelaceDecoder -- poolUpdateFixedCost
-    <*> Id.idDecoder Id.TxId -- poolUpdateRegisteredTxId
-    <*> Id.idDecoder Id.StakeAddressId -- poolUpdateRewardAddrId
-    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- poolUpdateDeposit
-
-entityPoolUpdateEncoder :: E.Params (Entity PoolUpdate)
-entityPoolUpdateEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolUpdateId
-    , entityVal >$< poolUpdateEncoder
-    ]
-
 poolUpdateEncoder :: E.Params PoolUpdate
 poolUpdateEncoder =
   mconcat
@@ -227,27 +145,6 @@ data PoolMetadataRef = PoolMetadataRef
 type instance Key PoolMetadataRef = Id.PoolMetadataRefId
 instance DbInfo PoolMetadataRef
 
-entityPoolMetadataRefDecoder :: D.Row (Entity PoolMetadataRef)
-entityPoolMetadataRefDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolMetadataRefId
-    <*> poolMetadataRefDecoder
-
-poolMetadataRefDecoder :: D.Row PoolMetadataRef
-poolMetadataRefDecoder =
-  PoolMetadataRef
-    <$> Id.idDecoder Id.PoolHashId -- poolMetadataRefPoolId
-    <*> D.column (D.nonNullable (PoolUrl <$> D.text)) -- poolMetadataRefUrl
-    <*> D.column (D.nonNullable D.bytea) -- poolMetadataRefHash
-    <*> Id.idDecoder Id.TxId -- poolMetadataRefRegisteredTxId
-
-entityPoolMetadataRefEncoder :: E.Params (Entity PoolMetadataRef)
-entityPoolMetadataRefEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolMetadataRefId
-    , entityVal >$< poolMetadataRefEncoder
-    ]
-
 poolMetadataRefEncoder :: E.Params PoolMetadataRef
 poolMetadataRefEncoder =
   mconcat
@@ -269,25 +166,6 @@ data PoolOwner = PoolOwner
 type instance Key PoolOwner = Id.PoolOwnerId
 instance DbInfo PoolOwner
 
-entityPoolOwnerDecoder :: D.Row (Entity PoolOwner)
-entityPoolOwnerDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolOwnerId
-    <*> poolOwnerDecoder
-
-poolOwnerDecoder :: D.Row PoolOwner
-poolOwnerDecoder =
-  PoolOwner
-    <$> Id.idDecoder Id.StakeAddressId -- poolOwnerAddrId
-    <*> Id.idDecoder Id.PoolUpdateId -- poolOwnerPoolUpdateId
-
-entityPoolOwnerEncoder :: E.Params (Entity PoolOwner)
-entityPoolOwnerEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolOwnerId
-    , entityVal >$< poolOwnerEncoder
-    ]
-
 poolOwnerEncoder :: E.Params PoolOwner
 poolOwnerEncoder =
   mconcat
@@ -308,27 +186,6 @@ data PoolRetire = PoolRetire
 
 type instance Key PoolRetire = Id.PoolRetireId
 instance DbInfo PoolRetire
-
-entityPoolRetireDecoder :: D.Row (Entity PoolRetire)
-entityPoolRetireDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolRetireId
-    <*> poolRetireDecoder
-
-poolRetireDecoder :: D.Row PoolRetire
-poolRetireDecoder =
-  PoolRetire
-    <$> Id.idDecoder Id.PoolHashId -- poolRetireHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- poolRetireCertIndex
-    <*> Id.idDecoder Id.TxId -- poolRetireAnnouncedTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- poolRetireRetiringEpoch
-
-entityPoolRetireEncoder :: E.Params (Entity PoolRetire)
-entityPoolRetireEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolRetireId
-    , entityVal >$< poolRetireEncoder
-    ]
 
 poolRetireEncoder :: E.Params PoolRetire
 poolRetireEncoder =
@@ -355,29 +212,6 @@ data PoolRelay = PoolRelay
 type instance Key PoolRelay = Id.PoolRelayId
 instance DbInfo PoolRelay
 
-entityPoolRelayDecoder :: D.Row (Entity PoolRelay)
-entityPoolRelayDecoder =
-  Entity
-    <$> Id.idDecoder Id.PoolRelayId
-    <*> poolRelayDecoder
-
-poolRelayDecoder :: D.Row PoolRelay
-poolRelayDecoder =
-  PoolRelay
-    <$> Id.idDecoder Id.PoolUpdateId -- poolRelayUpdateId
-    <*> D.column (D.nullable D.text) -- poolRelayIpv4
-    <*> D.column (D.nullable D.text) -- poolRelayIpv6
-    <*> D.column (D.nullable D.text) -- poolRelayDnsName
-    <*> D.column (D.nullable D.text) -- poolRelayDnsSrvName
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- poolRelayPort
-
-entityPoolRelayEncoder :: E.Params (Entity PoolRelay)
-entityPoolRelayEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getPoolRelayId
-    , entityVal >$< poolRelayEncoder
-    ]
-
 poolRelayEncoder :: E.Params PoolRelay
 poolRelayEncoder =
   mconcat
@@ -401,23 +235,10 @@ type instance Key DelistedPool = Id.DelistedPoolId
 instance DbInfo DelistedPool where
   uniqueFields _ = ["hash_raw"]
 
-entityDelistedPoolDecoder :: D.Row (Entity DelistedPool)
-entityDelistedPoolDecoder =
-  Entity
-    <$> Id.idDecoder Id.DelistedPoolId
-    <*> delistedPoolDecoder
-
 delistedPoolDecoder :: D.Row DelistedPool
 delistedPoolDecoder =
   DelistedPool
     <$> D.column (D.nonNullable D.bytea) -- delistedPoolHashRaw
-
-entityDelistedPoolEncoder :: E.Params (Entity DelistedPool)
-entityDelistedPoolEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getDelistedPoolId
-    , entityVal >$< delistedPoolEncoder
-    ]
 
 delistedPoolEncoder :: E.Params DelistedPool
 delistedPoolEncoder = delistedPoolHashRaw >$< E.param (E.nonNullable E.bytea)
@@ -447,13 +268,6 @@ reservedPoolTickerDecoder =
   ReservedPoolTicker
     <$> D.column (D.nonNullable D.text) -- reservedPoolTickerName
     <*> D.column (D.nonNullable D.bytea) -- reservedPoolTickerPoolHash
-
-entityReservedPoolTickerEncoder :: E.Params (Entity ReservedPoolTicker)
-entityReservedPoolTickerEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getReservedPoolTickerId
-    , entityVal >$< reservedPoolTickerEncoder
-    ]
 
 reservedPoolTickerEncoder :: E.Params ReservedPoolTicker
 reservedPoolTickerEncoder =

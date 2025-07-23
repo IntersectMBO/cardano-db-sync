@@ -40,9 +40,9 @@ import Prelude (error, userError)
 
 import Cardano.Db.Error (DbCallStack (..), DbError (..), runOrThrowIO)
 import Cardano.Db.PGConfig
+import Cardano.Db.Statement (runDbSession)
 import Cardano.Db.Statement.Function.Core (mkDbCallStack)
 import Cardano.Db.Types (DbAction (..), DbEnv (..))
-import Cardano.Db.Statement (runDbSession)
 import qualified Hasql.Session as HsqlSess
 
 -----------------------------------------------------------------------------------------

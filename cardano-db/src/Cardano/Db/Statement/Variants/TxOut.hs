@@ -7,8 +7,7 @@
 
 module Cardano.Db.Statement.Variants.TxOut where
 
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Text, Word64, fromMaybe, textShow, unless)
-import Control.Monad.Extra (whenJust)
+import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Text, Word64, fromMaybe, textShow)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -23,14 +22,13 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Variants (CollateralTxOutIdW (..), CollateralTxOutW (..), MaTxOutIdW (..), MaTxOutW (..), TxOutIdW (..), TxOutVariantType (..), TxOutW (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, mkDbCallStack, runDbSession)
-import Cardano.Db.Statement.Function.Delete (deleteAllCount, parameterisedDeleteWhere)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Delete (deleteAllCount)
 import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (adaDecoder, countAll)
-import Cardano.Db.Statement.Types (DbInfo (..), Entity (entityVal), Key)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (entityVal))
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, DbWord64, dbLovelaceDecoder)
-import Contravariant.Extras (contrazip2)
 
 --------------------------------------------------------------------------------
 -- TxOut
@@ -160,128 +158,6 @@ insertBulkTxOut disInOut txOutWs =
     extractVariantTxOut (VATxOutW txOut _) = txOut
     extractVariantTxOut (VCTxOutW _) = error "Unexpected VCTxOutW in VariantTxOut list"
 
--- | Batch resolve multiple transaction outputs at once
-batchResolveTxOutIds ::
-  MonadIO m =>
-  TxOutVariantType ->
-  [(ByteString, Word64)] -> -- [(tx_hash, output_index)]
-  DbAction m [(ByteString, Word64, Id.TxId, TxOutIdW)] -- Results with input info
-batchResolveTxOutIds txOutVariantType hashIndexPairs = do
-  case txOutVariantType of
-    TxOutVariantCore -> do
-      results <-
-        runDbSession (mkDbCallStack "batchResolveTxOutIdsCore") $
-          HsqlSes.statement hashIndexPairs batchResolveTxOutIdsCoreStmt
-      pure $ map (\(h, i, txId, txOutId) -> (h, i, txId, VCTxOutIdW txOutId)) results
-    TxOutVariantAddress -> do
-      results <-
-        runDbSession (mkDbCallStack "batchResolveTxOutIdsAddress") $
-          HsqlSes.statement hashIndexPairs batchResolveTxOutIdsAddressStmt
-      pure $ map (\(h, i, txId, txOutId) -> (h, i, txId, VATxOutIdW txOutId)) results
-
--- | Create batch statement for txout lookup with proper type constraints
-mkBatchResolveTxOutIdsStmt ::
-  forall a.
-  DbInfo a =>
-  Proxy a ->
-  HsqlD.Row (Key a) -> -- ID decoder for the specific type
-  HsqlStmt.Statement [(ByteString, Word64)] [(ByteString, Word64, Id.TxId, Key a)]
-mkBatchResolveTxOutIdsStmt proxy idDecoder =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    txTableN = tableName (Proxy @SVC.Tx)
-    txOutTableN = tableName proxy
-
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT tx.hash, txout.index, txout.tx_id, txout.id"
-          , " FROM " <> txTableN <> " tx"
-          , " INNER JOIN " <> txOutTableN <> " txout ON tx.id = txout.tx_id"
-          , " WHERE (tx.hash, txout.index) = ANY($1)"
-          ]
-
-    encoder =
-      contramap extractPairs $
-        contrazip2
-          (bulkEncoder $ HsqlE.nonNullable HsqlE.bytea)
-          (bulkEncoder $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-
-    extractPairs :: [(ByteString, Word64)] -> ([ByteString], [Word64])
-    extractPairs pairs = (map fst pairs, map snd pairs)
-
-    decoder = HsqlD.rowList $ do
-      hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      index <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      txId <- Id.idDecoder Id.TxId
-      txOutId <- idDecoder
-      pure (hash, index, txId, txOutId)
-
--- | Batch statement for core txout lookup
-batchResolveTxOutIdsCoreStmt :: HsqlStmt.Statement [(ByteString, Word64)] [(ByteString, Word64, Id.TxId, Id.TxOutCoreId)]
-batchResolveTxOutIdsCoreStmt = mkBatchResolveTxOutIdsStmt (Proxy @SVC.TxOutCore) (Id.idDecoder Id.TxOutCoreId)
-
--- | Batch statement for address txout lookup
-batchResolveTxOutIdsAddressStmt :: HsqlStmt.Statement [(ByteString, Word64)] [(ByteString, Word64, Id.TxId, Id.TxOutAddressId)]
-batchResolveTxOutIdsAddressStmt = mkBatchResolveTxOutIdsStmt (Proxy @SVA.TxOutAddress) (Id.idDecoder Id.TxOutAddressId)
-
--- | Batch update consumed_by_tx_id for multiple outputs
-batchUpdateConsumedTxOut ::
-  MonadIO m =>
-  TxOutVariantType ->
-  [(TxOutIdW, Id.TxId)] -> -- [(output_id, consuming_tx_id)]
-  DbAction m ()
-batchUpdateConsumedTxOut txOutVariantType updates = do
-  case txOutVariantType of
-    TxOutVariantCore -> do
-      let coreUpdates = [(Id.getTxOutCoreId coreId, txId) | (VCTxOutIdW coreId, txId) <- updates]
-      unless (null coreUpdates) $
-        runDbSession (mkDbCallStack "batchUpdateConsumedTxOutCore") $
-          HsqlSes.statement coreUpdates batchUpdateConsumedTxOutCoreStmt
-    TxOutVariantAddress -> do
-      let addressUpdates = [(Id.getTxOutAddressId addrId, txId) | (VATxOutIdW addrId, txId) <- updates]
-      unless (null addressUpdates) $
-        runDbSession (mkDbCallStack "batchUpdateConsumedTxOutAddress") $
-          HsqlSes.statement addressUpdates batchUpdateConsumedTxOutAddressStmt
-
--- | Create batch update statement for consumed_by_tx_id with proper type constraints
-mkBatchUpdateConsumedTxOutStmt ::
-  forall a.
-  DbInfo a =>
-  Proxy a ->
-  HsqlStmt.Statement [(Int64, Id.TxId)] ()
-mkBatchUpdateConsumedTxOutStmt proxy =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
-  where
-    tableN = tableName proxy
-
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "UPDATE " <> tableN
-          , " SET consumed_by_tx_id = updates.consuming_tx_id"
-          , " FROM (SELECT unnest($1::bigint[]) as output_id,"
-          , "               unnest($2::bigint[]) as consuming_tx_id) as updates"
-          , " WHERE id = updates.output_id"
-          ]
-
-    encoder =
-      contramap extractPairs $
-        contrazip2
-          (bulkEncoder $ HsqlE.nonNullable HsqlE.int8)
-          (bulkEncoder $ HsqlE.nonNullable $ Id.getTxId >$< HsqlE.int8)
-
-    extractPairs :: [(Int64, Id.TxId)] -> ([Int64], [Id.TxId])
-    extractPairs pairs = (map fst pairs, map snd pairs)
-
--- | Core txout batch update statement
-batchUpdateConsumedTxOutCoreStmt :: HsqlStmt.Statement [(Int64, Id.TxId)] ()
-batchUpdateConsumedTxOutCoreStmt = mkBatchUpdateConsumedTxOutStmt (Proxy @SVC.TxOutCore)
-
--- | Address txout batch update statement
-batchUpdateConsumedTxOutAddressStmt :: HsqlStmt.Statement [(Int64, Id.TxId)] ()
-batchUpdateConsumedTxOutAddressStmt = mkBatchUpdateConsumedTxOutStmt (Proxy @SVA.TxOutAddress)
-
 -- | QUERIES -------------------------------------------------------------------
 queryTxOutCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
 queryTxOutCount txOutVariantType =
@@ -292,46 +168,6 @@ queryTxOutCount txOutVariantType =
     TxOutVariantAddress ->
       runDbSession (mkDbCallStack "queryTxOutCountAddress") $
         HsqlSes.statement () (countAll @SVA.TxOutAddress)
-
---------------------------------------------------------------------------------
-queryTxOutValueStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Id.TxId, DbLovelace))
-queryTxOutValueStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT tx_out.tx_id, tx_out.value"
-          , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
-          , " WHERE tx_out.index = $2 AND tx.hash = $1"
-          ]
-    -- Parameter encoder for (hash, index)
-    encoder =
-      contramap fst (HsqlE.param $ HsqlE.nonNullable HsqlE.bytea)
-        <> contramap snd (HsqlE.param $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-
-    -- Result decoder for (TxId, DbLovelace)
-    decoder =
-      HsqlD.rowMaybe
-        ( (,)
-            <$> Id.idDecoder Id.TxId
-            <*> dbLovelaceDecoder
-        )
-
--- | Query the value of a TxOut by its hash and index,
--- this works the same for both variations of TxOut
-queryTxOutValue ::
-  MonadIO m =>
-  (ByteString, Word64) ->
-  DbAction m (Id.TxId, DbLovelace)
-queryTxOutValue hashIndex@(hash, _) = do
-  result <- runDbSession dbCallStack $ HsqlSes.statement hashIndex queryTxOutValueStmt
-  case result of
-    Just value -> pure value
-    Nothing -> throwError $ DbError dbCallStack errorMsg Nothing
-  where
-    dbCallStack = mkDbCallStack "queryTxOutValue"
-    errorMsg = "TxOut not found for hash: " <> Text.pack (show hash)
 
 --------------------------------------------------------------------------------
 queryTxOutIdStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Id.TxId, Int64))
@@ -616,63 +452,6 @@ queryShelleyGenesisSupply txOutVariantType = do
 
 --------------------------------------------------------------------------------
 -- DELETES
-
--- Statement for deleting MaTxOutCore and TxOutVariantCore records after specific IDs
-deleteMaTxOutCoreAfterIdStmt :: HsqlStmt.Statement Id.MaTxOutCoreId ()
-deleteMaTxOutCoreAfterIdStmt =
-  parameterisedDeleteWhere @SVC.MaTxOutCore
-    "id"
-    ">="
-    (Id.idEncoder Id.getMaTxOutCoreId)
-
-deleteTxOutCoreAfterIdStmt :: HsqlStmt.Statement Id.TxOutCoreId ()
-deleteTxOutCoreAfterIdStmt =
-  parameterisedDeleteWhere @SVC.TxOutCore
-    "id"
-    ">="
-    (Id.idEncoder Id.getTxOutCoreId)
-
--- Function that uses the core delete statements
-deleteCoreTxOutTablesAfterTxId :: MonadIO m => Maybe Id.TxOutCoreId -> Maybe Id.MaTxOutCoreId -> DbAction m ()
-deleteCoreTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
-  let dbCallStack = mkDbCallStack "deleteCoreTxOutTablesAfterTxId"
-
-  -- Delete MaTxOut entries if ID provided
-  whenJust mmaTxOutId $ \maTxOutId ->
-    runDbSession dbCallStack $ HsqlSes.statement maTxOutId deleteMaTxOutCoreAfterIdStmt
-
-  -- Delete TxOut entries if ID provided
-  whenJust mtxOutId $ \txOutId ->
-    runDbSession dbCallStack $ HsqlSes.statement txOutId deleteTxOutCoreAfterIdStmt
-
---------------------------------------------------------------------------------
--- Statement for deleting MaTxOutAddress and TxOutAddress records after specific IDs
-deleteMaTxOutAddressAfterIdStmt :: HsqlStmt.Statement Id.MaTxOutAddressId ()
-deleteMaTxOutAddressAfterIdStmt =
-  parameterisedDeleteWhere @SVA.MaTxOutAddress
-    "id"
-    ">="
-    (Id.idEncoder Id.getMaTxOutAddressId)
-
-deleteTxOutAddressAfterIdStmt :: HsqlStmt.Statement Id.TxOutAddressId ()
-deleteTxOutAddressAfterIdStmt =
-  parameterisedDeleteWhere @SVA.TxOutAddress
-    "id"
-    ">="
-    (Id.idEncoder Id.getTxOutAddressId)
-
--- Function that uses the address variant delete statements
-deleteVariantTxOutTablesAfterTxId :: MonadIO m => Maybe Id.TxOutAddressId -> Maybe Id.MaTxOutAddressId -> DbAction m ()
-deleteVariantTxOutTablesAfterTxId mtxOutId mmaTxOutId = do
-  let dbCallStack = mkDbCallStack "deleteVariantTxOutTablesAfterTxId"
-
-  -- Delete MaTxOut entries if ID provided
-  whenJust mmaTxOutId $ \maTxOutId ->
-    runDbSession dbCallStack $ HsqlSes.statement maTxOutId deleteMaTxOutAddressAfterIdStmt
-
-  -- Delete TxOut entries if ID provided
-  whenJust mtxOutId $ \txOutId ->
-    runDbSession dbCallStack $ HsqlSes.statement txOutId deleteTxOutAddressAfterIdStmt
 
 --------------------------------------------------------------------------------
 -- Statements for deleting all records and returning counts

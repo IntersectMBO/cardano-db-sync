@@ -17,13 +17,12 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Hasql.Decoders as D
 import Hasql.Encoders as E
 
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
-import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
-import Cardano.Db.Types (DbInt65, dbInt65Decoder, dbInt65Encoder)
+import Cardano.Db.Statement.Types (DbInfo (..), Key)
+import Cardano.Db.Types (DbInt65, dbInt65Encoder)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- MULTI ASSETS
@@ -44,36 +43,8 @@ type instance Key MultiAsset = MultiAssetId
 instance DbInfo MultiAsset where
   uniqueFields _ = ["policy", "name"]
 
-entityMultiAssetDecoder :: D.Row (Entity MultiAsset)
-entityMultiAssetDecoder =
-  Entity
-    <$> idDecoder MultiAssetId
-    <*> multiAssetDecoder
-
-multiAssetDecoder :: D.Row MultiAsset
-multiAssetDecoder =
-  MultiAsset
-    <$> D.column (D.nonNullable D.bytea) -- multiAssetPolicy
-    <*> D.column (D.nonNullable D.bytea) -- multiAssetName
-    <*> D.column (D.nonNullable D.text) -- multiAssetFingerprint
-
-entityMultiAssetEncoder :: E.Params (Entity MultiAsset)
-entityMultiAssetEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getMultiAssetId
-    , entityVal >$< multiAssetEncoder
-    ]
-
 multiAssetEncoder :: E.Params MultiAsset
 multiAssetEncoder =
-  mconcat
-    [ multiAssetPolicy >$< E.param (E.nonNullable E.bytea)
-    , multiAssetName >$< E.param (E.nonNullable E.bytea)
-    , multiAssetFingerprint >$< E.param (E.nonNullable E.text)
-    ]
-
-multiAssetInsertEncoder :: E.Params MultiAsset
-multiAssetInsertEncoder =
   mconcat
     [ multiAssetPolicy >$< E.param (E.nonNullable E.bytea)
     , multiAssetName >$< E.param (E.nonNullable E.bytea)
@@ -99,34 +70,6 @@ instance DbInfo MaTxMint where
     [ ("quantity", "bigint[]")
     , ("tx_id", "bigint[]")
     , ("ident", "bigint[]")
-    ]
-
-entityMaTxMintDecoder :: D.Row (Entity MaTxMint)
-entityMaTxMintDecoder =
-  Entity
-    <$> idDecoder MaTxMintId
-    <*> maTxMintDecoder
-
-maTxMintDecoder :: D.Row MaTxMint
-maTxMintDecoder =
-  MaTxMint
-    <$> D.column (D.nonNullable dbInt65Decoder)
-    <*> idDecoder TxId
-    <*> idDecoder MultiAssetId
-
-entityMaTxMintEncoder :: E.Params (Entity MaTxMint)
-entityMaTxMintEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getMaTxMintId
-    , entityVal >$< maTxMintEncoder
-    ]
-
-maTxMintEncoder :: E.Params MaTxMint
-maTxMintEncoder =
-  mconcat
-    [ maTxMintQuantity >$< E.param (E.nonNullable dbInt65Encoder)
-    , maTxMintTxId >$< idEncoder getTxId
-    , maTxMintIdent >$< idEncoder getMultiAssetId
     ]
 
 maTxMintBulkEncoder :: E.Params ([DbInt65], [TxId], [MultiAssetId])

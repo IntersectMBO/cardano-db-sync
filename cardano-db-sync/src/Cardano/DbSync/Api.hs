@@ -12,7 +12,6 @@ module Cardano.DbSync.Api (
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
-  getIsConsumedFixed,
   getDisableInOutState,
   getRanIndexes,
   runIndexesMigrations,
@@ -109,16 +108,6 @@ isConsistent env = do
   case cst of
     Consistent -> pure True
     _otherwise -> pure False
-
-getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
-getIsConsumedFixed env =
-  case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutVariantType)
-    _otherwise -> pure Nothing
-  where
-    txOutVariantType = getTxOutVariantType env
-    pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envDbEnv env
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do

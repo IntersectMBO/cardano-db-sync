@@ -23,12 +23,11 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder, utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
-import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
+import Cardano.Db.Statement.Function.Insert (insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (countAll)
-import Cardano.Db.Statement.GovernanceAndVoting (queryVotingAnchorIdExists)
 import Cardano.Db.Statement.Pool (queryPoolHashIdExistsStmt, queryPoolMetadataRefIdExistsStmt)
-import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
+import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (AnchorType, DbAction, VoteUrl, anchorTypeDecoder, voteUrlDecoder)
 
 --------------------------------------------------------------------------------
@@ -449,20 +448,6 @@ insertBulkOffChainVoteAuthorsStmt =
       )
 
 --------------------------------------------------------------------------------
-insertOffChainVoteDataStmt :: HsqlStmt.Statement SO.OffChainVoteData Id.OffChainVoteDataId
-insertOffChainVoteDataStmt =
-  insertCheckUnique
-    SO.offChainVoteDataEncoder
-    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.OffChainVoteDataId)
-
-insertOffChainVoteData :: MonadIO m => SO.OffChainVoteData -> DbAction m (Maybe Id.OffChainVoteDataId)
-insertOffChainVoteData offChainVoteData = do
-  foundVotingAnchorId <- queryVotingAnchorIdExists (SO.offChainVoteDataVotingAnchorId offChainVoteData)
-  if foundVotingAnchorId
-    then do
-      ocId <- runDbSession (mkDbCallStack "insertOffChainVoteData") $ HsqlS.statement offChainVoteData insertOffChainVoteDataStmt
-      pure $ Just ocId
-    else pure Nothing
 
 insertBulkOffChainVoteDataStmt :: HsqlStmt.Statement [SO.OffChainVoteData] [Id.OffChainVoteDataId]
 insertBulkOffChainVoteDataStmt =
@@ -483,22 +468,7 @@ insertBulkOffChainVoteDataStmt =
       , map SO.offChainVoteDataIsValid xs
       )
 
-insertBulkOffChainVoteData :: MonadIO m => [SO.OffChainVoteData] -> DbAction m [Id.OffChainVoteDataId]
-insertBulkOffChainVoteData offChainVoteData = do
-  runDbSession (mkDbCallStack "insertBulkOffChainVoteData") $
-    HsqlS.statement offChainVoteData insertBulkOffChainVoteDataStmt
-
 --------------------------------------------------------------------------------
-insertOffChainVoteDrepDataStmt :: HsqlStmt.Statement SO.OffChainVoteDrepData Id.OffChainVoteDrepDataId
-insertOffChainVoteDrepDataStmt =
-  insert
-    SO.offChainVoteDrepDataEncoder
-    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.OffChainVoteDrepDataId)
-
-insertOffChainVoteDrepData :: MonadIO m => SO.OffChainVoteDrepData -> DbAction m Id.OffChainVoteDrepDataId
-insertOffChainVoteDrepData drepData =
-  runDbSession (mkDbCallStack "insertOffChainVoteDrepData") $
-    HsqlS.statement drepData insertOffChainVoteDrepDataStmt
 
 insertBulkOffChainVoteDrepDataStmt :: HsqlStmt.Statement [SO.OffChainVoteDrepData] ()
 insertBulkOffChainVoteDrepDataStmt =
@@ -518,11 +488,6 @@ insertBulkOffChainVoteDrepDataStmt =
       , map SO.offChainVoteDrepDataImageUrl xs
       , map SO.offChainVoteDrepDataImageHash xs
       )
-
-insertBulkOffChainVoteDrepData :: MonadIO m => [SO.OffChainVoteDrepData] -> DbAction m ()
-insertBulkOffChainVoteDrepData offChainVoteDrepData =
-  runDbSession (mkDbCallStack "insertBulkOffChainVoteDrepData") $
-    HsqlS.statement offChainVoteDrepData insertBulkOffChainVoteDrepDataStmt
 
 --------------------------------------------------------------------------------
 queryNewVoteWorkQueueDataStmt :: HsqlStmt.Statement Int [(Id.VotingAnchorId, ByteString, VoteUrl, AnchorType)]
@@ -582,19 +547,6 @@ insertBulkOffChainVoteExternalUpdatesStmt =
       )
 
 --------------------------------------------------------------------------------
-insertOffChainVoteFetchErrorStmt :: HsqlStmt.Statement SO.OffChainVoteFetchError ()
-insertOffChainVoteFetchErrorStmt =
-  insertCheckUnique
-    SO.offChainVoteFetchErrorEncoder
-    NoResult
-
-insertOffChainVoteFetchError :: MonadIO m => SO.OffChainVoteFetchError -> DbAction m ()
-insertOffChainVoteFetchError offChainVoteFetchError = do
-  foundVotingAnchor <-
-    queryVotingAnchorIdExists (SO.offChainVoteFetchErrorVotingAnchorId offChainVoteFetchError)
-  when foundVotingAnchor $ do
-    runDbSession (mkDbCallStack "insertOffChainVoteFetchError") $
-      HsqlS.statement offChainVoteFetchError insertOffChainVoteFetchErrorStmt
 
 insertBulkOffChainVoteFetchErrorStmt :: HsqlStmt.Statement [SO.OffChainVoteFetchError] ()
 insertBulkOffChainVoteFetchErrorStmt =
@@ -632,22 +584,6 @@ insertBulkOffChainVoteGovActionData :: MonadIO m => [SO.OffChainVoteGovActionDat
 insertBulkOffChainVoteGovActionData offChainVoteGovActionData =
   runDbSession (mkDbCallStack "insertBulkOffChainVoteGovActionData") $
     HsqlS.statement offChainVoteGovActionData insertBulkOffChainVoteGovActionDataStmt
-
---------------------------------------------------------------------------------
--- OffChainVoteGovActionData
---------------------------------------------------------------------------------
-insertOffChainVoteGovActionDataStmt :: HsqlStmt.Statement SO.OffChainVoteGovActionData (Entity SO.OffChainVoteGovActionData)
-insertOffChainVoteGovActionDataStmt =
-  insert
-    SO.offChainVoteGovActionDataEncoder
-    (WithResult $ HsqlD.singleRow SO.entityOffChainVoteGovActionDataDecoder)
-
-insertOffChainVoteGovActionData :: MonadIO m => SO.OffChainVoteGovActionData -> DbAction m Id.OffChainVoteGovActionDataId
-insertOffChainVoteGovActionData offChainVoteGovActionData = do
-  entity <-
-    runDbSession (mkDbCallStack "insertOffChainVoteGovActionData") $
-      HsqlS.statement offChainVoteGovActionData insertOffChainVoteGovActionDataStmt
-  pure $ entityKey entity
 
 --------------------------------------------------------------------------------
 -- OffChainVoteReference

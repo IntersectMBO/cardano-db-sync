@@ -2,7 +2,7 @@
 
 module Cardano.Db.Progress (
   -- * Types
-  Progress(..),
+  Progress (..),
   ProgressRef,
 
   -- * Progress creation and management
@@ -16,10 +16,10 @@ module Cardano.Db.Progress (
 
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import Data.Time.Clock (UTCTime, getCurrentTime, diffUTCTime, NominalDiffTime)
+import Data.Time.Clock (NominalDiffTime, UTCTime, diffUTCTime, getCurrentTime)
 import System.IO (hFlush, stdout)
 import Text.Printf (printf)
 
@@ -43,19 +43,21 @@ initProgress totalSteps initialPhase = liftIO $ do
 -- | Update progress with new step and phase
 updateProgress :: MonadIO m => ProgressRef -> Int -> Text -> m ()
 updateProgress progressRef step phase = liftIO $ do
-  modifyIORef' progressRef $ \p -> p
-    { pCurrentStep = step
-    , pCurrentPhase = phase
-    }
+  modifyIORef' progressRef $ \p ->
+    p
+      { pCurrentStep = step
+      , pCurrentPhase = phase
+      }
   renderProgressBar =<< readIORef progressRef
 
 -- | Render the progress bar to stdout
 renderProgressBar :: Progress -> IO ()
 renderProgressBar progress = do
   let percentage :: Double
-      percentage = if pTotalSteps progress == 0
-                   then 0
-                   else fromIntegral (pCurrentStep progress) / fromIntegral (pTotalSteps progress) * 100
+      percentage =
+        if pTotalSteps progress == 0
+          then 0
+          else fromIntegral (pCurrentStep progress) / fromIntegral (pTotalSteps progress) * 100
       barWidth = 50
       filled = round (fromIntegral barWidth * percentage / 100)
       bar = replicate filled '█' ++ replicate (barWidth - filled) '░'
@@ -75,7 +77,9 @@ renderProgressBar progress = do
       ++ "] "
       ++ printf "%.1f%% - " percentage
       ++ Text.unpack (pCurrentPhase progress)
-      ++ " (" ++ elapsedStr ++ ")"
+      ++ " ("
+      ++ elapsedStr
+      ++ ")"
   hFlush stdout
 
 -- | Format duration as MM:SS or HH:MM:SS

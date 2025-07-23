@@ -146,11 +146,6 @@ queryPoolHashIdExistsStmt =
     (Id.idEncoder Id.getPoolHashId)
     (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
 
-queryPoolHashIdExists :: MonadIO m => Id.PoolHashId -> DbAction m Bool
-queryPoolHashIdExists poolHashId =
-  runDbSession (mkDbCallStack "queryPoolHashIdExists") $
-    HsqlSes.statement poolHashId queryPoolHashIdExistsStmt
-
 --------------------------------------------------------------------------------
 -- PoolMetadataRef
 --------------------------------------------------------------------------------
@@ -171,23 +166,6 @@ queryPoolMetadataRefIdExistsStmt =
   existsById
     (Id.idEncoder Id.getPoolMetadataRefId)
     (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
-
-queryPoolMetadataRefIdExists :: MonadIO m => Id.PoolMetadataRefId -> DbAction m Bool
-queryPoolMetadataRefIdExists poolMetadataRefId =
-  runDbSession (mkDbCallStack "queryPoolMetadataRefIdExists") $
-    HsqlSes.statement poolMetadataRefId queryPoolMetadataRefIdExistsStmt
-
---------------------------------------------------------------------------------
-existsPoolMetadataRefIdStmt :: HsqlStmt.Statement Id.PoolMetadataRefId Bool
-existsPoolMetadataRefIdStmt =
-  existsById
-    (Id.idEncoder Id.getPoolMetadataRefId)
-    (WithResult (HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
-
-existsPoolMetadataRefId :: MonadIO m => Id.PoolMetadataRefId -> DbAction m Bool
-existsPoolMetadataRefId pmrid =
-  runDbSession (mkDbCallStack "existsPoolMetadataRefId") $
-    HsqlSes.statement pmrid existsPoolMetadataRefIdStmt
 
 --------------------------------------------------------------------------------
 deletePoolMetadataRefById :: MonadIO m => Id.PoolMetadataRefId -> DbAction m ()

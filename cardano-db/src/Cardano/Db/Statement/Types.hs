@@ -13,7 +13,6 @@
 
 module Cardano.Db.Statement.Types where
 
-import Cardano.Prelude (Int64)
 import Data.Char (isUpper, toLower)
 import Data.List (stripPrefix)
 import qualified Data.List.NonEmpty as NE
@@ -22,7 +21,6 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Typeable (Typeable, tyConName, typeRep, typeRepTyCon)
 import GHC.Generics
-import qualified Hasql.Decoders as HsqlD
 
 -- | DbInfo provides automatic derivation of table and column names from Haskell types.
 -- Table names are derived from the type name converted to snake_case.
@@ -207,18 +205,3 @@ deriving instance (Eq (Key record), Eq record) => Eq (Entity record)
 deriving instance (Ord (Key record), Ord record) => Ord (Entity record)
 deriving instance (Show (Key record), Show record) => Show (Entity record)
 deriving instance (Read (Key record), Read record) => Read (Entity record)
-
--- Functions to work with entities
-fromEntity :: Entity a -> a
-fromEntity = entityVal
-
-toEntity :: Key a -> a -> Entity a
-toEntity = Entity
-
--- Decoder for Entity
-entityDecoder :: HsqlD.Row (Key a) -> HsqlD.Row a -> HsqlD.Row (Entity a)
-entityDecoder keyDec valDec = Entity <$> keyDec <*> valDec
-
--- Helper function for decoding standard integer IDs
-stdKeyDecoder :: HsqlD.Row Int64
-stdKeyDecoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)

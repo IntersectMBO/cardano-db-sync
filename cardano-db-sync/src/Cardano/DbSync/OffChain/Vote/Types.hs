@@ -32,30 +32,6 @@ getMinimalBody = \case
   OffChainVoteDataGa dt -> coerceMinimalBody @GovernanceOffChainData $ toMinimal $ body dt
   OffChainVoteDataDr dt -> coerceMinimalBody @DrepOffChainData $ toMinimal $ body dt
 
-getTitle :: OffChainVoteData -> Maybe Text
-getTitle = \case
-  OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ textValue $ title $ body ga
-  OffChainVoteDataDr _ -> Nothing
-
-getAbstract :: OffChainVoteData -> Maybe Text
-getAbstract = \case
-  OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ textValue $ abstract $ body ga
-  OffChainVoteDataDr _ -> Nothing
-
-getMotivation :: OffChainVoteData -> Maybe Text
-getMotivation = \case
-  OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ textValue $ motivation $ body ga
-  OffChainVoteDataDr _ -> Nothing
-
-getRationale :: OffChainVoteData -> Maybe Text
-getRationale = \case
-  OffChainVoteDataOther _ -> Nothing
-  OffChainVoteDataGa ga -> Just $ textValue $ rationale $ body ga
-  OffChainVoteDataDr _ -> Nothing
-
 eitherDecodeOffChainVoteData :: LBS.ByteString -> DB.AnchorType -> Either String OffChainVoteData
 eitherDecodeOffChainVoteData lbs = \case
   DB.GovActionAnchor ->
@@ -80,12 +56,6 @@ getAuthors = \case
   OffChainVoteDataOther dt -> authors dt
   OffChainVoteDataGa dt -> authors dt
   OffChainVoteDataDr dt -> authors dt
-
-getHashAlgorithm :: OffChainVoteData -> Text
-getHashAlgorithm = \case
-  OffChainVoteDataOther dt -> textValue $ hashAlgorithm dt
-  OffChainVoteDataGa dt -> textValue $ hashAlgorithm dt
-  OffChainVoteDataDr dt -> textValue $ hashAlgorithm dt
 
 getLanguage :: OffChainVoteData -> Text
 getLanguage = \case

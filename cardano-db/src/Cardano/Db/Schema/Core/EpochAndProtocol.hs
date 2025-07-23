@@ -18,7 +18,6 @@ import Cardano.Db.Types (
   DbLovelace (..),
   DbWord64,
   SyncState,
-  dbInt65Decoder,
   dbInt65Encoder,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
@@ -26,7 +25,6 @@ import Cardano.Db.Types (
   maybeDbLovelaceEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
-  syncStateDecoder,
   syncStateEncoder,
   word128Decoder,
   word128Encoder,
@@ -40,9 +38,7 @@ import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
-import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
-import Contravariant.Extras (contrazip4)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
 
@@ -74,12 +70,6 @@ type instance Key Epoch = EpochId
 instance DbInfo Epoch where
   uniqueFields _ = ["no"]
 
-entityEpochDecoder :: D.Row (Entity Epoch)
-entityEpochDecoder =
-  Entity
-    <$> idDecoder EpochId
-    <*> epochDecoder
-
 epochDecoder :: D.Row Epoch
 epochDecoder =
   Epoch
@@ -90,13 +80,6 @@ epochDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochNo
     <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochStartTime
     <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochEndTime
-
-entityEpochEncoder :: E.Params (Entity Epoch)
-entityEpochEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getEpochId
-    , entityVal >$< epochEncoder
-    ]
 
 epochEncoder :: E.Params Epoch
 epochEncoder =
@@ -241,13 +224,6 @@ epochParamDecoder =
     <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
 
-entityEpochParamEncoder :: E.Params (Entity EpochParam)
-entityEpochParamEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getEpochParamId
-    , entityVal >$< epochParamEncoder
-    ]
-
 epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
   mconcat
@@ -330,27 +306,6 @@ instance DbInfo EpochState where
     , ("epoch_no", "bigint[]")
     ]
 
-entityEpochStateDecoder :: D.Row (Entity EpochState)
-entityEpochStateDecoder =
-  Entity
-    <$> idDecoder EpochStateId
-    <*> epochStateDecoder
-
-epochStateDecoder :: D.Row EpochState
-epochStateDecoder =
-  EpochState
-    <$> maybeIdDecoder CommitteeId -- epochStateCommitteeId
-    <*> maybeIdDecoder GovActionProposalId -- epochStateNoConfidenceId
-    <*> maybeIdDecoder ConstitutionId -- epochStateConstitutionId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochStateEpochNo
-
-entityEpochStateEncoder :: E.Params (Entity EpochState)
-entityEpochStateEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getEpochStateId
-    , entityVal >$< epochStateEncoder
-    ]
-
 epochStateEncoder :: E.Params EpochState
 epochStateEncoder =
   mconcat
@@ -359,14 +314,6 @@ epochStateEncoder =
     , epochStateConstitutionId >$< maybeIdEncoder getConstitutionId
     , epochStateEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     ]
-
-epochStateBulkEncoder :: E.Params ([Maybe CommitteeId], [Maybe GovActionProposalId], [Maybe ConstitutionId], [Word64])
-epochStateBulkEncoder =
-  contrazip4
-    (bulkEncoder $ E.nullable $ getCommitteeId >$< E.int8)
-    (bulkEncoder $ E.nullable $ getGovActionProposalId >$< E.int8)
-    (bulkEncoder $ E.nullable $ getConstitutionId >$< E.int8)
-    (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int8)
 
 -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -384,26 +331,6 @@ type instance Key EpochSyncTime = EpochSyncTimeId
 instance DbInfo EpochSyncTime where
   uniqueFields _ = ["no"]
   enumFields _ = [("state", "syncstatetype")]
-
-entityEpochSyncTimeDecoder :: D.Row (Entity EpochSyncTime)
-entityEpochSyncTimeDecoder =
-  Entity
-    <$> idDecoder EpochSyncTimeId
-    <*> epochSyncTimeDecoder
-
-epochSyncTimeDecoder :: D.Row EpochSyncTime
-epochSyncTimeDecoder =
-  EpochSyncTime
-    <$> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochSyncTimeNo
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochSyncTimeSeconds
-    <*> D.column (D.nonNullable syncStateDecoder) -- epochSyncTimeState
-
-entityEpochSyncTimeEncoder :: E.Params (Entity EpochSyncTime)
-entityEpochSyncTimeEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getEpochSyncTimeId
-    , entityVal >$< epochSyncTimeEncoder
-    ]
 
 epochSyncTimeEncoder :: E.Params EpochSyncTime
 epochSyncTimeEncoder =
@@ -460,13 +387,6 @@ adaPotsDecoder =
     <*> dbLovelaceDecoder -- adaPotsDepositsDrep
     <*> dbLovelaceDecoder -- adaPotsDepositsProposal
 
-entityAdaPotsEncoder :: E.Params (Entity AdaPots)
-entityAdaPotsEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getAdaPotsId
-    , entityVal >$< adaPotsEncoder
-    ]
-
 adaPotsEncoder :: E.Params AdaPots
 adaPotsEncoder =
   mconcat
@@ -499,27 +419,6 @@ data PotTransfer = PotTransfer
 instance DbInfo PotTransfer
 type instance Key PotTransfer = PotTransferId
 
-entityPotTransferDecoder :: D.Row (Entity PotTransfer)
-entityPotTransferDecoder =
-  Entity
-    <$> idDecoder PotTransferId
-    <*> potTransferDecoder
-
-potTransferDecoder :: D.Row PotTransfer
-potTransferDecoder =
-  PotTransfer
-    <$> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- potTransferCertIndex
-    <*> D.column (D.nonNullable dbInt65Decoder) -- potTransferTreasury
-    <*> D.column (D.nonNullable dbInt65Decoder) -- potTransferReserves
-    <*> idDecoder TxId -- potTransferTxId
-
-entityPotTransferEncoder :: E.Params (Entity PotTransfer)
-entityPotTransferEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getPotTransferId
-    , entityVal >$< potTransferEncoder
-    ]
-
 potTransferEncoder :: E.Params PotTransfer
 potTransferEncoder =
   mconcat
@@ -544,27 +443,6 @@ data Treasury = Treasury
 
 instance DbInfo Treasury
 type instance Key Treasury = TreasuryId
-
-entityTreasuryDecoder :: D.Row (Entity Treasury)
-entityTreasuryDecoder =
-  Entity
-    <$> idDecoder TreasuryId
-    <*> treasuryDecoder
-
-treasuryDecoder :: D.Row Treasury
-treasuryDecoder =
-  Treasury
-    <$> idDecoder StakeAddressId -- treasuryAddrId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- treasuryCertIndex
-    <*> D.column (D.nonNullable dbInt65Decoder) -- treasuryAmount
-    <*> idDecoder TxId -- treasuryTxId
-
-entityTreasuryEncoder :: E.Params (Entity Treasury)
-entityTreasuryEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getTreasuryId
-    , entityVal >$< treasuryEncoder
-    ]
 
 treasuryEncoder :: E.Params Treasury
 treasuryEncoder =
@@ -591,27 +469,6 @@ data Reserve = Reserve
 type instance Key Reserve = ReserveId
 instance DbInfo Reserve
 
-entityReserveDecoder :: D.Row (Entity Reserve)
-entityReserveDecoder =
-  Entity
-    <$> idDecoder ReserveId
-    <*> reserveDecoder
-
-reserveDecoder :: D.Row Reserve
-reserveDecoder =
-  Reserve
-    <$> idDecoder StakeAddressId -- reserveAddrId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- reserveCertIndex
-    <*> D.column (D.nonNullable dbInt65Decoder) -- reserveAmount
-    <*> idDecoder TxId -- reserveTxId
-
-entityReserveEncoder :: E.Params (Entity Reserve)
-entityReserveEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getReserveId
-    , entityVal >$< reserveEncoder
-    ]
-
 reserveEncoder :: E.Params Reserve
 reserveEncoder =
   mconcat
@@ -636,25 +493,6 @@ type instance Key CostModel = CostModelId
 instance DbInfo CostModel where
   uniqueFields _ = ["hash"]
   jsonbFields _ = ["costs"]
-
-entityCostModelDecoder :: D.Row (Entity CostModel)
-entityCostModelDecoder =
-  Entity
-    <$> idDecoder CostModelId
-    <*> costModelDecoder
-
-costModelDecoder :: D.Row CostModel
-costModelDecoder =
-  CostModel
-    <$> D.column (D.nonNullable D.text) -- costModelCosts
-    <*> D.column (D.nonNullable D.bytea) -- costModelHash
-
-entityCostModelEncoder :: E.Params (Entity CostModel)
-entityCostModelEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getCostModelId
-    , entityVal >$< costModelEncoder
-    ]
 
 costModelEncoder :: E.Params CostModel
 costModelEncoder =

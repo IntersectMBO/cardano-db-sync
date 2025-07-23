@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -19,7 +18,6 @@ module Cardano.DbSync.Era.Universal.Epoch (
   insertProposalRefunds,
   insertPoolDepositRefunds,
   insertStakeSlice,
-  sumRewardTotal,
 ) where
 
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
@@ -375,14 +373,6 @@ insertPoolDepositRefunds syncEnv epochNo refunds = do
     tracer = getTrace syncEnv
     rwds = Generic.unRewards refunds
     nw = getNetwork syncEnv
-
-sumRewardTotal :: Map StakeCred (Set Generic.Reward) -> Shelley.Coin
-sumRewardTotal =
-  Shelley.Coin . Map.foldl' sumCoin 0
-  where
-    sumCoin :: Integer -> Set Generic.Reward -> Integer
-    sumCoin !acc sr =
-      acc + sum (map (Shelley.unCoin . Generic.rewardAmount) $ Set.toList sr)
 
 insertPoolStats ::
   forall m.

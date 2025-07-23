@@ -5,7 +5,6 @@
 
 module Cardano.DbSync.Era.Shelley.Query (
   resolveStakeAddress,
-  resolveInputTxOutId,
   resolveInputTxOutIdValue,
   queryResolveInputCredentials,
 ) where
@@ -18,10 +17,6 @@ import Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 
 resolveStakeAddress :: MonadIO m => ByteString -> DB.DbAction m (Maybe DB.StakeAddressId)
 resolveStakeAddress = DB.queryStakeAddress
-
-resolveInputTxOutId :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW))
-resolveInputTxOutId syncEnv txIn =
-  DB.queryTxOutIdEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 resolveInputTxOutIdValue :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
 resolveInputTxOutIdValue syncEnv txIn =

@@ -17,39 +17,23 @@ import qualified Hasql.Statement as HsqlS
 
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 
--- | Creates a statement to delete rows that match a condition on a column
+-- | Creates a parameterized statement to delete rows that match a condition with a parameter
+--
+-- This is the safe, parameterized version of 'deleteWhere' that prevents SQL injection
+-- by properly encoding parameter values.
 --
 -- === Example
 -- @
--- deleteInvalidRecords :: MonadIO m => DbAction m ()
--- deleteInvalidRecords =
---   runDbSession (mkDbCallStack "deleteInvalidRecords") $
---     HsqlSes.statement () (deleteWhere @Record "status" "= 'INVALID'")
+-- deleteOldRecords :: MonadIO m => Word64 -> DbAction m ()
+-- deleteOldRecords maxAge =
+--   runDbSession (mkDbCallStack "deleteOldRecords") $
+--     HsqlSes.statement maxAge (parameterisedDeleteWhere @Record "age" ">=" HsqlE.param)
+--
+-- deleteByStatus :: MonadIO m => Text -> DbAction m ()
+-- deleteByStatus status =
+--   runDbSession (mkDbCallStack "deleteByStatus") $
+--     HsqlSes.statement status (parameterisedDeleteWhere @Record "status" "=" HsqlE.param)
 -- @
-deleteWhere ::
-  forall a.
-  DbInfo a =>
-  -- | Column name to filter on
-  Text.Text ->
-  -- | SQL condition to apply (e.g., "IS NULL", ">= $1", "= 'INVALID'")
-  Text.Text ->
-  -- | Returns a statement that deletes matching rows
-  HsqlS.Statement () ()
-deleteWhere colName condition =
-  HsqlS.Statement sql HsqlE.noParams HsqlD.noResult True
-  where
-    -- Validate the column name
-    validCol = validateColumn @a colName
-
-    -- SQL statement to delete rows matching the condition
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "DELETE FROM " <> tableName (Proxy @a)
-          , " WHERE " <> validCol <> " " <> condition
-          ]
-
--- | Helper function for parameterized DELETE queries
 parameterisedDeleteWhere ::
   forall a p.
   DbInfo a =>
@@ -115,28 +99,6 @@ deleteWhereCount colName condition encoder =
           , ")"
           , "SELECT COUNT(*)::bigint FROM deleted"
           ]
-
--- | Creates a statement to delete all rows in a table
---
--- === Example
--- @
--- truncateTable :: MonadIO m => DbAction m ()
--- truncateTable =
---   runDbSession (mkDbCallStack "truncateTable") $
---     HsqlSes.statement () (deleteAll @MyTable)
--- @
-deleteAll ::
-  forall a.
-  DbInfo a =>
-  HsqlS.Statement () ()
-deleteAll =
-  HsqlS.Statement sql HsqlE.noParams HsqlD.noResult True
-  where
-    table = tableName (Proxy @a)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          ["DELETE FROM " <> table]
 
 -- | Creates a statement to delete all rows in a table and return the count
 --

@@ -2,14 +2,12 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Util (
-  liftLookupFail,
   containsUnicodeNul,
   safeDecodeUtf8,
   safeDecodeToJson,
 ) where
 
 import Control.Concurrent.Class.MonadSTM.Strict (modifyTVar)
-import Control.Monad.Trans.Except.Extra (firstExceptT, newExceptT)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
@@ -22,11 +20,6 @@ import Cardano.Prelude
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..), UnicodeNullSource)
-import Cardano.DbSync.Error
-
-liftLookupFail :: Monad m => Text -> m (Either DB.DbError a) -> ExceptT SyncNodeError m a
-liftLookupFail loc =
-  firstExceptT (\lf -> SNErrDefault $ mconcat [loc, " ", show lf]) . newExceptT
 
 safeDecodeUtf8 :: ByteString -> IO (Either Text.UnicodeException Text)
 safeDecodeUtf8 bs

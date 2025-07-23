@@ -2,7 +2,6 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Cache.Epoch (
-  readCacheEpoch,
   readEpochBlockDiffFromCache,
   readLastMapEpochFromCache,
   rollbackMapEpochInCache,
@@ -25,14 +24,6 @@ import Data.Map.Strict (deleteMin, insert, lookupMax, size, split)
 -------------------------------------------------------------------------------------
 -- Epoch Cache
 -------------------------------------------------------------------------------------
-readCacheEpoch :: MonadIO m => CacheStatus -> m (Maybe CacheEpoch)
-readCacheEpoch cache =
-  case cache of
-    NoCache -> pure Nothing
-    ActiveCache ci -> do
-      cacheEpoch <- liftIO $ readTVarIO (cEpoch ci)
-      pure $ Just cacheEpoch
-
 readEpochBlockDiffFromCache :: MonadIO m => CacheStatus -> m (Maybe EpochBlockDiff)
 readEpochBlockDiffFromCache cache =
   case cache of

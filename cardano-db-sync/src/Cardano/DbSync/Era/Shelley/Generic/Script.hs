@@ -10,9 +10,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Script (
   TimelockScript (..),
   KeyHash (..),
   fromMultiSig,
-  toMultiSig,
   fromTimelock,
-  toTimelock,
 ) where
 
 import Cardano.Crypto.Hash.Class
@@ -51,16 +49,8 @@ fromMultiSig ::
   MultiSigScript era
 fromMultiSig = MultiSigScript
 
-toMultiSig ::
-  MultiSigScript era ->
-  Shelley.MultiSig era
-toMultiSig = unMultiSigScript
-
 fromTimelock :: Allegra.Timelock era -> TimelockScript era
 fromTimelock = TimelockScript
-
-toTimelock :: TimelockScript era -> Allegra.Timelock era
-toTimelock = unTimelockScript
 
 instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era) => Aeson.ToJSON (MultiSigScript era) where
   toJSON (MultiSigScript script) = multiSigToJSON script
