@@ -32,21 +32,6 @@ import Cardano.Db.Statement.MinIds (queryMinRefId, queryMinRefIdNullable) -- Imp
 import Cardano.Db.Statement.Types (DbInfo (..), tableName)
 import Cardano.Db.Types (DbAction)
 
--- This creates a pipeline for multiple delete operations
-runDeletePipeline ::
-  forall m.
-  MonadIO m =>
-  -- | Operation name for logging
-  Text.Text ->
-  -- | List of (table name, delete session)
-  [(Text.Text, HsqlSes.Session Int64)] ->
-  DbAction m [(Text.Text, Int64)]
-runDeletePipeline opName operations = do
-  runDbSession (mkDbCallStack opName) $ do
-    forM operations $ \(tName, deleteSession) -> do
-      count <- deleteSession
-      pure (tName, count)
-
 -- Function to create a delete session without immediately running it
 prepareDelete ::
   forall a b.

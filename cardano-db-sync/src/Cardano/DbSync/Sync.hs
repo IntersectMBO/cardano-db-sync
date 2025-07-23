@@ -18,7 +18,6 @@ module Cardano.DbSync.Sync (
   NetworkName (..),
   SocketPath (..),
   MetricSetters (..),
-  nullMetricSetters,
   SyncEnv (..),
   configureLogging,
   runSyncNodeClient,

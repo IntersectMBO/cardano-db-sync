@@ -26,7 +26,7 @@ import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..),
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
-import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
+import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (Ada, DbAction, DbLovelace, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
@@ -117,64 +117,8 @@ queryEpochStakeCount epoch =
     HsqlSes.statement epoch queryEpochStakeCountStmt
 
 --------------------------------------------------------------------------------
-queryMinMaxEpochStakeStmt ::
-  forall a.
-  DbInfo a =>
-  Text.Text ->
-  HsqlStmt.Statement () (Maybe Word64, Maybe Word64)
-queryMinMaxEpochStakeStmt colName =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
-  where
-    table = tableName (Proxy @a)
-    validCol = validateColumn @a colName
-
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT "
-          , "(SELECT MIN("
-          , validCol
-          , ") FROM "
-          , table
-          , "), "
-          , "(SELECT MAX("
-          , validCol
-          , ") FROM "
-          , table
-          , ")"
-          ]
-
-    decoder =
-      HsqlD.singleRow $
-        ((,) . fmap fromIntegral <$> HsqlD.column (HsqlD.nullable HsqlD.int8))
-          <*> (fmap fromIntegral <$> HsqlD.column (HsqlD.nullable HsqlD.int8))
-
-queryMinMaxEpochStake :: MonadIO m => DbAction m (Maybe Word64, Maybe Word64)
-queryMinMaxEpochStake =
-  runDbSession (mkDbCallStack "queryMinMaxEpochStake") $
-    HsqlSes.statement () $
-      queryMinMaxEpochStakeStmt @SS.EpochStake "epoch_no"
-
---------------------------------------------------------------------------------
 -- EpochProgress
 --------------------------------------------------------------------------------
-insertBulkEpochStakeProgressStmt :: HsqlStmt.Statement [SS.EpochStakeProgress] ()
-insertBulkEpochStakeProgressStmt =
-  insertBulk
-    extractEpochStakeProgress
-    SS.epochStakeProgressBulkEncoder
-    NoResultBulk
-  where
-    extractEpochStakeProgress :: [SS.EpochStakeProgress] -> ([Word64], [Bool])
-    extractEpochStakeProgress xs =
-      ( map SS.epochStakeProgressEpochNo xs
-      , map SS.epochStakeProgressCompleted xs
-      )
-
-insertBulkEpochStakeProgress :: MonadIO m => [SS.EpochStakeProgress] -> DbAction m ()
-insertBulkEpochStakeProgress epochStakeProgresses =
-  runDbSession (mkDbCallStack "insertBulkEpochStakeProgress") $
-    HsqlSes.statement epochStakeProgresses insertBulkEpochStakeProgressStmt
 
 updateStakeProgressCompletedStmt :: HsqlStmt.Statement Word64 ()
 updateStakeProgressCompletedStmt =

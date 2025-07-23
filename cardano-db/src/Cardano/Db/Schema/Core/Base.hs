@@ -37,9 +37,7 @@ import Cardano.Db.Types (
   dbLovelaceEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
-  scriptPurposeDecoder,
   scriptPurposeEncoder,
-  scriptTypeDecoder,
   scriptTypeEncoder,
  )
 
@@ -107,13 +105,6 @@ blockDecoder =
     <*> D.column (D.nullable D.text) -- blockVrfKey
     <*> D.column (D.nullable D.bytea) -- blockOpCert
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockOpCertCounter
-
-entityBlockEncoder :: E.Params (Entity Block)
-entityBlockEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getBlockId
-    , entityVal >$< blockEncoder
-    ]
 
 blockEncoder :: E.Params Block
 blockEncoder =
@@ -185,13 +176,6 @@ txDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txScriptSize
     <*> dbLovelaceDecoder -- txTreasuryDonation
 
-entityTxEncoder :: E.Params (Entity Tx)
-entityTxEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getTxId
-    , entityVal >$< txEncoder
-    ]
-
 txEncoder :: E.Params Tx
 txEncoder =
   mconcat
@@ -232,36 +216,6 @@ instance DbInfo TxMetadata where
     , ("tx_id", "bigint[]")
     ]
 
-entityTxMetadataDecoder :: D.Row (Entity TxMetadata)
-entityTxMetadataDecoder =
-  Entity
-    <$> idDecoder TxMetadataId
-    <*> txMetadataDecoder
-
-txMetadataDecoder :: D.Row TxMetadata
-txMetadataDecoder =
-  TxMetadata
-    <$> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- txMetadataKey
-    <*> D.column (D.nullable D.text) -- txMetadataJson
-    <*> D.column (D.nonNullable D.bytea) -- txMetadataBytes
-    <*> idDecoder TxId -- txMetadataTxId
-
-entityTxMetadataEncoder :: E.Params (Entity TxMetadata)
-entityTxMetadataEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getTxMetadataId
-    , entityVal >$< txMetadataEncoder
-    ]
-
-txMetadataEncoder :: E.Params TxMetadata
-txMetadataEncoder =
-  mconcat
-    [ txMetadataKey >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , txMetadataJson >$< E.param (E.nullable E.text)
-    , txMetadataBytes >$< E.param (E.nonNullable E.bytea)
-    , txMetadataTxId >$< idEncoder getTxId
-    ]
-
 txMetadataBulkEncoder :: E.Params ([DbWord64], [Maybe Text], [ByteString], [TxId])
 txMetadataBulkEncoder =
   contrazip4
@@ -291,12 +245,6 @@ instance DbInfo TxIn where
     , ("tx_out_index", "bigint[]")
     , ("redeemer_id", "bigint[]")
     ]
-
-entityTxInDecoder :: D.Row (Entity TxIn)
-entityTxInDecoder =
-  Entity
-    <$> idDecoder TxInId
-    <*> txInDecoder
 
 txInDecoder :: D.Row TxIn
 txInDecoder =
@@ -344,26 +292,6 @@ data CollateralTxIn = CollateralTxIn
 type instance Key CollateralTxIn = CollateralTxInId
 instance DbInfo CollateralTxIn
 
-entityCollateralTxInDecoder :: D.Row (Entity CollateralTxIn)
-entityCollateralTxInDecoder =
-  Entity
-    <$> idDecoder CollateralTxInId
-    <*> collateralTxInDecoder
-
-collateralTxInDecoder :: D.Row CollateralTxIn
-collateralTxInDecoder =
-  CollateralTxIn
-    <$> idDecoder TxId -- collateralTxInTxInId
-    <*> idDecoder TxId -- collateralTxInTxOutId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- collateralTxInTxOutIndex
-
-entityCollateralTxInEncoder :: E.Params (Entity CollateralTxIn)
-entityCollateralTxInEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getCollateralTxInId
-    , entityVal >$< collateralTxInEncoder
-    ]
-
 collateralTxInEncoder :: E.Params CollateralTxIn
 collateralTxInEncoder =
   mconcat
@@ -386,26 +314,6 @@ data ReferenceTxIn = ReferenceTxIn
 type instance Key ReferenceTxIn = ReferenceTxInId
 instance DbInfo ReferenceTxIn
 
-entityReferenceTxInDecoder :: D.Row (Entity ReferenceTxIn)
-entityReferenceTxInDecoder =
-  Entity
-    <$> idDecoder ReferenceTxInId
-    <*> referenceTxInDecoder
-
-referenceTxInDecoder :: D.Row ReferenceTxIn
-referenceTxInDecoder =
-  ReferenceTxIn
-    <$> idDecoder TxId -- referenceTxInTxInId
-    <*> idDecoder TxId -- referenceTxInTxOutId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- referenceTxInTxOutIndex
-
-entityReferenceTxInEncoder :: E.Params (Entity ReferenceTxIn)
-entityReferenceTxInEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getReferenceTxInId
-    , entityVal >$< referenceTxInEncoder
-    ]
-
 referenceTxInEncoder :: E.Params ReferenceTxIn
 referenceTxInEncoder =
   mconcat
@@ -426,18 +334,6 @@ data ReverseIndex = ReverseIndex
 
 type instance Key ReverseIndex = ReverseIndexId
 instance DbInfo ReverseIndex
-
-entityReverseIndexDecoder :: D.Row (Entity ReverseIndex)
-entityReverseIndexDecoder =
-  Entity
-    <$> idDecoder ReverseIndexId
-    <*> reverseIndexDecoder
-
-reverseIndexDecoder :: D.Row ReverseIndex
-reverseIndexDecoder =
-  ReverseIndex
-    <$> idDecoder BlockId -- reverseIndexBlockId
-    <*> D.column (D.nonNullable D.text) -- reverseIndexMinIds
 
 entityReverseIndexEncoder :: E.Params (Entity ReverseIndex)
 entityReverseIndexEncoder =
@@ -467,25 +363,6 @@ data TxCbor = TxCbor
 type instance Key TxCbor = TxCborId
 instance DbInfo TxCbor
 
-entityTxCborDecoder :: D.Row (Entity TxCbor)
-entityTxCborDecoder =
-  Entity
-    <$> idDecoder TxCborId
-    <*> txCborDecoder
-
-txCborDecoder :: D.Row TxCbor
-txCborDecoder =
-  TxCbor
-    <$> idDecoder TxId -- txCborTxId
-    <*> D.column (D.nonNullable D.bytea) -- txCborBytes
-
-entityTxCborEncoder :: E.Params (Entity TxCbor)
-entityTxCborEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getTxCborId
-    , entityVal >$< txCborEncoder
-    ]
-
 txCborEncoder :: E.Params TxCbor
 txCborEncoder =
   mconcat
@@ -509,27 +386,6 @@ type instance Key Datum = DatumId
 instance DbInfo Datum where
   uniqueFields _ = ["hash"]
   jsonbFields _ = ["value"]
-
-entityDatumDecoder :: D.Row (Entity Datum)
-entityDatumDecoder =
-  Entity
-    <$> idDecoder DatumId
-    <*> datumDecoder
-
-datumDecoder :: D.Row Datum
-datumDecoder =
-  Datum
-    <$> D.column (D.nonNullable D.bytea) -- datumHash
-    <*> idDecoder TxId -- datumTxId
-    <*> D.column (D.nullable D.text) -- datumValue
-    <*> D.column (D.nonNullable D.bytea) -- datumBytes
-
-entityDatumEncoder :: E.Params (Entity Datum)
-entityDatumEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getDatumId
-    , entityVal >$< datumEncoder
-    ]
 
 datumEncoder :: E.Params Datum
 datumEncoder =
@@ -560,29 +416,6 @@ instance DbInfo Script where
   uniqueFields _ = ["hash"]
   jsonbFields _ = ["json"]
   enumFields _ = [("type", "scripttype")]
-
-entityScriptDecoder :: D.Row (Entity Script)
-entityScriptDecoder =
-  Entity
-    <$> idDecoder ScriptId
-    <*> scriptDecoder
-
-scriptDecoder :: D.Row Script
-scriptDecoder =
-  Script
-    <$> idDecoder TxId -- scriptTxId
-    <*> D.column (D.nonNullable D.bytea) -- scriptHash
-    <*> D.column (D.nonNullable scriptTypeDecoder) -- scriptType
-    <*> D.column (D.nullable D.text) -- scriptJson
-    <*> D.column (D.nullable D.bytea) -- scriptBytes
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- scriptSerialisedSize
-
-entityScriptEncoder :: E.Params (Entity Script)
-entityScriptEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getScriptId
-    , entityVal >$< scriptEncoder
-    ]
 
 scriptEncoder :: E.Params Script
 scriptEncoder =
@@ -622,31 +455,6 @@ type instance Key Redeemer = RedeemerId
 instance DbInfo Redeemer where
   enumFields _ = [("purpose", "scriptpurposetype")]
 
-entityRedeemerDecoder :: D.Row (Entity Redeemer)
-entityRedeemerDecoder =
-  Entity
-    <$> idDecoder RedeemerId
-    <*> redeemerDecoder
-
-redeemerDecoder :: D.Row Redeemer
-redeemerDecoder =
-  Redeemer
-    <$> idDecoder TxId -- redeemerTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- redeemerUnitMem
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- redeemerUnitSteps
-    <*> D.column (D.nullable $ DbLovelace . fromIntegral <$> D.int8) -- redeemerFee
-    <*> D.column (D.nonNullable scriptPurposeDecoder) -- redeemerPurpose
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- redeemerIndex
-    <*> D.column (D.nullable D.bytea) -- redeemerScriptHash
-    <*> idDecoder RedeemerDataId -- redeemerRedeemerDataId
-
-entityRedeemerEncoder :: E.Params (Entity Redeemer)
-entityRedeemerEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getRedeemerId
-    , entityVal >$< redeemerEncoder
-    ]
-
 redeemerEncoder :: E.Params Redeemer
 redeemerEncoder =
   mconcat
@@ -677,27 +485,6 @@ instance DbInfo RedeemerData where
   uniqueFields _ = ["hash"]
   jsonbFields _ = ["value"]
 
-entityRedeemerDataDecoder :: D.Row (Entity RedeemerData)
-entityRedeemerDataDecoder =
-  Entity
-    <$> idDecoder RedeemerDataId
-    <*> redeemerDataDecoder
-
-redeemerDataDecoder :: D.Row RedeemerData
-redeemerDataDecoder =
-  RedeemerData
-    <$> D.column (D.nonNullable D.bytea) -- redeemerDataHash
-    <*> idDecoder TxId -- redeemerDataTxId
-    <*> D.column (D.nullable D.text) -- redeemerDataValue
-    <*> D.column (D.nonNullable D.bytea) -- redeemerDataBytes
-
-entityRedeemerDataEncoder :: E.Params (Entity RedeemerData)
-entityRedeemerDataEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getRedeemerDataId
-    , entityVal >$< redeemerDataEncoder
-    ]
-
 redeemerDataEncoder :: E.Params RedeemerData
 redeemerDataEncoder =
   mconcat
@@ -719,25 +506,6 @@ data ExtraKeyWitness = ExtraKeyWitness
 
 type instance Key ExtraKeyWitness = ExtraKeyWitnessId
 instance DbInfo ExtraKeyWitness
-
-entityExtraKeyWitnessDecoder :: D.Row (Entity ExtraKeyWitness)
-entityExtraKeyWitnessDecoder =
-  Entity
-    <$> idDecoder ExtraKeyWitnessId
-    <*> extraKeyWitnessDecoder
-
-extraKeyWitnessDecoder :: D.Row ExtraKeyWitness
-extraKeyWitnessDecoder =
-  ExtraKeyWitness
-    <$> D.column (D.nonNullable D.bytea) -- extraKeyWitnessHash
-    <*> idDecoder TxId -- extraKeyWitnessTxId
-
-entityExtraKeyWitnessEncoder :: E.Params (Entity ExtraKeyWitness)
-entityExtraKeyWitnessEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getExtraKeyWitnessId
-    , entityVal >$< extraKeyWitnessEncoder
-    ]
 
 extraKeyWitnessEncoder :: E.Params ExtraKeyWitness
 extraKeyWitnessEncoder =
@@ -761,26 +529,6 @@ data SlotLeader = SlotLeader
 type instance Key SlotLeader = SlotLeaderId
 instance DbInfo SlotLeader where
   uniqueFields _ = ["hash"]
-
-entitySlotLeaderDecoder :: D.Row (Entity SlotLeader)
-entitySlotLeaderDecoder =
-  Entity
-    <$> idDecoder SlotLeaderId
-    <*> slotLeaderDecoder
-
-slotLeaderDecoder :: D.Row SlotLeader
-slotLeaderDecoder =
-  SlotLeader
-    <$> D.column (D.nonNullable D.bytea) -- slotLeaderHash
-    <*> Id.maybeIdDecoder Id.PoolHashId -- slotLeaderPoolHashId
-    <*> D.column (D.nonNullable D.text) -- slotLeaderDescription
-
-entitySlotLeaderEncoder :: E.Params (Entity SlotLeader)
-entitySlotLeaderEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getSlotLeaderId
-    , entityVal >$< slotLeaderEncoder
-    ]
 
 slotLeaderEncoder :: E.Params SlotLeader
 slotLeaderEncoder =
@@ -814,33 +562,12 @@ data SchemaVersion = SchemaVersion
 type instance Key SchemaVersion = SchemaVersionId
 instance DbInfo SchemaVersion
 
-entitySchemaVersionDecoder :: D.Row (Entity SchemaVersion)
-entitySchemaVersionDecoder =
-  Entity
-    <$> idDecoder SchemaVersionId
-    <*> schemaVersionDecoder
-
 schemaVersionDecoder :: D.Row SchemaVersion
 schemaVersionDecoder =
   SchemaVersion
     <$> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageOne
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageTwo
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- schemaVersionStageThree
-
-entitySchemaVersionEncoder :: E.Params (Entity SchemaVersion)
-entitySchemaVersionEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getSchemaVersionId
-    , entityVal >$< schemaVersionEncoder
-    ]
-
-schemaVersionEncoder :: E.Params SchemaVersion
-schemaVersionEncoder =
-  mconcat
-    [ schemaVersionStageOne >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
-    , schemaVersionStageTwo >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
-    , schemaVersionStageThree >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
-    ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: meta
@@ -870,13 +597,6 @@ metaDecoder =
     <*> D.column (D.nonNullable D.text) -- metaNetworkName
     <*> D.column (D.nonNullable D.text) -- metaVersion
 
-entityMetaEncoder :: E.Params (Entity Meta)
-entityMetaEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getMetaId
-    , entityVal >$< metaEncoder
-    ]
-
 metaEncoder :: E.Params Meta
 metaEncoder =
   mconcat
@@ -900,12 +620,6 @@ data Withdrawal = Withdrawal
 type instance Key Withdrawal = WithdrawalId
 instance DbInfo Withdrawal
 
-entityWithdrawalDecoder :: D.Row (Entity Withdrawal)
-entityWithdrawalDecoder =
-  Entity
-    <$> idDecoder WithdrawalId
-    <*> withdrawalDecoder
-
 withdrawalDecoder :: D.Row Withdrawal
 withdrawalDecoder =
   Withdrawal
@@ -913,13 +627,6 @@ withdrawalDecoder =
     <*> dbLovelaceDecoder -- withdrawalAmount
     <*> maybeIdDecoder RedeemerId -- withdrawalRedeemerId
     <*> idDecoder TxId -- withdrawalTxId
-
-entityWithdrawalEncoder :: E.Params (Entity Withdrawal)
-entityWithdrawalEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getWithdrawalId
-    , entityVal >$< withdrawalEncoder
-    ]
 
 withdrawalEncoder :: E.Params Withdrawal
 withdrawalEncoder =
@@ -942,25 +649,6 @@ data ExtraMigrations = ExtraMigrations
 
 type instance Key ExtraMigrations = ExtraMigrationsId
 instance DbInfo ExtraMigrations
-
-entityExtraMigrationsDecoder :: D.Row (Entity ExtraMigrations)
-entityExtraMigrationsDecoder =
-  Entity
-    <$> idDecoder ExtraMigrationsId
-    <*> extraMigrationsDecoder
-
-extraMigrationsDecoder :: D.Row ExtraMigrations
-extraMigrationsDecoder =
-  ExtraMigrations
-    <$> D.column (D.nonNullable D.text) -- extraMigrationsToken
-    <*> D.column (D.nullable D.text) -- extraMigrationsDescription
-
-entityExtraMigrationsEncoder :: E.Params (Entity ExtraMigrations)
-entityExtraMigrationsEncoder =
-  mconcat
-    [ entityKey >$< idEncoder getExtraMigrationsId
-    , entityVal >$< extraMigrationsEncoder
-    ]
 
 extraMigrationsEncoder :: E.Params ExtraMigrations
 extraMigrationsEncoder =

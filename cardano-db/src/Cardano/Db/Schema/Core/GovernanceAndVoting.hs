@@ -24,22 +24,16 @@ import Cardano.Db.Types (
   Vote,
   VoteUrl,
   VoterRole,
-  anchorTypeDecoder,
   anchorTypeEncoder,
   dbLovelaceBulkEncoder,
-  dbLovelaceDecoder,
   dbLovelaceEncoder,
-  govActionTypeDecoder,
   govActionTypeEncoder,
   maybeDbLovelaceDecoder,
   maybeDbLovelaceEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
-  voteDecoder,
   voteEncoder,
-  voteUrlDecoder,
   voteUrlEncoder,
-  voterRoleDecoder,
   voterRoleEncoder,
  )
 import Contravariant.Extras (contrazip3, contrazip4)
@@ -63,26 +57,6 @@ type instance Key DrepHash = Id.DrepHashId
 instance DbInfo DrepHash where
   uniqueFields _ = ["raw", "has_script"]
 
-entityDrepHashDecoder :: D.Row (Entity DrepHash)
-entityDrepHashDecoder =
-  Entity
-    <$> Id.idDecoder Id.DrepHashId -- entityKey
-    <*> drepHashDecoder -- entityVal
-
-drepHashDecoder :: D.Row DrepHash
-drepHashDecoder =
-  DrepHash
-    <$> D.column (D.nullable D.bytea) -- drepHashRaw
-    <*> D.column (D.nonNullable D.text) -- drepHashView
-    <*> D.column (D.nonNullable D.bool) -- drepHashHasScript
-
-entityDrepHashEncoder :: E.Params (Entity DrepHash)
-entityDrepHashEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getDrepHashId
-    , entityVal >$< drepHashEncoder
-    ]
-
 drepHashEncoder :: E.Params DrepHash
 drepHashEncoder =
   mconcat
@@ -105,28 +79,6 @@ data DrepRegistration = DrepRegistration
 
 type instance Key DrepRegistration = Id.DrepRegistrationId
 instance DbInfo DrepRegistration
-
-entityDrepRegistrationDecoder :: D.Row (Entity DrepRegistration)
-entityDrepRegistrationDecoder =
-  Entity
-    <$> Id.idDecoder Id.DrepRegistrationId -- entityKey
-    <*> drepRegistrationDecoder -- entityVal
-
-drepRegistrationDecoder :: D.Row DrepRegistration
-drepRegistrationDecoder =
-  DrepRegistration
-    <$> Id.idDecoder Id.TxId -- drepRegistrationTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- drepRegistrationCertIndex
-    <*> D.column (D.nullable D.int8) -- drepRegistrationDeposit
-    <*> Id.idDecoder Id.DrepHashId -- drepRegistrationId.DrepHashId
-    <*> Id.maybeIdDecoder Id.VotingAnchorId -- drepRegistrationVotingAnchorId
-
-entityDrepRegistrationEncoder :: E.Params (Entity DrepRegistration)
-entityDrepRegistrationEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getDrepRegistrationId
-    , entityVal >$< drepRegistrationEncoder
-    ]
 
 drepRegistrationEncoder :: E.Params DrepRegistration
 drepRegistrationEncoder =
@@ -159,36 +111,6 @@ instance DbInfo DrepDistr where
     , ("active_until", "bigint[]")
     ]
 
-entityDrepDistrDecoder :: D.Row (Entity DrepDistr)
-entityDrepDistrDecoder =
-  Entity
-    <$> Id.idDecoder Id.DrepDistrId -- entityKey
-    <*> drepDistrDecoder -- entityVal
-
-drepDistrDecoder :: D.Row DrepDistr
-drepDistrDecoder =
-  DrepDistr
-    <$> Id.idDecoder Id.DrepHashId -- drepDistrHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- drepDistrAmount
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- drepDistrEpochNo
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- drepDistrActiveUntil
-
-entityDrepDistrEncoder :: E.Params (Entity DrepDistr)
-entityDrepDistrEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getDrepDistrId
-    , entityVal >$< drepDistrEncoder
-    ]
-
-drepDistrEncoder :: E.Params DrepDistr
-drepDistrEncoder =
-  mconcat
-    [ drepDistrHashId >$< Id.idEncoder Id.getDrepHashId
-    , drepDistrAmount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , drepDistrEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , drepDistrActiveUntil >$< E.param (E.nullable $ fromIntegral >$< E.int8)
-    ]
-
 drepDistrBulkEncoder :: E.Params ([Id.DrepHashId], [Word64], [Word64], [Maybe Word64])
 drepDistrBulkEncoder =
   contrazip4
@@ -211,28 +133,6 @@ data DelegationVote = DelegationVote
 
 type instance Key DelegationVote = Id.DelegationVoteId
 instance DbInfo DelegationVote
-
-entityDelegationVoteDecoder :: D.Row (Entity DelegationVote)
-entityDelegationVoteDecoder =
-  Entity
-    <$> Id.idDecoder Id.DelegationVoteId -- entityKey
-    <*> delegationVoteDecoder -- entityVal
-
-delegationVoteDecoder :: D.Row DelegationVote
-delegationVoteDecoder =
-  DelegationVote
-    <$> Id.idDecoder Id.StakeAddressId -- delegationVoteAddrId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- delegationVoteCertIndex
-    <*> Id.idDecoder Id.DrepHashId -- delegationVoteId.DrepHashId
-    <*> Id.idDecoder Id.TxId -- delegationVoteTxId
-    <*> Id.maybeIdDecoder Id.RedeemerId -- delegationVoteRedeemerId
-
-entityDelegationVoteEncoder :: E.Params (Entity DelegationVote)
-entityDelegationVoteEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getDelegationVoteId
-    , entityVal >$< delegationVoteEncoder
-    ]
 
 delegationVoteEncoder :: E.Params DelegationVote
 delegationVoteEncoder =
@@ -270,37 +170,6 @@ type instance Key GovActionProposal = Id.GovActionProposalId
 instance DbInfo GovActionProposal where
   jsonbFields _ = ["description"]
   enumFields _ = [("type", "govactiontype")]
-
-entityGovActionProposalDecoder :: D.Row (Entity GovActionProposal)
-entityGovActionProposalDecoder =
-  Entity
-    <$> Id.idDecoder Id.GovActionProposalId -- entityKey
-    <*> govActionProposalDecoder -- entityVal
-
-govActionProposalDecoder :: D.Row GovActionProposal
-govActionProposalDecoder =
-  GovActionProposal
-    <$> Id.idDecoder Id.TxId -- govActionProposalTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- govActionProposalIndex
-    <*> Id.maybeIdDecoder Id.GovActionProposalId -- govActionProposalPrevGovActionProposal
-    <*> dbLovelaceDecoder -- govActionProposalDeposit
-    <*> Id.idDecoder Id.StakeAddressId -- govActionProposalReturnAddress
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalExpiration
-    <*> Id.maybeIdDecoder Id.VotingAnchorId -- govActionProposalVotingAnchorId
-    <*> D.column (D.nonNullable govActionTypeDecoder) -- govActionProposalType
-    <*> D.column (D.nonNullable D.text) -- govActionProposalDescription
-    <*> Id.maybeIdDecoder Id.ParamProposalId -- govActionProposalParamProposal
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalRatifiedEpoch
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalEnactedEpoch
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalDroppedEpoch
-    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- govActionProposalExpiredEpoch
-
-entityGovActionProposalEncoder :: E.Params (Entity GovActionProposal)
-entityGovActionProposalEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getGovActionProposalId
-    , entityVal >$< govActionProposalEncoder
-    ]
 
 govActionProposalEncoder :: E.Params GovActionProposal
 govActionProposalEncoder =
@@ -343,33 +212,6 @@ type instance Key VotingProcedure = Id.VotingProcedureId
 instance DbInfo VotingProcedure where
   enumFields _ = [("voter_role", "voterrole"), ("vote", "vote")]
 
-entityVotingProcedureDecoder :: D.Row (Entity VotingProcedure)
-entityVotingProcedureDecoder =
-  Entity
-    <$> Id.idDecoder Id.VotingProcedureId -- entityKey
-    <*> votingProcedureDecoder -- entityVal
-
-votingProcedureDecoder :: D.Row VotingProcedure
-votingProcedureDecoder =
-  VotingProcedure
-    <$> Id.idDecoder Id.TxId -- votingProcedureTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- votingProcedureIndex
-    <*> Id.idDecoder Id.GovActionProposalId -- votingProcedureGovActionProposalId
-    <*> D.column (D.nonNullable voterRoleDecoder) -- votingProcedureVoterRole
-    <*> Id.maybeIdDecoder Id.DrepHashId -- votingProcedureDrepVoter
-    <*> Id.maybeIdDecoder Id.PoolHashId -- votingProcedurePoolVoter
-    <*> D.column (D.nonNullable voteDecoder) -- votingProcedureVote
-    <*> Id.maybeIdDecoder Id.VotingAnchorId -- votingProcedureVotingAnchorId
-    <*> Id.maybeIdDecoder Id.CommitteeHashId -- votingProcedureCommitteeVoter
-    <*> Id.maybeIdDecoder Id.EventInfoId -- votingProcedureInvalid
-
-entityVotingProcedureEncoder :: E.Params (Entity VotingProcedure)
-entityVotingProcedureEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getVotingProcedureId
-    , entityVal >$< votingProcedureEncoder
-    ]
-
 votingProcedureEncoder :: E.Params VotingProcedure
 votingProcedureEncoder =
   mconcat
@@ -402,27 +244,6 @@ instance DbInfo VotingAnchor where
   uniqueFields _ = ["data_hash", "url", "type"]
   enumFields _ = [("type", "anchorType")]
 
-entityVotingAnchorDecoder :: D.Row (Entity VotingAnchor)
-entityVotingAnchorDecoder =
-  Entity
-    <$> Id.idDecoder Id.VotingAnchorId
-    <*> votingAnchorDecoder
-
-votingAnchorDecoder :: D.Row VotingAnchor
-votingAnchorDecoder =
-  VotingAnchor
-    <$> D.column (D.nonNullable voteUrlDecoder) -- votingAnchorUrl
-    <*> D.column (D.nonNullable D.bytea) -- votingAnchorDataHash
-    <*> D.column (D.nonNullable anchorTypeDecoder) -- votingAnchorType
-    <*> Id.idDecoder Id.BlockId -- votingAnchorBlockId
-
-entityVotingAnchorEncoder :: E.Params (Entity VotingAnchor)
-entityVotingAnchorEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getVotingAnchorId
-    , entityVal >$< votingAnchorEncoder
-    ]
-
 votingAnchorEncoder :: E.Params VotingAnchor
 votingAnchorEncoder =
   mconcat
@@ -445,26 +266,6 @@ data Constitution = Constitution
 type instance Key Constitution = Id.ConstitutionId
 instance DbInfo Constitution
 
-entityConstitutionDecoder :: D.Row (Entity Constitution)
-entityConstitutionDecoder =
-  Entity
-    <$> Id.idDecoder Id.ConstitutionId -- entityKey
-    <*> constitutionDecoder -- entityVal
-
-constitutionDecoder :: D.Row Constitution
-constitutionDecoder =
-  Constitution
-    <$> Id.maybeIdDecoder Id.GovActionProposalId -- constitutionGovActionProposalId
-    <*> Id.idDecoder Id.VotingAnchorId -- constitutionVotingAnchorId
-    <*> D.column (D.nullable D.bytea) -- constitutionScriptHash
-
-entityConstitutionEncoder :: E.Params (Entity Constitution)
-entityConstitutionEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getConstitutionId
-    , entityVal >$< constitutionEncoder
-    ]
-
 constitutionEncoder :: E.Params Constitution
 constitutionEncoder =
   mconcat
@@ -486,25 +287,12 @@ data Committee = Committee
 type instance Key Committee = Id.CommitteeId
 instance DbInfo Committee
 
-entityCommitteeDecoder :: D.Row (Entity Committee)
-entityCommitteeDecoder =
-  Entity
-    <$> Id.idDecoder Id.CommitteeId -- entityKey
-    <*> committeeDecoder -- entityVal
-
 committeeDecoder :: D.Row Committee
 committeeDecoder =
   Committee
     <$> Id.maybeIdDecoder Id.GovActionProposalId -- committeeGovActionProposalId
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumNumerator
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumDenominator
-
-entityCommitteeEncoder :: E.Params (Entity Committee)
-entityCommitteeEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getCommitteeId
-    , entityVal >$< committeeEncoder
-    ]
 
 committeeEncoder :: E.Params Committee
 committeeEncoder =
@@ -529,25 +317,6 @@ type instance Key CommitteeHash = Id.CommitteeHashId
 instance DbInfo CommitteeHash where
   uniqueFields _ = ["raw", "has_script"]
 
-entityCommitteeHashDecoder :: D.Row (Entity CommitteeHash)
-entityCommitteeHashDecoder =
-  Entity
-    <$> Id.idDecoder Id.CommitteeHashId -- entityKey
-    <*> committeeHashDecoder -- entityVal
-
-committeeHashDecoder :: D.Row CommitteeHash
-committeeHashDecoder =
-  CommitteeHash
-    <$> D.column (D.nonNullable D.bytea) -- committeeHashRaw
-    <*> D.column (D.nonNullable D.bool) -- committeeHashHasScript
-
-entityCommitteeHashEncoder :: E.Params (Entity CommitteeHash)
-entityCommitteeHashEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getCommitteeHashId
-    , entityVal >$< committeeHashEncoder
-    ]
-
 committeeHashEncoder :: E.Params CommitteeHash
 committeeHashEncoder =
   mconcat
@@ -569,26 +338,6 @@ data CommitteeMember = CommitteeMember
 
 type instance Key CommitteeMember = Id.CommitteeMemberId
 instance DbInfo CommitteeMember
-
-entityCommitteeMemberDecoder :: D.Row (Entity CommitteeMember)
-entityCommitteeMemberDecoder =
-  Entity
-    <$> Id.idDecoder Id.CommitteeMemberId -- entityKey
-    <*> committeeMemberDecoder -- entityVal
-
-committeeMemberDecoder :: D.Row CommitteeMember
-committeeMemberDecoder =
-  CommitteeMember
-    <$> Id.idDecoder Id.CommitteeId -- committeeMemberCommitteeId
-    <*> Id.idDecoder Id.CommitteeHashId -- committeeMemberCommitteeHashId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeMemberExpirationEpoch
-
-entityCommitteeMemberEncoder :: E.Params (Entity CommitteeMember)
-entityCommitteeMemberEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getCommitteeMemberId
-    , entityVal >$< committeeMemberEncoder
-    ]
 
 committeeMemberEncoder :: E.Params CommitteeMember
 committeeMemberEncoder =
@@ -614,27 +363,6 @@ data CommitteeRegistration = CommitteeRegistration
 type instance Key CommitteeRegistration = Id.CommitteeRegistrationId
 instance DbInfo CommitteeRegistration
 
-entityCommitteeRegistrationDecoder :: D.Row (Entity CommitteeRegistration)
-entityCommitteeRegistrationDecoder =
-  Entity
-    <$> Id.idDecoder Id.CommitteeRegistrationId -- entityKey
-    <*> committeeRegistrationDecoder -- entityVal
-
-committeeRegistrationDecoder :: D.Row CommitteeRegistration
-committeeRegistrationDecoder =
-  CommitteeRegistration
-    <$> Id.idDecoder Id.TxId -- committeeRegistrationTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeRegistrationCertIndex
-    <*> Id.idDecoder Id.CommitteeHashId -- committeeRegistrationColdKeyId
-    <*> Id.idDecoder Id.CommitteeHashId -- committeeRegistrationHotKeyId
-
-entityCommitteeRegistrationEncoder :: E.Params (Entity CommitteeRegistration)
-entityCommitteeRegistrationEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getCommitteeRegistrationId
-    , entityVal >$< committeeRegistrationEncoder
-    ]
-
 committeeRegistrationEncoder :: E.Params CommitteeRegistration
 committeeRegistrationEncoder =
   mconcat
@@ -659,27 +387,6 @@ data CommitteeDeRegistration = CommitteeDeRegistration
 
 type instance Key CommitteeDeRegistration = Id.CommitteeDeRegistrationId
 instance DbInfo CommitteeDeRegistration
-
-entityCommitteeDeRegistrationDecoder :: D.Row (Entity CommitteeDeRegistration)
-entityCommitteeDeRegistrationDecoder =
-  Entity
-    <$> Id.idDecoder Id.CommitteeDeRegistrationId -- entityKey
-    <*> committeeDeRegistrationDecoder -- entityVal
-
-committeeDeRegistrationDecoder :: D.Row CommitteeDeRegistration
-committeeDeRegistrationDecoder =
-  CommitteeDeRegistration
-    <$> Id.idDecoder Id.TxId -- committeeDeRegistrationTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- committeeDeRegistrationCertIndex
-    <*> Id.maybeIdDecoder Id.VotingAnchorId -- committeeDeRegistrationVotingAnchorId
-    <*> Id.idDecoder Id.CommitteeHashId -- committeeDeRegistrationColdKeyId
-
-entityCommitteeDeRegistrationEncoder :: E.Params (Entity CommitteeDeRegistration)
-entityCommitteeDeRegistrationEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getCommitteeDeRegistrationId
-    , entityVal >$< committeeDeRegistrationEncoder
-    ]
 
 committeeDeRegistrationEncoder :: E.Params CommitteeDeRegistration
 committeeDeRegistrationEncoder =
@@ -818,13 +525,6 @@ paramProposalDecoder =
     <*> maybeDbWord64Decoder -- paramProposalDrepActivity
     <*> D.column (D.nullable D.float8) -- paramProposalMinFeeRefScriptCostPerByte
 
-entityParamProposalEncoder :: E.Params (Entity ParamProposal)
-entityParamProposalEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getParamProposalId
-    , entityVal >$< paramProposalEncoder
-    ]
-
 paramProposalEncoder :: E.Params ParamProposal
 paramProposalEncoder =
   mconcat
@@ -905,34 +605,6 @@ instance DbInfo TreasuryWithdrawal where
     , ("amount", "bigint[]")
     ]
 
-entityTreasuryWithdrawalDecoder :: D.Row (Entity TreasuryWithdrawal)
-entityTreasuryWithdrawalDecoder =
-  Entity
-    <$> Id.idDecoder Id.TreasuryWithdrawalId -- entityKey
-    <*> treasuryWithdrawalDecoder -- entityVal
-
-treasuryWithdrawalDecoder :: D.Row TreasuryWithdrawal
-treasuryWithdrawalDecoder =
-  TreasuryWithdrawal
-    <$> Id.idDecoder Id.GovActionProposalId -- treasuryWithdrawalGovActionProposalId
-    <*> Id.idDecoder Id.StakeAddressId -- treasuryWithdrawalStakeAddressId
-    <*> dbLovelaceDecoder -- treasuryWithdrawalAmount
-
-entityTreasuryWithdrawalEncoder :: E.Params (Entity TreasuryWithdrawal)
-entityTreasuryWithdrawalEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getTreasuryWithdrawalId
-    , entityVal >$< treasuryWithdrawalEncoder
-    ]
-
-treasuryWithdrawalEncoder :: E.Params TreasuryWithdrawal
-treasuryWithdrawalEncoder =
-  mconcat
-    [ treasuryWithdrawalGovActionProposalId >$< Id.idEncoder Id.getGovActionProposalId
-    , treasuryWithdrawalStakeAddressId >$< Id.idEncoder Id.getStakeAddressId
-    , treasuryWithdrawalAmount >$< dbLovelaceEncoder
-    ]
-
 treasuryWithdrawalBulkEncoder :: E.Params ([Id.GovActionProposalId], [Id.StakeAddressId], [DbLovelace])
 treasuryWithdrawalBulkEncoder =
   contrazip3
@@ -955,33 +627,3 @@ data EventInfo = EventInfo
 
 type instance Key EventInfo = Id.EventInfoId
 instance DbInfo EventInfo
-
-entityEventInfoDecoder :: D.Row (Entity EventInfo)
-entityEventInfoDecoder =
-  Entity
-    <$> Id.idDecoder Id.EventInfoId -- entityKey
-    <*> eventInfoDecoder -- entityVal
-
-eventInfoDecoder :: D.Row EventInfo
-eventInfoDecoder =
-  EventInfo
-    <$> Id.maybeIdDecoder Id.TxId -- eventInfoTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- eventInfoEpoch
-    <*> D.column (D.nonNullable D.text) -- eventInfoType
-    <*> D.column (D.nullable D.text) -- eventInfoExplanation
-
-entityEventInfoEncoder :: E.Params (Entity EventInfo)
-entityEventInfoEncoder =
-  mconcat
-    [ entityKey >$< Id.idEncoder Id.getEventInfoId
-    , entityVal >$< eventInfoEncoder
-    ]
-
-eventInfoEncoder :: E.Params EventInfo
-eventInfoEncoder =
-  mconcat
-    [ eventInfoTxId >$< Id.maybeIdEncoder Id.getTxId
-    , eventInfoEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , eventInfoType >$< E.param (E.nonNullable E.text)
-    , eventInfoExplanation >$< E.param (E.nullable E.text)
-    ]

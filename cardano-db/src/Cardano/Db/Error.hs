@@ -6,16 +6,12 @@ module Cardano.Db.Error (
   runOrThrowIODb,
   runOrThrowIO,
   logAndThrowIO,
-  base16encode,
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
 import Cardano.Prelude (MonadIO, throwIO)
 import Control.Exception (Exception)
-import qualified Data.ByteString.Base16 as Base16
-import Data.ByteString.Char8 (ByteString)
 import Data.Text (Text)
-import qualified Data.Text.Encoding as Text
 
 import qualified Hasql.Session as HsqlSes
 
@@ -35,9 +31,6 @@ data DbCallStack = DbCallStack
   , dbCsLine :: !Int
   }
   deriving (Show, Eq)
-
-base16encode :: ByteString -> Text
-base16encode = Text.decodeUtf8 . Base16.encode
 
 runOrThrowIODb :: forall e a. Exception e => IO (Either e a) -> IO a
 runOrThrowIODb ioEither = do

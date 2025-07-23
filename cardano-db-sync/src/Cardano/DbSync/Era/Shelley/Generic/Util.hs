@@ -15,7 +15,6 @@ module Cardano.DbSync.Era.Shelley.Generic.Util (
   maybePaymentCred,
   mkSlotLeader,
   nonceToBytes,
-  partitionMIRTargets,
   renderAddress,
   renderRewardAccount,
   stakingCredHash,
@@ -41,14 +40,13 @@ import Cardano.DbSync.Util.Address (serialiseAddress, serialiseRewardAccount)
 import Cardano.DbSync.Util.Bech32 (serialiseStakePoolKeyHashToBech32)
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.Coin (Coin (..), DeltaCoin)
+import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Hashes (SafeHash, ScriptHash (..), extractHash)
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..))
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
-import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Binary.Put as Binary
@@ -56,7 +54,6 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
-import qualified Data.List as List
 import qualified Data.Text.Encoding as Text
 
 annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential -> Ledger.RewardAccount
@@ -105,21 +102,6 @@ nonceToBytes nonce =
   case nonce of
     Ledger.Nonce hash -> Just $ Crypto.hashToBytes hash
     Ledger.NeutralNonce -> Nothing
-
-partitionMIRTargets ::
-  [MIRTarget] ->
-  ([Map (Ledger.Credential 'Ledger.Staking) DeltaCoin], [Coin])
-partitionMIRTargets =
-  List.foldl' foldfunc ([], [])
-  where
-    foldfunc ::
-      ([Map (Ledger.Credential 'Ledger.Staking) DeltaCoin], [Coin]) ->
-      MIRTarget ->
-      ([Map (Ledger.Credential 'Ledger.Staking) DeltaCoin], [Coin])
-    foldfunc (xs, ys) mt =
-      case mt of
-        StakeAddressesMIR x -> (x : xs, ys)
-        SendToOppositePotMIR y -> (xs, y : ys)
 
 renderAddress :: Ledger.Addr -> Text
 renderAddress = serialiseAddress

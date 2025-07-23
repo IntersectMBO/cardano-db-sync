@@ -12,8 +12,6 @@ module Cardano.Db.Statement.Function.InsertBulk (
   -- * Convenience Functions
   insertBulk,
   insertBulkJsonb,
-  insertBulkIgnore,
-  insertBulkReplace,
   insertBulkMaybeIgnore,
   insertBulkMaybeIgnoreWithConstraint,
 )
@@ -29,7 +27,7 @@ import qualified Data.Text.Encoding as TextEnc
 
 import Cardano.Db.Statement.Function.Core (ResultTypeBulk (..))
 import Cardano.Db.Statement.Types (DbInfo (..))
-import Cardano.Prelude (Proxy (..), typeRep)
+import Cardano.Prelude (Proxy (..))
 import Data.Functor.Contravariant (contramap)
 
 -- | Conflict handling strategies for bulk operations
@@ -170,76 +168,6 @@ insertBulkJsonb ::
   ResultTypeBulk r ->
   HsqlS.Statement [a] r
 insertBulkJsonb = insertBulkWith NoConflict
-
--- | Bulk insert with automatic conflict detection and ignore strategy.
---
--- Automatically detects unique constraints from the table definition and
--- generates appropriate `ON CONFLICT DO NOTHING` clauses. Falls back to
--- simple insert if no constraints are defined.
---
--- ==== Parameters
--- * @extract@: Function to extract fields from a list of records.
--- * @encoder@: Encoder for the extracted fields.
--- * @returnIds@: Result type indicating whether to return generated IDs.
--- * @statement@: The prepared statement that can be executed.
-insertBulkIgnore ::
-  forall a b r.
-  DbInfo a =>
-  ([a] -> b) ->
-  HsqlE.Params b ->
-  ResultTypeBulk r ->
-  HsqlS.Statement [a] r
-insertBulkIgnore extract enc returnIds =
-  case getConflictStrategy (Proxy @a) of
-    NoConflict -> insertBulkWith NoConflict False extract enc returnIds
-    strategy -> insertBulkWith strategy False extract enc returnIds
-  where
-    getConflictStrategy :: Proxy a -> ConflictStrategy
-    getConflictStrategy p =
-      case validateUniqueConstraints p of
-        Left _ -> NoConflict
-        Right autoConstraints ->
-          let bulkConstraints = bulkUniqueFields p
-              allConstraints = if null autoConstraints then bulkConstraints else autoConstraints
-           in if null allConstraints
-                then NoConflict
-                else IgnoreWithColumns allConstraints
-
--- | Bulk insert with automatic conflict detection and replace strategy.
---
--- Automatically detects unique constraints and generates `ON CONFLICT DO UPDATE`
--- clauses to replace existing records. Requires at least one unique constraint
--- to be defined in the table schema.
---
--- ==== Parameters
--- * @extract@: Function to extract fields from a list of records.
--- * @encoder@: Encoder for the extracted fields.
--- * @returnIds@: Result type indicating whether to return generated IDs.
--- * @statement@: The prepared statement that can be executed.
-insertBulkReplace ::
-  forall a b r.
-  DbInfo a =>
-  ([a] -> b) ->
-  HsqlE.Params b ->
-  ResultTypeBulk r ->
-  HsqlS.Statement [a] r
-insertBulkReplace extract enc returnIds =
-  case getConflictStrategy (Proxy @a) of
-    NoConflict -> error $ "insertBulkReplace: No unique constraints defined for " <> show (typeRep (Proxy @a))
-    IgnoreWithColumns cols -> insertBulkWith (ReplaceWithColumns cols) False extract enc returnIds
-    IgnoreWithConstraint name -> insertBulkWith (ReplaceWithConstraint name) False extract enc returnIds
-    _ -> error "Invalid conflict strategy for replace"
-  where
-    getConflictStrategy :: Proxy a -> ConflictStrategy
-    getConflictStrategy p =
-      case validateUniqueConstraints p of
-        Left _ -> NoConflict
-        Right autoConstraints ->
-          let bulkConstraints = bulkUniqueFields p
-              allConstraints = if null autoConstraints then bulkConstraints else autoConstraints
-           in if null allConstraints
-                then NoConflict
-                else IgnoreWithColumns allConstraints
 
 -----------------------------------------------------------------------------------------------------------------------------------
 -- PERFORMANCE-OPTIMIZED FUNCTIONS FOR ManualDbConstraints PATTERN

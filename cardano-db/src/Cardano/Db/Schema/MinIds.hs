@@ -140,33 +140,6 @@ minIdsAddressToText minIds =
     maTxOutIdAddressToText _ = "" -- Skip non-variant IDs
 
 --------------------------------------------------------------------------------
-minIdsToText :: MinIdsWrapper -> Text
-minIdsToText (CMinIdsWrapper minIds) = minIdsToTextHelper minIds "C"
-minIdsToText (VMinIdsWrapper minIds) = minIdsToTextHelper minIds "V"
-
-minIdsToTextHelper :: MinIds -> Text -> Text
-minIdsToTextHelper minIds prefix =
-  Text.intercalate
-    ":"
-    [ txInIdText
-    , txOutIdText
-    , maTxOutIdText
-    , prefix -- Add type identifier
-    ]
-  where
-    txInIdText = maybe "" (Text.pack . show . Id.getTxInId) $ minTxInId minIds
-
-    txOutIdText = case minTxOutId minIds of
-      Nothing -> ""
-      Just (VCTxOutIdW id) -> "C" <> Text.pack (show (Id.getTxOutCoreId id))
-      Just (VATxOutIdW id) -> "V" <> Text.pack (show (Id.getTxOutAddressId id))
-
-    maTxOutIdText = case minMaTxOutId minIds of
-      Nothing -> ""
-      Just (CMaTxOutIdW id) -> "C" <> Text.pack (show (Id.getMaTxOutCoreId id))
-      Just (VMaTxOutIdW id) -> "V" <> Text.pack (show (Id.getMaTxOutAddressId id))
-
---------------------------------------------------------------------------------
 textToMinIds :: TxOutVariantType -> Text -> Maybe MinIdsWrapper
 textToMinIds txOutVariantType txt =
   case Text.split (== ':') txt of

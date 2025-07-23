@@ -157,27 +157,6 @@ instance DbInfo CollateralTxOutCore where
       , "reference_script_id"
       ]
 
-entityCollateralTxOutCoreDecoder :: D.Row (Entity CollateralTxOutCore)
-entityCollateralTxOutCoreDecoder =
-  Entity
-    <$> Id.idDecoder Id.CollateralTxOutCoreId
-    <*> collateralTxOutCoreDecoder
-
-collateralTxOutCoreDecoder :: D.Row CollateralTxOutCore
-collateralTxOutCoreDecoder =
-  CollateralTxOutCore
-    <$> Id.idDecoder Id.TxId -- collateralTxOutCoreTxId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- collateralTxOutCoreIndex
-    <*> D.column (D.nonNullable D.text) -- collateralTxOutCoreAddress
-    <*> D.column (D.nonNullable D.bool) -- collateralTxOutCoreAddressHasScript
-    <*> D.column (D.nullable D.bytea) -- collateralTxOutCorePaymentCred
-    <*> Id.maybeIdDecoder Id.StakeAddressId -- collateralTxOutCoreStakeAddressId
-    <*> dbLovelaceDecoder -- collateralTxOutCoreValue
-    <*> D.column (D.nullable D.bytea) -- collateralTxOutCoreDataHash
-    <*> D.column (D.nonNullable D.text) -- collateralTxOutCoreMultiAssetsDescr
-    <*> Id.maybeIdDecoder Id.DatumId -- collateralTxOutCoreInlineDatumId
-    <*> Id.maybeIdDecoder Id.ScriptId -- collateralTxOutCoreReferenceScriptId
-
 collateralTxOutCoreEncoder :: E.Params CollateralTxOutCore
 collateralTxOutCoreEncoder =
   mconcat
@@ -215,26 +194,12 @@ instance DbInfo MaTxOutCore where
       , "ident"
       ]
 
-entityMaTxOutCoreDecoder :: D.Row (Entity MaTxOutCore)
-entityMaTxOutCoreDecoder =
-  Entity
-    <$> Id.idDecoder Id.MaTxOutCoreId
-    <*> maTxOutCoreDecoder
-
 maTxOutCoreDecoder :: D.Row MaTxOutCore
 maTxOutCoreDecoder =
   MaTxOutCore
     <$> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutCoreQuantity
     <*> Id.idDecoder Id.TxOutCoreId -- maTxOutCoreTxOutId
     <*> Id.idDecoder Id.MultiAssetId -- maTxOutCoreIdent
-
-maTxOutCoreEncoder :: E.Params MaTxOutCore
-maTxOutCoreEncoder =
-  mconcat
-    [ maTxOutCoreQuantity >$< E.param (E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
-    , maTxOutCoreTxOutId >$< Id.idEncoder Id.getTxOutCoreId
-    , maTxOutCoreIdent >$< Id.idEncoder Id.getMultiAssetId
-    ]
 
 maTxOutCoreBulkEncoder :: E.Params ([DbWord64], [Id.TxOutCoreId], [Id.MultiAssetId])
 maTxOutCoreBulkEncoder =

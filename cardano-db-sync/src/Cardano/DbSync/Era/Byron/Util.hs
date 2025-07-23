@@ -4,20 +4,14 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Byron.Util (
-  boundaryEpochNumber,
-  configSlotDuration,
   mkSlotLeader,
   slotLeaderHash,
   unAbstractHash,
-  unAddressHash,
-  unCryptoHash,
   blockHash,
   blockNumber,
   blockPayload,
   blockPreviousHash,
   ebbPrevHash,
-  prevHash,
-  epochNumber,
   genesisToHeaderHash,
   protocolVersion,
   renderAbstractHash,
@@ -45,14 +39,6 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Text.Encoding as Text
-import qualified Ouroboros.Consensus.Byron.Ledger.Block as Byron
-
-boundaryEpochNumber :: Byron.ABoundaryBlock ByteString -> Word64
-boundaryEpochNumber = Byron.boundaryEpoch . Byron.boundaryHeader
-
-configSlotDuration :: Byron.Config -> Word64
-configSlotDuration =
-  fromIntegral . Byron.ppSlotDuration . Byron.gdProtocolParameters . Byron.configGenesisData
 
 mkSlotLeader :: Byron.ABlock ByteString -> DB.SlotLeader
 mkSlotLeader blk =
@@ -75,12 +61,6 @@ slotLeaderHash =
 unAbstractHash :: Crypto.Hash Raw -> ByteString
 unAbstractHash = Crypto.abstractHashToBytes
 
-unAddressHash :: Byron.AddressHash Byron.Address' -> ByteString
-unAddressHash = Crypto.abstractHashToBytes
-
-unCryptoHash :: Crypto.Hash Raw -> ByteString
-unCryptoHash = Crypto.abstractHashToBytes
-
 blockHash :: Byron.ABlock ByteString -> ByteString
 blockHash = unHeaderHash . Byron.blockHashAnnotated
 
@@ -100,15 +80,6 @@ ebbPrevHash bblock =
   case Byron.boundaryPrevHash (Byron.boundaryHeader bblock) of
     Left gh -> genesisToHeaderHash gh
     Right hh -> unHeaderHash hh
-
-prevHash :: Byron.ByronBlock -> ByteString
-prevHash blk = case Byron.byronBlockRaw blk of
-  Byron.ABOBBlock ablk -> blockPreviousHash ablk
-  Byron.ABOBBoundary abblk -> ebbPrevHash abblk
-
-epochNumber :: Byron.ABlock ByteString -> Word64 -> Word64
-epochNumber blk slotsPerEpoch =
-  slotNumber blk `div` slotsPerEpoch
 
 genesisToHeaderHash :: Byron.GenesisHash -> ByteString
 genesisToHeaderHash = unAbstractHash . Byron.unGenesisHash

@@ -170,14 +170,8 @@ newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
   deriving (Eq, Generic, Num)
   deriving (Read, Show) via (Quiet DbWord64)
 
-dbWord64Encoder :: HsqlE.Params DbWord64
-dbWord64Encoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral . unDbWord64 >$< HsqlE.int8
-
 maybeDbWord64Encoder :: HsqlE.Params (Maybe DbWord64)
 maybeDbWord64Encoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbWord64 >$< HsqlE.int8
-
-dbWord64Decoder :: HsqlD.Row DbWord64
-dbWord64Decoder = HsqlD.column (HsqlD.nonNullable (DbWord64 . fromIntegral <$> HsqlD.int8))
 
 maybeDbWord64Decoder :: HsqlD.Row (Maybe DbWord64)
 maybeDbWord64Decoder = HsqlD.column (HsqlD.nullable (DbWord64 . fromIntegral <$> HsqlD.int8))
@@ -333,9 +327,6 @@ processMigrationValues migrations pcm =
     , isTxOutAddressPreviouslySet = TxOutAddressPreviouslySet `elem` migrations
     , pruneConsumeMigration = pcm
     }
-
-isStakeDistrComplete :: [ExtraMigration] -> Bool
-isStakeDistrComplete = elem StakeDistrEnded
 
 data BootstrapState
   = BootstrapNotStarted
@@ -536,7 +527,7 @@ rewardSourceFromText txt =
     "refund" -> RwdDepositRefund
     "proposal_refund" -> RwdProposalRefund
     -- This should never happen. On the Postgres side we defined an ENUM with
-    -- only the two values as above.
+    -- only the values above.
     _other -> error $ "rewardSourceFromText: Unknown RewardSource " ++ show txt
 
 syncStateFromText :: Text -> SyncState

@@ -6,12 +6,9 @@
 
 module Cardano.Db.Statement.Function.Insert (
   insert,
-  insertJsonb,
   insertReplace,
   insertCheckUnique,
-  insertCheckUniqueJsonb,
   insertIfUnique,
-  insertIfUniqueJsonb,
 )
 where
 
@@ -40,21 +37,6 @@ insert ::
   ResultType r r -> -- Whether to return result and decoder
   HsqlS.Statement a r -- Returns the prepared statement
 insert = mkInsert False
-
--- | Same as `insert` but having access to the global dbEnvRemoveJsonb.
---
--- ==== Parameters
--- * @encoder@: The encoder for the record.
--- * @resultType@: Whether to return a result (usually it's newly generated id) and decoder.
--- * @statement@: The prepared statement that can be executed, wrapped in DbAction due to needing access to the `dbEnvRemoveJsonb` environment.
-insertJsonb ::
-  forall a r.
-  DbInfo a =>
-  Bool -> -- Whether jsonb casting is present in current schema
-  HsqlE.Params a -> -- Encoder for record (without ID)
-  ResultType r r -> -- Whether to return result and decoder
-  HsqlS.Statement a r -- Returns the prepared statement
-insertJsonb = mkInsert
 
 -- | Helper function to create an insert statement.
 mkInsert ::
@@ -151,22 +133,6 @@ insertCheckUnique ::
   HsqlS.Statement a r -- Returns the prepared statement
 insertCheckUnique = mkInsertCheckUnique False
 
--- | Same as `insertCheckUnique` but having access to the global dbEnvRemoveJsonb.
---
--- ==== Parameters
--- * @encoder@: The encoder for the record.
--- * @resultType@: Whether to return a result (usually it's newly generated id) and decoder.
--- * @statement@: The prepared statement that can be executed, wrapped in DbAction due to needing access to the `dbEnvRemoveJsonb` environment.
-insertCheckUniqueJsonb ::
-  forall a r.
-  DbInfo a =>
-  Bool -> -- Whether jsonb casting is present in current schema
-  HsqlE.Params a -> -- Encoder for record (without ID)
-  ResultType r r -> -- Whether to return result and decoder
-  HsqlS.Statement a r -- Returns the prepared statement
-insertCheckUniqueJsonb removeJsonb encoder resultType = do
-  mkInsertCheckUnique removeJsonb encoder resultType
-
 -- | Helper function to create an insert statement that checks for unique constraints.
 mkInsertCheckUnique ::
   forall a r.
@@ -216,22 +182,6 @@ insertIfUnique ::
   HsqlD.Row c -> -- Row decoder
   HsqlS.Statement a (Maybe c) -- Statement that returns Maybe Entity
 insertIfUnique = mkInsertIfUnique False
-
--- | Same as `insertCheckUniqueIfUnique` but having access to the global dbEnvRemoveJsonb.
---
--- ==== Parameters
--- * @encoder@: The encoder for the record (without ID).
--- * @decoder@: The row decoder for the result.
--- * @statement@: The prepared statement that can be executed, wrapped in DbAction due to needing access to the `dbEnvRemoveJsonb` environment.
-insertIfUniqueJsonb ::
-  forall a c.
-  DbInfo a =>
-  Bool -> -- Whether jsonb casting is present in current schema
-  HsqlE.Params a -> -- Encoder for record (without ID)
-  HsqlD.Row c -> -- Row decoder
-  HsqlS.Statement a (Maybe c) -- Statement that returns Maybe Entity
-insertIfUniqueJsonb removeJsonb = do
-  mkInsertIfUnique removeJsonb
 
 mkInsertIfUnique ::
   forall a c.

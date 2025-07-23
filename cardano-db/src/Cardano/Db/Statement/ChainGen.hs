@@ -33,17 +33,6 @@ import Data.Scientific (toBoundedInteger)
 import qualified Data.Text as Text
 import Prelude hiding (length, show, (.))
 
-queryCheckMigrationsStmt :: HsqlStmt.Statement () Int32
-queryCheckMigrationsStmt =
-  HsqlStmt.Statement "SELECT 1" HsqlE.noParams (HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable HsqlD.int4))) True
-
-queryCheckMigrations :: MonadIO m => DbAction m Int32
-queryCheckMigrations =
-  runDbSession (mkDbCallStack "queryCheckMigrations") $
-    HsqlSes.statement () queryCheckMigrationsStmt
-
--------------------------------------------------------------------------------------------------
-
 queryEpochParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryEpochParamWithEpochNoStmt =
   HsqlStmt.Statement sql encoder decoder True

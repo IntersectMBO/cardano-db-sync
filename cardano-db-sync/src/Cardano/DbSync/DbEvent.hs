@@ -14,15 +14,13 @@ module Cardano.DbSync.DbEvent (
   writeDbEventQueue,
   waitRollback,
   waitRestartState,
-  waitDoneInit,
-  runAndSetDone,
 ) where
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.Types
 import Cardano.Prelude
-import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, newEmptyTMVarIO, newTVarIO, readTVar, readTVarIO, takeTMVar, writeTVar)
+import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, newEmptyTMVarIO, newTVarIO, takeTMVar)
 import qualified Control.Concurrent.STM as STM
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
@@ -81,21 +79,6 @@ waitRestartState tc = do
     _ <- TBQ.flushTBQueue (tcQueue tc)
     writeDbEventQueue tc $ DbRestartState resultVar
   atomically $ takeTMVar resultVar
-
-waitDoneInit :: ThreadChannels -> IO ()
-waitDoneInit tc = atomically $ do
-  isDone <- readTVar (tcDoneInit tc)
-  unless isDone retry
-
-runAndSetDone :: ThreadChannels -> IO Bool -> IO Bool
-runAndSetDone tc action = do
-  isDone <- readTVarIO (tcDoneInit tc)
-  if isDone
-    then pure True
-    else do
-      fl <- action
-      atomically $ writeTVar (tcDoneInit tc) fl
-      pure fl
 
 lengthDbEventQueue :: ThreadChannels -> STM Natural
 lengthDbEventQueue = STM.lengthTBQueue . tcQueue

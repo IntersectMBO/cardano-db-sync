@@ -40,7 +40,6 @@ library
                         Cardano.Db.Git.RevFromGit
                         Cardano.Db.Git.Version
                         Cardano.Db.Migration
-                        Cardano.Db.Migration.Haskell
                         Cardano.Db.Migration.Version
                         Cardano.Db.PGConfig
                         Cardano.Db.Run
@@ -81,12 +80,10 @@ library
   build-depends:        aeson
                       , base                            >= 4.14         && < 5
                       , bech32
-                      , base16-bytestring
                       , bytestring
                       , cardano-crypto-class
                       , cardano-ledger-core
                       , cardano-prelude
-                      , containers
                       , contra-tracer
                       , contravariant-extras
                       , cryptonite

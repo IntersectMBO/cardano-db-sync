@@ -69,20 +69,6 @@ addUniqueConstraintStmt tbName constraintName fields =
           , ")"
           ]
 
--- | Statement for dropping a constraint (no parameters - SQL built dynamically)
-dropConstraintStmt :: Text.Text -> Text.Text -> HsqlStmt.Statement () ()
-dropConstraintStmt tbName constraintName =
-  HsqlStmt.Statement sql HsqlE.noParams HsqlD.noResult True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "ALTER TABLE "
-          , tbName
-          , " DROP CONSTRAINT IF EXISTS "
-          , constraintName
-          ]
-
 -- | Check if a constraint exists
 queryHasConstraint :: MonadIO m => ConstraintNameDB -> DbAction m Bool
 queryHasConstraint (ConstraintNameDB cname) =
@@ -104,20 +90,6 @@ alterTableAddUniqueConstraint proxy (ConstraintNameDB cname) fields =
   where
     tbName = tableName proxy
     fieldNames = map unFieldNameDB fields
-
--- | Generic function to drop a constraint from any table with DbInfo
-alterTableDropConstraint ::
-  forall table m.
-  (MonadIO m, DbInfo table) =>
-  Proxy table ->
-  ConstraintNameDB ->
-  DbAction m ()
-alterTableDropConstraint proxy (ConstraintNameDB cname) =
-  runDbSession (mkDbCallStack "alterTableDropConstraint") $
-    HsqlSess.statement () $
-      dropConstraintStmt tbName cname
-  where
-    tbName = tableName proxy
 
 -- | Data type to track manual constraints
 data ManualDbConstraints = ManualDbConstraints
@@ -188,35 +160,3 @@ logNewConstraint trce tbName constraintName =
       <> tbName
       <> " was given a new unique constraint called "
       <> constraintName
-
--- | Generic constraint addition function (can be used for any table)
-addTableUniqueConstraint ::
-  forall table m.
-  (MonadIO m, DbInfo table) =>
-  Trace IO Text.Text ->
-  Proxy table ->
-  ConstraintNameDB ->
-  [FieldNameDB] ->
-  DbAction m ()
-addTableUniqueConstraint trce proxy cname fields = do
-  let tbName = tableName proxy
-  alterTableAddUniqueConstraint proxy cname fields
-  liftIO $ logNewConstraint trce tbName (unConstraintNameDB cname)
-
--- | Generic constraint dropping function (can be used for any table)
-dropTableConstraint ::
-  forall table m.
-  (MonadIO m, DbInfo table) =>
-  Trace IO Text.Text ->
-  Proxy table ->
-  ConstraintNameDB ->
-  DbAction m ()
-dropTableConstraint trce proxy cname = do
-  let tbName = tableName proxy
-  alterTableDropConstraint proxy cname
-  liftIO $
-    logInfo trce $
-      "Dropped constraint "
-        <> unConstraintNameDB cname
-        <> " from table "
-        <> tbName

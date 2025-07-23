@@ -3,15 +3,12 @@
 module Cardano.Db.Migration.Version (
   MigrationVersion (..),
   parseMigrationVersionFromFile,
-  nextMigrationVersion,
   renderMigrationVersion,
   renderMigrationVersionFile,
 ) where
 
 import qualified Data.List as List
 import qualified Data.List.Extra as List
-import qualified Data.Time.Calendar as Time
-import qualified Data.Time.Clock as Time
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
@@ -30,14 +27,6 @@ parseMigrationVersionFromFile str =
         (Just s, Just v, Just d) -> Just $ MigrationVersion s v d
         _ -> Nothing
     _ -> Nothing
-
-nextMigrationVersion :: MigrationVersion -> IO MigrationVersion
-nextMigrationVersion (MigrationVersion _stage ver _date) = do
-  -- We can ignore the provided 'stage' and 'date' fields, but we do bump the version number.
-  -- All new versions have 'stage == 2' because the stage 2 migrations are the Persistent
-  -- generated ones. For the date we use today's date.
-  (y, m, d) <- Time.toGregorian . Time.utctDay <$> Time.getCurrentTime
-  pure $ MigrationVersion 2 (ver + 1) (fromIntegral y * 10000 + m * 100 + d)
 
 renderMigrationVersion :: MigrationVersion -> String
 renderMigrationVersion mv =

@@ -61,12 +61,12 @@ import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
+import Cardano.Db.Progress (updateProgress, withProgress)
 import Cardano.Db.Run
 import Cardano.Db.Schema.Variants (TxOutVariantType (..))
 import qualified Cardano.Db.Statement.Function.Core as DB
 import qualified Cardano.Db.Types as DB
 import System.Process (readProcessWithExitCode)
-import Cardano.Db.Progress (withProgress, updateProgress)
 
 newtype MigrationDir
   = MigrationDir FilePath
@@ -113,7 +113,6 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = 
 
       putStrLn "Success!"
       pure ranAll
-
     (Just logfiledir, scripts) -> do
       logFilename <- genLogFilename logfiledir
       withFile logFilename AppendMode $ \logHandle -> do
@@ -184,21 +183,21 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (_,
   unless quiet $ putStr ("    " ++ script ++ " ... ")
   -- hFlush stdout
 
-  let psqlArgs = [ Text.unpack (pgcDbname pgconfig)
-                 , "--no-password"
-                 , "--quiet"
-                 , "--username=" <> Text.unpack (pgcUser pgconfig)
-                 , "--host=" <> Text.unpack (pgcHost pgconfig)
-                 , "--port=" <> Text.unpack (pgcPort pgconfig)
-                 , "--no-psqlrc"
-                 , "--single-transaction"
-                 , "--set", "ON_ERROR_STOP=on"
-                 , "--file=" ++ location </> script
-                 ]
+  let psqlArgs =
+        [ Text.unpack (pgcDbname pgconfig)
+        , "--no-password"
+        , "--quiet"
+        , "--username=" <> Text.unpack (pgcUser pgconfig)
+        , "--host=" <> Text.unpack (pgcHost pgconfig)
+        , "--port=" <> Text.unpack (pgcPort pgconfig)
+        , "--no-psqlrc"
+        , "--single-transaction"
+        , "--set"
+        , "ON_ERROR_STOP=on"
+        , "--file=" ++ location </> script
+        ]
 
-  hPutStrLn logHandle $ "DEBUG: About to execute psql with args: " ++ show psqlArgs
   (exitCode, stdt, stderr) <- readProcessWithExitCode "psql" psqlArgs ""
-  hPutStrLn logHandle $ "DEBUG: Command completed with exit code: " ++ show exitCode
   hPutStrLn logHandle $ "Command output: " ++ stdt
   unless (null stderr) $ hPutStrLn logHandle $ "Command stderr: " ++ stderr
 

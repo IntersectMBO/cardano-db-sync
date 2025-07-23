@@ -65,58 +65,30 @@ data UtxoQueryResult = UtxoQueryResult
 -- Helper functions
 --------------------------------------------------------------------------------
 
--- convertTxOutIdCore :: [TxOutIdW] -> [Id.TxOutCoreId]
--- convertTxOutIdCore = mapMaybe unwrapTxOutIdCore
-
 unwrapTxOutIdCore :: TxOutIdW -> Maybe Id.TxOutCoreId
 unwrapTxOutIdCore (VCTxOutIdW txOutid) = Just txOutid
 unwrapTxOutIdCore _ = Nothing
 
--- --------------------------------------------------------------------------------
--- convertTxOutIdAddress :: [TxOutIdW] -> [Id.TxOutAddressId]
--- convertTxOutIdAddress = mapMaybe unwrapTxOutIdAddress
+----------------------------------------------------------------------------------
 
 unwrapTxOutIdAddress :: TxOutIdW -> Maybe Id.TxOutAddressId
 unwrapTxOutIdAddress (VATxOutIdW txOutid) = Just txOutid
 unwrapTxOutIdAddress _ = Nothing
 
--- --------------------------------------------------------------------------------
--- convertMaTxOutIdCore :: [MaTxOutIdW] -> [Id.MaTxOutCoreId]
--- convertMaTxOutIdCore = mapMaybe unwrapMaTxOutIdCore
+----------------------------------------------------------------------------------
 
 unwrapMaTxOutIdCore :: MaTxOutIdW -> Maybe Id.MaTxOutCoreId
 unwrapMaTxOutIdCore (CMaTxOutIdW maTxOutId) = Just maTxOutId
 unwrapMaTxOutIdCore _ = Nothing
 
--- --------------------------------------------------------------------------------
--- convertMaTxOutIdAddress :: [MaTxOutIdW] -> [Id.MaTxOutAddressId]
--- convertMaTxOutIdAddress = mapMaybe unwrapMaTxOutIdAddress
+----------------------------------------------------------------------------------
 
 unwrapMaTxOutIdAddress :: MaTxOutIdW -> Maybe Id.MaTxOutAddressId
 unwrapMaTxOutIdAddress (VMaTxOutIdW maTxOutId) = Just maTxOutId
 unwrapMaTxOutIdAddress _ = Nothing
 
--- --------------------------------------------------------------------------------
--- convertCollateralTxOutIdCore :: [CollateralTxOutIdW] -> [Id.CollateralTxOutCoreId]
--- convertCollateralTxOutIdCore = mapMaybe unwrapCollateralTxOutIdCore
-
-unwrapCollateralTxOutIdCore :: CollateralTxOutIdW -> Maybe Id.CollateralTxOutCoreId
-unwrapCollateralTxOutIdCore (VCCollateralTxOutIdW iD) = Just iD
-unwrapCollateralTxOutIdCore _ = Nothing
-
--- --------------------------------------------------------------------------------
--- convertCollateralTxOutIdAddress :: [CollateralTxOutIdW] -> [Id.CollateralTxOutAddressId]
--- convertCollateralTxOutIdAddress = mapMaybe unwrapCollateralTxOutIdAddress
+----------------------------------------------------------------------------------
 
 unwrapCollateralTxOutIdAddress :: CollateralTxOutIdW -> Maybe Id.CollateralTxOutAddressId
 unwrapCollateralTxOutIdAddress (VACollateralTxOutIdW iD) = Just iD
 unwrapCollateralTxOutIdAddress _ = Nothing
-
---------------------------------------------------------------------------------
-isTxOutCore :: TxOutVariantType -> Bool
-isTxOutCore TxOutVariantCore = True
-isTxOutCore _ = False
-
-isTxOutAddress :: TxOutVariantType -> Bool
-isTxOutAddress TxOutVariantAddress = True
-isTxOutAddress _ = False

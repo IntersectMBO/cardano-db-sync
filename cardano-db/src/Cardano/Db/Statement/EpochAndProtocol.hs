@@ -3,7 +3,7 @@
 
 module Cardano.Db.Statement.EpochAndProtocol where
 
-import Cardano.Prelude (MonadError (..), MonadIO (..), Proxy (..), Word64, void)
+import Cardano.Prelude (MonadError (..), MonadIO (..), Word64)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -17,11 +17,10 @@ import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEnP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertReplace)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (countAll, replace, selectByFieldFirst)
-import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
+import Cardano.Db.Statement.Types (Entity (..))
 import Cardano.Db.Types (DbAction (..), DbLovelace (..))
 import Data.WideWord (Word128 (..))
 
@@ -37,27 +36,6 @@ costModelStmt =
 insertCostModel :: MonadIO m => SEnP.CostModel -> DbAction m Id.CostModelId
 insertCostModel costModel =
   runDbSession (mkDbCallStack "insertCostModel") $ HsqlSes.statement costModel costModelStmt
-
-queryCostModelStmt :: HsqlStmt.Statement () [Id.CostModelId]
-queryCostModelStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
-  where
-    tableN = tableName (Proxy @SEnP.CostModel)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id"
-          , " FROM " <> tableN
-          , " ORDER BY id ASC"
-          ]
-    decoder =
-      HsqlD.rowList $
-        Id.idDecoder Id.CostModelId
-
-queryCostModel :: MonadIO m => DbAction m [Id.CostModelId]
-queryCostModel =
-  runDbSession (mkDbCallStack "queryCostModel") $
-    HsqlSes.statement () queryCostModelStmt
 
 --------------------------------------------------------------------------------
 -- AdaPots
@@ -79,12 +57,6 @@ insertAdaPots adaPots =
 -- AdaPots query statement
 queryAdaPotsIdStmt :: HsqlStmt.Statement Id.BlockId (Maybe (Entity SEnP.AdaPots))
 queryAdaPotsIdStmt = selectByFieldFirst "block_id" (Id.idEncoder Id.getBlockId) SEnP.entityAdaPotsDecoder
-
--- AdaPots query function
-queryAdaPotsId :: MonadIO m => Id.BlockId -> DbAction m (Maybe (Entity SEnP.AdaPots))
-queryAdaPotsId blockId =
-  runDbSession (mkDbCallStack "queryAdaPotsId") $
-    HsqlSes.statement blockId queryAdaPotsIdStmt
 
 -- AdaPots query function used in tests
 queryAdaPotsIdTest :: MonadIO m => Id.BlockId -> DbAction m (Maybe SEnP.AdaPots)
@@ -289,28 +261,6 @@ queryForEpochId epochNum =
     HsqlSes.statement epochNum queryForEpochIdStmt
 
 --------------------------------------------------------------------------------
-queryEpochFromNumStmt :: HsqlStmt.Statement Word64 (Maybe SEnP.Epoch)
-queryEpochFromNumStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT *"
-          , " FROM epoch"
-          , " WHERE no = $1"
-          ]
-
-    encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-    decoder = HsqlD.rowMaybe SEnP.epochDecoder
-
--- | Get an epoch given it's number.
-queryEpochFromNum :: MonadIO m => Word64 -> DbAction m (Maybe SEnP.Epoch)
-queryEpochFromNum epochNum =
-  runDbSession (mkDbCallStack "queryEpochFromNum") $
-    HsqlSes.statement epochNum queryEpochFromNumStmt
-
---------------------------------------------------------------------------------
 queryLatestEpochStmt :: HsqlStmt.Statement () (Maybe SEnP.Epoch)
 queryLatestEpochStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True
@@ -385,27 +335,6 @@ insertEpochStateStmt =
 insertEpochState :: MonadIO m => SEnP.EpochState -> DbAction m Id.EpochStateId
 insertEpochState epochState =
   runDbSession (mkDbCallStack "insertEpochState") $ HsqlSes.statement epochState insertEpochStateStmt
-
-insertBulkEpochStateStmt :: HsqlStmt.Statement [SEnP.EpochState] ()
-insertBulkEpochStateStmt =
-  insertBulk
-    extractEpochState
-    SEnP.epochStateBulkEncoder
-    NoResultBulk
-  where
-    extractEpochState :: [SEnP.EpochState] -> ([Maybe Id.CommitteeId], [Maybe Id.GovActionProposalId], [Maybe Id.ConstitutionId], [Word64])
-    extractEpochState xs =
-      ( map SEnP.epochStateCommitteeId xs
-      , map SEnP.epochStateNoConfidenceId xs
-      , map SEnP.epochStateConstitutionId xs
-      , map SEnP.epochStateEpochNo xs
-      )
-
-insertBulkEpochState :: MonadIO m => [SEnP.EpochState] -> DbAction m ()
-insertBulkEpochState epochStates =
-  void $
-    runDbSession (mkDbCallStack "insertBulkEpochState") $
-      HsqlSes.statement epochStates insertBulkEpochStateStmt
 
 --------------------------------------------------------------------------------
 -- PotTransfer

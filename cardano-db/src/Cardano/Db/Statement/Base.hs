@@ -16,7 +16,7 @@ import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
 import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Word64, textShow, void)
-import Data.Functor.Contravariant (Contravariant (..), (>$<))
+import Data.Functor.Contravariant ((>$<))
 import Data.IORef (readIORef)
 import Data.List (partition)
 import Data.Maybe (fromMaybe, isJust)
@@ -31,6 +31,7 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
+import Cardano.Db.Progress (ProgressRef, renderProgressBar, updateProgress, withProgress)
 import qualified Cardano.Db.Schema.Core as SC
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Ids as Id
@@ -48,7 +49,6 @@ import Cardano.Db.Statement.Rollback (deleteTablesAfterBlockId)
 import Cardano.Db.Statement.Types (DbInfo, Entity (..), tableName, validateColumn)
 import Cardano.Db.Statement.Variants.TxOut (querySetNullTxOut)
 import Cardano.Db.Types (Ada (..), DbAction, DbWord64, ExtraMigration, extraDescription)
-import Cardano.Db.Progress (ProgressRef, updateProgress, withProgress, renderProgressBar)
 
 --------------------------------------------------------------------------------
 -- Block
@@ -139,17 +139,6 @@ querySlotUtcTimeStmt =
           ]
 
 -- | Calculate the slot time (as UTCTime) for a given slot number.
--- This will fail if the slot is empty.
-querySlotUtcTime :: MonadIO m => Word64 -> DbAction m UTCTime
-querySlotUtcTime slotNo = do
-  result <- runDbSession dbCallStack $ HsqlSes.statement slotNo querySlotUtcTimeStmt
-  case result of
-    Just time -> pure time
-    Nothing -> throwError $ DbError dbCallStack errorMsg Nothing
-  where
-    dbCallStack = mkDbCallStack "querySlotUtcTime"
-    errorMsg = "slot_no not found with number: " <> Text.pack (show slotNo)
-
 querySlotUtcTimeEither :: MonadIO m => Word64 -> DbAction m (Either DbError UTCTime)
 querySlotUtcTimeEither slotNo = do
   result <- runDbSession dbCallStack $ HsqlSes.statement slotNo querySlotUtcTimeStmt
@@ -158,28 +147,6 @@ querySlotUtcTimeEither slotNo = do
     Nothing -> pure $ Left $ DbError dbCallStack ("Slot not found for slot_no: " <> Text.pack (show slotNo)) Nothing
   where
     dbCallStack = mkDbCallStack "querySlotUtcTimeEither"
-
---------------------------------------------------------------------------------
-queryBlockByIdStmt :: HsqlStmt.Statement Id.BlockId (Maybe (Entity SCB.Block))
-queryBlockByIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT *"
-          , " FROM " <> tableName (Proxy @SCB.Block)
-          , " WHERE id = $1"
-          ]
-    encoder = Id.idEncoder Id.getBlockId
-    decoder = HsqlD.rowMaybe SCB.entityBlockDecoder
-
-queryBlockById :: MonadIO m => Id.BlockId -> DbAction m (Maybe SCB.Block)
-queryBlockById blockId = do
-  res <-
-    runDbSession (mkDbCallStack "queryBlockSlotAndHash") $
-      HsqlSes.statement blockId queryBlockByIdStmt
-  pure $ entityVal <$> res
 
 --------------------------------------------------------------------------------
 
@@ -210,30 +177,6 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
   runDbSession dbCallStack $ HsqlSes.statement blockNo stmt
 
 --------------------------------------------------------------------------------
-queryBlockNoStmt ::
-  forall a.
-  DbInfo a =>
-  HsqlStmt.Statement Word64 (Maybe Id.BlockId)
-queryBlockNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-    decoder = HsqlD.rowMaybe (Id.idDecoder Id.BlockId)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT id"
-          , " FROM " <> tableName (Proxy @a)
-          , " WHERE block_no = $1"
-          ]
-
-queryBlockNo :: MonadIO m => Word64 -> DbAction m (Maybe Id.BlockId)
-queryBlockNo blkNo =
-  runDbSession (mkDbCallStack "queryBlockNo") $
-    HsqlSes.statement blkNo $
-      queryBlockNoStmt @SCB.Block
-
---------------------------------------------------------------------------------
 queryBlockNoAndEpochStmt ::
   forall a.
   DbInfo a =>
@@ -260,29 +203,6 @@ queryBlockNoAndEpoch blkNo =
   runDbSession (mkDbCallStack "queryBlockNoAndEpoch") $
     HsqlSes.statement blkNo $
       queryBlockNoAndEpochStmt @SCB.Block
-
---------------------------------------------------------------------------------
-queryBlockSlotAndHashStmt :: HsqlStmt.Statement Id.BlockId (Maybe (SlotNo, ByteString))
-queryBlockSlotAndHashStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT slot_no, hash"
-          , " FROM " <> tableName (Proxy @SCB.Block)
-          , " WHERE id = $1"
-          ]
-    encoder = Id.idEncoder Id.getBlockId
-    decoder = HsqlD.rowMaybe $ do
-      slotNo <- SlotNo . fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
-      hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-      pure (slotNo, hash)
-
-queryBlockSlotAndHash :: MonadIO m => Id.BlockId -> DbAction m (Maybe (SlotNo, ByteString))
-queryBlockSlotAndHash blockId =
-  runDbSession (mkDbCallStack "queryBlockSlotAndHash") $
-    HsqlSes.statement blockId queryBlockSlotAndHashStmt
 
 --------------------------------------------------------------------------------
 queryNearestBlockSlotNoStmt ::
@@ -393,27 +313,6 @@ queryReverseIndexBlockId blockId =
   runDbSession (mkDbCallStack "queryReverseIndexBlockId") $
     HsqlSes.statement blockId $
       queryReverseIndexBlockIdStmt @SCB.Block
-
---------------------------------------------------------------------------------
-queryMinIdsAfterReverseIndexStmt :: HsqlStmt.Statement Id.ReverseIndexId [Text.Text]
-queryMinIdsAfterReverseIndexStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    encoder = Id.idEncoder Id.getReverseIndexId
-    decoder = HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT min_ids"
-          , " FROM reverse_index"
-          , " WHERE id >= $1"
-          , " ORDER BY id DESC"
-          ]
-
-queryMinIdsAfterReverseIndex :: MonadIO m => Id.ReverseIndexId -> DbAction m [Text.Text]
-queryMinIdsAfterReverseIndex rollbackId =
-  runDbSession (mkDbCallStack "queryMinIdsAfterReverseIndex") $
-    HsqlSes.statement rollbackId queryMinIdsAfterReverseIndexStmt
 
 --------------------------------------------------------------------------------
 
@@ -789,55 +688,6 @@ queryLatestBlockNo =
     HsqlSes.statement () queryLatestBlockNoStmt
 
 -----------------------------------------------------------------------------------
-querySlotNosGreaterThanStmt :: HsqlStmt.Statement Word64 [SlotNo]
-querySlotNosGreaterThanStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    blockTable = tableName (Proxy @SC.Block)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT slot_no"
-          , " FROM " <> blockTable
-          , " WHERE slot_no > $1"
-          , " ORDER BY slot_no DESC"
-          ]
-    encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowList $ do
-      slotValue <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
-      pure $ SlotNo (fromIntegral slotValue)
-
-querySlotNosGreaterThan :: MonadIO m => Word64 -> DbAction m [SlotNo]
-querySlotNosGreaterThan slotNo =
-  runDbSession (mkDbCallStack "querySlotNosGreaterThan") $
-    HsqlSes.statement slotNo querySlotNosGreaterThanStmt
-
------------------------------------------------------------------------------------
-
--- | Like 'querySlotNosGreaterThan', but returns all slots in the same order.
-querySlotNosStmt :: HsqlStmt.Statement () [SlotNo]
-querySlotNosStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
-  where
-    blockTable = tableName (Proxy @SC.Block)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT slot_no"
-          , " FROM " <> blockTable
-          , " WHERE slot_no IS NOT NULL"
-          , " ORDER BY slot_no DESC"
-          ]
-    decoder = HsqlD.rowList $ do
-      slotValue <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
-      pure $ SlotNo (fromIntegral slotValue)
-
-querySlotNos :: MonadIO m => DbAction m [SlotNo]
-querySlotNos =
-  runDbSession (mkDbCallStack "querySlotNos") $
-    HsqlSes.statement () querySlotNosStmt
-
------------------------------------------------------------------------------------
 queryPreviousSlotNoStmt :: HsqlStmt.Statement Word64 (Maybe Word64)
 queryPreviousSlotNoStmt =
   HsqlStmt.Statement sql encoder decoder True
@@ -866,26 +716,6 @@ queryPreviousSlotNo slotNo =
 -- DELETE
 -----------------------------------------------------------------------------------
 
-deleteBlocksBlockIdStmt :: HsqlStmt.Statement (Id.BlockId, Word64, Bool) Int64
-deleteBlocksBlockIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    encoder =
-      contramap (\(a, _, _) -> a) (Id.idEncoder Id.getBlockId)
-        <> contramap (\(_, b, _) -> b) (HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8))
-        <> contramap (\(_, _, c) -> c) (HsqlE.param (HsqlE.nonNullable HsqlE.bool))
-    decoder = HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable HsqlD.int8))
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "WITH deleted AS ("
-          , "  DELETE FROM block"
-          , "  WHERE id >= $1"
-          , "  RETURNING *"
-          , ")"
-          , "SELECT COUNT(*)::bigint FROM deleted"
-          ]
-
 deleteBlocksBlockId ::
   MonadIO m =>
   Trace IO Text.Text ->
@@ -898,7 +728,6 @@ deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
   startTime <- liftIO getCurrentTime
 
   withProgress 6 "Initializing rollback..." $ \progressRef -> do
-
     -- Step 1: Find minimum IDs
     updateProgress progressRef 1 "Finding reverse indexes..."
 
@@ -960,8 +789,6 @@ deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
     isComplete minIdsW = case minIdsW of
       CMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
       VMinIdsWrapper (MinIds m1 m2 m3) -> isJust m1 && isJust m2 && isJust m3
-
----------------------------------------------------------------------------------
 
 mkRollbackSummary :: [(Text.Text, Int64)] -> (Text.Text, Int64) -> Text.Text
 mkRollbackSummary logs setNullLogs =

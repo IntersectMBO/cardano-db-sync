@@ -11,7 +11,7 @@
 
 module Cardano.Db.Statement.Function.Query where
 
-import Cardano.Prelude (MonadIO, Proxy (..), Word64, fromMaybe, listToMaybe)
+import Cardano.Prelude (MonadIO, Proxy (..), Word64, listToMaybe)
 import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
@@ -54,25 +54,6 @@ replace keyEncoder recordEncoder =
           , " SET " <> setClause
           , " WHERE id = $1"
           ]
-
-selectByField ::
-  forall a b.
-  DbInfo a =>
-  Text.Text -> -- Field name
-  HsqlE.Params b -> -- Parameter encoder (not Value)
-  HsqlD.Row (Entity a) -> -- Entity decoder
-  HsqlStmt.Statement b (Maybe (Entity a))
-selectByField fieldName paramEncoder entityDecoder =
-  HsqlStmt.Statement
-    ( TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT * FROM " <> tableName (Proxy @a)
-          , " WHERE " <> fieldName <> " = $1"
-          ]
-    )
-    paramEncoder -- Direct use of paramEncoder
-    (HsqlD.rowMaybe entityDecoder)
-    True
 
 selectByFieldFirst ::
   forall a b.
@@ -130,43 +111,6 @@ existsById encoder resultType =
 --
 -- === Example
 -- @
--- existsWhereStmt :: HsqlStmt.Statement ByteString Bool
--- existsWhereStmt = existsWhere @DelistedPool "hash_raw" (HsqlE.param (HsqlE.nonNullable HsqlE.bytea)) (WithResult boolDecoder)
--- @
-existsWhere ::
-  forall a r.
-  (DbInfo a, Key a ~ Key a) =>
-  -- | Column name to filter on
-  Text.Text ->
-  -- | Parameter encoder
-  HsqlE.Params (Key a) ->
-  -- | Whether to return result and decoder
-  ResultType Bool r ->
-  HsqlStmt.Statement (Key a) r
-existsWhere colName encoder resultType =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    decoder = case resultType of
-      NoResult -> HsqlD.noResult
-      WithResult dec -> dec
-
-    table = tableName (Proxy @a)
-    validCol = validateColumn @a colName
-
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT EXISTS ("
-          , "  SELECT 1"
-          , "  FROM " <> table
-          , "  WHERE " <> validCol <> " = $1"
-          , ")"
-          ]
-
--- | Statement to check if a row exists with a specific value in a given column
---
--- === Example
--- @
 -- existsWhereByColumnStmt :: HsqlStmt.Statement ByteString Bool
 -- existsWhereByColumnStmt = existsWhereByColumn @DelistedPool "hash_raw" (HsqlE.param (HsqlE.nonNullable HsqlE.bytea)) (WithResult boolDecoder)
 -- @
@@ -198,48 +142,6 @@ existsWhereByColumn colName encoder resultType =
           , "  FROM " <> table
           , "  WHERE " <> validCol <> " = $1"
           , ")"
-          ]
-
--- | Creates a statement to replace a record with a new value
---
--- === Example
--- @
--- replaceVotingAnchor :: MonadIO m => VotingAnchorId -> VotingAnchor -> DbAction m ()
--- replaceVotingAnchor key record =
---   runDbSession (mkDbCallStack "replaceVotingAnchor") $
---     HsqlStmt.statement (key, record) $ replaceRecord
---       @VotingAnchor
---       (idEncoder getVotingAnchorId)
---       votingAnchorEncoder
--- @
-replaceRecord ::
-  forall a.
-  DbInfo a =>
-  HsqlE.Params (Key a) -> -- Key encoder
-  HsqlE.Params a -> -- Record encoder
-  HsqlStmt.Statement (Key a, a) () -- Returns a statement to replace a record
-replaceRecord keyEnc recordEnc =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
-  where
-    table = tableName (Proxy @a)
-    colsNames = NE.toList $ columnNames (Proxy @a)
-
-    setClause =
-      Text.intercalate ", " $
-        zipWith
-          (\col idx -> col <> " = $" <> Text.pack (show idx))
-          colsNames
-          [2 .. (length colsNames + 1)]
-
-    -- Combined encoder for the (key, record) tuple
-    encoder = contramap fst keyEnc <> contramap snd recordEnc
-
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "UPDATE " <> table
-          , " SET " <> setClause
-          , " WHERE id = $1"
           ]
 
 -- | Creates a statement to count rows in a table where a column matches a condition
@@ -367,11 +269,3 @@ adaSumDecoder = do
   case amount of
     Just value -> pure $ lovelaceToAda (MkFixed $ fromIntegral value)
     Nothing -> pure $ Ada 0
-
--- | Get the UTxO set after the specified 'BlockNo' has been applied to the chain.
--- Unfortunately the 'sum_' operation above returns a 'PersistRational' so we need
--- to un-wibble it.
-unValueSumAda :: HsqlD.Result Ada
-unValueSumAda =
-  HsqlD.singleRow $
-    fromMaybe (Ada 0) <$> HsqlD.column (HsqlD.nullable (Ada . fromIntegral <$> HsqlD.int8))
