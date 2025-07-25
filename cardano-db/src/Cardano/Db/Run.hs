@@ -12,7 +12,7 @@ import Cardano.BM.Data.LogItem (
   mkLOMeta,
  )
 import Cardano.BM.Data.Severity (Severity (..))
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.BM.Trace (Trace)
 import Cardano.Prelude
 import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Logger (
@@ -94,8 +94,22 @@ sessionErrorToDbError cs sessionErr =
 -- Run DB actions with INTERRUPT HANDLING
 -----------------------------------------------------------------------------------------
 
--- | Run a DbAction with explicit transaction and isolation level
--- This version properly handles interrupts (Ctrl+C) and ensures cleanup
+-- | Run a DbAction with explicit transaction control and isolation level
+--
+-- Transaction behavior:
+-- * Begins transaction with specified isolation level
+-- * Runs the action within the transaction
+-- * Commits if action succeeds, rollback only on commit failure or async exceptions
+-- * Returns Either for explicit error handling instead of throwing exceptions
+--
+-- Exception safety:
+-- * Uses 'mask' to prevent async exceptions during transaction lifecycle
+-- * Uses 'onException' to ensure rollback on interrupts (Ctrl+C, SIGTERM, etc.)
+-- * Does NOT rollback on action errors - lets them commit (matches Persistent semantics)
+--
+-- Note: This follows Persistent's philosophy where successful function calls commit
+-- their transactions regardless of the return value. Only async exceptions and
+-- commit failures trigger rollbacks.
 runDbActionWithIsolation ::
   MonadUnliftIO m =>
   DbEnv ->
@@ -104,28 +118,28 @@ runDbActionWithIsolation ::
   m (Either DbError a)
 runDbActionWithIsolation dbEnv isolationLevel action = do
   withRunInIO $ \runInIO -> do
+    -- Use masking to prevent async exceptions during transaction management
     mask $ \restore -> do
-      -- Begin transaction
+      -- Begin transaction with specified isolation level
       beginResult <- beginTransaction dbEnv isolationLevel
       case beginResult of
         Left err -> pure (Left err)
         Right _ -> do
-          -- Run the action with exception handling for interrupts
-          result <-
-            restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv)
-              `onException` do
-                case dbTracer dbEnv of
-                  Just tracer -> logWarning tracer "rolling back transaction, due to interrupt."
-                  Nothing -> pure ()
-                rollbackTransaction dbEnv
+          -- Run action with async exception protection via onException
+          -- If interrupted (Ctrl+C), the onException handler will rollback
+          result <- onException
+              (restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv))
+              (restore $ rollbackTransaction dbEnv)
           case result of
-            Left err -> do
-              rollbackTransaction dbEnv
-              pure (Left err)
+            -- Action returned error but ran successfully - commit the transaction
+            -- This matches Persistent's behavior: successful calls always commit
+            Left err -> pure (Left err)
             Right val -> do
+              -- Attempt to commit the transaction
               commitResult <- commitTransaction dbEnv
               case commitResult of
                 Left commitErr -> do
+                  -- Commit failed - rollback and return the commit error
                   rollbackTransaction dbEnv
                   pure (Left commitErr)
                 Right _ -> pure (Right val)

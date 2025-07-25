@@ -24,7 +24,7 @@ import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder, utcTimeAsTimestampDecod
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insertCheckUnique)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
+import Cardano.Db.Statement.Function.InsertBulk (ConflictStrategy (..), insertBulk, insertBulkWith)
 import Cardano.Db.Statement.Function.Query (countAll)
 import Cardano.Db.Statement.Pool (queryPoolHashIdExistsStmt, queryPoolMetadataRefIdExistsStmt)
 import Cardano.Db.Statement.Types (DbInfo (..))
@@ -550,7 +550,9 @@ insertBulkOffChainVoteExternalUpdatesStmt =
 
 insertBulkOffChainVoteFetchErrorStmt :: HsqlStmt.Statement [SO.OffChainVoteFetchError] ()
 insertBulkOffChainVoteFetchErrorStmt =
-  insertBulk
+  insertBulkWith
+    (IgnoreWithColumns ["voting_anchor_id", "retry_count"]) -- ON CONFLICT DO NOTHING
+    False
     extractOffChainVoteFetchError
     SO.offChainVoteFetchErrorBulkEncoder
     NoResultBulk

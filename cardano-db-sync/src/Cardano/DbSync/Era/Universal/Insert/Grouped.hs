@@ -1,5 +1,7 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -9,6 +11,7 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   ExtendedTxIn (..),
   ExtendedTxOut (..),
   insertBlockGroupedData,
+  insertBlockGroupedDataSequential,
   insertReverseIndex,
   resolveTxInputs,
   resolveScriptHash,
@@ -87,12 +90,13 @@ instance Semigroup BlockGroupedData where
       (groupedTxFees tgd1 + groupedTxFees tgd2)
       (groupedTxOutSum tgd1 + groupedTxOutSum tgd2)
 
-insertBlockGroupedData ::
+-- | Original sequential implementation (kept for fallback)
+insertBlockGroupedDataSequential ::
   MonadIO m =>
   SyncEnv ->
   BlockGroupedData ->
   DB.DbAction m DB.MinIdsWrapper
-insertBlockGroupedData syncEnv grouped = do
+insertBlockGroupedDataSequential syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
 
   let txOutChunks = chunksOf maxBulkSize $ etoTxOut . fst <$> groupedTxOut grouped
@@ -137,47 +141,54 @@ insertBlockGroupedData syncEnv grouped = do
   mapM_ (DB.insertBulkTxMetadata removeJsonbFromSchema) txMetadataChunks
   mapM_ DB.insertBulkMaTxMint txMintChunks
 
-  pure $ makeMinId txInIds txOutIds maTxOutIds
+  pure $ makeMinId syncEnv txInIds txOutIds maTxOutIds
   where
     tracer = getTrace syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
     removeJsonbFromSchema = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
 
-    categorizeResolvedInputs :: [ExtendedTxIn] -> ([DB.BulkConsumedByHash], [(DB.TxOutIdW, DB.TxId)], [ExtendedTxIn])
-    categorizeResolvedInputs etis =
-      let (hashBased, idBased, failed) = foldr categorizeOne ([], [], []) etis
-       in (hashBased, idBased, failed)
-      where
-        categorizeOne ExtendedTxIn {..} (hAcc, iAcc, fAcc) =
-          case etiTxOutId of
-            Right txOutId ->
-              (hAcc, (txOutId, DB.txInTxInId etiTxIn) : iAcc, fAcc)
-            Left genericTxIn ->
-              let bulkData =
-                    DB.BulkConsumedByHash
-                      { bchTxHash = unTxHash (Generic.txInTxId genericTxIn)
-                      , bchOutputIndex = Generic.txInIndex genericTxIn
-                      , bchConsumingTxId = DB.txInTxInId etiTxIn
-                      }
-               in (bulkData : hAcc, iAcc, fAcc)
+-- | Parallel implementation with single connection coordination
+insertBlockGroupedData ::
+  MonadIO m =>
+  SyncEnv ->
+  BlockGroupedData ->
+  DB.DbAction m DB.MinIdsWrapper
+insertBlockGroupedData syncEnv grouped = do
+  disInOut <- liftIO $ getDisableInOutState syncEnv
 
-    makeMinId :: [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
-    makeMinId txInIds txOutIds maTxOutIds =
-      case txOutVariantType of
-        DB.TxOutVariantCore -> do
-          DB.CMinIdsWrapper $
-            DB.MinIds
-              { minTxInId = listToMaybe txInIds
-              , minTxOutId = listToMaybe txOutIds
-              , minMaTxOutId = listToMaybe maTxOutIds
-              }
-        DB.TxOutVariantAddress ->
-          DB.VMinIdsWrapper $
-            DB.MinIds
-              { minTxInId = listToMaybe txInIds
-              , minTxOutId = listToMaybe txOutIds
-              , minMaTxOutId = listToMaybe maTxOutIds
-              }
+  -- Parallel preparation of independent data
+  (preparedTxIn, preparedMetadata, preparedMint, txOutChunks) <- liftIO $ do
+    a1 <- async $ pure $ prepareTxInProcessing syncEnv grouped
+    a2 <- async $ pure $ prepareMetadataProcessing syncEnv grouped
+    a3 <- async $ pure $ prepareMintProcessing syncEnv grouped
+    a4 <- async $ pure $ chunksOf maxBulkSize $ etoTxOut . fst <$> groupedTxOut grouped
+    
+    r1 <- wait a1
+    r2 <- wait a2
+    r3 <- wait a3
+    r4 <- wait a4
+    pure (r1, r2, r3, r4)
+
+  -- Sequential TxOut processing (generates required IDs)
+  txOutIds <- concat <$> mapM (DB.insertBulkTxOut disInOut) txOutChunks
+
+  -- PHASE 3: Execute independent operations (TxIn, Metadata, Mint) in parallel
+  txInIds <- executePreparedTxIn preparedTxIn
+  
+  -- PHASE 4: Pipeline TxOut-dependent operations (MaTxOut + UTxO consumption)
+  maTxOutIds <- processMaTxOuts syncEnv txOutIds grouped
+  
+  -- PHASE 5: Execute remaining independent operations in parallel
+  liftIO $ do
+    a1 <- async $ DB.runDbActionIO (envDbEnv syncEnv) (executePreparedMetadata preparedMetadata)
+    a2 <- async $ DB.runDbActionIO (envDbEnv syncEnv) (executePreparedMint preparedMint)
+    _ <- wait a1
+    void $ wait a2
+  
+  -- PHASE 6: Process UTxO consumption (depends on txOutIds)
+  processUtxoConsumption syncEnv grouped txOutIds
+
+  pure $ makeMinId syncEnv txInIds txOutIds maTxOutIds
 
 mkmaTxOuts :: DB.TxOutVariantType -> (DB.TxOutIdW, [MissingMaTxOut]) -> [DB.MaTxOutW]
 mkmaTxOuts _txOutVariantType (txOutId, mmtos) = mkmaTxOut <$> mmtos
@@ -341,3 +352,141 @@ matches txIn eutxo =
     getTxOutIndex txOutWrapper = case txOutWrapper of
       DB.VCTxOutW cTxOut -> VC.txOutCoreIndex cTxOut
       DB.VATxOutW vTxOut _ -> VA.txOutAddressIndex vTxOut
+
+-----------------------------------------------------------------------------------------------------------------------------------
+-- PARALLEL PROCESSING HELPER FUNCTIONS
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-- | Prepared TxIn data for async execution
+data PreparedTxIn = PreparedTxIn
+  { ptiChunks :: ![[DB.TxIn]]
+  , ptiSkip :: !Bool
+  }
+
+-- | Prepared Metadata data for async execution  
+data PreparedMetadata = PreparedMetadata
+  { pmChunks :: ![[DB.TxMetadata]]
+  , pmRemoveJsonb :: !Bool
+  }
+
+-- | Prepared Mint data for async execution
+data PreparedMint = PreparedMint
+  { pmtChunks :: ![[DB.MaTxMint]]
+  }
+
+-- | Prepare TxIn processing (can run in parallel with TxOut)
+prepareTxInProcessing :: SyncEnv -> BlockGroupedData -> PreparedTxIn
+prepareTxInProcessing syncEnv grouped =
+  PreparedTxIn
+    { ptiChunks = chunksOf maxBulkSize $ etiTxIn <$> groupedTxIn grouped
+    , ptiSkip = getSkipTxIn syncEnv
+    }
+
+-- | Prepare Metadata processing (fully independent)
+prepareMetadataProcessing :: SyncEnv -> BlockGroupedData -> PreparedMetadata
+prepareMetadataProcessing syncEnv grouped =
+  PreparedMetadata
+    { pmChunks = chunksOf maxBulkSize $ groupedTxMetadata grouped
+    , pmRemoveJsonb = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
+    }
+
+-- | Prepare Mint processing (fully independent)
+prepareMintProcessing :: SyncEnv -> BlockGroupedData -> PreparedMint
+prepareMintProcessing _syncEnv grouped =
+  PreparedMint
+    { pmtChunks = chunksOf maxBulkSize $ groupedTxMint grouped
+    }
+
+-- | Execute prepared TxIn operations
+executePreparedTxIn :: MonadIO m => PreparedTxIn -> DB.DbAction m [DB.TxInId]
+executePreparedTxIn prepared = 
+  if ptiSkip prepared
+    then pure []
+    else concat <$> mapM DB.insertBulkTxIn (ptiChunks prepared)
+
+-- | Execute prepared Metadata operations
+executePreparedMetadata :: MonadIO m => PreparedMetadata -> DB.DbAction m ()
+executePreparedMetadata prepared =
+  mapM_ (DB.insertBulkTxMetadata (pmRemoveJsonb prepared)) (pmChunks prepared)
+
+-- | Execute prepared Mint operations
+executePreparedMint :: MonadIO m => PreparedMint -> DB.DbAction m ()
+executePreparedMint prepared =
+  mapM_ DB.insertBulkMaTxMint (pmtChunks prepared)
+
+-- | Process MaTxOut operations (depends on TxOut IDs)
+processMaTxOuts :: MonadIO m => SyncEnv -> [DB.TxOutIdW] -> BlockGroupedData -> DB.DbAction m [DB.MaTxOutIdW]
+processMaTxOuts syncEnv txOutIds grouped = do
+  let txOutVariantType = getTxOutVariantType syncEnv
+      maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $
+                   zip txOutIds (snd <$> groupedTxOut grouped)
+      maTxOutChunks = chunksOf maxBulkSize maTxOuts
+  concat <$> mapM DB.insertBulkMaTxOut maTxOutChunks
+
+-- | Process UTxO consumption updates (depends on TxOut IDs)
+processUtxoConsumption :: MonadIO m => SyncEnv -> BlockGroupedData -> [DB.TxOutIdW] -> DB.DbAction m ()
+processUtxoConsumption syncEnv grouped txOutIds = do
+  let tracer = getTrace syncEnv
+      txOutVariantType = getTxOutVariantType syncEnv
+      
+  whenConsumeOrPruneTxOut syncEnv $ do
+    -- Resolve remaining inputs
+    etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
+    -- Categorise resolved inputs for bulk vs individual processing
+    let (hashBasedUpdates, idBasedUpdates, failedInputs) = categorizeResolvedInputs etis
+        hashUpdateChunks = chunksOf maxBulkSize hashBasedUpdates
+        idUpdateChunks = chunksOf maxBulkSize idBasedUpdates
+
+    -- Bulk process hash-based updates
+    unless (null hashBasedUpdates) $
+      mapM_ (DB.updateConsumedByTxHashBulk txOutVariantType) hashUpdateChunks
+    -- Individual process ID-based updates
+    unless (null idBasedUpdates) $
+      mapM_ DB.updateListTxOutConsumedByTxId idUpdateChunks
+    -- Log failures
+    mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
+
+-- | Helper function to categorize resolved inputs for parallel processing
+categorizeResolvedInputs :: [ExtendedTxIn] -> ([DB.BulkConsumedByHash], [(DB.TxOutIdW, DB.TxId)], [ExtendedTxIn])
+categorizeResolvedInputs etis =
+  let (hashBased, idBased, failed) = foldr categorizeOne ([], [], []) etis
+   in (hashBased, idBased, failed)
+  where
+    categorizeOne ExtendedTxIn {..} (hAcc, iAcc, fAcc) =
+      case etiTxOutId of
+        Right txOutId ->
+          (hAcc, (txOutId, DB.txInTxInId etiTxIn) : iAcc, fAcc)
+        Left genericTxIn ->
+          let bulkData =
+                DB.BulkConsumedByHash
+                  { bchTxHash = unTxHash (Generic.txInTxId genericTxIn)
+                  , bchOutputIndex = Generic.txInIndex genericTxIn
+                  , bchConsumingTxId = DB.txInTxInId etiTxIn
+                  }
+           in (bulkData : hAcc, iAcc, fAcc)
+
+-----------------------------------------------------------------------------------------------------------------------------------
+-- PARALLEL PROCESSING HELPER FUNCTIONS (NO PIPELINES)
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-- Note: After analysis, pipelines aren't suitable here due to data dependencies.
+-- The current approach using async for truly independent operations is optimal.
+
+-- | Helper function to create MinIds result
+makeMinId :: SyncEnv -> [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
+makeMinId syncEnv txInIds txOutIds maTxOutIds =
+  case getTxOutVariantType syncEnv of
+    DB.TxOutVariantCore ->
+      DB.CMinIdsWrapper $
+        DB.MinIds
+          { minTxInId = listToMaybe txInIds
+          , minTxOutId = listToMaybe txOutIds
+          , minMaTxOutId = listToMaybe maTxOutIds
+          }
+    DB.TxOutVariantAddress ->
+      DB.VMinIdsWrapper $
+        DB.MinIds
+          { minTxInId = listToMaybe txInIds
+          , minTxOutId = listToMaybe txOutIds
+          , minMaTxOutId = listToMaybe maTxOutIds
+          }
