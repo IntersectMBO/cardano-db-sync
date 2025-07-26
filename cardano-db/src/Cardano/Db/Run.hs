@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cardano.Db.Run where
 
@@ -127,7 +128,8 @@ runDbActionWithIsolation dbEnv isolationLevel action = do
         Right _ -> do
           -- Run action with async exception protection via onException
           -- If interrupted (Ctrl+C), the onException handler will rollback
-          result <- onException
+          result <-
+            onException
               (restore (runInIO $ runReaderT (runExceptT (runDbAction action)) dbEnv))
               (restore $ rollbackTransaction dbEnv)
           case result of
@@ -196,16 +198,9 @@ runPoolDbIohkLogging ::
   m (Either DbError a)
 runPoolDbIohkLogging connPool tracer action = do
   conn <- liftIO $ withResource connPool pure
-  let dbEnv = mkDbEnv conn
+  let dbEnv = createDbEnv conn connPool (Just tracer)
   runIohkLogging tracer $
     runDbActionWithIsolation dbEnv RepeatableRead action
-  where
-    mkDbEnv conn =
-      DbEnv
-        { dbConnection = conn
-        , dbEnableLogging = True
-        , dbTracer = Just tracer
-        }
 
 runDbNoLogging :: MonadUnliftIO m => PGPassSource -> DbAction m a -> m a
 runDbNoLogging source action = do
@@ -217,9 +212,11 @@ runDbNoLogging source action = do
     bracket
       (acquireConnection [connSetting])
       HsqlCon.release
-      ( \connection -> runInIO $ do
-          let dbEnv = DbEnv connection False Nothing
-          runDbConnWithIsolation action dbEnv RepeatableRead
+      ( \connection -> do
+          pool <- createHasqlConnectionPool [connSetting] 4 -- 4 connections for reasonable parallelism
+          runInIO $ do
+            let dbEnv = createDbEnv connection pool Nothing
+            runDbConnWithIsolation action dbEnv RepeatableRead
       )
 
 runDbNoLoggingEnv :: MonadUnliftIO m => DbAction m a -> m a
@@ -235,7 +232,8 @@ runWithConnectionNoLogging source action = do
     (acquireConnection [connSetting])
     HsqlCon.release
     ( \connection -> do
-        let dbEnv = DbEnv connection False Nothing
+        pool <- createHasqlConnectionPool [connSetting] 4 -- 4 connections for reasonable parallelism
+        let dbEnv = createDbEnv connection pool Nothing
         runNoLoggingT $ runDbConnWithIsolation action dbEnv RepeatableRead
     )
 
@@ -295,3 +293,33 @@ createHasqlConnectionPool settings numConnections = do
         Left err -> throwIO $ userError $ "Connection error: " <> show err
         Right conn -> pure conn
     releaseConn = HsqlCon.release
+
+-- Helper to create DbEnv with both single connection and pool
+createDbEnv :: HsqlCon.Connection -> Pool HsqlCon.Connection -> Maybe (Trace IO Text) -> DbEnv
+createDbEnv conn pool tracer =
+  DbEnv
+    { dbConnection = conn
+    , dbPoolConnection = pool
+    , dbTracer = tracer
+    }
+
+-- Pool-aware database action runners for async operations
+runPoolDbAction :: forall a m. MonadUnliftIO m => DbEnv -> DbAction m a -> m a
+runPoolDbAction dbEnv action = do
+  withRunInIO $ \runInIO -> do
+    conn <- withResource (dbPoolConnection dbEnv) pure
+    let poolDbEnv = dbEnv {dbConnection = conn, dbTracer = Nothing} -- No logging for pool operations to avoid contention
+    result <- runInIO $ runReaderT (runExceptT (runDbAction action)) poolDbEnv
+    case result of
+      Left err -> throwIO err
+      Right val -> pure val
+
+runPoolDbActionWithLogging :: forall a m. MonadUnliftIO m => DbEnv -> DbAction m a -> m a
+runPoolDbActionWithLogging dbEnv action = do
+  withRunInIO $ \runInIO -> do
+    conn <- withResource (dbPoolConnection dbEnv) pure
+    let poolDbEnv = dbEnv {dbConnection = conn} -- Keep original logging settings
+    result <- runInIO $ runReaderT (runExceptT (runDbAction action)) poolDbEnv
+    case result of
+      Left err -> throwIO err
+      Right val -> pure val

@@ -30,6 +30,7 @@ import Data.Either (fromRight)
 import Data.Fixed (Micro, showFixed)
 import Data.Functor.Contravariant ((>$<))
 import Data.Int (Int64)
+import Data.Pool (Pool)
 import Data.Scientific (Scientific (..), scientific, toBoundedInteger)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -60,7 +61,7 @@ newtype DbAction m a = DbAction
 ----------------------------------------------------------------------------
 data DbEnv = DbEnv
   { dbConnection :: !HsqlCon.Connection
-  , dbEnableLogging :: !Bool
+  , dbPoolConnection :: !(Pool HsqlCon.Connection)
   , dbTracer :: !(Maybe (Trace IO Text))
   }
 

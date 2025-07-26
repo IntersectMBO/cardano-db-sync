@@ -204,10 +204,12 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runIndexesMigrationFnc syncN
     ( \dbConn -> do
         runOrThrowIO $ runExceptT $ do
           let isLogingEnabled = dncEnableDbLogging syncNodeConfigFromFile
-              dbEnv =
+          -- Create connection pool for parallel operations
+          pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
+          let dbEnv =
                 if isLogingEnabled
-                  then DB.DbEnv dbConn isLogingEnabled (Just trce)
-                  else DB.DbEnv dbConn isLogingEnabled Nothing
+                  then DB.createDbEnv dbConn pool (Just trce)
+                  else DB.createDbEnv dbConn pool Nothing
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftDbError $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg

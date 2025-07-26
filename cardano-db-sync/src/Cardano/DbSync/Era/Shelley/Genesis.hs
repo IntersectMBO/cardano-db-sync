@@ -69,9 +69,9 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
     liftIO $ logError tracer $ show SNErrIgnoreShelleyInitiation
     throwError SNErrIgnoreShelleyInitiation
 
-  if DB.dbEnableLogging $ envDbEnv syncEnv
-    then liftDbIO $ DB.runDbIohkLogging tracer (envDbEnv syncEnv) (insertAction prunes)
-    else liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) (insertAction prunes)
+  case DB.dbTracer $ envDbEnv syncEnv of
+    Just trce -> liftDbIO $ DB.runDbIohkLogging trce (envDbEnv syncEnv) (insertAction prunes)
+    Nothing -> liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) (insertAction prunes)
   where
     tracer = getTrace syncEnv
 

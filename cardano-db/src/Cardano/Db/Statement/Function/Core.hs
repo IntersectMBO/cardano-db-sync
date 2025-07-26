@@ -16,7 +16,7 @@ where
 import Cardano.BM.Trace (logInfo)
 import Cardano.Db.Error (DbCallStack (..), DbError (..))
 import Cardano.Db.Types (DbAction (..), DbEnv (..))
-import Cardano.Prelude (MonadError (..), MonadIO (..), Text, ask, for_, when)
+import Cardano.Prelude (MonadError (..), MonadIO (..), Text, ask)
 import qualified Data.Text as Text
 import Data.Time (diffUTCTime, getCurrentTime)
 import GHC.Stack (HasCallStack, SrcLoc (..), callStack, getCallStack)
@@ -57,11 +57,7 @@ import qualified Hasql.Session as HsqlS
 runDbSession :: MonadIO m => DbCallStack -> HsqlS.Session a -> DbAction m a
 runDbSession dbCallStack@DbCallStack {..} session = DbAction $ do
   dbEnv <- ask
-  let logMsg msg =
-        when (dbEnableLogging dbEnv) $
-          for_ (dbTracer dbEnv) $
-            \tracer -> liftIO $ logInfo tracer msg
-      locationInfo =
+  let locationInfo =
         " Function: "
           <> dbCsFncName
           <> " at "
@@ -71,15 +67,15 @@ runDbSession dbCallStack@DbCallStack {..} session = DbAction $ do
           <> ":"
           <> Text.pack (show dbCsLine)
 
-  if dbEnableLogging dbEnv
-    then do
+  case dbTracer dbEnv of
+    Nothing -> run dbEnv
+    Just tracer -> do
       start <- liftIO getCurrentTime
       result <- run dbEnv
       end <- liftIO getCurrentTime
       let duration = diffUTCTime end start
-      logMsg $ "Query: " <> dbCsFncName <> locationInfo <> " in " <> Text.pack (show duration)
+      liftIO $ logInfo tracer $ "Query: " <> dbCsFncName <> locationInfo <> " in " <> Text.pack (show duration)
       pure result
-    else run dbEnv
   where
     run dbEnv = do
       result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
