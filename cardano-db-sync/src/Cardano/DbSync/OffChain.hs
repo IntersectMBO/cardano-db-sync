@@ -240,7 +240,11 @@ runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
       HsqlC.release
       ( \dbConn -> forever $ do
           -- Create a new DbEnv for this thread
-          let dbEnv = DB.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile) $ Just trce
+          pool <- DB.createHasqlConnectionPool [connSetting] 4 -- 4 connections for reasonable parallelism
+          let dbEnv =
+                if dncEnableDbLogging syncNodeConfigFromFile
+                  then DB.createDbEnv dbConn pool (Just trce)
+                  else DB.createDbEnv dbConn pool Nothing
               -- Create a new SyncEnv with the new DbEnv but preserving all other fields
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           tDelay
@@ -275,7 +279,11 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
       HsqlC.release
       ( \dbConn -> do
           -- Create a new DbEnv for this thread
-          let dbEnv = DB.DbEnv dbConn (dncEnableDbLogging syncNodeConfigFromFile) $ Just trce
+          pool <- DB.createHasqlConnectionPool [connSetting] 4 -- 4 connections for reasonable parallelism
+          let dbEnv =
+                if dncEnableDbLogging syncNodeConfigFromFile
+                  then DB.createDbEnv dbConn pool (Just trce)
+                  else DB.createDbEnv dbConn pool Nothing
           -- Create a new SyncEnv with the new DbEnv but preserving all other fields
           let threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           -- Use the thread-specific SyncEnv for all operations

@@ -162,7 +162,7 @@ insertBlockGroupedData syncEnv grouped = do
     a2 <- async $ pure $ prepareMetadataProcessing syncEnv grouped
     a3 <- async $ pure $ prepareMintProcessing syncEnv grouped
     a4 <- async $ pure $ chunksOf maxBulkSize $ etoTxOut . fst <$> groupedTxOut grouped
-    
+
     r1 <- wait a1
     r2 <- wait a2
     r3 <- wait a3
@@ -172,20 +172,20 @@ insertBlockGroupedData syncEnv grouped = do
   -- Sequential TxOut processing (generates required IDs)
   txOutIds <- concat <$> mapM (DB.insertBulkTxOut disInOut) txOutChunks
 
-  -- PHASE 3: Execute independent operations (TxIn, Metadata, Mint) in parallel
+  -- Execute independent operations (TxIn, Metadata, Mint) in parallel
   txInIds <- executePreparedTxIn preparedTxIn
-  
-  -- PHASE 4: Pipeline TxOut-dependent operations (MaTxOut + UTxO consumption)
+
+  -- TxOut-dependent operations (MaTxOut + UTxO consumption)
   maTxOutIds <- processMaTxOuts syncEnv txOutIds grouped
-  
-  -- PHASE 5: Execute remaining independent operations in parallel
+
+  -- Execute remaining independent operations in parallel with pools
   liftIO $ do
-    a1 <- async $ DB.runDbActionIO (envDbEnv syncEnv) (executePreparedMetadata preparedMetadata)
-    a2 <- async $ DB.runDbActionIO (envDbEnv syncEnv) (executePreparedMint preparedMint)
+    a1 <- async $ DB.runPoolDbAction (envDbEnv syncEnv) (executePreparedMetadata preparedMetadata)
+    a2 <- async $ DB.runPoolDbAction (envDbEnv syncEnv) (executePreparedMint preparedMint)
     _ <- wait a1
     void $ wait a2
-  
-  -- PHASE 6: Process UTxO consumption (depends on txOutIds)
+
+  -- Process UTxO consumption (depends on txOutIds)
   processUtxoConsumption syncEnv grouped txOutIds
 
   pure $ makeMinId syncEnv txInIds txOutIds maTxOutIds
@@ -363,7 +363,7 @@ data PreparedTxIn = PreparedTxIn
   , ptiSkip :: !Bool
   }
 
--- | Prepared Metadata data for async execution  
+-- | Prepared Metadata data for async execution
 data PreparedMetadata = PreparedMetadata
   { pmChunks :: ![[DB.TxMetadata]]
   , pmRemoveJsonb :: !Bool
@@ -399,7 +399,7 @@ prepareMintProcessing _syncEnv grouped =
 
 -- | Execute prepared TxIn operations
 executePreparedTxIn :: MonadIO m => PreparedTxIn -> DB.DbAction m [DB.TxInId]
-executePreparedTxIn prepared = 
+executePreparedTxIn prepared =
   if ptiSkip prepared
     then pure []
     else concat <$> mapM DB.insertBulkTxIn (ptiChunks prepared)
@@ -418,8 +418,9 @@ executePreparedMint prepared =
 processMaTxOuts :: MonadIO m => SyncEnv -> [DB.TxOutIdW] -> BlockGroupedData -> DB.DbAction m [DB.MaTxOutIdW]
 processMaTxOuts syncEnv txOutIds grouped = do
   let txOutVariantType = getTxOutVariantType syncEnv
-      maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $
-                   zip txOutIds (snd <$> groupedTxOut grouped)
+      maTxOuts =
+        concatMap (mkmaTxOuts txOutVariantType) $
+          zip txOutIds (snd <$> groupedTxOut grouped)
       maTxOutChunks = chunksOf maxBulkSize maTxOuts
   concat <$> mapM DB.insertBulkMaTxOut maTxOutChunks
 
@@ -428,7 +429,7 @@ processUtxoConsumption :: MonadIO m => SyncEnv -> BlockGroupedData -> [DB.TxOutI
 processUtxoConsumption syncEnv grouped txOutIds = do
   let tracer = getTrace syncEnv
       txOutVariantType = getTxOutVariantType syncEnv
-      
+
   whenConsumeOrPruneTxOut syncEnv $ do
     -- Resolve remaining inputs
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
