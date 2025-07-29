@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -15,7 +16,7 @@ import qualified Hasql.Statement as HsqlStmt
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertIfUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
@@ -34,7 +35,7 @@ insertDelistedPoolStmt =
 
 insertDelistedPool :: MonadIO m => SCP.DelistedPool -> DbAction m Id.DelistedPoolId
 insertDelistedPool delistedPool =
-  runDbSession (mkDbCallStack "insertDelistedPool") $
+  runDbSessionMain (mkDbCallStack "insertDelistedPool") $
     HsqlSes.statement delistedPool insertDelistedPoolStmt
 
 --------------------------------------------------------------------------------
@@ -56,7 +57,7 @@ queryDelistedPoolsStmt =
 
 queryDelistedPools :: MonadIO m => DbAction m [ByteString]
 queryDelistedPools =
-  runDbSession (mkDbCallStack "queryDelistedPools") $
+  runDbSessionMain (mkDbCallStack "queryDelistedPools") $
     HsqlSes.statement () queryDelistedPoolsStmt
 
 --------------------------------------------------------------------------------
@@ -71,7 +72,7 @@ existsDelistedPoolStmt =
 -- Updated function that takes a ByteString
 existsDelistedPool :: MonadIO m => ByteString -> DbAction m Bool
 existsDelistedPool ph =
-  runDbSession (mkDbCallStack "existsDelistedPool") $
+  runDbSessionMain (mkDbCallStack "existsDelistedPool") $
     HsqlSes.statement ph existsDelistedPoolStmt
 
 --------------------------------------------------------------------------------
@@ -95,7 +96,7 @@ deleteDelistedPoolStmt =
 
 deleteDelistedPool :: MonadIO m => ByteString -> DbAction m Bool
 deleteDelistedPool poolHash =
-  runDbSession (mkDbCallStack "deleteDelistedPool") $ do
+  runDbSessionMain (mkDbCallStack "deleteDelistedPool") $ do
     count <- HsqlSes.statement poolHash deleteDelistedPoolStmt
     pure $ count > 0
 
@@ -110,7 +111,7 @@ insertPoolHashStmt =
 
 insertPoolHash :: MonadIO m => SCP.PoolHash -> DbAction m Id.PoolHashId
 insertPoolHash poolHash =
-  runDbSession (mkDbCallStack "insertPoolHash") $
+  runDbSessionMain (mkDbCallStack "insertPoolHash") $
     HsqlSes.statement poolHash insertPoolHashStmt
 
 --------------------------------------------------------------------------------
@@ -136,7 +137,7 @@ queryPoolHashIdStmt =
 
 queryPoolHashId :: MonadIO m => ByteString -> DbAction m (Maybe Id.PoolHashId)
 queryPoolHashId hash =
-  runDbSession (mkDbCallStack "queryPoolHashId") $
+  runDbSessionMain (mkDbCallStack "queryPoolHashId") $
     HsqlSes.statement hash queryPoolHashIdStmt
 
 -----------------------------------------------------------------------------------
@@ -157,7 +158,7 @@ insertPoolMetadataRefStmt =
 
 insertPoolMetadataRef :: MonadIO m => SCP.PoolMetadataRef -> DbAction m Id.PoolMetadataRefId
 insertPoolMetadataRef poolMetadataRef =
-  runDbSession (mkDbCallStack "insertPoolMetadataRef") $
+  runDbSessionMain (mkDbCallStack "insertPoolMetadataRef") $
     HsqlSes.statement poolMetadataRef insertPoolMetadataRefStmt
 
 --------------------------------------------------------------------------------
@@ -170,7 +171,7 @@ queryPoolMetadataRefIdExistsStmt =
 --------------------------------------------------------------------------------
 deletePoolMetadataRefById :: MonadIO m => Id.PoolMetadataRefId -> DbAction m ()
 deletePoolMetadataRefById pmrId =
-  runDbSession (mkDbCallStack "deletePoolMetadataRefById") $
+  runDbSessionMain (mkDbCallStack "deletePoolMetadataRefById") $
     HsqlSes.statement pmrId (parameterisedDeleteWhere @SCP.PoolMetadataRef "id" ">=" $ Id.idEncoder Id.getPoolMetadataRefId)
 
 --------------------------------------------------------------------------------
@@ -185,7 +186,7 @@ insertPoolRelayStmt =
 
 insertPoolRelay :: MonadIO m => SCP.PoolRelay -> DbAction m Id.PoolRelayId
 insertPoolRelay poolRelay =
-  runDbSession (mkDbCallStack "insertPoolRelay") $ HsqlSes.statement poolRelay insertPoolRelayStmt
+  runDbSessionMain (mkDbCallStack "insertPoolRelay") $ HsqlSes.statement poolRelay insertPoolRelayStmt
 
 --------------------------------------------------------------------------------
 -- PoolStat
@@ -209,7 +210,7 @@ insertBulkPoolStatStmt =
 
 insertBulkPoolStat :: MonadIO m => [SCP.PoolStat] -> DbAction m ()
 insertBulkPoolStat poolStats =
-  runDbSession (mkDbCallStack "insertBulkPoolStat") $
+  runDbSessionMain (mkDbCallStack "insertBulkPoolStat") $
     HsqlSes.statement poolStats insertBulkPoolStatStmt
 
 --------------------------------------------------------------------------------
@@ -224,7 +225,7 @@ insertPoolOwnerStmt =
 
 insertPoolOwner :: MonadIO m => SCP.PoolOwner -> DbAction m Id.PoolOwnerId
 insertPoolOwner poolOwner =
-  runDbSession (mkDbCallStack "insertPoolOwner") $
+  runDbSessionMain (mkDbCallStack "insertPoolOwner") $
     HsqlSes.statement poolOwner insertPoolOwnerStmt
 
 --------------------------------------------------------------------------------
@@ -239,7 +240,7 @@ insertPoolRetireStmt =
 
 insertPoolRetire :: MonadIO m => SCP.PoolRetire -> DbAction m Id.PoolRetireId
 insertPoolRetire poolRetire =
-  runDbSession (mkDbCallStack "insertPoolRetire") $ HsqlSes.statement poolRetire insertPoolRetireStmt
+  runDbSessionMain (mkDbCallStack "insertPoolRetire") $ HsqlSes.statement poolRetire insertPoolRetireStmt
 
 --------------------------------------------------------------------------------
 queryRetiredPoolsStmt :: HsqlStmt.Statement (Maybe ByteString) [PoolCert]
@@ -279,7 +280,7 @@ queryRetiredPoolsStmt =
 
 queryRetiredPools :: MonadIO m => Maybe ByteString -> DbAction m [PoolCert]
 queryRetiredPools mPoolHash =
-  runDbSession (mkDbCallStack "queryRetiredPools") $
+  runDbSessionMain (mkDbCallStack "queryRetiredPools") $
     HsqlSes.statement mPoolHash queryRetiredPoolsStmt
 
 --------------------------------------------------------------------------------
@@ -294,7 +295,7 @@ insertPoolUpdateStmt =
 
 insertPoolUpdate :: MonadIO m => SCP.PoolUpdate -> DbAction m Id.PoolUpdateId
 insertPoolUpdate poolUpdate =
-  runDbSession (mkDbCallStack "insertPoolUpdate") $ HsqlSes.statement poolUpdate insertPoolUpdateStmt
+  runDbSessionMain (mkDbCallStack "insertPoolUpdate") $ HsqlSes.statement poolUpdate insertPoolUpdateStmt
 
 --------------------------------------------------------------------------------
 
@@ -333,7 +334,7 @@ queryPoolUpdateByBlockStmt =
 
 queryPoolUpdateByBlock :: MonadIO m => Id.BlockId -> Id.PoolHashId -> DbAction m Bool
 queryPoolUpdateByBlock blkId poolHashId =
-  runDbSession (mkDbCallStack "queryPoolUpdateByBlock") $
+  runDbSessionMain (mkDbCallStack "queryPoolUpdateByBlock") $
     HsqlSes.statement (blkId, poolHashId) queryPoolUpdateByBlockStmt
 
 --------------------------------------------------------------------------------
@@ -387,7 +388,7 @@ queryPoolRegisterStmt =
 
 queryPoolRegister :: MonadIO m => Maybe ByteString -> DbAction m [PoolCert]
 queryPoolRegister mPoolHash =
-  runDbSession (mkDbCallStack "queryPoolRegister") $
+  runDbSessionMain (mkDbCallStack "queryPoolRegister") $
     HsqlSes.statement mPoolHash queryPoolRegisterStmt
 
 --------------------------------------------------------------------------------
@@ -402,7 +403,7 @@ insertReservedPoolTickerStmt =
 
 insertReservedPoolTicker :: MonadIO m => SCP.ReservedPoolTicker -> DbAction m (Maybe Id.ReservedPoolTickerId)
 insertReservedPoolTicker reservedPool =
-  runDbSession (mkDbCallStack "insertReservedPoolTicker") $
+  runDbSessionMain (mkDbCallStack "insertReservedPoolTicker") $
     HsqlSes.statement reservedPool insertReservedPoolTickerStmt
 
 --------------------------------------------------------------------------------
@@ -429,7 +430,7 @@ queryReservedTickerStmt =
 
 queryReservedTicker :: MonadIO m => Text.Text -> DbAction m (Maybe ByteString)
 queryReservedTicker tickerName =
-  runDbSession (mkDbCallStack "queryReservedTicker") $
+  runDbSessionMain (mkDbCallStack "queryReservedTicker") $
     HsqlSes.statement tickerName queryReservedTickerStmt
 
 --------------------------------------------------------------------------------
@@ -449,5 +450,5 @@ queryReservedTickersStmt =
 
 queryReservedTickers :: MonadIO m => DbAction m [SCP.ReservedPoolTicker]
 queryReservedTickers =
-  runDbSession (mkDbCallStack "queryReservedTickers") $
+  runDbSessionMain (mkDbCallStack "queryReservedTickers") $
     HsqlSes.statement () queryReservedTickersStmt

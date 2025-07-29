@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -28,7 +29,7 @@ import Cardano.Prelude (textShow)
 import Control.Exception (Exception)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Logger (NoLoggingT)
+
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (isDigit)
 import Data.Either (partitionEithers)
@@ -89,7 +90,7 @@ data MigrationValidateError = UnknownMigrationsFound
 
 instance Exception MigrationValidateError
 
-data MigrationToRun = Initial | Full | Indexes
+data MigrationToRun = Initial | Full | NearTip
   deriving (Show, Eq)
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
@@ -144,7 +145,7 @@ runMigrations pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = 
     filterMigrations scripts = case mToRun of
       Full -> pure (filter filterIndexesFull scripts, True)
       Initial -> pure (filter filterInitial scripts, True)
-      Indexes -> do
+      NearTip -> do
         pure (filter filterIndexes scripts, False)
 
     filterIndexesFull (mv, _) = do
@@ -226,7 +227,7 @@ createMigration _source (MigrationDir _migdir) _txOutVariantType = do
 recreateDB :: PGPassSource -> IO ()
 recreateDB pgpass = do
   runWithConnectionNoLogging pgpass $ do
-    DB.runDbSession (DB.mkDbCallStack "recreateDB-dropSchema") $
+    DB.runDbSessionMain (DB.mkDbCallStack "recreateDB-dropSchema") $
       HsqlS.statement () $
         HsqlStm.Statement
           "DROP SCHEMA IF EXISTS public CASCADE"
@@ -234,7 +235,7 @@ recreateDB pgpass = do
           HsqlD.noResult
           True
 
-    DB.runDbSession (DB.mkDbCallStack "recreateDB-createSchema") $
+    DB.runDbSessionMain (DB.mkDbCallStack "recreateDB-createSchema") $
       HsqlS.statement () $
         HsqlStm.Statement
           "CREATE SCHEMA public"
@@ -245,7 +246,7 @@ recreateDB pgpass = do
 getAllTableNames :: PGPassSource -> IO [Text.Text]
 getAllTableNames pgpass = do
   runWithConnectionNoLogging pgpass $ do
-    DB.runDbSession (DB.mkDbCallStack "getAllTableNames") $
+    DB.runDbSessionMain (DB.mkDbCallStack "getAllTableNames") $
       HsqlS.statement () $
         HsqlStm.Statement
           "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()"
@@ -256,7 +257,7 @@ getAllTableNames pgpass = do
 truncateTables :: PGPassSource -> [Text.Text] -> IO ()
 truncateTables pgpass tables =
   runWithConnectionNoLogging pgpass $ do
-    DB.runDbSession (DB.mkDbCallStack "truncateTables") $
+    DB.runDbSessionMain (DB.mkDbCallStack "truncateTables") $
       HsqlS.statement () $
         HsqlStm.Statement
           (TextEnc.encodeUtf8 ("TRUNCATE " <> Text.intercalate ", " tables <> " CASCADE"))
@@ -277,9 +278,9 @@ getMaintenancePsqlConf pgconfig = runWithConnectionNoLogging (PGPassCached pgcon
       , mconcat workers
       ]
 
-showMaintenanceWorkMem :: DB.DbAction (NoLoggingT IO) [Text.Text]
+showMaintenanceWorkMem :: MonadIO m => DB.DbAction m [Text.Text]
 showMaintenanceWorkMem =
-  DB.runDbSession (DB.mkDbCallStack "showMaintenanceWorkMem") $
+  DB.runDbSessionMain (DB.mkDbCallStack "showMaintenanceWorkMem") $
     HsqlS.statement () $
       HsqlStm.Statement
         "SHOW maintenance_work_mem"
@@ -287,9 +288,9 @@ showMaintenanceWorkMem =
         (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
         True
 
-showMaxParallelMaintenanceWorkers :: DB.DbAction (NoLoggingT IO) [Text.Text]
+showMaxParallelMaintenanceWorkers :: MonadIO m => DB.DbAction m [Text.Text]
 showMaxParallelMaintenanceWorkers =
-  DB.runDbSession (DB.mkDbCallStack "showMaxParallelMaintenanceWorkers") $
+  DB.runDbSessionMain (DB.mkDbCallStack "showMaxParallelMaintenanceWorkers") $
     HsqlS.statement () $
       HsqlStm.Statement
         "SHOW max_parallel_maintenance_workers"
@@ -303,7 +304,7 @@ dropTables :: PGPassSource -> IO ()
 dropTables pgpass = do
   runWithConnectionNoLogging pgpass $ do
     mstr <-
-      DB.runDbSession (DB.mkDbCallStack "dropTables-getCommand") $
+      DB.runDbSessionMain (DB.mkDbCallStack "dropTables-getCommand") $
         HsqlS.statement () $
           HsqlStm.Statement
             ( mconcat
@@ -316,7 +317,7 @@ dropTables pgpass = do
             True
 
     whenJust mstr $ \dropsCommand ->
-      DB.runDbSession (DB.mkDbCallStack "dropTables-execute") $
+      DB.runDbSessionMain (DB.mkDbCallStack "dropTables-execute") $
         HsqlS.statement dropsCommand $
           HsqlStm.Statement
             "$1"
@@ -379,8 +380,9 @@ readStageFromFilename fn =
 
 noLedgerMigrations :: DB.DbEnv -> Trace IO Text.Text -> IO ()
 noLedgerMigrations dbEnv trce = do
-  let action = do
-        DB.runDbSession (DB.mkDbCallStack "noLedgerMigrations-redeemer") $
+  let action :: MonadIO m => DB.DbAction m ()
+      action = do
+        DB.runDbSessionMain (DB.mkDbCallStack "noLedgerMigrations-redeemer") $
           HsqlS.statement () $
             HsqlStm.Statement
               "UPDATE redeemer SET fee = NULL"
@@ -388,7 +390,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runDbSession (DB.mkDbCallStack "noLedgerMigrations-reward") $
+        DB.runDbSessionMain (DB.mkDbCallStack "noLedgerMigrations-reward") $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM reward"
@@ -396,7 +398,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runDbSession (DB.mkDbCallStack "noLedgerMigrations-epoch_stake") $
+        DB.runDbSessionMain (DB.mkDbCallStack "noLedgerMigrations-epoch_stake") $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM epoch_stake"
@@ -404,7 +406,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runDbSession (DB.mkDbCallStack "noLedgerMigrations-ada_pots") $
+        DB.runDbSessionMain (DB.mkDbCallStack "noLedgerMigrations-ada_pots") $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM ada_pots"
@@ -412,7 +414,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runDbSession (DB.mkDbCallStack "noLedgerMigrations-epoch_param") $
+        DB.runDbSessionMain (DB.mkDbCallStack "noLedgerMigrations-epoch_param") $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM epoch_param"
@@ -425,7 +427,7 @@ noLedgerMigrations dbEnv trce = do
 queryPgIndexesCount :: MonadIO m => DB.DbAction m Word64
 queryPgIndexesCount = do
   indexesExists <-
-    DB.runDbSession (DB.mkDbCallStack "queryPgIndexesCount") $
+    DB.runDbSessionMain (DB.mkDbCallStack "queryPgIndexesCount") $
       HsqlS.statement () $
         HsqlStm.Statement
           "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"

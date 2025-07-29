@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Cardano.DbSync.Util.Constraint where
 
 import Cardano.BM.Data.Trace (Trace)

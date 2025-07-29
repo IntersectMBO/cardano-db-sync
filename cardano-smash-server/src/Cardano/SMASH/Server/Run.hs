@@ -41,7 +41,7 @@ runSmashServer config = do
     Right setting -> pure setting
 
   -- Create the Hasql connection pool
-  pool <- DB.createHasqlConnectionPool [connSetting] (sscSmashPort config)
+  pool <- DB.createHasqlConnectionPool [connSetting] 4
   -- Setup app with the pool
   app <- mkApp (sscTrace config) (postgresqlPoolDataLayer trce pool) (sscAdmins config)
   -- Run the web server

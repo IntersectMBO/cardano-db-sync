@@ -6,16 +6,6 @@
 
 module Cardano.DbSync.Api.Ledger where
 
-import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
-import Control.Monad.Extra
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.List.Extra
-import Data.Map (Map)
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as Text
-import Lens.Micro
-import Numeric
-
 import Cardano.BM.Trace (logError, logInfo, logWarning)
 import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Alonzo.Scripts
@@ -26,7 +16,16 @@ import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Prelude (MonadError (..), textShow)
+import Cardano.Prelude (textShow, throwIO)
+import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
+import Control.Monad.Extra
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.List.Extra
+import Data.Map (Map)
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as Text
+import Lens.Micro
+import Numeric
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
@@ -158,7 +157,7 @@ prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let genTxOut = fromTxOut (fromIntegral index) txOut
   eTxId <- queryTxIdWithCache syncEnv txIntxId
   txId <- case eTxId of
-    Left err -> throwError err
+    Left err -> liftIO $ throwIO err
     Right tid -> pure tid
   insertTxOut syncEnv iopts (txId, txHashByteString) genTxOut
   where

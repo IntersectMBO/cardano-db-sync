@@ -29,7 +29,7 @@ import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEnc
 import Cardano.Db.Schema.Variants (TxOutVariantType (..), TxOutW (..), UtxoQueryResult (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Function.Query (adaDecoder)
 import Cardano.Db.Statement.Types (tableName)
 import Cardano.Db.Types (Ada (..), DbAction, DbLovelace, dbLovelaceDecoder, lovelaceToAda)
@@ -73,7 +73,7 @@ queryDelegationForEpochStmt =
 
 queryDelegationForEpoch :: MonadIO m => Text.Text -> Word64 -> DbAction m (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
 queryDelegationForEpoch address epochNum =
-  runDbSession (mkDbCallStack "queryDelegationForEpoch") $
+  runDbSessionMain (mkDbCallStack "queryDelegationForEpoch") $
     HsqlSes.statement (address, epochNum) queryDelegationForEpochStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -102,7 +102,7 @@ queryBlockNoListStmt =
 
 queryBlockNoList :: MonadIO m => Word64 -> Word64 -> DbAction m [Word64]
 queryBlockNoList start count =
-  runDbSession (mkDbCallStack "queryBlockNoList") $
+  runDbSessionMain (mkDbCallStack "queryBlockNoList") $
     HsqlSes.statement (start, count) queryBlockNoListStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -130,7 +130,7 @@ queryBlockTimestampsStmt =
 
 queryBlockTimestamps :: MonadIO m => Word64 -> Word64 -> DbAction m [UTCTime]
 queryBlockTimestamps start count =
-  runDbSession (mkDbCallStack "queryBlockTimestamps") $
+  runDbSessionMain (mkDbCallStack "queryBlockTimestamps") $
     HsqlSes.statement (start, count) queryBlockTimestampsStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -156,7 +156,7 @@ queryBlocksTimeAftersStmt =
 
 queryBlocksTimeAfters :: MonadIO m => UTCTime -> DbAction m [(Maybe Word64, Maybe Word64, UTCTime)]
 queryBlocksTimeAfters now =
-  runDbSession (mkDbCallStack "queryBlocksTimeAfters") $
+  runDbSessionMain (mkDbCallStack "queryBlocksTimeAfters") $
     HsqlSes.statement now queryBlocksTimeAftersStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ queryLatestMemberRewardEpochNoStmt =
 queryLatestMemberRewardEpochNo :: MonadIO m => DbAction m Word64
 queryLatestMemberRewardEpochNo = do
   result <-
-    runDbSession (mkDbCallStack "queryLatestMemberRewardEpochNo") $
+    runDbSessionMain (mkDbCallStack "queryLatestMemberRewardEpochNo") $
       HsqlSes.statement () queryLatestMemberRewardEpochNoStmt
   pure $ maybe 0 (\x -> if x >= 2 then x - 2 else 0) result
 
@@ -211,7 +211,7 @@ queryRewardAmountStmt =
 
 queryRewardAmount :: MonadIO m => Word64 -> Id.StakeAddressId -> DbAction m (Maybe DbLovelace)
 queryRewardAmount epochNo saId =
-  runDbSession (mkDbCallStack "queryRewardAmount") $
+  runDbSessionMain (mkDbCallStack "queryRewardAmount") $
     HsqlSes.statement (epochNo, saId) queryRewardAmountStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -249,7 +249,7 @@ queryDelegationHistoryStmt =
 
 queryDelegationHistory :: MonadIO m => Text.Text -> Word64 -> DbAction m [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
 queryDelegationHistory address maxEpoch =
-  runDbSession (mkDbCallStack "queryDelegationHistory") $
+  runDbSessionMain (mkDbCallStack "queryDelegationHistory") $
     HsqlSes.statement (address, maxEpoch) queryDelegationHistoryStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -283,7 +283,7 @@ queryAdaPotsSumStmt =
 
 queryAdaPotsSum :: MonadIO m => DbAction m [AdaPotsSum]
 queryAdaPotsSum =
-  runDbSession (mkDbCallStack "queryAdaPotsSum") $
+  runDbSessionMain (mkDbCallStack "queryAdaPotsSum") $
     HsqlSes.statement () queryAdaPotsSumStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -312,7 +312,7 @@ queryPoolsWithoutOwnersStmt =
 
 queryPoolsWithoutOwners :: MonadIO m => DbAction m Int
 queryPoolsWithoutOwners =
-  runDbSession (mkDbCallStack "queryPoolsWithoutOwners") $
+  runDbSessionMain (mkDbCallStack "queryPoolsWithoutOwners") $
     HsqlSes.statement () queryPoolsWithoutOwnersStmt
 
 ------------------------------------------------------------------------------------------------------------
@@ -333,7 +333,7 @@ queryUtxoAtSlotNoStmt =
 
 queryUtxoAtSlotNo :: MonadIO m => TxOutVariantType -> Word64 -> DbAction m [UtxoQueryResult]
 queryUtxoAtSlotNo txOutTableType slotNo = do
-  runDbSession (mkDbCallStack "queryUtxoAtSlotNo") $ do
+  runDbSessionMain (mkDbCallStack "queryUtxoAtSlotNo") $ do
     mBlockId <- HsqlSes.statement slotNo queryUtxoAtSlotNoStmt
     case mBlockId of
       Nothing -> pure []
@@ -413,7 +413,7 @@ queryUtxoAtBlockIdVariantStmt =
 -- Individual functions for backward compatibility
 queryUtxoAtBlockId :: MonadIO m => TxOutVariantType -> Id.BlockId -> DbAction m [UtxoQueryResult]
 queryUtxoAtBlockId txOutTableType blockId =
-  runDbSession (mkDbCallStack "queryUtxoAtBlockId") $
+  runDbSessionMain (mkDbCallStack "queryUtxoAtBlockId") $
     HsqlSes.statement blockId $ case txOutTableType of
       TxOutVariantCore -> queryUtxoAtBlockIdCoreStmt
       TxOutVariantAddress -> queryUtxoAtBlockIdVariantStmt
@@ -509,7 +509,7 @@ queryAddressBalanceAtSlot txOutVariantType addr slotNo = do
 
   -- First get the block ID for the slot
   mBlockId <-
-    runDbSession dbCallStack $
+    runDbSessionMain dbCallStack $
       HsqlSes.statement slotNo queryBlockIdAtSlotStmt
 
   -- If no block at that slot, return 0
@@ -518,10 +518,10 @@ queryAddressBalanceAtSlot txOutVariantType addr slotNo = do
     Just blockId ->
       case txOutVariantType of
         TxOutVariantCore ->
-          runDbSession (mkDbCallStack "queryAddressBalanceAtBlockIdCore") $
+          runDbSessionMain (mkDbCallStack "queryAddressBalanceAtBlockIdCore") $
             HsqlSes.statement (blockId, addr) queryAddressBalanceAtBlockIdCoreStmt
         TxOutVariantAddress ->
-          runDbSession (mkDbCallStack "queryAddressBalanceAtBlockIdVariant") $
+          runDbSessionMain (mkDbCallStack "queryAddressBalanceAtBlockIdVariant") $
             HsqlSes.statement (blockId, addr) queryAddressBalanceAtBlockIdVariantStmt
 
 --------------------------------------------------------------------------------
@@ -546,7 +546,7 @@ queryStakeAddressIdStmt =
 
 queryStakeAddressId :: MonadIO m => Text.Text -> DbAction m (Maybe Id.StakeAddressId)
 queryStakeAddressId address =
-  runDbSession (mkDbCallStack "queryStakeAddressId") $
+  runDbSessionMain (mkDbCallStack "queryStakeAddressId") $
     HsqlSes.statement address queryStakeAddressIdStmt
 
 --------------------------------------------------------------------------------
@@ -577,7 +577,7 @@ queryInputTransactionsCoreStmt =
 
 queryInputTransactionsCore :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsCore saId =
-  runDbSession (mkDbCallStack "queryInputTransactionsCore") $
+  runDbSessionMain (mkDbCallStack "queryInputTransactionsCore") $
     HsqlSes.statement saId queryInputTransactionsCoreStmt
 
 --------------------------------------------------------------------------------
@@ -610,7 +610,7 @@ queryInputTransactionsAddressStmt =
 
 queryInputTransactionsAddress :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsAddress saId =
-  runDbSession (mkDbCallStack "queryInputTransactionsAddress") $
+  runDbSessionMain (mkDbCallStack "queryInputTransactionsAddress") $
     HsqlSes.statement saId queryInputTransactionsAddressStmt
 
 --------------------------------------------------------------------------------
@@ -641,7 +641,7 @@ queryWithdrawalTransactionsStmt =
 
 queryWithdrawalTransactions :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryWithdrawalTransactions saId =
-  runDbSession (mkDbCallStack "queryWithdrawalTransactions") $
+  runDbSessionMain (mkDbCallStack "queryWithdrawalTransactions") $
     HsqlSes.statement saId queryWithdrawalTransactionsStmt
 
 --------------------------------------------------------------------------------
@@ -675,7 +675,7 @@ queryOutputTransactionsCoreStmt =
 
 queryOutputTransactionsCore :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsCore saId =
-  runDbSession (mkDbCallStack "queryOutputTransactionsCore") $
+  runDbSessionMain (mkDbCallStack "queryOutputTransactionsCore") $
     HsqlSes.statement saId queryOutputTransactionsCoreStmt
 
 --------------------------------------------------------------------------------
@@ -711,7 +711,7 @@ queryOutputTransactionsAddressStmt =
 
 queryOutputTransactionsAddress :: MonadIO m => Id.StakeAddressId -> DbAction m [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsAddress saId =
-  runDbSession (mkDbCallStack "queryOutputTransactionsAddress") $
+  runDbSessionMain (mkDbCallStack "queryOutputTransactionsAddress") $
     HsqlSes.statement saId queryOutputTransactionsAddressStmt
 
 --------------------------------------------------------------------------------
@@ -735,7 +735,7 @@ queryInputsSumCoreStmt =
 
 queryInputsSumCore :: MonadIO m => Id.StakeAddressId -> DbAction m Ada
 queryInputsSumCore saId =
-  runDbSession (mkDbCallStack "queryInputsSumCore") $
+  runDbSessionMain (mkDbCallStack "queryInputsSumCore") $
     HsqlSes.statement saId queryInputsSumCoreStmt
 
 --------------------------------------------------------------------------------
@@ -759,7 +759,7 @@ queryInputsSumAddressStmt =
 
 queryInputsSumAddress :: MonadIO m => Id.StakeAddressId -> DbAction m Ada
 queryInputsSumAddress saId =
-  runDbSession (mkDbCallStack "queryInputsSumAddress") $
+  runDbSessionMain (mkDbCallStack "queryInputsSumAddress") $
     HsqlSes.statement saId queryInputsSumAddressStmt
 
 --------------------------------------------------------------------------------
@@ -786,7 +786,7 @@ queryRewardsSumStmt =
 
 queryRewardsSum :: MonadIO m => Id.StakeAddressId -> Word64 -> DbAction m Ada
 queryRewardsSum saId currentEpoch =
-  runDbSession (mkDbCallStack "queryRewardsSum") $
+  runDbSessionMain (mkDbCallStack "queryRewardsSum") $
     HsqlSes.statement (saId, currentEpoch) queryRewardsSumStmt
 
 --------------------------------------------------------------------------------
@@ -808,7 +808,7 @@ queryWithdrawalsSumStmt =
 
 queryWithdrawalsSum :: MonadIO m => Id.StakeAddressId -> DbAction m Ada
 queryWithdrawalsSum saId =
-  runDbSession (mkDbCallStack "queryWithdrawalsSum") $
+  runDbSessionMain (mkDbCallStack "queryWithdrawalsSum") $
     HsqlSes.statement saId queryWithdrawalsSumStmt
 
 --------------------------------------------------------------------------------
@@ -847,7 +847,7 @@ queryOutputsCoreStmt =
 
 queryOutputsCore :: MonadIO m => Id.StakeAddressId -> DbAction m (Ada, Ada, Ada)
 queryOutputsCore saId =
-  runDbSession (mkDbCallStack "queryOutputsCore") $
+  runDbSessionMain (mkDbCallStack "queryOutputsCore") $
     HsqlSes.statement saId queryOutputsCoreStmt
 
 --------------------------------------------------------------------------------
@@ -888,7 +888,7 @@ queryOutputsAddressStmt =
 
 queryOutputsAddress :: MonadIO m => Id.StakeAddressId -> DbAction m (Ada, Ada, Ada)
 queryOutputsAddress saId =
-  runDbSession (mkDbCallStack "queryOutputsAddress") $
+  runDbSessionMain (mkDbCallStack "queryOutputsAddress") $
     HsqlSes.statement saId queryOutputsAddressStmt
 
 --------------------------------------------------------------------------------
@@ -916,5 +916,5 @@ queryEpochBlockNumbersStmt =
 
 queryEpochBlockNumbers :: MonadIO m => Word64 -> DbAction m [(Word64, Word64)]
 queryEpochBlockNumbers epoch =
-  runDbSession (mkDbCallStack "queryEpochBlockNumbers") $
+  runDbSessionMain (mkDbCallStack "queryEpochBlockNumbers") $
     HsqlSes.statement epoch queryEpochBlockNumbersStmt

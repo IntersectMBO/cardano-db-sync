@@ -11,11 +11,10 @@
 module Cardano.Db.Types where
 
 import Cardano.BM.Trace (Trace)
-import Cardano.Db.Error (DbError (..))
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadError, MonadIO (..), MonadReader, fromMaybe)
+import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, fromMaybe)
 import qualified Codec.Binary.Bech32 as Bech32
-import Control.Monad.Trans.Except (ExceptT)
+import Control.Monad.Trans.Class (MonadTrans)
 import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
@@ -43,16 +42,28 @@ import qualified Hasql.Encoders as HsqlE
 import Quiet (Quiet (..))
 
 ----------------------------------------------------------------------------
+-- Connection Type
+----------------------------------------------------------------------------
+
+-- | Specifies which type of database connection to use for operations
+data ConnectionType
+  = -- | Use the persistent main connection (for sequential operations, transactions)
+    UseMainConnection
+  | -- | Use a connection from the pool (for parallel/async operations)
+    UsePoolConnection
+  deriving (Show, Eq)
+
+----------------------------------------------------------------------------
 -- DbAction
 ----------------------------------------------------------------------------
 newtype DbAction m a = DbAction
-  {runDbAction :: ExceptT DbError (ReaderT DbEnv m) a}
+  {runDbAction :: ReaderT DbEnv m a}
   deriving newtype
     ( Functor
     , Applicative
     , Monad
-    , MonadError DbError
     , MonadReader DbEnv
+    , MonadTrans
     , MonadIO
     )
 
