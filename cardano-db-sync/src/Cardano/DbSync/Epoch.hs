@@ -22,7 +22,6 @@ import Cardano.DbSync.Types (
 import Cardano.DbSync.Util
 import Cardano.Prelude hiding (from, on, replace)
 import Cardano.Slotting.Slot (unEpochNo)
-import Control.Monad.Logger (LoggingT)
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 
@@ -33,12 +32,13 @@ import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 --    updated on each new block.
 
 epochHandler ::
+  MonadIO m =>
   SyncEnv ->
   Trace IO Text ->
   CacheStatus ->
   Bool ->
   BlockDetails ->
-  DB.DbAction (LoggingT IO) ()
+  DB.DbAction m ()
 epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
   case cblk of
     BlockByron bblk ->
@@ -57,7 +57,7 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
     BlockConway {} -> epochSlotTimecheck
   where
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
-    epochSlotTimecheck :: DB.DbAction (LoggingT IO) ()
+    epochSlotTimecheck :: MonadIO m => DB.DbAction m ()
     epochSlotTimecheck = do
       when (sdSlotTime details > sdCurrentTime details)
         $ liftIO
@@ -67,12 +67,13 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
       updateEpochStart syncEnv cache details isNewEpochEvent False
 
 updateEpochStart ::
+  MonadIO m =>
   SyncEnv ->
   CacheStatus ->
   SlotDetails ->
   Bool ->
   Bool ->
-  DB.DbAction (LoggingT IO) ()
+  DB.DbAction m ()
 updateEpochStart syncEnv cache slotDetails isNewEpochEvent isBoundaryBlock = do
   mLastMapEpochFromCache <- liftIO $ readLastMapEpochFromCache cache
   mEpochBlockDiff <- liftIO $ readEpochBlockDiffFromCache cache
@@ -225,7 +226,7 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
       newEpoch <- DB.queryCalcEpochEntry $ ebdEpochNo currentEpC
       writeToMapEpochCache syncEnv cache newEpoch
     -- There will always be a EpochBlockDiff at this point in time
-    (_, _) -> throwError $ DB.DbError (DB.mkDbCallStack "handleEpochCachingWhenSyncing") "No caches available to update cache" Nothing
+    (_, _) -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "handleEpochCachingWhenSyncing") "No caches available to update cache" Nothing
 
 -----------------------------------------------------------------------------------------------------
 -- Helper functions

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.Db.Statement.MultiAsset where
@@ -14,7 +15,7 @@ import qualified Hasql.Statement as HsqlStmt
 import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSessionMain, runDbSessionPool)
 import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Types (DbAction, DbInt65)
@@ -32,7 +33,7 @@ insertMultiAssetStmt =
 
 insertMultiAsset :: MonadIO m => SMA.MultiAsset -> DbAction m Id.MultiAssetId
 insertMultiAsset multiAsset =
-  runDbSession (mkDbCallStack "insertMultiAsset") $
+  runDbSessionMain (mkDbCallStack "insertMultiAsset") $
     HsqlSes.statement multiAsset insertMultiAssetStmt
 
 -- | QUERY -------------------------------------------------------------------
@@ -56,7 +57,7 @@ queryMultiAssetIdStmt =
 
 queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Id.MultiAssetId)
 queryMultiAssetId policy assetName =
-  runDbSession (mkDbCallStack "queryMultiAssetId") $
+  runDbSessionMain (mkDbCallStack "queryMultiAssetId") $
     HsqlSes.statement (policy, assetName) queryMultiAssetIdStmt
 
 --------------------------------------------------------------------------------
@@ -79,5 +80,11 @@ insertBulkMaTxMintStmt =
 
 insertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
 insertBulkMaTxMint maTxMints =
-  runDbSession (mkDbCallStack "insertBulkMaTxMint") $
+  runDbSessionMain (mkDbCallStack "insertBulkMaTxMint") $
+    HsqlSes.statement maTxMints insertBulkMaTxMintStmt
+
+-- | Pool version for parallel operations
+parallelInsertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
+parallelInsertBulkMaTxMint maTxMints =
+  runDbSessionPool (mkDbCallStack "parallelInsertBulkMaTxMint") $
     HsqlSes.statement maTxMints insertBulkMaTxMintStmt

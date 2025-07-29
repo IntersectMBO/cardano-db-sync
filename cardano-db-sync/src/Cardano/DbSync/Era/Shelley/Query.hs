@@ -18,10 +18,18 @@ import Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 resolveStakeAddress :: MonadIO m => ByteString -> DB.DbAction m (Maybe DB.StakeAddressId)
 resolveStakeAddress = DB.queryStakeAddress
 
-resolveInputTxOutIdValue :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
+resolveInputTxOutIdValue ::
+  MonadIO m =>
+  SyncEnv ->
+  Generic.TxIn ->
+  DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
 resolveInputTxOutIdValue syncEnv txIn =
   DB.queryTxOutIdValueEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
-queryResolveInputCredentials :: MonadIO m => SyncEnv -> Generic.TxIn -> DB.DbAction m (Maybe ByteString)
+queryResolveInputCredentials ::
+  MonadIO m =>
+  SyncEnv ->
+  Generic.TxIn ->
+  DB.DbAction m (Maybe ByteString)
 queryResolveInputCredentials syncEnv txIn = do
   DB.queryTxOutCredentials (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))

@@ -253,11 +253,12 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       case mTxId of
         Just txId -> pure $ Right $ convertnotFoundCache txId
         Nothing ->
-          throwError $
-            DB.DbError
-              (DB.mkDbCallStack "resolveTxInputs")
-              ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
-              Nothing
+          liftIO $
+            throwIO $
+              DB.DbError
+                (DB.mkDbCallStack "resolveTxInputs")
+                ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
+                Nothing
     (True, False) -> do
       -- Consumed mode use cache
       eTxId <- queryTxIdWithCache syncEnv (Generic.txInTxId txIn)
@@ -276,11 +277,12 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
         (Nothing, _, _) ->
           -- Only throw if in-memory resolution also fails
-          throwError $
-            DB.DbError
-              (DB.mkDbCallStack "resolveTxInputs")
-              ("TxOut not found for TxIn: " <> textShow txIn)
-              Nothing
+          liftIO $
+            throwIO $
+              DB.DbError
+                (DB.mkDbCallStack "resolveTxInputs")
+                ("TxOut not found for TxIn: " <> textShow txIn)
+                Nothing
         (Just eutxo, True, True) ->
           pure $ convertFoundValue (etoTxOut eutxo)
         (Just eutxo, _, _) ->
@@ -332,11 +334,11 @@ resolveScriptHash syncEnv groupedOutputs txIn = do
     Just ret -> pure $ Just ret
     Nothing ->
       case resolveInMemory txIn groupedOutputs of
-        Nothing -> throwError $ DB.DbError (DB.mkDbCallStack "resolveScriptHash") "resolveInMemory: VATxOutW with Nothing address" Nothing
+        Nothing -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "resolveScriptHash") "resolveInMemory: VATxOutW with Nothing address" Nothing
         Just eutxo -> case etoTxOut eutxo of
           DB.VCTxOutW cTxOut -> pure $ VC.txOutCorePaymentCred cTxOut
           DB.VATxOutW _ vAddress -> case vAddress of
-            Nothing -> throwError $ DB.DbError (DB.mkDbCallStack "resolveScriptHash") "VATxOutW with Nothing address" Nothing
+            Nothing -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "resolveScriptHash") "VATxOutW with Nothing address" Nothing
             Just vAddr -> pure $ VA.addressPaymentCred vAddr
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut

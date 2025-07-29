@@ -273,11 +273,11 @@ insertByronTx' syncEnv blkId tx blockIndex = do
 
   resolvedInputs <- case sequence resolvedResults of
     Right inputs -> pure inputs
-    Left dbErr -> throwError dbErr
+    Left dbErr -> liftIO $ throwIO dbErr
 
   -- Calculate transaction fee
   valFee <- case calculateTxFee (Byron.taTx tx) resolvedInputs of
-    Left err -> throwError $ DB.DbError (DB.mkDbCallStack "insertByronTx'") (show (annotateTx err)) Nothing
+    Left err -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "insertByronTx'") (show (annotateTx err)) Nothing
     Right vf -> pure vf
 
   -- Insert the transaction record

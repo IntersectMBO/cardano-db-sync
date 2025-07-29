@@ -16,7 +16,7 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (DbError (..))
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Types (DbAction)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -26,7 +26,7 @@ import qualified Data.Text.Encoding as TextEnc
 --------------------------------------------------------------------------------
 enableJsonbInSchema :: MonadIO m => DbAction m ()
 enableJsonbInSchema =
-  runDbSession (mkDbCallStack "enableJsonbInSchema") $ do
+  runDbSessionMain (mkDbCallStack "enableJsonbInSchema") $ do
     forM_ jsonbColumns $ \(table, column) ->
       HsqlSes.sql $
         "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE jsonb USING " <> column <> "::jsonb"
@@ -48,7 +48,7 @@ enableJsonbInSchema =
 --------------------------------------------------------------------------------
 disableJsonbInSchema :: MonadIO m => DbAction m ()
 disableJsonbInSchema =
-  runDbSession (mkDbCallStack "disableJsonbInSchema") $ do
+  runDbSessionMain (mkDbCallStack "disableJsonbInSchema") $ do
     forM_ jsonColumnsToRevert $ \(table, column) ->
       HsqlSes.sql $
         "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE VARCHAR"
@@ -103,6 +103,6 @@ queryJsonbInSchemaExists conn = do
 queryJsonbInSchemaExistsTest :: MonadIO m => DbAction m Bool
 queryJsonbInSchemaExistsTest = do
   result <-
-    runDbSession (mkDbCallStack "queryJsonbInSchemaExists") $
+    runDbSessionMain (mkDbCallStack "queryJsonbInSchemaExists") $
       HsqlSes.statement () jsonbSchemaStatement
   pure $ result == 1

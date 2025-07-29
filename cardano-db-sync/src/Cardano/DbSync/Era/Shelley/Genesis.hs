@@ -97,8 +97,9 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
             Nothing -> do
               count <- DB.queryBlockCount
               when (count > 0) $
-                throwError $
-                  DB.DbError (DB.mkDbCallStack "insertAction") (show err <> " Genesis data mismatch. count " <> textShow count) Nothing
+                liftIO $
+                  throwIO $
+                    DB.DbError (DB.mkDbCallStack "insertAction") (show err <> " Genesis data mismatch. count " <> textShow count) Nothing
               void $ DB.insertMeta metaRecord
           -- No reason to insert the artificial block if there are no funds or stakes definitions.
           when (hasInitialFunds || hasStakes) $ do
@@ -182,63 +183,68 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   meta <- case metaMaybe of
     Just m -> pure m
     Nothing ->
-      throwError $
-        DB.DbError dbCallStack "Meta table is empty during validation - this should not happen" Nothing
+      liftIO $
+        throwIO $
+          DB.DbError dbCallStack "Meta table is empty during validation - this should not happen" Nothing
 
   when (DB.metaStartTime meta /= configStartTime cfg) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Shelley: Mismatch chain start time. Config value "
-            , textShow (configStartTime cfg)
-            , " does not match DB value of "
-            , textShow (DB.metaStartTime meta)
-            ]
-        )
-        Nothing
+    liftIO $
+      throwIO $
+        DB.DbError
+          dbCallStack
+          ( Text.concat
+              [ "Shelley: Mismatch chain start time. Config value "
+              , textShow (configStartTime cfg)
+              , " does not match DB value of "
+              , textShow (DB.metaStartTime meta)
+              ]
+          )
+          Nothing
 
   when (DB.metaNetworkName meta /= networkName) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Shelley.validateGenesisDistribution: Provided network name "
-            , networkName
-            , " does not match DB value "
-            , DB.metaNetworkName meta
-            ]
-        )
-        Nothing
+    liftIO $
+      throwIO $
+        DB.DbError
+          dbCallStack
+          ( Text.concat
+              [ "Shelley.validateGenesisDistribution: Provided network name "
+              , networkName
+              , " does not match DB value "
+              , DB.metaNetworkName meta
+              ]
+          )
+          Nothing
 
   txCount <- DB.queryBlockTxCount bid
   when (txCount /= expectedTxCount) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Shelley.validateGenesisDistribution: Expected initial block to have "
-            , textShow expectedTxCount
-            , " but got "
-            , textShow txCount
-            ]
-        )
-        Nothing
+    liftIO $
+      throwIO $
+        DB.DbError
+          dbCallStack
+          ( Text.concat
+              [ "Shelley.validateGenesisDistribution: Expected initial block to have "
+              , textShow expectedTxCount
+              , " but got "
+              , textShow txCount
+              ]
+          )
+          Nothing
 
   totalSupply <- DB.queryShelleyGenesisSupply txOutVariantType
   let expectedSupply = configGenesisSupply cfg
   when (expectedSupply /= totalSupply && not prunes) $
-    throwError $
-      DB.DbError
-        dbCallStack
-        ( Text.concat
-            [ "Shelley.validateGenesisDistribution: Expected total supply to be "
-            , textShow expectedSupply
-            , " but got "
-            , textShow totalSupply
-            ]
-        )
-        Nothing
+    liftIO $
+      throwIO $
+        DB.DbError
+          dbCallStack
+          ( Text.concat
+              [ "Shelley.validateGenesisDistribution: Expected total supply to be "
+              , textShow expectedSupply
+              , " but got "
+              , textShow totalSupply
+              ]
+          )
+          Nothing
 
   liftIO $ do
     logInfo tracer "Initial genesis distribution present and correct"

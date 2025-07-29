@@ -82,7 +82,6 @@ insertRedeemerData syncEnv txId txd = do
   case mRedeemerDataId of
     Just redeemerDataId -> pure redeemerDataId
     Nothing -> do
-      -- value <- safeDecodeToJson tracer "insertDatum: Column 'value' in table 'datum' " $ Generic.txDataValue txd
       value <- safeDecodeToJson syncEnv InsertDatum txId (Generic.txDataValue txd)
       DB.insertRedeemerData $
         DB.RedeemerData
@@ -106,7 +105,6 @@ insertDatum syncEnv txId txd = do
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
-      -- value <- safeDecodeToJson syncEnv "insertRedeemerData: Column 'value' in table 'redeemer' " $ Generic.txDataValue txd
       value <- safeDecodeToJson syncEnv InsertRedeemerData txId (Generic.txDataValue txd)
       insertDatumAndCache (envCache syncEnv) (Generic.txDataHash txd) $
         DB.Datum
@@ -194,7 +192,6 @@ insertScript syncEnv txId script = do
   where
     scriptConvert :: MonadIO m => Generic.TxScript -> m (Maybe Text)
     scriptConvert s =
-      -- maybe (pure Nothing) (safeDecodeToJson syncEnv "insertScript: Column 'json' in table 'script' ") (Generic.txScriptJson s)
       maybe (pure Nothing) (safeDecodeToJson syncEnv InsertScript txId) (Generic.txScriptJson s)
 
 insertExtraKeyWitness ::

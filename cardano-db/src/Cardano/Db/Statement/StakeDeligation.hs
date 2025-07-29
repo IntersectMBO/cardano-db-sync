@@ -22,7 +22,7 @@ import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.StakeDeligation as SS
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
@@ -44,7 +44,7 @@ insertDelegationStmt =
 
 insertDelegation :: MonadIO m => SS.Delegation -> DbAction m Id.DelegationId
 insertDelegation delegation =
-  runDbSession (mkDbCallStack "insertDelegation") $ HsqlSes.statement delegation insertDelegationStmt
+  runDbSessionMain (mkDbCallStack "insertDelegation") $ HsqlSes.statement delegation insertDelegationStmt
 
 --------------------------------------------------------------------------------
 -- Statement for querying delegations with non-null redeemer_id
@@ -64,7 +64,7 @@ queryDelegationScriptStmt =
 
 queryDelegationScript :: MonadIO m => DbAction m [SS.Delegation]
 queryDelegationScript =
-  runDbSession (mkDbCallStack "queryDelegationScript") $
+  runDbSessionMain (mkDbCallStack "queryDelegationScript") $
     HsqlSes.statement () queryDelegationScriptStmt
 
 --------------------------------------------------------------------------------
@@ -90,7 +90,7 @@ insertBulkEpochStakeStmt dbConstraintEpochStake =
 
 insertBulkEpochStake :: MonadIO m => Bool -> [SS.EpochStake] -> DbAction m ()
 insertBulkEpochStake dbConstraintEpochStake epochStakes =
-  runDbSession (mkDbCallStack "insertBulkEpochStake") $
+  runDbSessionMain (mkDbCallStack "insertBulkEpochStake") $
     HsqlSes.statement epochStakes $
       insertBulkEpochStakeStmt dbConstraintEpochStake
 
@@ -113,7 +113,7 @@ queryEpochStakeCountStmt =
 
 queryEpochStakeCount :: MonadIO m => Word64 -> DbAction m Word64
 queryEpochStakeCount epoch =
-  runDbSession (mkDbCallStack "queryEpochStakeCount") $
+  runDbSessionMain (mkDbCallStack "queryEpochStakeCount") $
     HsqlSes.statement epoch queryEpochStakeCountStmt
 
 --------------------------------------------------------------------------------
@@ -140,7 +140,7 @@ updateStakeProgressCompletedStmt =
 
 updateStakeProgressCompleted :: MonadIO m => Word64 -> DbAction m ()
 updateStakeProgressCompleted epoch =
-  runDbSession (mkDbCallStack "updateStakeProgressCompleted") $
+  runDbSessionMain (mkDbCallStack "updateStakeProgressCompleted") $
     HsqlSes.statement epoch updateStakeProgressCompletedStmt
 
 --------------------------------------------------------------------------------
@@ -175,7 +175,7 @@ insertBulkRewardsStmt dbConstraintRewards =
 
 insertBulkRewards :: MonadIO m => Bool -> [SS.Reward] -> DbAction m ()
 insertBulkRewards dbConstraintRewards rewards =
-  runDbSession (mkDbCallStack "insertBulkRewards") $
+  runDbSessionMain (mkDbCallStack "insertBulkRewards") $
     HsqlSes.statement rewards $
       insertBulkRewardsStmt dbConstraintRewards
 
@@ -200,13 +200,13 @@ queryNormalEpochRewardCountStmt =
 
 queryNormalEpochRewardCount :: MonadIO m => Word64 -> DbAction m Word64
 queryNormalEpochRewardCount epochNum =
-  runDbSession (mkDbCallStack "queryNormalEpochRewardCount") $
+  runDbSessionMain (mkDbCallStack "queryNormalEpochRewardCount") $
     HsqlSes.statement epochNum queryNormalEpochRewardCountStmt
 
 --------------------------------------------------------------------------------
 queryRewardCount :: MonadIO m => DbAction m Word64
 queryRewardCount =
-  runDbSession (mkDbCallStack "queryRewardCount") $
+  runDbSessionMain (mkDbCallStack "queryRewardCount") $
     HsqlSes.statement () (countAll @SS.Reward)
 
 --------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ queryRewardMapDataStmt =
 
 queryRewardMapData :: MonadIO m => Word64 -> DbAction m [(ByteString, RewardSource, DbLovelace)]
 queryRewardMapData epochNo =
-  runDbSession (mkDbCallStack "queryRewardMapData") $
+  runDbSessionMain (mkDbCallStack "queryRewardMapData") $
     HsqlSes.statement epochNo queryRewardMapDataStmt
 
 -- Bulk delete statement
@@ -272,7 +272,7 @@ deleteRewardsBulk ::
   ([Id.StakeAddressId], [RewardSource], [Word64], [Id.PoolHashId]) ->
   DbAction m ()
 deleteRewardsBulk params =
-  runDbSession (mkDbCallStack "deleteRewardsBulk") $
+  runDbSessionMain (mkDbCallStack "deleteRewardsBulk") $
     HsqlSes.statement params deleteRewardsBulkStmt
 
 --------------------------------------------------------------------------------
@@ -300,7 +300,7 @@ deleteOrphanedRewardsBulk ::
   [Id.StakeAddressId] ->
   DbAction m ()
 deleteOrphanedRewardsBulk epochNo addrIds =
-  runDbSession (mkDbCallStack "deleteOrphanedRewardsBulk") $
+  runDbSessionMain (mkDbCallStack "deleteOrphanedRewardsBulk") $
     HsqlSes.statement (epochNo, addrIds) deleteOrphanedRewardsBulkStmt
 
 --------------------------------------------------------------------------------
@@ -323,13 +323,13 @@ insertBulkRewardRestsStmt =
 
 insertBulkRewardRests :: MonadIO m => [SS.RewardRest] -> DbAction m ()
 insertBulkRewardRests rewardRests =
-  runDbSession (mkDbCallStack "insertBulkRewardRests") $
+  runDbSessionMain (mkDbCallStack "insertBulkRewardRests") $
     HsqlSes.statement rewardRests insertBulkRewardRestsStmt
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: MonadIO m => DbAction m Word64
 queryRewardRestCount =
-  runDbSession (mkDbCallStack "queryRewardRestCount") $
+  runDbSessionMain (mkDbCallStack "queryRewardRestCount") $
     HsqlSes.statement () (countAll @SS.RewardRest)
 
 --------------------------------------------------------------------------------
@@ -343,7 +343,7 @@ insertStakeAddressStmt =
 
 insertStakeAddress :: MonadIO m => SS.StakeAddress -> DbAction m Id.StakeAddressId
 insertStakeAddress stakeAddress =
-  runDbSession (mkDbCallStack "insertStakeAddress") $
+  runDbSessionMain (mkDbCallStack "insertStakeAddress") $
     HsqlSes.statement stakeAddress insertStakeAddressStmt
 
 --------------------------------------------------------------------------------
@@ -355,7 +355,7 @@ insertStakeDeregistrationStmt =
 
 insertStakeDeregistration :: MonadIO m => SS.StakeDeregistration -> DbAction m Id.StakeDeregistrationId
 insertStakeDeregistration stakeDeregistration =
-  runDbSession (mkDbCallStack "insertStakeDeregistration") $
+  runDbSessionMain (mkDbCallStack "insertStakeDeregistration") $
     HsqlSes.statement stakeDeregistration insertStakeDeregistrationStmt
 
 --------------------------------------------------------------------------------
@@ -367,7 +367,7 @@ insertStakeRegistrationStmt =
 
 insertStakeRegistration :: MonadIO m => SS.StakeRegistration -> DbAction m Id.StakeRegistrationId
 insertStakeRegistration stakeRegistration =
-  runDbSession (mkDbCallStack "insertStakeRegistration") $
+  runDbSessionMain (mkDbCallStack "insertStakeRegistration") $
     HsqlSes.statement stakeRegistration insertStakeRegistrationStmt
 
 -- | Queries
@@ -389,7 +389,7 @@ queryStakeAddressStmt =
 
 queryStakeAddress :: MonadIO m => ByteString -> DbAction m (Maybe Id.StakeAddressId)
 queryStakeAddress addr = do
-  runDbSession dbCallStack $ HsqlSes.statement addr queryStakeAddressStmt
+  runDbSessionMain dbCallStack $ HsqlSes.statement addr queryStakeAddressStmt
   where
     dbCallStack = mkDbCallStack "queryStakeAddress"
 
@@ -437,7 +437,7 @@ queryStakeRefPtrStmt =
 
 queryStakeRefPtr :: MonadIO m => Ptr -> DbAction m (Maybe Id.StakeAddressId)
 queryStakeRefPtr ptr =
-  runDbSession (mkDbCallStack "queryStakeRefPtr") $
+  runDbSessionMain (mkDbCallStack "queryStakeRefPtr") $
     HsqlSes.statement ptr queryStakeRefPtrStmt
 
 -----------------------------------------------------------------------------------
@@ -458,7 +458,7 @@ queryStakeAddressScriptStmt =
 
 queryStakeAddressScript :: MonadIO m => DbAction m [SS.StakeAddress]
 queryStakeAddressScript =
-  runDbSession (mkDbCallStack "queryStakeAddressScript") $
+  runDbSessionMain (mkDbCallStack "queryStakeAddressScript") $
     HsqlSes.statement () queryStakeAddressScriptStmt
 
 -----------------------------------------------------------------------------------
@@ -511,7 +511,7 @@ queryAddressInfoViewStmt =
 -- Pipeline function
 queryAddressInfoData :: MonadIO m => Id.StakeAddressId -> DbAction m (Ada, Ada, Maybe Text.Text)
 queryAddressInfoData addrId =
-  runDbSession (mkDbCallStack "queryAddressInfoData") $
+  runDbSessionMain (mkDbCallStack "queryAddressInfoData") $
     HsqlSes.pipeline $ do
       rewards <- HsqlP.statement addrId queryAddressInfoRewardsStmt
       withdrawals <- HsqlP.statement addrId queryAddressInfoWithdrawalsStmt
@@ -548,7 +548,7 @@ queryRewardForEpochStmt =
 
 queryRewardForEpoch :: MonadIO m => Word64 -> Id.StakeAddressId -> DbAction m (Maybe DbLovelace)
 queryRewardForEpoch epochNo saId =
-  runDbSession (mkDbCallStack "queryRewardForEpoch") $
+  runDbSessionMain (mkDbCallStack "queryRewardForEpoch") $
     HsqlSes.statement (epochNo, saId) queryRewardForEpochStmt
 
 ---------------------------------------------------------------------------
@@ -573,5 +573,5 @@ queryDeregistrationScriptStmt =
 
 queryDeregistrationScript :: MonadIO m => DbAction m [SS.StakeDeregistration]
 queryDeregistrationScript =
-  runDbSession (mkDbCallStack "queryDeregistrationScript") $
+  runDbSessionMain (mkDbCallStack "queryDeregistrationScript") $
     HsqlSes.statement () queryDeregistrationScriptStmt

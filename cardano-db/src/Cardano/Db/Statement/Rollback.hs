@@ -26,7 +26,7 @@ import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..))
 import qualified Cardano.Db.Schema.Variants as SV
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount, deleteWhereCountWithNotNull)
 import Cardano.Db.Statement.MinIds (queryMinRefId, queryMinRefIdNullable) -- Import from MinIds
 import Cardano.Db.Statement.Types (DbInfo (..), tableName)
@@ -122,7 +122,7 @@ deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
         , prepareDelete @SCE.EpochParam "block_id" blkId ">=" blockIdEncoder
         ]
   initialLogs <- forM initialDeleteOps $ \(tableN, deleteSession) -> do
-    count <- runDbSession (mkDbCallStack $ "deleteInitial" <> tableN) deleteSession
+    count <- runDbSessionMain (mkDbCallStack $ "deleteInitial" <> tableN) deleteSession
     pure (tableN, count)
 
   -- Handle off-chain related deletions
@@ -158,7 +158,7 @@ deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
                 , prepareDelete @SCO.OffChainVoteExternalUpdate offChainVoteDataId ocvdId ">=" ocvdIdEncoder
                 ]
           forM voteDataDeleteOps $ \(tableN, deleteSession) -> do
-            count <- runDbSession (mkDbCallStack $ "deleteVoteData" <> tableN) deleteSession
+            count <- runDbSessionMain (mkDbCallStack $ "deleteVoteData" <> tableN) deleteSession
             pure (tableN, count)
 
       -- Execute anchor deletions sequentially (after vote data is deleted)
@@ -168,7 +168,7 @@ deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
             , prepareDelete @SCG.VotingAnchor "id" vaId ">=" vaIdEncoder
             ]
       offChain <- forM anchorDeleteOps $ \(tableN, deleteSession) -> do
-        count <- runDbSession (mkDbCallStack $ "deleteAnchor" <> tableN) deleteSession
+        count <- runDbSessionMain (mkDbCallStack $ "deleteAnchor" <> tableN) deleteSession
         pure (tableN, count)
 
       pure $ logsVoting <> offChain
@@ -178,7 +178,7 @@ deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
 
   -- Final block deletion (delete block last since everything references it)
   let (tableN, deleteSession) = prepareDelete @SCB.Block "id" blkId ">=" blockIdEncoder
-  blockCount <- runDbSession (mkDbCallStack "deleteBlock") deleteSession
+  blockCount <- runDbSessionMain (mkDbCallStack "deleteBlock") deleteSession
   let blockLogs = [(tableN, blockCount)]
 
   -- Aggregate and return all logs
@@ -202,21 +202,21 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
         Nothing -> pure []
         Just txInId -> do
           let (tableN, deleteSession) = prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)
-          count <- runDbSession (mkDbCallStack "deleteTxInAfterTxInId") deleteSession
+          count <- runDbSessionMain (mkDbCallStack "deleteTxInAfterTxInId") deleteSession
           pure [(tableN, count)]
 
       -- Step 2: Delete TxOut records second (after TxIn references are gone)
       txOutLogs <- case prepareTypedDelete @VC.TxOutCore "id" mtxOutId SV.unwrapTxOutIdCore (Id.idEncoder Id.getTxOutCoreId) of
         Nothing -> pure []
         Just (tableN, deleteSession) -> do
-          count <- runDbSession (mkDbCallStack "deleteTxOutCoreAfterTxOutId") deleteSession
+          count <- runDbSessionMain (mkDbCallStack "deleteTxOutCoreAfterTxOutId") deleteSession
           pure [(tableN, count)]
 
       -- Step 3: Delete MaTxOut records third (after TxOut references are gone)
       maTxOutLogs <- case prepareTypedDelete @VC.MaTxOutCore "id" mmaTxOutId SV.unwrapMaTxOutIdCore (Id.idEncoder Id.getMaTxOutCoreId) of
         Nothing -> pure []
         Just (tableN, deleteSession) -> do
-          count <- runDbSession (mkDbCallStack "deleteMaTxOutCoreAfterMaTxOutId") deleteSession
+          count <- runDbSessionMain (mkDbCallStack "deleteMaTxOutCoreAfterMaTxOutId") deleteSession
           pure [(tableN, count)]
 
       pure $ concat [txInLogs, txOutLogs, maTxOutLogs]
@@ -226,21 +226,21 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
         Nothing -> pure []
         Just txInId -> do
           let (tableN, deleteSession) = prepareOnlyDelete @SCB.TxIn "id" txInId ">=" (Id.idEncoder Id.getTxInId)
-          count <- runDbSession (mkDbCallStack "deleteTxInAfterTxInId") deleteSession
+          count <- runDbSessionMain (mkDbCallStack "deleteTxInAfterTxInId") deleteSession
           pure [(tableN, count)]
 
       -- Step 2: Delete TxOut records second (after TxIn references are gone)
       txOutLogs <- case prepareTypedDelete @VA.TxOutAddress "id" mtxOutId SV.unwrapTxOutIdAddress (Id.idEncoder Id.getTxOutAddressId) of
         Nothing -> pure []
         Just (tableN, deleteSession) -> do
-          count <- runDbSession (mkDbCallStack "deleteTxOutAddressAfterTxOutId") deleteSession
+          count <- runDbSessionMain (mkDbCallStack "deleteTxOutAddressAfterTxOutId") deleteSession
           pure [(tableN, count)]
 
       -- Step 3: Delete MaTxOut records third (after TxOut references are gone)
       maTxOutLogs <- case prepareTypedDelete @VA.MaTxOutAddress "id" mmaTxOutId SV.unwrapMaTxOutIdAddress (Id.idEncoder Id.getMaTxOutAddressId) of
         Nothing -> pure []
         Just (tableN, deleteSession) -> do
-          count <- runDbSession (mkDbCallStack "deleteMaTxOutAddressAfterMaTxOutId") deleteSession
+          count <- runDbSessionMain (mkDbCallStack "deleteMaTxOutAddressAfterMaTxOutId") deleteSession
           pure [(tableN, count)]
 
       pure $ concat [txInLogs, txOutLogs, maTxOutLogs]
@@ -310,7 +310,7 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
       maybeOps <- sequence deleteOperations
       let actualOps = catMaybes maybeOps
       result <- forM actualOps $ \(tableN, deleteSession) -> do
-        count <- runDbSession (mkDbCallStack $ "queryDelete" <> tableN) deleteSession
+        count <- runDbSessionMain (mkDbCallStack $ "queryDelete" <> tableN) deleteSession
         pure (tableN, count)
 
       -- Handle GovActionProposal related deletions
@@ -329,7 +329,7 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
           maybeGaOps <- sequence gaDeleteOps
           let actualGaOps = catMaybes maybeGaOps
           forM actualGaOps $ \(tableN, deleteSession) -> do
-            count <- runDbSession (mkDbCallStack $ "deleteGA" <> tableN) deleteSession
+            count <- runDbSessionMain (mkDbCallStack $ "deleteGA" <> tableN) deleteSession
             pure (tableN, count)
 
       -- Handle PoolMetadataRef related deletions
@@ -347,7 +347,7 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
           maybepmrOps <- sequence pmrDeleteOps
           let actualPmrOps = catMaybes maybepmrOps
           forM actualPmrOps $ \(tableN, deleteSession) -> do
-            count <- runDbSession (mkDbCallStack $ "deletePMR" <> tableN) deleteSession
+            count <- runDbSessionMain (mkDbCallStack $ "deletePMR" <> tableN) deleteSession
             pure (tableN, count)
 
       -- Handle PoolUpdate related deletions
@@ -365,12 +365,12 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
           maybePuOps <- sequence puDeleteOps
           let actualPuOps = catMaybes maybePuOps
           forM actualPuOps $ \(tableN, deleteSession) -> do
-            count <- runDbSession (mkDbCallStack $ "deletePU" <> tableN) deleteSession
+            count <- runDbSessionMain (mkDbCallStack $ "deletePU" <> tableN) deleteSession
             pure (tableN, count)
 
       -- Final Tx deletion using direct delete (since we want to delete the tx itself)
       let (tableN, deleteSession) = prepareOnlyDelete @SCB.Tx "id" txId ">=" (Id.idEncoder Id.getTxId)
-      txCount <- runDbSession (mkDbCallStack "deleteTx") deleteSession
+      txCount <- runDbSessionMain (mkDbCallStack "deleteTx") deleteSession
       let txLogs = [(tableN, txCount)]
 
       pure $ result <> gaLogs <> pmrLogs <> poolUpdateLogs <> txLogs

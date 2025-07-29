@@ -60,7 +60,7 @@ runCommand cmd =
           "Unofficial migration scripts found: " ++ show unofficial
       when forceIndexes $
         void $
-          runMigrations pgConfig False mdir mldir Indexes txOutTabletype
+          runMigrations pgConfig False mdir mldir NearTip txOutTabletype
     CmdTxOutMigration txOutVariantType -> do
       runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid

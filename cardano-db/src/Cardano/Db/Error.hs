@@ -29,6 +29,7 @@ data DbCallStack = DbCallStack
   , dbCsModule :: !Text
   , dbCsFile :: !Text
   , dbCsLine :: !Int
+  , dbCsCallChain :: ![Text]
   }
   deriving (Show, Eq)
 

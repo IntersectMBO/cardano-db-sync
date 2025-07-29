@@ -22,7 +22,7 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
-import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key, validateColumn)
 import Cardano.Db.Types (Ada (..), DbAction, lovelaceToAda)
 
@@ -155,11 +155,11 @@ existsWhereByColumn colName encoder resultType =
 -- queryTxOutUnspentCount txOutVariantType =
 --   case txOutVariantType of
 --     TxOutVariantCore ->
---       runDbSession (mkDbCallStack "queryTxOutUnspentCountCore") $
+--       runDbSessionMain (mkDbCallStack "queryTxOutUnspentCountCore") $
 --         HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
 --
 --     TxOutVariantAddress ->
---       runDbSession (mkDbCallStack "queryTxOutUnspentCountAddress") $
+--       runDbSessionMain (mkDbCallStack "queryTxOutUnspentCountAddress") $
 --         HsqlSes.statement () (countWhere @TxOutAddress "consumed_by_tx_id" "IS NULL")
 -- @
 countWhere ::
@@ -220,7 +220,7 @@ parameterisedCountWhere colName condition encoder =
 -- @
 -- queryTableCount :: MonadIO m => DbAction m Word64
 -- queryTableCount =
---   runDbSession (mkDbCallStack "queryTableCount") $
+--   runDbSessionMain (mkDbCallStack "queryTableCount") $
 --     HsqlSes.statement () (countAll @TxOutCore)
 -- @
 countAll ::
@@ -253,7 +253,7 @@ queryStatementCacheStmt =
 
 queryStatementCacheSize :: MonadIO m => DbAction m Int
 queryStatementCacheSize =
-  runDbSession (mkDbCallStack "queryStatementCacheSize") $
+  runDbSessionMain (mkDbCallStack "queryStatementCacheSize") $
     HsqlSes.statement () queryStatementCacheStmt
 
 -- Decoder for Ada amounts from database int8 values

@@ -1,4 +1,5 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -21,7 +22,7 @@ import qualified Cardano.Db.Schema.Core.OffChain as SO
 import qualified Cardano.Db.Schema.Core.Pool as SP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (PoolUrl, poolUrlDecoder, utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Function.Delete (parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (ConflictStrategy (..), insertBulk, insertBulkWith)
@@ -45,7 +46,7 @@ insertCheckOffChainPoolData offChainPoolData = do
   let metadataRefId = SO.offChainPoolDataPmrId offChainPoolData
 
   -- Run checks in pipeline
-  (poolExists, metadataExists) <- runDbSession (mkDbCallStack "checkPoolAndMetadata") $
+  (poolExists, metadataExists) <- runDbSessionMain (mkDbCallStack "checkPoolAndMetadata") $
     HsqlS.pipeline $ do
       poolResult <- HsqlP.statement poolHashId queryPoolHashIdExistsStmt
       metadataResult <- HsqlP.statement metadataRefId queryPoolMetadataRefIdExistsStmt
@@ -53,7 +54,7 @@ insertCheckOffChainPoolData offChainPoolData = do
 
   -- Only insert if both exist
   when (poolExists && metadataExists) $
-    runDbSession (mkDbCallStack "insertOffChainPoolData") $
+    runDbSessionMain (mkDbCallStack "insertOffChainPoolData") $
       HsqlS.statement offChainPoolData insertOffChainPoolDataStmt
 
 --------------------------------------------------------------------------------
@@ -92,7 +93,7 @@ queryOffChainPoolDataStmt =
 
 queryOffChainPoolData :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe (Text, ByteString))
 queryOffChainPoolData poolHash poolMetadataHash =
-  runDbSession (mkDbCallStack "queryOffChainPoolData") $
+  runDbSessionMain (mkDbCallStack "queryOffChainPoolData") $
     HsqlSes.statement (poolHash, poolMetadataHash) queryOffChainPoolDataStmt
 
 --------------------------------------------------------------------------------
@@ -127,7 +128,7 @@ queryUsedTickerStmt =
 
 queryUsedTicker :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Text)
 queryUsedTicker poolHash metaHash =
-  runDbSession (mkDbCallStack "queryUsedTicker") $
+  runDbSessionMain (mkDbCallStack "queryUsedTicker") $
     HsqlSes.statement (poolHash, metaHash) queryUsedTickerStmt
 
 --------------------------------------------------------------------------------
@@ -161,7 +162,7 @@ queryTestOffChainDataStmt =
 
 queryTestOffChainData :: MonadIO m => DbAction m [(Text, PoolUrl, ByteString, Id.PoolHashId)]
 queryTestOffChainData =
-  runDbSession (mkDbCallStack "queryTestOffChainData") $
+  runDbSessionMain (mkDbCallStack "queryTestOffChainData") $
     HsqlSes.statement () queryTestOffChainDataStmt
 
 --------------------------------------------------------------------------------
@@ -186,7 +187,7 @@ queryPoolTickerStmt =
 
 queryPoolTicker :: MonadIO m => Id.PoolHashId -> DbAction m (Maybe Text)
 queryPoolTicker poolId =
-  runDbSession (mkDbCallStack "queryPoolTicker") $
+  runDbSessionMain (mkDbCallStack "queryPoolTicker") $
     HsqlSes.statement poolId queryPoolTickerStmt
 
 --------------------------------------------------------------------------------
@@ -204,7 +205,7 @@ insertCheckOffChainPoolFetchError offChainPoolFetchError = do
   let metadataRefId = SO.offChainPoolFetchErrorPmrId offChainPoolFetchError
 
   -- Run checks in pipeline
-  (poolExists, metadataExists) <- runDbSession (mkDbCallStack "checkPoolAndMetadata") $
+  (poolExists, metadataExists) <- runDbSessionMain (mkDbCallStack "checkPoolAndMetadata") $
     HsqlS.pipeline $ do
       poolResult <- HsqlP.statement poolHashId queryPoolHashIdExistsStmt
       metadataResult <- HsqlP.statement metadataRefId queryPoolMetadataRefIdExistsStmt
@@ -212,7 +213,7 @@ insertCheckOffChainPoolFetchError offChainPoolFetchError = do
 
   -- Only insert if both exist
   when (poolExists && metadataExists) $
-    runDbSession (mkDbCallStack "insertOffChainPoolFetchError") $
+    runDbSessionMain (mkDbCallStack "insertOffChainPoolFetchError") $
       HsqlS.statement offChainPoolFetchError insertOffChainPoolFetchErrorStmt
 
 queryOffChainPoolFetchErrorStmt :: HsqlStmt.Statement (ByteString, Maybe UTCTime) [(SO.OffChainPoolFetchError, ByteString)]
@@ -270,7 +271,7 @@ queryOffChainPoolFetchErrorStmt =
 
 queryOffChainPoolFetchError :: MonadIO m => ByteString -> Maybe UTCTime -> DbAction m [(SO.OffChainPoolFetchError, ByteString)]
 queryOffChainPoolFetchError hash mFromTime =
-  runDbSession (mkDbCallStack "queryOffChainPoolFetchError") $
+  runDbSessionMain (mkDbCallStack "queryOffChainPoolFetchError") $
     HsqlSes.statement (hash, mFromTime) queryOffChainPoolFetchErrorStmt
 
 --------------------------------------------------------------------------------
@@ -278,13 +279,13 @@ queryOffChainPoolFetchError hash mFromTime =
 -- Count OffChainPoolFetchError records
 countOffChainPoolFetchError :: MonadIO m => DbAction m Word64
 countOffChainPoolFetchError =
-  runDbSession (mkDbCallStack "countOffChainPoolFetchError") $
+  runDbSessionMain (mkDbCallStack "countOffChainPoolFetchError") $
     HsqlSes.statement () (countAll @SO.OffChainPoolFetchError)
 
 --------------------------------------------------------------------------------
 deleteOffChainPoolFetchErrorByPmrId :: MonadIO m => Id.PoolMetadataRefId -> DbAction m ()
 deleteOffChainPoolFetchErrorByPmrId pmrId =
-  runDbSession (mkDbCallStack "deleteOffChainPoolFetchErrorByPmrId") $
+  runDbSessionMain (mkDbCallStack "deleteOffChainPoolFetchErrorByPmrId") $
     HsqlSes.statement pmrId (parameterisedDeleteWhere @SO.OffChainPoolFetchError "pmr_id" ">=" (Id.idEncoder Id.getPoolMetadataRefId))
 
 --------------------------------------------------------------------------------
@@ -330,7 +331,7 @@ queryOffChainVoteWorkQueueDataStmt =
 
 queryOffChainVoteWorkQueueData :: MonadIO m => Int -> DbAction m [(UTCTime, Id.VotingAnchorId, ByteString, VoteUrl, AnchorType, Word)]
 queryOffChainVoteWorkQueueData maxCount =
-  runDbSession (mkDbCallStack "queryOffChainVoteWorkQueueData") $
+  runDbSessionMain (mkDbCallStack "queryOffChainVoteWorkQueueData") $
     HsqlSes.statement maxCount queryOffChainVoteWorkQueueDataStmt
 
 --------------------------------------------------------------------------------
@@ -377,7 +378,7 @@ queryNewPoolWorkQueueDataStmt =
 
 queryNewPoolWorkQueueData :: MonadIO m => Int -> DbAction m [(Id.PoolHashId, Id.PoolMetadataRefId, PoolUrl, ByteString)]
 queryNewPoolWorkQueueData maxCount =
-  runDbSession (mkDbCallStack "queryNewPoolWorkQueueData") $
+  runDbSessionMain (mkDbCallStack "queryNewPoolWorkQueueData") $
     HsqlSes.statement maxCount queryNewPoolWorkQueueDataStmt
 
 --------------------------------------------------------------------------------
@@ -424,7 +425,7 @@ queryOffChainPoolWorkQueueDataStmt =
 
 queryOffChainPoolWorkQueueData :: MonadIO m => Int -> DbAction m [(UTCTime, Id.PoolMetadataRefId, PoolUrl, ByteString, Id.PoolHashId, Word)]
 queryOffChainPoolWorkQueueData maxCount =
-  runDbSession (mkDbCallStack "queryOffChainPoolWorkQueueData") $
+  runDbSessionMain (mkDbCallStack "queryOffChainPoolWorkQueueData") $
     HsqlSes.statement maxCount queryOffChainPoolWorkQueueDataStmt
 
 --------------------------------------------------------------------------------
@@ -526,7 +527,7 @@ queryNewVoteWorkQueueDataStmt =
 
 queryNewVoteWorkQueueData :: MonadIO m => Int -> DbAction m [(Id.VotingAnchorId, ByteString, VoteUrl, AnchorType)]
 queryNewVoteWorkQueueData maxCount =
-  runDbSession (mkDbCallStack "queryNewVoteWorkQueueData") $
+  runDbSessionMain (mkDbCallStack "queryNewVoteWorkQueueData") $
     HsqlSes.statement maxCount queryNewVoteWorkQueueDataStmt
 
 --------------------------------------------------------------------------------
@@ -584,7 +585,7 @@ insertBulkOffChainVoteGovActionDataStmt =
 
 insertBulkOffChainVoteGovActionData :: MonadIO m => [SO.OffChainVoteGovActionData] -> DbAction m ()
 insertBulkOffChainVoteGovActionData offChainVoteGovActionData =
-  runDbSession (mkDbCallStack "insertBulkOffChainVoteGovActionData") $
+  runDbSessionMain (mkDbCallStack "insertBulkOffChainVoteGovActionData") $
     HsqlS.statement offChainVoteGovActionData insertBulkOffChainVoteGovActionDataStmt
 
 --------------------------------------------------------------------------------

@@ -14,7 +14,7 @@ module Cardano.DbSync.Api (
   isConsistent,
   getDisableInOutState,
   getRanIndexes,
-  runIndexesMigrations,
+  runNearTipMigrations,
   initPruneConsumeMigration,
   runConsumedTxOutMigrationsMaybe,
   runAddJsonbToSchema,
@@ -46,6 +46,13 @@ module Cardano.DbSync.Api (
 )
 where
 
+import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import qualified Cardano.Chain.Genesis as Byron
+import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
   newTBQueueIO,
   newTVarIO,
@@ -55,14 +62,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Strict.Maybe as Strict
-
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
-import qualified Cardano.Chain.Genesis as Byron
-import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Shelley.Genesis as Shelley
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
@@ -120,12 +119,12 @@ getRanIndexes :: SyncEnv -> IO Bool
 getRanIndexes env = do
   readTVarIO $ envIndexes env
 
-runIndexesMigrations :: SyncEnv -> IO ()
-runIndexesMigrations env = do
+runNearTipMigrations :: SyncEnv -> IO ()
+runNearTipMigrations env = do
   haveRan <- readTVarIO $ envIndexes env
   unless haveRan $ do
-    envRunIndexesMigration env DB.Indexes
-    logInfo (getTrace env) "Indexes were created"
+    envRunNearTipMigration env DB.NearTip
+    logInfo (getTrace env) "NearTip migrations were ran successfully."
     atomically $ writeTVar (envIndexes env) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
@@ -297,53 +296,6 @@ getCurrentTipBlockNo env = do
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
-mkSyncEnvFromConfig ::
-  Trace IO Text ->
-  DB.DbEnv ->
-  SyncOptions ->
-  GenesisConfig ->
-  SyncNodeConfig ->
-  SyncNodeParams ->
-  -- | run migration function
-  RunMigration ->
-  IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runIndexesMigrationFnc =
-  case genCfg of
-    GenesisCardano _ bCfg sCfg _ _
-      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
-          pure
-            . Left
-            . SNErrCardanoConfig
-            $ mconcat
-              [ "ProtocolMagicId "
-              , textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              , " /= "
-              , textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
-              ]
-      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
-          pure
-            . Left
-            . SNErrCardanoConfig
-            $ mconcat
-              [ "SystemStart "
-              , textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              , " /= "
-              , textShow (Shelley.sgSystemStart $ scConfig sCfg)
-              ]
-      | otherwise ->
-          Right
-            <$> mkSyncEnv
-              trce
-              dbEnv
-              syncOptions
-              (fst $ mkProtocolInfoCardano genCfg [])
-              (Shelley.sgNetworkId $ scConfig sCfg)
-              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
-              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
-              syncNodeConfigFromFile
-              syncNodeParams
-              runIndexesMigrationFnc
-
 mkSyncEnv ::
   Trace IO Text ->
   DB.DbEnv ->
@@ -356,7 +308,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runIndexesMigrationFnc = do
+mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
@@ -418,13 +370,60 @@ mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfig
       , envOffChainVoteResultQueue = oarq
       , envOffChainVoteWorkQueue = oawq
       , envOptions = syncOptions
-      , envRunIndexesMigration = runIndexesMigrationFnc
+      , envRunNearTipMigration = runNearTipMigrationFnc
       , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }
   where
     hasLedger' = hasLedger . sioLedger . dncInsertOptions
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
+
+mkSyncEnvFromConfig ::
+  Trace IO Text ->
+  DB.DbEnv ->
+  SyncOptions ->
+  GenesisConfig ->
+  SyncNodeConfig ->
+  SyncNodeParams ->
+  -- | run migration function
+  RunMigration ->
+  IO (Either SyncNodeError SyncEnv)
+mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc =
+  case genCfg of
+    GenesisCardano _ bCfg sCfg _ _
+      | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
+              [ "ProtocolMagicId "
+              , textShow (unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              , " /= "
+              , textShow (Shelley.sgNetworkMagic $ scConfig sCfg)
+              ]
+      | Byron.gdStartTime (Byron.configGenesisData bCfg) /= Shelley.sgSystemStart (scConfig sCfg) ->
+          pure
+            . Left
+            . SNErrCardanoConfig
+            $ mconcat
+              [ "SystemStart "
+              , textShow (Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              , " /= "
+              , textShow (Shelley.sgSystemStart $ scConfig sCfg)
+              ]
+      | otherwise ->
+          Right
+            <$> mkSyncEnv
+              trce
+              dbEnv
+              syncOptions
+              (fst $ mkProtocolInfoCardano genCfg [])
+              (Shelley.sgNetworkId $ scConfig sCfg)
+              (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
+              (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
+              syncNodeConfigFromFile
+              syncNodeParams
+              runNearTipMigrationFnc
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]

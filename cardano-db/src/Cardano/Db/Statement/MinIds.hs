@@ -26,7 +26,7 @@ import qualified Cardano.Db.Schema.MinIds as SM
 import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Types (DbInfo (..), Key, tableName, validateColumn)
 import Cardano.Db.Types (DbAction)
 
@@ -71,7 +71,7 @@ queryMinRefId ::
   HsqlE.Params b ->
   DbAction m (Maybe Int64)
 queryMinRefId fieldName value encoder =
-  runDbSession (mkDbCallStack "queryMinRefId") $
+  runDbSessionMain (mkDbCallStack "queryMinRefId") $
     HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
@@ -117,7 +117,7 @@ queryMinRefIdNullable ::
   HsqlE.Params b ->
   DbAction m (Maybe Int64)
 queryMinRefIdNullable fieldName value encoder =
-  runDbSession (mkDbCallStack "queryMinRefIdNullable") $
+  runDbSessionMain (mkDbCallStack "queryMinRefIdNullable") $
     HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
@@ -165,7 +165,7 @@ queryMinRefIdKey ::
   HsqlD.Row (Key a) ->
   DbAction m (Maybe (Key a))
 queryMinRefIdKey fieldName value encoder keyDecoder =
-  runDbSession (mkDbCallStack "queryMinRefIdKey") $
+  runDbSessionMain (mkDbCallStack "queryMinRefIdKey") $
     HsqlSes.statement value (queryMinRefIdKeyStmt @a fieldName encoder keyDecoder)
 
 whenNothingQueryMinRefId ::

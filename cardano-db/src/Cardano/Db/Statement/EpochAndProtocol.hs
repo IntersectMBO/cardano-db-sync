@@ -1,9 +1,10 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Db.Statement.EpochAndProtocol where
 
-import Cardano.Prelude (MonadError (..), MonadIO (..), Word64)
+import Cardano.Prelude (MonadIO (..), Word64, throwIO)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -17,7 +18,7 @@ import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEnP
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
-import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertReplace)
 import Cardano.Db.Statement.Function.Query (countAll, replace, selectByFieldFirst)
 import Cardano.Db.Statement.Types (Entity (..))
@@ -35,7 +36,7 @@ costModelStmt =
 
 insertCostModel :: MonadIO m => SEnP.CostModel -> DbAction m Id.CostModelId
 insertCostModel costModel =
-  runDbSession (mkDbCallStack "insertCostModel") $ HsqlSes.statement costModel costModelStmt
+  runDbSessionMain (mkDbCallStack "insertCostModel") $ HsqlSes.statement costModel costModelStmt
 
 --------------------------------------------------------------------------------
 -- AdaPots
@@ -50,7 +51,7 @@ insertAdaPotsStmt =
 
 insertAdaPots :: MonadIO m => SEnP.AdaPots -> DbAction m Id.AdaPotsId
 insertAdaPots adaPots =
-  runDbSession (mkDbCallStack "insertAdaPots") $ HsqlSes.statement adaPots insertAdaPotsStmt
+  runDbSessionMain (mkDbCallStack "insertAdaPots") $ HsqlSes.statement adaPots insertAdaPotsStmt
 
 -- | QUERY
 
@@ -62,7 +63,7 @@ queryAdaPotsIdStmt = selectByFieldFirst "block_id" (Id.idEncoder Id.getBlockId) 
 queryAdaPotsIdTest :: MonadIO m => Id.BlockId -> DbAction m (Maybe SEnP.AdaPots)
 queryAdaPotsIdTest blockId = do
   mEntityAdaPots <-
-    runDbSession (mkDbCallStack "queryAdaPotsId") $
+    runDbSessionMain (mkDbCallStack "queryAdaPotsId") $
       HsqlSes.statement blockId queryAdaPotsIdStmt
   pure $ entityVal <$> mEntityAdaPots
 
@@ -77,7 +78,7 @@ replaceAdaPots :: MonadIO m => Id.BlockId -> SEnP.AdaPots -> DbAction m Bool
 replaceAdaPots blockId adapots = do
   -- Do the query first
   mAdaPotsEntity <-
-    runDbSession (mkDbCallStack "queryAdaPots") $
+    runDbSessionMain (mkDbCallStack "queryAdaPots") $
       HsqlSes.statement blockId queryAdaPotsIdStmt
 
   -- Then conditionally do the update
@@ -86,7 +87,7 @@ replaceAdaPots blockId adapots = do
     Just adaPotsEntity
       | entityVal adaPotsEntity == adapots -> pure False
       | otherwise -> do
-          runDbSession (mkDbCallStack "updateAdaPots") $
+          runDbSessionMain (mkDbCallStack "updateAdaPots") $
             HsqlSes.statement (entityKey adaPotsEntity, adapots) replaceAdaPotsStmt
           pure True
 
@@ -101,7 +102,7 @@ insertEpochStmt =
 
 insertEpoch :: MonadIO m => SEnP.Epoch -> DbAction m Id.EpochId
 insertEpoch epoch =
-  runDbSession (mkDbCallStack "insertEpoch") $ HsqlSes.statement epoch insertEpochStmt
+  runDbSessionMain (mkDbCallStack "insertEpoch") $ HsqlSes.statement epoch insertEpochStmt
 
 --------------------------------------------------------------------------------
 insertEpochParamStmt :: HsqlStmt.Statement SEnP.EpochParam Id.EpochParamId
@@ -112,7 +113,7 @@ insertEpochParamStmt =
 
 insertEpochParam :: MonadIO m => SEnP.EpochParam -> DbAction m Id.EpochParamId
 insertEpochParam epochParam =
-  runDbSession (mkDbCallStack "insertEpochParam") $ HsqlSes.statement epochParam insertEpochParamStmt
+  runDbSessionMain (mkDbCallStack "insertEpochParam") $ HsqlSes.statement epochParam insertEpochParamStmt
 
 --------------------------------------------------------------------------------
 insertEpochSyncTimeStmt :: HsqlStmt.Statement SEnP.EpochSyncTime Id.EpochSyncTimeId
@@ -123,7 +124,7 @@ insertEpochSyncTimeStmt =
 
 insertEpochSyncTime :: MonadIO m => SEnP.EpochSyncTime -> DbAction m Id.EpochSyncTimeId
 insertEpochSyncTime epochSyncTime =
-  runDbSession (mkDbCallStack "insertEpochSyncTime") $ HsqlSes.statement epochSyncTime insertEpochSyncTimeStmt
+  runDbSessionMain (mkDbCallStack "insertEpochSyncTime") $ HsqlSes.statement epochSyncTime insertEpochSyncTimeStmt
 
 -- | QUERY ----------------------------------------------------------------------------------
 queryEpochEntryStmt :: HsqlStmt.Statement Word64 (Maybe SEnP.Epoch)
@@ -142,10 +143,10 @@ queryEpochEntryStmt =
 
 queryEpochEntry :: MonadIO m => Word64 -> DbAction m SEnP.Epoch
 queryEpochEntry epochNum = do
-  result <- runDbSession dbCallStack $ HsqlSes.statement epochNum queryEpochEntryStmt
+  result <- runDbSessionMain dbCallStack $ HsqlSes.statement epochNum queryEpochEntryStmt
   case result of
     Just res -> pure res
-    Nothing -> throwError $ DbError dbCallStack errorMsg Nothing
+    Nothing -> liftIO $ throwIO $ DbError dbCallStack errorMsg Nothing
   where
     dbCallStack = mkDbCallStack "queryEpochEntry"
     errorMsg = "Epoch not found with number: " <> Text.pack (show epochNum)
@@ -236,7 +237,7 @@ defaultUTCTime = read "2000-01-01 00:00:00.000000 UTC"
 -- calculate the Epoch entry for the last epoch.
 queryCalcEpochEntry :: MonadIO m => Word64 -> DbAction m SEnP.Epoch
 queryCalcEpochEntry epochNum =
-  runDbSession (mkDbCallStack "queryCalcEpochEntry") $
+  runDbSessionMain (mkDbCallStack "queryCalcEpochEntry") $
     HsqlSes.statement epochNum queryCalcEpochEntryStmt
 
 --------------------------------------------------------------------------------
@@ -257,7 +258,7 @@ queryForEpochIdStmt =
 -- | Get the PostgreSQL row index (EpochId) that matches the given epoch number.
 queryForEpochId :: MonadIO m => Word64 -> DbAction m (Maybe Id.EpochId)
 queryForEpochId epochNum =
-  runDbSession (mkDbCallStack "queryForEpochId") $
+  runDbSessionMain (mkDbCallStack "queryForEpochId") $
     HsqlSes.statement epochNum queryForEpochIdStmt
 
 --------------------------------------------------------------------------------
@@ -279,13 +280,13 @@ queryLatestEpochStmt =
 -- | Get the most recent epoch in the Epoch DB table.
 queryLatestEpoch :: MonadIO m => DbAction m (Maybe SEnP.Epoch)
 queryLatestEpoch =
-  runDbSession (mkDbCallStack "queryLatestEpoch") $
+  runDbSessionMain (mkDbCallStack "queryLatestEpoch") $
     HsqlSes.statement () queryLatestEpochStmt
 
 --------------------------------------------------------------------------------
 queryEpochCount :: MonadIO m => DbAction m Word64
 queryEpochCount =
-  runDbSession (mkDbCallStack "queryEpochCount") $
+  runDbSessionMain (mkDbCallStack "queryEpochCount") $
     HsqlSes.statement () (countAll @SEnP.Epoch)
 
 --------------------------------------------------------------------------------
@@ -308,7 +309,7 @@ queryLatestCachedEpochNoStmt =
 
 queryLatestCachedEpochNo :: MonadIO m => DbAction m (Maybe Word64)
 queryLatestCachedEpochNo =
-  runDbSession (mkDbCallStack "queryLatestCachedEpochNo") $
+  runDbSessionMain (mkDbCallStack "queryLatestCachedEpochNo") $
     HsqlSes.statement () queryLatestCachedEpochNoStmt
 
 --------------------------------------------------------------------------------
@@ -320,7 +321,7 @@ replaceEpochStmt =
 
 replaceEpoch :: MonadIO m => Id.EpochId -> SEnP.Epoch -> DbAction m ()
 replaceEpoch epochId epoch =
-  runDbSession (mkDbCallStack "replaceEpoch") $
+  runDbSessionMain (mkDbCallStack "replaceEpoch") $
     HsqlSes.statement (epochId, epoch) replaceEpochStmt
 
 --------------------------------------------------------------------------------
@@ -334,7 +335,7 @@ insertEpochStateStmt =
 
 insertEpochState :: MonadIO m => SEnP.EpochState -> DbAction m Id.EpochStateId
 insertEpochState epochState =
-  runDbSession (mkDbCallStack "insertEpochState") $ HsqlSes.statement epochState insertEpochStateStmt
+  runDbSessionMain (mkDbCallStack "insertEpochState") $ HsqlSes.statement epochState insertEpochStateStmt
 
 --------------------------------------------------------------------------------
 -- PotTransfer
@@ -347,7 +348,7 @@ insertPotTransferStmt =
 
 insertPotTransfer :: MonadIO m => SEnP.PotTransfer -> DbAction m Id.PotTransferId
 insertPotTransfer potTransfer =
-  runDbSession (mkDbCallStack "insertPotTransfer") $ HsqlSes.statement potTransfer insertPotTransferStmt
+  runDbSessionMain (mkDbCallStack "insertPotTransfer") $ HsqlSes.statement potTransfer insertPotTransferStmt
 
 --------------------------------------------------------------------------------
 -- Reserve
@@ -360,4 +361,4 @@ insertReserveStmt =
 
 insertReserve :: MonadIO m => SEnP.Reserve -> DbAction m Id.ReserveId
 insertReserve reserve =
-  runDbSession (mkDbCallStack "insertReserve") $ HsqlSes.statement reserve insertReserveStmt
+  runDbSessionMain (mkDbCallStack "insertReserve") $ HsqlSes.statement reserve insertReserveStmt

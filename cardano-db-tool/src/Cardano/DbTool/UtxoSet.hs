@@ -90,7 +90,7 @@ queryAtSlot txOutVariantType slotNo =
       <$> DB.queryGenesisSupply txOutVariantType
       <*> DB.queryUtxoAtSlotNo txOutVariantType slotNo
       <*> DB.queryFeesUpToSlotNo slotNo
-      <*> DB.querySlotUtcTimeEither slotNo
+      <*> DB.querySlotUtcTime slotNo
 
 reportSlotDate :: Word64 -> Either DB.DbError UTCTime -> IO ()
 reportSlotDate slotNo eUtcTime = do

@@ -5,6 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TupleSections #-}
 
 module Cardano.DbSync.Cache (
   insertBlockAndCache,
@@ -26,6 +27,12 @@ module Cardano.DbSync.Cache (
   tryUpdateCacheTx,
 ) where
 
+import Cardano.BM.Trace
+import qualified Cardano.Ledger.Address as Ledger
+import Cardano.Ledger.BaseTypes (Network)
+import Cardano.Ledger.Mary.Value
+import qualified Cardano.Ledger.TxIn as Ledger
+import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   modifyTVar,
   readTVarIO,
@@ -34,13 +41,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
-
-import Cardano.BM.Trace
-import qualified Cardano.Ledger.Address as Ledger
-import Cardano.Ledger.BaseTypes (Network)
-import Cardano.Ledger.Mary.Value
-import qualified Cardano.Ledger.TxIn as Ledger
-import Cardano.Prelude
 
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
@@ -105,12 +105,10 @@ queryOrInsertRewardAccount ::
   Ledger.RewardAccount ->
   DB.DbAction m DB.StakeAddressId
 queryOrInsertRewardAccount syncEnv cacheUA rewardAddr = do
-  eiAddrId <- queryStakeAddrWithCacheRetBs syncEnv cacheUA rewardAddr
+  (eiAddrId, bs) <- queryStakeAddrWithCacheRetBs syncEnv cacheUA rewardAddr
   case eiAddrId of
     Just addrId -> pure addrId
-    Nothing -> do
-      let bs = Ledger.serialiseRewardAccount rewardAddr
-      insertStakeAddress rewardAddr (Just bs)
+    Nothing -> insertStakeAddress rewardAddr (Just bs)
 
 queryOrInsertStakeAddress ::
   MonadIO m =>
@@ -148,7 +146,7 @@ queryStakeAddrWithCache ::
   StakeCred ->
   DB.DbAction m (Maybe DB.StakeAddressId)
 queryStakeAddrWithCache syncEnv cacheUA nw cred =
-  queryStakeAddrWithCacheRetBs syncEnv cacheUA (Ledger.RewardAccount nw cred)
+  fst <$> queryStakeAddrWithCacheRetBs syncEnv cacheUA (Ledger.RewardAccount nw cred)
 
 queryStakeAddrWithCacheRetBs ::
   forall m.
@@ -156,13 +154,13 @@ queryStakeAddrWithCacheRetBs ::
   SyncEnv ->
   CacheAction ->
   Ledger.RewardAccount ->
-  DB.DbAction m (Maybe DB.StakeAddressId)
+  DB.DbAction m (Maybe DB.StakeAddressId, ByteString)
 queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.RewardAccount _ cred) = do
   let bs = Ledger.serialiseRewardAccount ra
   case envCache syncEnv of
-    NoCache -> resolveStakeAddress bs
+    NoCache ->  (, bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do
-      withCacheOptimisationCheck ci (resolveStakeAddress bs) $ do
+      result <- withCacheOptimisationCheck ci (resolveStakeAddress bs) $ do
         stakeCache <- liftIO $ readTVarIO (cStake ci)
         case queryStakeCache cred stakeCache of
           Just (addrId, stakeCache') -> do
@@ -188,6 +186,7 @@ queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.RewardAccount _ cred) = 
                   atomically $
                     writeTVar (cStake ci) stakeCache'
                 pure $ Just stakeAddrsId
+      pure (result, bs)
 
 -- | True if it was found in LRU
 queryStakeCache :: StakeCred -> StakeCache -> Maybe (DB.StakeAddressId, StakeCache)
@@ -394,6 +393,34 @@ queryMAWithCache syncEnv policyId asset =
       let !assetNameBs = Generic.unAssetName asset
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
 
+queryPrevBlockWithCache ::
+  MonadIO m =>
+  SyncEnv ->
+  ByteString ->
+  Text.Text ->
+  DB.DbAction m DB.BlockId
+queryPrevBlockWithCache syncEnv hsh errMsg =
+  case envCache syncEnv of
+    NoCache -> DB.queryBlockId hsh errMsg
+    ActiveCache ci -> do
+      mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
+      case mCachedPrev of
+        -- if the cached block matches the requested hash, we return its db id.
+        Just (cachedBlockId, cachedHash) ->
+          if cachedHash == hsh
+            then do
+              liftIO $ hitPBlock syncEnv
+              pure cachedBlockId
+            else queryFromDb
+        Nothing -> queryFromDb
+  where
+    queryFromDb ::
+      MonadIO m =>
+      DB.DbAction m DB.BlockId
+    queryFromDb = do
+      liftIO $ missPrevBlock syncEnv
+      DB.queryBlockId hsh errMsg
+
 queryTxIdWithCache ::
   MonadIO m =>
   SyncEnv ->
@@ -438,34 +465,6 @@ queryTxIdWithCache syncEnv txIdLedger = do
                 (DB.mkDbCallStack "queryTxIdWithCacheEither")
                 ("TxId not found for hash: " <> textShow txHash)
                 Nothing
-
-queryPrevBlockWithCache ::
-  MonadIO m =>
-  SyncEnv ->
-  ByteString ->
-  Text.Text ->
-  DB.DbAction m DB.BlockId
-queryPrevBlockWithCache syncEnv hsh errMsg =
-  case envCache syncEnv of
-    NoCache -> DB.queryBlockId hsh errMsg
-    ActiveCache ci -> do
-      mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
-      case mCachedPrev of
-        -- if the cached block matches the requested hash, we return its db id.
-        Just (cachedBlockId, cachedHash) ->
-          if cachedHash == hsh
-            then do
-              liftIO $ hitPBlock syncEnv
-              pure cachedBlockId
-            else queryFromDb
-        Nothing -> queryFromDb
-  where
-    queryFromDb ::
-      MonadIO m =>
-      DB.DbAction m DB.BlockId
-    queryFromDb = do
-      liftIO $ missPrevBlock syncEnv
-      DB.queryBlockId hsh errMsg
 
 tryUpdateCacheTx ::
   MonadIO m =>

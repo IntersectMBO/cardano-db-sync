@@ -65,8 +65,9 @@ insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
           liftIO $ logInfo tracer "Inserting Byron Genesis distribution"
           count <- DB.queryBlockCount
           when (not disInOut && count > 0) $
-            throwError $
-              DB.DbError (DB.mkDbCallStack "insertValidateByronGenesisDist") ("Genesis data mismatch. " <> show err) Nothing
+            liftIO $
+              throwIO $
+                DB.DbError (DB.mkDbCallStack "insertValidateByronGenesisDist") ("Genesis data mismatch. " <> show err) Nothing
           void $
             DB.insertMeta $
               DB.Meta
@@ -139,62 +140,66 @@ validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
       pure ()
     Just meta -> do
       when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
-        throwError $
-          DB.DbError
-            dbCallStack
-            ( Text.concat
-                [ "Mismatch chain start time. Config value "
-                , textShow (Byron.configStartTime cfg)
-                , " does not match DB value of "
-                , textShow (DB.metaStartTime meta)
-                ]
-            )
-            Nothing
+        liftIO $
+          throwIO $
+            DB.DbError
+              dbCallStack
+              ( Text.concat
+                  [ "Mismatch chain start time. Config value "
+                  , textShow (Byron.configStartTime cfg)
+                  , " does not match DB value of "
+                  , textShow (DB.metaStartTime meta)
+                  ]
+              )
+              Nothing
 
       when (DB.metaNetworkName meta /= networkName) $
-        throwError $
-          DB.DbError
-            dbCallStack
-            ( Text.concat
-                [ "Provided network name "
-                , networkName
-                , " does not match DB value "
-                , DB.metaNetworkName meta
-                ]
-            )
-            Nothing
+        liftIO $
+          throwIO $
+            DB.DbError
+              dbCallStack
+              ( Text.concat
+                  [ "Provided network name "
+                  , networkName
+                  , " does not match DB value "
+                  , DB.metaNetworkName meta
+                  ]
+              )
+              Nothing
 
       txCount <- DB.queryBlockTxCount bid
       let expectedTxCount = fromIntegral $ length (genesisTxos cfg)
       when (txCount /= expectedTxCount) $
-        throwError $
-          DB.DbError
-            dbCallStack
-            ( Text.concat
-                [ "Expected initial block to have "
-                , textShow expectedTxCount
-                , " but got "
-                , textShow txCount
-                ]
-            )
-            Nothing
+        liftIO $
+          throwIO $
+            DB.DbError
+              dbCallStack
+              ( Text.concat
+                  [ "Expected initial block to have "
+                  , textShow expectedTxCount
+                  , " but got "
+                  , textShow txCount
+                  ]
+              )
+              Nothing
       unless disInOut $ do
         totalSupply <- DB.queryGenesisSupply $ getTxOutVariantType syncEnv
         case DB.word64ToAda <$> configGenesisSupply cfg of
-          Left err -> throwError $ DB.DbError dbCallStack (textShow err) Nothing
+          Left err -> liftIO $ throwIO $ DB.DbError dbCallStack (textShow err) Nothing
           Right expectedSupply ->
             when (expectedSupply /= totalSupply && not prunes) $
-              throwError $
-                DB.DbError
-                  dbCallStack
-                  ( Text.concat
-                      [ "Expected total supply to be "
-                      , DB.renderAda expectedSupply
-                      , " but got "
-                      , DB.renderAda totalSupply
-                      ]
-                  )
-                  Nothing
+              liftIO $
+                throwIO $
+                  DB.DbError
+                    dbCallStack
+                    ( Text.concat
+                        [ "Expected total supply to be "
+                        , DB.renderAda expectedSupply
+                        , " but got "
+                        , DB.renderAda totalSupply
+                        ]
+                    )
+                    Nothing
         liftIO $ do
           logInfo tracer "Initial genesis distribution present and correct"
           logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
@@ -210,7 +215,7 @@ insertTxOutsByron ::
   DB.DbAction m ()
 insertTxOutsByron syncEnv disInOut blkId (address, value) = do
   case txHashOfAddress address of
-    Left err -> throwError $ DB.DbError (DB.mkDbCallStack "insertTxOutsByron") (Text.concat ["txHashOfAddress: ", show err]) Nothing
+    Left err -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "insertTxOutsByron") (Text.concat ["txHashOfAddress: ", show err]) Nothing
     Right val -> do
       -- Each address/value pair of the initial coin distribution comes from an artifical transaction
       -- with a hash generated by hashing the address.
