@@ -190,7 +190,7 @@ resolveGovActionProposal syncEnv gaId = do
   mGaTxId <- queryTxIdWithCache syncEnv govTxId
   gaTxId <- case mGaTxId of
     Right txId -> pure txId
-    Left err -> throwError err
+    Left err -> liftIO $ throwIO err
 
   let (GovActionIx index) = gaidGovActionIx gaId
   DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?

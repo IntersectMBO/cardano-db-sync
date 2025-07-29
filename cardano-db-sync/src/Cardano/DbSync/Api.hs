@@ -14,7 +14,7 @@ module Cardano.DbSync.Api (
   isConsistent,
   getDisableInOutState,
   getRanIndexes,
-  runIndexesMigrations,
+  runNearTipMigrations,
   initPruneConsumeMigration,
   runConsumedTxOutMigrationsMaybe,
   runAddJsonbToSchema,
@@ -120,12 +120,12 @@ getRanIndexes :: SyncEnv -> IO Bool
 getRanIndexes env = do
   readTVarIO $ envIndexes env
 
-runIndexesMigrations :: SyncEnv -> IO ()
-runIndexesMigrations env = do
+runNearTipMigrations :: SyncEnv -> IO ()
+runNearTipMigrations env = do
   haveRan <- readTVarIO $ envIndexes env
   unless haveRan $ do
-    envRunIndexesMigration env DB.Indexes
-    logInfo (getTrace env) "Indexes were created"
+    envRunNearTipMigration env DB.NearTip
+    logInfo (getTrace env) "NearTip migrations were ran successfully."
     atomically $ writeTVar (envIndexes env) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
@@ -307,7 +307,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runIndexesMigrationFnc =
+mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -342,7 +342,7 @@ mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNod
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
               syncNodeConfigFromFile
               syncNodeParams
-              runIndexesMigrationFnc
+              runNearTipMigrationFnc
 
 mkSyncEnv ::
   Trace IO Text ->
@@ -356,7 +356,7 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runIndexesMigrationFnc = do
+mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
   dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
@@ -418,7 +418,7 @@ mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfig
       , envOffChainVoteResultQueue = oarq
       , envOffChainVoteWorkQueue = oawq
       , envOptions = syncOptions
-      , envRunIndexesMigration = runIndexesMigrationFnc
+      , envRunNearTipMigration = runNearTipMigrationFnc
       , envSyncNodeConfig = syncNodeConfigFromFile
       , envSystemStart = systemStart
       }

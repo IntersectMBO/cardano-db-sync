@@ -145,11 +145,11 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
     void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
 
   -- This runMigration is ONLY for delayed migrations during sync (like indexes)
-  let runIndexesMigration mode = do
+  let runNearTipMigration mode = do
         msg <- DB.getMaintenancePsqlConf pgConfig
-        logInfo trce $ "Running database migrations in mode " <> textShow mode
+        logInfo trce $ "Running NearTip database migrations in mode " <> textShow mode
         logInfo trce msg
-        when (mode `elem` [DB.Indexes, DB.Full]) $ logWarning trce indexesMsg
+        when (mode `elem` [DB.NearTip, DB.Full]) $ logWarning trce indexesMsg
         DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
 
   runSyncNode
@@ -157,7 +157,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
     trce
     iomgr
     dbConnectionSetting
-    (void . runIndexesMigration)
+    (void . runNearTipMigration)
     syncNodeConfigFromFile
     params
     syncOpts
@@ -188,7 +188,7 @@ runSyncNode ::
   SyncNodeParams ->
   SyncOptions ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnSetting runIndexesMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -222,7 +222,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runIndexesMigrationFnc syncN
                 genCfg
                 syncNodeConfigFromFile
                 syncNodeParams
-                runIndexesMigrationFnc
+                runNearTipMigrationFnc
 
           -- Warn the user that jsonb datatypes are being removed from the database schema.
           when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do

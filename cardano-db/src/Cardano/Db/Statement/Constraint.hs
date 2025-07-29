@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -7,7 +8,8 @@ module Cardano.Db.Statement.Constraint where
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo)
 import Cardano.Db.Schema.Core.StakeDeligation (EpochStake, Reward)
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSession)
+
+import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (DbAction)
 import Cardano.Prelude (Proxy (..), liftIO)
@@ -72,19 +74,19 @@ addUniqueConstraintStmt tbName constraintName fields =
 -- | Check if a constraint exists
 queryHasConstraint :: MonadIO m => ConstraintNameDB -> DbAction m Bool
 queryHasConstraint (ConstraintNameDB cname) =
-  runDbSession (mkDbCallStack "queryHasConstraint") $
+  runDbSessionMain (mkDbCallStack "queryHasConstraint") $
     HsqlSess.statement cname queryHasConstraintStmt
 
 -- | Generic function to add a unique constraint to any table with DbInfo
 alterTableAddUniqueConstraint ::
   forall table m.
-  (MonadIO m, DbInfo table) =>
+  (DbInfo table, MonadIO m) =>
   Proxy table ->
   ConstraintNameDB ->
   [FieldNameDB] ->
   DbAction m ()
 alterTableAddUniqueConstraint proxy (ConstraintNameDB cname) fields =
-  runDbSession (mkDbCallStack "alterTableAddUniqueConstraint") $
+  runDbSessionMain (mkDbCallStack "alterTableAddUniqueConstraint") $
     HsqlSess.statement () $
       addUniqueConstraintStmt tbName cname fieldNames
   where
@@ -101,12 +103,12 @@ data ManualDbConstraints = ManualDbConstraints
 -- | Check if constraints exist
 queryRewardAndEpochStakeConstraints :: MonadIO m => DbAction m ManualDbConstraints
 queryRewardAndEpochStakeConstraints = do
-  resEpochStake <- queryHasConstraint constraintNameEpochStake
-  resReward <- queryHasConstraint constraintNameReward
+  epochStake <- queryHasConstraint constraintNameEpochStake
+  reward <- queryHasConstraint constraintNameReward
   pure $
     ManualDbConstraints
-      { dbConstraintRewards = resReward
-      , dbConstraintEpochStake = resEpochStake
+      { dbConstraintRewards = reward
+      , dbConstraintEpochStake = epochStake
       }
 
 -- | Add reward table constraint

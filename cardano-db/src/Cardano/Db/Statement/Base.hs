@@ -15,7 +15,7 @@ module Cardano.Db.Statement.Base where
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
-import Cardano.Prelude (ByteString, Int64, MonadError (..), MonadIO (..), Proxy (..), Word64, textShow, void)
+import Cardano.Prelude (ByteString, Int64, MonadIO (..), Proxy (..), Word64, textShow, throwIO, void)
 import Data.Functor.Contravariant ((>$<))
 import Data.IORef (readIORef)
 import Data.List (partition)
@@ -38,7 +38,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..), textToMinIds)
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 import Cardano.Db.Schema.Variants (TxOutVariantType)
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSession)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSessionMain, runDbSessionPool)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkJsonb)
@@ -63,7 +63,7 @@ insertBlockStmt =
 
 insertBlock :: MonadIO m => SCB.Block -> DbAction m Id.BlockId
 insertBlock block =
-  runDbSession (mkDbCallStack "insertBlock") $ HsqlSes.statement block insertBlockStmt
+  runDbSessionMain (mkDbCallStack "insertBlock") $ HsqlSes.statement block insertBlockStmt
 
 insertCheckUniqueBlockStmt :: HsqlStmt.Statement SCB.Block Id.BlockId
 insertCheckUniqueBlockStmt =
@@ -73,7 +73,7 @@ insertCheckUniqueBlockStmt =
 
 insertCheckUniqueBlock :: MonadIO m => SCB.Block -> DbAction m Id.BlockId
 insertCheckUniqueBlock block =
-  runDbSession (mkDbCallStack "insertCheckUniqueBlock") $
+  runDbSessionMain (mkDbCallStack "insertCheckUniqueBlock") $
     HsqlSes.statement block insertCheckUniqueBlockStmt
 
 -- | QUERIES -------------------------------------------------------------------
@@ -93,12 +93,12 @@ queryBlockHashBlockNo :: MonadIO m => ByteString -> DbAction m (Maybe Word64)
 queryBlockHashBlockNo hash = do
   let dbCallStack = mkDbCallStack "queryBlockHashBlockNo"
   result <-
-    runDbSession dbCallStack $
+    runDbSessionMain dbCallStack $
       HsqlSes.statement hash queryBlockHashBlockNoStmt
   case result of
     [] -> pure Nothing
     [blockNo] -> pure (Just blockNo)
-    results -> throwError $ DbError dbCallStack errorMsg Nothing
+    results -> liftIO $ throwIO $ DbError dbCallStack errorMsg Nothing
       where
         errorMsg =
           "Multiple blocks found with same hash: "
@@ -120,7 +120,7 @@ queryBlockCountStmt =
           ["SELECT COUNT(*) FROM " <> table]
 
 queryBlockCount :: MonadIO m => DbAction m Word64
-queryBlockCount = runDbSession (mkDbCallStack "queryBlockCount") $ HsqlSes.statement () queryBlockCountStmt
+queryBlockCount = runDbSessionMain (mkDbCallStack "queryBlockCount") $ HsqlSes.statement () queryBlockCountStmt
 
 --------------------------------------------------------------------------------
 querySlotUtcTimeStmt :: HsqlStmt.Statement Word64 (Maybe UTCTime)
@@ -139,14 +139,14 @@ querySlotUtcTimeStmt =
           ]
 
 -- | Calculate the slot time (as UTCTime) for a given slot number.
-querySlotUtcTimeEither :: MonadIO m => Word64 -> DbAction m (Either DbError UTCTime)
-querySlotUtcTimeEither slotNo = do
-  result <- runDbSession dbCallStack $ HsqlSes.statement slotNo querySlotUtcTimeStmt
+querySlotUtcTime :: MonadIO m => Word64 -> DbAction m (Either DbError UTCTime)
+querySlotUtcTime slotNo = do
+  result <- runDbSessionMain dbCallStack $ HsqlSes.statement slotNo querySlotUtcTimeStmt
   case result of
     Just time -> pure $ Right time
     Nothing -> pure $ Left $ DbError dbCallStack ("Slot not found for slot_no: " <> Text.pack (show slotNo)) Nothing
   where
-    dbCallStack = mkDbCallStack "querySlotUtcTimeEither"
+    dbCallStack = mkDbCallStack "querySlotUtcTime"
 
 --------------------------------------------------------------------------------
 
@@ -174,7 +174,7 @@ queryBlockCountAfterBlockNo blockNo queryEq = do
         if queryEq
           then queryBlockCountAfterEqBlockNoStmt
           else queryBlockCountAfterBlockNoStmt
-  runDbSession dbCallStack $ HsqlSes.statement blockNo stmt
+  runDbSessionMain dbCallStack $ HsqlSes.statement blockNo stmt
 
 --------------------------------------------------------------------------------
 queryBlockNoAndEpochStmt ::
@@ -200,7 +200,7 @@ queryBlockNoAndEpochStmt =
 
 queryBlockNoAndEpoch :: MonadIO m => Word64 -> DbAction m (Maybe (Id.BlockId, Word64))
 queryBlockNoAndEpoch blkNo =
-  runDbSession (mkDbCallStack "queryBlockNoAndEpoch") $
+  runDbSessionMain (mkDbCallStack "queryBlockNoAndEpoch") $
     HsqlSes.statement blkNo $
       queryBlockNoAndEpochStmt @SCB.Block
 
@@ -229,7 +229,7 @@ queryNearestBlockSlotNoStmt =
 
 queryNearestBlockSlotNo :: MonadIO m => Word64 -> DbAction m (Maybe (Id.BlockId, Word64))
 queryNearestBlockSlotNo slotNo =
-  runDbSession (mkDbCallStack "queryNearestBlockSlotNo") $
+  runDbSessionMain (mkDbCallStack "queryNearestBlockSlotNo") $
     HsqlSes.statement slotNo $
       queryNearestBlockSlotNoStmt @SCB.Block
 
@@ -256,7 +256,7 @@ queryBlockHashStmt =
 
 queryBlockHash :: MonadIO m => SCB.Block -> DbAction m (Maybe (Id.BlockId, Word64))
 queryBlockHash block =
-  runDbSession (mkDbCallStack "queryBlockHash") $
+  runDbSessionMain (mkDbCallStack "queryBlockHash") $
     HsqlSes.statement (SCB.blockHash block) $
       queryBlockHashStmt @SCB.Block
 
@@ -284,7 +284,7 @@ queryMinBlockStmt =
 
 queryMinBlock :: MonadIO m => DbAction m (Maybe (Id.BlockId, Word64))
 queryMinBlock =
-  runDbSession (mkDbCallStack "queryMinBlock") $
+  runDbSessionMain (mkDbCallStack "queryMinBlock") $
     HsqlSes.statement () $
       queryMinBlockStmt @SCB.Block
 
@@ -310,7 +310,7 @@ queryReverseIndexBlockIdStmt =
 
 queryReverseIndexBlockId :: MonadIO m => Id.BlockId -> DbAction m [Maybe Text.Text]
 queryReverseIndexBlockId blockId =
-  runDbSession (mkDbCallStack "queryReverseIndexBlockId") $
+  runDbSessionMain (mkDbCallStack "queryReverseIndexBlockId") $
     HsqlSes.statement blockId $
       queryReverseIndexBlockIdStmt @SCB.Block
 
@@ -323,7 +323,7 @@ queryBlockTxCountStmt =
 
 queryBlockTxCount :: MonadIO m => Id.BlockId -> DbAction m Word64
 queryBlockTxCount blkId =
-  runDbSession (mkDbCallStack "queryBlockTxCount") $
+  runDbSessionMain (mkDbCallStack "queryBlockTxCount") $
     HsqlSes.statement blkId queryBlockTxCountStmt
 
 --------------------------------------------------------------------------------
@@ -344,16 +344,20 @@ queryBlockIdStmt =
 
 queryBlockId :: MonadIO m => ByteString -> Text.Text -> DbAction m Id.BlockId
 queryBlockId hash errMsg = do
-  result <- runDbSession callStack $ HsqlSes.statement hash queryBlockIdStmt
+  result <- runDbSessionMain callStack $ HsqlSes.statement hash queryBlockIdStmt
   case result of
     Just blockId -> pure blockId
-    Nothing -> throwError $ DbError callStack ("Block not found for hash: " <> errMsg) Nothing
+    Nothing -> liftIO $ throwIO $ DbError callStack ("Block not found for hash: " <> errMsg) Nothing
   where
     callStack = mkDbCallStack "queryBlockId"
 
-queryBlockIdEither :: MonadIO m => ByteString -> Text.Text -> DbAction m (Either DbError Id.BlockId)
+queryBlockIdEither ::
+  MonadIO m =>
+  ByteString ->
+  Text.Text ->
+  DbAction m (Either DbError Id.BlockId)
 queryBlockIdEither hash errMsg = do
-  result <- runDbSession callStack $ HsqlSes.statement hash queryBlockIdStmt
+  result <- runDbSessionMain callStack $ HsqlSes.statement hash queryBlockIdStmt
   case result of
     Just blockId -> pure $ Right blockId
     Nothing -> pure $ Left $ DbError callStack ("Block not found for hash: " <> errMsg) Nothing
@@ -379,7 +383,7 @@ queryBlocksForCurrentEpochNoStmt =
 
 queryBlocksForCurrentEpochNo :: MonadIO m => DbAction m (Maybe Word64)
 queryBlocksForCurrentEpochNo =
-  runDbSession (mkDbCallStack "queryBlocksForCurrentEpochNo") $
+  runDbSessionMain (mkDbCallStack "queryBlocksForCurrentEpochNo") $
     HsqlSes.statement () queryBlocksForCurrentEpochNoStmt
 
 --------------------------------------------------------------------------------
@@ -402,7 +406,7 @@ queryLatestBlockStmt =
 queryLatestBlock :: MonadIO m => DbAction m (Maybe SCB.Block)
 queryLatestBlock = do
   result <-
-    runDbSession (mkDbCallStack "queryLatestBlock") $
+    runDbSessionMain (mkDbCallStack "queryLatestBlock") $
       HsqlSes.statement () queryLatestBlockStmt
   pure $ entityVal <$> result
 
@@ -428,7 +432,7 @@ queryLatestEpochNoFromBlockStmt =
 
 queryLatestEpochNoFromBlock :: MonadIO m => DbAction m Word64
 queryLatestEpochNoFromBlock =
-  runDbSession (mkDbCallStack "queryLatestEpochNoFromBlock") $
+  runDbSessionMain (mkDbCallStack "queryLatestEpochNoFromBlock") $
     HsqlSes.statement () queryLatestEpochNoFromBlockStmt
 
 --------------------------------------------------------------------------------
@@ -450,7 +454,7 @@ queryLatestBlockIdStmt =
 -- | Get 'BlockId' of the latest block.
 queryLatestBlockId :: MonadIO m => DbAction m (Maybe Id.BlockId)
 queryLatestBlockId =
-  runDbSession (mkDbCallStack "queryLatestBlockId") $
+  runDbSessionMain (mkDbCallStack "queryLatestBlockId") $
     HsqlSes.statement () queryLatestBlockIdStmt
 
 --------------------------------------------------------------------------------
@@ -478,7 +482,7 @@ queryDepositUpToBlockNoStmt =
 
 queryDepositUpToBlockNo :: MonadIO m => Word64 -> DbAction m Ada
 queryDepositUpToBlockNo blkNo =
-  runDbSession (mkDbCallStack "queryDepositUpToBlockNo") $
+  runDbSessionMain (mkDbCallStack "queryDepositUpToBlockNo") $
     HsqlSes.statement blkNo queryDepositUpToBlockNoStmt
 
 --------------------------------------------------------------------------------
@@ -503,7 +507,7 @@ queryLatestSlotNoStmt =
 
 queryLatestSlotNo :: MonadIO m => DbAction m Word64
 queryLatestSlotNo =
-  runDbSession (mkDbCallStack "queryLatestSlotNo") $
+  runDbSessionMain (mkDbCallStack "queryLatestSlotNo") $
     HsqlSes.statement () queryLatestSlotNoStmt
 
 --------------------------------------------------------------------------------
@@ -529,7 +533,7 @@ queryLatestPointsStmt =
 
 queryLatestPoints :: MonadIO m => DbAction m [(Maybe Word64, ByteString)]
 queryLatestPoints =
-  runDbSession (mkDbCallStack "queryLatestPoints") $
+  runDbSessionMain (mkDbCallStack "queryLatestPoints") $
     HsqlSes.statement () queryLatestPointsStmt
 
 -----------------------------------------------------------------------------------
@@ -551,7 +555,7 @@ querySlotHashStmt =
 querySlotHash :: MonadIO m => SlotNo -> DbAction m [(SlotNo, ByteString)]
 querySlotHash slotNo = do
   hashes <-
-    runDbSession (mkDbCallStack "querySlotHash") $
+    runDbSessionMain (mkDbCallStack "querySlotHash") $
       HsqlSes.statement (unSlotNo slotNo) querySlotHashStmt
   pure $ map (\hash -> (slotNo, hash)) hashes
 
@@ -576,7 +580,7 @@ queryCountSlotNosGreaterThanStmt =
 
 queryCountSlotNosGreaterThan :: MonadIO m => Word64 -> DbAction m Word64
 queryCountSlotNosGreaterThan slotNo =
-  runDbSession (mkDbCallStack "queryCountSlotNosGreaterThan") $
+  runDbSessionMain (mkDbCallStack "queryCountSlotNosGreaterThan") $
     HsqlSes.statement slotNo queryCountSlotNosGreaterThanStmt
 
 -----------------------------------------------------------------------------------
@@ -600,7 +604,7 @@ queryCountSlotNoStmt =
 -- | Like 'queryCountSlotNosGreaterThan', but returns all slots in the same order.
 queryCountSlotNo :: MonadIO m => DbAction m Word64
 queryCountSlotNo =
-  runDbSession (mkDbCallStack "queryCountSlotNo") $
+  runDbSessionMain (mkDbCallStack "queryCountSlotNo") $
     HsqlSes.statement () queryCountSlotNoStmt
 
 -----------------------------------------------------------------------------------
@@ -633,7 +637,7 @@ queryBlockHeightStmt colName =
 
 queryBlockHeight :: MonadIO m => DbAction m (Maybe Word64)
 queryBlockHeight =
-  runDbSession (mkDbCallStack "queryBlockHeight") $
+  runDbSessionMain (mkDbCallStack "queryBlockHeight") $
     HsqlSes.statement () $
       queryBlockHeightStmt @SC.Block "block_no"
 
@@ -657,10 +661,10 @@ queryGenesis errMsg = do
   let dbCallStack = mkDbCallStack "queryGenesis"
       errorMsg = "Multiple Genesis blocks found: " <> errMsg
 
-  result <- runDbSession dbCallStack $ HsqlSes.statement () queryGenesisStmt
+  result <- runDbSessionMain dbCallStack $ HsqlSes.statement () queryGenesisStmt
   case result of
     [blk] -> pure blk
-    _otherwise -> throwError $ DbError dbCallStack errorMsg Nothing
+    _otherwise -> liftIO $ throwIO $ DbError dbCallStack errorMsg Nothing
 
 -----------------------------------------------------------------------------------
 queryLatestBlockNoStmt :: HsqlStmt.Statement () (Maybe Word64)
@@ -684,7 +688,7 @@ queryLatestBlockNoStmt =
 
 queryLatestBlockNo :: MonadIO m => DbAction m (Maybe Word64)
 queryLatestBlockNo =
-  runDbSession (mkDbCallStack "queryLatestBlockNo") $
+  runDbSessionMain (mkDbCallStack "queryLatestBlockNo") $
     HsqlSes.statement () queryLatestBlockNoStmt
 
 -----------------------------------------------------------------------------------
@@ -709,7 +713,7 @@ queryPreviousSlotNoStmt =
 
 queryPreviousSlotNo :: MonadIO m => Word64 -> DbAction m (Maybe Word64)
 queryPreviousSlotNo slotNo =
-  runDbSession (mkDbCallStack "queryPreviousSlotNo") $
+  runDbSessionMain (mkDbCallStack "queryPreviousSlotNo") $
     HsqlSes.statement slotNo queryPreviousSlotNoStmt
 
 -----------------------------------------------------------------------------------
@@ -831,7 +835,7 @@ deleteUsingEpochNo epochN = do
       epochInt64 = fromIntegral epochN
 
   -- Execute batch deletes in a pipeline
-  results <- runDbSession dbCallStack $
+  results <- runDbSessionMain dbCallStack $
     HsqlSes.pipeline $ do
       c1 <- HsqlPipeL.statement epochN (deleteWhereCount @SC.Epoch "no" "=" epochEncoder)
       c2 <- HsqlPipeL.statement epochN (deleteWhereCount @SC.DrepDistr "epoch_no" ">" epochEncoder)
@@ -920,7 +924,7 @@ insertDatumStmt =
 
 insertDatum :: MonadIO m => SCB.Datum -> DbAction m Id.DatumId
 insertDatum datum =
-  runDbSession (mkDbCallStack "insertDatum") $ HsqlSes.statement datum insertDatumStmt
+  runDbSessionMain (mkDbCallStack "insertDatum") $ HsqlSes.statement datum insertDatumStmt
 
 -- | QUERY ---------------------------------------------------------------------
 queryDatumStmt :: HsqlStmt.Statement ByteString (Maybe Id.DatumId)
@@ -939,7 +943,7 @@ queryDatumStmt =
 
 queryDatum :: MonadIO m => ByteString -> DbAction m (Maybe Id.DatumId)
 queryDatum hash =
-  runDbSession (mkDbCallStack "queryDatum") $
+  runDbSessionMain (mkDbCallStack "queryDatum") $
     HsqlSes.statement hash queryDatumStmt
 
 --------------------------------------------------------------------------------
@@ -965,7 +969,7 @@ queryAllExtraMigrationsStmt colName =
 
 queryAllExtraMigrations :: MonadIO m => DbAction m [ExtraMigration]
 queryAllExtraMigrations =
-  runDbSession (mkDbCallStack "queryAllExtraMigrations") $
+  runDbSessionMain (mkDbCallStack "queryAllExtraMigrations") $
     HsqlSes.statement () $
       queryAllExtraMigrationsStmt @SC.ExtraMigrations "token"
 
@@ -992,7 +996,12 @@ insertBulkTxMetadataStmt removeJsonb =
 
 insertBulkTxMetadata :: MonadIO m => Bool -> [SCB.TxMetadata] -> DbAction m [Id.TxMetadataId]
 insertBulkTxMetadata removeJsonb txMetas =
-  runDbSession (mkDbCallStack "insertBulkTxMetadata") $
+  runDbSessionMain (mkDbCallStack "insertBulkTxMetadata") $
+    HsqlSes.statement txMetas (insertBulkTxMetadataStmt removeJsonb)
+
+parallelInsertBulkTxMetadata :: MonadIO m => Bool -> [SCB.TxMetadata] -> DbAction m [Id.TxMetadataId]
+parallelInsertBulkTxMetadata removeJsonb txMetas =
+  runDbSessionPool (mkDbCallStack "insertBulkTxMetadata") $
     HsqlSes.statement txMetas (insertBulkTxMetadataStmt removeJsonb)
 
 --------------------------------------------------------------------------------
@@ -1005,7 +1014,7 @@ insertCollateralTxInStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CollateralTxInId)
 
 insertCollateralTxIn :: MonadIO m => SCB.CollateralTxIn -> DbAction m Id.CollateralTxInId
-insertCollateralTxIn cTxIn = runDbSession (mkDbCallStack "insertCollateralTxIn") $ HsqlSes.statement cTxIn insertCollateralTxInStmt
+insertCollateralTxIn cTxIn = runDbSessionMain (mkDbCallStack "insertCollateralTxIn") $ HsqlSes.statement cTxIn insertCollateralTxInStmt
 
 --------------------------------------------------------------------------------
 -- Meta
@@ -1026,11 +1035,11 @@ queryMetaStmt =
 queryMeta :: MonadIO m => DbAction m (Maybe SCB.Meta)
 queryMeta = do
   let dbCallStack = mkDbCallStack "queryMeta"
-  result <- runDbSession dbCallStack $ HsqlSes.statement () queryMetaStmt
+  result <- runDbSessionMain dbCallStack $ HsqlSes.statement () queryMetaStmt
   case result of
     [] -> pure Nothing -- Empty table is valid
     [m] -> pure $ Just $ entityVal m
-    _otherwise -> throwError $ DbError dbCallStack "Multiple rows in meta table" Nothing
+    _otherwise -> liftIO $ throwIO $ DbError dbCallStack "Multiple rows in meta table" Nothing
 
 --------------------------------------------------------------------------------
 -- ReferenceTxIn
@@ -1042,7 +1051,7 @@ insertReferenceTxInStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ReferenceTxInId)
 
 insertReferenceTxIn :: MonadIO m => SCB.ReferenceTxIn -> DbAction m Id.ReferenceTxInId
-insertReferenceTxIn rTxIn = runDbSession (mkDbCallStack "insertReferenceTxIn") $ HsqlSes.statement rTxIn insertReferenceTxInStmt
+insertReferenceTxIn rTxIn = runDbSessionMain (mkDbCallStack "insertReferenceTxIn") $ HsqlSes.statement rTxIn insertReferenceTxInStmt
 
 --------------------------------------------------------------------------------
 insertExtraMigrationStmt :: HsqlStmt.Statement SCB.ExtraMigrations ()
@@ -1053,7 +1062,7 @@ insertExtraMigrationStmt =
 
 insertExtraMigration :: MonadIO m => ExtraMigration -> DbAction m ()
 insertExtraMigration extraMigration =
-  void $ runDbSession (mkDbCallStack "insertExtraMigration") $ HsqlSes.statement input insertExtraMigrationStmt
+  void $ runDbSessionMain (mkDbCallStack "insertExtraMigration") $ HsqlSes.statement input insertExtraMigrationStmt
   where
     input = SCB.ExtraMigrations (textShow extraMigration) (Just $ extraDescription extraMigration)
 
@@ -1067,7 +1076,7 @@ insertExtraKeyWitnessStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ExtraKeyWitnessId)
 
 insertExtraKeyWitness :: MonadIO m => SCB.ExtraKeyWitness -> DbAction m Id.ExtraKeyWitnessId
-insertExtraKeyWitness eKeyWitness = runDbSession (mkDbCallStack "insertExtraKeyWitness") $ HsqlSes.statement eKeyWitness insertExtraKeyWitnessStmt
+insertExtraKeyWitness eKeyWitness = runDbSessionMain (mkDbCallStack "insertExtraKeyWitness") $ HsqlSes.statement eKeyWitness insertExtraKeyWitnessStmt
 
 --------------------------------------------------------------------------------
 -- Meta
@@ -1079,7 +1088,7 @@ insertMetaStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MetaId)
 
 insertMeta :: MonadIO m => SCB.Meta -> DbAction m Id.MetaId
-insertMeta meta = runDbSession (mkDbCallStack "insertMeta") $ HsqlSes.statement meta insertMetaStmt
+insertMeta meta = runDbSessionMain (mkDbCallStack "insertMeta") $ HsqlSes.statement meta insertMetaStmt
 
 --------------------------------------------------------------------------------
 -- Redeemer
@@ -1091,7 +1100,7 @@ insertRedeemerStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.RedeemerId)
 
 insertRedeemer :: MonadIO m => SCB.Redeemer -> DbAction m Id.RedeemerId
-insertRedeemer redeemer = runDbSession (mkDbCallStack "insertRedeemer") $ HsqlSes.statement redeemer insertRedeemerStmt
+insertRedeemer redeemer = runDbSessionMain (mkDbCallStack "insertRedeemer") $ HsqlSes.statement redeemer insertRedeemerStmt
 
 --------------------------------------------------------------------------------
 -- RedeemerData
@@ -1103,7 +1112,7 @@ insertRedeemerDataStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.RedeemerDataId)
 
 insertRedeemerData :: MonadIO m => SCB.RedeemerData -> DbAction m Id.RedeemerDataId
-insertRedeemerData redeemerData = runDbSession (mkDbCallStack "insertRedeemerData") $ HsqlSes.statement redeemerData insertRedeemerDataStmt
+insertRedeemerData redeemerData = runDbSessionMain (mkDbCallStack "insertRedeemerData") $ HsqlSes.statement redeemerData insertRedeemerDataStmt
 
 --------------------------------------------------------------------------------
 queryRedeemerDataStmt :: HsqlStmt.Statement ByteString (Maybe Id.RedeemerDataId)
@@ -1123,7 +1132,7 @@ queryRedeemerDataStmt =
 
 queryRedeemerData :: MonadIO m => ByteString -> DbAction m (Maybe Id.RedeemerDataId)
 queryRedeemerData hash =
-  runDbSession (mkDbCallStack "queryRedeemerData") $
+  runDbSessionMain (mkDbCallStack "queryRedeemerData") $
     HsqlSes.statement hash queryRedeemerDataStmt
 
 --------------------------------------------------------------------------------
@@ -1136,7 +1145,7 @@ insertReverseIndexStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ReverseIndexId)
 
 insertReverseIndex :: MonadIO m => SCB.ReverseIndex -> DbAction m Id.ReverseIndexId
-insertReverseIndex reverseIndex = runDbSession (mkDbCallStack "insertReverseIndex") $ HsqlSes.statement reverseIndex insertReverseIndexStmt
+insertReverseIndex reverseIndex = runDbSessionMain (mkDbCallStack "insertReverseIndex") $ HsqlSes.statement reverseIndex insertReverseIndexStmt
 
 --------------------------------------------------------------------------------
 
@@ -1160,7 +1169,7 @@ querySchemaVersionStmt =
 
 querySchemaVersion :: MonadIO m => DbAction m (Maybe SCB.SchemaVersion)
 querySchemaVersion =
-  runDbSession (mkDbCallStack "querySchemaVersion") $
+  runDbSessionMain (mkDbCallStack "querySchemaVersion") $
     HsqlSes.statement () querySchemaVersionStmt
 
 --------------------------------------------------------------------------------
@@ -1175,7 +1184,7 @@ insertScriptStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ScriptId)
 
 insertScript :: MonadIO m => SCB.Script -> DbAction m Id.ScriptId
-insertScript script = runDbSession (mkDbCallStack "insertScript") $ HsqlSes.statement script insertScriptStmt
+insertScript script = runDbSessionMain (mkDbCallStack "insertScript") $ HsqlSes.statement script insertScriptStmt
 
 -- | QUERIES
 
@@ -1197,7 +1206,7 @@ queryScriptWithIdStmt =
 
 queryScriptWithId :: MonadIO m => ByteString -> DbAction m (Maybe Id.ScriptId)
 queryScriptWithId hash =
-  runDbSession (mkDbCallStack "queryScriptWithId") $
+  runDbSessionMain (mkDbCallStack "queryScriptWithId") $
     HsqlSes.statement hash queryScriptWithIdStmt
 
 --------------------------------------------------------------------------------
@@ -1210,7 +1219,7 @@ insertCheckUniqueSlotLeaderStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.SlotLeaderId)
 
 insertSlotLeader :: MonadIO m => SCB.SlotLeader -> DbAction m Id.SlotLeaderId
-insertSlotLeader slotLeader = runDbSession (mkDbCallStack "insertSlotLeader") $ HsqlSes.statement slotLeader insertCheckUniqueSlotLeaderStmt
+insertSlotLeader slotLeader = runDbSessionMain (mkDbCallStack "insertSlotLeader") $ HsqlSes.statement slotLeader insertCheckUniqueSlotLeaderStmt
 
 --------------------------------------------------------------------------------
 -- TxCbor
@@ -1223,7 +1232,7 @@ insertTxCborStmt =
 
 insertTxCbor :: MonadIO m => SCB.TxCbor -> DbAction m Id.TxCborId
 insertTxCbor txCBOR =
-  runDbSession (mkDbCallStack "insertTxCBOR") $ HsqlSes.statement txCBOR insertTxCborStmt
+  runDbSessionMain (mkDbCallStack "insertTxCBOR") $ HsqlSes.statement txCBOR insertTxCborStmt
 
 --------------------------------------------------------------------------------
 -- Tx
@@ -1237,14 +1246,14 @@ insertTxStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxId)
 
 insertTx :: MonadIO m => SCB.Tx -> DbAction m Id.TxId
-insertTx tx = runDbSession (mkDbCallStack "insertTx") $ HsqlSes.statement tx insertTxStmt
+insertTx tx = runDbSessionMain (mkDbCallStack "insertTx") $ HsqlSes.statement tx insertTxStmt
 
 -- | QUERIES ------------------------------------------------------------------
 
 -- | Count the number of transactions in the Tx table.
 queryTxCount :: MonadIO m => DbAction m Word64
 queryTxCount =
-  runDbSession (mkDbCallStack "queryTxCount") $
+  runDbSessionMain (mkDbCallStack "queryTxCount") $
     HsqlSes.statement () $
       countAll @SCB.Tx
 
@@ -1268,7 +1277,7 @@ queryWithdrawalsUpToBlockNoStmt =
 
 queryWithdrawalsUpToBlockNo :: MonadIO m => Word64 -> DbAction m Ada
 queryWithdrawalsUpToBlockNo blkNo =
-  runDbSession (mkDbCallStack "queryWithdrawalsUpToBlockNo") $
+  runDbSessionMain (mkDbCallStack "queryWithdrawalsUpToBlockNo") $
     HsqlSes.statement blkNo queryWithdrawalsUpToBlockNoStmt
 
 --------------------------------------------------------------------------------
@@ -1289,7 +1298,7 @@ queryTxIdStmt = HsqlStmt.Statement sql encoder decoder True
 -- | Get the 'TxId' associated with the given hash.
 queryTxId :: MonadIO m => ByteString -> DbAction m (Maybe Id.TxId)
 queryTxId txHash =
-  runDbSession (mkDbCallStack "queryTxId") $
+  runDbSessionMain (mkDbCallStack "queryTxId") $
     HsqlSes.statement txHash queryTxIdStmt
 
 --------------------------------------------------------------------------------
@@ -1311,7 +1320,7 @@ queryFeesUpToBlockNoStmt =
 
 queryFeesUpToBlockNo :: MonadIO m => Word64 -> DbAction m Ada
 queryFeesUpToBlockNo blkNo =
-  runDbSession (mkDbCallStack "queryFeesUpToBlockNo") $
+  runDbSessionMain (mkDbCallStack "queryFeesUpToBlockNo") $
     HsqlSes.statement blkNo queryFeesUpToBlockNoStmt
 
 --------------------------------------------------------------------------------
@@ -1334,7 +1343,7 @@ queryFeesUpToSlotNoStmt =
 
 queryFeesUpToSlotNo :: MonadIO m => Word64 -> DbAction m Ada
 queryFeesUpToSlotNo slotNo =
-  runDbSession (mkDbCallStack "queryFeesUpToSlotNo") $
+  runDbSessionMain (mkDbCallStack "queryFeesUpToSlotNo") $
     HsqlSes.statement slotNo queryFeesUpToSlotNoStmt
 
 --------------------------------------------------------------------------------
@@ -1355,7 +1364,7 @@ queryInvalidTxStmt =
 queryInvalidTx :: MonadIO m => DbAction m [SCB.Tx]
 queryInvalidTx = do
   result <-
-    runDbSession (mkDbCallStack "queryInvalidTx") $
+    runDbSessionMain (mkDbCallStack "queryInvalidTx") $
       HsqlSes.statement () queryInvalidTxStmt
   pure $ entityVal <$> result
 
@@ -1369,7 +1378,7 @@ insertTxInStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxInId)
 
 insertTxIn :: MonadIO m => SCB.TxIn -> DbAction m Id.TxInId
-insertTxIn txIn = runDbSession (mkDbCallStack "insertTxIn") $ HsqlSes.statement txIn insertTxInStmt
+insertTxIn txIn = runDbSessionMain (mkDbCallStack "insertTxIn") $ HsqlSes.statement txIn insertTxInStmt
 
 --------------------------------------------------------------------------------
 insertBulkTxInStmt :: HsqlStmt.Statement [SCB.TxIn] [Id.TxInId]
@@ -1389,13 +1398,13 @@ insertBulkTxInStmt =
 
 insertBulkTxIn :: MonadIO m => [SCB.TxIn] -> DbAction m [Id.TxInId]
 insertBulkTxIn txIns =
-  runDbSession (mkDbCallStack "insertBulkTxIn") $
+  runDbSessionMain (mkDbCallStack "insertBulkTxIn") $
     HsqlSes.statement txIns insertBulkTxInStmt
 
 --------------------------------------------------------------------------------
 queryTxInCount :: MonadIO m => DbAction m Word64
 queryTxInCount =
-  runDbSession (mkDbCallStack "queryTxInCount") $
+  runDbSessionMain (mkDbCallStack "queryTxInCount") $
     HsqlSes.statement () $
       countAll @SCB.TxIn
 
@@ -1416,7 +1425,7 @@ queryTxInRedeemerStmt =
 
 queryTxInRedeemer :: MonadIO m => DbAction m [SCB.TxIn]
 queryTxInRedeemer =
-  runDbSession (mkDbCallStack "queryTxInRedeemer") $
+  runDbSessionMain (mkDbCallStack "queryTxInRedeemer") $
     HsqlSes.statement () queryTxInRedeemerStmt
 
 --------------------------------------------------------------------------------
@@ -1441,7 +1450,7 @@ queryTxInFailedTxStmt =
 
 queryTxInFailedTx :: MonadIO m => DbAction m [SCB.TxIn]
 queryTxInFailedTx =
-  runDbSession (mkDbCallStack "queryTxInFailedTx") $
+  runDbSessionMain (mkDbCallStack "queryTxInFailedTx") $
     HsqlSes.statement () queryTxInFailedTxStmt
 
 --------------------------------------------------------------------------------
@@ -1454,7 +1463,7 @@ insertWithdrawalStmt =
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.WithdrawalId)
 
 insertWithdrawal :: MonadIO m => SCB.Withdrawal -> DbAction m Id.WithdrawalId
-insertWithdrawal withdrawal = runDbSession (mkDbCallStack "insertWithdrawal") $ HsqlSes.statement withdrawal insertWithdrawalStmt
+insertWithdrawal withdrawal = runDbSessionMain (mkDbCallStack "insertWithdrawal") $ HsqlSes.statement withdrawal insertWithdrawalStmt
 
 --------------------------------------------------------------------------------
 -- Statement for querying withdrawals with non-null redeemer_id
@@ -1474,7 +1483,7 @@ queryWithdrawalScriptStmt =
 
 queryWithdrawalScript :: MonadIO m => DbAction m [SCB.Withdrawal]
 queryWithdrawalScript =
-  runDbSession (mkDbCallStack "queryWithdrawalScript") $
+  runDbSessionMain (mkDbCallStack "queryWithdrawalScript") $
     HsqlSes.statement () queryWithdrawalScriptStmt
 
 --------------------------------------------------------------------------------
@@ -1499,5 +1508,5 @@ queryWithdrawalAddressesStmt =
 
 queryWithdrawalAddresses :: MonadIO m => DbAction m [Id.StakeAddressId]
 queryWithdrawalAddresses =
-  runDbSession (mkDbCallStack "queryWithdrawalAddresses") $
+  runDbSessionMain (mkDbCallStack "queryWithdrawalAddresses") $
     HsqlSes.statement () queryWithdrawalAddressesStmt

@@ -8,6 +8,7 @@ module Cardano.DbSync.Database (
 ) where
 
 import Cardano.BM.Trace (logDebug, logError, logInfo)
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), SyncEnv (..))
 import Cardano.DbSync.DbEvent
@@ -19,10 +20,10 @@ import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude hiding (atomically)
-import Cardano.Slotting.Slot (WithOrigin (..))
+import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
 import Control.Monad.Extra (whenJust)
-import Ouroboros.Network.Block (BlockNo, Point (..))
+import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
 
 data NextState
@@ -80,14 +81,16 @@ runDbThread syncEnv metricsSetters queue = do
       logDbState syncEnv
       atomically $ putTMVar resultVar (latestPoints, currentTip)
       processQueue -- Continue processing
-
-    -- Update block and slot height metrics
     updateBlockMetrics :: IO ()
     updateBlockMetrics = do
-      mBlock <- getDbLatestBlockInfo (envDbEnv syncEnv)
-      whenJust mBlock $ \block -> do
-        setDbBlockHeight metricsSetters $ bBlockNo block
-        setDbSlotHeight metricsSetters $ bSlotNo block
+      -- Fire-and-forget async metrics update
+      void $ async $ DB.runPoolDbAction (envDbEnv syncEnv) $ do
+        mBlock <- DB.queryLatestBlock
+        liftIO $ whenJust mBlock $ \block -> do
+          let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block
+              slotNo = SlotNo $ fromMaybe 0 $ DB.blockSlotNo block
+          setDbBlockHeight metricsSetters blockNo
+          setDbSlotHeight metricsSetters slotNo
 
 -- | Run the list of 'DbEvent's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.

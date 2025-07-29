@@ -188,7 +188,6 @@ library
                       , memory
                       , microlens
                       , monad-control
-                      , monad-logger
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano

@@ -465,7 +465,7 @@ insertCollateralTxIn syncEnv _tracer txInId txIn = do
   eTxOutId <- queryTxIdWithCache syncEnv (txInTxId txIn)
   txOutId <- case eTxOutId of
     Right txId -> pure txId
-    Left err -> throwError err
+    Left err -> liftIO $ throwIO err
   void
     . DB.insertCollateralTxIn
     $ DB.CollateralTxIn
@@ -485,7 +485,7 @@ insertReferenceTxIn syncEnv _tracer txInId txIn = do
   etxOutId <- queryTxIdWithCache syncEnv (txInTxId txIn)
   txOutId <- case etxOutId of
     Right txId -> pure txId
-    Left err -> throwError err
+    Left err -> liftIO $ throwIO err
 
   void
     . DB.insertReferenceTxIn
