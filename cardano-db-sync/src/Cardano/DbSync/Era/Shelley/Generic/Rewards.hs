@@ -9,10 +9,9 @@ module Cardano.DbSync.Era.Shelley.Generic.Rewards (
   RewardRest (..),
   RewardRests (..),
   rewardsCount,
-  rewardsTotalAda,
 ) where
 
-import Cardano.Db (Ada, RewardSource (..), word64ToAda)
+import Cardano.Db (RewardSource (..))
 import Cardano.DbSync.Types
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Prelude
@@ -45,11 +44,3 @@ newtype RewardRests = RewardRests
 
 rewardsCount :: Rewards -> Int
 rewardsCount = sum . map Set.size . Map.elems . unRewards
-
-rewardsTotalAda :: Rewards -> Ada
-rewardsTotalAda rwds =
-  word64ToAda
-    . fromIntegral
-    . sum
-    . concatMap (map (unCoin . rewardAmount) . Set.toList)
-    $ Map.elems (unRewards rwds)

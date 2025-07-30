@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -5,6 +6,9 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Redundant pure" #-}
 
 module Cardano.DbSync.OffChain (
   insertOffChainPoolResults,
@@ -18,7 +22,6 @@ module Cardano.DbSync.OffChain (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Db (runIohkLogging)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
@@ -34,12 +37,12 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   isEmptyTBQueue,
   writeTBQueue,
  )
-import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
-import Database.Persist.Postgresql (withPostgresqlConn)
-import Database.Persist.Sql (SqlBackend)
+import GHC.IO.Exception (userError)
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Pipeline as HsqlP
+import qualified Hasql.Session as HsqlSes
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 
@@ -49,14 +52,14 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 data LoadOffChainWorkQueue a m = LoadOffChainWorkQueue
   { lQueue :: StrictTBQueue IO a
   , lRetryTime :: a -> Retry
-  , lGetData :: MonadIO m => POSIXTime -> Int -> ReaderT SqlBackend m [a]
+  , lGetData :: MonadIO m => POSIXTime -> Int -> DB.DbAction m [a]
   }
 
 loadOffChainPoolWorkQueue ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   StrictTBQueue IO OffChainPoolWorkQueue ->
-  ReaderT SqlBackend m ()
+  DB.DbAction m ()
 loadOffChainPoolWorkQueue trce workQueue =
   loadOffChainWorkQueue
     trce
@@ -67,10 +70,10 @@ loadOffChainPoolWorkQueue trce workQueue =
       }
 
 loadOffChainVoteWorkQueue ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   StrictTBQueue IO OffChainVoteWorkQueue ->
-  ReaderT SqlBackend m ()
+  DB.DbAction m ()
 loadOffChainVoteWorkQueue trce workQueue =
   loadOffChainWorkQueue
     trce
@@ -82,10 +85,10 @@ loadOffChainVoteWorkQueue trce workQueue =
 
 loadOffChainWorkQueue ::
   forall a m.
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   LoadOffChainWorkQueue a m ->
-  ReaderT SqlBackend m ()
+  DB.DbAction m ()
 loadOffChainWorkQueue _trce offChainWorkQueue = do
   whenM (liftIO $ atomically (isEmptyTBQueue (lQueue offChainWorkQueue))) $ do
     now <- liftIO Time.getPOSIXTime
@@ -102,10 +105,10 @@ loadOffChainWorkQueue _trce offChainWorkQueue = do
 -- Insert OffChain
 ---------------------------------------------------------------------------------------------------------------------------------
 insertOffChainPoolResults ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   StrictTBQueue IO OffChainPoolResult ->
-  ReaderT SqlBackend m ()
+  DB.DbAction m ()
 insertOffChainPoolResults trce resultQueue = do
   res <- liftIO . atomically $ flushTBQueue resultQueue
   unless (null res) $ do
@@ -115,7 +118,7 @@ insertOffChainPoolResults trce resultQueue = do
       logInsertOffChainResults "Pool" resLength resErrorsLength
   mapM_ insert res
   where
-    insert :: (MonadBaseControl IO m, MonadIO m) => OffChainPoolResult -> ReaderT SqlBackend m ()
+    insert :: MonadIO m => OffChainPoolResult -> DB.DbAction m ()
     insert = \case
       OffChainPoolResultMetadata md -> void $ DB.insertCheckOffChainPoolData md
       OffChainPoolResultError fe -> void $ DB.insertCheckOffChainPoolFetchError fe
@@ -126,37 +129,85 @@ insertOffChainPoolResults trce resultQueue = do
       OffChainPoolResultError {} -> True
 
 insertOffChainVoteResults ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  MonadIO m =>
   Trace IO Text ->
   StrictTBQueue IO OffChainVoteResult ->
-  ReaderT SqlBackend m ()
+  DB.DbAction m ()
 insertOffChainVoteResults trce resultQueue = do
-  res <- liftIO . atomically $ flushTBQueue resultQueue
-  unless (null res) $ do
-    let resLength = length res
-        resErrorsLength = length $ filter isFetchError res
+  results <- liftIO . atomically $ flushTBQueue resultQueue
+  unless (null results) $ do
+    let resLength = length results
+        resErrorsLength = length $ filter isFetchError results
     liftIO . logInfo trce $
       logInsertOffChainResults "Voting Anchor" resLength resErrorsLength
-  mapM_ insert res
+  -- Process using a pipeline approach
+  processResultsBatched results
   where
-    insert :: (MonadBaseControl IO m, MonadIO m) => OffChainVoteResult -> ReaderT SqlBackend m ()
-    insert = \case
-      OffChainVoteResultMetadata md accessors -> do
-        mocvdId <- DB.insertOffChainVoteData md
-        whenJust mocvdId $ \ocvdId -> do
-          whenJust (offChainVoteGovAction accessors ocvdId) $ \ocvga ->
-            void $ DB.insertOffChainVoteGovActionData ocvga
-          whenJust (offChainVoteDrep accessors ocvdId) $ \ocvdr ->
-            void $ DB.insertOffChainVoteDrepData ocvdr
-          DB.insertOffChainVoteAuthors $ offChainVoteAuthors accessors ocvdId
-          DB.insertOffChainVoteReference $ offChainVoteReferences accessors ocvdId
-          DB.insertOffChainVoteExternalUpdate $ offChainVoteExternalUpdates accessors ocvdId
-      OffChainVoteResultError fe -> void $ DB.insertOffChainVoteFetchError fe
-
     isFetchError :: OffChainVoteResult -> Bool
     isFetchError = \case
       OffChainVoteResultMetadata {} -> False
       OffChainVoteResultError {} -> True
+
+    processResultsBatched :: MonadIO m => [OffChainVoteResult] -> DB.DbAction m ()
+    processResultsBatched results = do
+      -- Split by type
+      let errors = [e | OffChainVoteResultError e <- results]
+          metadataWithAccessors = [(md, acc) | OffChainVoteResultMetadata md acc <- results]
+      -- Process errors in bulk if any
+      unless (null errors) $
+        insertBulkOffChainVoteFetchErrors errors
+      -- Process metadata in a pipeline if any
+      unless (null metadataWithAccessors) $ do
+        -- First insert all metadata and collect the IDs
+        metadataIds <- insertMetadataWithIds metadataWithAccessors
+        -- Now prepare all the related data for bulk inserts
+        let allGovActions = catMaybes [offChainVoteGovAction acc id | (_, acc, id) <- metadataIds]
+            allDrepData = catMaybes [offChainVoteDrep acc id | (_, acc, id) <- metadataIds]
+            allAuthors = concatMap (\(_, acc, id) -> offChainVoteAuthors acc id) metadataIds
+            allReferences = concatMap (\(_, acc, id) -> offChainVoteReferences acc id) metadataIds
+            allExternalUpdates = concatMap (\(_, acc, id) -> offChainVoteExternalUpdates acc id) metadataIds
+        -- Execute all bulk inserts in a pipeline
+        DB.runDbSessionMain (DB.mkDbCallStack "insertRelatedDataPipeline") $
+          HsqlSes.pipeline $ do
+            -- Insert all related data in one pipeline
+            unless (null allGovActions) $
+              void $
+                HsqlP.statement allGovActions DB.insertBulkOffChainVoteGovActionDataStmt
+            unless (null allDrepData) $
+              void $
+                HsqlP.statement allDrepData DB.insertBulkOffChainVoteDrepDataStmt
+            unless (null allAuthors) $
+              void $
+                HsqlP.statement allAuthors DB.insertBulkOffChainVoteAuthorsStmt
+            unless (null allReferences) $
+              void $
+                HsqlP.statement allReferences DB.insertBulkOffChainVoteReferencesStmt
+            unless (null allExternalUpdates) $
+              void $
+                HsqlP.statement allExternalUpdates DB.insertBulkOffChainVoteExternalUpdatesStmt
+            pure ()
+
+    -- Helper function to insert metadata and get back IDs
+    insertMetadataWithIds ::
+      MonadIO m =>
+      [(DB.OffChainVoteData, OffChainVoteAccessors)] ->
+      DB.DbAction m [(DB.OffChainVoteData, OffChainVoteAccessors, DB.OffChainVoteDataId)]
+    insertMetadataWithIds metadataWithAccessors = do
+      -- Extract just the metadata for insert
+      let metadata = map fst metadataWithAccessors
+      -- Insert and get IDs
+      ids <-
+        DB.runDbSessionMain (DB.mkDbCallStack "insertMetadataWithIds") $
+          HsqlSes.statement metadata DB.insertBulkOffChainVoteDataStmt
+
+      -- Return original data with IDs
+      pure $ zipWith (\(md, acc) id -> (md, acc, id)) metadataWithAccessors ids
+
+    -- Bulk insert for errors (you'll need to create this statement)
+    insertBulkOffChainVoteFetchErrors :: MonadIO m => [DB.OffChainVoteFetchError] -> DB.DbAction m ()
+    insertBulkOffChainVoteFetchErrors errors =
+      DB.runDbSessionMain (DB.mkDbCallStack "insertBulkOffChainVoteFetchErrors") $
+        HsqlSes.statement errors DB.insertBulkOffChainVoteFetchErrorStmt
 
 logInsertOffChainResults ::
   Text -> -- Pool of Vote
@@ -177,22 +228,38 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Run OffChain threads
 ---------------------------------------------------------------------------------------------------------------------------------
-runFetchOffChainPoolThread :: SyncEnv -> IO ()
-runFetchOffChainPoolThread syncEnv = do
-  -- if dissable gov is active then don't run voting anchor thread
+runFetchOffChainPoolThread :: SyncEnv -> SyncNodeConfig -> IO ()
+runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
+  -- if disable gov is active then don't run voting anchor thread
   when (ioOffChainPoolData iopts) $ do
     logInfo trce "Running Offchain Pool fetch thread"
-    runIohkLogging trce $
-      withPostgresqlConn (envConnectionString syncEnv) $
-        \backendPool -> liftIO $
-          forever $ do
-            tDelay
-            -- load the offChain vote work queue using the db
-            _ <- runReaderT (loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue syncEnv)) backendPool
-            poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue syncEnv)
-            manager <- Http.newManager tlsManagerSettings
-            now <- liftIO Time.getPOSIXTime
-            mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
+    pgconfig <- DB.runOrThrowIO (DB.readPGPass DB.PGPassDefaultEnv)
+    connSetting <- case DB.toConnectionSetting pgconfig of
+      Left err -> throwIO $ userError err
+      Right setting -> pure setting
+
+    DB.withManagedPool [connSetting] 4 $ \pool ->
+      bracket
+        (DB.acquireConnection [connSetting])
+        HsqlC.release
+        ( \dbConn -> do
+            let dbEnv =
+                  if dncEnableDbLogging syncNodeConfigFromFile
+                    then DB.createDbEnv dbConn pool (Just trce)
+                    else DB.createDbEnv dbConn pool Nothing
+                -- Create a new SyncEnv with the new DbEnv but preserving all other fields
+                threadSyncEnv = syncEnv {envDbEnv = dbEnv}
+            forever $ do
+              tDelay
+              -- load the offChain vote work queue using the db
+              _ <-
+                DB.runDbIohkLoggingEither trce dbEnv $
+                  loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
+              poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
+              manager <- Http.newManager tlsManagerSettings
+              now <- liftIO Time.getPOSIXTime
+              mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
+        )
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
@@ -200,21 +267,38 @@ runFetchOffChainPoolThread syncEnv = do
     queuePoolInsert :: OffChainPoolResult -> IO ()
     queuePoolInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
 
-runFetchOffChainVoteThread :: SyncEnv -> IO ()
-runFetchOffChainVoteThread syncEnv = do
-  -- if dissable gov is active then don't run voting anchor thread
+runFetchOffChainVoteThread :: SyncEnv -> SyncNodeConfig -> IO ()
+runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
+  -- if disable gov is active then don't run voting anchor thread
   when (ioGov iopts) $ do
     logInfo trce "Running Offchain Vote Anchor fetch thread"
-    runIohkLogging trce $
-      withPostgresqlConn (envConnectionString syncEnv) $
-        \backendVote -> liftIO $
-          forever $ do
-            tDelay
-            -- load the offChain vote work queue using the db
-            _ <- runReaderT (loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue syncEnv)) backendVote
-            voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue syncEnv)
-            now <- liftIO Time.getPOSIXTime
-            mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
+    pgconfig <- DB.runOrThrowIO (DB.readPGPass DB.PGPassDefaultEnv)
+    connSetting <- case DB.toConnectionSetting pgconfig of
+      Left err -> throwIO $ userError err
+      Right setting -> pure setting
+
+    DB.withManagedPool [connSetting] 4 $ \pool ->
+      bracket
+        (DB.acquireConnection [connSetting])
+        HsqlC.release
+        ( \dbConn -> do
+            let dbEnv =
+                  if dncEnableDbLogging syncNodeConfigFromFile
+                    then DB.createDbEnv dbConn pool (Just trce)
+                    else DB.createDbEnv dbConn pool Nothing
+                -- Create a new SyncEnv with the new DbEnv but preserving all other fields
+                threadSyncEnv = syncEnv {envDbEnv = dbEnv}
+            -- Use the thread-specific SyncEnv for all operations
+            forever $ do
+              tDelay
+              -- load the offChain vote work queue using the db
+              _ <-
+                DB.runDbIohkLoggingEither trce dbEnv $
+                  loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
+              voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
+              now <- liftIO Time.getPOSIXTime
+              mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
+        )
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv

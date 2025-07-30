@@ -127,6 +127,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncProtocol :: !SyncProtocol
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
   , dncEnableLogging :: !Bool
+  , dncEnableDbLogging :: !Bool
   , dncEnableMetrics :: !Bool
   , dncPrometheusPort :: !Int
   , dncPBftSignatureThreshold :: !(Maybe Double)
@@ -155,6 +156,7 @@ data SyncPreConfig = SyncPreConfig
   , pcNodeConfigFile :: !NodeConfigFile
   , pcEnableFutureGenesis :: !Bool
   , pcEnableLogging :: !Bool
+  , pcEnableDbLogging :: !Bool
   , pcEnableMetrics :: !Bool
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
@@ -388,7 +390,7 @@ isPlutusEnabled PlutusDisable = False
 isPlutusEnabled PlutusEnable = True
 isPlutusEnabled (PlutusScripts _) = True
 
--- -------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 
 instance FromJSON SyncPreConfig where
   parseJSON =
@@ -402,6 +404,7 @@ parseGenSyncNodeConfig o =
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> fmap (fromMaybe True) (o .:? "EnableFutureGenesis")
     <*> o .: "EnableLogging"
+    <*> fmap (fromMaybe False) (o .:? "EnableDbLogging")
     <*> o .: "EnableLogMetrics"
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
     <*> o .:? "insert_options" .!= def

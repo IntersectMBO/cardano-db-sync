@@ -5,6 +5,8 @@
 
 #if __GLASGOW_HASKELL__ >= 908
 {-# OPTIONS_GHC -Wno-x-partial #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use zipWith" #-}
 #endif
 
 module Cardano.Mock.Forging.Tx.Conway.Scenarios (

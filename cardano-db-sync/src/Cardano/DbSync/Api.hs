@@ -12,12 +12,11 @@ module Cardano.DbSync.Api (
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
-  getIsConsumedFixed,
   getDisableInOutState,
   getRanIndexes,
-  runIndexMigrations,
+  runNearTipMigrations,
   initPruneConsumeMigration,
-  runExtraMigrationsMaybe,
+  runConsumedTxOutMigrationsMaybe,
   runAddJsonbToSchema,
   runRemoveJsonbFromSchema,
   getSafeBlockNoDiff,
@@ -44,17 +43,43 @@ module Cardano.DbSync.Api (
   generateNewEpochEvents,
   logDbState,
   convertToPoint,
-) where
+)
+where
+
+import Control.Concurrent.Class.MonadSTM.Strict (
+  newTBQueueIO,
+  newTVarIO,
+  readTVar,
+  readTVarIO,
+  writeTVar,
+ )
+import Control.Monad.Trans.Maybe (MaybeT (..))
+import qualified Data.Strict.Maybe as Strict
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
+import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
+import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
+import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
+import Ouroboros.Network.Block (BlockNo (..), Point (..))
+import Ouroboros.Network.Magic (NetworkMagic (..))
+import qualified Ouroboros.Network.Point as Point
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache.Types (CacheCapacity (..), newEmptyCache, useNoCache)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Era.Cardano.Util (initEpochStatistics)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Ledger.State (
@@ -67,32 +92,6 @@ import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), Sna
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.DbSync.Util.Constraint (dbConstraintNamesExists)
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import qualified Cardano.Ledger.Shelley.Genesis as Shelley
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
-import Control.Concurrent.Class.MonadSTM.Strict (
-  newTBQueueIO,
-  newTVarIO,
-  readTVar,
-  readTVarIO,
-  writeTVar,
- )
-import Control.Monad.Trans.Maybe (MaybeT (..))
-import qualified Data.Strict.Maybe as Strict
-import Data.Time.Clock (getCurrentTime)
-import Database.Persist.Postgresql (ConnectionString)
-import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.Block.Abstract (BlockProtocol, HeaderHash, Point (..), fromRawHash)
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Config (SecurityParam (..), TopLevelConfig, configSecurityParam)
-import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo (pInfoConfig))
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Protocol.Abstract (ConsensusProtocol)
-import Ouroboros.Network.Block (BlockNo (..), Point (..))
-import Ouroboros.Network.Magic (NetworkMagic (..))
-import qualified Ouroboros.Network.Point as Point
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -108,17 +107,7 @@ isConsistent env = do
   cst <- getConsistentLevel env
   case cst of
     Consistent -> pure True
-    _ -> pure False
-
-getIsConsumedFixed :: SyncEnv -> IO (Maybe Word64)
-getIsConsumedFixed env =
-  case (DB.pcmPruneTxOut pcm, DB.pcmConsumedTxOut pcm) of
-    (False, True) -> Just <$> DB.runDbIohkNoLogging backend (DB.queryWrongConsumedBy txOutTableType)
-    _ -> pure Nothing
-  where
-    txOutTableType = getTxOutVariantType env
-    pcm = soptPruneConsumeMigration $ envOptions env
-    backend = envBackend env
+    _otherwise -> pure False
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
@@ -131,12 +120,12 @@ getRanIndexes :: SyncEnv -> IO Bool
 getRanIndexes env = do
   readTVarIO $ envIndexes env
 
-runIndexMigrations :: SyncEnv -> IO ()
-runIndexMigrations env = do
+runNearTipMigrations :: SyncEnv -> IO ()
+runNearTipMigrations env = do
   haveRan <- readTVarIO $ envIndexes env
   unless haveRan $ do
-    envRunDelayedMigration env DB.Indexes
-    logInfo (getTrace env) "Indexes were created"
+    envRunNearTipMigration env DB.NearTip
+    logInfo (getTrace env) "NearTip migrations were ran successfully."
     atomically $ writeTVar (envIndexes env) True
 
 initPruneConsumeMigration :: Bool -> Bool -> Bool -> Bool -> DB.PruneConsumeMigration
@@ -150,25 +139,26 @@ initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
 getPruneConsume = soptPruneConsumeMigration . envOptions
 
-runExtraMigrationsMaybe :: SyncEnv -> IO ()
-runExtraMigrationsMaybe syncEnv = do
+runConsumedTxOutMigrationsMaybe :: SyncEnv -> IO ()
+runConsumedTxOutMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
-      txOutTableType = getTxOutVariantType syncEnv
-  logInfo (getTrace syncEnv) $ "runExtraMigrationsMaybe: " <> textShow pcm
-  DB.runDbIohkNoLogging (envBackend syncEnv) $
-    DB.runExtraMigrations
+      txOutVariantType = getTxOutVariantType syncEnv
+  logInfo (getTrace syncEnv) $ "runConsumedTxOutMigrationsMaybe: " <> textShow pcm
+  DB.runDbIohkNoLogging (envDbEnv syncEnv) $
+    DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
-      txOutTableType
+      maxBulkSize
+      txOutVariantType
       (getSafeBlockNoDiff syncEnv)
       pcm
 
 runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.enableJsonbInSchema
+  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
 
 runRemoveJsonbFromSchema :: SyncEnv -> IO ()
 runRemoveJsonbFromSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envBackend syncEnv) DB.disableJsonbInSchema
+  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.disableJsonbInSchema
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -224,7 +214,7 @@ generateNewEpochEvents env details = do
         Strict.Just oldEpoch
           | currentEpochNo == EpochNo (1 + unEpochNo oldEpoch) ->
               Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
-        _ -> Nothing
+        _otherwise -> Nothing
 
     newCurrentEpochNo :: CurrentEpochNo
     newCurrentEpochNo =
@@ -253,7 +243,7 @@ getNetwork sEnv =
 getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
-getSlotHash :: SqlBackend -> SlotNo -> IO [(SlotNo, ByteString)]
+getSlotHash :: DB.DbEnv -> SlotNo -> IO [(SlotNo, ByteString)]
 getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
 
 hasLedgerState :: SyncEnv -> Bool
@@ -262,10 +252,10 @@ hasLedgerState syncEnv =
     HasLedger _ -> True
     NoLedger _ -> False
 
-getDbLatestBlockInfo :: SqlBackend -> IO (Maybe TipInfo)
-getDbLatestBlockInfo backend = do
+getDbLatestBlockInfo :: DB.DbEnv -> IO (Maybe TipInfo)
+getDbLatestBlockInfo dbEnv = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbIohkNoLogging backend DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbIohkNoLogging dbEnv DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $
@@ -278,12 +268,12 @@ getDbLatestBlockInfo backend = do
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  mblk <- getDbLatestBlockInfo (envBackend env)
+  mblk <- getDbLatestBlockInfo (envDbEnv env)
   case mblk of
     Nothing -> logInfo tracer "Database is empty"
     Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
@@ -302,99 +292,14 @@ logDbState env = do
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envBackend env)
+  maybeTip <- getDbLatestBlockInfo (envDbEnv env)
   case maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
-mkSyncEnv ::
-  Trace IO Text ->
-  SqlBackend ->
-  ConnectionString ->
-  SyncOptions ->
-  ProtocolInfo CardanoBlock ->
-  Ledger.Network ->
-  NetworkMagic ->
-  SystemStart ->
-  SyncNodeConfig ->
-  SyncNodeParams ->
-  RunMigration ->
-  IO SyncEnv
-mkSyncEnv trce backend connectionString syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runMigrationFnc = do
-  dbCNamesVar <- newTVarIO =<< dbConstraintNamesExists backend
-  cache <-
-    if soptCache syncOptions
-      then
-        newEmptyCache
-          CacheCapacity
-            { cacheCapacityAddress = 100000
-            , cacheCapacityStake = 100000
-            , cacheCapacityDatum = 250000
-            , cacheCapacityMultiAsset = 250000
-            , cacheCapacityTx = 100000
-            }
-      else pure useNoCache
-  consistentLevelVar <- newTVarIO Unchecked
-  indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) backend
-  bootstrapVar <- newTVarIO bts
-  -- Offline Pool + Anchor queues
-  opwq <- newTBQueueIO 1000
-  oprq <- newTBQueueIO 1000
-  oawq <- newTBQueueIO 1000
-  oarq <- newTBQueueIO 1000
-  epochVar <- newTVarIO initCurrentEpochNo
-  epochSyncTime <- newTVarIO =<< getCurrentTime
-  ledgerEnvType <-
-    case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
-      (Just dir, True) ->
-        HasLedger
-          <$> mkHasLedgerEnv
-            trce
-            protoInfo
-            dir
-            nw
-            systemStart
-            syncOptions
-      (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
-      (Just _, False) -> do
-        logWarning trce $
-          "Disabling the ledger doesn't require having a --state-dir."
-            <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
-        NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
-      -- This won't ever call because we error out this combination at parse time
-      (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
-
-  pure $
-    SyncEnv
-      { envBackend = backend
-      , envBootstrap = bootstrapVar
-      , envCache = cache
-      , envConnectionString = connectionString
-      , envConsistentLevel = consistentLevelVar
-      , envDbConstraints = dbCNamesVar
-      , envCurrentEpochNo = epochVar
-      , envEpochSyncTime = epochSyncTime
-      , envIndexes = indexesVar
-      , envLedgerEnv = ledgerEnvType
-      , envNetworkMagic = nwMagic
-      , envOffChainPoolResultQueue = oprq
-      , envOffChainPoolWorkQueue = opwq
-      , envOffChainVoteResultQueue = oarq
-      , envOffChainVoteWorkQueue = oawq
-      , envOptions = syncOptions
-      , envRunDelayedMigration = runMigrationFnc
-      , envSyncNodeConfig = syncNodeConfigFromFile
-      , envSystemStart = systemStart
-      }
-  where
-    hasLedger' = hasLedger . sioLedger . dncInsertOptions
-    isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
-
 mkSyncEnvFromConfig ::
   Trace IO Text ->
-  SqlBackend ->
-  ConnectionString ->
+  DB.DbEnv ->
   SyncOptions ->
   GenesisConfig ->
   SyncNodeConfig ->
@@ -402,7 +307,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeConfigFromFile syncNodeParams runMigrationFnc =
+mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -429,8 +334,7 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
           Right
             <$> mkSyncEnv
               trce
-              backend
-              connectionString
+              dbEnv
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
@@ -438,7 +342,89 @@ mkSyncEnvFromConfig trce backend connectionString syncOptions genCfg syncNodeCon
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
               syncNodeConfigFromFile
               syncNodeParams
-              runMigrationFnc
+              runNearTipMigrationFnc
+
+mkSyncEnv ::
+  Trace IO Text ->
+  DB.DbEnv ->
+  SyncOptions ->
+  ProtocolInfo CardanoBlock ->
+  Ledger.Network ->
+  NetworkMagic ->
+  SystemStart ->
+  SyncNodeConfig ->
+  SyncNodeParams ->
+  RunMigration ->
+  IO SyncEnv
+mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
+  dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
+  cache <-
+    if soptCache syncOptions
+      then
+        newEmptyCache
+          CacheCapacity
+            { cacheCapacityAddress = 100000
+            , cacheCapacityStake = 100000
+            , cacheCapacityDatum = 250000
+            , cacheCapacityMultiAsset = 250000
+            , cacheCapacityTx = 100000
+            }
+      else pure useNoCache
+  consistentLevelVar <- newTVarIO Unchecked
+  indexesVar <- newTVarIO $ enpForceIndexes syncNP
+  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) dbEnv
+  bootstrapVar <- newTVarIO bts
+  -- Offline Pool + Anchor queues
+  opwq <- newTBQueueIO 1000
+  oprq <- newTBQueueIO 1000
+  oawq <- newTBQueueIO 1000
+  oarq <- newTBQueueIO 1000
+  epochVar <- newTVarIO initCurrentEpochNo
+  epochStatistics <- initEpochStatistics
+  ledgerEnvType <-
+    case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
+      (Just dir, True) ->
+        HasLedger
+          <$> mkHasLedgerEnv
+            trce
+            protoInfo
+            dir
+            nw
+            systemStart
+            syncOptions
+      (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+      (Just _, False) -> do
+        logWarning trce $
+          "Disabling the ledger doesn't require having a --state-dir."
+            <> " For more details view https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md#ledger"
+        NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+      -- This won't ever call because we error out this combination at parse time
+      (Nothing, True) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
+
+  pure $
+    SyncEnv
+      { envDbEnv = dbEnv
+      , envBootstrap = bootstrapVar
+      , envCache = cache
+      , envEpochStatistics = epochStatistics
+      , envConsistentLevel = consistentLevelVar
+      , envDbConstraints = dbCNamesVar
+      , envCurrentEpochNo = epochVar
+      , envIndexes = indexesVar
+      , envLedgerEnv = ledgerEnvType
+      , envNetworkMagic = nwMagic
+      , envOffChainPoolResultQueue = oprq
+      , envOffChainPoolWorkQueue = opwq
+      , envOffChainVoteResultQueue = oarq
+      , envOffChainVoteWorkQueue = oawq
+      , envOptions = syncOptions
+      , envRunNearTipMigration = runNearTipMigrationFnc
+      , envSyncNodeConfig = syncNodeConfigFromFile
+      , envSystemStart = systemStart
+      }
+  where
+    hasLedger' = hasLedger . sioLedger . dncInsertOptions
+    isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]
@@ -449,7 +435,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envBackend env) DB.queryLatestPoints
+      lastPoints <- DB.runDbIohkNoLogging (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -461,20 +447,20 @@ verifySnapshotPoint env snapPoints =
   where
     validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
     validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envBackend env) (lsfSlotNo lsf)
+      hashes <- getSlotHash (envDbEnv env) (lsfSlotNo lsf)
       let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
       case valid of
         Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
-        _ -> pure Nothing
+        _otherwise -> pure Nothing
     validLedgerFileToPoint (InMemory pnt) = do
       case pnt of
         GenesisPoint -> pure Nothing
         BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envBackend env) slotNo
+          hashes <- getSlotHash (envDbEnv env) slotNo
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
-            _ -> pure Nothing
+            _otherwise -> pure Nothing
 
 convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
 convertToDiskPoint slot hashBlob = (,False) <$> convertToPoint slot hashBlob
@@ -501,10 +487,10 @@ getMaxRollbacks = Ledger.unNonZero . maxRollbacks . configSecurityParam . pInfoC
 getBootstrapInProgress ::
   Trace IO Text ->
   Bool ->
-  SqlBackend ->
+  DB.DbEnv ->
   IO Bool
-getBootstrapInProgress trce bootstrapFlag sqlBackend = do
-  DB.runDbIohkNoLogging sqlBackend $ do
+getBootstrapInProgress trce bootstrapFlag dbEnv = do
+  DB.runDbIohkNoLogging dbEnv $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems
     case (bootstrapFlag, btsState) of

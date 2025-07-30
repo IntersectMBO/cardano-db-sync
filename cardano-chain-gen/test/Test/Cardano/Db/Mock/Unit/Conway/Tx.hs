@@ -16,13 +16,12 @@ module Test.Cardano.Db.Mock.Unit.Conway.Tx (
   addTxMetadataWhitelist,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
-import Cardano.Mock.Query (queryNullTxDepositExists, queryTxMetadataCount)
-import qualified Cardano.Mock.Query as Query
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Test.Cardano.Db.Mock.Config
@@ -44,7 +43,7 @@ addSimpleTx =
     assertBlockNoBackoff dbSync 1
     assertTxCount dbSync 12
     -- When ledger is enabled, tx.deposits should not be null
-    assertEqQuery dbSync queryNullTxDepositExists False "Unexpected null tx deposits"
+    assertEqQuery dbSync DB.queryNullTxDepositExists False "Unexpected null tx deposits"
   where
     testLabel = "conwayAddSimpleTx"
 
@@ -76,7 +75,7 @@ addSimpleTxNoLedger = do
     assertBlockNoBackoff dbSync 1
     assertTxCount dbSync 12
     -- When ledger is disabled, tx.deposits should be null
-    assertEqQuery dbSync queryNullTxDepositExists True "Unexpected null tx deposits"
+    assertEqQuery dbSync DB.queryNullTxDepositExists True "Unexpected null tx deposits"
   where
     args =
       initCommandLineArgs
@@ -97,7 +96,7 @@ addTxTreasuryDonation =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 1
     -- Should have a treasury donation
-    assertEqQuery dbSync Query.queryTreasuryDonations 1_000 "Unexpected treasury donations"
+    assertEqQuery dbSync DB.queryTreasuryDonations 1_000 "Unexpected treasury donations"
 
     assertTxCount dbSync 12
   where
@@ -137,7 +136,7 @@ addTxMetadata = do
       -- Wait for it to sync
       assertBlockNoBackoff dbSync 1
       -- Should have tx metadata
-      assertEqBackoff dbSync queryTxMetadataCount 2 [] "Expected tx metadata"
+      assertEqBackoff dbSync DB.queryTxMetadataCount 2 [] "Expected tx metadata"
   where
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayConfigMetadataEnabled"
@@ -158,7 +157,7 @@ addTxMetadataWhitelist = do
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 1
     -- Should have tx metadata
-    assertEqBackoff dbSync queryTxMetadataCount 1 [] "Expected tx metadata"
+    assertEqBackoff dbSync DB.queryTxMetadataCount 1 [] "Expected tx metadata"
   where
     args =
       initCommandLineArgs
@@ -182,7 +181,7 @@ addTxMetadataDisabled = do
       -- Wait for it to sync
       assertBlockNoBackoff dbSync 1
       -- Should have tx metadata
-      assertEqBackoff dbSync queryTxMetadataCount 0 [] "Expected tx metadata"
+      assertEqBackoff dbSync DB.queryTxMetadataCount 0 [] "Expected tx metadata"
   where
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayConfigMetadataDisabled"

@@ -32,7 +32,6 @@ module Cardano.DbSync.Ledger.State (
   getHeaderHash,
   runLedgerStateWriteThread,
   getStakeSlice,
-  getSliceMeta,
   findProposedCommittee,
 ) where
 
@@ -315,10 +314,6 @@ getStakeSlice env cls isMigration =
         (clsState cls)
         isMigration
     _ -> Generic.NoSlices
-
-getSliceMeta :: Generic.StakeSliceRes -> Maybe (Bool, EpochNo)
-getSliceMeta (Generic.Slice (Generic.StakeSlice epochNo _) isFinal) = Just (isFinal, epochNo)
-getSliceMeta _ = Nothing
 
 storeSnapshotAndCleanupMaybe ::
   HasLedgerEnv ->
@@ -693,7 +688,7 @@ listKnownSnapshots :: HasLedgerEnv -> IO [SnapshotPoint]
 listKnownSnapshots env = do
   inMem <- fmap InMemory <$> listMemorySnapshots env
   onDisk <- fmap OnDisk <$> listLedgerStateFilesOrdered (leDir env)
-  pure $ List.sortOn (Down . getSlotNoSnapshot) (inMem <> onDisk)
+  pure $ List.sortOn (Down . getSlotNoSnapshot) $ inMem <> onDisk
 
 listMemorySnapshots :: HasLedgerEnv -> IO [CardanoPoint]
 listMemorySnapshots env = do

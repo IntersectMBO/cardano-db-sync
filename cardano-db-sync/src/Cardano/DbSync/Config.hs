@@ -15,7 +15,6 @@ module Cardano.DbSync.Config (
   SyncProtocol (..),
   SyncNodeConfig (..),
   SyncNodeParams (..),
-  cardanoLedgerConfig,
   genesisProtocolMagicId,
   readCardanoGenesisConfig,
   readSyncNodeConfig,
@@ -67,6 +66,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncProtocol = ncProtocol ncfg
       , dncRequiresNetworkMagic = ncRequiresNetworkMagic ncfg
       , dncEnableLogging = pcEnableLogging pcfg
+      , dncEnableDbLogging = pcEnableDbLogging pcfg
       , dncEnableMetrics = pcEnableMetrics pcfg
       , dncPrometheusPort = pcPrometheusPort pcfg
       , dncPBftSignatureThreshold = ncPBftSignatureThreshold ncfg

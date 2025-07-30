@@ -8,8 +8,6 @@ module Cardano.DbSync.Cache.LRU (
   optimise,
   trim,
   insert,
-  fromList,
-  delete,
   lookup,
   getSize,
   getCapacity,
@@ -75,14 +73,6 @@ insert k v cache =
       }
   where
     (_mbOldVal, queue) = OrdPSQ.insertView k (cTick cache) v (cQueue cache) -- Insert the new entry
-
--- fromList inserts into a cache from a list of key-value pairs.
-fromList :: Ord k => [(k, v)] -> LRUCache k v -> LRUCache k v
-fromList kvs cache = foldl' (\c (k, v) -> insert k v c) cache kvs
-
-delete :: Ord k => k -> LRUCache k v -> LRUCache k v
-delete key cache =
-  cache {cQueue = OrdPSQ.delete key (cQueue cache)}
 
 -- lookup retrieves a value from the cache by its key, updating the access order.
 -- It returns the value and the updated cache.

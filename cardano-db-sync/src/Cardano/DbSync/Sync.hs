@@ -18,7 +18,6 @@ module Cardano.DbSync.Sync (
   NetworkName (..),
   SocketPath (..),
   MetricSetters (..),
-  nullMetricSetters,
   SyncEnv (..),
   configureLogging,
   runSyncNodeClient,
@@ -31,8 +30,7 @@ import Cardano.Client.Subscription (Decision (..), MuxTrace, SubscriptionParams 
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
-import Cardano.DbSync.Database
-import Cardano.DbSync.DbAction
+import Cardano.DbSync.DbEvent
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
@@ -219,7 +217,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
               ( chainSyncClientPeerPipelined $
                   chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
               )
-          atomically $ writeDbActionQueue tc DbFinish
+          atomically $ writeDbEventQueue tc DbFinish
           -- We should return leftover bytes returned by 'runPipelinedPeer', but
           -- client application do not care about them (it's only important if one
           -- would like to restart a protocol on the same mux and thus bearer).
@@ -350,8 +348,8 @@ chainSyncClient metricsSetters trce latestPoints currentTip tc = do
               setNodeBlockHeight metricsSetters (getTipBlockNo tip)
 
               newSize <- atomically $ do
-                writeDbActionQueue tc $ mkDbApply blk
-                lengthDbActionQueue tc
+                writeDbEventQueue tc $ mkDbApply blk
+                lengthDbEventQueue tc
 
               setDbQueueLength metricsSetters newSize
 
