@@ -16,7 +16,7 @@ import Cardano.Db (
   getMigrationScripts,
   querySchemaVersion,
   readPGPassDefault,
-  runDbNoLoggingEnv,
+  runDbStandaloneSilent,
   runMigrations,
   runOrThrowIODb,
   validateMigrations,
@@ -25,7 +25,6 @@ import qualified Cardano.Db as DB
 import Control.Monad (unless, when)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
@@ -135,7 +134,7 @@ migrationTest = do
   pgConfig <- runOrThrowIODb readPGPassDefault
   -- Recreate database to ensure clean state for migration testing
   DB.recreateDB (DB.PGPassCached pgConfig)
-  _ <- runMigrations pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial TxOutVariantAddress
+  _ <- runMigrations Nothing pgConfig True schemaDir (Just $ LogFileDir "/tmp") Initial TxOutVariantAddress
   expected <- readSchemaVersion schemaDir
   actual <- getDbSchemaVersion
   unless (expected == actual) $
@@ -167,9 +166,11 @@ migrationScriptNameTest = do
                 $ "Stage " ++ show (mvStage x) ++ " migration scripts do not have unique version numbers."
 
 getDbSchemaVersion :: IO SchemaVersion
-getDbSchemaVersion =
-  runDbNoLoggingEnv $
-    fromMaybe (error "getDbSchemaVersion: Nothing") <$> querySchemaVersion
+getDbSchemaVersion = do
+  result <- runDbStandaloneSilent querySchemaVersion
+  case result of
+    Nothing -> error "getDbSchemaVersion: Nothing"
+    Just version -> pure version
 
 readSchemaVersion :: MigrationDir -> IO SchemaVersion
 readSchemaVersion migrationDir = do

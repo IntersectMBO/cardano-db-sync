@@ -34,6 +34,7 @@ insertConfig = do
           , sioPoolStats = PoolStatsConfig False
           , sioJsonType = JsonTypeDisable
           , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+          , sioStopAtBlock = Nothing
           }
 
   dncInsertOptions cfg @?= expected

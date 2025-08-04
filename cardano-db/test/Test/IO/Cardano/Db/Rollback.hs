@@ -10,7 +10,6 @@ module Test.IO.Cardano.Db.Rollback (
 import Cardano.Db
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
-import Control.Monad.IO.Class (MonadIO)
 import Data.Maybe (fromJust)
 import Data.Word (Word64)
 import Test.IO.Cardano.Db.Util
@@ -26,7 +25,7 @@ tests =
 
 _rollbackTest :: IO ()
 _rollbackTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     -- Delete the blocks if they exist.
     deleteAllBlocks
     setupBlockCount <- queryBlockCount
@@ -57,7 +56,7 @@ _rollbackTest =
 
 -- -----------------------------------------------------------------------------
 
-queryWalkChain :: MonadIO m => Int -> Word64 -> DbAction m (Maybe Word64)
+queryWalkChain :: Int -> Word64 -> DbM (Maybe Word64)
 queryWalkChain count blkNo
   | count <= 0 = pure $ Just blkNo
   | otherwise = do
@@ -66,23 +65,21 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-createAndInsertBlocks :: MonadIO m => Word64 -> DbAction m ()
+createAndInsertBlocks :: Word64 -> DbM ()
 createAndInsertBlocks blockCount =
   void $ loop (0, Nothing, Nothing)
   where
     loop ::
-      MonadIO m =>
       (Word64, Maybe BlockId, Maybe TxId) ->
-      DbAction m (Word64, Maybe BlockId, Maybe TxId)
+      DbM (Word64, Maybe BlockId, Maybe TxId)
     loop (indx, mPrevId, mOutId) =
       if indx < blockCount
         then loop =<< createAndInsert (indx, mPrevId, mOutId)
         else pure (0, Nothing, Nothing)
 
     createAndInsert ::
-      MonadIO m =>
       (Word64, Maybe BlockId, Maybe TxId) ->
-      DbAction m (Word64, Maybe BlockId, Maybe TxId)
+      DbM (Word64, Maybe BlockId, Maybe TxId)
     createAndInsert (indx, mPrevId, mTxOutId) = do
       slid <- insertSlotLeader testSlotLeader
       let newBlock =
@@ -110,20 +107,21 @@ createAndInsertBlocks blockCount =
           then pure mTxOutId
           else do
             txId <-
-              insertTx $
-                Tx
-                  (mkTxHash blkId 0)
-                  blkId
-                  0
-                  (DbLovelace 0)
-                  (DbLovelace 0)
-                  (Just 0)
-                  12
-                  Nothing
-                  Nothing
-                  True
-                  0
-                  (DbLovelace 0)
+              ( insertTx $
+                  Tx
+                    (mkTxHash blkId 0)
+                    blkId
+                    0
+                    (DbLovelace 0)
+                    (DbLovelace 0)
+                    (Just 0)
+                    12
+                    Nothing
+                    Nothing
+                    True
+                    0
+                    (DbLovelace 0)
+              )
 
             void $ insertTxOut (mkTxOutCore blkId txId)
             pure $ Just txId

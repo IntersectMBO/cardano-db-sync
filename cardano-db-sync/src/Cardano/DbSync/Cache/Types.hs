@@ -73,7 +73,7 @@ data CacheAction
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cIsCacheOptimised :: !(StrictTVar IO Bool)
+  { cIsCacheCleanedForTip :: !(StrictTVar IO Bool)
   , cStake :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
@@ -82,6 +82,9 @@ data CacheInternal = CacheInternal
   , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString DB.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
+  -- Optimisation target sizes for Map-based caches
+  , cOptimisePools :: !Word64
+  , cOptimiseStake :: !Word64
   }
 
 data CacheStatistics = CacheStatistics
@@ -108,6 +111,9 @@ data CacheCapacity = CacheCapacity
   , cacheCapacityDatum :: !Word64
   , cacheCapacityMultiAsset :: !Word64
   , cacheCapacityTx :: !Word64
+  -- Optimisation target sizes for Map-based caches (used every 100k blocks)
+  , cacheOptimisePools :: !Word64
+  , cacheOptimiseStake :: !Word64
   }
 
 -- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
@@ -132,7 +138,7 @@ data CacheEpoch = CacheEpoch
 textShowCacheStats :: CacheStatistics -> CacheStatus -> IO Text
 textShowCacheStats _ NoCache = pure "No Caches"
 textShowCacheStats stats (ActiveCache ic) = do
-  isCacheOptimised <- readTVarIO $ cIsCacheOptimised ic
+  isCacheCleanedForTip <- readTVarIO $ cIsCacheCleanedForTip ic
   stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
   datums <- readTVarIO (cDatum ic)
@@ -142,7 +148,7 @@ textShowCacheStats stats (ActiveCache ic) = do
   pure $
     mconcat
       [ "\n\nEpoch Cache Statistics: "
-      , "\n  Caches Optimised: " <> textShow isCacheOptimised
+      , "\n  Caches Cleaned For Tip: " <> textShow isCacheCleanedForTip
       , textCacheSection "  Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
       , textMapSection "  Pools" pools (poolsHits stats) (poolsQueries stats)
       , textLruSection "  Datums" datums (datumHits stats) (datumQueries stats)
@@ -215,7 +221,7 @@ useNoCache = NoCache
 
 newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
 newEmptyCache CacheCapacity {..} = liftIO $ do
-  cIsCacheOptimised <- newTVarIO False
+  cIsCacheCleanedForTip <- newTVarIO False
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
   cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
@@ -227,7 +233,7 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
 
   pure . ActiveCache $
     CacheInternal
-      { cIsCacheOptimised = cIsCacheOptimised
+      { cIsCacheCleanedForTip = cIsCacheCleanedForTip
       , cStake = cStake
       , cPools = cPools
       , cDatum = cDatum
@@ -236,6 +242,8 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
       , cEpoch = cEpoch
       , cAddress = cAddress
       , cTxIds = cTxIds
+      , cOptimisePools = cacheOptimisePools
+      , cOptimiseStake = cacheOptimiseStake
       }
 
 initCacheStatistics :: CacheStatistics

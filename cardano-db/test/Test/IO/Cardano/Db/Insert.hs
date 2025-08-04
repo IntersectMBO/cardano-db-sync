@@ -27,7 +27,7 @@ tests =
 
 insertZeroTest :: IO ()
 insertZeroTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     -- Delete the blocks if they exist.
     slid <- insertSlotLeader testSlotLeader
@@ -41,7 +41,7 @@ insertZeroTest =
 
 insertFirstTest :: IO ()
 insertFirstTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     -- Delete the block if it exists.
     slid <- insertSlotLeader testSlotLeader
@@ -53,7 +53,7 @@ insertFirstTest =
 
 insertTwice :: IO ()
 insertTwice =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
     bid <- insertCheckUniqueBlock (blockZero slid)
@@ -70,13 +70,13 @@ insertTwice =
 insertForeignKeyMissing :: IO ()
 insertForeignKeyMissing = do
   time <- getCurrentTime
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
     bid <- insertCheckUniqueBlock (blockZero slid)
     txid <- insertTx (txZero bid)
     phid <- insertPoolHash poolHash0
-    pmrid <- insertPoolMetadataRef $ poolMetadataRef txid phid
+    pmrid <- insertPoolMetadataRef (poolMetadataRef txid phid)
 
     let fe = offChainPoolFetchError phid pmrid time
     insertCheckOffChainPoolFetchError fe

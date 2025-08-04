@@ -74,7 +74,6 @@ import Control.Concurrent.STM.TMVar (
 import Control.Exception (SomeException, bracket)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
-import Control.Monad.Logger (NoLoggingT)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
@@ -230,9 +229,9 @@ withDBSyncEnv mkEnv = bracket mkEnv stopDBSyncIfRunning
 getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
-queryDBSync :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
+queryDBSync :: DBSyncEnv -> DB.DbM a -> IO a
 queryDBSync env = do
-  DB.runWithConnectionNoLogging (getDBSyncPGPass env)
+  DB.runDbStandaloneTransSilent (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
@@ -385,6 +384,8 @@ emptyMetricsSetters =
     , metricsSetDbQueueLength = \_ -> pure ()
     , metricsSetDbBlockHeight = \_ -> pure ()
     , metricsSetDbSlotHeight = \_ -> pure ()
+    , metricsSetDbEpochSyncDuration = \_ -> pure ()
+    , metricsSetDbEpochSyncNumber = \_ -> pure ()
     }
 
 withFullConfig ::

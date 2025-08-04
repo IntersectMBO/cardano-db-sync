@@ -13,23 +13,22 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTxOutVariantType)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
 
-resolveStakeAddress :: MonadIO m => ByteString -> DB.DbAction m (Maybe DB.StakeAddressId)
-resolveStakeAddress = DB.queryStakeAddress
+resolveStakeAddress :: ByteString -> ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId)
+resolveStakeAddress = lift . DB.queryStakeAddress
 
 resolveInputTxOutIdValue ::
-  MonadIO m =>
   SyncEnv ->
   Generic.TxIn ->
-  DB.DbAction m (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
+  ExceptT SyncNodeError DB.DbM (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
 resolveInputTxOutIdValue syncEnv txIn =
-  DB.queryTxOutIdValueEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+  lift $ DB.queryTxOutIdValueEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
 queryResolveInputCredentials ::
-  MonadIO m =>
   SyncEnv ->
   Generic.TxIn ->
-  DB.DbAction m (Maybe ByteString)
+  ExceptT SyncNodeError DB.DbM (Maybe ByteString)
 queryResolveInputCredentials syncEnv txIn = do
-  DB.queryTxOutCredentials (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+  lift $ DB.queryTxOutCredentials (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))

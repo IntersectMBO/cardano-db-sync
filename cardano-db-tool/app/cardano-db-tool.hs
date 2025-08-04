@@ -54,15 +54,15 @@ runCommand cmd =
     CmdRollback slotNo txOutAddressType -> runRollback slotNo txOutAddressType
     CmdRunMigrations mdir forceIndexes mldir txOutTabletype -> do
       pgConfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
-      unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial txOutTabletype
+      unofficial <- snd <$> runMigrations Nothing pgConfig False mdir mldir Initial txOutTabletype
       unless (null unofficial) $
         putStrLn $
           "Unofficial migration scripts found: " ++ show unofficial
       when forceIndexes $
         void $
-          runMigrations pgConfig False mdir mldir NearTip txOutTabletype
+          runMigrations Nothing pgConfig False mdir mldir NearTip txOutTabletype
     CmdTxOutMigration txOutVariantType -> do
-      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
+      runDbStandaloneTransSilent PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType
@@ -78,7 +78,7 @@ runCreateMigration mdir txOutVariantType = do
 
 runRollback :: SlotNo -> TxOutVariantType -> IO ()
 runRollback slotNo txOutVariantType =
-  print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace txOutVariantType slotNo)
+  print =<< runDbStandaloneSilent (deleteBlocksSlotNoNoTrace txOutVariantType slotNo)
 
 runVersionCommand :: IO ()
 runVersionCommand = do

@@ -8,7 +8,6 @@ module Cardano.DbTool.Report.StakeReward.History (
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Cardano.Prelude (fromMaybe, textShow)
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.List as List
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -19,7 +18,7 @@ import Text.Printf (printf)
 
 reportStakeRewardHistory :: Text -> IO ()
 reportStakeRewardHistory saddr = do
-  xs <- DB.runDbNoLoggingEnv (queryHistoryStakeRewards saddr)
+  xs <- DB.runDbStandaloneSilent (queryHistoryStakeRewards saddr)
   if List.null xs
     then errorMsg
     else renderRewards saddr xs
@@ -48,16 +47,15 @@ data EpochReward = EpochReward
   , erPercent :: !Double
   }
 
-queryHistoryStakeRewards :: MonadIO m => Text -> DB.DbAction m [EpochReward]
+queryHistoryStakeRewards :: Text -> DB.DbM [EpochReward]
 queryHistoryStakeRewards address = do
   maxEpoch <- DB.queryLatestMemberRewardEpochNo
   delegations <- DB.queryDelegationHistory address maxEpoch
   mapM queryReward delegations
   where
     queryReward ::
-      MonadIO m =>
       (DB.StakeAddressId, Word64, UTCTime, DB.DbLovelace, DB.PoolHashId) ->
-      DB.DbAction m EpochReward
+      DB.DbM EpochReward
     queryReward (saId, en, date, DB.DbLovelace delegated, poolId) = do
       mReward <- DB.queryRewardForEpoch en saId
       mPoolTicker <- DB.queryPoolTicker poolId

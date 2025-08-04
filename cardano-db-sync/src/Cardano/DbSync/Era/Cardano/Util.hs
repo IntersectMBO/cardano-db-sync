@@ -9,39 +9,39 @@ module Cardano.DbSync.Era.Cardano.Util (
   unChainHash,
 ) where
 
+import Cardano.Prelude
+import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, newTVarIO, writeTVar)
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map as Map
 import Data.Time (getCurrentTime)
 import Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock as Time
-
-import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..))
 import Ouroboros.Consensus.Cardano.Block (CardanoBlock)
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Network.Block (ChainHash (..))
 
-import Cardano.Db (DbAction, SyncState)
-import qualified Cardano.Db as Db
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (initCacheStatistics)
+import Cardano.DbSync.Error (SyncNodeError)
 
 -- If `db-sync` is started in epoch `N`, the number of seconds to sync that epoch will be recorded
 -- as `Nothing`.
 insertEpochSyncTime ::
-  MonadIO m =>
   EpochNo ->
-  SyncState ->
+  DB.SyncState ->
   EpochStatistics ->
   UTCTime ->
-  DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertEpochSyncTime epochNo syncState epochStats endTime = do
-  void . Db.insertEpochSyncTime $
-    Db.EpochSyncTime
-      { Db.epochSyncTimeNo = unEpochNo epochNo - 1
-      , Db.epochSyncTimeSeconds = ceiling (realToFrac (Time.diffUTCTime endTime (elsStartTime epochStats)) :: Double)
-      , Db.epochSyncTimeState = syncState
+  void
+    . lift
+    $ DB.insertEpochSyncTime
+    $ DB.EpochSyncTime
+      { DB.epochSyncTimeNo = unEpochNo epochNo - 1
+      , DB.epochSyncTimeSeconds = ceiling (realToFrac (Time.diffUTCTime endTime (elsStartTime epochStats)) :: Double)
+      , DB.epochSyncTimeState = syncState
       }
 
 initEpochStatistics :: MonadIO m => m (StrictTVar IO EpochStatistics)

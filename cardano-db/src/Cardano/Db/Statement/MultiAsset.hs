@@ -3,22 +3,23 @@
 
 module Cardano.Db.Statement.MultiAsset where
 
-import Cardano.Prelude (ByteString, MonadIO)
+import Cardano.Prelude (ByteString, for)
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSessionMain, runDbSessionPool)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), runSession)
 import Cardano.Db.Statement.Function.Insert (insert)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
-import Cardano.Db.Types (DbAction, DbInt65)
+import Cardano.Db.Types (DbInt65, DbM)
 
 --------------------------------------------------------------------------------
 -- MultiAsset
@@ -31,10 +32,9 @@ insertMultiAssetStmt =
     SMA.multiAssetEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MultiAssetId)
 
-insertMultiAsset :: MonadIO m => SMA.MultiAsset -> DbAction m Id.MultiAssetId
+insertMultiAsset :: SMA.MultiAsset -> DbM Id.MultiAssetId
 insertMultiAsset multiAsset =
-  runDbSessionMain (mkDbCallStack "insertMultiAsset") $
-    HsqlSes.statement multiAsset insertMultiAssetStmt
+  runSession $ HsqlSes.statement multiAsset insertMultiAssetStmt
 
 -- | QUERY -------------------------------------------------------------------
 queryMultiAssetIdStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Id.MultiAssetId)
@@ -55,9 +55,9 @@ queryMultiAssetIdStmt =
 
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.MultiAssetId)
 
-queryMultiAssetId :: MonadIO m => ByteString -> ByteString -> DbAction m (Maybe Id.MultiAssetId)
+queryMultiAssetId :: ByteString -> ByteString -> DbM (Maybe Id.MultiAssetId)
 queryMultiAssetId policy assetName =
-  runDbSessionMain (mkDbCallStack "queryMultiAssetId") $
+  runSession $
     HsqlSes.statement (policy, assetName) queryMultiAssetIdStmt
 
 --------------------------------------------------------------------------------
@@ -78,13 +78,11 @@ insertBulkMaTxMintStmt =
       , map SMA.maTxMintIdent xs
       )
 
-insertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
-insertBulkMaTxMint maTxMints =
-  runDbSessionMain (mkDbCallStack "insertBulkMaTxMint") $
-    HsqlSes.statement maTxMints insertBulkMaTxMintStmt
-
--- | Pool version for parallel operations
-parallelInsertBulkMaTxMint :: MonadIO m => [SMA.MaTxMint] -> DbAction m [Id.MaTxMintId]
-parallelInsertBulkMaTxMint maTxMints =
-  runDbSessionPool (mkDbCallStack "parallelInsertBulkMaTxMint") $
-    HsqlSes.statement maTxMints insertBulkMaTxMintStmt
+insertBulkMaTxMintPiped :: [[SMA.MaTxMint]] -> DbM [Id.MaTxMintId]
+insertBulkMaTxMintPiped maTxMintChunks =
+  concat
+    <$> runSession
+      ( HsqlSes.pipeline $
+          for maTxMintChunks $ \chunk ->
+            HsqlP.statement chunk insertBulkMaTxMintStmt
+      )

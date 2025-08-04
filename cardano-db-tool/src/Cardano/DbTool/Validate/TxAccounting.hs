@@ -26,7 +26,7 @@ import qualified System.Random as Random
 
 validateTxAccounting :: DB.TxOutVariantType -> IO ()
 validateTxAccounting getTxOutVariantType = do
-  txIdRange <- DB.runDbNoLoggingEnv DB.queryTestTxIds
+  txIdRange <- DB.runDbStandaloneSilent DB.queryTestTxIds
   putStrF $
     "For "
       ++ show testCount
@@ -98,10 +98,10 @@ showTxOut txo =
 -- For a given TxId, validate the input/output accounting.
 validateAccounting :: DB.TxOutVariantType -> Word64 -> ExceptT ValidateError IO ()
 validateAccounting txOutVariantType txId = do
-  (fee, deposit) <- liftIO $ DB.runDbNoLoggingEnv (DB.queryTxFeeDeposit txId)
-  withdrawal <- liftIO $ DB.runDbNoLoggingEnv (DB.queryTxWithdrawal txId)
-  ins <- liftIO $ DB.runDbNoLoggingEnv (DB.queryTxInputs txOutVariantType txId)
-  outs <- liftIO $ DB.runDbNoLoggingEnv (DB.queryTxOutputs txOutVariantType txId)
+  (fee, deposit) <- liftIO $ DB.runDbStandaloneSilent (DB.queryTxFeeDeposit txId)
+  withdrawal <- liftIO $ DB.runDbStandaloneSilent (DB.queryTxWithdrawal txId)
+  ins <- liftIO $ DB.runDbStandaloneSilent (DB.queryTxInputs txOutVariantType txId)
+  outs <- liftIO $ DB.runDbStandaloneSilent (DB.queryTxOutputs txOutVariantType txId)
   -- A refund is a negative deposit.
   when (deposit >= 0 && sumValues ins + withdrawal /= fee + adaDeposit deposit + sumValues outs) $
     left (ValidateError txId fee deposit withdrawal ins outs)

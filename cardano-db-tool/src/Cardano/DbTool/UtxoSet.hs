@@ -85,7 +85,7 @@ partitionUtxos =
 queryAtSlot :: DB.TxOutVariantType -> Word64 -> IO (DB.Ada, [DB.UtxoQueryResult], DB.Ada, Either DB.DbError UTCTime)
 queryAtSlot txOutVariantType slotNo =
   -- Run the following queries in a single transaction.
-  DB.runDbNoLoggingEnv $ do
+  DB.runDbStandaloneSilent $ do
     (,,,)
       <$> DB.queryGenesisSupply txOutVariantType
       <*> DB.queryUtxoAtSlotNo txOutVariantType slotNo

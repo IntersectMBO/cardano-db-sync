@@ -16,10 +16,10 @@ import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Prelude (textShow, throwIO)
+import Cardano.Prelude (ExceptT, lift, textShow, throwIO)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
-import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.IO.Class (liftIO)
 import Data.List.Extra
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
@@ -39,34 +39,33 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
+import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (maxBulkSize)
 
 bootStrapMaybe ::
-  MonadIO m =>
   SyncEnv ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 bootStrapMaybe syncEnv = do
   bts <- liftIO $ readTVarIO (envBootstrap syncEnv)
   when bts $ migrateBootstrapUTxO syncEnv
 
 migrateBootstrapUTxO ::
-  MonadIO m =>
   SyncEnv ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 migrateBootstrapUTxO syncEnv = do
   case envLedgerEnv syncEnv of
     HasLedger lenv -> do
       liftIO $ logInfo trce "Starting UTxO bootstrap migration"
       cls <- liftIO $ readCurrentStateUnsafe lenv
-      count <- DB.deleteTxOut (getTxOutVariantType syncEnv)
+      count <- lift $ DB.deleteTxOut (getTxOutVariantType syncEnv)
       when (count > 0) $
         liftIO $
           logWarning trce $
             "Found and deleted " <> textShow count <> " tx_out."
       storeUTxOFromLedger syncEnv cls
-      DB.insertExtraMigration DB.BootstrapFinished
+      lift $ DB.insertExtraMigration DB.BootstrapFinished
       liftIO $ logInfo trce "UTxO bootstrap migration done"
       liftIO $ atomically $ writeTVar (envBootstrap syncEnv) False
     NoLedger _ ->
@@ -75,10 +74,9 @@ migrateBootstrapUTxO syncEnv = do
     trce = getTrace syncEnv
 
 storeUTxOFromLedger ::
-  MonadIO m =>
   SyncEnv ->
   ExtLedgerState CardanoBlock ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
   LedgerStateConway stc -> storeUTxO env (getUTxO stc)
@@ -93,13 +91,12 @@ storeUTxO ::
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
   , BabbageEraTxOut era
-  , MonadIO m
   , DBPlutusScript era
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
   Map TxIn (BabbageTxOut era) ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 storeUTxO env mp = do
   liftIO $
     logInfo trce $
@@ -123,18 +120,17 @@ storePage ::
   , DBPlutusScript era
   , BabbageEraTxOut era
   , NativeScript era ~ Timelock era
-  , MonadIO m
   ) =>
   SyncEnv ->
   Float ->
   (Int, [(TxIn, BabbageTxOut era)]) ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 storePage syncEnv percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
   txOuts <- mapM (prepareTxOut syncEnv) ls
-  txOutIds <- DB.insertBulkTxOut False $ etoTxOut . fst <$> txOuts
+  txOutIds <- lift $ DB.insertBulkTxOut False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> txOuts)
-  void $ DB.insertBulkMaTxOut maTxOuts
+  void . lift $ DB.insertBulkMaTxOutPiped [maTxOuts]
   where
     txOutVariantType = getTxOutVariantType syncEnv
     trce = getTrace syncEnv
@@ -145,13 +141,12 @@ prepareTxOut ::
   , Script era ~ AlonzoScript era
   , TxOut era ~ BabbageTxOut era
   , BabbageEraTxOut era
-  , MonadIO m
   , DBPlutusScript era
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
   (TxIn, BabbageTxOut era) ->
-  DB.DbAction m (ExtendedTxOut, [MissingMaTxOut])
+  ExceptT SyncNodeError DB.DbM (ExtendedTxOut, [MissingMaTxOut])
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut (fromIntegral index) txOut

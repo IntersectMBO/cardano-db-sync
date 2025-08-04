@@ -26,7 +26,7 @@ import System.Random.Shuffle (shuffleM)
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Query OffChain VoteData
 ---------------------------------------------------------------------------------------------------------------------------------
-getOffChainVoteData :: MonadIO m => POSIXTime -> Int -> DB.DbAction m [OffChainVoteWorkQueue]
+getOffChainVoteData :: POSIXTime -> Int -> DB.DbM [OffChainVoteWorkQueue]
 getOffChainVoteData now maxCount = do
   xs <- queryNewVoteWorkQueue now maxCount
   if length xs >= maxCount
@@ -36,7 +36,7 @@ getOffChainVoteData now maxCount = do
       take maxCount . (xs ++) <$> liftIO (shuffleM ys)
 
 -- get all the voting anchors that don't already exist in OffChainVoteData or OffChainVoteFetchError
-queryNewVoteWorkQueue :: MonadIO m => POSIXTime -> Int -> DB.DbAction m [OffChainVoteWorkQueue]
+queryNewVoteWorkQueue :: POSIXTime -> Int -> DB.DbM [OffChainVoteWorkQueue]
 queryNewVoteWorkQueue now maxCount = do
   results <- DB.queryNewVoteWorkQueueData maxCount
   pure $ map (makeOffChainVoteWorkQueue now) results
@@ -54,7 +54,7 @@ makeOffChainVoteWorkQueue now (vaId, vaHash, url, tp) =
     , oVoteWqUrl = url
     }
 
-queryOffChainVoteWorkQueue :: MonadIO m => UTCTime -> Int -> DB.DbAction m [OffChainVoteWorkQueue]
+queryOffChainVoteWorkQueue :: UTCTime -> Int -> DB.DbM [OffChainVoteWorkQueue]
 queryOffChainVoteWorkQueue _now maxCount = do
   results <- DB.queryOffChainVoteWorkQueueData maxCount
   pure $ map convertToWorkQueue results
@@ -72,7 +72,7 @@ convertToWorkQueue (time, vaId, vaHash, url, tp, rCount) =
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Query OffChain PoolData
 ---------------------------------------------------------------------------------------------------------------------------------
-getOffChainPoolData :: MonadIO m => POSIXTime -> Int -> DB.DbAction m [OffChainPoolWorkQueue]
+getOffChainPoolData :: POSIXTime -> Int -> DB.DbM [OffChainPoolWorkQueue]
 getOffChainPoolData now maxCount = do
   -- Results from the query are shuffles so we don't continuously get the same entries.
   xs <- queryNewPoolWorkQueue now maxCount
@@ -84,7 +84,7 @@ getOffChainPoolData now maxCount = do
 
 -- Get pool work queue data for new pools (ie pools that had OffChainPoolData entry and no
 -- OffChainPoolFetchError).
-queryNewPoolWorkQueue :: MonadIO m => POSIXTime -> Int -> DB.DbAction m [OffChainPoolWorkQueue]
+queryNewPoolWorkQueue :: POSIXTime -> Int -> DB.DbM [OffChainPoolWorkQueue]
 queryNewPoolWorkQueue now maxCount = do
   results <- DB.queryNewPoolWorkQueueData maxCount
   pure $ map (makeOffChainPoolWorkQueue now) results
@@ -99,7 +99,7 @@ makeOffChainPoolWorkQueue now (phId, pmrId, url, pmh) =
     , oPoolWqRetry = newRetry now
     }
 
-queryOffChainPoolWorkQueue :: MonadIO m => UTCTime -> Int -> DB.DbAction m [OffChainPoolWorkQueue]
+queryOffChainPoolWorkQueue :: UTCTime -> Int -> DB.DbM [OffChainPoolWorkQueue]
 queryOffChainPoolWorkQueue _now maxCount = do
   results <- DB.queryOffChainPoolWorkQueueData maxCount
   pure $ map convertToOffChainPoolWorkQueue results

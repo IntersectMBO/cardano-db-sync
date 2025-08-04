@@ -20,7 +20,6 @@ import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Cardano.Prelude (textShow)
 import Control.Monad (forM_)
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.ByteString.Base16 as Base16
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
@@ -37,7 +36,7 @@ reportTransactions :: TxOutVariantType -> [Text] -> IO ()
 reportTransactions txOutVariantType addrs =
   forM_ addrs $ \saddr -> do
     Text.putStrLn $ "\nTransactions for: " <> saddr <> "\n"
-    xs <- runDbNoLoggingEnv (queryStakeAddressTransactions txOutVariantType saddr)
+    xs <- runDbStandaloneSilent (queryStakeAddressTransactions txOutVariantType saddr)
     renderTransactions $ coaleseTxs xs
 
 -- -------------------------------------------------------------------------------------------------
@@ -63,20 +62,20 @@ instance Ord Transaction where
       GT -> GT
       EQ -> compare (trDirection tra) (trDirection trb)
 
-queryStakeAddressTransactions :: MonadIO m => TxOutVariantType -> Text -> DB.DbAction m [Transaction]
+queryStakeAddressTransactions :: TxOutVariantType -> Text -> DB.DbM [Transaction]
 queryStakeAddressTransactions txOutVariantType address = do
   mSaId <- DB.queryStakeAddressId address
   case mSaId of
     Nothing -> pure []
     Just saId -> queryTransactions saId
   where
-    queryTransactions :: MonadIO m => DB.StakeAddressId -> DB.DbAction m [Transaction]
+    queryTransactions :: DB.StakeAddressId -> DB.DbM [Transaction]
     queryTransactions saId = do
       inputs <- queryInputs txOutVariantType saId
       outputs <- queryOutputs txOutVariantType saId
       pure $ List.sort (inputs ++ outputs)
 
-queryInputs :: MonadIO m => TxOutVariantType -> DB.StakeAddressId -> DB.DbAction m [Transaction]
+queryInputs :: TxOutVariantType -> DB.StakeAddressId -> DB.DbM [Transaction]
 queryInputs txOutVariantType saId = do
   -- Standard UTxO inputs
   res1 <- case txOutVariantType of
@@ -103,7 +102,7 @@ queryInputs txOutVariantType saId = do
               , trAmount = sumAmounts xs
               }
 
-queryOutputs :: MonadIO m => TxOutVariantType -> DB.StakeAddressId -> DB.DbAction m [Transaction]
+queryOutputs :: TxOutVariantType -> DB.StakeAddressId -> DB.DbM [Transaction]
 queryOutputs txOutVariantType saId = do
   res <- case txOutVariantType of
     TxOutVariantCore -> DB.queryOutputTransactionsCore saId

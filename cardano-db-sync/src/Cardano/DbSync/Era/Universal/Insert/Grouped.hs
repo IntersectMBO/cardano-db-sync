@@ -11,7 +11,6 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   ExtendedTxIn (..),
   ExtendedTxOut (..),
   insertBlockGroupedData,
-  insertBlockGroupedDataSequential,
   insertReverseIndex,
   resolveTxInputs,
   resolveScriptHash,
@@ -32,6 +31,7 @@ import Cardano.DbSync.Cache (queryTxIdWithCache)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util (unTxHash)
 import Cardano.DbSync.Era.Shelley.Query
+import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.Prelude
 import Data.List.Extra (chunksOf)
@@ -90,72 +90,15 @@ instance Semigroup BlockGroupedData where
       (groupedTxFees tgd1 + groupedTxFees tgd2)
       (groupedTxOutSum tgd1 + groupedTxOutSum tgd2)
 
--- | Original sequential implementation (kept for fallback)
-insertBlockGroupedDataSequential ::
-  MonadIO m =>
-  SyncEnv ->
-  BlockGroupedData ->
-  DB.DbAction m DB.MinIdsWrapper
-insertBlockGroupedDataSequential syncEnv grouped = do
-  disInOut <- liftIO $ getDisableInOutState syncEnv
-
-  let txOutChunks = chunksOf maxBulkSize $ etoTxOut . fst <$> groupedTxOut grouped
-      txInChunks = chunksOf maxBulkSize $ etiTxIn <$> groupedTxIn grouped
-      txMetadataChunks = chunksOf maxBulkSize $ groupedTxMetadata grouped
-      txMintChunks = chunksOf maxBulkSize $ groupedTxMint grouped
-
-  -- Process TxOut chunks
-  txOutIds <- concat <$> mapM (DB.insertBulkTxOut disInOut) txOutChunks
-  let maTxOuts =
-        concatMap (mkmaTxOuts txOutVariantType) $
-          zip txOutIds (snd <$> groupedTxOut grouped)
-      maTxOutChunks = chunksOf maxBulkSize maTxOuts
-
-  -- Process MaTxOut chunks
-  maTxOutIds <- concat <$> mapM DB.insertBulkMaTxOut maTxOutChunks
-
-  -- Process TxIn chunks
-  txInIds <-
-    if getSkipTxIn syncEnv
-      then pure []
-      else concat <$> mapM DB.insertBulkTxIn txInChunks
-
-  whenConsumeOrPruneTxOut syncEnv $ do
-    -- Resolve remaining inputs
-    etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
-    -- Categorise resolved inputs for bulk vs individual processing
-    let (hashBasedUpdates, idBasedUpdates, failedInputs) = categorizeResolvedInputs etis
-        hashUpdateChunks = chunksOf maxBulkSize hashBasedUpdates
-        idUpdateChunks = chunksOf maxBulkSize idBasedUpdates
-
-    -- Bulk process hash-based updates
-    unless (null hashBasedUpdates) $
-      mapM_ (DB.updateConsumedByTxHashBulk txOutVariantType) hashUpdateChunks
-    -- Individual process ID-based updates
-    unless (null idBasedUpdates) $
-      mapM_ DB.updateListTxOutConsumedByTxId idUpdateChunks
-    -- Log failures
-    mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
-
-  -- Process metadata and mint chunks
-  mapM_ (DB.insertBulkTxMetadata removeJsonbFromSchema) txMetadataChunks
-  mapM_ DB.insertBulkMaTxMint txMintChunks
-
-  pure $ makeMinId syncEnv txInIds txOutIds maTxOutIds
-  where
-    tracer = getTrace syncEnv
-    txOutVariantType = getTxOutVariantType syncEnv
-    removeJsonbFromSchema = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
-
 -- | Parallel implementation with single connection coordination
 insertBlockGroupedData ::
-  MonadIO m =>
   SyncEnv ->
   BlockGroupedData ->
-  DB.DbAction m DB.MinIdsWrapper
+  ExceptT SyncNodeError DB.DbM DB.MinIdsWrapper
 insertBlockGroupedData syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
 
+  -- Parallel preparation of independent data
   -- Parallel preparation of independent data
   (preparedTxIn, preparedMetadata, preparedMint, txOutChunks) <- liftIO $ do
     a1 <- async $ pure $ prepareTxInProcessing syncEnv grouped
@@ -168,22 +111,14 @@ insertBlockGroupedData syncEnv grouped = do
     r3 <- wait a3
     r4 <- wait a4
     pure (r1, r2, r3, r4)
-
   -- Sequential TxOut processing (generates required IDs)
-  txOutIds <- concat <$> mapM (DB.insertBulkTxOut disInOut) txOutChunks
-
+  txOutIds <- concat <$> mapM (lift . DB.insertBulkTxOut disInOut) txOutChunks
   -- Execute independent operations (TxIn, Metadata, Mint) in parallel
-  txInIds <- executePreparedTxIn preparedTxIn
-
+  txInIds <- executePreparedTxInPiped preparedTxIn
   -- TxOut-dependent operations (MaTxOut + UTxO consumption)
   maTxOutIds <- processMaTxOuts syncEnv txOutIds grouped
-
-  -- Execute remaining independent operations in parallel with pools
-  liftIO $ do
-    a1 <- async $ DB.runPoolDbAction (envDbEnv syncEnv) (executePreparedMetadata preparedMetadata)
-    a2 <- async $ DB.runPoolDbAction (envDbEnv syncEnv) (executePreparedMint preparedMint)
-    _ <- wait a1
-    void $ wait a2
+  executePreparedMetadataPiped preparedMetadata
+  executePreparedMintPiped preparedMint
 
   -- Process UTxO consumption (depends on txOutIds)
   processUtxoConsumption syncEnv grouped txOutIds
@@ -212,60 +147,58 @@ mkmaTxOuts _txOutVariantType (txOutId, mmtos) = mkmaTxOut <$> mmtos
               }
 
 insertReverseIndex ::
-  MonadIO m =>
   DB.BlockId ->
   DB.MinIdsWrapper ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertReverseIndex blockId minIdsWrapper =
   case minIdsWrapper of
     DB.CMinIdsWrapper minIds ->
       void $
-        DB.insertReverseIndex $
-          DB.ReverseIndex
-            { DB.reverseIndexBlockId = blockId
-            , DB.reverseIndexMinIds = DB.minIdsCoreToText minIds
-            }
+        lift $
+          DB.insertReverseIndex $
+            DB.ReverseIndex
+              { DB.reverseIndexBlockId = blockId
+              , DB.reverseIndexMinIds = DB.minIdsCoreToText minIds
+              }
     DB.VMinIdsWrapper minIds ->
       void $
-        DB.insertReverseIndex $
-          DB.ReverseIndex
-            { DB.reverseIndexBlockId = blockId
-            , DB.reverseIndexMinIds = DB.minIdsAddressToText minIds
-            }
+        lift $
+          DB.insertReverseIndex $
+            DB.ReverseIndex
+              { DB.reverseIndexBlockId = blockId
+              , DB.reverseIndexMinIds = DB.minIdsAddressToText minIds
+              }
 
 -- | If we can't resolve from the db, we fall back to the provided outputs
 -- This happens the input consumes an output introduced in the same block.
 resolveTxInputs ::
-  MonadIO m =>
   SyncEnv ->
   Bool ->
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  DB.DbAction m (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
+  ExceptT SyncNodeError DB.DbM (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
 resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
   qres <- case (hasConsumed, needsValue) of
     -- No cache (complex query)
     (_, True) -> fmap convertFoundAll <$> resolveInputTxOutIdValue syncEnv txIn
     -- Direct query (simple case)
     (False, _) -> do
-      mTxId <- DB.queryTxId (Generic.unTxHash $ Generic.txInTxId txIn)
+      mTxId <- lift $ DB.queryTxId (Generic.unTxHash $ Generic.txInTxId txIn)
       case mTxId of
         Just txId -> pure $ Right $ convertnotFoundCache txId
         Nothing ->
-          liftIO $
-            throwIO $
-              DB.DbError
-                (DB.mkDbCallStack "resolveTxInputs")
-                ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
-                Nothing
+          throwError $
+            SNErrDefault
+              (mkSyncNodeCallStack "resolveTxInputs")
+              ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
     (True, False) -> do
       -- Consumed mode use cache
       eTxId <- queryTxIdWithCache syncEnv (Generic.txInTxId txIn)
       case eTxId of
         Right txId -> do
           -- Now get the TxOutId separately
-          eTxOutId <- DB.resolveInputTxOutIdFromTxId txId (Generic.txInIndex txIn)
+          eTxOutId <- lift $ DB.resolveInputTxOutIdFromTxId txId (Generic.txInIndex txIn)
           case eTxOutId of
             Right txOutId -> pure $ Right $ convertFoundTxOutId (txId, txOutId)
             Left err -> pure $ Left err
@@ -277,12 +210,10 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
         (Nothing, _, _) ->
           -- Only throw if in-memory resolution also fails
-          liftIO $
-            throwIO $
-              DB.DbError
-                (DB.mkDbCallStack "resolveTxInputs")
-                ("TxOut not found for TxIn: " <> textShow txIn)
-                Nothing
+          throwError $
+            SNErrDefault
+              (mkSyncNodeCallStack "resolveTxInputs")
+              ("TxIn not found in memory: " <> textShow txIn)
         (Just eutxo, True, True) ->
           pure $ convertFoundValue (etoTxOut eutxo)
         (Just eutxo, _, _) ->
@@ -308,10 +239,9 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       DB.VATxOutW vTxOut _ -> (txIn, VA.txOutAddressTxId vTxOut, Left txIn, Nothing)
 
 resolveRemainingInputs ::
-  MonadIO m =>
   [ExtendedTxIn] ->
   [(DB.TxOutIdW, ExtendedTxOut)] ->
-  DB.DbAction m [ExtendedTxIn]
+  ExceptT SyncNodeError DB.DbM [ExtendedTxIn]
 resolveRemainingInputs etis mp =
   mapM f etis
   where
@@ -323,22 +253,21 @@ resolveRemainingInputs etis mp =
       _otherwise -> pure eti
 
 resolveScriptHash ::
-  MonadIO m =>
   SyncEnv ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  DB.DbAction m (Maybe ByteString)
+  ExceptT SyncNodeError DB.DbM (Maybe ByteString)
 resolveScriptHash syncEnv groupedOutputs txIn = do
   qres <- queryResolveInputCredentials syncEnv txIn
   case qres of
     Just ret -> pure $ Just ret
     Nothing ->
       case resolveInMemory txIn groupedOutputs of
-        Nothing -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "resolveScriptHash") "resolveInMemory: VATxOutW with Nothing address" Nothing
+        Nothing -> throwError $ SNErrDefault (mkSyncNodeCallStack "resolveScriptHash") "resolveInMemory: VATxOutW with Nothing address"
         Just eutxo -> case etoTxOut eutxo of
           DB.VCTxOutW cTxOut -> pure $ VC.txOutCorePaymentCred cTxOut
           DB.VATxOutW _ vAddress -> case vAddress of
-            Nothing -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "resolveScriptHash") "VATxOutW with Nothing address" Nothing
+            Nothing -> throwError $ SNErrDefault (mkSyncNodeCallStack "resolveScriptHash") "VATxOutW with Nothing address"
             Just vAddr -> pure $ VA.addressPaymentCred vAddr
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut
@@ -347,8 +276,10 @@ resolveInMemory txIn =
 
 matches :: Generic.TxIn -> ExtendedTxOut -> Bool
 matches txIn eutxo =
-  Generic.toTxHash txIn == etoTxHash eutxo
-    && Generic.txInIndex txIn == getTxOutIndex (etoTxOut eutxo)
+  Generic.toTxHash txIn
+    == etoTxHash eutxo
+    && Generic.txInIndex txIn
+      == getTxOutIndex (etoTxOut eutxo)
   where
     getTxOutIndex :: DB.TxOutW -> Word64
     getTxOutIndex txOutWrapper = case txOutWrapper of
@@ -399,35 +330,35 @@ prepareMintProcessing _syncEnv grouped =
     { pmtChunks = chunksOf maxBulkSize $ groupedTxMint grouped
     }
 
--- | Execute prepared TxIn operations
-executePreparedTxIn :: MonadIO m => PreparedTxIn -> DB.DbAction m [DB.TxInId]
-executePreparedTxIn prepared =
+-- | Execute prepared TxIn operations (using pipeline)
+executePreparedTxInPiped :: PreparedTxIn -> ExceptT SyncNodeError DB.DbM [DB.TxInId]
+executePreparedTxInPiped prepared =
   if ptiSkip prepared
     then pure []
-    else concat <$> mapM DB.insertBulkTxIn (ptiChunks prepared)
+    else lift $ DB.insertBulkTxInPiped (ptiChunks prepared)
 
--- | Execute prepared Metadata operations
-executePreparedMetadata :: MonadIO m => PreparedMetadata -> DB.DbAction m ()
-executePreparedMetadata prepared =
-  mapM_ (DB.insertBulkTxMetadata (pmRemoveJsonb prepared)) (pmChunks prepared)
+-- | Execute prepared Metadata operations (using pipeline)
+executePreparedMetadataPiped :: PreparedMetadata -> ExceptT SyncNodeError DB.DbM ()
+executePreparedMetadataPiped prepared =
+  void $ lift $ DB.insertBulkTxMetadataPiped (pmRemoveJsonb prepared) (pmChunks prepared)
 
--- | Execute prepared Mint operations
-executePreparedMint :: MonadIO m => PreparedMint -> DB.DbAction m ()
-executePreparedMint prepared =
-  mapM_ DB.insertBulkMaTxMint (pmtChunks prepared)
+-- | Execute prepared Mint operations (using pipeline)
+executePreparedMintPiped :: PreparedMint -> ExceptT SyncNodeError DB.DbM ()
+executePreparedMintPiped prepared =
+  void $ lift $ DB.insertBulkMaTxMintPiped (pmtChunks prepared)
 
 -- | Process MaTxOut operations (depends on TxOut IDs)
-processMaTxOuts :: MonadIO m => SyncEnv -> [DB.TxOutIdW] -> BlockGroupedData -> DB.DbAction m [DB.MaTxOutIdW]
+processMaTxOuts :: SyncEnv -> [DB.TxOutIdW] -> BlockGroupedData -> ExceptT SyncNodeError DB.DbM [DB.MaTxOutIdW]
 processMaTxOuts syncEnv txOutIds grouped = do
   let txOutVariantType = getTxOutVariantType syncEnv
       maTxOuts =
         concatMap (mkmaTxOuts txOutVariantType) $
           zip txOutIds (snd <$> groupedTxOut grouped)
       maTxOutChunks = chunksOf maxBulkSize maTxOuts
-  concat <$> mapM DB.insertBulkMaTxOut maTxOutChunks
+  lift $ DB.insertBulkMaTxOutPiped maTxOutChunks
 
 -- | Process UTxO consumption updates (depends on TxOut IDs)
-processUtxoConsumption :: MonadIO m => SyncEnv -> BlockGroupedData -> [DB.TxOutIdW] -> DB.DbAction m ()
+processUtxoConsumption :: SyncEnv -> BlockGroupedData -> [DB.TxOutIdW] -> ExceptT SyncNodeError DB.DbM ()
 processUtxoConsumption syncEnv grouped txOutIds = do
   let tracer = getTrace syncEnv
       txOutVariantType = getTxOutVariantType syncEnv
@@ -442,10 +373,14 @@ processUtxoConsumption syncEnv grouped txOutIds = do
 
     -- Bulk process hash-based updates
     unless (null hashBasedUpdates) $
-      mapM_ (DB.updateConsumedByTxHashBulk txOutVariantType) hashUpdateChunks
+      void $
+        lift $
+          DB.updateConsumedByTxHashPiped txOutVariantType hashUpdateChunks
     -- Individual process ID-based updates
     unless (null idBasedUpdates) $
-      mapM_ DB.updateListTxOutConsumedByTxId idUpdateChunks
+      void $
+        lift $
+          DB.updateListTxOutConsumedByTxIdBP idUpdateChunks
     -- Log failures
     mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
 
@@ -472,7 +407,7 @@ categorizeResolvedInputs etis =
 -- PARALLEL PROCESSING HELPER FUNCTIONS (NO PIPELINES)
 -----------------------------------------------------------------------------------------------------------------------------------
 
--- Note: After analysis, pipelines aren't suitable here due to data dependencies.
+-- Pipelines aren't suitable here due to data dependencies.
 -- The current approach using async for truly independent operations is optimal.
 
 -- | Helper function to create MinIds result

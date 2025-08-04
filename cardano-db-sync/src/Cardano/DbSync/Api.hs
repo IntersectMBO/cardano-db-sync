@@ -143,7 +143,7 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutVariantType = getTxOutVariantType syncEnv
   logInfo (getTrace syncEnv) $ "runConsumedTxOutMigrationsMaybe: " <> textShow pcm
-  DB.runDbIohkNoLogging (envDbEnv syncEnv) $
+  DB.runDbDirectSilent (envDbEnv syncEnv) $
     DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
       maxBulkSize
@@ -153,11 +153,11 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
 
 runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
+  void $ DB.runDbDirectSilent (envDbEnv syncEnv) DB.enableJsonbInSchema
 
 runRemoveJsonbFromSchema :: SyncEnv -> IO ()
 runRemoveJsonbFromSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.disableJsonbInSchema
+  void $ DB.runDbDirectSilent (envDbEnv syncEnv) DB.disableJsonbInSchema
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -243,7 +243,7 @@ getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
 getSlotHash :: DB.DbEnv -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
+getSlotHash backend = DB.runDbDirectSilent backend . DB.querySlotHash
 
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
@@ -254,7 +254,7 @@ hasLedgerState syncEnv =
 getDbLatestBlockInfo :: DB.DbEnv -> IO (Maybe TipInfo)
 getDbLatestBlockInfo dbEnv = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbIohkNoLogging dbEnv DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbDirectSilent dbEnv DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $
@@ -297,6 +297,7 @@ getCurrentTipBlockNo env = do
     Nothing -> pure Origin
 
 mkSyncEnv ::
+  MetricSetters ->
   Trace IO Text ->
   DB.DbEnv ->
   SyncOptions ->
@@ -308,18 +309,20 @@ mkSyncEnv ::
   SyncNodeParams ->
   RunMigration ->
   IO SyncEnv
-mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
-  dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
+mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
+  dbCNamesVar <- newTVarIO =<< DB.runDbDirectSilent dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
       then
         newEmptyCache
           CacheCapacity
-            { cacheCapacityAddress = 100000
-            , cacheCapacityStake = 100000
-            , cacheCapacityDatum = 250000
-            , cacheCapacityMultiAsset = 250000
-            , cacheCapacityTx = 100000
+            { cacheCapacityAddress = 50000
+            , cacheCapacityStake = 50000
+            , cacheCapacityDatum = 125000
+            , cacheCapacityMultiAsset = 125000
+            , cacheCapacityTx = 50000
+            , cacheOptimisePools = 50000
+            , cacheOptimiseStake = 50000
             }
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
@@ -356,6 +359,7 @@ mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfig
   pure $
     SyncEnv
       { envDbEnv = dbEnv
+      , envMetricSetters = metricSetters
       , envBootstrap = bootstrapVar
       , envCache = cache
       , envEpochStatistics = epochStatistics
@@ -379,6 +383,7 @@ mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfig
     isTxOutConsumedBootstrap' = isTxOutConsumedBootstrap . sioTxOut . dncInsertOptions
 
 mkSyncEnvFromConfig ::
+  MetricSetters ->
   Trace IO Text ->
   DB.DbEnv ->
   SyncOptions ->
@@ -388,7 +393,7 @@ mkSyncEnvFromConfig ::
   -- | run migration function
   RunMigration ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc =
+mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -414,6 +419,7 @@ mkSyncEnvFromConfig trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNod
       | otherwise ->
           Right
             <$> mkSyncEnv
+              metricsSetters
               trce
               dbEnv
               syncOptions
@@ -434,7 +440,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envDbEnv env) DB.queryLatestPoints
+      lastPoints <- DB.runDbDirectSilent (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -489,7 +495,7 @@ getBootstrapInProgress ::
   DB.DbEnv ->
   IO Bool
 getBootstrapInProgress trce bootstrapFlag dbEnv = do
-  DB.runDbIohkNoLogging dbEnv $ do
+  DB.runDbDirectSilent dbEnv $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems
     case (bootstrapFlag, btsState) of

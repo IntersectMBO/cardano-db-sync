@@ -7,7 +7,6 @@ module Cardano.DbTool.Validate.AdaPots (
 
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Validate.Util
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import Data.Word (Word64)
@@ -18,7 +17,7 @@ validateSumAdaPots :: IO ()
 validateSumAdaPots = do
   putStrF "Sum of AdaPots amounts is constant across epochs: "
 
-  xs <- DB.runDbNoLoggingEnv queryAdaPotsAccounting
+  xs <- DB.runDbStandaloneSilent queryAdaPotsAccounting
   let uniqueCount = List.length $ List.nubOrd (map accSumAdaPots xs)
 
   if
@@ -34,7 +33,7 @@ data Accounting = Accounting
   , accSumAdaPots :: DB.Ada
   }
 
-queryAdaPotsAccounting :: MonadIO m => DB.DbAction m [Accounting]
+queryAdaPotsAccounting :: DB.DbM [Accounting]
 queryAdaPotsAccounting = do
   map convertToAccounting <$> DB.queryAdaPotsSum
   where

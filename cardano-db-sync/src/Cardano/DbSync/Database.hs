@@ -33,10 +33,9 @@ data NextState
 
 runDbThread ::
   SyncEnv ->
-  MetricSetters ->
   ThreadChannels ->
   IO ()
-runDbThread syncEnv metricsSetters queue = do
+runDbThread syncEnv queue = do
   logInfo tracer "Starting DB thread"
   logException tracer "runDbThread: " processQueue
   logInfo tracer "Shutting down DB thread"
@@ -83,8 +82,8 @@ runDbThread syncEnv metricsSetters queue = do
       processQueue -- Continue processing
     updateBlockMetrics :: IO ()
     updateBlockMetrics = do
-      -- Fire-and-forget async metrics update
-      void $ async $ DB.runPoolDbAction (envDbEnv syncEnv) $ do
+      let metricsSetters = envMetricSetters syncEnv
+      void $ async $ DB.runDbDirectLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) $ do
         mBlock <- DB.queryLatestBlock
         liftIO $ whenJust mBlock $ \block -> do
           let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block

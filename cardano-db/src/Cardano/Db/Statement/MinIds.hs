@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -16,6 +17,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -26,9 +28,9 @@ import qualified Cardano.Db.Schema.MinIds as SM
 import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
+import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Statement.Types (DbInfo (..), Key, tableName, validateColumn)
-import Cardano.Db.Types (DbAction)
+import Cardano.Db.Types (DbM)
 
 ---------------------------------------------------------------------------
 -- RAW INT64 QUERIES (for rollback operations)
@@ -61,18 +63,17 @@ queryMinRefIdStmt fieldName encoder idDecoder =
     decoder = HsqlD.rowMaybe idDecoder
 
 queryMinRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value to compare against
   b ->
   -- | Parameter encoder
   HsqlE.Params b ->
-  DbAction m (Maybe Int64)
+  DbM (Maybe Int64)
 queryMinRefId fieldName value encoder =
-  runDbSessionMain (mkDbCallStack "queryMinRefId") $
-    HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
+  runSession $ HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -107,18 +108,17 @@ queryMinRefIdNullableStmt fieldName encoder idDecoder =
           ]
 
 queryMinRefIdNullable ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value to compare against
   b ->
   -- | Parameter encoder
   HsqlE.Params b ->
-  DbAction m (Maybe Int64)
+  DbM (Maybe Int64)
 queryMinRefIdNullable fieldName value encoder =
-  runDbSessionMain (mkDbCallStack "queryMinRefIdNullable") $
-    HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
+  runSession $ HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -134,8 +134,8 @@ queryMinRefIdKeyStmt ::
   Text.Text ->
   -- | Parameter encoder
   HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
+  -- | Key decoder (nullable)
+  HsqlD.Row (Maybe (Key a)) ->
   HsqlStmt.Statement b (Maybe (Key a))
 queryMinRefIdKeyStmt fieldName encoder keyDecoder =
   HsqlStmt.Statement sql encoder decoder True
@@ -144,39 +144,37 @@ queryMinRefIdKeyStmt fieldName encoder keyDecoder =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT id"
+          [ "SELECT MIN(id)"
           , " FROM " <> tableName (Proxy @a)
           , " WHERE " <> validCol <> " >= $1"
-          , " ORDER BY id ASC"
-          , " LIMIT 1"
           ]
-    decoder = HsqlD.rowMaybe keyDecoder
+    decoder = HsqlD.singleRow keyDecoder
 
 queryMinRefIdKey ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value to compare against
   b ->
   -- | Parameter encoder
   HsqlE.Params b ->
-  -- | Key decoder
-  HsqlD.Row (Key a) ->
-  DbAction m (Maybe (Key a))
+  -- | Key decoder (nullable)
+  HsqlD.Row (Maybe (Key a)) ->
+  DbM (Maybe (Key a))
 queryMinRefIdKey fieldName value encoder keyDecoder =
-  runDbSessionMain (mkDbCallStack "queryMinRefIdKey") $
+  runSession $
     HsqlSes.statement value (queryMinRefIdKeyStmt @a fieldName encoder keyDecoder)
 
 whenNothingQueryMinRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   Maybe (Key a) -> -- Existing key value
   Text.Text -> -- Field name
   b -> -- Value to compare
   HsqlE.Params b -> -- Encoder for value
-  HsqlD.Row (Key a) -> -- Decoder for key
-  DbAction m (Maybe (Key a))
+  HsqlD.Row (Maybe (Key a)) -> -- Decoder for key (nullable)
+  DbM (Maybe (Key a))
 whenNothingQueryMinRefId mKey fieldName value encoder keyDecoder =
   case mKey of
     Just k -> pure $ Just k
@@ -187,44 +185,39 @@ whenNothingQueryMinRefId mKey fieldName value encoder keyDecoder =
 ---------------------------------------------------------------------------
 
 completeMinId ::
-  MonadIO m =>
   Maybe Id.TxId ->
   SM.MinIdsWrapper ->
-  DbAction m SM.MinIdsWrapper
+  DbM SM.MinIdsWrapper
 completeMinId mTxId mIdW = case mIdW of
-  SM.CMinIdsWrapper minIds -> SM.CMinIdsWrapper <$> completeMinIdCore mTxId minIds
-  SM.VMinIdsWrapper minIds -> SM.VMinIdsWrapper <$> completeMinIdVariant mTxId minIds
+  SM.CMinIdsWrapper minIds -> do
+    res <- completeMinIdCore mTxId minIds
+    pure $ SM.CMinIdsWrapper res
+  SM.VMinIdsWrapper minIds -> do
+    res <- completeMinIdVariant mTxId minIds
+    pure $ SM.VMinIdsWrapper res
 
-completeMinIdCore :: MonadIO m => Maybe Id.TxId -> MinIds -> DbAction m MinIds
+completeMinIdCore :: Maybe Id.TxId -> MinIds -> DbM MinIds
 completeMinIdCore mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty
     Just txId -> do
-      mTxInId <-
-        whenNothingQueryMinRefId @SCB.TxIn
-          (minTxInId minIds)
-          "tx_in_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxInId)
+      (mTxInId, mTxOutId) <- runSession $ HsqlSes.pipeline $ do
+        txInResult <- case minTxInId minIds of
+          Just k -> pure $ Just k
+          Nothing -> HsqlP.statement txId (queryMinRefIdKeyStmt @SCB.TxIn "tx_in_id" (Id.idEncoder Id.getTxId) (Id.maybeIdDecoder Id.TxInId))
 
-      mTxOutId <-
-        whenNothingQueryMinRefId @VC.TxOutCore
-          (extractCoreTxOutId $ minTxOutId minIds)
-          "tx_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxOutCoreId)
+        txOutResult <- case extractCoreTxOutId $ minTxOutId minIds of
+          Just k -> pure $ Just k
+          Nothing -> HsqlP.statement txId (queryMinRefIdKeyStmt @VC.TxOutCore "tx_id" (Id.idEncoder Id.getTxId) (Id.maybeIdDecoder Id.TxOutCoreId))
+
+        pure (txInResult, txOutResult)
 
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
         Just txOutId ->
-          whenNothingQueryMinRefId @VC.MaTxOutCore
-            (extractCoreMaTxOutId $ minMaTxOutId minIds)
-            "tx_out_id"
-            txOutId
-            (Id.idEncoder Id.getTxOutCoreId)
-            (Id.idDecoder Id.MaTxOutCoreId)
+          case extractCoreMaTxOutId $ minMaTxOutId minIds of
+            Just k -> pure $ Just k
+            Nothing -> runSession $ HsqlSes.statement txOutId (queryMinRefIdKeyStmt @VC.MaTxOutCore "tx_out_id" (Id.idEncoder Id.getTxOutCoreId) (Id.maybeIdDecoder Id.MaTxOutCoreId))
 
       pure $
         MinIds
@@ -233,36 +226,28 @@ completeMinIdCore mTxId minIds = do
           , minMaTxOutId = CMaTxOutIdW <$> mMaTxOutId
           }
 
-completeMinIdVariant :: MonadIO m => Maybe Id.TxId -> MinIds -> DbAction m MinIds
+completeMinIdVariant :: Maybe Id.TxId -> MinIds -> DbM MinIds
 completeMinIdVariant mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty
     Just txId -> do
-      mTxInId <-
-        whenNothingQueryMinRefId @SCB.TxIn
-          (minTxInId minIds)
-          "tx_in_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxInId)
+      (mTxInId, mTxOutId) <- runSession $ HsqlSes.pipeline $ do
+        txInResult <- case minTxInId minIds of
+          Just k -> pure $ Just k
+          Nothing -> HsqlP.statement txId (queryMinRefIdKeyStmt @SCB.TxIn "tx_in_id" (Id.idEncoder Id.getTxId) (Id.maybeIdDecoder Id.TxInId))
 
-      mTxOutId <-
-        whenNothingQueryMinRefId @VA.TxOutAddress
-          (extractVariantTxOutId $ minTxOutId minIds)
-          "tx_id"
-          txId
-          (Id.idEncoder Id.getTxId)
-          (Id.idDecoder Id.TxOutAddressId)
+        txOutResult <- case extractVariantTxOutId $ minTxOutId minIds of
+          Just k -> pure $ Just k
+          Nothing -> HsqlP.statement txId (queryMinRefIdKeyStmt @VA.TxOutAddress "tx_id" (Id.idEncoder Id.getTxId) (Id.maybeIdDecoder Id.TxOutAddressId))
+
+        pure (txInResult, txOutResult)
 
       mMaTxOutId <- case mTxOutId of
         Nothing -> pure Nothing
         Just txOutId ->
-          whenNothingQueryMinRefId @VA.MaTxOutAddress
-            (extractVariantMaTxOutId $ minMaTxOutId minIds)
-            "tx_out_id"
-            txOutId
-            (Id.idEncoder Id.getTxOutAddressId)
-            (Id.idDecoder Id.MaTxOutAddressId)
+          case extractVariantMaTxOutId $ minMaTxOutId minIds of
+            Just k -> pure $ Just k
+            Nothing -> runSession $ HsqlSes.statement txOutId (queryMinRefIdKeyStmt @VA.MaTxOutAddress "tx_out_id" (Id.idEncoder Id.getTxOutAddressId) (Id.maybeIdDecoder Id.MaTxOutAddressId))
 
       pure $
         MinIds

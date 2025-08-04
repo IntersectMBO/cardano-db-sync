@@ -27,7 +27,7 @@ tests =
 
 initialSupplyTest :: IO ()
 initialSupplyTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     -- Delete the blocks if they exist.
     deleteAllBlocks
 

@@ -35,6 +35,7 @@ import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.GovAction (insertCommitteeHash, insertCredDrepHash, insertDrep, insertVotingAnchor)
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
+import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.BaseTypes
@@ -54,7 +55,6 @@ import Data.Group (invert)
 import qualified Data.Map.Strict as Map
 
 insertCertificate ::
-  MonadIO m =>
   SyncEnv ->
   IsPoolMember ->
   Maybe Generic.Deposits ->
@@ -64,7 +64,7 @@ insertCertificate ::
   SlotNo ->
   Map Word64 DB.RedeemerId ->
   Generic.TxCertificate ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
   case cert of
     Left (ShelleyTxCertDelegCert deleg) ->
@@ -100,7 +100,6 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
     mRedeemerId = mlookup ridx redeemers
 
 insertDelegCert ::
-  MonadIO m =>
   SyncEnv ->
   Maybe Generic.Deposits ->
   Ledger.Network ->
@@ -110,7 +109,7 @@ insertDelegCert ::
   EpochNo ->
   SlotNo ->
   ShelleyDelegCert ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertDelegCert syncEnv mDeposits network txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
     ShelleyRegCert cred -> insertStakeRegistration syncEnv epochNo mDeposits txId idx $ Generic.annotateStakingCred network cred
@@ -118,7 +117,6 @@ insertDelegCert syncEnv mDeposits network txId idx mRedeemerId epochNo slotNo dC
     ShelleyDelegCert cred poolkh -> insertDelegation syncEnv network epochNo slotNo txId idx mRedeemerId cred poolkh
 
 insertConwayDelegCert ::
-  MonadIO m =>
   SyncEnv ->
   Maybe Generic.Deposits ->
   DB.TxId ->
@@ -127,7 +125,7 @@ insertConwayDelegCert ::
   EpochNo ->
   SlotNo ->
   ConwayDelegCert ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo dCert =
   case dCert of
     ConwayRegCert cred _dep ->
@@ -161,13 +159,12 @@ insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo dCer
     network = getNetwork syncEnv
 
 insertMirCert ::
-  MonadIO m =>
   SyncEnv ->
   Ledger.Network ->
   DB.TxId ->
   Word16 ->
   MIRCert ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertMirCert syncEnv network txId idx mcert = do
   case mirPot mcert of
     ReservesMIR ->
@@ -180,40 +177,40 @@ insertMirCert syncEnv network txId idx mcert = do
         SendToOppositePotMIR xfrs -> insertPotTransfer (invert $ Ledger.toDeltaCoin xfrs)
   where
     insertMirReserves ::
-      MonadIO m =>
       (StakeCred, Ledger.DeltaCoin) ->
-      DB.DbAction m ()
+      ExceptT SyncNodeError DB.DbM ()
     insertMirReserves (cred, dcoin) = do
       addrId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network cred
-      void . DB.insertReserve $
-        DB.Reserve
-          { DB.reserveAddrId = addrId
-          , DB.reserveCertIndex = idx
-          , DB.reserveTxId = txId
-          , DB.reserveAmount = DB.deltaCoinToDbInt65 dcoin
-          }
+      void . lift $
+        DB.insertReserve $
+          DB.Reserve
+            { DB.reserveAddrId = addrId
+            , DB.reserveCertIndex = idx
+            , DB.reserveTxId = txId
+            , DB.reserveAmount = DB.deltaCoinToDbInt65 dcoin
+            }
 
     insertMirTreasury ::
-      MonadIO m =>
       (StakeCred, Ledger.DeltaCoin) ->
-      DB.DbAction m ()
+      ExceptT SyncNodeError DB.DbM ()
     insertMirTreasury (cred, dcoin) = do
       addrId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network cred
-      void . DB.insertTreasury $
-        DB.Treasury
-          { DB.treasuryAddrId = addrId
-          , DB.treasuryCertIndex = idx
-          , DB.treasuryTxId = txId
-          , DB.treasuryAmount = DB.deltaCoinToDbInt65 dcoin
-          }
+      void . lift $
+        DB.insertTreasury $
+          DB.Treasury
+            { DB.treasuryAddrId = addrId
+            , DB.treasuryCertIndex = idx
+            , DB.treasuryTxId = txId
+            , DB.treasuryAmount = DB.deltaCoinToDbInt65 dcoin
+            }
 
     insertPotTransfer ::
-      MonadIO m =>
       Ledger.DeltaCoin ->
-      DB.DbAction m ()
+      ExceptT SyncNodeError DB.DbM ()
     insertPotTransfer dcoinTreasury =
       void
-        . DB.insertPotTransfer
+        . lift
+        $ DB.insertPotTransfer
         $ DB.PotTransfer
           { DB.potTransferCertIndex = idx
           , DB.potTransferTreasury = DB.deltaCoinToDbInt65 dcoinTreasury
@@ -225,19 +222,19 @@ insertMirCert syncEnv network txId idx mcert = do
 -- Insert Registration
 --------------------------------------------------------------------------------------------
 insertDrepRegistration ::
-  MonadIO m =>
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'DRepRole ->
   Maybe Coin ->
   Maybe Anchor ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
   drepId <- insertCredDrepHash cred
   votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blkId DB.DrepAnchor
   void
-    . DB.insertDrepRegistration
+    . lift
+    $ DB.insertDrepRegistration
     $ DB.DrepRegistration
       { DB.drepRegistrationTxId = txId
       , DB.drepRegistrationCertIndex = idx
@@ -247,16 +244,16 @@ insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
       }
 
 insertDrepDeRegistration ::
-  MonadIO m =>
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'DRepRole ->
   Coin ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertDrepDeRegistration txId idx cred coin = do
   drepId <- insertCredDrepHash cred
   void
-    . DB.insertDrepRegistration
+    . lift
+    $ DB.insertDrepRegistration
     $ DB.DrepRegistration
       { DB.drepRegistrationTxId = txId
       , DB.drepRegistrationCertIndex = idx
@@ -266,17 +263,17 @@ insertDrepDeRegistration txId idx cred coin = do
       }
 
 insertCommitteeRegistration ::
-  MonadIO m =>
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'ColdCommitteeRole ->
   Ledger.Credential 'HotCommitteeRole ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertCommitteeRegistration txId idx khCold cred = do
   khHotId <- insertCommitteeHash cred
   khColdId <- insertCommitteeHash khCold
   void
-    . DB.insertCommitteeRegistration
+    . lift
+    $ DB.insertCommitteeRegistration
     $ DB.CommitteeRegistration
       { DB.committeeRegistrationTxId = txId
       , DB.committeeRegistrationCertIndex = idx
@@ -285,18 +282,18 @@ insertCommitteeRegistration txId idx khCold cred = do
       }
 
 insertCommitteeDeRegistration ::
-  MonadIO m =>
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
   Ledger.Credential 'ColdCommitteeRole ->
   Maybe Anchor ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
   votingAnchorId <- whenMaybe mAnchor $ insertVotingAnchor blockId DB.CommitteeDeRegAnchor
   khColdId <- insertCommitteeHash khCold
   void
-    . DB.insertCommitteeDeRegistration
+    . lift
+    $ DB.insertCommitteeDeRegistration
     $ DB.CommitteeDeRegistration
       { DB.committeeDeRegistrationTxId = txId
       , DB.committeeDeRegistrationCertIndex = idx
@@ -305,7 +302,6 @@ insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
       }
 
 insertStakeDeregistration ::
-  MonadIO m =>
   SyncEnv ->
   Ledger.Network ->
   EpochNo ->
@@ -313,50 +309,50 @@ insertStakeDeregistration ::
   Word16 ->
   Maybe DB.RedeemerId ->
   StakeCred ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertStakeDeregistration syncEnv network epochNo txId idx mRedeemerId cred = do
   scId <- queryOrInsertStakeAddress syncEnv EvictAndUpdateCache network cred
-  void . DB.insertStakeDeregistration $
-    DB.StakeDeregistration
-      { DB.stakeDeregistrationAddrId = scId
-      , DB.stakeDeregistrationCertIndex = idx
-      , DB.stakeDeregistrationEpochNo = unEpochNo epochNo
-      , DB.stakeDeregistrationTxId = txId
-      , DB.stakeDeregistrationRedeemerId = mRedeemerId
-      }
+  void . lift $
+    DB.insertStakeDeregistration $
+      DB.StakeDeregistration
+        { DB.stakeDeregistrationAddrId = scId
+        , DB.stakeDeregistrationCertIndex = idx
+        , DB.stakeDeregistrationEpochNo = unEpochNo epochNo
+        , DB.stakeDeregistrationTxId = txId
+        , DB.stakeDeregistrationRedeemerId = mRedeemerId
+        }
 
 insertStakeRegistration ::
-  MonadIO m =>
   SyncEnv ->
   EpochNo ->
   Maybe Generic.Deposits ->
   DB.TxId ->
   Word16 ->
   Shelley.RewardAccount ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertStakeRegistration syncEnv epochNo mDeposits txId idx rewardAccount = do
   saId <- queryOrInsertRewardAccount syncEnv UpdateCache rewardAccount
-  void . DB.insertStakeRegistration $
-    DB.StakeRegistration
-      { DB.stakeRegistrationAddrId = saId
-      , DB.stakeRegistrationCertIndex = idx
-      , DB.stakeRegistrationEpochNo = unEpochNo epochNo
-      , DB.stakeRegistrationDeposit = Generic.coinToDbLovelace . Generic.stakeKeyDeposit <$> mDeposits
-      , DB.stakeRegistrationTxId = txId
-      }
+  void . lift $
+    DB.insertStakeRegistration $
+      DB.StakeRegistration
+        { DB.stakeRegistrationAddrId = saId
+        , DB.stakeRegistrationCertIndex = idx
+        , DB.stakeRegistrationEpochNo = unEpochNo epochNo
+        , DB.stakeRegistrationDeposit = Generic.coinToDbLovelace . Generic.stakeKeyDeposit <$> mDeposits
+        , DB.stakeRegistrationTxId = txId
+        }
 
 --------------------------------------------------------------------------------------------
 -- Insert Pots
 --------------------------------------------------------------------------------------------
 insertPots ::
-  MonadIO m =>
   DB.BlockId ->
   SlotNo ->
   EpochNo ->
   Shelley.AdaPots ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertPots blockId slotNo epochNo pots =
-  void $ DB.insertAdaPots $ mkAdaPots blockId slotNo epochNo pots
+  void $ lift $ DB.insertAdaPots $ mkAdaPots blockId slotNo epochNo pots
 
 mkAdaPots ::
   DB.BlockId ->
@@ -385,7 +381,6 @@ mkAdaPots blockId slotNo epochNo pots =
 -- Insert Delegation
 --------------------------------------------------------------------------------------------
 insertDelegation ::
-  MonadIO m =>
   SyncEnv ->
   Ledger.Network ->
   EpochNo ->
@@ -395,35 +390,36 @@ insertDelegation ::
   Maybe DB.RedeemerId ->
   StakeCred ->
   Ledger.KeyHash 'Ledger.StakePool ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertDelegation syncEnv network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
   addrId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network cred
   poolHashId <- queryPoolKeyOrInsert syncEnv "insertDelegation" UpdateCache True poolkh
-  void . DB.insertDelegation $
-    DB.Delegation
-      { DB.delegationAddrId = addrId
-      , DB.delegationCertIndex = idx
-      , DB.delegationPoolHashId = poolHashId
-      , DB.delegationActiveEpochNo = epoch + 2 -- The first epoch where this delegation is valid.
-      , DB.delegationTxId = txId
-      , DB.delegationSlotNo = unSlotNo slotNo
-      , DB.delegationRedeemerId = mRedeemerId
-      }
+  void . lift $
+    DB.insertDelegation $
+      DB.Delegation
+        { DB.delegationAddrId = addrId
+        , DB.delegationCertIndex = idx
+        , DB.delegationPoolHashId = poolHashId
+        , DB.delegationActiveEpochNo = epoch + 2 -- The first epoch where this delegation is valid.
+        , DB.delegationTxId = txId
+        , DB.delegationSlotNo = unSlotNo slotNo
+        , DB.delegationRedeemerId = mRedeemerId
+        }
 
 insertDelegationVote ::
-  MonadIO m =>
   SyncEnv ->
   Ledger.Network ->
   DB.TxId ->
   Word16 ->
   StakeCred ->
   DRep ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertDelegationVote syncEnv network txId idx cred drep = do
   addrId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network cred
   drepId <- insertDrep drep
   void
-    . DB.insertDelegationVote
+    . lift
+    $ DB.insertDelegationVote
     $ DB.DelegationVote
       { DB.delegationVoteAddrId = addrId
       , DB.delegationVoteCertIndex = idx

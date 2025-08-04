@@ -79,7 +79,7 @@ validateSchemaColumns =
     validateCall dbSync (Proxy @DB.MultiAsset)
     validateCall dbSync (Proxy @DB.MaTxMint)
 
-    -- Cardano.Db.Schema.Core.StakeDeligation
+    -- Cardano.Db.Schema.Core.StakeDelegation
     validateCall dbSync (Proxy @DB.StakeAddress)
     validateCall dbSync (Proxy @DB.StakeRegistration)
     validateCall dbSync (Proxy @DB.StakeDeregistration)

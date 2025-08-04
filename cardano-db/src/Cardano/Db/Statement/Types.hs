@@ -105,12 +105,6 @@ class Typeable a => DbInfo a where
   default uniqueFields :: Proxy a -> [Text]
   uniqueFields _ = []
 
-  -- | Manual constraint specification for bulk operations only.
-  -- This doesn't affect singular inserts, only bulk operations with conflict handling.
-  bulkUniqueFields :: Proxy a -> [Text]
-  default bulkUniqueFields :: Proxy a -> [Text]
-  bulkUniqueFields _ = []
-
   -- \| Column names and their pg_array type. Used for UNNEST statements.
   unnestParamTypes :: Proxy a -> [(Text, Text)] -- (column_name, pg_array_type)
   default unnestParamTypes :: Proxy a -> [(Text, Text)]

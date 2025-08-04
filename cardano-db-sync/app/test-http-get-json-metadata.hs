@@ -16,7 +16,6 @@ import Cardano.DbSync.Types (
   OffChainUrlType (..),
  )
 import Control.Monad (foldM)
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.List as List
@@ -32,7 +31,7 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 main :: IO ()
 main = do
   manager <- Http.newManager tlsManagerSettings
-  xs <- DB.runDbNoLoggingEnv queryTestOffChainData
+  xs <- DB.runDbStandaloneTransSilent DB.PGPassDefaultEnv queryTestOffChainData
   putStrLn $ "testOffChainPoolDataFetch: " ++ show (length xs) ++ " tests to run."
   tfs <- foldM (testOne manager) emptyTestFailure xs
   reportTestFailures tfs
@@ -74,7 +73,7 @@ data TestFailure = TestFailure
   , tfOtherError :: !Word
   }
 
-queryTestOffChainData :: MonadIO m => DB.DbAction m [TestOffChain]
+queryTestOffChainData :: DB.DbM [TestOffChain]
 queryTestOffChainData = do
   res <- DB.queryTestOffChainData
   pure . organise $ map convert res

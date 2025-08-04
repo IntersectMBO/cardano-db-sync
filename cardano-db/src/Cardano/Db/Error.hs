@@ -13,13 +13,7 @@ import Cardano.Prelude (MonadIO, throwIO)
 import Control.Exception (Exception)
 import Data.Text (Text)
 
-import qualified Hasql.Session as HsqlSes
-
-data DbError = DbError
-  { dbErrorDbCallStack :: !DbCallStack
-  , dbErrorMessage :: !Text
-  , dbErrorCause :: !(Maybe HsqlSes.SessionError)
-  }
+newtype DbError = DbError {dbErrorMessage :: Text}
   deriving (Show, Eq)
 
 instance Exception DbError

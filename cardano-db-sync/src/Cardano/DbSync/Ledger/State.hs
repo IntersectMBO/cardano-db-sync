@@ -33,6 +33,8 @@ module Cardano.DbSync.Ledger.State (
   runLedgerStateWriteThread,
   getStakeSlice,
   findProposedCommittee,
+  writeLedgerState,
+  saveCleanupState,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)

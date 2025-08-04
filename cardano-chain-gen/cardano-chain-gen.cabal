@@ -192,7 +192,6 @@ test-suite cardano-chain-gen
                       , transformers-except
                       , tree-diff
                       , tasty-hunit
-                      , monad-logger
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
                       , ouroboros-network-api

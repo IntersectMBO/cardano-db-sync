@@ -24,6 +24,7 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
+import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Types (StakeCred)
 import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.Ledger.BaseTypes (Network)
@@ -40,13 +41,12 @@ import Cardano.Ledger.BaseTypes (Network)
 -- epoch.
 
 adjustEpochRewards ::
-  MonadIO m =>
   SyncEnv ->
   Network ->
   EpochNo ->
   Generic.Rewards ->
   Set StakeCred ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 adjustEpochRewards syncEnv nw epochNo rwds creds = do
   let rewardsToDelete =
         [ (cred, rwd)
@@ -56,7 +56,7 @@ adjustEpochRewards syncEnv nw epochNo rwds creds = do
   liftIO . logInfo (getTrace syncEnv) $
     mconcat
       [ "Removing "
-      , if null rewardsToDelete then "0" else textShow (length rewardsToDelete) <> " rewards and "
+      , textShow (length rewardsToDelete) <> " rewards and "
       , show (length creds)
       , " orphaned rewards"
       ]
@@ -66,20 +66,20 @@ adjustEpochRewards syncEnv nw epochNo rwds creds = do
     forM_ (chunksOf maxBulkSize rewardsToDelete) $ \batch -> do
       params <- prepareRewardsForDeletion syncEnv nw epochNo batch
       unless (areParamsEmpty params) $
-        DB.deleteRewardsBulk params
+        lift $
+          DB.deleteRewardsBulk params
 
   -- Handle orphaned rewards in batches
   crds <- catMaybes <$> forM (Set.toList creds) (queryStakeAddrWithCache syncEnv DoNotUpdateCache nw)
   forM_ (chunksOf maxBulkSize crds) $ \batch ->
-    DB.deleteOrphanedRewardsBulk (unEpochNo epochNo) batch
+    lift $ DB.deleteOrphanedRewardsBulk (unEpochNo epochNo) batch
 
 prepareRewardsForDeletion ::
-  MonadIO m =>
   SyncEnv ->
   Network ->
   EpochNo ->
   [(StakeCred, Generic.Reward)] ->
-  DB.DbAction m ([DB.StakeAddressId], [DB.RewardSource], [Word64], [DB.PoolHashId])
+  ExceptT SyncNodeError DB.DbM ([DB.StakeAddressId], [DB.RewardSource], [Word64], [DB.PoolHashId])
 prepareRewardsForDeletion syncEnv nw epochNo rewards = do
   -- Process each reward to get parameter tuples
   rewardParams <- forM rewards $ \(cred, rwd) -> do

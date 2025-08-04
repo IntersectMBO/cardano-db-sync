@@ -49,7 +49,7 @@ library
                         Cardano.Db.Schema.Core.MultiAsset
                         Cardano.Db.Schema.Core.OffChain
                         Cardano.Db.Schema.Core.Pool
-                        Cardano.Db.Schema.Core.StakeDeligation
+                        Cardano.Db.Schema.Core.StakeDelegation
                         Cardano.Db.Schema.Ids
                         Cardano.Db.Schema.MinIds
                         Cardano.Db.Schema.Types
@@ -72,7 +72,7 @@ library
                         Cardano.Db.Statement.OffChain
                         Cardano.Db.Statement.Pool
                         Cardano.Db.Statement.Rollback
-                        Cardano.Db.Statement.StakeDeligation
+                        Cardano.Db.Statement.StakeDelegation
                         Cardano.Db.Statement.Types
                         Cardano.Db.Statement.Variants.TxOut
                         Cardano.Db.Types
@@ -104,8 +104,8 @@ library
                       , template-haskell
                       , text
                       , time
-                      , transformers
-                      , unliftio-core
+                      -- , transformers
+                      -- , unliftio-core
                       -- This is never intended to run on non-POSIX systems.
                       , unix
                       , wide-word

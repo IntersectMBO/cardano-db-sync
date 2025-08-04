@@ -55,7 +55,7 @@ import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
-import Cardano.DbSync.Rollback (unsafeRollback)
+import Cardano.DbSync.Rollback (handlePostRollbackSnapshots, unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbSync.Types
@@ -98,7 +98,7 @@ runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile = do
         msg <- DB.getMaintenancePsqlConf pgConfig
         logInfo trce $ "Running database migrations in mode " <> textShow mode
         logInfo trce msg
-        DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
+        DB.runMigrations (Just trce) pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
 
   -- Always run Initial mode only - never indexes
   (ranMigrations, unofficial) <- runMigration DB.Initial
@@ -150,7 +150,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
         logInfo trce $ "Running NearTip database migrations in mode " <> textShow mode
         logInfo trce msg
         when (mode `elem` [DB.NearTip, DB.Full]) $ logWarning trce indexesMsg
-        DB.runMigrations pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
+        DB.runMigrations (Just trce) pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
 
   runSyncNode
     metricsSetters
@@ -199,7 +199,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
   -- The main thread
   bracket
-    (acquireDbConnection [dbConnSetting])
+    (DB.acquireConnection [dbConnSetting])
     HsqlC.release
     ( \dbConn -> do
         runOrThrowIO $ runExceptT $ do
@@ -208,14 +208,15 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
           pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
           let dbEnv =
                 if isLogingEnabled
-                  then DB.createDbEnv dbConn pool (Just trce)
-                  else DB.createDbEnv dbConn pool Nothing
+                  then DB.createDbEnv dbConn (Just pool) (Just trce)
+                  else DB.createDbEnv dbConn (Just pool) Nothing
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftDbError $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
+                metricsSetters
                 trce
                 dbEnv
                 syncOptions
@@ -239,12 +240,15 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
             DB.noLedgerMigrations dbEnv trce
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
+          -- Handle ledger snapshots after rollback to ensure consistency
+          liftIO $ handlePostRollbackSnapshots syncEnv (enpMaybeRollback syncNodeParams)
+
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
           liftIO $
             race_
               -- We split the main thread into two parts to allow for graceful shutdown of the main App db thread.
-              (runDbThread syncEnv metricsSetters threadChannels)
+              (runDbThread syncEnv threadChannels)
               ( mapConcurrently_
                   id
                   [ runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)

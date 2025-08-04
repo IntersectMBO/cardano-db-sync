@@ -9,7 +9,6 @@ module Cardano.DbTool.Report.StakeReward.Latest (
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
 import Cardano.Prelude (fromMaybe, textShow)
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.List as List
 import Data.Maybe (catMaybes)
 import Data.Ord (Down (..))
@@ -22,12 +21,12 @@ import Text.Printf (printf)
 
 reportEpochStakeRewards :: Word64 -> [Text] -> IO ()
 reportEpochStakeRewards epochNum saddr = do
-  xs <- catMaybes <$> DB.runDbNoLoggingEnv (mapM (queryEpochStakeRewards epochNum) saddr)
+  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM (queryEpochStakeRewards epochNum) saddr)
   renderRewards xs
 
 reportLatestStakeRewards :: [Text] -> IO ()
 reportLatestStakeRewards saddr = do
-  xs <- catMaybes <$> DB.runDbNoLoggingEnv (mapM queryLatestStakeRewards saddr)
+  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM queryLatestStakeRewards saddr)
   renderRewards xs
 
 data EpochReward = EpochReward
@@ -42,14 +41,14 @@ data EpochReward = EpochReward
   , erPercent :: !Double
   }
 
-queryEpochStakeRewards :: MonadIO m => Word64 -> Text -> DB.DbAction m (Maybe EpochReward)
+queryEpochStakeRewards :: Word64 -> Text -> DB.DbM (Maybe EpochReward)
 queryEpochStakeRewards epochNum address = do
   mdel <- DB.queryDelegationForEpoch address epochNum
   case mdel of
     Nothing -> pure Nothing
     Just delegation -> Just <$> queryReward epochNum address delegation
 
-queryLatestStakeRewards :: MonadIO m => Text -> DB.DbAction m (Maybe EpochReward)
+queryLatestStakeRewards :: Text -> DB.DbM (Maybe EpochReward)
 queryLatestStakeRewards address = do
   epochNum <- DB.queryLatestMemberRewardEpochNo
   mdel <- DB.queryDelegationForEpoch address epochNum
@@ -58,11 +57,10 @@ queryLatestStakeRewards address = do
     Just delegation -> Just <$> queryReward epochNum address delegation
 
 queryReward ::
-  MonadIO m =>
   Word64 ->
   Text ->
   (DB.StakeAddressId, UTCTime, DB.DbLovelace, DB.PoolHashId) ->
-  DB.DbAction m EpochReward
+  DB.DbM EpochReward
 queryReward en address (saId, date, DB.DbLovelace delegated, poolId) = do
   mRewardAmount <- DB.queryRewardAmount en saId
   mPoolTicker <- DB.queryPoolTicker poolId

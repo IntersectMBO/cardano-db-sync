@@ -7,19 +7,18 @@ module Cardano.Db.Statement.Constraint where
 
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo)
-import Cardano.Db.Schema.Core.StakeDeligation (EpochStake, Reward)
-
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
-import Cardano.Db.Statement.Types (DbInfo (..))
-import Cardano.Db.Types (DbAction)
+import Cardano.Db.Schema.Core.StakeDelegation (EpochStake, Reward)
 import Cardano.Prelude (Proxy (..), liftIO)
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSess
 import qualified Hasql.Statement as HsqlStmt
+
+import Cardano.Db.Statement.Function.Core (runSession)
+import Cardano.Db.Statement.Types (DbInfo (..))
+import Cardano.Db.Types (DbM)
 
 -- | Name of a database constraint
 newtype ConstraintNameDB = ConstraintNameDB
@@ -72,21 +71,21 @@ addUniqueConstraintStmt tbName constraintName fields =
           ]
 
 -- | Check if a constraint exists
-queryHasConstraint :: MonadIO m => ConstraintNameDB -> DbAction m Bool
+queryHasConstraint :: ConstraintNameDB -> DbM Bool
 queryHasConstraint (ConstraintNameDB cname) =
-  runDbSessionMain (mkDbCallStack "queryHasConstraint") $
+  runSession $
     HsqlSess.statement cname queryHasConstraintStmt
 
 -- | Generic function to add a unique constraint to any table with DbInfo
 alterTableAddUniqueConstraint ::
-  forall table m.
-  (DbInfo table, MonadIO m) =>
+  forall table.
+  DbInfo table =>
   Proxy table ->
   ConstraintNameDB ->
   [FieldNameDB] ->
-  DbAction m ()
+  DbM ()
 alterTableAddUniqueConstraint proxy (ConstraintNameDB cname) fields =
-  runDbSessionMain (mkDbCallStack "alterTableAddUniqueConstraint") $
+  runSession $
     HsqlSess.statement () $
       addUniqueConstraintStmt tbName cname fieldNames
   where
@@ -101,7 +100,7 @@ data ManualDbConstraints = ManualDbConstraints
   deriving (Show, Eq)
 
 -- | Check if constraints exist
-queryRewardAndEpochStakeConstraints :: MonadIO m => DbAction m ManualDbConstraints
+queryRewardAndEpochStakeConstraints :: DbM ManualDbConstraints
 queryRewardAndEpochStakeConstraints = do
   epochStake <- queryHasConstraint constraintNameEpochStake
   reward <- queryHasConstraint constraintNameReward
@@ -113,13 +112,12 @@ queryRewardAndEpochStakeConstraints = do
 
 -- | Add reward table constraint
 addRewardTableConstraint ::
-  forall m.
-  MonadIO m =>
   Trace IO Text.Text ->
-  DbAction m ()
+  DbM ()
 addRewardTableConstraint trce = do
   let proxy = Proxy @Reward
       tbName = tableName proxy
+
   alterTableAddUniqueConstraint
     proxy
     constraintNameReward
@@ -132,13 +130,12 @@ addRewardTableConstraint trce = do
 
 -- | Add epoch stake table constraint
 addEpochStakeTableConstraint ::
-  forall m.
-  MonadIO m =>
   Trace IO Text.Text ->
-  DbAction m ()
+  DbM ()
 addEpochStakeTableConstraint trce = do
   let proxy = Proxy @EpochStake
       tbName = tableName proxy
+
   alterTableAddUniqueConstraint
     proxy
     constraintNameEpochStake

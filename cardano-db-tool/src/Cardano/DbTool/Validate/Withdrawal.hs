@@ -18,7 +18,7 @@ import System.Random.Shuffle (shuffleM)
 
 validateWithdrawals :: IO ()
 validateWithdrawals = do
-  res <- DB.runDbNoLoggingEnv $ do
+  res <- DB.runDbStandaloneSilent $ do
     addresses <- DB.queryWithdrawalAddresses
     shuffledAddresses <- liftIO $ shuffleM addresses
     mapM validateAccounting (take 1000 shuffledAddresses)
@@ -50,7 +50,7 @@ reportError ai =
     ]
 
 -- For a given StakeAddressId, validate that sum rewards >= sum withdrawals.
-validateAccounting :: MonadIO m => DB.StakeAddressId -> DB.DbAction m (Either AddressInfo ())
+validateAccounting :: DB.StakeAddressId -> DB.DbM (Either AddressInfo ())
 validateAccounting addrId = do
   ai <- queryAddressInfo addrId
   pure $
@@ -58,7 +58,7 @@ validateAccounting addrId = do
       then Left ai
       else Right ()
 
-queryAddressInfo :: MonadIO m => DB.StakeAddressId -> DB.DbAction m AddressInfo
+queryAddressInfo :: DB.StakeAddressId -> DB.DbM AddressInfo
 queryAddressInfo addrId = do
   result <- DB.queryAddressInfoData addrId
   pure $ makeAddressInfo addrId result

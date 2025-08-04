@@ -50,7 +50,7 @@ postgresqlPoolDataLayer tracer conn =
     { dlGetPoolMetadata = \poolId poolMetadataHash -> do
         let poolHash = fromDbPoolId poolId
         let metaHash = fromDbPoolMetaHash poolMetadataHash
-        resultOCPD <- Db.runPoolDbIohkLogging conn tracer $ Db.queryOffChainPoolData poolHash metaHash
+        resultOCPD <- Db.runDbWithPool conn tracer $ Db.queryOffChainPoolData poolHash metaHash
         case resultOCPD of
           Left dbErr -> pure $ Left $ DBFail dbErr
           Right mMeta -> case mMeta of
@@ -58,14 +58,14 @@ postgresqlPoolDataLayer tracer conn =
             Nothing -> pure $ Left $ DbLookupPoolMetadataHash poolId poolMetadataHash
     , dlAddPoolMetadata = error "dlAddPoolMetadata not defined. Will be used only for testing."
     , dlGetReservedTickers = do
-        resTickers <- Db.runPoolDbIohkLogging conn tracer Db.queryReservedTickers
+        resTickers <- Db.runDbWithPool conn tracer Db.queryReservedTickers
         case resTickers of
           Left dbErr -> throwIO $ userError $ "Database error in dlGetReservedTickers: " <> show dbErr
           Right tickers ->
             pure $ fmap (\ticker -> (TickerName $ Db.reservedPoolTickerName ticker, toDbPoolId $ Db.reservedPoolTickerPoolHash ticker)) tickers
     , dlAddReservedTicker = \ticker poolId -> do
         resInserted <-
-          Db.runPoolDbIohkLogging conn tracer $
+          Db.runDbWithPool conn tracer $
             Db.insertReservedPoolTicker $
               Db.ReservedPoolTicker (getTickerName ticker) (fromDbPoolId poolId)
         case resInserted of
@@ -76,23 +76,23 @@ postgresqlPoolDataLayer tracer conn =
               Nothing -> pure $ Left $ TickerAlreadyReserved ticker
     , dlCheckReservedTicker = \ticker -> do
         result <-
-          Db.runPoolDbIohkLogging conn tracer $
+          Db.runDbWithPool conn tracer $
             fmap toDbPoolId <$> Db.queryReservedTicker (getTickerName ticker)
         case result of
           Left dbErr -> throwIO $ userError $ "Database error in dlCheckReservedTicker: " <> show dbErr
           Right poolId -> pure poolId
     , dlGetDelistedPools = do
-        result <- Db.runPoolDbIohkLogging conn tracer Db.queryDelistedPools
+        result <- Db.runDbWithPool conn tracer Db.queryDelistedPools
         case result of
           Left dbErr -> throwIO $ userError $ "Database error in dlGetDelistedPools: " <> show dbErr
           Right pools -> pure $ fmap toDbPoolId pools
     , dlCheckDelistedPool = \poolHash -> do
-        result <- Db.runPoolDbIohkLogging conn tracer $ Db.existsDelistedPool (fromDbPoolId poolHash)
+        result <- Db.runDbWithPool conn tracer $ Db.existsDelistedPool (fromDbPoolId poolHash)
         case result of
           Left dbErr -> throwIO $ userError $ "Database error in dlCheckDelistedPool: " <> show dbErr
           Right exists -> pure exists
     , dlAddDelistedPool = \poolHash -> do
-        result <- Db.runPoolDbIohkLogging conn tracer $ do
+        result <- Db.runDbWithPool conn tracer $ do
           let poolHashDb = fromDbPoolId poolHash
           isAlready <- Db.existsDelistedPool poolHashDb
           if isAlready
@@ -105,7 +105,7 @@ postgresqlPoolDataLayer tracer conn =
           Right eitherResult -> pure eitherResult
     , dlRemoveDelistedPool = \poolHash -> do
         result <-
-          Db.runPoolDbIohkLogging conn tracer $
+          Db.runDbWithPool conn tracer $
             Db.deleteDelistedPool (fromDbPoolId poolHash)
         case result of
           Left dbErr -> pure $ Left $ DBFail dbErr
@@ -128,7 +128,7 @@ postgresqlPoolDataLayer tracer conn =
             pure $ Right $ toDbPoolId <$> ls
     , dlGetFetchErrors = \poolId mTimeFrom -> do
         result <-
-          Db.runPoolDbIohkLogging conn tracer $
+          Db.runDbWithPool conn tracer $
             Db.queryOffChainPoolFetchError (fromDbPoolId poolId) mTimeFrom
         case result of
           Left dbErr -> pure $ Left $ DBFail dbErr
@@ -156,7 +156,7 @@ dbToServantFetchError poolId (fetchError, metaHash) =
 -- current epoch.
 getCertActions :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Either Db.DbError (Maybe Word64, Map ByteString Db.PoolCertAction))
 getCertActions tracer conn mPoolId = do
-  result <- Db.runPoolDbIohkLogging conn tracer $ do
+  result <- Db.runDbWithPool conn tracer $ do
     poolRetired <- Db.queryRetiredPools (fromDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (fromDbPoolId <$> mPoolId)
     currentEpoch <- Db.queryBlocksForCurrentEpochNo
@@ -169,7 +169,7 @@ getCertActions tracer conn mPoolId = do
 
 getActivePools :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Either Db.DbError (Map ByteString ByteString))
 getActivePools tracer conn mPoolId = do
-  result <- Db.runPoolDbIohkLogging conn tracer $ do
+  result <- Db.runDbWithPool conn tracer $ do
     poolRetired <- Db.queryRetiredPools (fromDbPoolId <$> mPoolId)
     poolUpdate <- Db.queryPoolRegister (fromDbPoolId <$> mPoolId)
     currentEpoch <- Db.queryBlocksForCurrentEpochNo
@@ -244,7 +244,7 @@ _getUsedTickers tracer conn = do
   case poolsResult of
     Left dbErr -> pure $ Left dbErr
     Right pools -> do
-      tickersResult <- Db.runPoolDbIohkLogging conn tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
+      tickersResult <- Db.runDbWithPool conn tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
         mticker <- Db.queryUsedTicker ph meta
         pure $ map (\ticker -> (TickerName ticker, toDbServantMetaHash meta)) mticker
       case tickersResult of
@@ -257,7 +257,7 @@ _checkUsedTicker tracer conn ticker = do
   case poolsResult of
     Left dbErr -> pure $ Left dbErr
     Right pools -> do
-      tickersResult <- Db.runPoolDbIohkLogging conn tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
+      tickersResult <- Db.runDbWithPool conn tracer $ forM (Map.toList pools) $ \(ph, meta) -> do
         mticker <- Db.queryUsedTicker ph meta
         pure $ map (\tickerText -> (TickerName tickerText, toDbServantMetaHash meta)) mticker
       case tickersResult of

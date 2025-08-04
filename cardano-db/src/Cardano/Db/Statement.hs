@@ -16,7 +16,7 @@ module Cardano.Db.Statement (
   module Cardano.Db.Statement.MultiAsset,
   module Cardano.Db.Statement.OffChain,
   module Cardano.Db.Statement.Pool,
-  module Cardano.Db.Statement.StakeDeligation,
+  module Cardano.Db.Statement.StakeDelegation,
   module Cardano.Db.Statement.Types,
   module Cardano.Db.Statement.Variants.TxOut,
 ) where
@@ -38,6 +38,6 @@ import Cardano.Db.Statement.MinIds
 import Cardano.Db.Statement.MultiAsset
 import Cardano.Db.Statement.OffChain
 import Cardano.Db.Statement.Pool
-import Cardano.Db.Statement.StakeDeligation
+import Cardano.Db.Statement.StakeDelegation
 import Cardano.Db.Statement.Types
 import Cardano.Db.Statement.Variants.TxOut

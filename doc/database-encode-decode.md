@@ -52,9 +52,6 @@ instance DbInfo SomeTable where
   -- Unique constraints
   uniqueFields _ = ["col1", "col2"]  -- Multi-column unique constraint
   
-  -- Bulk unique fields (for bulk operations only)
-  bulkUniqueFields _ = ["bulk_unique_col"]
-  
   -- JSONB columns (require ::jsonb casting)
   jsonbFields _ = ["metadata", "config"]
   

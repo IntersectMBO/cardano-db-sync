@@ -60,7 +60,7 @@ import Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
 
 maxBulkSize :: Int
-maxBulkSize = 40000
+maxBulkSize = 20000
 
 cardanoBlockSlotNo :: Consensus.CardanoBlock StandardCrypto -> SlotNo
 cardanoBlockSlotNo = blockSlot

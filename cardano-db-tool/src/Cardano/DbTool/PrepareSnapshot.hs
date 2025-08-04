@@ -22,7 +22,7 @@ newtype PrepareSnapshotArgs = PrepareSnapshotArgs
 runPrepareSnapshot :: PrepareSnapshotArgs -> IO ()
 runPrepareSnapshot args = do
   ledgerFiles <- listLedgerStateFilesOrdered (unPrepareSnapshotArgs args)
-  mblock <- runDbNoLoggingEnv queryLatestBlock
+  mblock <- runDbStandaloneSilent queryLatestBlock
   case mblock of
     Just block | Just bSlotNo <- SlotNo <$> blockSlotNo block -> do
       let bHash = blockHash block

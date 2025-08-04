@@ -6,6 +6,7 @@ module Test.IO.Cardano.Db.Util (
   assertBool,
   deleteAllBlocks,
   dummyUTCTime,
+  extractDbResult,
   mkAddressHash,
   mkBlock,
   mkBlockHash,
@@ -15,8 +16,8 @@ module Test.IO.Cardano.Db.Util (
   testSlotLeader,
 ) where
 
+import Control.Exception (throwIO)
 import Control.Monad (unless)
-import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
@@ -33,10 +34,18 @@ assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =
   liftIO $ unless bool (error msg)
 
-deleteAllBlocks :: MonadIO m => DbAction m ()
+extractDbResult :: MonadIO m => Either DbError a -> m a
+extractDbResult (Left err) = liftIO $ throwIO err
+extractDbResult (Right val) = pure val
+
+deleteAllBlocks :: DbM ()
 deleteAllBlocks = do
-  mblkId <- queryMinBlock
-  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutVariantCore)
+  result <- queryMinBlock
+  case result of
+    Nothing -> pure ()
+    Just (blockId, word64) -> do
+      deleteResult <- deleteBlocksForTests TxOutVariantCore blockId word64
+      extractDbResult deleteResult
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0

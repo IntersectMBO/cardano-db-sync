@@ -35,7 +35,7 @@ validateLedger params txOutVariantType =
     enc <- readSyncNodeConfig (vpConfigFile params)
     genCfg <- runOrThrowIO $ runExceptT $ readCardanoGenesisConfig enc
     ledgerFiles <- listLedgerStateFilesOrdered (vpLedgerStateDir params)
-    slotNo <- SlotNo <$> DB.runDbNoLoggingEnv DB.queryLatestSlotNo
+    slotNo <- SlotNo <$> DB.runDbStandaloneSilent DB.queryLatestSlotNo
     validate params txOutVariantType genCfg slotNo ledgerFiles
 
 validate :: LedgerValidationParams -> DB.TxOutVariantType -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
@@ -57,7 +57,7 @@ validate params txOutVariantType genCfg slotNo ledgerFiles =
 
 validateBalance :: DB.TxOutVariantType -> SlotNo -> Text -> CardanoLedgerState -> IO ()
 validateBalance txOutVariantType slotNo addr st = do
-  balanceDB <- DB.runDbNoLoggingEnv $ DB.queryAddressBalanceAtSlot txOutVariantType addr (unSlotNo slotNo)
+  balanceDB <- DB.runDbStandaloneSilent $ DB.queryAddressBalanceAtSlot txOutVariantType addr (unSlotNo slotNo)
   let eiBalanceLedger = DB.word64ToAda <$> ledgerAddrBalance addr (ledgerState $ clsState st)
   case eiBalanceLedger of
     Left str -> putStrLn $ redText $ show str

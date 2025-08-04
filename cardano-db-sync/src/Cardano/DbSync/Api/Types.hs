@@ -32,6 +32,7 @@ import Cardano.DbSync.Config.Types (SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
+  MetricSetters,
   OffChainPoolResult,
   OffChainPoolWorkQueue,
   OffChainVoteResult,
@@ -41,6 +42,7 @@ import Cardano.DbSync.Types (
 -- | SyncEnv is the main environment for the whole application.
 data SyncEnv = SyncEnv
   { envDbEnv :: !DB.DbEnv
+  , envMetricSetters :: !MetricSetters
   , envCache :: !CacheStatus
   , envEpochStatistics :: !(StrictTVar IO EpochStatistics)
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)

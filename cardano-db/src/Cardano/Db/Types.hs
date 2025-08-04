@@ -12,10 +12,8 @@ module Cardano.Db.Types where
 
 import Cardano.BM.Trace (Trace)
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, fromMaybe)
+import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, ReaderT, fromMaybe)
 import qualified Codec.Binary.Bech32 as Bech32
-import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
 import Data.Aeson.Encoding (unsafeToEncoding)
@@ -48,31 +46,27 @@ import Quiet (Quiet (..))
 -- | Specifies which type of database connection to use for operations
 data ConnectionType
   = -- | Use the persistent main connection (for sequential operations, transactions)
-    UseMainConnection
+    UseConnection
   | -- | Use a connection from the pool (for parallel/async operations)
     UsePoolConnection
   deriving (Show, Eq)
 
 ----------------------------------------------------------------------------
--- DbAction
+-- DbM
 ----------------------------------------------------------------------------
-newtype DbAction m a = DbAction
-  {runDbAction :: ReaderT DbEnv m a}
-  deriving newtype
-    ( Functor
-    , Applicative
-    , Monad
-    , MonadReader DbEnv
-    , MonadTrans
-    , MonadIO
-    )
+
+-- | Database session monad that wraps Hasql Session
+-- Functions can return Either DbError a to handle validation errors
+newtype DbM a = DbM
+  {runDbM :: ReaderT DbEnv IO a}
+  deriving (Functor, Applicative, Monad, MonadReader DbEnv, MonadIO)
 
 ----------------------------------------------------------------------------
 -- DbEnv
 ----------------------------------------------------------------------------
 data DbEnv = DbEnv
   { dbConnection :: !HsqlCon.Connection
-  , dbPoolConnection :: !(Pool HsqlCon.Connection)
+  , dbPoolConnection :: !(Maybe (Pool HsqlCon.Connection)) -- not all operations use a pool connection
   , dbTracer :: !(Maybe (Trace IO Text))
   }
 
@@ -528,157 +522,6 @@ renderAda (Ada a) = Text.pack (show a)
 scientificToAda :: Scientific -> Ada
 scientificToAda s =
   word64ToAda $ floor (s * 1000000)
-
-rewardSourceFromText :: Text -> RewardSource
-rewardSourceFromText txt =
-  case txt of
-    "member" -> RwdMember
-    "leader" -> RwdLeader
-    "reserves" -> RwdReserves
-    "treasury" -> RwdTreasury
-    "refund" -> RwdDepositRefund
-    "proposal_refund" -> RwdProposalRefund
-    -- This should never happen. On the Postgres side we defined an ENUM with
-    -- only the values above.
-    _other -> error $ "rewardSourceFromText: Unknown RewardSource " ++ show txt
-
-syncStateFromText :: Text -> SyncState
-syncStateFromText txt =
-  case txt of
-    "lagging" -> SyncLagging
-    "following" -> SyncFollowing
-    -- This should never happen. On the Postgres side we defined an ENUM with
-    -- only the two values as above.
-    _other -> error $ "syncStateToText: Unknown SyncState " ++ show txt
-
-syncStateToText :: SyncState -> Text
-syncStateToText ss =
-  case ss of
-    SyncFollowing -> "following"
-    SyncLagging -> "lagging"
-
-scriptPurposeFromText :: ScriptPurpose -> Text
-scriptPurposeFromText ss =
-  case ss of
-    Spend -> "spend"
-    Mint -> "mint"
-    Cert -> "cert"
-    Rewrd -> "reward"
-    Vote -> "vote"
-    Propose -> "propose"
-
-scriptPurposeToText :: Text -> ScriptPurpose
-scriptPurposeToText txt =
-  case txt of
-    "spend" -> Spend
-    "mint" -> Mint
-    "cert" -> Cert
-    "reward" -> Rewrd
-    "vote" -> Vote
-    "propose" -> Propose
-    _other -> error $ "scriptPurposeFromText: Unknown ScriptPurpose " ++ show txt
-
-rewardSourceToText :: RewardSource -> Text
-rewardSourceToText rs =
-  case rs of
-    RwdMember -> "member"
-    RwdLeader -> "leader"
-    RwdReserves -> "reserves"
-    RwdTreasury -> "treasury"
-    RwdDepositRefund -> "refund"
-    RwdProposalRefund -> "proposal_refund"
-
-scriptTypeToText :: ScriptType -> Text
-scriptTypeToText st =
-  case st of
-    MultiSig -> "multisig"
-    Timelock -> "timelock"
-    PlutusV1 -> "plutusV1"
-    PlutusV2 -> "plutusV2"
-    PlutusV3 -> "plutusV3"
-
-scriptTypeFromText :: Text -> ScriptType
-scriptTypeFromText txt =
-  case txt of
-    "multisig" -> MultiSig
-    "timelock" -> Timelock
-    "plutusV1" -> PlutusV1
-    "plutusV2" -> PlutusV2
-    "plutusV3" -> PlutusV3
-    _other -> error $ "scriptTypeFromText: Unknown ScriptType " ++ show txt
-
-voteToText :: Vote -> Text
-voteToText ss =
-  case ss of
-    VoteYes -> "Yes"
-    VoteNo -> "No"
-    VoteAbstain -> "Abstain"
-
-voteFromText :: Text -> Vote
-voteFromText txt =
-  case txt of
-    "Yes" -> VoteYes
-    "No" -> VoteNo
-    "Abstain" -> VoteAbstain
-    _other -> error $ "readVote: Unknown Vote " ++ show txt
-
-voterRoleToText :: VoterRole -> Text
-voterRoleToText ss =
-  case ss of
-    ConstitutionalCommittee -> "ConstitutionalCommittee"
-    DRep -> "DRep"
-    SPO -> "SPO"
-
-voterRoleFromText :: Text -> VoterRole
-voterRoleFromText txt =
-  case txt of
-    "ConstitutionalCommittee" -> ConstitutionalCommittee
-    "DRep" -> DRep
-    "SPO" -> SPO
-    _other -> error $ "voterRoleFromText: Unknown VoterRole " ++ show txt
-
-govActionTypeToText :: GovActionType -> Text
-govActionTypeToText gav =
-  case gav of
-    ParameterChange -> "ParameterChange"
-    HardForkInitiation -> "HardForkInitiation"
-    TreasuryWithdrawals -> "TreasuryWithdrawals"
-    NoConfidence -> "NoConfidence"
-    NewCommitteeType -> "NewCommittee"
-    NewConstitution -> "NewConstitution"
-    InfoAction -> "InfoAction"
-
-govActionTypeFromText :: Text -> GovActionType
-govActionTypeFromText txt =
-  case txt of
-    "ParameterChange" -> ParameterChange
-    "HardForkInitiation" -> HardForkInitiation
-    "TreasuryWithdrawals" -> TreasuryWithdrawals
-    "NoConfidence" -> NoConfidence
-    "NewCommittee" -> NewCommitteeType
-    "NewConstitution" -> NewConstitution
-    _other -> error $ "govActionTypeFromText: Unknown GovActionType " ++ show txt
-
-anchorTypeToText :: AnchorType -> Text
-anchorTypeToText gav =
-  case gav of
-    GovActionAnchor -> "gov_action"
-    DrepAnchor -> "drep"
-    OtherAnchor -> "other"
-    VoteAnchor -> "vote"
-    CommitteeDeRegAnchor -> "committee_dereg"
-    ConstitutionAnchor -> "constitution"
-
-anchorTypeFromText :: Text -> AnchorType
-anchorTypeFromText txt =
-  case txt of
-    "gov_action" -> GovActionAnchor
-    "drep" -> DrepAnchor
-    "other" -> OtherAnchor
-    "vote" -> VoteAnchor
-    "committee_dereg" -> CommitteeDeRegAnchor
-    "constitution" -> ConstitutionAnchor
-    _other -> error $ "anchorTypeFromText: Unknown AnchorType " ++ show txt
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =

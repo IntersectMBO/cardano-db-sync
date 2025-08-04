@@ -12,7 +12,7 @@ import System.Exit (exitFailure)
 
 assertFullySynced :: IO ()
 assertFullySynced = do
-  latestBlock <- maybe (assertFail Nothing) pure =<< DB.runDbNoLoggingEnv DB.queryLatestBlock
+  latestBlock <- maybe (assertFail Nothing) pure =<< DB.runDbStandaloneSilent DB.queryLatestBlock
   currentTime <- Time.getCurrentTime
   let diff = Time.diffUTCTime currentTime (DB.blockTime latestBlock)
   when (diff > 300.0) $

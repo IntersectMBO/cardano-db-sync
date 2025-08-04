@@ -7,7 +7,6 @@ module Cardano.DbTool.Report.Balance (
 import Cardano.Db
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Report.Display
-import Control.Monad.IO.Class (MonadIO)
 import qualified Data.List as List
 import Data.Maybe (catMaybes)
 import Data.Ord (Down (..))
@@ -16,7 +15,7 @@ import qualified Data.Text.IO as Text
 
 reportBalance :: TxOutVariantType -> [Text] -> IO ()
 reportBalance txOutVariantType saddr = do
-  xs <- catMaybes <$> DB.runDbNoLoggingEnv (mapM (queryStakeAddressBalance txOutVariantType) saddr)
+  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM (queryStakeAddressBalance txOutVariantType) saddr)
   renderBalances xs
 
 -- -------------------------------------------------------------------------------------------------
@@ -33,14 +32,14 @@ data Balance = Balance
   , balTotal :: !Ada
   }
 
-queryStakeAddressBalance :: MonadIO m => TxOutVariantType -> Text -> DB.DbAction m (Maybe Balance)
+queryStakeAddressBalance :: TxOutVariantType -> Text -> DB.DbM (Maybe Balance)
 queryStakeAddressBalance txOutVariantType address = do
   mSaId <- DB.queryStakeAddressId address
   case mSaId of
     Nothing -> pure Nothing
     Just saId -> Just <$> queryBalance saId
   where
-    queryBalance :: MonadIO m => DB.StakeAddressId -> DB.DbAction m Balance
+    queryBalance :: DB.StakeAddressId -> DB.DbM Balance
     queryBalance saId = do
       inputs <- queryInputs saId
       (outputs, fees, deposit) <- queryOutputs saId
@@ -60,12 +59,12 @@ queryStakeAddressBalance txOutVariantType address = do
           , balTotal = inputs - outputs + rewards - withdrawals
           }
 
-    queryInputs :: MonadIO m => DB.StakeAddressId -> DB.DbAction m Ada
+    queryInputs :: DB.StakeAddressId -> DB.DbM Ada
     queryInputs saId = case txOutVariantType of
       TxOutVariantCore -> DB.queryInputsSumCore saId
       TxOutVariantAddress -> DB.queryInputsSumAddress saId
 
-    queryOutputs :: MonadIO m => DB.StakeAddressId -> DB.DbAction m (Ada, Ada, Ada)
+    queryOutputs :: DB.StakeAddressId -> DB.DbM (Ada, Ada, Ada)
     queryOutputs saId = case txOutVariantType of
       TxOutVariantCore -> DB.queryOutputsCore saId
       TxOutVariantAddress -> DB.queryOutputsAddress saId
