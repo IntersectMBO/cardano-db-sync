@@ -83,8 +83,7 @@ runDbThread syncEnv metricsSetters queue = do
       processQueue -- Continue processing
     updateBlockMetrics :: IO ()
     updateBlockMetrics = do
-      -- Fire-and-forget async metrics update
-      void $ async $ DB.runPoolDbAction (envDbEnv syncEnv) $ do
+      void $ async $ DB.runDbTransactionIohkNoLogging (envDbEnv syncEnv) $ do
         mBlock <- DB.queryLatestBlock
         liftIO $ whenJust mBlock $ \block -> do
           let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block

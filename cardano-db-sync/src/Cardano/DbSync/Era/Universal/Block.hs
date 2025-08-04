@@ -31,11 +31,13 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
+import Cardano.DbSync.DbEvent (liftFail)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTx)
+import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.OffChain
 import Cardano.DbSync.Types
@@ -46,7 +48,6 @@ import Cardano.DbSync.Util
 -- This is the entry point for inserting a block into the database, used for all eras appart from Byron.
 --------------------------------------------------------------------------------------------
 insertBlockUniversal ::
-  MonadIO m =>
   SyncEnv ->
   -- | Should log
   Bool ->
@@ -58,18 +59,18 @@ insertBlockUniversal ::
   SlotDetails ->
   IsPoolMember ->
   ApplyResult ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
   -- if we're syncing within 2 mins of the tip, we optimise the caches.
   when (isSyncedWithintwoMinutes details) $ optimiseCaches cache
   do
     pbid <- case Generic.blkPreviousHash blk of
-      Nothing -> DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.
+      Nothing -> liftFail (mkSyncNodeCallStack "insertBlockUniversal") $ DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.
       Just pHash -> queryPrevBlockWithCache syncEnv pHash (renderErrorMessage (Generic.blkEra blk))
     mPhid <- queryPoolKeyWithCache syncEnv UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
-    slid <- DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
+    slid <- lift $ DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
       insertBlockAndCache syncEnv $
         DB.Block
@@ -150,10 +151,12 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     insertStakeSlice syncEnv $ apStakeSlice applyResult
 
     when (ioGov iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0)) $
-      insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
+      lift $
+        insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
 
     when (ioOffChainPoolData iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0)) $
-      insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
+      lift $
+        insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
   where
     iopts = getInsertOptions syncEnv
 

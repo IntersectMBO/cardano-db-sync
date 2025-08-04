@@ -29,6 +29,7 @@ import Cardano.DbSync.Era.Universal.Validate (validateEpochRewards)
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 
+import Cardano.DbSync.Error (SyncNodeError)
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Control.Monad.Extra (whenJust)
 import qualified Data.Map.Strict as Map
@@ -41,11 +42,10 @@ import Text.Printf (printf)
 -- Insert LedgerEvents
 --------------------------------------------------------------------------------------------
 insertNewEpochLedgerEvents ::
-  MonadIO m =>
   SyncEnv ->
   EpochNo ->
   [LedgerEvent] ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
@@ -64,13 +64,12 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     toSyncState SyncFollowing = DB.SyncFollowing
 
     handler ::
-      MonadIO m =>
       LedgerEvent ->
-      DB.DbAction m ()
+      ExceptT SyncNodeError DB.DbM ()
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
-          databaseCacheSize <- DB.queryStatementCacheSize
+          databaseCacheSize <- lift DB.queryStatementCacheSize
           liftIO . logInfo tracer $ "Database Statement Cache size is " <> textShow databaseCacheSize
           currentTime <- liftIO getCurrentTime
           -- Get current epoch statistics
@@ -127,7 +126,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           insertProposalRefunds syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo refunded -- TODO: check if they are disjoint to avoid double entries.
           forM_ enacted $ \gar -> do
             gaId <- resolveGovActionProposal syncEnv (garGovActionId gar)
-            void $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
+            void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
             whenJust (garMTreasury gar) $ \treasuryMap -> do
               let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
               insertRewardRests syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo (Map.toList rewards)

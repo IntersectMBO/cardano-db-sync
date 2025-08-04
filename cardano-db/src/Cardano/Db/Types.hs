@@ -12,10 +12,8 @@ module Cardano.Db.Types where
 
 import Cardano.BM.Trace (Trace)
 import Cardano.Ledger.Coin (DeltaCoin (..))
-import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, fromMaybe)
+import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, ReaderT, fromMaybe)
 import qualified Codec.Binary.Bech32 as Bech32
-import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Trans.Reader (ReaderT)
 import Crypto.Hash (Blake2b_160)
 import qualified Crypto.Hash
 import Data.Aeson.Encoding (unsafeToEncoding)
@@ -48,31 +46,27 @@ import Quiet (Quiet (..))
 -- | Specifies which type of database connection to use for operations
 data ConnectionType
   = -- | Use the persistent main connection (for sequential operations, transactions)
-    UseMainConnection
+    UseConnection
   | -- | Use a connection from the pool (for parallel/async operations)
     UsePoolConnection
   deriving (Show, Eq)
 
 ----------------------------------------------------------------------------
--- DbAction
+-- DbM
 ----------------------------------------------------------------------------
-newtype DbAction m a = DbAction
-  {runDbAction :: ReaderT DbEnv m a}
-  deriving newtype
-    ( Functor
-    , Applicative
-    , Monad
-    , MonadReader DbEnv
-    , MonadTrans
-    , MonadIO
-    )
+
+-- | Database session monad that wraps Hasql Session
+-- Functions can return Either DbError a to handle validation errors
+newtype DbM a = DbM
+  {runDbM :: ReaderT DbEnv IO a}
+  deriving (Functor, Applicative, Monad, MonadReader DbEnv, MonadIO)
 
 ----------------------------------------------------------------------------
 -- DbEnv
 ----------------------------------------------------------------------------
 data DbEnv = DbEnv
   { dbConnection :: !HsqlCon.Connection
-  , dbPoolConnection :: !(Pool HsqlCon.Connection)
+  , dbPoolConnection :: !(Maybe (Pool HsqlCon.Connection)) -- not all operations use a pool connection
   , dbTracer :: !(Maybe (Trace IO Text))
   }
 

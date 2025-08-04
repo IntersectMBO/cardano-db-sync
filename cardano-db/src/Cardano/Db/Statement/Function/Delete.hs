@@ -26,12 +26,12 @@ import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
 -- @
 -- deleteOldRecords :: MonadIO m => Word64 -> DbAction m ()
 -- deleteOldRecords maxAge =
---   runDbSessionMain (mkDbCallStack "deleteOldRecords") $
+--   runDbSession (mkDbCallStack "deleteOldRecords") $
 --     HsqlSes.statement maxAge (parameterisedDeleteWhere @Record "age" ">=" HsqlE.param)
 --
 -- deleteByStatus :: MonadIO m => Text -> DbAction m ()
 -- deleteByStatus status =
---   runDbSessionMain (mkDbCallStack "deleteByStatus") $
+--   runDbSession (mkDbCallStack "deleteByStatus") $
 --     HsqlSes.statement status (parameterisedDeleteWhere @Record "status" "=" HsqlE.param)
 -- @
 parameterisedDeleteWhere ::
@@ -61,7 +61,7 @@ parameterisedDeleteWhere colName condition encoder =
 -- @
 -- deleteTxOutRecords :: MonadIO m => DbAction m Int64
 -- deleteTxOutRecords =
---   runDbSessionMain (mkDbCallStack "deleteTxOutRecords") $
+--   runDbSession (mkDbCallStack "deleteTxOutRecords") $
 --     HsqlSes.statement () (deleteWhereCount @TxOutCore "id" ">=" HsqlE.noParams)
 -- @
 deleteWhereCount ::
@@ -106,7 +106,7 @@ deleteWhereCount colName condition encoder =
 -- @
 -- truncateAndCount :: MonadIO m => DbAction m Int64
 -- truncateAndCount =
---   runDbSessionMain (mkDbCallStack "truncateAndCount") $
+--   runDbSession (mkDbCallStack "truncateAndCount") $
 --     HsqlSes.statement () (deleteAllCount @MyTable)
 -- @
 deleteAllCount ::

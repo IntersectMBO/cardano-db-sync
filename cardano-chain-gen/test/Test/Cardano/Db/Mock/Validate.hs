@@ -46,7 +46,6 @@ module Test.Cardano.Db.Mock.Validate (
 import Control.Concurrent
 import Control.Exception
 import Control.Monad (forM_)
-import Control.Monad.Logger (NoLoggingT)
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.Either (isRight)
@@ -69,7 +68,6 @@ import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Shelley.LedgerState (EraCertState)
 import Cardano.Mock.Forging.Tx.Generic
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude (MonadIO)
 import Cardano.SMASH.Server.PoolDataLayer
 import Cardano.SMASH.Server.Types
 import Test.Cardano.Db.Mock.Config
@@ -129,16 +127,16 @@ assertUnspentTx dbSyncEnv = do
 defaultDelays :: [Int]
 defaultDelays = [1, 2, 4, 8, 16, 32, 64, 128, 256]
 
-assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> a -> String -> IO ()
+assertEqQuery :: (Eq a, Show a) => DBSyncEnv -> DB.DbM a -> a -> String -> IO ()
 assertEqQuery env query a msg = do
   assertEqBackoff env query a defaultDelays msg
 
-assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> a -> [Int] -> String -> IO ()
+assertEqBackoff :: (Eq a, Show a) => DBSyncEnv -> DB.DbM a -> a -> [Int] -> String -> IO ()
 assertEqBackoff env query a delays msg = do
   checkStillRuns env
   assertBackoff env query delays (== a) (\a' -> msg <> ": got " <> show a' <> " expected " <> show a)
 
-assertBackoff :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
+assertBackoff :: DBSyncEnv -> DB.DbM a -> [Int] -> (a -> Bool) -> (a -> String) -> IO ()
 assertBackoff env query delays check errMsg = go delays
   where
     go ds = do
@@ -150,7 +148,7 @@ assertBackoff env query delays check errMsg = go delays
           threadDelay $ dl * 100_000
           go rest
 
-assertQuery :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
+assertQuery :: DBSyncEnv -> DB.DbM a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
 assertQuery env query check errMsg = do
   ma <- try @DB.DbError $ queryDBSync env query
   case ma of
@@ -161,7 +159,7 @@ assertQuery env query check errMsg = do
     Right a | not (check a) -> pure $ Just $ errMsg a
     _ -> pure Nothing
 
-runQuery :: DBSyncEnv -> DB.DbAction (NoLoggingT IO) a -> IO a
+runQuery :: DBSyncEnv -> DB.DbM a -> IO a
 runQuery env query = do
   ma <- try @DB.DbError $ queryDBSync env query
   case ma of
@@ -371,7 +369,7 @@ assertPoolCounters :: DBSyncEnv -> (Word64, Word64, Word64, Word64, Word64, Word
 assertPoolCounters env expected =
   assertEqBackoff env poolCountersQuery expected defaultDelays "Unexpected Pool counts"
 
-poolCountersQuery :: MonadIO m => DB.DbAction m (Word64, Word64, Word64, Word64, Word64, Word64)
+poolCountersQuery :: DB.DbM (Word64, Word64, Word64, Word64, Word64, Word64)
 poolCountersQuery = do
   poolHash <- DB.queryPoolHashCount
   poolMetadataRef <- DB.queryPoolMetadataRefCount

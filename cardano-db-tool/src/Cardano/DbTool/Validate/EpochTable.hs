@@ -27,22 +27,25 @@ validate lastEpoch = do
     recurse current
       | current > lastEpoch = putStrLn $ greenText "ok"
       | otherwise = do
-          -- Recalculate the epoch entry
-          recalc <- runDbNoLoggingEnv (queryCalcEpochEntry current)
-          -- Get the table entry
-          value <- runDbNoLoggingEnv $ queryEpochEntry current
+          -- Recalculate the epoch entry (returns SEnP.Epoch directly)
+          recalc <- runDbMNoLoggingDefaultEnv (queryCalcEpochEntry current)
+          -- Get the table entry (returns Either DbError SEnP.Epoch)
+          eitherValue <- runDbMNoLoggingDefaultEnv $ queryEpochEntry current
 
-          when (recalc /= value)
-            . error
-            $ redText (show recalc ++ " /= " ++ show value)
-          recurse (current + 1)
+          case eitherValue of
+            Left dbErr -> error $ redText $ "Database error: " ++ show dbErr
+            Right value -> do
+              when (recalc /= value)
+                . error
+                $ redText (show recalc ++ " /= " ++ show value)
+              recurse (current + 1)
 
 -- -----------------------------------------------------------------------------
 
 getStableEpochCount :: IO (Maybe Word64)
 getStableEpochCount = do
   -- May return Nothing if the EPoch table is empty.
-  mLatest <- runDbNoLoggingEnv queryLatestCachedEpochNo
+  mLatest <- runDbMNoLoggingDefaultEnv queryLatestCachedEpochNo
   case mLatest of
     Nothing -> pure Nothing
     Just 0 -> pure Nothing

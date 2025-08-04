@@ -1,9 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.DbEvent (
   DbEvent (..),
   ThreadChannels (..),
+  liftFail,
   liftDbIO,
   liftDbError,
   acquireDbConnection,
@@ -14,16 +16,24 @@ module Cardano.DbSync.DbEvent (
   writeDbEventQueue,
   waitRollback,
   waitRestartState,
+
+  -- * Transaction and error handling utilities
+  lift,
+  runDbSyncTransaction,
+  runDbSyncTransactionNoLogging,
+  runDbSyncTransactionPool,
 ) where
 
+import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Error (SyncNodeError (..))
+import Cardano.DbSync.Error (SyncNodeCallStack, SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Types
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, newEmptyTMVarIO, newTVarIO, takeTMVar)
 import qualified Control.Concurrent.STM as STM
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Connection.Setting as HsqlSet
 import Ouroboros.Network.Block (BlockNo, Tip (..))
@@ -40,25 +50,137 @@ data ThreadChannels = ThreadChannels
   , tcDoneInit :: !(StrictTVar IO Bool)
   }
 
+--------------------------------------------------------------------------------
+-- Transaction and error handling utilities
+--------------------------------------------------------------------------------
+
+-- | Execute database operations in a single transaction using the main connection
+--
+-- This is the primary transaction runner for sequential database operations in db-sync.
+-- All operations within the ExceptT stack are executed atomically in one database transaction.
+--
+-- == Transaction Behavior:
+-- * Uses the main database connection from DbEnv for sequential operations
+-- * All DbM operations are combined into a single Hasql session
+-- * Entire transaction commits on success or rolls back on any failure
+-- * Provides atomic all-or-nothing semantics for blockchain data consistency
+--
+-- == Error Handling:
+-- * Captures full call stack with HasCallStack for precise error location
+-- * Converts low-level Hasql SessionErrors to high-level SyncNodeErrors
+-- * Returns Either for explicit error handling rather than throwing exceptions
+-- * Database errors include 8-frame call chain showing exact failure path
+--
+-- == Usage:
+-- * Primary use: insertListBlocks and other critical sync operations
+-- * Sequential operations that must maintain strict consistency
+-- * Operations where blocking the main connection is acceptable
+--
+-- == Example:
+-- @
+-- insertBlockWithValidation :: BlockData -> ExceptT SyncNodeError DB.DbM BlockId
+-- insertBlockWithValidation blockData = do
+--   liftIO $ logInfo tracer "Starting block insertion"
+--   blockId <- lift $ insertBlock blockData  -- lift DbM to ExceptT
+--   liftIO $ logDebug tracer $ "Inserted block with ID: " <> show blockId
+--   pure blockId
+--
+-- result <- runDbSyncTransaction tracer dbEnv $ do
+--   blockId <- insertBlockWithValidation blockData
+--   lift $ updateSyncProgress blockId
+--   pure blockId
+-- -- All operations succeed together or all fail together
+-- @
+-- runDbSyncTransaction ::
+--   forall m a.
+--   (MonadUnliftIO m, HasCallStack) =>
+--   Trace IO Text ->
+--   DB.DbEnv ->
+--   ExceptT SyncNodeError DB.DbM a ->
+--   m (Either SyncNodeError a)
+-- runDbSyncTransaction tracer dbEnv exceptTAction = do
+--   let dbAction = runExceptT exceptTAction
+--   eResult <- liftIO $ try $ DB.runDbIohkLogging tracer dbEnv dbAction
+--   case eResult of
+--     Left (dbErr :: DB.DbError) -> do
+--       let cs = mkSyncNodeCallStack "runDbSyncTransaction"
+--       pure $ Left $ SNErrDatabase cs dbErr
+--     Right appResult -> pure appResult
+runDbSyncTransaction ::
+  forall m a.
+  (MonadUnliftIO m, HasCallStack) =>
+  Trace IO Text ->
+  DB.DbEnv ->
+  ExceptT SyncNodeError DB.DbM a ->
+  m (Either SyncNodeError a)
+runDbSyncTransaction tracer dbEnv exceptTAction = do
+  -- OUTER TRY: Catch any exceptions from the entire database operation
+  -- This includes connection errors, DB.DbError exceptions thrown from runDbTransactionIohkLogging,
+  -- or any other unexpected exceptions during database access
+  eResult <- liftIO $ try $ DB.runDbTransactionIohkLogging tracer dbEnv (runExceptT exceptTAction)
+  case eResult of
+    Left (dbErr :: DB.DbError) -> do
+      let cs = mkSyncNodeCallStack "runDbSyncTransaction"
+      pure $ Left $ SNErrDatabase cs dbErr
+    Right appResult -> pure appResult
+
+runDbSyncTransactionNoLogging ::
+  forall m a.
+  (MonadUnliftIO m, HasCallStack) =>
+  DB.DbEnv ->
+  ExceptT SyncNodeError DB.DbM a ->
+  m (Either SyncNodeError a)
+runDbSyncTransactionNoLogging dbEnv exceptTAction = do
+  let dbAction = runExceptT exceptTAction
+  eResult <- liftIO $ try $ DB.runDbTransactionIohkNoLogging dbEnv dbAction
+  case eResult of
+    Left (dbErr :: DB.DbError) -> do
+      let cs = mkSyncNodeCallStack "runDbSyncTransactionNoLogging"
+      pure $ Left $ SNErrDatabase cs dbErr
+    Right appResult -> pure appResult
+
+-- | Execute database operations in a single transaction using the connection pool
+runDbSyncTransactionPool ::
+  (MonadUnliftIO m, HasCallStack) =>
+  Trace IO Text ->
+  DB.DbEnv ->
+  ExceptT SyncNodeError DB.DbM a ->
+  m (Either SyncNodeError a)
+runDbSyncTransactionPool tracer dbEnv exceptTAction = do
+  let dbAction = runExceptT exceptTAction
+  eResult <- liftIO $ try $ DB.runDbPoolIohkLogging tracer dbEnv dbAction -- Use pool
+  case eResult of
+    Left (dbErr :: DB.DbError) -> do
+      let cs = mkSyncNodeCallStack "runDbSyncTransactionPool"
+      pure $ Left $ SNErrDatabase cs dbErr
+    Right appResult -> pure appResult
+
+liftFail :: SyncNodeCallStack -> DB.DbM (Either DB.DbError a) -> ExceptT SyncNodeError DB.DbM a
+liftFail cs dbAction = do
+  result <- lift dbAction
+  case result of
+    Left dbErr -> throwError $ SNErrDatabase cs dbErr
+    Right val -> pure val
+
 liftDbIO :: IO a -> ExceptT SyncNodeError IO a
 liftDbIO action = do
   result <- liftIO $ try action
   case result of
-    Left dbErr -> throwError $ SNErrDatabase dbErr
+    Left dbErr -> throwError $ SNErrDatabase (mkSyncNodeCallStack "liftDbIO") dbErr
     Right val -> pure val
 
 liftDbError :: ExceptT DB.DbError IO a -> ExceptT SyncNodeError IO a
 liftDbError dbAction = do
   result <- liftIO $ runExceptT dbAction
   case result of
-    Left dbErr -> throwError $ SNErrDatabase dbErr
+    Left dbErr -> throwError $ SNErrDatabase (mkSyncNodeCallStack "liftDbError") dbErr
     Right val -> pure val
 
 acquireDbConnection :: [HsqlSet.Setting] -> IO HsqlC.Connection
 acquireDbConnection settings = do
   result <- HsqlC.acquire settings
   case result of
-    Left connErr -> throwIO $ SNErrDatabase $ DB.DbError (DB.mkDbCallStack "acquireDbConnection") (show connErr) Nothing
+    Left connErr -> throwIO $ SNErrDatabase (mkSyncNodeCallStack "acquireDbConnection") $ DB.DbError (show connErr)
     Right conn -> pure conn
 
 mkDbApply :: CardanoBlock -> DbEvent

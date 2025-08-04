@@ -62,7 +62,7 @@ runCommand cmd =
         void $
           runMigrations pgConfig False mdir mldir NearTip txOutTabletype
     CmdTxOutMigration txOutVariantType -> do
-      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
+      runDbMTransactionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType
@@ -78,7 +78,7 @@ runCreateMigration mdir txOutVariantType = do
 
 runRollback :: SlotNo -> TxOutVariantType -> IO ()
 runRollback slotNo txOutVariantType =
-  print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace txOutVariantType slotNo)
+  print =<< runDbMNoLoggingDefaultEnv (deleteBlocksSlotNoNoTrace txOutVariantType slotNo)
 
 runVersionCommand :: IO ()
 runVersionCommand = do

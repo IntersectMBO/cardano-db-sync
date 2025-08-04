@@ -208,8 +208,8 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
           pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
           let dbEnv =
                 if isLogingEnabled
-                  then DB.createDbEnv dbConn pool (Just trce)
-                  else DB.createDbEnv dbConn pool Nothing
+                  then DB.createDbEnv dbConn (Just pool) (Just trce)
+                  else DB.createDbEnv dbConn (Just pool) Nothing
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftDbError $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg

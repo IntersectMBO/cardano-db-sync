@@ -24,18 +24,18 @@ data TestParams = TestParams
 
 genTestParameters :: DB.TxOutVariantType -> IO TestParams
 genTestParameters txOutVariantType = do
-  mlatest <- DB.runDbNoLoggingEnv DB.queryLatestBlockNo
+  mlatest <- DB.runDbMNoLoggingDefaultEnv DB.queryLatestBlockNo
   case mlatest of
     Nothing -> error "Cardano.DbTool.Validation: Empty database"
     Just latest ->
       TestParams
         <$> randomRIO (1, latest - 1)
-        <*> DB.runDbNoLoggingEnv (DB.queryGenesisSupply txOutVariantType)
+        <*> DB.runDbMNoLoggingDefaultEnv (DB.queryGenesisSupply txOutVariantType)
 
 queryInitialSupply :: DB.TxOutVariantType -> Word64 -> IO Accounting
 queryInitialSupply txOutVariantType blkNo =
   -- Run all queries in a single transaction.
-  DB.runDbNoLoggingEnv $
+  DB.runDbMNoLoggingDefaultEnv $
     Accounting
       <$> DB.queryFeesUpToBlockNo blkNo
       <*> DB.queryDepositUpToBlockNo blkNo

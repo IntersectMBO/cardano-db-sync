@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Cardano.DbSync.Config.Byron (
@@ -18,8 +19,9 @@ readByronGenesisConfig ::
   ExceptT SyncNodeError IO Byron.Config
 readByronGenesisConfig enc = do
   let file = unGenesisFile $ dncByronGenesisFile enc
+      cs = mkSyncNodeCallStack "readByronGenesisConfig"
   genHash <-
-    firstExceptT SNErrDefault
+    firstExceptT (SNErrDefault cs)
       . hoistEither
       $ decodeAbstractHash (unGenesisHashByron $ dncByronGenesisHash enc)
   firstExceptT (SNErrByronConfig file) $

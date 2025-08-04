@@ -7,6 +7,7 @@ module Cardano.DbSync.Error (
   SyncInvariant (..),
   SyncNodeError (..),
   NodeConfigError (..),
+  SyncNodeCallStack (..),
   annotateInvariantTx,
   bsBase16Encode,
   renderSyncInvariant,
@@ -14,6 +15,7 @@ module Cardano.DbSync.Error (
   fromEitherSTM,
   logAndThrowIO,
   hasAbortOnPanicEnv,
+  mkSyncNodeCallStack,
 ) where
 
 import Cardano.BM.Trace (Trace, logError)
@@ -24,6 +26,9 @@ import qualified Cardano.Db as DB
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Util
 import Cardano.Prelude
+
+-- import Control.Monad.Except (ExceptT, throwError)
+-- import Control.Monad.Logger (LoggingT)
 import qualified Data.ByteString.Base16 as Base16
 import Data.String (String)
 import qualified Data.Text as Text
@@ -35,9 +40,13 @@ data SyncInvariant
   = EInvInOut !Word64 !Word64
   | EInvTxInOut !Byron.Tx !Word64 !Word64
 
+newtype SyncNodeCallStack = SyncNodeCallStack
+  {sncsCallChain :: [Text]}
+  deriving (Show, Eq)
+
 data SyncNodeError
-  = SNErrDefault !Text
-  | SNErrDatabase !DB.DbError
+  = SNErrDefault !SyncNodeCallStack !Text
+  | SNErrDatabase !SyncNodeCallStack !DB.DbError
   | SNErrInvariant !Text !SyncInvariant
   | SNEErrBlockMismatch !Word64 !ByteString !ByteString
   | SNErrIgnoreShelleyInitiation
@@ -63,8 +72,8 @@ instance Exception SyncNodeError
 instance Show SyncNodeError where
   show =
     \case
-      SNErrDefault t -> "Error SNErrDefault: " <> show t
-      SNErrDatabase err -> "Error SNErrDatabase: " <> show err
+      SNErrDefault cs err -> "Error SNErrDefault: " <> show err <> ":" <> Text.unpack (formatCallStack cs)
+      SNErrDatabase cs err -> "Error SNErrDatabase at " <> show err <> ":" <> Text.unpack (formatCallStack cs)
       SNErrInvariant loc i -> "Error SNErrInvariant: " <> Show.show loc <> ": " <> show (renderSyncInvariant i)
       SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
@@ -193,3 +202,30 @@ logAndThrowIO tracer err = do
 
 hasAbortOnPanicEnv :: IO Bool
 hasAbortOnPanicEnv = isJust <$> lookupEnv "DbSyncAbortOnPanic"
+
+-- | Create a SyncNodeCallStack from the current call stack
+mkSyncNodeCallStack :: HasCallStack => Text -> SyncNodeCallStack
+mkSyncNodeCallStack _name =
+  case getCallStack callStack of
+    [] -> SyncNodeCallStack []
+    ((_, _) : rest) ->
+      SyncNodeCallStack
+        { sncsCallChain = take 8 $ map formatFrame rest -- Take next 8 frames
+        }
+  where
+    formatFrame (fnName, srcLoc) =
+      Text.pack fnName
+        <> " at "
+        <> Text.pack (srcLocModule srcLoc)
+        <> ":"
+        <> Text.pack (srcLocFile srcLoc)
+        <> ":"
+        <> Text.pack (show (srcLocStartLine srcLoc))
+
+-- | Format a SyncNodeCallStack for display in error messages
+-- This can be reused for other error types that include callstacks
+formatCallStack :: SyncNodeCallStack -> Text
+formatCallStack cs =
+  if null (sncsCallChain cs)
+    then ""
+    else "\n  Call chain: " <> Text.intercalate " <- " (sncsCallChain cs)

@@ -26,9 +26,9 @@ import qualified Cardano.Db.Schema.MinIds as SM
 import Cardano.Db.Schema.Variants (MaTxOutIdW (..), TxOutIdW (..))
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
+import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Statement.Types (DbInfo (..), Key, tableName, validateColumn)
-import Cardano.Db.Types (DbAction)
+import Cardano.Db.Types (DbM)
 
 ---------------------------------------------------------------------------
 -- RAW INT64 QUERIES (for rollback operations)
@@ -61,18 +61,17 @@ queryMinRefIdStmt fieldName encoder idDecoder =
     decoder = HsqlD.rowMaybe idDecoder
 
 queryMinRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value to compare against
   b ->
   -- | Parameter encoder
   HsqlE.Params b ->
-  DbAction m (Maybe Int64)
+  DbM (Maybe Int64)
 queryMinRefId fieldName value encoder =
-  runDbSessionMain (mkDbCallStack "queryMinRefId") $
-    HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
+  runSession $ HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -107,18 +106,17 @@ queryMinRefIdNullableStmt fieldName encoder idDecoder =
           ]
 
 queryMinRefIdNullable ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value to compare against
   b ->
   -- | Parameter encoder
   HsqlE.Params b ->
-  DbAction m (Maybe Int64)
+  DbM (Maybe Int64)
 queryMinRefIdNullable fieldName value encoder =
-  runDbSessionMain (mkDbCallStack "queryMinRefIdNullable") $
-    HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
+  runSession $ HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -153,8 +151,8 @@ queryMinRefIdKeyStmt fieldName encoder keyDecoder =
     decoder = HsqlD.rowMaybe keyDecoder
 
 queryMinRefIdKey ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   -- | Field name
   Text.Text ->
   -- | Value to compare against
@@ -163,20 +161,20 @@ queryMinRefIdKey ::
   HsqlE.Params b ->
   -- | Key decoder
   HsqlD.Row (Key a) ->
-  DbAction m (Maybe (Key a))
+  DbM (Maybe (Key a))
 queryMinRefIdKey fieldName value encoder keyDecoder =
-  runDbSessionMain (mkDbCallStack "queryMinRefIdKey") $
+  runSession $
     HsqlSes.statement value (queryMinRefIdKeyStmt @a fieldName encoder keyDecoder)
 
 whenNothingQueryMinRefId ::
-  forall a b m.
-  (DbInfo a, MonadIO m) =>
+  forall a b.
+  DbInfo a =>
   Maybe (Key a) -> -- Existing key value
   Text.Text -> -- Field name
   b -> -- Value to compare
   HsqlE.Params b -> -- Encoder for value
   HsqlD.Row (Key a) -> -- Decoder for key
-  DbAction m (Maybe (Key a))
+  DbM (Maybe (Key a))
 whenNothingQueryMinRefId mKey fieldName value encoder keyDecoder =
   case mKey of
     Just k -> pure $ Just k
@@ -187,15 +185,18 @@ whenNothingQueryMinRefId mKey fieldName value encoder keyDecoder =
 ---------------------------------------------------------------------------
 
 completeMinId ::
-  MonadIO m =>
   Maybe Id.TxId ->
   SM.MinIdsWrapper ->
-  DbAction m SM.MinIdsWrapper
+  DbM SM.MinIdsWrapper
 completeMinId mTxId mIdW = case mIdW of
-  SM.CMinIdsWrapper minIds -> SM.CMinIdsWrapper <$> completeMinIdCore mTxId minIds
-  SM.VMinIdsWrapper minIds -> SM.VMinIdsWrapper <$> completeMinIdVariant mTxId minIds
+  SM.CMinIdsWrapper minIds -> do
+    res <- completeMinIdCore mTxId minIds
+    pure $ SM.CMinIdsWrapper res
+  SM.VMinIdsWrapper minIds -> do
+    res <- completeMinIdVariant mTxId minIds
+    pure $ SM.VMinIdsWrapper res
 
-completeMinIdCore :: MonadIO m => Maybe Id.TxId -> MinIds -> DbAction m MinIds
+completeMinIdCore :: Maybe Id.TxId -> MinIds -> DbM MinIds
 completeMinIdCore mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty
@@ -233,7 +234,7 @@ completeMinIdCore mTxId minIds = do
           , minMaTxOutId = CMaTxOutIdW <$> mMaTxOutId
           }
 
-completeMinIdVariant :: MonadIO m => Maybe Id.TxId -> MinIds -> DbAction m MinIds
+completeMinIdVariant :: Maybe Id.TxId -> MinIds -> DbM MinIds
 completeMinIdVariant mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty

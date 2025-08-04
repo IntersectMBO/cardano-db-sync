@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Cardano.Db.Run where
 
@@ -16,12 +17,10 @@ import Cardano.BM.Data.LogItem (
 import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Trace (Trace)
 import Cardano.Prelude
-import Control.Monad.IO.Unlift (withRunInIO)
 import Control.Monad.Logger (
   LogLevel (..),
   LogSource,
   LoggingT,
-  NoLoggingT,
   runLoggingT,
   runNoLoggingT,
  )
@@ -32,19 +31,193 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Connection.Setting as HsqlConS
-import qualified Hasql.Decoders as HsqlD
-import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
-import qualified Hasql.Statement as HsqlStmt
 import Language.Haskell.TH.Syntax (Loc)
 import System.Log.FastLogger (LogStr, fromLogStr)
-import Prelude (error, userError)
+import Prelude (userError)
 
-import Cardano.Db.Error (DbCallStack (..), DbError (..), runOrThrowIO)
-import Cardano.Db.PGConfig
-import Cardano.Db.Statement.Function.Core (mkDbCallStack, runDbSessionMain)
-import Cardano.Db.Types (DbAction (..), DbEnv (..))
-import qualified Hasql.Session as HsqlSess
+import Cardano.Db.Error (DbError (..), runOrThrowIO)
+import Cardano.Db.PGConfig (PGPassSource (..), readPGPass, toConnectionSetting)
+import Cardano.Db.Statement.Function.Core (runSession)
+import Cardano.Db.Types (DbEnv (..), DbM (..))
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Statement as HsqlStmt
+
+-----------------------------------------------------------------------------------------
+-- Transaction Runners for DbM
+-----------------------------------------------------------------------------------------
+
+-- | Main database runner for blockchain synchronization operations
+--
+-- This is the primary runner used for cardano-db-sync block processing.
+-- Wraps all operations in a single database transaction with full ACID guarantees.
+-- Automatically handles BEGIN/COMMIT/ROLLBACK and provides comprehensive logging.
+runDbTransactionIohkLogging ::
+  MonadUnliftIO m =>
+  Trace IO Text ->
+  DbEnv ->
+  DbM a ->
+  m a
+runDbTransactionIohkLogging tracer dbEnv action = do
+  runIohkLogging tracer $ do
+    result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
+    case result of
+      Left sessionErr ->
+        throwIO $ DbError $ "Database transaction error: " <> Text.pack (show sessionErr)
+      Right dbResult -> pure dbResult
+  where
+    transactionSession = do
+      -- Begin the transaction
+      HsqlS.statement () (beginTransactionStmt RepeatableRead)
+      -- Run the action in IO, but it will use the same connection
+      -- since runSession uses the connection from dbEnv
+      result <- liftIO $ try @SomeException $ runReaderT (runDbM action) dbEnv
+      case result of
+        Left err -> do
+          -- Something went wrong - rollback the transaction
+          HsqlS.statement () rollbackTransactionStmt
+          throwIO err
+        Right value -> do
+          -- Everything succeeded - commit the transaction
+          HsqlS.statement () commitTransactionStmt
+          pure value
+
+-- | Transaction runner without logging overhead
+--
+-- Same transaction guarantees as runDbTransactionIohkLogging but without logging.
+-- Useful for performance-critical operations or testing where log output isn't needed.
+runDbTransactionIohkNoLogging ::
+  MonadUnliftIO m =>
+  DbEnv ->
+  DbM a ->
+  m a
+runDbTransactionIohkNoLogging dbEnv action = do
+  runNoLoggingT $ do
+    result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
+    case result of
+      Left sessionErr ->
+        throwIO $ DbError $ "Database transaction error: " <> Text.pack (show sessionErr)
+      Right dbResult -> pure dbResult
+  where
+    transactionSession = do
+      -- Step 1: Begin the transaction
+      HsqlS.statement () (beginTransactionStmt RepeatableRead)
+      -- Step 2: Run the action in IO, but it will use the same connection
+      -- since runSession uses the connection from dbEnv
+      result <- liftIO $ try @SomeException $ runReaderT (runDbM action) dbEnv
+      case result of
+        Left err -> do
+          -- Step 2a: Something went wrong - rollback the transaction
+          HsqlS.statement () rollbackTransactionStmt
+          throwIO err
+        Right value -> do
+          -- Step 2b: Everything succeeded - commit the transaction
+          HsqlS.statement () commitTransactionStmt
+          pure value
+
+-- | Pool-based runner for concurrent database operations
+--
+-- Uses a connection from the DbEnv's connection pool instead of the main connection.
+-- Each database operation auto-commits (no explicit transaction boundaries).
+-- Ideal for operations that run parallel to the main synchronization thread.
+runDbPoolIohkLogging ::
+  MonadUnliftIO m =>
+  Trace IO Text ->
+  DbEnv ->
+  DbM a ->
+  m a
+runDbPoolIohkLogging tracer dbEnv action = do
+  case dbPoolConnection dbEnv of
+    Nothing -> throwIO $ DbError "No connection pool available in DbEnv"
+    Just pool -> do
+      runIohkLogging tracer $ do
+        liftIO $ withResource pool $ \conn -> do
+          -- Create a temporary DbEnv using the pool connection
+          let tempDbEnv = dbEnv {dbConnection = conn}
+          -- Run the action with the temporary DbEnv
+          runReaderT (runDbM action) tempDbEnv
+
+-- | External service database runner with error handling
+--
+-- Designed for external services (like SMASH server) that manage their own connection pools.
+-- Returns Either for explicit error handling rather than throwing exceptions.
+-- Creates temporary DbEnv from the provided pool connection.
+runDbWithPool ::
+  MonadIO m =>
+  Pool HsqlCon.Connection ->
+  Trace IO Text ->
+  DbM a ->
+  m (Either DbError a)
+runDbWithPool connPool tracer action = do
+  liftIO $ try $ runIohkLogging tracer $ do
+    liftIO $ withResource connPool $ \conn -> do
+      let tempDbEnv =
+            DbEnv
+              { dbConnection = conn
+              , dbPoolConnection = Just connPool
+              , dbTracer = Just tracer
+              }
+      runReaderT (runDbM action) tempDbEnv
+
+-----------------------------------------------------------------------------------------
+-- High-Level Database Runners with Specific Patterns
+-----------------------------------------------------------------------------------------
+
+-- | Simple standalone runner using default environment configuration
+--
+-- Self-contained runner that reads database configuration from environment variables.
+-- Creates its own temporary connection and cleans up automatically.
+-- Perfect for simple scripts and testing scenarios
+runDbMNoLoggingDefaultEnv :: DbM a -> IO a
+runDbMNoLoggingDefaultEnv = runDbMTransactionNoLogging PGPassDefaultEnv
+
+-- | Standalone runner with connection pool support
+--
+-- Creates both a main connection and connection pool from the provided configuration.
+-- Self-contained with full cleanup, suitable for applications needing both connection types
+runDbMWithPoolNoLogging :: PGPassSource -> DbM a -> IO a
+runDbMWithPoolNoLogging source action = do
+  pgconfig <- runOrThrowIO (readPGPass source)
+  connSetting <- case toConnectionSetting pgconfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+  withManagedPool [connSetting] 4 $ \pool ->
+    bracket
+      (acquireConnection [connSetting])
+      HsqlCon.release
+      ( \connection -> do
+          let dbEnv =
+                DbEnv
+                  { dbConnection = connection
+                  , dbPoolConnection = Just pool -- Pool available for async operations
+                  , dbTracer = Nothing
+                  }
+          runReaderT (runDbM action) dbEnv
+      )
+
+-- | Standalone runner with connection pool support
+--
+-- Creates both a main connection and connection pool from the provided configuration.
+-- Self-contained with full cleanup, suitable for applications needing both connection types
+runDbMTransactionNoLogging :: PGPassSource -> DbM a -> IO a
+runDbMTransactionNoLogging source action = do
+  pgconfig <- runOrThrowIO (readPGPass source)
+  connSetting <- case toConnectionSetting pgconfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+  bracket
+    (acquireConnection [connSetting])
+    HsqlCon.release
+    ( \connection -> do
+        let dbEnv =
+              DbEnv
+                { dbConnection = connection
+                , dbPoolConnection = Nothing
+                , dbTracer = Nothing
+                }
+        runDbTransactionIohkNoLogging dbEnv action
+    )
 
 -----------------------------------------------------------------------------------------
 -- Types and Constants
@@ -76,6 +249,11 @@ beginTransactionStmt isolationLevel =
   where
     sql = "BEGIN ISOLATION LEVEL " <> encodeUtf8 (isolationLevelToSql isolationLevel)
 
+beginTransaction :: IsolationLevel -> DbM ()
+beginTransaction isolationLevel = do
+  -- Begin new transaction with specified isolation level
+  runSession $ HsqlS.statement () (beginTransactionStmt isolationLevel)
+
 -- | Create a COMMIT statement
 commitTransactionStmt :: HsqlStmt.Statement () ()
 commitTransactionStmt =
@@ -86,16 +264,26 @@ rollbackTransactionStmt :: HsqlStmt.Statement () ()
 rollbackTransactionStmt =
   HsqlStmt.Statement "ROLLBACK" HsqlE.noParams HsqlD.noResult True
 
--- | Commit the current transaction within a DbAction context
-commitCurrentTransaction :: MonadIO m => DbAction m ()
-commitCurrentTransaction = do
-  runDbSessionMain (mkDbCallStack "commitCurrentTransaction") $
-    HsqlSess.statement () commitTransactionStmt
+transactionSaveWithIsolation :: IsolationLevel -> DbM ()
+transactionSaveWithIsolation isolationLevel = do
+  -- Commit current transaction
+  runSession $ HsqlS.statement () commitTransactionStmt
+  -- Begin new transaction with specified isolation level
+  runSession $ HsqlS.statement () (beginTransactionStmt isolationLevel)
 
--- | Convert Hasql SessionError to DbError for consistent error handling
-sessionErrorToDbError :: DbCallStack -> HsqlS.SessionError -> DbError
-sessionErrorToDbError cs sessionErr =
-  DbError cs ("Transaction error: " <> Text.pack (show sessionErr)) (Just sessionErr)
+setDefaultIsolationLevel :: HsqlCon.Connection -> IO ()
+setDefaultIsolationLevel conn = do
+  result <- HsqlS.run (HsqlS.statement () setIsolationStmt) conn
+  case result of
+    Left err -> throwIO $ DbError $ "Failed to set isolation level: " <> Text.pack (show err)
+    Right _ -> pure ()
+  where
+    setIsolationStmt =
+      HsqlStmt.Statement
+        "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+        HsqlE.noParams
+        HsqlD.noResult
+        True
 
 -----------------------------------------------------------------------------------------
 -- Connection Management
@@ -107,7 +295,10 @@ acquireConnection settings = do
   result <- HsqlCon.acquire settings
   case result of
     Left err -> throwIO $ userError $ "Connection error: " <> show err
-    Right conn -> pure conn
+    Right conn -> do
+      -- Set default isolation level for the connection to Repeatable Read
+      setDefaultIsolationLevel conn
+      pure conn
 
 -- | Create a connection pool with specified settings and size
 --
@@ -134,7 +325,7 @@ createHasqlConnectionPool settings numConnections = do
 --
 -- The primary connection is used for sequential/transactional operations,
 -- while the pool is used for parallel/async operations.
-createDbEnv :: HsqlCon.Connection -> Pool HsqlCon.Connection -> Maybe (Trace IO Text) -> DbEnv
+createDbEnv :: HsqlCon.Connection -> Maybe (Pool HsqlCon.Connection) -> Maybe (Trace IO Text) -> DbEnv
 createDbEnv conn pool mTracer =
   DbEnv
     { dbConnection = conn -- Primary connection for main thread operations
@@ -151,226 +342,6 @@ withManagedPool :: [HsqlConS.Setting] -> Int -> (Pool HsqlCon.Connection -> IO a
 withManagedPool settings numConns action = do
   pool <- createHasqlConnectionPool settings numConns
   action pool `finally` destroyAllResources pool
-
------------------------------------------------------------------------------------------
--- Core Database Execution with Transaction Control
------------------------------------------------------------------------------------------
-
--- | Run a DbAction with explicit transaction control and isolation level
---
--- This is the foundational function for all database operations with full control
--- over transaction behavior and error handling.
---
--- == Transaction Behavior:
--- * Begins transaction with specified isolation level
--- * Runs the action within the transaction
--- * Commits if action succeeds, rollback only on commit failure or async exceptions
--- * Returns Either for explicit error handling instead of throwing exceptions
---
--- == Exception Safety:
--- * Uses 'mask' to prevent async exceptions during transaction lifecycle
--- * Uses 'onException' to ensure rollback on interrupts (Ctrl+C, SIGTERM, etc.)
--- * Does NOT rollback on action errors - lets them commit (matches Persistent semantics)
---
--- == Note:
--- This follows Persistent's philosophy where successful function calls commit
--- their transactions regardless of the return value. Only async exceptions and
--- commit failures trigger rollbacks.
-runDbActionWithIsolation ::
-  MonadUnliftIO m =>
-  DbEnv ->
-  IsolationLevel ->
-  DbAction m a ->
-  m (Either DbError a)
-runDbActionWithIsolation dbEnv isolationLevel action  = do
-  withRunInIO $ \runInIO -> do
-    -- Use masking to prevent async exceptions during transaction management
-    mask $ \restore -> do
-      -- Begin transaction with specified isolation level
-      beginResult <- beginTransaction dbEnv isolationLevel
-      case beginResult of
-        Left err -> pure (Left err)
-        Right _ -> do
-          -- Run action with async exception protection via onException
-          -- If interrupted (Ctrl+C), the onException handler will rollback
-          actionResult <-
-            try $
-              onException
-                (restore (runInIO $ runReaderT (runDbAction action) dbEnv))
-                (restore $ rollbackTransaction dbEnv)
-          case actionResult of
-            -- Action threw exception - return the DbError
-            Left (err :: DbError) -> pure (Left err)
-            Right val -> do
-              -- Attempt to commit the transaction
-              commitResult <- commitTransaction dbEnv
-              case commitResult of
-                Left commitErr -> do
-                  -- Commit failed - rollback and return the commit error
-                  rollbackTransaction dbEnv
-                  pure (Left commitErr)
-                Right _ -> pure (Right val)
-  where
-    beginTransaction :: DbEnv -> IsolationLevel -> IO (Either DbError ())
-    beginTransaction env level = do
-      let cs = mkDbCallStack "beginTransaction"
-      result <- HsqlS.run (HsqlS.statement () (beginTransactionStmt level)) (dbConnection env)
-      pure $ first (sessionErrorToDbError cs) result
-
-    commitTransaction :: DbEnv -> IO (Either DbError ())
-    commitTransaction env = do
-      let cs = mkDbCallStack "commitTransaction"
-      result <- HsqlS.run (HsqlS.statement () commitTransactionStmt) (dbConnection env)
-      pure $ first (sessionErrorToDbError cs) result
-
-    rollbackTransaction :: DbEnv -> IO ()
-    rollbackTransaction env = do
-      void $ HsqlS.run (HsqlS.statement () rollbackTransactionStmt) (dbConnection env)
-
--- | Run a DbAction with transaction control, throwing exceptions on error
---
--- This is a convenience wrapper around 'runDbActionWithIsolation' that
--- throws exceptions instead of returning Either values.
-runDbConnWithIsolation ::
-  MonadUnliftIO m =>
-  DbAction m a ->
-  DbEnv ->
-  IsolationLevel ->
-  m a
-runDbConnWithIsolation action dbEnv isolationLevel = do
-  result <- runDbActionWithIsolation dbEnv isolationLevel action
-  case result of
-    Left err -> liftIO $ throwIO err
-    Right val -> pure val
-
--- | Simple DbAction runner for testing and simple operations
---
--- Runs the action in IO context with basic error propagation.
--- Does not provide transaction control - use runDbActionWithIsolation for that.
-runDbActionIO :: DbEnv -> DbAction IO a -> IO a
-runDbActionIO dbEnv action = do
-  result <- try $ runReaderT (runDbAction action) dbEnv
-  case result of
-    Left (err :: DbError) -> throwIO err
-    Right val -> pure val
-
------------------------------------------------------------------------------------------
--- High-Level Database Runners with Specific Patterns
------------------------------------------------------------------------------------------
-
--- | Run DbAction with IOHK-style logging and RepeatableRead isolation
---
--- This is the standard runner for most database operations in the sync system.
--- Uses RepeatableRead isolation level to match historical behavior.
-runDbIohkLogging :: MonadUnliftIO m => Trace IO Text -> DbEnv -> DbAction (LoggingT m) a -> m a
-runDbIohkLogging tracer dbEnv action =
-  runIohkLogging tracer $
-    runDbConnWithIsolation action dbEnv RepeatableRead
-
--- | Like runDbIohkLogging but returns Either instead of throwing exceptions
---
--- Useful when you need to handle database errors explicitly rather than
--- letting them propagate as exceptions.
-runDbIohkLoggingEither :: MonadUnliftIO m => Trace IO Text -> DbEnv -> DbAction (LoggingT m) a -> m (Either DbError a)
-runDbIohkLoggingEither tracer dbEnv action = do
-  runIohkLogging tracer $
-    runDbActionWithIsolation dbEnv RepeatableRead action
-
--- | Run DbAction without logging but with RepeatableRead isolation
---
--- Useful for operations where logging overhead is not desired.
-runDbIohkNoLogging :: MonadUnliftIO m => DbEnv -> DbAction (NoLoggingT m) a -> m a
-runDbIohkNoLogging dbEnv action =
-  runNoLoggingT $
-    runDbConnWithIsolation action dbEnv RepeatableRead
-
--- | Standalone database runner that creates its own connection from PGPass
---
--- This function handles the complete lifecycle: reads configuration,
--- creates connections and pools, runs the action, and cleans up.
--- Suitable for standalone operations or testing.
-runDbNoLogging :: MonadUnliftIO m => PGPassSource -> DbAction m a -> m a
-runDbNoLogging source action = do
-  pgconfig <- liftIO $ runOrThrowIO (readPGPass source)
-  connSetting <- liftIO $ case toConnectionSetting pgconfig of
-    Left err -> error err
-    Right setting -> pure setting
-  withRunInIO $ \runInIO ->
-    withManagedPool [connSetting] 4 $ \pool ->
-      bracket
-        (acquireConnection [connSetting])
-        HsqlCon.release
-        ( \connection -> runInIO $ do
-            let dbEnv = createDbEnv connection pool Nothing
-            runDbConnWithIsolation action dbEnv RepeatableRead
-        )
-
--- | Convenience wrapper for runDbNoLogging using default environment PGPass
-runDbNoLoggingEnv :: MonadUnliftIO m => DbAction m a -> m a
-runDbNoLoggingEnv = runDbNoLogging PGPassDefaultEnv
-
--- | Standalone runner with NoLoggingT monad for pure IO operations
---
--- Similar to runDbNoLogging but specifically for NoLoggingT IO actions.
-runWithConnectionNoLogging :: PGPassSource -> DbAction (NoLoggingT IO) a -> IO a
-runWithConnectionNoLogging source action = do
-  pgConfig <- runOrThrowIO (readPGPass source)
-  connSetting <- case toConnectionSetting pgConfig of
-    Left err -> throwIO $ userError err
-    Right setting -> pure setting
-  withManagedPool [connSetting] 4 $ \pool ->
-    bracket
-      (acquireConnection [connSetting])
-      HsqlCon.release
-      ( \connection -> do
-          let dbEnv = createDbEnv connection pool Nothing
-          runNoLoggingT $ runDbConnWithIsolation action dbEnv RepeatableRead
-      )
-
------------------------------------------------------------------------------------------
--- Pool-Based Operations for Parallel/Async Work
------------------------------------------------------------------------------------------
-
--- | Run DbAction using a connection from an existing pool with logging
---
--- This function takes a connection from the provided pool and runs the action
--- with full logging support. The connection is kept locked for the entire
--- duration of the action to prevent race conditions and resource leaks.
-runPoolDbIohkLogging ::
-  MonadUnliftIO m =>
-  Pool HsqlCon.Connection ->
-  Trace IO Text ->
-  DbAction (LoggingT m) a ->
-  m (Either DbError a)
-runPoolDbIohkLogging connPool tracer action = do
-  withRunInIO $ \runInIO ->
-    withResource connPool $ \conn -> do
-      let dbEnv = createDbEnv conn connPool (Just tracer)
-      runInIO $
-        runIohkLogging tracer $
-          runDbActionWithIsolation dbEnv RepeatableRead action
-
--- | Run DbAction using a connection from the DbEnv's pool
---
--- This function extracts a connection from the DbEnv's connection pool
--- and runs the action with it. The connection is kept locked for the entire
--- duration of the action to prevent race conditions and resource leaks.
---
--- == Use Cases:
--- * Parallel database operations alongside the main thread
--- * Async database work that shouldn't block the main connection
--- * Bulk operations that can benefit from connection pooling
---
--- == Important Notes:
--- * The action runs in the same DbEnv context but with a pool connection
--- * Logging is preserved from the original DbEnv
--- * Connection is automatically managed by the pool and kept locked during execution
-runPoolDbAction :: forall a m. MonadUnliftIO m => DbEnv -> DbAction m a -> m a
-runPoolDbAction dbEnv action = do
-  withRunInIO $ \runInIO ->
-    withResource (dbPoolConnection dbEnv) $ \conn -> do
-      let poolDbEnv = dbEnv {dbConnection = conn}
-      runInIO $ runReaderT (runDbAction action) poolDbEnv
 
 -----------------------------------------------------------------------------------------
 -- Logging Utilities

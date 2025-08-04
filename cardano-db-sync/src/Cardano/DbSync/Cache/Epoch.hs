@@ -15,6 +15,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (CacheEpoch (..), CacheInternal (..), CacheStatus (..), EpochBlockDiff (..))
 import Cardano.DbSync.Era.Shelley.Generic.StakeDist (getSecurityParameter)
+import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv (..))
 import Cardano.Ledger.BaseTypes.NonZero (NonZero (..))
@@ -57,13 +58,14 @@ rollbackMapEpochInCache cacheInternal blockId = do
   writeToCache cacheInternal (CacheEpoch newMapEpoch (ceEpochBlockDiff cE))
 
 writeEpochBlockDiffToCache ::
-  MonadIO m =>
   CacheStatus ->
   EpochBlockDiff ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
-    NoCache -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "writeEpochBlockDiffToCache") "Cache is NoCache" Nothing
+    NoCache -> do
+      let cs = mkSyncNodeCallStack "writeEpochBlockDiffToCache"
+      throwError $ SNErrDefault cs "Cache is NoCache"
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
@@ -73,24 +75,24 @@ writeEpochBlockDiffToCache cache epCurrent =
 -- | into the db. This is so we have a historic representation of an epoch after every block is inserted.
 -- | This becomes usefull when syncing and doing rollbacks and saves on expensive db queries to calculte an epoch.
 writeToMapEpochCache ::
-  MonadIO m =>
   SyncEnv ->
   CacheStatus ->
   DB.Epoch ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 writeToMapEpochCache syncEnv cache latestEpoch = do
+  let cs = mkSyncNodeCallStack "writeToMapEpochCache"
   -- this can also be tought of as max rollback number
   let securityParam =
         case envLedgerEnv syncEnv of
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    NoCache -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "writeToMapEpochCache") "Cache is NoCache" Nothing
+    NoCache -> throwError $ SNErrDefault cs "Cache is NoCache"
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
-        Nothing -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "writeToMapEpochCache") "No epochInternalEpochCache" Nothing
+        Nothing -> throwError $ SNErrDefault cs "No epochInternalEpochCache"
         Just ei -> do
           cE <- liftIO $ readTVarIO (cEpoch ci)
           let currentBlockId = ebdBlockId ei

@@ -3,50 +3,48 @@
 module Cardano.DbSync.Util.Constraint where
 
 import Cardano.BM.Data.Trace (Trace)
-import Cardano.Db (ManualDbConstraints (..))
-import qualified Cardano.Db as DB
-import Cardano.Prelude (MonadIO (..), atomically)
+import Cardano.Prelude (ExceptT, MonadIO (..), atomically, lift)
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad (unless)
 import Data.Text (Text)
 
+import Cardano.Db (ManualDbConstraints (..))
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (SyncEnv (..))
+import Cardano.DbSync.Error (SyncNodeError)
 
 -- | Add all constraints if needed
 addConstraintsIfNotExist ::
-  MonadIO m =>
   -- | TVar for tracking constraint state
   SyncEnv ->
   Trace IO Text ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 addConstraintsIfNotExist syncEnv trce = do
   addStakeConstraintsIfNotExist syncEnv trce
   addRewardConstraintsIfNotExist syncEnv trce
 
 -- | Add EpochStake constraints if not exist
 addStakeConstraintsIfNotExist ::
-  MonadIO m =>
   SyncEnv ->
   Trace IO Text ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 addStakeConstraintsIfNotExist syncEnv trce = do
   let eDbConstraints = envDbConstraints syncEnv
   mdbc <- liftIO $ readTVarIO eDbConstraints
   unless (dbConstraintEpochStake mdbc) $ do
-    DB.addEpochStakeTableConstraint trce
+    lift $ DB.addEpochStakeTableConstraint trce
     liftIO . atomically $
       writeTVar eDbConstraints (mdbc {dbConstraintEpochStake = True})
 
 -- | Add Reward constraints if not exist
 addRewardConstraintsIfNotExist ::
-  MonadIO m =>
   SyncEnv ->
   Trace IO Text ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 addRewardConstraintsIfNotExist syncEnv trce = do
   let eDbConstraints = envDbConstraints syncEnv
   mdbc <- liftIO $ readTVarIO eDbConstraints
   unless (dbConstraintRewards mdbc) $ do
-    DB.addRewardTableConstraint trce
+    lift $ DB.addRewardTableConstraint trce
     liftIO . atomically $
       writeTVar eDbConstraints (mdbc {dbConstraintRewards = True})

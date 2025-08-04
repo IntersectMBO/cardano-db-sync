@@ -8,7 +8,7 @@
 
 module Cardano.Db.Statement.GovernanceAndVoting where
 
-import Cardano.Prelude (Int64, MonadIO, Proxy (..), Word64, liftIO, throwIO)
+import Cardano.Prelude (Int64, Proxy (..), Word64)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -21,11 +21,11 @@ import Cardano.Db.Error (DbError (..))
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Ids as Id
-import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), mkDbCallStack, runDbSessionMain)
+import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), runSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Types (DbInfo (..), validateColumn)
-import Cardano.Db.Types (DbAction, DbLovelace, hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
+import Cardano.Db.Types (DbLovelace, DbM, hardcodedAlwaysAbstain, hardcodedAlwaysNoConfidence)
 
 --------------------------------------------------------------------------------
 -- Committee
@@ -36,9 +36,9 @@ insertCommitteeStmt =
     SGV.committeeEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CommitteeId)
 
-insertCommittee :: MonadIO m => SGV.Committee -> DbAction m Id.CommitteeId
+insertCommittee :: SGV.Committee -> DbM Id.CommitteeId
 insertCommittee committee = do
-  runDbSessionMain (mkDbCallStack "insertCommittee") $ HsqlSes.statement committee insertCommitteeStmt
+  runSession $ HsqlSes.statement committee insertCommitteeStmt
 
 queryProposalCommitteeStmt :: HsqlStmt.Statement (Maybe Id.GovActionProposalId) [Id.CommitteeId]
 queryProposalCommitteeStmt =
@@ -66,9 +66,9 @@ queryProposalCommitteeStmt =
               Id.CommitteeId <$> HsqlD.int8
         )
 
-queryProposalCommittee :: MonadIO m => Maybe Id.GovActionProposalId -> DbAction m [Id.CommitteeId]
+queryProposalCommittee :: Maybe Id.GovActionProposalId -> DbM [Id.CommitteeId]
 queryProposalCommittee mgapId =
-  runDbSessionMain (mkDbCallStack "queryProposalCommittee") $
+  runSession $
     HsqlSes.statement mgapId queryProposalCommitteeStmt
 
 --------------------------------------------------------------------------------
@@ -82,9 +82,9 @@ insertCommitteeHashStmt =
     SGV.committeeHashEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CommitteeHashId)
 
-insertCommitteeHash :: MonadIO m => SGV.CommitteeHash -> DbAction m Id.CommitteeHashId
+insertCommitteeHash :: SGV.CommitteeHash -> DbM Id.CommitteeHashId
 insertCommitteeHash committeeHash = do
-  runDbSessionMain (mkDbCallStack "insertCommitteeHash") $ HsqlSes.statement committeeHash insertCommitteeHashStmt
+  runSession $ HsqlSes.statement committeeHash insertCommitteeHashStmt
 
 --------------------------------------------------------------------------------
 -- CommitteeMember
@@ -95,9 +95,9 @@ insertCommitteeMemberStmt =
     SGV.committeeMemberEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CommitteeMemberId)
 
-insertCommitteeMember :: MonadIO m => SGV.CommitteeMember -> DbAction m Id.CommitteeMemberId
+insertCommitteeMember :: SGV.CommitteeMember -> DbM Id.CommitteeMemberId
 insertCommitteeMember committeeMember = do
-  runDbSessionMain (mkDbCallStack "insertCommitteeMember") $ HsqlSes.statement committeeMember insertCommitteeMemberStmt
+  runSession $ HsqlSes.statement committeeMember insertCommitteeMemberStmt
 
 insertCommitteeDeRegistrationStmt :: HsqlStmt.Statement SGV.CommitteeDeRegistration Id.CommitteeDeRegistrationId
 insertCommitteeDeRegistrationStmt =
@@ -105,9 +105,9 @@ insertCommitteeDeRegistrationStmt =
     SGV.committeeDeRegistrationEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CommitteeDeRegistrationId)
 
-insertCommitteeDeRegistration :: MonadIO m => SGV.CommitteeDeRegistration -> DbAction m Id.CommitteeDeRegistrationId
+insertCommitteeDeRegistration :: SGV.CommitteeDeRegistration -> DbM Id.CommitteeDeRegistrationId
 insertCommitteeDeRegistration committeeDeRegistration = do
-  runDbSessionMain (mkDbCallStack "insertCommitteeDeRegistration") $
+  runSession $
     HsqlSes.statement committeeDeRegistration insertCommitteeDeRegistrationStmt
 
 insertCommitteeRegistrationStmt :: HsqlStmt.Statement SGV.CommitteeRegistration Id.CommitteeRegistrationId
@@ -116,9 +116,9 @@ insertCommitteeRegistrationStmt =
     SGV.committeeRegistrationEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.CommitteeRegistrationId)
 
-insertCommitteeRegistration :: MonadIO m => SGV.CommitteeRegistration -> DbAction m Id.CommitteeRegistrationId
+insertCommitteeRegistration :: SGV.CommitteeRegistration -> DbM Id.CommitteeRegistrationId
 insertCommitteeRegistration committeeRegistration = do
-  runDbSessionMain (mkDbCallStack "insertCommitteeRegistration") $
+  runSession $
     HsqlSes.statement committeeRegistration insertCommitteeRegistrationStmt
 
 --------------------------------------------------------------------------------
@@ -130,9 +130,9 @@ insertConstitutionStmt =
     SGV.constitutionEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ConstitutionId)
 
-insertConstitution :: MonadIO m => SGV.Constitution -> DbAction m Id.ConstitutionId
+insertConstitution :: SGV.Constitution -> DbM Id.ConstitutionId
 insertConstitution constitution = do
-  runDbSessionMain (mkDbCallStack "insertConstitution") $ HsqlSes.statement constitution insertConstitutionStmt
+  runSession $ HsqlSes.statement constitution insertConstitutionStmt
 
 queryProposalConstitutionStmt :: HsqlStmt.Statement (Maybe Id.GovActionProposalId) [Id.ConstitutionId]
 queryProposalConstitutionStmt =
@@ -160,9 +160,9 @@ queryProposalConstitutionStmt =
               Id.ConstitutionId <$> HsqlD.int8
         )
 
-queryProposalConstitution :: MonadIO m => Maybe Id.GovActionProposalId -> DbAction m [Id.ConstitutionId]
+queryProposalConstitution :: Maybe Id.GovActionProposalId -> DbM [Id.ConstitutionId]
 queryProposalConstitution mgapId =
-  runDbSessionMain (mkDbCallStack "queryProposalConstitution") $
+  runSession $
     HsqlSes.statement mgapId queryProposalConstitutionStmt
 
 --------------------------------------------------------------------------------
@@ -174,9 +174,9 @@ insertDelegationVoteStmt =
     SGV.delegationVoteEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DelegationVoteId)
 
-insertDelegationVote :: MonadIO m => SGV.DelegationVote -> DbAction m Id.DelegationVoteId
+insertDelegationVote :: SGV.DelegationVote -> DbM Id.DelegationVoteId
 insertDelegationVote delegationVote = do
-  runDbSessionMain (mkDbCallStack "insertDelegationVote") $ HsqlSes.statement delegationVote insertDelegationVoteStmt
+  runSession $ HsqlSes.statement delegationVote insertDelegationVoteStmt
 
 --------------------------------------------------------------------------------
 -- Drep
@@ -189,9 +189,9 @@ insertDrepHashStmt =
     SGV.drepHashEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DrepHashId)
 
-insertDrepHash :: MonadIO m => SGV.DrepHash -> DbAction m Id.DrepHashId
+insertDrepHash :: SGV.DrepHash -> DbM Id.DrepHashId
 insertDrepHash drepHash = do
-  runDbSessionMain (mkDbCallStack "insertDrepHash") $ HsqlSes.statement drepHash insertDrepHashStmt
+  runSession $ HsqlSes.statement drepHash insertDrepHashStmt
 
 insertDrepHashAbstainStmt :: HsqlStmt.Statement SGV.DrepHash Id.DrepHashId
 insertDrepHashAbstainStmt =
@@ -199,13 +199,13 @@ insertDrepHashAbstainStmt =
     SGV.drepHashEncoder
     (WithResult (HsqlD.singleRow $ Id.idDecoder Id.DrepHashId))
 
-insertDrepHashAlwaysAbstain :: MonadIO m => DbAction m Id.DrepHashId
+insertDrepHashAlwaysAbstain :: DbM Id.DrepHashId
 insertDrepHashAlwaysAbstain = do
   qr <- queryDrepHashAlwaysAbstain
   maybe ins pure qr
   where
     ins =
-      runDbSessionMain (mkDbCallStack "insertDrepHashAlwaysAbstain") $
+      runSession $
         HsqlSes.statement drepHashAbstain insertDrepHashAbstainStmt
 
     drepHashAbstain =
@@ -215,13 +215,13 @@ insertDrepHashAlwaysAbstain = do
         , SGV.drepHashHasScript = False
         }
 
-insertDrepHashAlwaysNoConfidence :: MonadIO m => DbAction m Id.DrepHashId
+insertDrepHashAlwaysNoConfidence :: DbM Id.DrepHashId
 insertDrepHashAlwaysNoConfidence = do
   qr <- queryDrepHashAlwaysNoConfidence
   maybe ins pure qr
   where
     ins =
-      runDbSessionMain (mkDbCallStack "insertDrepHashAlwaysNoConfidence") $
+      runSession $
         HsqlSes.statement drepHashNoConfidence insertDrepHashAbstainStmt
 
     drepHashNoConfidence =
@@ -237,9 +237,9 @@ insertDrepRegistrationStmt =
     SGV.drepRegistrationEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DrepRegistrationId)
 
-insertDrepRegistration :: MonadIO m => SGV.DrepRegistration -> DbAction m Id.DrepRegistrationId
+insertDrepRegistration :: SGV.DrepRegistration -> DbM Id.DrepRegistrationId
 insertDrepRegistration drepRegistration = do
-  runDbSessionMain (mkDbCallStack "insertDrepRegistration") $ HsqlSes.statement drepRegistration insertDrepRegistrationStmt
+  runSession $ HsqlSes.statement drepRegistration insertDrepRegistrationStmt
 
 insertBulkDrepDistrStmt :: HsqlStmt.Statement [SGV.DrepDistr] ()
 insertBulkDrepDistrStmt =
@@ -256,9 +256,9 @@ insertBulkDrepDistrStmt =
       , map SGV.drepDistrActiveUntil xs
       )
 
-insertBulkDrepDistr :: MonadIO m => [SGV.DrepDistr] -> DbAction m ()
+insertBulkDrepDistr :: [SGV.DrepDistr] -> DbM ()
 insertBulkDrepDistr drepDistrs = do
-  runDbSessionMain (mkDbCallStack "insertBulkDrepDistr") $
+  runSession $
     HsqlSes.statement drepDistrs insertBulkDrepDistrStmt
 
 -- | QUERY
@@ -297,15 +297,15 @@ queryDrepHashSpecialStmt targetValue =
               Id.DrepHashId <$> HsqlD.int8
         )
 
-queryDrepHashAlwaysAbstain :: MonadIO m => DbAction m (Maybe Id.DrepHashId)
+queryDrepHashAlwaysAbstain :: DbM (Maybe Id.DrepHashId)
 queryDrepHashAlwaysAbstain =
-  runDbSessionMain (mkDbCallStack "queryDrepHashAlwaysAbstain") $
+  runSession $
     HsqlSes.statement () $
       queryDrepHashSpecialStmt @SGV.DrepHash hardcodedAlwaysAbstain
 
-queryDrepHashAlwaysNoConfidence :: MonadIO m => DbAction m (Maybe Id.DrepHashId)
+queryDrepHashAlwaysNoConfidence :: DbM (Maybe Id.DrepHashId)
 queryDrepHashAlwaysNoConfidence =
-  runDbSessionMain (mkDbCallStack "queryDrepHashAlwaysNoConfidence") $
+  runSession $
     HsqlSes.statement () $
       queryDrepHashSpecialStmt @SGV.DrepHash hardcodedAlwaysNoConfidence
 
@@ -320,9 +320,9 @@ insertGovActionProposalStmt =
     SGV.govActionProposalEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.GovActionProposalId)
 
-insertGovActionProposal :: MonadIO m => SGV.GovActionProposal -> DbAction m Id.GovActionProposalId
+insertGovActionProposal :: SGV.GovActionProposal -> DbM Id.GovActionProposalId
 insertGovActionProposal govActionProposal = do
-  runDbSessionMain (mkDbCallStack "insertGovActionProposal") $
+  runSession $
     HsqlSes.statement govActionProposal insertGovActionProposalStmt
 
 -- | UPDATE
@@ -405,24 +405,24 @@ setNullDroppedStmt :: HsqlStmt.Statement Int64 Int64
 setNullDroppedStmt = setGovActionStateNullStmt "dropped_epoch"
 
 -- Executions
-updateGovActionEnacted :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m Int64
+updateGovActionEnacted :: Id.GovActionProposalId -> Word64 -> DbM Int64
 updateGovActionEnacted gaid eNo =
-  runDbSessionMain (mkDbCallStack "updateGovActionEnacted") $
+  runSession $
     HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionEnactedStmt
 
-updateGovActionRatified :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
+updateGovActionRatified :: Id.GovActionProposalId -> Word64 -> DbM ()
 updateGovActionRatified gaid eNo =
-  runDbSessionMain (mkDbCallStack "updateGovActionRatified") $
+  runSession $
     HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionRatifiedStmt
 
-updateGovActionDropped :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
+updateGovActionDropped :: Id.GovActionProposalId -> Word64 -> DbM ()
 updateGovActionDropped gaid eNo =
-  runDbSessionMain (mkDbCallStack "updateGovActionDropped") $
+  runSession $
     HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionDroppedStmt
 
-updateGovActionExpired :: MonadIO m => Id.GovActionProposalId -> Word64 -> DbAction m ()
+updateGovActionExpired :: Id.GovActionProposalId -> Word64 -> DbM ()
 updateGovActionExpired gaid eNo =
-  runDbSessionMain (mkDbCallStack "updateGovActionExpired") $
+  runSession $
     HsqlSes.statement (gaid, fromIntegral eNo) updateGovActionExpiredStmt
 
 --------------------------------------------------------------------------------
@@ -445,19 +445,18 @@ queryGovActionProposalIdStmt =
 
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.GovActionProposalId)
 
-queryGovActionProposalId :: MonadIO m => Id.TxId -> Word64 -> DbAction m Id.GovActionProposalId
+queryGovActionProposalId :: Id.TxId -> Word64 -> DbM (Either DbError Id.GovActionProposalId)
 queryGovActionProposalId txId index = do
-  let dbCallStack = mkDbCallStack "queryGovActionProposalId"
-      errorMsg =
+  let errorMsg =
         "GovActionProposal not found with txId: "
           <> Text.pack (show txId)
           <> " and index: "
           <> Text.pack (show index)
 
-  result <- runDbSessionMain dbCallStack $ HsqlSes.statement (txId, index) queryGovActionProposalIdStmt
+  result <- runSession $ HsqlSes.statement (txId, index) queryGovActionProposalIdStmt
   case result of
-    Just res -> pure res
-    Nothing -> liftIO $ throwIO $ DbError dbCallStack errorMsg Nothing
+    Just res -> pure $ Right res
+    Nothing -> pure $ Left $ DbError errorMsg
 
 --------------------------------------------------------------------------------
 -- ParamProposal
@@ -468,10 +467,9 @@ insertParamProposalStmt =
     SGV.paramProposalEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.ParamProposalId)
 
-insertParamProposal :: MonadIO m => SGV.ParamProposal -> DbAction m Id.ParamProposalId
+insertParamProposal :: SGV.ParamProposal -> DbM Id.ParamProposalId
 insertParamProposal paramProposal = do
-  runDbSessionMain (mkDbCallStack "insertParamProposal") $
-    HsqlSes.statement paramProposal insertParamProposalStmt
+  runSession $ HsqlSes.statement paramProposal insertParamProposalStmt
 
 --------------------------------------------------------------------------------
 -- Treasury
@@ -482,9 +480,9 @@ insertTreasuryStmt =
     SEP.treasuryEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TreasuryId)
 
-insertTreasury :: MonadIO m => SEP.Treasury -> DbAction m Id.TreasuryId
+insertTreasury :: SEP.Treasury -> DbM Id.TreasuryId
 insertTreasury treasury = do
-  runDbSessionMain (mkDbCallStack "insertTreasury") $ HsqlSes.statement treasury insertTreasuryStmt
+  runSession $ HsqlSes.statement treasury insertTreasuryStmt
 
 --------------------------------------------------------------------------------
 insertBulkTreasuryWithdrawalStmt :: HsqlStmt.Statement [SGV.TreasuryWithdrawal] ()
@@ -501,10 +499,9 @@ insertBulkTreasuryWithdrawalStmt =
       , map SGV.treasuryWithdrawalAmount xs
       )
 
-insertBulkTreasuryWithdrawal :: MonadIO m => [SGV.TreasuryWithdrawal] -> DbAction m ()
+insertBulkTreasuryWithdrawal :: [SGV.TreasuryWithdrawal] -> DbM ()
 insertBulkTreasuryWithdrawal treasuryWithdrawals = do
-  runDbSessionMain (mkDbCallStack "insertBulkTreasuryWithdrawal") $
-    HsqlSes.statement treasuryWithdrawals insertBulkTreasuryWithdrawalStmt
+  runSession $ HsqlSes.statement treasuryWithdrawals insertBulkTreasuryWithdrawalStmt
 
 --------------------------------------------------------------------------------
 -- Voting
@@ -517,10 +514,9 @@ insertVotingAnchorStmt =
     SGV.votingAnchorEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.VotingAnchorId)
 
-insertVotingAnchor :: MonadIO m => SGV.VotingAnchor -> DbAction m Id.VotingAnchorId
+insertVotingAnchor :: SGV.VotingAnchor -> DbM Id.VotingAnchorId
 insertVotingAnchor votingAnchor = do
-  runDbSessionMain (mkDbCallStack "insertVotingAnchor") $
-    HsqlSes.statement votingAnchor insertVotingAnchorStmt
+  runSession $ HsqlSes.statement votingAnchor insertVotingAnchorStmt
 
 insertVotingProcedureStmt :: HsqlStmt.Statement SGV.VotingProcedure Id.VotingProcedureId
 insertVotingProcedureStmt =
@@ -528,7 +524,6 @@ insertVotingProcedureStmt =
     SGV.votingProcedureEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.VotingProcedureId)
 
-insertVotingProcedure :: MonadIO m => SGV.VotingProcedure -> DbAction m Id.VotingProcedureId
+insertVotingProcedure :: SGV.VotingProcedure -> DbM Id.VotingProcedureId
 insertVotingProcedure votingProcedure = do
-  runDbSessionMain (mkDbCallStack "insertVotingProcedure") $
-    HsqlSes.statement votingProcedure insertVotingProcedureStmt
+  runSession $ HsqlSes.statement votingProcedure insertVotingProcedureStmt

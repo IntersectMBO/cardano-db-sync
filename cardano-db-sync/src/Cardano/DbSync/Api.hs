@@ -143,7 +143,7 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutVariantType = getTxOutVariantType syncEnv
   logInfo (getTrace syncEnv) $ "runConsumedTxOutMigrationsMaybe: " <> textShow pcm
-  DB.runDbIohkNoLogging (envDbEnv syncEnv) $
+  DB.runDbTransactionIohkNoLogging (envDbEnv syncEnv) $
     DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
       maxBulkSize
@@ -153,11 +153,11 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
 
 runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
+  void $ DB.runDbTransactionIohkNoLogging (envDbEnv syncEnv) DB.enableJsonbInSchema
 
 runRemoveJsonbFromSchema :: SyncEnv -> IO ()
 runRemoveJsonbFromSchema syncEnv =
-  void $ DB.runDbIohkNoLogging (envDbEnv syncEnv) DB.disableJsonbInSchema
+  void $ DB.runDbTransactionIohkNoLogging (envDbEnv syncEnv) DB.disableJsonbInSchema
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -243,7 +243,7 @@ getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
 getSlotHash :: DB.DbEnv -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend = DB.runDbIohkNoLogging backend . DB.querySlotHash
+getSlotHash backend = DB.runDbTransactionIohkNoLogging backend . DB.querySlotHash
 
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
@@ -254,7 +254,7 @@ hasLedgerState syncEnv =
 getDbLatestBlockInfo :: DB.DbEnv -> IO (Maybe TipInfo)
 getDbLatestBlockInfo dbEnv = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbIohkNoLogging dbEnv DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbTransactionIohkNoLogging dbEnv DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $
@@ -309,7 +309,7 @@ mkSyncEnv ::
   RunMigration ->
   IO SyncEnv
 mkSyncEnv trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
-  dbCNamesVar <- newTVarIO =<< DB.runDbActionIO dbEnv DB.queryRewardAndEpochStakeConstraints
+  dbCNamesVar <- newTVarIO =<< DB.runDbTransactionIohkNoLogging dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
       then
@@ -434,7 +434,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbIohkNoLogging (envDbEnv env) DB.queryLatestPoints
+      lastPoints <- DB.runDbTransactionIohkNoLogging (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -489,7 +489,7 @@ getBootstrapInProgress ::
   DB.DbEnv ->
   IO Bool
 getBootstrapInProgress trce bootstrapFlag dbEnv = do
-  DB.runDbIohkNoLogging dbEnv $ do
+  DB.runDbTransactionIohkNoLogging dbEnv $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems
     case (bootstrapFlag, btsState) of

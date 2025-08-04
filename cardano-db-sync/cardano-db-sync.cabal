@@ -187,7 +187,7 @@ library
                       , lifted-base
                       , memory
                       , microlens
-                      , monad-control
+                      -- , monad-control
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
@@ -215,6 +215,7 @@ library
                       , transformers
                       , transformers-except
                       , typed-protocols
+                      , unliftio-core
                       , vector
                       , wide-word
                       , yaml

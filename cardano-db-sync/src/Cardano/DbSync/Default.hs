@@ -29,6 +29,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
+import Cardano.DbSync.DbEvent (runDbSyncTransaction)
 import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -45,27 +46,36 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 
+-- insertListBlocks ::
+--   SyncEnv ->
+--   [CardanoBlock] ->
+--   IO (Either SyncNodeError ())
+-- insertListBlocks syncEnv blocks = do
+--   runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) $ do
+--       traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocks
+
 insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
-insertListBlocks syncEnv blocks = do
-  result <-
-    try $
-      DB.runDbIohkLogging tracer (envDbEnv syncEnv) $
-        traverse_ (applyAndInsertBlockMaybe syncEnv tracer) blocks
-  case result of
-    Left (dbErr :: DB.DbError) -> pure $ Left $ SNErrDatabase dbErr
-    Right val -> pure $ Right val
+insertListBlocks syncEnv = go
   where
-    tracer = getTrace syncEnv
+    go [] = pure $ Right ()
+    go (block : rest) = do
+      result <- processBlock block
+      case result of
+        Left err -> pure $ Left err
+        Right _ -> go rest
+
+    processBlock block =
+      runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) $
+        applyAndInsertBlockMaybe syncEnv (getTrace syncEnv) block
 
 applyAndInsertBlockMaybe ::
-  MonadIO m =>
   SyncEnv ->
   Trace IO Text ->
   CardanoBlock ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do
   bl <- liftIO $ isConsistent syncEnv
   (!applyRes, !tookSnapshot) <- liftIO (mkApplyResult bl)
@@ -73,13 +83,14 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
     then -- In the usual case it will be consistent so we don't need to do any queries. Just insert the block
       insertBlock syncEnv cblk applyRes False tookSnapshot
     else do
-      eiBlockInDbAlreadyId <- DB.queryBlockIdEither (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk) ""
+      eiBlockInDbAlreadyId <- lift $ DB.queryBlockIdEither (SBS.fromShort . Consensus.getOneEraHash $ blockHash cblk)
       -- If the block is already in db, do nothing. If not, delete all blocks with greater 'BlockNo' or
       -- equal, insert the block and restore consistency between ledger and db.
       case eiBlockInDbAlreadyId of
         Left _ -> do
-          liftIO . logInfo tracer $
-            mconcat
+          liftIO
+            . logInfo tracer
+            $ mconcat
               [ "Received block which is not in the db with "
               , textShow (getHeaderFields cblk)
               , ". Time to restore consistency."
@@ -88,7 +99,7 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
           insertBlock syncEnv cblk applyRes True tookSnapshot
           liftIO $ setConsistentLevel syncEnv Consistent
         Right blockId | Just (adaPots, slotNo, epochNo) <- getAdaPots applyRes -> do
-          replaced <- DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
+          replaced <- lift $ DB.replaceAdaPots blockId $ mkAdaPots blockId slotNo epochNo adaPots
           if replaced
             then liftIO $ logInfo tracer $ "Fixed AdaPots for " <> textShow epochNo
             else liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
@@ -116,7 +127,6 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
       Generic.neEpoch <$> maybeFromStrict (apNewEpoch appRes)
 
 insertBlock ::
-  MonadIO m =>
   SyncEnv ->
   CardanoBlock ->
   ApplyResult ->
@@ -124,7 +134,7 @@ insertBlock ::
   Bool ->
   -- has snapshot been taken
   Bool ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   !epochEvents <- liftIO $ atomically $ generateNewEpochEvents syncEnv (apSlotDetails applyRes)
   let !applyResult = applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}
@@ -175,7 +185,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   whenPruneTxOut syncEnv $
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
       do
-        DB.deleteConsumedTxOut tracer txOutVariantType (getSafeBlockNoDiff syncEnv)
+        lift $ DB.deleteConsumedTxOut tracer txOutVariantType (getSafeBlockNoDiff syncEnv)
   commitOrIndexes withinTwoMin withinHalfHour
   where
     tracer = getTrace syncEnv
@@ -198,7 +208,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       Strict.Nothing | hasLedgerState syncEnv -> Just $ Ledger.Prices minBound minBound
       Strict.Nothing -> Nothing
 
-    commitOrIndexes :: MonadIO m => Bool -> Bool -> DB.DbAction m ()
+    commitOrIndexes :: Bool -> Bool -> ExceptT SyncNodeError DB.DbM ()
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
         if withinTwoMin || tookSnapshot
@@ -211,7 +221,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
 
         unless ranIndexes $ do
           -- We need to commit the transaction as we are going to run indexes migrations
-          DB.commitCurrentTransaction
+          lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
           liftIO $ runNearTipMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk

@@ -9,10 +9,6 @@ module Cardano.DbSync.Era.Universal.Validate (
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
-import qualified Cardano.Db as DB
-import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Ledger.Event
-import Cardano.DbSync.Types
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Shelley.API (Network)
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
@@ -24,20 +20,26 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import GHC.Err (error)
 
+import qualified Cardano.Db as DB
+import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Error (SyncNodeError)
+import Cardano.DbSync.Ledger.Event
+import Cardano.DbSync.Types
+
 validateEpochRewards ::
-  MonadIO m =>
   Trace IO Text ->
   Network ->
   EpochNo ->
   EpochNo ->
   Map StakeCred (Set Ledger.Reward) ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
-  actualCount <- DB.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
+  actualCount <- lift $ DB.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
   if actualCount /= expectedCount
     then do
-      liftIO . logWarning tracer $
-        mconcat
+      liftIO
+        . logWarning tracer
+        $ mconcat
           [ "validateEpochRewards: rewards spendable in epoch "
           , textShow (unEpochNo spendableEpochNo)
           , " expected total of "
@@ -47,8 +49,9 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
           ]
       logFullRewardMap tracer spendableEpochNo network (convertPoolRewards rmap)
     else do
-      liftIO . logInfo tracer $
-        mconcat
+      liftIO
+        . logInfo tracer
+        $ mconcat
           [ "Validate Epoch Rewards: total rewards that become spendable in epoch "
           , textShow (unEpochNo spendableEpochNo)
           , " are "
@@ -59,12 +62,11 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
     expectedCount = fromIntegral . sum $ map Set.size (Map.elems rmap)
 
 logFullRewardMap ::
-  MonadIO m =>
   Trace IO Text ->
   EpochNo ->
   Network ->
   Generic.Rewards ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 logFullRewardMap tracer epochNo network ledgerMap = do
   dbMap <- queryRewardMap epochNo
   when (Map.size dbMap > 0 && Map.size (Generic.unRewards ledgerMap) > 0) $
@@ -74,9 +76,9 @@ logFullRewardMap tracer epochNo network ledgerMap = do
     convert :: Set Generic.Reward -> [(DB.RewardSource, Coin)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
 
-queryRewardMap :: MonadIO m => EpochNo -> DB.DbAction m (Map ByteString [(DB.RewardSource, DB.DbLovelace)])
+queryRewardMap :: EpochNo -> ExceptT SyncNodeError DB.DbM (Map ByteString [(DB.RewardSource, DB.DbLovelace)])
 queryRewardMap (EpochNo epochNo) = do
-  results <- DB.queryRewardMapData epochNo
+  results <- lift $ DB.queryRewardMapData epochNo
   pure $ processRewardMapData results
 
 processRewardMapData :: [(ByteString, DB.RewardSource, DB.DbLovelace)] -> Map ByteString [(DB.RewardSource, DB.DbLovelace)]

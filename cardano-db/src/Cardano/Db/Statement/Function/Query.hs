@@ -11,7 +11,7 @@
 
 module Cardano.Db.Statement.Function.Query where
 
-import Cardano.Prelude (MonadIO, Proxy (..), Word64, listToMaybe)
+import Cardano.Prelude (Proxy (..), Word64, listToMaybe)
 import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
@@ -22,9 +22,9 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
-import Cardano.Db.Statement.Function.Core (ResultType (..), mkDbCallStack, runDbSessionMain)
+import Cardano.Db.Statement.Function.Core (ResultType (..), runSession)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key, validateColumn)
-import Cardano.Db.Types (Ada (..), DbAction, lovelaceToAda)
+import Cardano.Db.Types (Ada (..), DbM, lovelaceToAda)
 
 replace ::
   forall a.
@@ -151,16 +151,14 @@ existsWhereByColumn colName encoder resultType =
 --
 -- === Example
 -- @
--- queryTxOutUnspentCount :: MonadIO m => TxOutVariantType -> DbAction m Word64
+-- queryTxOutUnspentCount :: TxOutVariantType -> DbM Word64
 -- queryTxOutUnspentCount txOutVariantType =
 --   case txOutVariantType of
 --     TxOutVariantCore ->
---       runDbSessionMain (mkDbCallStack "queryTxOutUnspentCountCore") $
---         HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
+--       runSession $ HsqlSes.statement () (countWhere @TxOutCore "consumed_by_tx_id" "IS NULL")
 --
 --     TxOutVariantAddress ->
---       runDbSessionMain (mkDbCallStack "queryTxOutUnspentCountAddress") $
---         HsqlSes.statement () (countWhere @TxOutAddress "consumed_by_tx_id" "IS NULL")
+--       runSession $ HsqlSes.statement () (countWhere @TxOutAddress "consumed_by_tx_id" "IS NULL")
 -- @
 countWhere ::
   forall a.
@@ -220,7 +218,7 @@ parameterisedCountWhere colName condition encoder =
 -- @
 -- queryTableCount :: MonadIO m => DbAction m Word64
 -- queryTableCount =
---   runDbSessionMain (mkDbCallStack "queryTableCount") $
+--   runSession (mkDbCallStack "queryTableCount") $
 --     HsqlSes.statement () (countAll @TxOutCore)
 -- @
 countAll ::
@@ -251,10 +249,9 @@ queryStatementCacheStmt =
     sql = "SELECT count(*) FROM pg_prepared_statements"
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
 
-queryStatementCacheSize :: MonadIO m => DbAction m Int
+queryStatementCacheSize :: DbM Int
 queryStatementCacheSize =
-  runDbSessionMain (mkDbCallStack "queryStatementCacheSize") $
-    HsqlSes.statement () queryStatementCacheStmt
+  runSession $ HsqlSes.statement () queryStatementCacheStmt
 
 -- Decoder for Ada amounts from database int8 values
 adaDecoder :: HsqlD.Row Ada

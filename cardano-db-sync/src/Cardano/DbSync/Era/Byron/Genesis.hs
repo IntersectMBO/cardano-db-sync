@@ -32,7 +32,7 @@ import Cardano.DbSync.Api.Types (SyncEnv (..))
 import Cardano.DbSync.Cache (insertAddressUsingCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
 import Cardano.DbSync.Config.Types
-import Cardano.DbSync.DbEvent (liftDbIO)
+import Cardano.DbSync.DbEvent (liftFail, runDbSyncTransaction)
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Error
 import Cardano.DbSync.Util
@@ -45,36 +45,33 @@ insertValidateByronGenesisDist ::
   Byron.Config ->
   ExceptT SyncNodeError IO ()
 insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
-  -- Setting this to True will log all 'Persistent' operations which is great
-  -- for debugging, but otherwise *way* too chatty.
-  case DB.dbTracer $ envDbEnv syncEnv of
-    Just trce -> liftDbIO $ DB.runDbIohkLogging trce (envDbEnv syncEnv) insertAction
-    Nothing -> liftDbIO $ DB.runDbIohkNoLogging (envDbEnv syncEnv) insertAction
+  -- Use the new transaction runner - it handles tracing based on DbEnv.dbTracer
+  ExceptT $ runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) insertAction
   where
     tracer = getTrace syncEnv
 
-    insertAction :: MonadIO m => DB.DbAction m ()
+    insertAction :: ExceptT SyncNodeError DB.DbM ()
     insertAction = do
       disInOut <- liftIO $ getDisableInOutState syncEnv
       let prunes = getPrunes syncEnv
 
-      ebid <- DB.queryBlockIdEither (configGenesisHash cfg) " insertValidateByronGenesisDist"
+      ebid <- lift $ DB.queryBlockIdEither (configGenesisHash cfg)
       case ebid of
         Right bid -> validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid
         Left err -> do
           liftIO $ logInfo tracer "Inserting Byron Genesis distribution"
-          count <- DB.queryBlockCount
+          count <- lift DB.queryBlockCount
           when (not disInOut && count > 0) $
-            liftIO $
-              throwIO $
-                DB.DbError (DB.mkDbCallStack "insertValidateByronGenesisDist") ("Genesis data mismatch. " <> show err) Nothing
+            throwError $
+              SNErrDefault (mkSyncNodeCallStack "insertValidateByronGenesisDist") ("Genesis data mismatch. " <> show err)
           void $
-            DB.insertMeta $
-              DB.Meta
-                { DB.metaStartTime = Byron.configStartTime cfg
-                , DB.metaNetworkName = networkName
-                , DB.metaVersion = textShow version
-                }
+            lift $
+              DB.insertMeta $
+                DB.Meta
+                  { DB.metaStartTime = Byron.configStartTime cfg
+                  , DB.metaNetworkName = networkName
+                  , DB.metaVersion = textShow version
+                  }
 
           -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
           -- need this block to attach the genesis distribution transactions to.
@@ -82,44 +79,45 @@ insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
           -- require plumbing the Genesis.Config into 'insertByronBlockOrEBB'
           -- which would be a pain in the neck.
           slid <-
-            DB.insertSlotLeader $
-              DB.SlotLeader
-                { DB.slotLeaderHash = BS.take 28 $ configGenesisHash cfg
-                , DB.slotLeaderPoolHashId = Nothing
-                , DB.slotLeaderDescription = "Genesis slot leader"
-                }
+            lift $
+              DB.insertSlotLeader $
+                DB.SlotLeader
+                  { DB.slotLeaderHash = BS.take 28 $ configGenesisHash cfg
+                  , DB.slotLeaderPoolHashId = Nothing
+                  , DB.slotLeaderDescription = "Genesis slot leader"
+                  }
           bid <-
-            DB.insertBlock $
-              DB.Block
-                { DB.blockHash = configGenesisHash cfg
-                , DB.blockEpochNo = Nothing
-                , DB.blockSlotNo = Nothing
-                , DB.blockEpochSlotNo = Nothing
-                , DB.blockBlockNo = Nothing
-                , DB.blockPreviousId = Nothing
-                , DB.blockSlotLeaderId = slid
-                , DB.blockSize = 0
-                , DB.blockTime = Byron.configStartTime cfg
-                , DB.blockTxCount = fromIntegral (length $ genesisTxos cfg)
-                , -- Genesis block does not have a protocol version, so set this to '0'.
-                  DB.blockProtoMajor = 0
-                , DB.blockProtoMinor = 0
-                , -- Shelley specific
-                  DB.blockVrfKey = Nothing
-                , DB.blockOpCert = Nothing
-                , DB.blockOpCertCounter = Nothing
-                }
+            lift $
+              DB.insertBlock $
+                DB.Block
+                  { DB.blockHash = configGenesisHash cfg
+                  , DB.blockEpochNo = Nothing
+                  , DB.blockSlotNo = Nothing
+                  , DB.blockEpochSlotNo = Nothing
+                  , DB.blockBlockNo = Nothing
+                  , DB.blockPreviousId = Nothing
+                  , DB.blockSlotLeaderId = slid
+                  , DB.blockSize = 0
+                  , DB.blockTime = Byron.configStartTime cfg
+                  , DB.blockTxCount = fromIntegral (length $ genesisTxos cfg)
+                  , -- Genesis block does not have a protocol version, so set this to '0'.
+                    DB.blockProtoMajor = 0
+                  , DB.blockProtoMinor = 0
+                  , -- Shelley specific
+                    DB.blockVrfKey = Nothing
+                  , DB.blockOpCert = Nothing
+                  , DB.blockOpCertCounter = Nothing
+                  }
           mapM_ (insertTxOutsByron syncEnv disInOut bid) $ genesisTxos cfg
           liftIO . logInfo tracer $
             "Initial genesis distribution populated. Hash "
               <> renderByteArray (configGenesisHash cfg)
 
-          supply <- DB.queryTotalSupply $ getTxOutVariantType syncEnv
+          supply <- lift $ DB.queryTotalSupply $ getTxOutVariantType syncEnv
           liftIO $ logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda supply)
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
 validateGenesisDistribution ::
-  MonadIO m =>
   SyncEnv ->
   Bool ->
   Bool ->
@@ -127,10 +125,10 @@ validateGenesisDistribution ::
   Text ->
   Byron.Config ->
   DB.BlockId ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid = do
-  let dbCallStack = DB.mkDbCallStack "validateGenesisDistribution"
-  metaMaybe <- DB.queryMeta
+  let cs = mkSyncNodeCallStack "validateGenesisDistribution"
+  metaMaybe <- liftFail cs DB.queryMeta
 
   -- Only validate if meta table has data
   case metaMaybe of
@@ -140,66 +138,58 @@ validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
       pure ()
     Just meta -> do
       when (DB.metaStartTime meta /= Byron.configStartTime cfg) $
-        liftIO $
-          throwIO $
-            DB.DbError
-              dbCallStack
-              ( Text.concat
-                  [ "Mismatch chain start time. Config value "
-                  , textShow (Byron.configStartTime cfg)
-                  , " does not match DB value of "
-                  , textShow (DB.metaStartTime meta)
-                  ]
-              )
-              Nothing
+        throwError $
+          SNErrDefault
+            cs
+            ( Text.concat
+                [ "Mismatch chain start time. Config value "
+                , textShow (Byron.configStartTime cfg)
+                , " does not match DB value of "
+                , textShow (DB.metaStartTime meta)
+                ]
+            )
 
       when (DB.metaNetworkName meta /= networkName) $
-        liftIO $
-          throwIO $
-            DB.DbError
-              dbCallStack
-              ( Text.concat
-                  [ "Provided network name "
-                  , networkName
-                  , " does not match DB value "
-                  , DB.metaNetworkName meta
-                  ]
-              )
-              Nothing
+        throwError $
+          SNErrDefault
+            cs
+            ( Text.concat
+                [ "Provided network name "
+                , networkName
+                , " does not match DB value "
+                , DB.metaNetworkName meta
+                ]
+            )
 
-      txCount <- DB.queryBlockTxCount bid
+      txCount <- lift $ DB.queryBlockTxCount bid
       let expectedTxCount = fromIntegral $ length (genesisTxos cfg)
       when (txCount /= expectedTxCount) $
-        liftIO $
-          throwIO $
-            DB.DbError
-              dbCallStack
-              ( Text.concat
-                  [ "Expected initial block to have "
-                  , textShow expectedTxCount
-                  , " but got "
-                  , textShow txCount
-                  ]
-              )
-              Nothing
+        throwError $
+          SNErrDefault
+            cs
+            ( Text.concat
+                [ "Expected initial block to have "
+                , textShow expectedTxCount
+                , " but got "
+                , textShow txCount
+                ]
+            )
       unless disInOut $ do
-        totalSupply <- DB.queryGenesisSupply $ getTxOutVariantType syncEnv
+        totalSupply <- lift $ DB.queryGenesisSupply $ getTxOutVariantType syncEnv
         case DB.word64ToAda <$> configGenesisSupply cfg of
-          Left err -> liftIO $ throwIO $ DB.DbError dbCallStack (textShow err) Nothing
+          Left err -> throwError $ SNErrDefault cs (textShow err)
           Right expectedSupply ->
             when (expectedSupply /= totalSupply && not prunes) $
-              liftIO $
-                throwIO $
-                  DB.DbError
-                    dbCallStack
-                    ( Text.concat
-                        [ "Expected total supply to be "
-                        , DB.renderAda expectedSupply
-                        , " but got "
-                        , DB.renderAda totalSupply
-                        ]
-                    )
-                    Nothing
+              throwError $
+                SNErrDefault
+                  cs
+                  ( Text.concat
+                      [ "Expected total supply to be "
+                      , DB.renderAda expectedSupply
+                      , " but got "
+                      , DB.renderAda totalSupply
+                      ]
+                  )
         liftIO $ do
           logInfo tracer "Initial genesis distribution present and correct"
           logInfo tracer ("Total genesis supply of Ada: " <> DB.renderAda totalSupply)
@@ -207,59 +197,62 @@ validateGenesisDistribution syncEnv prunes disInOut tracer networkName cfg bid =
 -------------------------------------------------------------------------------
 
 insertTxOutsByron ::
-  MonadIO m =>
   SyncEnv ->
   Bool ->
   DB.BlockId ->
   (Byron.Address, Byron.Lovelace) ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 insertTxOutsByron syncEnv disInOut blkId (address, value) = do
+  let cs = mkSyncNodeCallStack "insertTxOutsByron"
   case txHashOfAddress address of
-    Left err -> liftIO $ throwIO $ DB.DbError (DB.mkDbCallStack "insertTxOutsByron") (Text.concat ["txHashOfAddress: ", show err]) Nothing
+    Left err -> throwError $ SNErrDefault cs $ Text.concat ["txHashOfAddress: ", show err]
     Right val -> do
       -- Each address/value pair of the initial coin distribution comes from an artifical transaction
       -- with a hash generated by hashing the address.
       txId <- do
-        DB.insertTx $
-          DB.Tx
-            { DB.txHash = Byron.unTxHash val
-            , DB.txBlockId = blkId
-            , DB.txBlockIndex = 0
-            , DB.txOutSum = DB.DbLovelace (Byron.unsafeGetLovelace value)
-            , DB.txFee = DB.DbLovelace 0
-            , DB.txDeposit = Just 0
-            , DB.txSize = 0 -- Genesis distribution address to not have a size.
-            , DB.txInvalidHereafter = Nothing
-            , DB.txInvalidBefore = Nothing
-            , DB.txValidContract = True
-            , DB.txScriptSize = 0
-            , DB.txTreasuryDonation = DB.DbLovelace 0
-            }
+        lift $
+          DB.insertTx $
+            DB.Tx
+              { DB.txHash = Byron.unTxHash val
+              , DB.txBlockId = blkId
+              , DB.txBlockIndex = 0
+              , DB.txOutSum = DB.DbLovelace (Byron.unsafeGetLovelace value)
+              , DB.txFee = DB.DbLovelace 0
+              , DB.txDeposit = Just 0
+              , DB.txSize = 0 -- Genesis distribution address to not have a size.
+              , DB.txInvalidHereafter = Nothing
+              , DB.txInvalidBefore = Nothing
+              , DB.txValidContract = True
+              , DB.txScriptSize = 0
+              , DB.txTreasuryDonation = DB.DbLovelace 0
+              }
       --
       unless disInOut $
         case getTxOutVariantType syncEnv of
           DB.TxOutVariantCore ->
-            void . DB.insertTxOut $
-              DB.VCTxOutW
-                VC.TxOutCore
-                  { VC.txOutCoreTxId = txId
-                  , VC.txOutCoreIndex = 0
-                  , VC.txOutCoreAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
-                  , VC.txOutCoreAddressHasScript = False
-                  , VC.txOutCorePaymentCred = Nothing
-                  , VC.txOutCoreStakeAddressId = Nothing
-                  , VC.txOutCoreValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
-                  , VC.txOutCoreDataHash = Nothing
-                  , VC.txOutCoreInlineDatumId = Nothing
-                  , VC.txOutCoreReferenceScriptId = Nothing
-                  , VC.txOutCoreConsumedByTxId = Nothing
-                  }
+            void . lift $
+              DB.insertTxOut $
+                DB.VCTxOutW
+                  VC.TxOutCore
+                    { VC.txOutCoreTxId = txId
+                    , VC.txOutCoreIndex = 0
+                    , VC.txOutCoreAddress = Text.decodeUtf8 $ Byron.addrToBase58 address
+                    , VC.txOutCoreAddressHasScript = False
+                    , VC.txOutCorePaymentCred = Nothing
+                    , VC.txOutCoreStakeAddressId = Nothing
+                    , VC.txOutCoreValue = DB.DbLovelace (Byron.unsafeGetLovelace value)
+                    , VC.txOutCoreDataHash = Nothing
+                    , VC.txOutCoreInlineDatumId = Nothing
+                    , VC.txOutCoreReferenceScriptId = Nothing
+                    , VC.txOutCoreConsumedByTxId = Nothing
+                    }
           DB.TxOutVariantAddress -> do
             let addrRaw = serialize' address
                 vAddress = mkVAddress addrRaw
             addrDetailId <- insertAddressUsingCache syncEnv UpdateCache addrRaw vAddress
-            void . DB.insertTxOut $
-              DB.VATxOutW (mkTxOutAddress txId addrDetailId) Nothing
+            void . lift $
+              DB.insertTxOut $
+                DB.VATxOutW (mkTxOutAddress txId addrDetailId) Nothing
   where
     mkTxOutAddress :: DB.TxId -> DB.AddressId -> VA.TxOutAddress
     mkTxOutAddress txId addrDetailId =

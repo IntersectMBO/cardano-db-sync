@@ -104,8 +104,8 @@ library
                       , template-haskell
                       , text
                       , time
-                      , transformers
-                      , unliftio-core
+                      -- , transformers
+                      -- , unliftio-core
                       -- This is never intended to run on non-POSIX systems.
                       , unix
                       , wide-word

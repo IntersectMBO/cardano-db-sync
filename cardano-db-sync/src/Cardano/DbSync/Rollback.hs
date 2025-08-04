@@ -25,7 +25,8 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache
-import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO)
+import Cardano.DbSync.DbEvent (liftFail)
+import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
 import Cardano.DbSync.Types
@@ -33,13 +34,12 @@ import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
 
 rollbackFromBlockNo ::
-  MonadIO m =>
   SyncEnv ->
   BlockNo ->
-  DB.DbAction m ()
+  ExceptT SyncNodeError DB.DbM ()
 rollbackFromBlockNo syncEnv blkNo = do
-  nBlocks <- DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
-  mres <- DB.queryBlockNoAndEpoch (unBlockNo blkNo)
+  nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
+  mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
   -- Use whenJust like the original - silently skip if block not found
   whenJust mres $ \(blockId, epochNo) -> do
     liftIO . logInfo trce $
@@ -50,7 +50,7 @@ rollbackFromBlockNo syncEnv blkNo = do
         , textShow blkNo
         ]
 
-    deletedBlockCount <- DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
+    deletedBlockCount <- lift $ DB.deleteBlocksBlockId trce txOutVariantType blockId epochNo (DB.pcmConsumedTxOut $ getPruneConsume syncEnv)
     when (deletedBlockCount > 0) $ do
       -- We use custom constraints to improve input speeds when syncing.
       -- If they don't already exists we add them here as once a rollback has happened
@@ -66,11 +66,11 @@ rollbackFromBlockNo syncEnv blkNo = do
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
 prepareRollback syncEnv point serverTip = do
-  DB.runDbIohkNoLogging (envDbEnv syncEnv) $ runExceptT action
+  DB.runDbTransactionIohkNoLogging (envDbEnv syncEnv) $ runExceptT action
   where
     trce = getTrace syncEnv
 
-    action :: MonadIO m => ExceptT SyncNodeError (DB.DbAction m) Bool
+    action :: ExceptT SyncNodeError DB.DbM Bool
     action = do
       case getPoint point of
         Origin -> do
@@ -92,7 +92,7 @@ prepareRollback syncEnv point serverTip = do
               pure False
         At blk -> do
           nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
-          mBlockNo <- lift $ DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+          mBlockNo <- liftFail (mkSyncNodeCallStack "prepareRollback") $ DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
           case mBlockNo of
             Nothing -> throwError $ SNErrRollback "Rollback.prepareRollback: queryBlockHashBlockNo: Block hash not found"
             Just blockN -> do
@@ -137,4 +137,4 @@ rollbackLedger syncEnv point =
 unsafeRollback :: Trace IO Text -> DB.TxOutVariantType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce txOutVariantType config slotNo = do
   logWarning trce $ "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
-  Right <$> DB.runDbNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutVariantType slotNo True)
+  Right <$> DB.runDbMTransactionNoLogging (DB.PGPassCached config) (void $ DB.deleteBlocksSlotNo trce txOutVariantType slotNo True)
