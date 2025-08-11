@@ -164,7 +164,7 @@ mkPaymentTx ::
   BabbageUTxOIndex ->
   Integer ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkPaymentTx inputIndex outputIndex amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
@@ -179,7 +179,7 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
 mkPaymentTx' ::
   BabbageUTxOIndex ->
   [(BabbageUTxOIndex, MaryValue)] ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkPaymentTx' inputIndex outputIndex sta = do
   inputPair <- fst <$> resolveUTxOIndex inputIndex sta
@@ -221,7 +221,7 @@ mkLockByScriptTx ::
   [TxOutScriptType] ->
   Integer ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkLockByScriptTx inputIndex txOutTypes amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
@@ -254,7 +254,7 @@ mkUnlockScriptTx ::
   Bool ->
   Integer ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
@@ -279,7 +279,7 @@ mkUnlockScriptTxBabbage ::
   Bool ->
   Integer ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succeeds amount fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
@@ -339,7 +339,7 @@ mkMAssetsScriptTx ::
   MultiAsset ->
   Bool ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkMAssetsScriptTx inputIndex colInputIndex outputIndex refInput minted succeeds fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
@@ -369,7 +369,7 @@ mkDCertTx certs wdrl ref = Right $ mkSimpleTx True $ consCertTxBody ref certs wd
 
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential -> ShelleyTxCert BabbageEra)] ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
@@ -390,7 +390,7 @@ mkDCertPoolTx ::
     , [StakeCredential] -> KeyHash 'StakePool -> ShelleyTxCert BabbageEra
     )
   ] ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkDCertPoolTx consDert st = do
   dcerts <- forM consDert $ \(stakeIxs, poolIx, mkDCert) -> do
@@ -402,7 +402,7 @@ mkDCertPoolTx consDert st = do
 mkScriptDCertTx ::
   [(StakeIndex, Bool, StakeCredential -> ShelleyTxCert BabbageEra)] ->
   Bool ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkScriptDCertTx consDert valid st = do
   dcerts <- forM consDert $ \(stakeIndex, _, mkDCert) -> do
@@ -425,7 +425,7 @@ mkScriptDCertTx consDert valid st = do
 mkDepositTxPools ::
   BabbageUTxOIndex ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkDepositTxPools inputIndex deposit sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
@@ -436,7 +436,7 @@ mkDepositTxPools inputIndex deposit sta = do
   Right $ mkSimpleTx True $ consTxBody input mempty mempty (StrictSeq.fromList [change]) SNothing (Coin 0) mempty (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkDCertTxPools ::
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody Nothing (allPoolStakeCert sta) (Withdrawals mempty)
 
@@ -529,7 +529,7 @@ mkParamUpdateTx = Right (mkSimpleTx True txBody)
 mkFullTx ::
   Int ->
   Integer ->
-  BabbageLedgerState ->
+  BabbageLedgerState mk ->
   Either ForgingError (AlonzoTx BabbageEra)
 mkFullTx n m sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inps

@@ -199,7 +199,7 @@ mkPaymentTx ::
   Integer ->
   Integer ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkPaymentTx inputIndex outputIndex amount =
   mkPaymentTx' inputIndex outputIndices
@@ -211,7 +211,7 @@ mkPaymentTx' ::
   [(ConwayUTxOIndex, MaryValue)] ->
   Integer ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkPaymentTx' inputIndex outputIndices fees donation state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
@@ -253,7 +253,7 @@ mkLockByScriptTx ::
   [Babbage.TxOutScriptType] ->
   Integer ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkLockByScriptTx inputIndex txOutTypes amount fees state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
@@ -287,7 +287,7 @@ mkUnlockScriptTx ::
   Bool ->
   Integer ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkUnlockScriptTx inputIndex colInputIndex outputIndex =
   mkUnlockScriptTx' inputIndex colInputIndex outputIndex mempty Nothing
@@ -301,7 +301,7 @@ mkUnlockScriptTxBabbage ::
   Bool ->
   Integer ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succeeds amount fees state' = do
   let colTxOutType =
@@ -336,7 +336,7 @@ mkDCertPoolTx ::
       ConwayTxCert ConwayEra
     )
   ] ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkDCertPoolTx consDCert state' = do
   dcerts <- forM consDCert $ \(stakeIxs, poolIx, mkDCert) -> do
@@ -346,7 +346,7 @@ mkDCertPoolTx consDCert state' = do
 
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
-mkDCertTxPools :: ConwayLedgerState -> Either ForgingError (AlonzoTx ConwayEra)
+mkDCertTxPools :: ConwayLedgerState mk -> Either ForgingError (AlonzoTx ConwayEra)
 mkDCertTxPools state' =
   Right $
     mkSimpleTx True $
@@ -376,7 +376,7 @@ mkAuxDataTx isValid' txBody auxData =
 
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential -> ConwayTxCert ConwayEra)] ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkSimpleDCertTx consDCert st = do
   dcerts <- forM consDCert $ \(stakeIndex, mkDCert) -> do
@@ -387,7 +387,7 @@ mkSimpleDCertTx consDCert st = do
 mkScriptDCertTx ::
   [(StakeIndex, Bool, StakeCredential -> ConwayTxCert ConwayEra)] ->
   Bool ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkScriptDCertTx consCert isValid' state' = do
   dcerts <- forM consCert $ \(stakeIndex, _, mkDCert) -> do
@@ -416,7 +416,7 @@ mkMultiAssetsScriptTx ::
   MultiAsset ->
   Bool ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees state' = do
   inputs <- mapM (`resolveUTxOIndex` state') inputIx
@@ -454,7 +454,7 @@ mkMultiAssetsScriptTx inputIx colInputIx outputIx refInput minted succeeds fees 
 mkDepositTxPools ::
   ConwayUTxOIndex ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkDepositTxPools inputIndex deposit state' = do
   (inputPair, _) <- resolveUTxOIndex inputIndex state'
@@ -649,7 +649,7 @@ mkDummyTxBody =
 mkFullTx ::
   Int ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkFullTx n m state' = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` state') inputs
@@ -883,7 +883,7 @@ mkUnlockScriptTx' ::
   Bool ->
   Integer ->
   Integer ->
-  ConwayLedgerState ->
+  ConwayLedgerState mk ->
   Either ForgingError (AlonzoTx ConwayEra)
 mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds amount fees state' = do
   inputPairs <- map fst <$> mapM (`resolveUTxOIndex` state') inputIndex
@@ -913,7 +913,7 @@ mkUnlockScriptTx' inputIndex colInputIndex outputIndex refInput colOut succeeds 
         mempty
         (Coin 0)
 
-allPoolStakeCert' :: ConwayLedgerState -> [ConwayTxCert ConwayEra]
+allPoolStakeCert' :: ConwayLedgerState mk -> [ConwayTxCert ConwayEra]
 allPoolStakeCert' st = map (mkRegTxCert SNothing) (getCreds st)
   where
     getCreds = nub . concatMap getPoolStakeCreds . Map.elems . stakePoolParams
