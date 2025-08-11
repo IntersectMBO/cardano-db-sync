@@ -123,7 +123,7 @@ mkPaymentTx ::
   AlonzoUTxOIndex ->
   Integer ->
   Integer ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkPaymentTx inputIndex outputIndex amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
@@ -138,7 +138,7 @@ mkPaymentTx inputIndex outputIndex amount fees sta = do
 mkPaymentTx' ::
   AlonzoUTxOIndex ->
   [(AlonzoUTxOIndex, MaryValue)] ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkPaymentTx' inputIndex outputIndex sta = do
   inputPair <- fst <$> resolveUTxOIndex inputIndex sta
@@ -159,7 +159,7 @@ mkLockByScriptTx ::
   [Bool] ->
   Integer ->
   Integer ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkLockByScriptTx inputIndex spendable amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
@@ -183,7 +183,7 @@ mkUnlockScriptTx ::
   Bool ->
   Integer ->
   Integer ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
@@ -249,7 +249,7 @@ mkMAssetsScriptTx ::
   MultiAsset ->
   Bool ->
   Integer ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
@@ -277,7 +277,7 @@ mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential -> ShelleyTxCert AlonzoEra)] ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
@@ -291,7 +291,7 @@ mkDCertPoolTx ::
     , [StakeCredential] -> KeyHash 'StakePool -> ShelleyTxCert AlonzoEra
     )
   ] ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkDCertPoolTx consDert st = do
   dcerts <- forM consDert $ \(stakeIxs, poolIx, mkDCert) -> do
@@ -303,7 +303,7 @@ mkDCertPoolTx consDert st = do
 mkScriptDCertTx ::
   [(StakeIndex, Bool, StakeCredential -> ShelleyTxCert AlonzoEra)] ->
   Bool ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkScriptDCertTx consDert valid st = do
   dcerts <- forM consDert $ \(stakeIndex, _, mkDCert) -> do
@@ -326,7 +326,7 @@ mkScriptDCertTx consDert valid st = do
 mkDepositTxPools ::
   AlonzoUTxOIndex ->
   Integer ->
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkDepositTxPools inputIndex deposit sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
@@ -337,7 +337,7 @@ mkDepositTxPools inputIndex deposit sta = do
   Right $ mkSimpleTx True $ consTxBody input mempty (StrictSeq.fromList [change]) (Coin 0) mempty (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkDCertTxPools ::
-  AlonzoLedgerState ->
+  AlonzoLedgerState mk ->
   Either ForgingError (AlonzoTx AlonzoEra)
 mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
