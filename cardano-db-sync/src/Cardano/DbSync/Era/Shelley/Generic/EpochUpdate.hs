@@ -40,7 +40,7 @@ data EpochUpdate = EpochUpdate
   , euNonce :: !Ledger.Nonce
   }
 
-epochUpdate :: ExtLedgerState CardanoBlock -> EpochUpdate
+epochUpdate :: ExtLedgerState CardanoBlock mk -> EpochUpdate
 epochUpdate lstate =
   EpochUpdate
     { euProtoParams = maybeToStrict $ epochProtoParams lstate
@@ -49,7 +49,7 @@ epochUpdate lstate =
 
 -- -------------------------------------------------------------------------------------------------
 
-extractEpochNonce :: ExtLedgerState CardanoBlock -> Ledger.Nonce
+extractEpochNonce :: ExtLedgerState CardanoBlock mk -> Ledger.Nonce
 extractEpochNonce extLedgerState =
   case Consensus.headerStateChainDep (headerState extLedgerState) of
     ChainDepStateByron _ -> Ledger.NeutralNonce

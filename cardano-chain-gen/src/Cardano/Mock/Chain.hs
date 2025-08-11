@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -17,6 +18,7 @@ module Cardano.Mock.Chain (
 ) where
 
 import Ouroboros.Consensus.Block
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Network.AnchoredFragment as AF
 import Ouroboros.Network.Block
@@ -30,7 +32,7 @@ data Chain' block st
 
 type State block = Consensus.ExtLedgerState block
 
-type Chain block = Chain' block (State block)
+type Chain block = Chain' block (State block ValuesMK)
 
 infixl 5 :>
 
