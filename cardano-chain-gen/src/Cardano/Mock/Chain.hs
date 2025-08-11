@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 
 module Cardano.Mock.Chain (
   Chain' (..),
@@ -20,6 +21,7 @@ import Ouroboros.Consensus.Block
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Network.AnchoredFragment as AF
 import Ouroboros.Network.Block
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 
 -- | This looks a lot like the 'Chain' defined in Ouroboros.Network.MockChain.Chain
 -- but this version includes also the ledger states.
@@ -30,7 +32,7 @@ data Chain' block st
 
 type State block = Consensus.ExtLedgerState block
 
-type Chain block = Chain' block (State block)
+type Chain block = Chain' block (State block ValuesMK)
 
 infixl 5 :>
 

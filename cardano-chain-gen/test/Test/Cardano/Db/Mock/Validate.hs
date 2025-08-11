@@ -211,7 +211,7 @@ assertAddrValues ::
   DBSyncEnv ->
   UTxOIndex era ->
   DbLovelace ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   IO ()
 assertAddrValues env ix expected sta = do
   addr <- assertRight $ resolveAddress ix sta
@@ -248,7 +248,7 @@ assertCertCounts env expected =
 assertRewardCounts ::
   EraCertState era =>
   DBSyncEnv ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   Bool ->
   Maybe Word64 ->
   [(StakeIndex, (Word64, Word64, Word64, Word64, Word64))] ->
@@ -502,7 +502,7 @@ assertPoolLayerCounters ::
   DBSyncEnv ->
   (Word64, Word64) ->
   [(PoolIndex, (Either DBFail Bool, Bool, Bool))] ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   IO ()
 assertPoolLayerCounters env (expectedRetired, expectedDelisted) expResults st = do
   poolLayer <- getPoolLayer env

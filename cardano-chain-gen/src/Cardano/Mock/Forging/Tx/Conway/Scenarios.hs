@@ -34,9 +34,10 @@ import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock ())
 import qualified Prelude
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 
-newtype ShelleyLedgerState era = ShelleyLedgerState
-  {unState :: LedgerState (ShelleyBlock PraosStandard era)}
+newtype ShelleyLedgerState era mk = ShelleyLedgerState
+  {unState :: LedgerState (ShelleyBlock PraosStandard era) mk}
 
 delegateAndSendBlocks :: Int -> Interpreter -> IO [CardanoBlock]
 delegateAndSendBlocks n interpreter = do
@@ -86,7 +87,7 @@ mkPaymentBlocks utxoIx addresses interpreter =
 forgeBlocksChunked ::
   Interpreter ->
   [a] ->
-  ([a] -> ShelleyLedgerState ConwayEra -> Either ForgingError (Tx ConwayEra)) ->
+  ([a] -> ShelleyLedgerState ConwayEra ValuesMK -> Either ForgingError (Tx ConwayEra)) ->
   IO [CardanoBlock]
 forgeBlocksChunked interpreter vs f = forM (chunksOf 500 vs) $ \blockCreds -> do
   blockTxs <- withConwayLedgerState interpreter $ \state' ->
@@ -107,7 +108,7 @@ registerDRepsAndDelegateVotes interpreter = do
 registerDRepAndDelegateVotes' ::
   Credential 'DRepRole ->
   StakeIndex ->
-  Conway.ConwayLedgerState ->
+  Conway.ConwayLedgerState mk ->
   Either ForgingError [AlonzoTx ConwayEra]
 registerDRepAndDelegateVotes' drepId stakeIx ledger = do
   stakeCreds <- resolveStakeCreds stakeIx ledger

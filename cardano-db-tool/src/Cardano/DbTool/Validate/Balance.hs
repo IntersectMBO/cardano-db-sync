@@ -67,7 +67,10 @@ vBErr :: String
 vBErr = "Validation Balance Error - "
 
 -- Given an address, return it's current UTxO balance.
-ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either ValidateBalanceError Word64
+ledgerAddrBalance :: 
+  Text -> 
+  LedgerState (CardanoBlock StandardCrypto) mk -> 
+  Either ValidateBalanceError Word64
 ledgerAddrBalance addr lsc =
   case lsc of
     LedgerStateByron st -> getByronBalance addr $ Byron.cvsUtxo $ byronLedgerState st
@@ -78,7 +81,7 @@ ledgerAddrBalance addr lsc =
     LedgerStateBabbage _st -> Left $ VBErrBabbage "undefined Babbage ledgerAddrBalance"
     LedgerStateConway _st -> Left $ VBErrConway "undefined Conway ledgerAddrBalance"
   where
-    getUTxO :: LedgerState (ShelleyBlock p era) -> Shelley.UTxO era
+    getUTxO :: LedgerState (ShelleyBlock p era) mk -> Shelley.UTxO era
     getUTxO = Shelley.utxosUtxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
 
 getByronBalance :: Text -> Byron.UTxO -> Either ValidateBalanceError Word64

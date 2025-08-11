@@ -81,7 +81,7 @@ migrateBootstrapUTxO syncEnv = do
 storeUTxOFromLedger ::
   (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
-  ExtLedgerState CardanoBlock ->
+  ExtLedgerState CardanoBlock mk ->
   ExceptT SyncNodeError (ReaderT SqlBackend m) ()
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)

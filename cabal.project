@@ -78,7 +78,7 @@ constraints:
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
 
-  , cardano-node ^>= 10.3
+  , cardano-node ^>= 10.4
 
 if impl (ghc >= 9.12)
   allow-newer:

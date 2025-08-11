@@ -55,7 +55,7 @@ import Network.TypedProtocol.Stateful.Codec ()
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
-import Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
+import Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery, QueryFootprint (..), BlockSupportsLedgerQuery)
 import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
@@ -107,6 +107,7 @@ import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQu
 import Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy (..))
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -116,7 +117,7 @@ data ServerHandle m blk = ServerHandle
   , forkAgain :: m (Async ())
   }
 
-replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk -> STM m ()
+replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk ValuesMK -> STM m ()
 replaceGenesis handle st =
   modifyTVar (chainProducerState handle) $ \cps ->
     cps {chainDB = replaceGenesisDB (chainDB cps) st}
@@ -125,12 +126,20 @@ readChain :: MonadSTM m => ServerHandle m blk -> STM m (Chain blk)
 readChain handle = do
   cchain . chainDB <$> readTVar (chainProducerState handle)
 
-addBlock :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> blk -> STM m ()
+addBlock :: 
+  (LedgerSupportsProtocol blk, MonadSTM m) => 
+  ServerHandle m blk -> 
+  blk -> 
+  STM m ()
 addBlock handle blk =
   modifyTVar (chainProducerState handle) $
     addBlockState blk
 
-rollback :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> Point blk -> STM m ()
+rollback :: 
+  (LedgerSupportsProtocol blk, MonadSTM m) => 
+  ServerHandle m blk ->
+  Point blk ->
+  STM m ()
 rollback handle point =
   modifyTVar (chainProducerState handle) $ \st ->
     case rollbackState point st of
@@ -153,7 +162,8 @@ stopServer sh = do
 
 type MockServerConstraint blk =
   ( SerialiseNodeToClientConstraints blk
-  , ShowQuery (BlockQuery blk)
+  , BlockSupportsLedgerQuery blk
+  , ShowQuery (BlockQuery blk 'QFNoTables)
   , StandardHash blk
   , ShowProxy (ApplyTxErr blk)
   , Serialise (HeaderHash blk)
@@ -167,11 +177,10 @@ type MockServerConstraint blk =
   )
 
 forkServerThread ::
-  forall blk.
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
-  State blk ->
+  State blk ValuesMK ->
   NetworkMagic ->
   FilePath ->
   IO (ServerHandle IO blk)
@@ -183,11 +192,10 @@ forkServerThread iom config initSt netMagic path = do
   pure $ ServerHandle chainSt threadVar runThread
 
 withServerHandle ::
-  forall blk a.
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
-  State blk ->
+  State blk ValuesMK ->
   NetworkMagic ->
   FilePath ->
   (ServerHandle IO blk -> IO a) ->

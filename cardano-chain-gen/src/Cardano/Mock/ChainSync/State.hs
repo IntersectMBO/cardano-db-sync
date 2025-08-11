@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -24,6 +25,7 @@ import Ouroboros.Consensus.Block (HasHeader, HeaderHash, Point, blockPoint, cast
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import Ouroboros.Network.Block (ChainUpdate (..))
+import Ouroboros.Consensus.Ledger.Tables (ValuesMK)
 
 data ChainProducerState block = ChainProducerState
   { chainDB :: ChainDB block
@@ -52,7 +54,10 @@ data FollowerNext
   | FollowerForwardFrom
   deriving (Eq, Show)
 
-initChainProducerState :: TopLevelConfig block -> Chain.State block -> ChainProducerState block
+initChainProducerState :: 
+  TopLevelConfig block ->
+  Chain.State block ValuesMK ->
+  ChainProducerState block
 initChainProducerState config st = ChainProducerState (initChainDB config st) Map.empty 0
 
 -- | Add a block to the chain. It does not require any follower's state changes.
