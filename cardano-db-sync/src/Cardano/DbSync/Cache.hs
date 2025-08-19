@@ -51,7 +51,7 @@ import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), shouldCache)
-import Cardano.DbSync.DbEvent (liftDbLookup)
+import Cardano.DbSync.DbEvent (liftDbLookup, liftDbLookupMaybe)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
@@ -218,14 +218,11 @@ queryPoolKeyWithCache ::
   SyncEnv ->
   CacheAction ->
   PoolKeyHash ->
-  ExceptT SyncNodeError DB.DbM (Either DB.DbSessionError DB.PoolHashId)
+  ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError DB.PoolHashId)
 queryPoolKeyWithCache syncEnv cacheUA hsh =
   case envCache syncEnv of
     NoCache -> do
-      mPhId <- lift $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
-      case mPhId of
-        Nothing -> pure $ Left $ DB.DbSessionError DB.mkDbCallStack "queryPoolKeyWithCache: NoCache queryPoolHashId"
-        Just phId -> pure $ Right phId
+      liftDbLookupMaybe DB.mkDbCallStack "NoCache queryPoolHashId" $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cPools ci)
       case Map.lookup hsh mp of
@@ -240,10 +237,10 @@ queryPoolKeyWithCache syncEnv cacheUA hsh =
           pure $ Right phId
         Nothing -> do
           liftIO $ missPools syncEnv
-          mPhId <- lift $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
-          case mPhId of
-            Nothing -> pure $ Left $ DB.DbSessionError DB.mkDbCallStack "queryPoolKeyWithCache: ActiveCache queryPoolHashId"
-            Just phId -> do
+          ePhId <- liftDbLookupMaybe DB.mkDbCallStack "ActiveCache queryPoolHashId" $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
+          case ePhId of
+            Left err -> pure $ Left err
+            Right phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
               when (shouldCache cacheUA) $
                 liftIO $

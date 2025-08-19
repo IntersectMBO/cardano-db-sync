@@ -14,6 +14,69 @@ data DbEnv = DbEnv
   }
 ```
 
+## Database Execution Functions
+
+Different `runDb*` functions provide various execution patterns for different use cases:
+
+### Transaction-Based Runners
+
+**`runDbTransLogged`** - Main synchronisation runner
+- Full ACID transaction guarantees with BEGIN/COMMIT/ROLLBACK
+- Comprehensive logging for debugging and monitoring
+- Primary runner for cardano-db-sync block processing
+- Automatically handles all transaction management
+
+**`runDbTransSilent`** - Performance-focused transaction runner  
+- Same transaction guarantees as logged version
+- No logging overhead for performance-critical operations
+- Ideal for testing scenarios or high-throughput operations
+
+**`runDbPoolTransLogged`** - Concurrent transaction runner
+- Uses connection pool instead of main connection
+- Full transaction management with logging
+- Designed for concurrent operations where multiple threads need independent connections
+- Requires DbEnv with connection pool configured
+
+### Direct Runners (No Transaction Management)
+
+**`runDbDirectLogged`** - Auto-commit with logging
+- No explicit transaction management (auto-commit mode)
+- Each statement commits immediately
+- Includes logging for debugging
+- Use when operations manage their own transactions
+
+**`runDbDirectSilent`** - Auto-commit without logging
+- No transaction management or logging overhead
+- Maximum performance for simple operations
+- Use for operations that don't need ACID guarantees
+
+### Standalone Runners
+
+**`runDbStandaloneSilent`** - Simple script runner
+- Self-contained with automatic connection management
+- Creates temporary connection from environment variables
+- Perfect for simple scripts and testing
+- Includes transaction management
+
+**`runDbStandaloneTransSilent`** - Configurable standalone runner
+- Custom connection configuration support
+- Full transaction management
+- Automatic resource cleanup
+- Good for applications needing custom connection settings
+
+**`runDbStandaloneDirectSilent`** - Script runner without transactions
+- Self-contained connection management
+- Auto-commit mode (no transactions)
+- Use for simple operations or tools that manage their own transaction boundaries
+
+### Pool-Based Runners
+
+**`runDbWithPool`** - External service runner
+- Designed for external services (like SMASH server)
+- Returns Either for explicit error handling (no exceptions)
+- Uses provided connection pool
+- Creates temporary DbEnv from pool connection
+
 ### Basic Usage
 
 ```haskell

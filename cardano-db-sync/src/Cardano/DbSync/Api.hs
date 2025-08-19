@@ -213,7 +213,7 @@ generateNewEpochEvents env details = do
         Strict.Just oldEpoch
           | currentEpochNo == EpochNo (1 + unEpochNo oldEpoch) ->
               Just $ LedgerNewEpoch currentEpochNo (getSyncStatus details)
-        _otherwise -> Nothing
+        _ -> Nothing
 
     newCurrentEpochNo :: CurrentEpochNo
     newCurrentEpochNo =
@@ -456,7 +456,7 @@ verifySnapshotPoint env snapPoints =
       let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
       case valid of
         Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
-        _otherwise -> pure Nothing
+        _ -> pure Nothing
     validLedgerFileToPoint (InMemory pnt) = do
       case pnt of
         GenesisPoint -> pure Nothing
@@ -465,7 +465,7 @@ verifySnapshotPoint env snapPoints =
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
-            _otherwise -> pure Nothing
+            _ -> pure Nothing
 
 convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
 convertToDiskPoint slot hashBlob = (,False) <$> convertToPoint slot hashBlob

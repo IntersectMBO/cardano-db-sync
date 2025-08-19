@@ -246,24 +246,21 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
           liftIO $
-            race_
-              -- We split the main thread into two parts to allow for graceful shutdown of the main App db thread.
-              (runDbThread syncEnv threadChannels)
-              ( mapConcurrently_
-                  id
-                  [ runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-                  , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
-                  , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
-                  , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-                  ]
-              )
+            mapConcurrently_
+              id
+              [ runDbThread syncEnv threadChannels
+              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
+              , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
+              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+              ]
     )
   where
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
       case dncShelleyHardFork cfg of
         CardanoTriggerHardForkAtEpoch (EpochNo 0) -> True
-        _other -> False
+        _ -> False
 
     removeJsonbFromSchemaConfig = ioRemoveJsonbFromSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams

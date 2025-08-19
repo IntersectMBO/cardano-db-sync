@@ -7,6 +7,7 @@ module Cardano.DbSync.DbEvent (
   ThreadChannels (..),
   liftDbSession,
   liftDbLookup,
+  liftDbLookupMaybe,
   liftDbSessionEither,
   liftDbLookupEither,
   liftSessionIO,
@@ -216,6 +217,17 @@ liftDbLookupEither cs mResult = do
     Right result -> case result of
       Left dbErr -> throwError $ SNErrDbLookupError cs dbErr
       Right val -> pure val
+
+-- | Lift a Maybe-returning database operation to Either DbLookupError
+--
+-- Converts DbM (Maybe a) to ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError a).
+-- Common pattern for database lookups that may not find results.
+liftDbLookupMaybe :: DB.DbCallStack -> Text -> DB.DbM (Maybe a) -> ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError a)
+liftDbLookupMaybe cs errMsg dbAction = do
+  result <- lift dbAction
+  pure $ case result of
+    Nothing -> Left $ DB.DbLookupError cs errMsg
+    Just value -> Right value
 
 liftSessionIO :: SyncNodeCallStack -> ExceptT DB.DbSessionError IO a -> ExceptT SyncNodeError IO a
 liftSessionIO cs dbAction = do

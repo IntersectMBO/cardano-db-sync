@@ -187,7 +187,6 @@ library
                       , lifted-base
                       , memory
                       , microlens
-                      -- , monad-control
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano

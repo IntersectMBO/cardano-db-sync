@@ -16,7 +16,7 @@ import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Prelude (ExceptT, lift, textShow, throwIO)
+import Cardano.Prelude (ExceptT, lift, textShow)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (liftIO)
@@ -34,12 +34,13 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache (queryTxIdWithCache)
+import Cardano.DbSync.DbEvent (liftDbLookupEither)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
-import Cardano.DbSync.Error (SyncNodeError)
+import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util (maxBulkSize)
@@ -150,10 +151,7 @@ prepareTxOut ::
 prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut (fromIntegral index) txOut
-  eTxId <- queryTxIdWithCache syncEnv txIntxId
-  txId <- case eTxId of
-    Left err -> liftIO $ throwIO err
-    Right tid -> pure tid
+  txId <- liftDbLookupEither mkSyncNodeCallStack $ queryTxIdWithCache syncEnv txIntxId
   insertTxOut syncEnv iopts (txId, txHashByteString) genTxOut
   where
     iopts = soptInsertOptions $ envOptions syncEnv

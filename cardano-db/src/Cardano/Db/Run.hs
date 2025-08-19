@@ -154,6 +154,11 @@ runDbDirectSilent dbEnv action = do
         Left err -> throwIO err
         Right value -> pure value
 
+-- | Connection pool-based transaction runner
+--
+-- Uses a connection from the pool rather than the main DbEnv connection.
+-- Wraps operations in a transaction with logging. Designed for concurrent operations
+-- where multiple threads need independent database connections.
 runDbPoolTransLogged ::
   MonadUnliftIO m =>
   Trace IO Text ->
@@ -231,6 +236,11 @@ runDbStandaloneTransSilent source action = do
         runDbTransSilent dbEnv action
     )
 
+-- | Standalone runner without transaction management
+--
+-- Self-contained runner that creates its own connection but doesn't wrap operations
+-- in transactions. Uses auto-commit mode. Perfect for simple operations that don't
+-- need ACID guarantees or tools that manage their own transaction boundaries.
 runDbStandaloneDirectSilent :: PGPassSource -> DbM a -> IO a
 runDbStandaloneDirectSilent source action = do
   pgconfig <- runOrThrowIO (readPGPass source)
