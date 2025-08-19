@@ -22,7 +22,7 @@ resolveStakeAddress = lift . DB.queryStakeAddress
 resolveInputTxOutIdValue ::
   SyncEnv ->
   Generic.TxIn ->
-  ExceptT SyncNodeError DB.DbM (Either DB.DbError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
+  ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
 resolveInputTxOutIdValue syncEnv txIn =
   lift $ DB.queryTxOutIdValueEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 

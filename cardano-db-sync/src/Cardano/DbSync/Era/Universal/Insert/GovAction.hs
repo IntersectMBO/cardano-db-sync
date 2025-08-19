@@ -36,7 +36,7 @@ import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert, queryTxIdWithCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
-import Cardano.DbSync.DbEvent (liftFail, liftFailEither)
+import Cardano.DbSync.DbEvent (liftDbLookup, liftDbLookupEither)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
@@ -192,14 +192,13 @@ resolveGovActionProposal ::
   ExceptT SyncNodeError DB.DbM DB.GovActionProposalId
 resolveGovActionProposal syncEnv gaId = do
   let govTxId = gaidTxId gaId
-      errorMsg = "resolveGovActionProposal "
   gaTxId <-
-    liftFailEither
-      (mkSyncNodeCallStack $ errorMsg <> "queryTxIdWithCache")
+    liftDbLookupEither
+      mkSyncNodeCallStack
       $ queryTxIdWithCache syncEnv govTxId
   let (GovActionIx index) = gaidGovActionIx gaId
-  liftFail
-    (mkSyncNodeCallStack $ errorMsg <> "queryTxIdWithCache")
+  liftDbLookup
+    mkSyncNodeCallStack
     $ DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::

@@ -93,7 +93,7 @@ class Typeable a => DbInfo a where
   default jsonbFields :: Proxy a -> [Text]
   jsonbFields _ = []
 
-  -- \| Column names that have an enum type.
+  -- | Column names that have an enum type.
   enumFields :: Proxy a -> [(Text, Text)] -- (column_name, enum_type)
   default enumFields :: Proxy a -> [(Text, Text)]
   enumFields _ = []

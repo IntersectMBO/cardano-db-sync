@@ -5,7 +5,7 @@
 
 module Cardano.Db.Statement.JsonB where
 
-import Cardano.Prelude (ExceptT, forM_, liftIO, throwError)
+import Cardano.Prelude (ExceptT, HasCallStack, forM_, liftIO, throwError)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import qualified Hasql.Connection as HsqlC
@@ -14,7 +14,7 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
-import Cardano.Db.Error (DbError (..))
+import Cardano.Db.Error (DbSessionError (..), formatSessionError, mkDbCallStack)
 import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Types (DbM)
 import qualified Data.Text as Text
@@ -23,9 +23,9 @@ import qualified Data.Text.Encoding as TextEnc
 --------------------------------------------------------------------------------
 -- Enable JSONB for specific fields in the schema
 --------------------------------------------------------------------------------
-enableJsonbInSchema :: DbM ()
+enableJsonbInSchema :: HasCallStack => DbM ()
 enableJsonbInSchema =
-  runSession $ do
+  runSession mkDbCallStack $ do
     forM_ jsonbColumns $ \(table, column) ->
       HsqlSes.sql $
         "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE jsonb USING " <> column <> "::jsonb"
@@ -45,9 +45,9 @@ enableJsonbInSchema =
 --------------------------------------------------------------------------------
 -- Disable JSONB for specific fields in the schema
 --------------------------------------------------------------------------------
-disableJsonbInSchema :: DbM ()
+disableJsonbInSchema :: HasCallStack => DbM ()
 disableJsonbInSchema =
-  runSession $ do
+  runSession mkDbCallStack $ do
     forM_ jsonColumnsToRevert $ \(table, column) ->
       HsqlSes.sql $
         "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE VARCHAR"
@@ -91,17 +91,17 @@ jsonbSchemaStatement =
           HsqlD.nonNullable HsqlD.int8
 
 -- Original function for direct connection use
-queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbError IO Bool
+queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbSessionError IO Bool
 queryJsonbInSchemaExists conn = do
   result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
   case result of
-    Left err -> throwError $ DbError $ Text.pack $ show err
+    Left err -> throwError $ DbSessionError mkDbCallStack (formatSessionError err)
     Right countRes -> pure $ countRes == 1
 
 -- Test function using DbAction monad
-queryJsonbInSchemaExistsTest :: DbM Bool
+queryJsonbInSchemaExistsTest :: HasCallStack => DbM Bool
 queryJsonbInSchemaExistsTest = do
   result <-
-    runSession $
+    runSession mkDbCallStack $
       HsqlSes.statement () jsonbSchemaStatement
   pure $ result == 1

@@ -221,7 +221,7 @@ handleEpochCachingWhenSyncing syncEnv cache newestEpochFromMap epochBlockDiffCac
       newEpoch <- lift $ DB.queryCalcEpochEntry $ ebdEpochNo currentEpC
       writeToMapEpochCache syncEnv cache newEpoch
     -- There will always be a EpochBlockDiff at this point in time
-    (_, _) -> throwError $ SNErrDefault (mkSyncNodeCallStack "handleEpochCachingWhenSyncing") "No caches available to update cache"
+    (_, _) -> throwError $ SNErrDefault mkSyncNodeCallStack "No caches available to update cache"
 
 -----------------------------------------------------------------------------------------------------
 -- Helper functions

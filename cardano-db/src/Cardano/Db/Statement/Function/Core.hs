@@ -9,6 +9,7 @@ module Cardano.Db.Statement.Function.Core (
 )
 where
 
+import Cardano.Db.Error (DbCallStack, DbSessionError (..), formatSessionError)
 import Cardano.Db.Statement.Types (Entity (..))
 import Cardano.Db.Types (DbEnv (..), DbM (..))
 import Cardano.Prelude (MonadIO (..), ask, throwIO)
@@ -16,21 +17,21 @@ import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
 
-runSession :: HsqlS.Session a -> DbM a
-runSession session = do
+runSession :: DbCallStack -> HsqlS.Session a -> DbM a
+runSession callStack session = do
   dbEnv <- ask
   result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
   case result of
-    Left sessionErr -> liftIO $ throwIO sessionErr
+    Left sessionErr -> liftIO $ throwIO $ DbSessionError callStack (formatSessionError sessionErr)
     Right a -> pure a
 
 -- | Runs a database session and returns the result as an Entity.
-runSessionEntity :: HsqlS.Session (Maybe (Entity record)) -> DbM (Maybe record)
-runSessionEntity session = do
+runSessionEntity :: DbCallStack -> HsqlS.Session (Maybe (Entity record)) -> DbM (Maybe record)
+runSessionEntity callStack session = do
   dbEnv <- ask
   result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
   case result of
-    Left sessionErr -> liftIO $ throwIO sessionErr
+    Left sessionErr -> liftIO $ throwIO $ DbSessionError callStack (formatSessionError sessionErr)
     Right a -> pure $ entityVal <$> a
 
 -- | The result type of an insert operation (usualy it's newly generated id).

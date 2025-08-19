@@ -81,7 +81,7 @@ insertListBlocksWithStopCondition syncEnv blocks targetBlock = do
           "Reached stop condition at block "
             <> textShow targetBlock
             <> ". Stopping db-sync gracefully."
-      pure $ Left $ SNErrDefault (mkSyncNodeCallStack "insertListBlocks") "Stop condition reached"
+      pure $ Left $ SNErrDefault mkSyncNodeCallStack "Stop condition reached"
     _ -> pure result
 
 applyAndInsertBlockMaybe ::

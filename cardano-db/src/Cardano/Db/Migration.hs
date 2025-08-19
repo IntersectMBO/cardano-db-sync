@@ -60,6 +60,7 @@ import Text.Read (readMaybe)
 
 import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
+import Cardano.Db.Error (mkDbCallStack)
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
 import Cardano.Db.Progress (updateProgress, withProgress)
@@ -225,7 +226,7 @@ createMigration _source (MigrationDir _migdir) _txOutVariantType = do
 recreateDB :: PGPassSource -> IO ()
 recreateDB pgpass = do
   runDbStandaloneTransSilent pgpass $ do
-    DB.runSession $
+    DB.runSession mkDbCallStack $
       HsqlS.statement () $
         HsqlStm.Statement
           "DROP SCHEMA IF EXISTS public CASCADE"
@@ -233,7 +234,7 @@ recreateDB pgpass = do
           HsqlD.noResult
           True
 
-    DB.runSession $
+    DB.runSession mkDbCallStack $
       HsqlS.statement () $
         HsqlStm.Statement
           "CREATE SCHEMA public"
@@ -244,7 +245,7 @@ recreateDB pgpass = do
 getAllTableNames :: PGPassSource -> IO [Text.Text]
 getAllTableNames pgpass = do
   runDbStandaloneTransSilent pgpass $ do
-    DB.runSession $
+    DB.runSession mkDbCallStack $
       HsqlS.statement () $
         HsqlStm.Statement
           "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()"
@@ -255,7 +256,7 @@ getAllTableNames pgpass = do
 truncateTables :: PGPassSource -> [Text.Text] -> IO ()
 truncateTables pgpass tables =
   runDbStandaloneTransSilent pgpass $ do
-    DB.runSession $
+    DB.runSession mkDbCallStack $
       HsqlS.statement () $
         HsqlStm.Statement
           (TextEnc.encodeUtf8 ("TRUNCATE " <> Text.intercalate ", " tables <> " CASCADE"))
@@ -278,7 +279,7 @@ getMaintenancePsqlConf pgconfig = runDbStandaloneTransSilent (PGPassCached pgcon
 
 showMaintenanceWorkMem :: DB.DbM [Text.Text]
 showMaintenanceWorkMem =
-  DB.runSession $
+  DB.runSession mkDbCallStack $
     HsqlS.statement () $
       HsqlStm.Statement
         "SHOW maintenance_work_mem"
@@ -288,7 +289,7 @@ showMaintenanceWorkMem =
 
 showMaxParallelMaintenanceWorkers :: DB.DbM [Text.Text]
 showMaxParallelMaintenanceWorkers =
-  DB.runSession $
+  DB.runSession mkDbCallStack $
     HsqlS.statement () $
       HsqlStm.Statement
         "SHOW max_parallel_maintenance_workers"
@@ -302,7 +303,7 @@ dropTables :: PGPassSource -> IO ()
 dropTables pgpass = do
   runDbStandaloneTransSilent pgpass $ do
     mstr <-
-      DB.runSession $
+      DB.runSession mkDbCallStack $
         HsqlS.statement () $
           HsqlStm.Statement
             ( mconcat
@@ -315,7 +316,7 @@ dropTables pgpass = do
             True
 
     whenJust mstr $ \dropsCommand ->
-      DB.runSession $
+      DB.runSession mkDbCallStack $
         HsqlS.statement dropsCommand $
           HsqlStm.Statement
             "$1"
@@ -380,7 +381,7 @@ noLedgerMigrations :: DB.DbEnv -> Trace IO Text.Text -> IO ()
 noLedgerMigrations dbEnv trce = do
   let action :: DB.DbM ()
       action = do
-        DB.runSession $
+        DB.runSession mkDbCallStack $
           HsqlS.statement () $
             HsqlStm.Statement
               "UPDATE redeemer SET fee = NULL"
@@ -388,7 +389,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runSession $
+        DB.runSession mkDbCallStack $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM reward"
@@ -396,7 +397,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runSession $
+        DB.runSession mkDbCallStack $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM epoch_stake"
@@ -404,7 +405,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runSession $
+        DB.runSession mkDbCallStack $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM ada_pots"
@@ -412,7 +413,7 @@ noLedgerMigrations dbEnv trce = do
               HsqlD.noResult
               True
 
-        DB.runSession $
+        DB.runSession mkDbCallStack $
           HsqlS.statement () $
             HsqlStm.Statement
               "DELETE FROM epoch_param"
@@ -425,7 +426,7 @@ noLedgerMigrations dbEnv trce = do
 queryPgIndexesCount :: DB.DbM Word64
 queryPgIndexesCount = do
   indexesExists <-
-    DB.runSession $
+    DB.runSession mkDbCallStack $
       HsqlS.statement () $
         HsqlStm.Statement
           "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"

@@ -137,7 +137,7 @@ setupTestData interpreter mockServer dbSync = do
 -- Individual Table Validation Functions
 ------------------------------------------------------------------------------
 
--- | Validate TxOutCore table column order
+-- | Validate table column order for any DbInfo type
 validateCall :: forall a. DB.DbInfo a => DBSyncEnv -> Proxy a -> IO ()
 validateCall dbSync proxy = do
   result <- queryDBSync dbSync $ DB.queryTableColumns proxy

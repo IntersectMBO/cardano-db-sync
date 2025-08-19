@@ -32,7 +32,7 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
-import Cardano.DbSync.DbEvent (liftFail)
+import Cardano.DbSync.DbEvent (liftDbLookup)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -68,7 +68,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
   when (unBlockNo (Generic.blkBlockNo blk) `mod` 100000 == 0) $ optimiseCaches cache
   do
     pbid <- case Generic.blkPreviousHash blk of
-      Nothing -> liftFail (mkSyncNodeCallStack "insertBlockUniversal") $ DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.
+      Nothing -> liftDbLookup mkSyncNodeCallStack $ DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.
       Just pHash -> queryPrevBlockWithCache syncEnv pHash (renderErrorMessage (Generic.blkEra blk))
     mPhid <- queryPoolKeyWithCache syncEnv UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details

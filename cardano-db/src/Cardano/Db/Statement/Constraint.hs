@@ -8,7 +8,7 @@ module Cardano.Db.Statement.Constraint where
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo)
 import Cardano.Db.Schema.Core.StakeDelegation (EpochStake, Reward)
-import Cardano.Prelude (Proxy (..), liftIO)
+import Cardano.Prelude (HasCallStack, Proxy (..), liftIO)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
@@ -16,6 +16,7 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSess
 import qualified Hasql.Statement as HsqlStmt
 
+import Cardano.Db.Error (mkDbCallStack)
 import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (DbM)
@@ -71,21 +72,21 @@ addUniqueConstraintStmt tbName constraintName fields =
           ]
 
 -- | Check if a constraint exists
-queryHasConstraint :: ConstraintNameDB -> DbM Bool
+queryHasConstraint :: HasCallStack => ConstraintNameDB -> DbM Bool
 queryHasConstraint (ConstraintNameDB cname) =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSess.statement cname queryHasConstraintStmt
 
 -- | Generic function to add a unique constraint to any table with DbInfo
 alterTableAddUniqueConstraint ::
   forall table.
-  DbInfo table =>
+  (DbInfo table, HasCallStack) =>
   Proxy table ->
   ConstraintNameDB ->
   [FieldNameDB] ->
   DbM ()
 alterTableAddUniqueConstraint proxy (ConstraintNameDB cname) fields =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSess.statement () $
       addUniqueConstraintStmt tbName cname fieldNames
   where

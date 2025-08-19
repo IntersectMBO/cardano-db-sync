@@ -64,8 +64,7 @@ writeEpochBlockDiffToCache ::
 writeEpochBlockDiffToCache cache epCurrent =
   case cache of
     NoCache -> do
-      let cs = mkSyncNodeCallStack "writeEpochBlockDiffToCache"
-      throwError $ SNErrDefault cs "Cache is NoCache"
+      throwError $ SNErrDefault mkSyncNodeCallStack "Cache is NoCache"
     ActiveCache ci -> do
       cE <- liftIO $ readTVarIO (cEpoch ci)
       case (ceMapEpoch cE, ceEpochBlockDiff cE) of
@@ -80,19 +79,18 @@ writeToMapEpochCache ::
   DB.Epoch ->
   ExceptT SyncNodeError DB.DbM ()
 writeToMapEpochCache syncEnv cache latestEpoch = do
-  let cs = mkSyncNodeCallStack "writeToMapEpochCache"
   -- this can also be tought of as max rollback number
   let securityParam =
         case envLedgerEnv syncEnv of
           HasLedger hle -> getSecurityParameter $ leProtocolInfo hle
           NoLedger nle -> getSecurityParameter $ nleProtocolInfo nle
   case cache of
-    NoCache -> throwError $ SNErrDefault cs "Cache is NoCache"
+    NoCache -> throwError $ SNErrDefault mkSyncNodeCallStack "Cache is NoCache"
     ActiveCache ci -> do
       -- get EpochBlockDiff so we can use the BlockId we stored when inserting blocks
       epochInternalCE <- readEpochBlockDiffFromCache cache
       case epochInternalCE of
-        Nothing -> throwError $ SNErrDefault cs "No epochInternalEpochCache"
+        Nothing -> throwError $ SNErrDefault mkSyncNodeCallStack "No epochInternalEpochCache"
         Just ei -> do
           cE <- liftIO $ readTVarIO (cEpoch ci)
           let currentBlockId = ebdBlockId ei

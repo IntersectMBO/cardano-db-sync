@@ -11,7 +11,7 @@
 
 module Cardano.Db.Statement.Function.Query where
 
-import Cardano.Prelude (Proxy (..), Word64, listToMaybe)
+import Cardano.Prelude (HasCallStack, Proxy (..), Word64, listToMaybe)
 import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
@@ -22,6 +22,7 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
+import Cardano.Db.Error (mkDbCallStack)
 import Cardano.Db.Statement.Function.Core (ResultType (..), runSession)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity, Key, validateColumn)
 import Cardano.Db.Types (Ada (..), DbM, lovelaceToAda)
@@ -218,7 +219,7 @@ parameterisedCountWhere colName condition encoder =
 -- @
 -- queryTableCount :: MonadIO m => DbAction m Word64
 -- queryTableCount =
---   runSession (mkDbCallStack "queryTableCount") $
+--   runSession mkDbCallStack $
 --     HsqlSes.statement () (countAll @TxOutCore)
 -- @
 countAll ::
@@ -249,9 +250,9 @@ queryStatementCacheStmt =
     sql = "SELECT count(*) FROM pg_prepared_statements"
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
 
-queryStatementCacheSize :: DbM Int
+queryStatementCacheSize :: HasCallStack => DbM Int
 queryStatementCacheSize =
-  runSession $ HsqlSes.statement () queryStatementCacheStmt
+  runSession mkDbCallStack $ HsqlSes.statement () queryStatementCacheStmt
 
 -- Decoder for Ada amounts from database int8 values
 adaDecoder :: HsqlD.Row Ada

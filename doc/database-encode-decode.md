@@ -1,5 +1,55 @@
 # Creating Hasql Encoders, Decoders, and DbInfo Instances
 
+## DbM Monad - The Foundation
+
+The `DbM` monad is the core database monad used throughout the application for all database operations:
+
+```haskell
+newtype DbM a = DbM {runDbM :: ReaderT DbEnv IO a}
+
+data DbEnv = DbEnv
+  { dbConnection :: !HsqlCon.Connection
+  , dbPoolConnection :: !(Maybe (Pool HsqlCon.Connection))
+  , dbTracer :: !(Maybe (Trace IO Text))
+  }
+```
+
+### Basic Usage
+
+```haskell
+-- Simple database operation
+runDbOperation :: DbM SomeResult
+runDbOperation = do
+  result <- DB.queryFunction someParams
+  DB.insertFunction otherParams
+  pure result
+
+-- Error handling with call stack tracking
+safeDbOperation :: HasCallStack => DbM (Either DbLookupError Result)
+safeDbOperation = 
+  runExceptT $ do
+    result <- liftDbLookup mkDbCallStack $ DB.queryRequiredEntity
+    lift $ DB.updateEntity result
+    pure result
+```
+
+### Error Handling Patterns
+
+```haskell
+-- For operations that may not find results
+liftDbLookup mkDbCallStack $ DB.queryMaybeEntity params
+
+-- For operations that must succeed
+liftDbSession mkDbCallStack $ DB.insertEntity entity
+
+-- Combined with ExceptT for complex operations
+complexOperation :: ExceptT SyncNodeError DbM Result
+complexOperation = do
+  entity <- liftDbLookup mkDbCallStack $ DB.queryRequiredEntity
+  processedData <- lift $ processEntity entity
+  liftDbSession mkDbCallStack $ DB.updateEntity processedData
+```
+
 ## Data Type Definition
 
 ```haskell

@@ -19,6 +19,7 @@ import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
+import Cardano.Db.Error (mkDbCallStack)
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.StakeDelegation as SS
@@ -44,7 +45,7 @@ insertDelegationStmt =
 
 insertDelegation :: SS.Delegation -> DbM Id.DelegationId
 insertDelegation delegation =
-  runSession $ HsqlSes.statement delegation insertDelegationStmt
+  runSession mkDbCallStack $ HsqlSes.statement delegation insertDelegationStmt
 
 --------------------------------------------------------------------------------
 -- Statement for querying delegations with non-null redeemer_id
@@ -64,7 +65,7 @@ queryDelegationScriptStmt =
 
 queryDelegationScript :: DbM [SS.Delegation]
 queryDelegationScript =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryDelegationScriptStmt
 
 --------------------------------------------------------------------------------
@@ -90,7 +91,7 @@ insertBulkEpochStakeStmt dbConstraintEpochStake =
 
 insertBulkEpochStake :: Bool -> [SS.EpochStake] -> DbM ()
 insertBulkEpochStake dbConstraintEpochStake epochStakes =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epochStakes $
       insertBulkEpochStakeStmt dbConstraintEpochStake
 
@@ -113,7 +114,7 @@ queryEpochStakeCountStmt =
 
 queryEpochStakeCount :: Word64 -> DbM Word64
 queryEpochStakeCount epoch =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epoch queryEpochStakeCountStmt
 
 --------------------------------------------------------------------------------
@@ -140,7 +141,7 @@ updateStakeProgressCompletedStmt =
 
 updateStakeProgressCompleted :: Word64 -> DbM ()
 updateStakeProgressCompleted epoch =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epoch updateStakeProgressCompletedStmt
 
 --------------------------------------------------------------------------------
@@ -175,7 +176,7 @@ insertBulkRewardsStmt dbConstraintRewards =
 
 insertBulkRewards :: Bool -> [SS.Reward] -> DbM ()
 insertBulkRewards dbConstraintRewards rewards =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement rewards $
       insertBulkRewardsStmt dbConstraintRewards
 
@@ -200,13 +201,13 @@ queryNormalEpochRewardCountStmt =
 
 queryNormalEpochRewardCount :: Word64 -> DbM Word64
 queryNormalEpochRewardCount epochNum =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epochNum queryNormalEpochRewardCountStmt
 
 --------------------------------------------------------------------------------
 queryRewardCount :: DbM Word64
 queryRewardCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SS.Reward)
 
 --------------------------------------------------------------------------------
@@ -239,7 +240,7 @@ queryRewardMapDataStmt =
 
 queryRewardMapData :: Word64 -> DbM [(ByteString, RewardSource, DbLovelace)]
 queryRewardMapData epochNo =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epochNo queryRewardMapDataStmt
 
 -- Bulk delete statement
@@ -271,7 +272,7 @@ deleteRewardsBulk ::
   ([Id.StakeAddressId], [RewardSource], [Word64], [Id.PoolHashId]) ->
   DbM ()
 deleteRewardsBulk params =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement params deleteRewardsBulkStmt
 
 --------------------------------------------------------------------------------
@@ -298,7 +299,7 @@ deleteOrphanedRewardsBulk ::
   [Id.StakeAddressId] ->
   DbM ()
 deleteOrphanedRewardsBulk epochNo addrIds =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement (epochNo, addrIds) deleteOrphanedRewardsBulkStmt
 
 --------------------------------------------------------------------------------
@@ -321,13 +322,13 @@ insertBulkRewardRestsStmt =
 
 insertBulkRewardRests :: [SS.RewardRest] -> DbM ()
 insertBulkRewardRests rewardRests =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement rewardRests insertBulkRewardRestsStmt
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: DbM Word64
 queryRewardRestCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SS.RewardRest)
 
 --------------------------------------------------------------------------------
@@ -341,7 +342,7 @@ insertStakeAddressStmt =
 
 insertStakeAddress :: SS.StakeAddress -> DbM Id.StakeAddressId
 insertStakeAddress stakeAddress =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement stakeAddress insertStakeAddressStmt
 
 --------------------------------------------------------------------------------
@@ -353,7 +354,7 @@ insertStakeDeregistrationStmt =
 
 insertStakeDeregistration :: SS.StakeDeregistration -> DbM Id.StakeDeregistrationId
 insertStakeDeregistration stakeDeregistration =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement stakeDeregistration insertStakeDeregistrationStmt
 
 --------------------------------------------------------------------------------
@@ -365,7 +366,7 @@ insertStakeRegistrationStmt =
 
 insertStakeRegistration :: SS.StakeRegistration -> DbM Id.StakeRegistrationId
 insertStakeRegistration stakeRegistration =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement stakeRegistration insertStakeRegistrationStmt
 
 -- | Queries
@@ -387,7 +388,7 @@ queryStakeAddressStmt =
 
 queryStakeAddress :: ByteString -> DbM (Maybe Id.StakeAddressId)
 queryStakeAddress addr = do
-  runSession $ HsqlSes.statement addr queryStakeAddressStmt
+  runSession mkDbCallStack $ HsqlSes.statement addr queryStakeAddressStmt
 
 -----------------------------------------------------------------------------------
 queryStakeRefPtrStmt :: HsqlStmt.Statement Ptr (Maybe Id.StakeAddressId)
@@ -431,7 +432,7 @@ queryStakeRefPtrStmt =
 
 queryStakeRefPtr :: Ptr -> DbM (Maybe Id.StakeAddressId)
 queryStakeRefPtr ptr =
-  runSession $ HsqlSes.statement ptr queryStakeRefPtrStmt
+  runSession mkDbCallStack $ HsqlSes.statement ptr queryStakeRefPtrStmt
 
 -----------------------------------------------------------------------------------
 -- Statement for querying stake addresses with non-null script_hash
@@ -451,7 +452,7 @@ queryStakeAddressScriptStmt =
 
 queryStakeAddressScript :: DbM [SS.StakeAddress]
 queryStakeAddressScript =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryStakeAddressScriptStmt
 
 -----------------------------------------------------------------------------------
@@ -504,7 +505,7 @@ queryAddressInfoViewStmt =
 -- Pipeline function
 queryAddressInfoData :: Id.StakeAddressId -> DbM (Ada, Ada, Maybe Text.Text)
 queryAddressInfoData addrId =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.pipeline $ do
       rewards <- HsqlP.statement addrId queryAddressInfoRewardsStmt
       withdrawals <- HsqlP.statement addrId queryAddressInfoWithdrawalsStmt
@@ -541,7 +542,7 @@ queryRewardForEpochStmt =
 
 queryRewardForEpoch :: Word64 -> Id.StakeAddressId -> DbM (Maybe DbLovelace)
 queryRewardForEpoch epochNo saId =
-  runSession $ HsqlSes.statement (epochNo, saId) queryRewardForEpochStmt
+  runSession mkDbCallStack $ HsqlSes.statement (epochNo, saId) queryRewardForEpochStmt
 
 ---------------------------------------------------------------------------
 -- StakeDeregistration
@@ -565,4 +566,4 @@ queryDeregistrationScriptStmt =
 
 queryDeregistrationScript :: DbM [SS.StakeDeregistration]
 queryDeregistrationScript =
-  runSession $ HsqlSes.statement () queryDeregistrationScriptStmt
+  runSession mkDbCallStack $ HsqlSes.statement () queryDeregistrationScriptStmt

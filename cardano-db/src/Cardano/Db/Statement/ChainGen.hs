@@ -18,6 +18,7 @@ import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 import Prelude hiding (length, show, (.))
 
+import Cardano.Db.Error (mkDbCallStack)
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SCE
 import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SCG
@@ -54,7 +55,7 @@ queryEpochParamWithEpochNoStmt =
 -- | Query protocol parameters from @EpochParam@ by epoch number.
 queryEpochParamWithEpochNo :: Word64 -> DbM (Maybe SCE.EpochParam)
 queryEpochParamWithEpochNo epochNo =
-  runSessionEntity $ HsqlSes.statement epochNo queryEpochParamWithEpochNoStmt
+  runSessionEntity mkDbCallStack $ HsqlSes.statement epochNo queryEpochParamWithEpochNoStmt
 
 ------------------------------------------------------------------------------------------------
 
@@ -79,7 +80,7 @@ queryParamProposalWithEpochNoStmt =
 -- | Query protocol parameter proposals from @ParamProposal@ by epoch number.
 queryParamProposalWithEpochNo :: Word64 -> DbM (Maybe SGV.ParamProposal)
 queryParamProposalWithEpochNo epochNo =
-  runSessionEntity $ HsqlSes.statement epochNo queryParamProposalWithEpochNoStmt
+  runSessionEntity mkDbCallStack $ HsqlSes.statement epochNo queryParamProposalWithEpochNoStmt
 
 ------------------------------------------------------------------------------------------------
 
@@ -103,7 +104,7 @@ queryParamWithEpochNoStmt =
 
 queryParamWithEpochNo :: Word64 -> DbM (Maybe SCE.EpochParam)
 queryParamWithEpochNo epochNo =
-  runSessionEntity $ HsqlSes.statement epochNo queryParamWithEpochNoStmt
+  runSessionEntity mkDbCallStack $ HsqlSes.statement epochNo queryParamWithEpochNoStmt
 
 ------------------------------------------------------------------------------------------------
 
@@ -127,7 +128,7 @@ queryNullTxDepositExistsStmt =
 -- | Query whether there any null tx deposits?
 queryNullTxDepositExists :: DbM Bool
 queryNullTxDepositExists =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryNullTxDepositExistsStmt
 
 ------------------------------------------------------------------------------------------------
@@ -149,7 +150,7 @@ queryMultiAssetCountStmt =
 
 queryMultiAssetCount :: DbM Word
 queryMultiAssetCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryMultiAssetCountStmt
 
 ------------------------------------------------------------------------------------------------
@@ -171,7 +172,7 @@ queryTxMetadataCountStmt =
 
 queryTxMetadataCount :: DbM Word
 queryTxMetadataCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryTxMetadataCountStmt
 
 ------------------------------------------------------------------------------------------------
@@ -204,7 +205,7 @@ queryDRepDistrAmountStmt =
 queryDRepDistrAmount :: ByteString -> Word64 -> DbM Word64
 queryDRepDistrAmount drepHash epochNo = do
   result <-
-    runSession $
+    runSession mkDbCallStack $
       HsqlSes.statement (drepHash, epochNo) queryDRepDistrAmountStmt
   pure $ fromMaybe 0 result
 
@@ -234,7 +235,7 @@ queryGovActionCountsStmt =
 
 queryGovActionCounts :: DbM (Word, Word, Word, Word)
 queryGovActionCounts =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryGovActionCountsStmt
 
 ------------------------------------------------------------------------------------------------
@@ -267,7 +268,7 @@ queryConstitutionAnchorStmt =
 
 queryConstitutionAnchor :: Word64 -> DbM (Maybe (Text, ByteString))
 queryConstitutionAnchor epochNo =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epochNo queryConstitutionAnchorStmt
 
 ------------------------------------------------------------------------------------------------
@@ -292,7 +293,7 @@ queryRewardRestsStmt =
 
 queryRewardRests :: DbM [(RewardSource, Word64)]
 queryRewardRests =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryRewardRestsStmt
 
 ------------------------------------------------------------------------------------------------
@@ -314,7 +315,7 @@ queryTreasuryDonationsStmt =
 
 queryTreasuryDonations :: DbM Word64
 queryTreasuryDonations =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryTreasuryDonationsStmt
 
 ------------------------------------------------------------------------------------------------
@@ -352,7 +353,7 @@ queryVoteCountsStmt =
 
 queryVoteCounts :: ByteString -> Word16 -> DbM (Word64, Word64, Word64)
 queryVoteCounts txHash idx =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement (txHash, idx) queryVoteCountsStmt
 
 ------------------------------------------------------------------------------------------------
@@ -374,7 +375,7 @@ queryEpochStateCountStmt =
 
 queryEpochStateCount :: Word64 -> DbM Word64
 queryEpochStateCount epochNo =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epochNo queryEpochStateCountStmt
 
 ------------------------------------------------------------------------------------------------
@@ -401,7 +402,7 @@ queryCommitteeByTxHashStmt =
 
 queryCommitteeByTxHash :: ByteString -> DbM (Maybe SCG.Committee)
 queryCommitteeByTxHash txHash =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement txHash queryCommitteeByTxHashStmt
 
 ------------------------------------------------------------------------------------------------
@@ -429,7 +430,7 @@ queryCommitteeMemberCountByTxHashStmt =
 
 queryCommitteeMemberCountByTxHash :: Maybe ByteString -> DbM Word64
 queryCommitteeMemberCountByTxHash txHash =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement txHash queryCommitteeMemberCountByTxHashStmt
 
 ------------------------------------------------------------------------------------------------
@@ -456,7 +457,7 @@ queryTestTxIdsStmt =
 -- | Exclude all 'faked' generated TxId values from the genesis block (block_id == 1).
 queryTestTxIds :: DbM (Word64, Word64)
 queryTestTxIds =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () queryTestTxIdsStmt
 
 ------------------------------------------------------------------------------------------------
@@ -482,7 +483,7 @@ queryTxFeeDepositStmt =
 
 queryTxFeeDeposit :: Word64 -> DbM (Ada, Int64)
 queryTxFeeDeposit txId = do
-  result <- runSession $ HsqlSes.statement txId queryTxFeeDepositStmt
+  result <- runSession mkDbCallStack $ HsqlSes.statement txId queryTxFeeDepositStmt
   pure $ fromMaybe (0, 0) result
 
 ------------------------------------------------------------------------------------------------
@@ -536,12 +537,12 @@ queryTxInputs txOutTableType txId = do
   case txOutTableType of
     SV.TxOutVariantCore -> do
       cores <-
-        runSession $
+        runSession mkDbCallStack $
           HsqlSes.statement txId queryTxInputsCoreStmt
       pure $ map SV.VCTxOutW cores
     SV.TxOutVariantAddress -> do
       addresses <-
-        runSession $
+        runSession mkDbCallStack $
           HsqlSes.statement txId queryTxInputsAddressStmt
       pure $ map (`SV.VATxOutW` Nothing) addresses
 
@@ -590,12 +591,12 @@ queryTxOutputs txOutTableType txId = do
   case txOutTableType of
     SV.TxOutVariantCore -> do
       cores <-
-        runSession $
+        runSession mkDbCallStack $
           HsqlSes.statement txId queryTxOutputsCoreStmt
       pure $ map SV.VCTxOutW cores
     SV.TxOutVariantAddress -> do
       addresses <-
-        runSession $
+        runSession mkDbCallStack $
           HsqlSes.statement txId queryTxOutputsAddressStmt
       pure $ map (`SV.VATxOutW` Nothing) addresses
 
@@ -624,7 +625,7 @@ queryTxWithdrawalStmt =
 -- If it is possible then there will be an accounting error.
 queryTxWithdrawal :: Word64 -> DbM Ada
 queryTxWithdrawal txId =
-  runSession $ HsqlSes.statement txId queryTxWithdrawalStmt
+  runSession mkDbCallStack $ HsqlSes.statement txId queryTxWithdrawalStmt
 
 ------------------------------------------------------------------------------------------------
 
@@ -675,10 +676,10 @@ queryRewardRestsWithStakeAddrStmt =
 queryRewardsAndRestsWithStakeAddr :: Maybe Word64 -> DbM [(RewardSource, ByteString)]
 queryRewardsAndRestsWithStakeAddr mEpoch = do
   res1 <-
-    runSession $
+    runSession mkDbCallStack $
       HsqlSes.statement mEpoch queryRewardsWithStakeAddrStmt
   res2 <-
-    runSession $
+    runSession mkDbCallStack $
       HsqlSes.statement mEpoch queryRewardRestsWithStakeAddrStmt
   pure (res1 <> res2)
 
@@ -688,36 +689,36 @@ queryRewardsAndRestsWithStakeAddr mEpoch = do
 
 queryStakeRegistrationCount :: DbM Word64
 queryStakeRegistrationCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCSD.StakeRegistration)
 
 queryStakeDeregistrationCount :: DbM Word64
 queryStakeDeregistrationCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCSD.StakeDeregistration)
 
 queryDelegationCount :: DbM Word64
 queryDelegationCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCSD.Delegation)
 
 queryWithdrawalCount :: DbM Word64
 queryWithdrawalCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.Withdrawal)
 
 ------------------------------------------------------------------------------------------------
 
 queryEpochStakeCountGen :: DbM Word64
 queryEpochStakeCountGen =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCSD.EpochStake)
 
 ------------------------------------------------------------------------------------------------
 
 queryEpochStakeByEpochCount :: Word64 -> DbM Word64
 queryEpochStakeByEpochCount epochNo =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement epochNo (parameterisedCountWhere @SCSD.EpochStake "epoch_no" "= $1" encoder)
   where
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
@@ -726,14 +727,14 @@ queryEpochStakeByEpochCount epochNo =
 
 queryZeroFeeInvalidTxCount :: DbM Word64
 queryZeroFeeInvalidTxCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countWhere @SCB.Tx "fee" "= 0 AND valid_contract = FALSE")
 
 ------------------------------------------------------------------------------------------------
 
 queryDatumByBytesCount :: ByteString -> DbM Word64
 queryDatumByBytesCount bs =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement bs (parameterisedCountWhere @SCB.Datum "bytes" "= $1" encoder)
   where
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
@@ -744,62 +745,62 @@ queryDatumByBytesCount bs =
 
 queryScriptCount :: DbM Word64
 queryScriptCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.Script)
 
 queryRedeemerCount :: DbM Word64
 queryRedeemerCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.Redeemer)
 
 queryDatumCount :: DbM Word64
 queryDatumCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.Datum)
 
 queryCollateralTxInCount :: DbM Word64
 queryCollateralTxInCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.CollateralTxIn)
 
 queryRedeemerDataCount :: DbM Word64
 queryRedeemerDataCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.RedeemerData)
 
 queryReferenceTxInCount :: DbM Word64
 queryReferenceTxInCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCB.ReferenceTxIn)
 
 queryCollateralTxOutCoreCount :: DbM Word64
 queryCollateralTxOutCoreCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SVC.CollateralTxOutCore)
 
 queryCollateralTxOutAddressCount :: DbM Word64
 queryCollateralTxOutAddressCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SVA.CollateralTxOutAddress)
 
 queryInlineDatumCoreCount :: DbM Word64
 queryInlineDatumCoreCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countWhere @SVC.TxOutCore "inline_datum_id" "IS NOT NULL")
 
 queryInlineDatumAddressCount :: DbM Word64
 queryInlineDatumAddressCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countWhere @SVA.TxOutAddress "inline_datum_id" "IS NOT NULL")
 
 queryReferenceScriptCoreCount :: DbM Word64
 queryReferenceScriptCoreCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countWhere @SVC.TxOutCore "reference_script_id" "IS NOT NULL")
 
 queryReferenceScriptAddressCount :: DbM Word64
 queryReferenceScriptAddressCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countWhere @SVA.TxOutAddress "reference_script_id" "IS NOT NULL")
 
 ------------------------------------------------------------------------------------------------
@@ -808,32 +809,32 @@ queryReferenceScriptAddressCount =
 
 queryPoolHashCount :: DbM Word64
 queryPoolHashCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolHash)
 
 queryPoolMetadataRefCount :: DbM Word64
 queryPoolMetadataRefCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolMetadataRef)
 
 queryPoolUpdateCount :: DbM Word64
 queryPoolUpdateCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolUpdate)
 
 queryPoolOwnerCount :: DbM Word64
 queryPoolOwnerCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolOwner)
 
 queryPoolRetireCount :: DbM Word64
 queryPoolRetireCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolRetire)
 
 queryPoolRelayCount :: DbM Word64
 queryPoolRelayCount =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolRelay)
 
 ------------------------------------------------------------------------------
@@ -889,7 +890,7 @@ queryTableColumns proxy = do
 
   -- Get actual database column order
   columnInfos <-
-    runSession $
+    runSession mkDbCallStack $
       HsqlSes.statement () (getTableColumnOrderStmt table)
 
   let allDbCols = map columnName columnInfos

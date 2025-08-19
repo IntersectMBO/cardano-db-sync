@@ -34,7 +34,7 @@ assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =
   liftIO $ unless bool (error msg)
 
-extractDbResult :: MonadIO m => Either DbError a -> m a
+extractDbResult :: MonadIO m => Either DbLookupError a -> m a
 extractDbResult (Left err) = liftIO $ throwIO err
 extractDbResult (Right val) = pure val
 

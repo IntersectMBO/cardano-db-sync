@@ -3,7 +3,7 @@
 
 module Cardano.Db.Statement.MultiAsset where
 
-import Cardano.Prelude (ByteString, for)
+import Cardano.Prelude (ByteString, HasCallStack, for)
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -13,6 +13,7 @@ import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
+import Cardano.Db.Error (mkDbCallStack)
 import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
@@ -32,9 +33,9 @@ insertMultiAssetStmt =
     SMA.multiAssetEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MultiAssetId)
 
-insertMultiAsset :: SMA.MultiAsset -> DbM Id.MultiAssetId
+insertMultiAsset :: HasCallStack => SMA.MultiAsset -> DbM Id.MultiAssetId
 insertMultiAsset multiAsset =
-  runSession $ HsqlSes.statement multiAsset insertMultiAssetStmt
+  runSession mkDbCallStack $ HsqlSes.statement multiAsset insertMultiAssetStmt
 
 -- | QUERY -------------------------------------------------------------------
 queryMultiAssetIdStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Id.MultiAssetId)
@@ -55,9 +56,9 @@ queryMultiAssetIdStmt =
 
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.MultiAssetId)
 
-queryMultiAssetId :: ByteString -> ByteString -> DbM (Maybe Id.MultiAssetId)
+queryMultiAssetId :: HasCallStack => ByteString -> ByteString -> DbM (Maybe Id.MultiAssetId)
 queryMultiAssetId policy assetName =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement (policy, assetName) queryMultiAssetIdStmt
 
 --------------------------------------------------------------------------------
@@ -78,10 +79,11 @@ insertBulkMaTxMintStmt =
       , map SMA.maTxMintIdent xs
       )
 
-insertBulkMaTxMintPiped :: [[SMA.MaTxMint]] -> DbM [Id.MaTxMintId]
+insertBulkMaTxMintPiped :: HasCallStack => [[SMA.MaTxMint]] -> DbM [Id.MaTxMintId]
 insertBulkMaTxMintPiped maTxMintChunks =
   concat
     <$> runSession
+      mkDbCallStack
       ( HsqlSes.pipeline $
           for maTxMintChunks $ \chunk ->
             HsqlP.statement chunk insertBulkMaTxMintStmt

@@ -21,6 +21,7 @@ import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
+import Cardano.Db.Error (mkDbCallStack)
 import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.MinIds (MinIds (..), extractCoreMaTxOutId, extractCoreTxOutId, extractVariantMaTxOutId, extractVariantTxOutId)
@@ -73,7 +74,7 @@ queryMinRefId ::
   HsqlE.Params b ->
   DbM (Maybe Int64)
 queryMinRefId fieldName value encoder =
-  runSession $ HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
+  runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -118,7 +119,7 @@ queryMinRefIdNullable ::
   HsqlE.Params b ->
   DbM (Maybe Int64)
 queryMinRefIdNullable fieldName value encoder =
-  runSession $ HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
+  runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -163,7 +164,7 @@ queryMinRefIdKey ::
   HsqlD.Row (Maybe (Key a)) ->
   DbM (Maybe (Key a))
 queryMinRefIdKey fieldName value encoder keyDecoder =
-  runSession $
+  runSession mkDbCallStack $
     HsqlSes.statement value (queryMinRefIdKeyStmt @a fieldName encoder keyDecoder)
 
 whenNothingQueryMinRefId ::
@@ -201,7 +202,7 @@ completeMinIdCore mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty
     Just txId -> do
-      (mTxInId, mTxOutId) <- runSession $ HsqlSes.pipeline $ do
+      (mTxInId, mTxOutId) <- runSession mkDbCallStack $ HsqlSes.pipeline $ do
         txInResult <- case minTxInId minIds of
           Just k -> pure $ Just k
           Nothing -> HsqlP.statement txId (queryMinRefIdKeyStmt @SCB.TxIn "tx_in_id" (Id.idEncoder Id.getTxId) (Id.maybeIdDecoder Id.TxInId))
@@ -217,7 +218,7 @@ completeMinIdCore mTxId minIds = do
         Just txOutId ->
           case extractCoreMaTxOutId $ minMaTxOutId minIds of
             Just k -> pure $ Just k
-            Nothing -> runSession $ HsqlSes.statement txOutId (queryMinRefIdKeyStmt @VC.MaTxOutCore "tx_out_id" (Id.idEncoder Id.getTxOutCoreId) (Id.maybeIdDecoder Id.MaTxOutCoreId))
+            Nothing -> runSession mkDbCallStack $ HsqlSes.statement txOutId (queryMinRefIdKeyStmt @VC.MaTxOutCore "tx_out_id" (Id.idEncoder Id.getTxOutCoreId) (Id.maybeIdDecoder Id.MaTxOutCoreId))
 
       pure $
         MinIds
@@ -231,7 +232,7 @@ completeMinIdVariant mTxId minIds = do
   case mTxId of
     Nothing -> pure mempty
     Just txId -> do
-      (mTxInId, mTxOutId) <- runSession $ HsqlSes.pipeline $ do
+      (mTxInId, mTxOutId) <- runSession mkDbCallStack $ HsqlSes.pipeline $ do
         txInResult <- case minTxInId minIds of
           Just k -> pure $ Just k
           Nothing -> HsqlP.statement txId (queryMinRefIdKeyStmt @SCB.TxIn "tx_in_id" (Id.idEncoder Id.getTxId) (Id.maybeIdDecoder Id.TxInId))
@@ -247,7 +248,7 @@ completeMinIdVariant mTxId minIds = do
         Just txOutId ->
           case extractVariantMaTxOutId $ minMaTxOutId minIds of
             Just k -> pure $ Just k
-            Nothing -> runSession $ HsqlSes.statement txOutId (queryMinRefIdKeyStmt @VA.MaTxOutAddress "tx_out_id" (Id.idEncoder Id.getTxOutAddressId) (Id.maybeIdDecoder Id.MaTxOutAddressId))
+            Nothing -> runSession mkDbCallStack $ HsqlSes.statement txOutId (queryMinRefIdKeyStmt @VA.MaTxOutAddress "tx_out_id" (Id.idEncoder Id.getTxOutAddressId) (Id.maybeIdDecoder Id.MaTxOutAddressId))
 
       pure $
         MinIds

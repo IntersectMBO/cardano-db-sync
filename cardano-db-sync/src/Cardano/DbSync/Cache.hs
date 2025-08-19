@@ -51,7 +51,7 @@ import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), shouldCache)
-import Cardano.DbSync.DbEvent (liftFail)
+import Cardano.DbSync.DbEvent (liftDbLookup)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
@@ -113,10 +113,10 @@ optimiseCaches cache =
         -- Trim pools Map to target size (keep most recent entries)
         atomically $ modifyTVar (cPools c) $ \poolMap ->
           Map.fromList $ take (fromIntegral $ cOptimisePools c) $ Map.toList poolMap
-        
+
         -- Trim stake stable cache to target size
         atomically $ modifyTVar (cStake c) $ \stakeCache ->
-          stakeCache { scStableCache = Map.fromList $ take (fromIntegral $ cOptimiseStake c) $ Map.toList (scStableCache stakeCache) }
+          stakeCache {scStableCache = Map.fromList $ take (fromIntegral $ cOptimiseStake c) $ Map.toList (scStableCache stakeCache)}
 
 queryOrInsertRewardAccount ::
   SyncEnv ->
@@ -218,13 +218,13 @@ queryPoolKeyWithCache ::
   SyncEnv ->
   CacheAction ->
   PoolKeyHash ->
-  ExceptT SyncNodeError DB.DbM (Either DB.DbError DB.PoolHashId)
+  ExceptT SyncNodeError DB.DbM (Either DB.DbSessionError DB.PoolHashId)
 queryPoolKeyWithCache syncEnv cacheUA hsh =
   case envCache syncEnv of
     NoCache -> do
       mPhId <- lift $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
       case mPhId of
-        Nothing -> pure $ Left $ DB.DbError "queryPoolKeyWithCache: NoCache queryPoolHashId"
+        Nothing -> pure $ Left $ DB.DbSessionError DB.mkDbCallStack "queryPoolKeyWithCache: NoCache queryPoolHashId"
         Just phId -> pure $ Right phId
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cPools ci)
@@ -242,7 +242,7 @@ queryPoolKeyWithCache syncEnv cacheUA hsh =
           liftIO $ missPools syncEnv
           mPhId <- lift $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
           case mPhId of
-            Nothing -> pure $ Left $ DB.DbError "queryPoolKeyWithCache: ActiveCache queryPoolHashId"
+            Nothing -> pure $ Left $ DB.DbSessionError DB.mkDbCallStack "queryPoolKeyWithCache: ActiveCache queryPoolHashId"
             Just phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
               when (shouldCache cacheUA) $
@@ -412,7 +412,7 @@ queryPrevBlockWithCache ::
 queryPrevBlockWithCache syncEnv hsh errMsg =
   case envCache syncEnv of
     NoCache ->
-      liftFail cs $ DB.queryBlockId hsh errMsg
+      liftDbLookup mkSyncNodeCallStack $ DB.queryBlockId hsh errMsg
     ActiveCache ci -> do
       mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
       case mCachedPrev of
@@ -425,18 +425,16 @@ queryPrevBlockWithCache syncEnv hsh errMsg =
             else queryFromDb
         Nothing -> queryFromDb
   where
-    cs = mkSyncNodeCallStack "queryPrevBlockWithCache"
-
     queryFromDb ::
       ExceptT SyncNodeError DB.DbM DB.BlockId
     queryFromDb = do
       liftIO $ missPrevBlock syncEnv
-      liftFail cs $ DB.queryBlockId hsh errMsg
+      liftDbLookup mkSyncNodeCallStack $ DB.queryBlockId hsh errMsg
 
 queryTxIdWithCache ::
   SyncEnv ->
   Ledger.TxId ->
-  ExceptT SyncNodeError DB.DbM (Either DB.DbError DB.TxId)
+  ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError DB.TxId)
 queryTxIdWithCache syncEnv txIdLedger = do
   case envCache syncEnv of
     -- Direct database query if no cache.
@@ -470,7 +468,7 @@ queryTxIdWithCache syncEnv txIdLedger = do
       case result of
         Just txId -> pure $ Right txId
         Nothing ->
-          pure $ Left $ DB.DbError ("TxId not found for hash: " <> textShow txHash)
+          pure $ Left $ DB.DbLookupError DB.mkDbCallStack ("TxId not found for hash: " <> textShow txHash)
 
 tryUpdateCacheTx ::
   MonadIO m =>

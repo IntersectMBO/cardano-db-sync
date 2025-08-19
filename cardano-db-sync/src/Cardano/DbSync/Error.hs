@@ -27,8 +27,6 @@ import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Util
 import Cardano.Prelude
 
--- import Control.Monad.Except (ExceptT, throwError)
--- import Control.Monad.Logger (LoggingT)
 import qualified Data.ByteString.Base16 as Base16
 import Data.String (String)
 import qualified Data.Text as Text
@@ -41,12 +39,13 @@ data SyncInvariant
   | EInvTxInOut !Byron.Tx !Word64 !Word64
 
 newtype SyncNodeCallStack = SyncNodeCallStack
-  {sncsCallChain :: [Text]}
+  {sncsCallChain :: [(String, SrcLoc)]}
   deriving (Show, Eq)
 
 data SyncNodeError
   = SNErrDefault !SyncNodeCallStack !Text
-  | SNErrDatabase !SyncNodeCallStack !DB.DbError
+  | SNErrDbSessionErr !SyncNodeCallStack !DB.DbSessionError
+  | SNErrDbLookupError !SyncNodeCallStack !DB.DbLookupError
   | SNErrInvariant !Text !SyncInvariant
   | SNEErrBlockMismatch !Word64 !ByteString !ByteString
   | SNErrIgnoreShelleyInitiation
@@ -62,8 +61,8 @@ data SyncNodeError
   | SNErrLocalStateQuery !String
   | SNErrByronGenesis !String
   | SNErrExtraMigration !String
-  | SNErrDatabaseRollBackLedger !String
-  | SNErrDatabaseValConstLevel !String
+  | SNErrDbSessionErrRollBackLedger !String
+  | SNErrDbSessionErrValConstLevel !String
   | SNErrJsonbInSchema !String
   | SNErrRollback !String
 
@@ -73,7 +72,8 @@ instance Show SyncNodeError where
   show =
     \case
       SNErrDefault cs err -> "Error SNErrDefault: " <> show err <> ":" <> Text.unpack (formatCallStack cs)
-      SNErrDatabase cs err -> "Error SNErrDatabase at " <> show err <> ":" <> Text.unpack (formatCallStack cs)
+      SNErrDbSessionErr cs err -> "Error SNErrDbSessionErr: " <> Text.unpack (formatCallStack cs) <> " " <> Text.unpack (DB.formatDbCallStack (DB.dbSessionErrCallStack err)) <> "\n " <> Text.unpack (DB.dbSessionErrMsg err)
+      SNErrDbLookupError cs err -> "Error SNErrDbLookupError: " <> Text.unpack (formatCallStack cs) <> " " <> Text.unpack (DB.formatDbCallStack (DB.dbLookupErrCallStack err)) <> "\n " <> Text.unpack (DB.dbLookupErrMsg err)
       SNErrInvariant loc i -> "Error SNErrInvariant: " <> Show.show loc <> ": " <> show (renderSyncInvariant i)
       SNEErrBlockMismatch blkNo hashDb hashBlk ->
         mconcat
@@ -137,8 +137,8 @@ instance Show SyncNodeError where
       SNErrLocalStateQuery err -> "Error SNErrLocalStateQuery: " <> show err
       SNErrByronGenesis err -> "Error SNErrByronGenesis:" <> show err
       SNErrExtraMigration err -> "Error SNErrExtraMigration: " <> show err
-      SNErrDatabaseRollBackLedger err -> "Error SNErrDatabase Rollback Ledger: " <> show err
-      SNErrDatabaseValConstLevel err -> "Error SNErrDatabase Validate Consistent Level: " <> show err
+      SNErrDbSessionErrRollBackLedger err -> "Error SNErrDbSessionErr Rollback Ledger: " <> show err
+      SNErrDbSessionErrValConstLevel err -> "Error SNErrDbSessionErr Validate Consistent Level: " <> show err
       SNErrJsonbInSchema err -> "Error SNErrJsonbInSchema: " <> show err
       SNErrRollback err -> "Error SNErrRollback: " <> show err
 
@@ -204,23 +204,19 @@ hasAbortOnPanicEnv :: IO Bool
 hasAbortOnPanicEnv = isJust <$> lookupEnv "DbSyncAbortOnPanic"
 
 -- | Create a SyncNodeCallStack from the current call stack
-mkSyncNodeCallStack :: HasCallStack => Text -> SyncNodeCallStack
-mkSyncNodeCallStack _name =
+mkSyncNodeCallStack :: HasCallStack => SyncNodeCallStack
+mkSyncNodeCallStack =
   case getCallStack callStack of
     [] -> SyncNodeCallStack []
     ((_, _) : rest) ->
       SyncNodeCallStack
-        { sncsCallChain = take 8 $ map formatFrame rest -- Take next 8 frames
+        { sncsCallChain = take 4 rest -- Take next 4 frames as raw data
         }
-  where
-    formatFrame (fnName, srcLoc) =
-      Text.pack fnName
-        <> " at "
-        <> Text.pack (srcLocModule srcLoc)
-        <> ":"
-        <> Text.pack (srcLocFile srcLoc)
-        <> ":"
-        <> Text.pack (show (srcLocStartLine srcLoc))
+
+-- | Format a single frame with function name, module, and location
+formatFrame :: String -> String -> String -> Int -> Text
+formatFrame fnName mName fileName lineNum =
+  Text.pack fnName <> " at " <> Text.pack mName <> ":" <> Text.pack fileName <> ":" <> textShow lineNum
 
 -- | Format a SyncNodeCallStack for display in error messages
 -- This can be reused for other error types that include callstacks
@@ -228,4 +224,13 @@ formatCallStack :: SyncNodeCallStack -> Text
 formatCallStack cs =
   if null (sncsCallChain cs)
     then ""
-    else "\n  Call chain: " <> Text.intercalate " <- " (sncsCallChain cs)
+    else
+      "\n App call chain: "
+        <> Text.intercalate
+          " <- "
+          ( map
+              ( \(fnName, srcLoc) ->
+                  formatFrame fnName (srcLocModule srcLoc) (srcLocFile srcLoc) (srcLocStartLine srcLoc)
+              )
+              (sncsCallChain cs)
+          )

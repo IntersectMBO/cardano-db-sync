@@ -21,7 +21,7 @@ import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (
 import Cardano.DbSync.Cache (insertAddressUsingCache, tryUpdateCacheTx)
 import Cardano.DbSync.Cache.Epoch (withNoCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
-import Cardano.DbSync.DbEvent (liftFail, runDbSyncNoTransaction, runDbSyncNoTransactionNoLogging)
+import Cardano.DbSync.DbEvent (liftDbLookup, runDbSyncNoTransaction, runDbSyncNoTransactionNoLogging)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insertStakeRegistration)
 import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
@@ -86,21 +86,20 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
 
     insertAction :: Bool -> ExceptT SyncNodeError DB.DbM ()
     insertAction prunes = do
-      let cs = mkSyncNodeCallStack "insertAction"
       ebid <- lift $ DB.queryBlockIdEither (configGenesisHash cfg)
       case ebid of
         Right bid -> validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount
         Left err -> do
           liftIO $ logInfo tracer "Inserting Shelley Genesis distribution"
-          emeta <- liftFail cs DB.queryMeta
+          emeta <- liftDbLookup mkSyncNodeCallStack DB.queryMeta
           case emeta of
             Just _ -> pure () -- Metadata from Shelley era already exists.
             Nothing -> do
               count <- lift DB.queryBlockCount
               when (count > 0) $
                 throwError $
-                  SNErrDatabase cs $
-                    DB.DbError (show err <> " Genesis data mismatch. count " <> textShow count)
+                  SNErrDbSessionErr mkSyncNodeCallStack $
+                    DB.mkDbSessionError (show err <> " Genesis data mismatch. count " <> textShow count)
               void $ lift $ DB.insertMeta metaRecord
           -- No reason to insert the artificial block if there are no funds or stakes definitions.
           when (hasInitialFunds || hasStakes) $ do
@@ -175,24 +174,23 @@ validateGenesisDistribution ::
   ExceptT SyncNodeError DB.DbM ()
 validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount = do
   let tracer = getTrace syncEnv
-      cs = mkSyncNodeCallStack "validateGenesisDistribution"
       txOutVariantType = getTxOutVariantType syncEnv
   liftIO $ logInfo tracer "Validating Genesis distribution"
 
   -- During validation, meta MUST exist.
-  metaMaybe <- liftFail cs DB.queryMeta
+  metaMaybe <- liftDbLookup mkSyncNodeCallStack DB.queryMeta
   meta <- case metaMaybe of
     Just m -> pure m
     Nothing ->
       throwError $
-        SNErrDatabase cs $
-          DB.DbError
+        SNErrDbSessionErr mkSyncNodeCallStack $
+          DB.mkDbSessionError
             "Meta table is empty during validation - this should not happen"
 
   when (DB.metaStartTime meta /= configStartTime cfg) $
     throwError $
-      SNErrDatabase cs $
-        DB.DbError
+      SNErrDbSessionErr mkSyncNodeCallStack $
+        DB.mkDbSessionError
           ( Text.concat
               [ "Shelley: Mismatch chain start time. Config value "
               , textShow (configStartTime cfg)
@@ -203,8 +201,8 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
 
   when (DB.metaNetworkName meta /= networkName) $
     throwError $
-      SNErrDatabase cs $
-        DB.DbError
+      SNErrDbSessionErr mkSyncNodeCallStack $
+        DB.mkDbSessionError
           ( Text.concat
               [ "Shelley.validateGenesisDistribution: Provided network name "
               , networkName
@@ -216,8 +214,8 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   txCount <- lift $ DB.queryBlockTxCount bid
   when (txCount /= expectedTxCount) $
     throwError $
-      SNErrDatabase cs $
-        DB.DbError
+      SNErrDbSessionErr mkSyncNodeCallStack $
+        DB.mkDbSessionError
           ( Text.concat
               [ "Shelley.validateGenesisDistribution: Expected initial block to have "
               , textShow expectedTxCount
@@ -230,8 +228,8 @@ validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount =
   let expectedSupply = configGenesisSupply cfg
   when (expectedSupply /= totalSupply && not prunes) $
     throwError $
-      SNErrDatabase cs $
-        DB.DbError
+      SNErrDbSessionErr mkSyncNodeCallStack $
+        DB.mkDbSessionError
           ( Text.concat
               [ "Shelley.validateGenesisDistribution: Expected total supply to be "
               , textShow expectedSupply

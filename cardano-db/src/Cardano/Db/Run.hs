@@ -39,7 +39,7 @@ import Language.Haskell.TH.Syntax (Loc)
 import System.Log.FastLogger (LogStr, fromLogStr)
 import Prelude (userError)
 
-import Cardano.Db.Error (DbError (..), runOrThrowIO)
+import Cardano.Db.Error (DbSessionError (..), formatSessionError, mkDbCallStack, runOrThrowIO)
 import Cardano.Db.PGConfig (PGPassSource (..), readPGPass, toConnectionSetting)
 import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Types (DbEnv (..), DbM (..))
@@ -64,7 +64,7 @@ runDbTransLogged tracer dbEnv action = do
   case result of
     Left sessionErr -> do
       liftIO $ logWarning tracer $ "Database transaction error: " <> Text.pack (show sessionErr)
-      throwIO $ DbError $ "Database transaction error: " <> Text.pack (show sessionErr)
+      throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
     Right dbResult -> pure dbResult
   where
     transactionSession = do
@@ -93,7 +93,7 @@ runDbTransSilent dbEnv action = do
     result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
     case result of
       Left sessionErr ->
-        throwIO $ DbError $ "Database transaction error: " <> Text.pack (show sessionErr)
+        throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
       Right dbResult -> pure dbResult
   where
     transactionSession = do
@@ -124,7 +124,7 @@ runDbDirectLogged tracer dbEnv action = do
   case result of
     Left sessionErr -> do
       liftIO $ logWarning tracer $ "Database session error: " <> Text.pack (show sessionErr)
-      throwIO $ DbError $ "Database session error: " <> Text.pack (show sessionErr)
+      throwIO $ DbSessionError mkDbCallStack ("Database session error: " <> formatSessionError sessionErr)
     Right dbResult -> pure dbResult
   where
     simpleSession = do
@@ -145,7 +145,7 @@ runDbDirectSilent dbEnv action = do
     result <- liftIO $ HsqlS.run simpleSession (dbConnection dbEnv)
     case result of
       Left sessionErr ->
-        throwIO $ DbError $ "Database session error: " <> Text.pack (show sessionErr)
+        throwIO $ DbSessionError mkDbCallStack ("Database session error: " <> formatSessionError sessionErr)
       Right dbResult -> pure dbResult
   where
     simpleSession = do
@@ -162,13 +162,13 @@ runDbPoolTransLogged ::
   m a
 runDbPoolTransLogged tracer dbEnv action = do
   case dbPoolConnection dbEnv of
-    Nothing -> throwIO $ DbError "No connection pool available in DbEnv"
+    Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
     Just pool -> do
       runIohkLogging tracer $ do
         liftIO $ withResource pool $ \conn -> do
           result <- HsqlS.run (transactionSession conn) conn
           case result of
-            Left sessionErr -> throwIO $ DbError $ "Pool transaction error: " <> Text.pack (show sessionErr)
+            Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
             Right dbResult -> pure dbResult
   where
     transactionSession conn = do
@@ -194,7 +194,7 @@ runDbWithPool ::
   Pool HsqlCon.Connection ->
   Trace IO Text ->
   DbM a ->
-  m (Either DbError a)
+  m (Either DbSessionError a)
 runDbWithPool connPool tracer action = do
   liftIO $ try $ runIohkLogging tracer $ do
     liftIO $ withResource connPool $ \conn -> do
@@ -285,27 +285,27 @@ commitTransactionStmt :: HsqlStmt.Statement () ()
 commitTransactionStmt =
   HsqlStmt.Statement "COMMIT" HsqlE.noParams HsqlD.noResult True
 
-commitTransaction :: DbM ()
+commitTransaction :: HasCallStack => DbM ()
 commitTransaction = do
-  runSession $ HsqlS.statement () commitTransactionStmt
+  runSession mkDbCallStack $ HsqlS.statement () commitTransactionStmt
 
 -- | Create a ROLLBACK statement
 rollbackTransactionStmt :: HsqlStmt.Statement () ()
 rollbackTransactionStmt =
   HsqlStmt.Statement "ROLLBACK" HsqlE.noParams HsqlD.noResult True
 
-transactionSaveWithIsolation :: IsolationLevel -> DbM ()
+transactionSaveWithIsolation :: HasCallStack => IsolationLevel -> DbM ()
 transactionSaveWithIsolation isolationLevel = do
   -- Commit current transaction
-  runSession $ HsqlS.statement () commitTransactionStmt
+  runSession mkDbCallStack $ HsqlS.statement () commitTransactionStmt
   -- Begin new transaction with specified isolation level
-  runSession $ HsqlS.statement () (beginTransactionStmt isolationLevel)
+  runSession mkDbCallStack $ HsqlS.statement () (beginTransactionStmt isolationLevel)
 
 setDefaultIsolationLevel :: HsqlCon.Connection -> IO ()
 setDefaultIsolationLevel conn = do
   result <- HsqlS.run (HsqlS.statement () setIsolationStmt) conn
   case result of
-    Left err -> throwIO $ DbError $ "Failed to set isolation level: " <> Text.pack (show err)
+    Left err -> throwIO $ DbSessionError mkDbCallStack ("Failed to set isolation level: " <> formatSessionError err)
     Right _ -> pure ()
   where
     setIsolationStmt =

@@ -5,9 +5,11 @@
 module Cardano.DbSync.DbEvent (
   DbEvent (..),
   ThreadChannels (..),
-  liftFail,
-  liftFailEither,
-  liftDbError,
+  liftDbSession,
+  liftDbLookup,
+  liftDbSessionEither,
+  liftDbLookupEither,
+  liftSessionIO,
   acquireDbConnection,
   blockingFlushDbEventQueue,
   lengthDbEventQueue,
@@ -104,9 +106,9 @@ data ThreadChannels = ThreadChannels
 --   let dbAction = runExceptT exceptTAction
 --   eResult <- liftIO $ try $ DB.runDbDirectLogged tracer dbEnv dbAction
 --   case eResult of
---     Left (dbErr :: DB.DbError) -> do
+--     Left (dbErr :: DB.DbSessionError) -> do
 --       let cs = mkSyncNodeCallStack "runDbSyncTransaction"
---       pure $ Left $ SNErrDatabase cs dbErr
+--       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
 --     Right appResult -> pure appResult
 runDbSyncTransaction ::
   forall m a.
@@ -117,13 +119,12 @@ runDbSyncTransaction ::
   m (Either SyncNodeError a)
 runDbSyncTransaction tracer dbEnv exceptTAction = do
   -- OUTER TRY: Catch any exceptions from the entire database operation
-  -- This includes connection errors, DB.DbError exceptions thrown from runDbTransLogged,
+  -- This includes connection errors, DB.DbSessionError exceptions thrown from runDbTransLogged,
   -- or any other unexpected exceptions during database access
   eResult <- liftIO $ try $ DB.runDbTransLogged tracer dbEnv (runExceptT exceptTAction)
   case eResult of
-    Left (dbErr :: DB.DbError) -> do
-      let cs = mkSyncNodeCallStack "runDbSyncTransaction"
-      pure $ Left $ SNErrDatabase cs dbErr
+    Left (dbErr :: DB.DbSessionError) -> do
+      pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
 runDbSyncTransactionNoLogging ::
@@ -136,9 +137,8 @@ runDbSyncTransactionNoLogging dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
   eResult <- liftIO $ try $ DB.runDbTransSilent dbEnv dbAction
   case eResult of
-    Left (dbErr :: DB.DbError) -> do
-      let cs = mkSyncNodeCallStack "runDbSyncTransactionNoLogging"
-      pure $ Left $ SNErrDatabase cs dbErr
+    Left (dbErr :: DB.DbSessionError) -> do
+      pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
 runDbSyncNoTransaction ::
@@ -151,9 +151,8 @@ runDbSyncNoTransaction ::
 runDbSyncNoTransaction tracer dbEnv exceptTAction = do
   eResult <- liftIO $ try $ DB.runDbDirectLogged tracer dbEnv (runExceptT exceptTAction)
   case eResult of
-    Left (dbErr :: DB.DbError) -> do
-      let cs = mkSyncNodeCallStack "runDbSyncNoTransaction"
-      pure $ Left $ SNErrDatabase cs dbErr
+    Left (dbErr :: DB.DbSessionError) -> do
+      pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
 runDbSyncNoTransactionNoLogging ::
@@ -166,9 +165,8 @@ runDbSyncNoTransactionNoLogging dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
   eResult <- liftIO $ try $ DB.runDbDirectSilent dbEnv dbAction
   case eResult of
-    Left (dbErr :: DB.DbError) -> do
-      let cs = mkSyncNodeCallStack "runDbSyncNoTransactionNoLogging"
-      pure $ Left $ SNErrDatabase cs dbErr
+    Left (dbErr :: DB.DbSessionError) -> do
+      pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
 -- | Execute database operations in a single transaction using the connection pool
@@ -182,45 +180,61 @@ runDbSyncTransactionPool tracer dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
   eResult <- liftIO $ try $ DB.runDbPoolTransLogged tracer dbEnv dbAction -- Use pool
   case eResult of
-    Left (dbErr :: DB.DbError) -> do
-      let cs = mkSyncNodeCallStack "runDbSyncTransactionPool"
-      pure $ Left $ SNErrDatabase cs dbErr
+    Left (dbErr :: DB.DbSessionError) -> do
+      pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
-liftFail :: SyncNodeCallStack -> DB.DbM (Either DB.DbError a) -> ExceptT SyncNodeError DB.DbM a
-liftFail cs dbAction = do
+liftDbSession :: SyncNodeCallStack -> DB.DbM (Either DB.DbSessionError a) -> ExceptT SyncNodeError DB.DbM a
+liftDbSession cs dbAction = do
   result <- lift dbAction
   case result of
-    Left dbErr -> throwError $ SNErrDatabase cs dbErr
+    Left dbErr -> throwError $ SNErrDbSessionErr cs dbErr
     Right val -> pure val
 
-liftFailEither :: SyncNodeCallStack -> ExceptT SyncNodeError DB.DbM (Either DB.DbError a) -> ExceptT SyncNodeError DB.DbM a
-liftFailEither cs mResult = do
+-- | Helper function to lift DbLookupError to SyncNodeError (similar to liftDbSession)
+liftDbLookup :: SyncNodeCallStack -> DB.DbM (Either DB.DbLookupError a) -> ExceptT SyncNodeError DB.DbM a
+liftDbLookup cs dbAction = do
+  result <- lift dbAction
+  case result of
+    Left dbErr -> throwError $ SNErrDbLookupError cs dbErr
+    Right val -> pure val
+
+liftDbSessionEither :: SyncNodeCallStack -> ExceptT SyncNodeError DB.DbM (Either DB.DbSessionError a) -> ExceptT SyncNodeError DB.DbM a
+liftDbSessionEither cs mResult = do
   resultE <- lift $ runExceptT mResult
   case resultE of
     Left err -> throwError $ SNErrDefault cs (show err)
     Right result -> case result of
-      Left dbErr -> throwError $ SNErrDatabase cs dbErr
+      Left dbErr -> throwError $ SNErrDbSessionErr cs dbErr
       Right val -> pure val
 
-liftDbError :: ExceptT DB.DbError IO a -> ExceptT SyncNodeError IO a
-liftDbError dbAction = do
+liftDbLookupEither :: SyncNodeCallStack -> ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError a) -> ExceptT SyncNodeError DB.DbM a
+liftDbLookupEither cs mResult = do
+  resultE <- lift $ runExceptT mResult
+  case resultE of
+    Left err -> throwError $ SNErrDefault cs (show err)
+    Right result -> case result of
+      Left dbErr -> throwError $ SNErrDbLookupError cs dbErr
+      Right val -> pure val
+
+liftSessionIO :: SyncNodeCallStack -> ExceptT DB.DbSessionError IO a -> ExceptT SyncNodeError IO a
+liftSessionIO cs dbAction = do
   result <- liftIO $ runExceptT dbAction
   case result of
-    Left dbErr -> throwError $ SNErrDatabase (mkSyncNodeCallStack "liftDbError") dbErr
+    Left dbErr -> throwError $ SNErrDbSessionErr cs dbErr
     Right val -> pure val
 
 acquireDbConnection :: [HsqlSet.Setting] -> IO HsqlC.Connection
 acquireDbConnection settings = do
   result <- HsqlC.acquire settings
   case result of
-    Left connErr -> throwIO $ SNErrDatabase (mkSyncNodeCallStack "acquireDbConnection") $ DB.DbError (show connErr)
+    Left connErr -> throwIO $ SNErrDbSessionErr mkSyncNodeCallStack $ DB.mkDbSessionError (show connErr)
     Right conn -> pure conn
 
 mkDbApply :: CardanoBlock -> DbEvent
 mkDbApply = DbApplyBlock
 
--- | This simulates a synhronous operations, since the thread waits for the db
+-- | This simulates a synchronous operations, since the thread waits for the db
 -- worker thread to finish the rollback.
 waitRollback :: ThreadChannels -> CardanoPoint -> Tip CardanoBlock -> IO (Maybe [CardanoPoint], Point.WithOrigin BlockNo)
 waitRollback tc point serverTip = do
@@ -252,7 +266,7 @@ newThreadChannels =
 writeDbEventQueue :: ThreadChannels -> DbEvent -> STM ()
 writeDbEventQueue = TBQ.writeTBQueue . tcQueue
 
--- | Block if the queue is empty and if its not read/flush everything.
+-- | Block if the queue is empty and if it's not read/flush everything.
 -- Need this because `flushTBQueue` never blocks and we want to block until
 -- there is one item or more.
 -- Use this instead of STM.check to make sure it blocks if the queue is empty.

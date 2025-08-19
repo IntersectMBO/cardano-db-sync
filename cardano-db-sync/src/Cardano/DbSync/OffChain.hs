@@ -162,7 +162,7 @@ insertOffChainVoteResults trce resultQueue = do
             allReferences = concatMap (\(_, acc, id) -> offChainVoteReferences acc id) metadataIds
             allExternalUpdates = concatMap (\(_, acc, id) -> offChainVoteExternalUpdates acc id) metadataIds
         -- Execute all bulk inserts in a pipeline
-        DB.runSession $
+        DB.runSession DB.mkDbCallStack $
           HsqlSes.pipeline $
             do
               -- Insert all related data in one pipeline
@@ -201,7 +201,7 @@ insertOffChainVoteResults trce resultQueue = do
               metadata
       -- Insert and get IDs
       ids <-
-        DB.runSession $
+        DB.runSession DB.mkDbCallStack $
           HsqlSes.statement deduplicatedMetadata DB.insertBulkOffChainVoteDataStmt
 
       -- Return original data with IDs (note: length mismatch possible if duplicates were removed)
@@ -210,7 +210,7 @@ insertOffChainVoteResults trce resultQueue = do
     -- Bulk insert for errors (you'll need to create this statement)
     insertBulkOffChainVoteFetchErrors :: [DB.OffChainVoteFetchError] -> DB.DbM ()
     insertBulkOffChainVoteFetchErrors errors =
-      DB.runSession $ HsqlSes.statement errors DB.insertBulkOffChainVoteFetchErrorStmt
+      DB.runSession DB.mkDbCallStack $ HsqlSes.statement errors DB.insertBulkOffChainVoteFetchErrorStmt
 
 logInsertOffChainResults ::
   Text -> -- Pool of Vote

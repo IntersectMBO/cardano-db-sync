@@ -82,8 +82,8 @@ data CacheInternal = CacheInternal
   , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString DB.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
-  -- Optimisation target sizes for Map-based caches
-  , cOptimisePools :: !Word64
+  , -- Optimisation target sizes for Map-based caches
+    cOptimisePools :: !Word64
   , cOptimiseStake :: !Word64
   }
 
@@ -111,8 +111,8 @@ data CacheCapacity = CacheCapacity
   , cacheCapacityDatum :: !Word64
   , cacheCapacityMultiAsset :: !Word64
   , cacheCapacityTx :: !Word64
-  -- Optimisation target sizes for Map-based caches (used every 100k blocks)
-  , cacheOptimisePools :: !Word64
+  , -- Optimisation target sizes for Map-based caches (used every 100k blocks)
+    cacheOptimisePools :: !Word64
   , cacheOptimiseStake :: !Word64
   }
 

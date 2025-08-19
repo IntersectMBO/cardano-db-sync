@@ -27,7 +27,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getLatestPoints, getPruneConsume, getTrace, getTxOutVariantType, verifySnapshotPoint)
 import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache
-import Cardano.DbSync.DbEvent (liftFail)
+import Cardano.DbSync.DbEvent (liftDbLookup)
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State (listKnownSnapshots, loadLedgerAtPoint, saveCleanupState, writeLedgerState)
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
@@ -94,7 +94,7 @@ prepareRollback syncEnv point serverTip = do
               pure False
         At blk -> do
           nBlocks <- lift $ DB.queryCountSlotNosGreaterThan (unSlotNo $ blockPointSlot blk)
-          mBlockNo <- liftFail (mkSyncNodeCallStack "prepareRollback") $ DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
+          mBlockNo <- liftDbLookup mkSyncNodeCallStack $ DB.queryBlockHashBlockNo (SBS.fromShort . getOneEraHash $ blockPointHash blk)
           case mBlockNo of
             Nothing -> throwError $ SNErrRollback "Rollback.prepareRollback: queryBlockHashBlockNo: Block hash not found"
             Just blockN -> do
@@ -122,7 +122,7 @@ rollbackLedger syncEnv point =
           -- This is an extra validation that should always succeed.
           unless (point == statePoint) $
             logAndThrowIO (getTrace syncEnv) $
-              SNErrDatabaseRollBackLedger $
+              SNErrDbSessionErrRollBackLedger $
                 mconcat
                   [ "Ledger "
                   , show statePoint

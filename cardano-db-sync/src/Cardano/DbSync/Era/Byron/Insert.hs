@@ -36,6 +36,7 @@ import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (
 import Cardano.DbSync.Cache (insertAddressUsingCache, insertBlockAndCache, queryPrevBlockWithCache)
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), EpochBlockDiff (..))
+import Cardano.DbSync.DbEvent (liftDbLookup)
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types
@@ -263,15 +264,11 @@ insertByronTx' ::
   ExceptT SyncNodeError DB.DbM Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
   -- Resolve all transaction inputs - any failure will throw via MonadError
-  resolvedResults <- mapM (resolveTxInputsByron txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
-
-  resolvedInputs <- case sequence resolvedResults of
-    Right inputs -> pure inputs
-    Left dbErr -> liftIO $ throwIO dbErr
+  resolvedInputs <- mapM (resolveTxInputsByron txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
 
   -- Calculate transaction fee
   valFee <- case calculateTxFee (Byron.taTx tx) resolvedInputs of
-    Left err -> throwError $ SNErrDefault (mkSyncNodeCallStack "insertByronTx'") (show (annotateTx err))
+    Left err -> throwError $ SNErrDefault mkSyncNodeCallStack (show (annotateTx err))
     Right vf -> pure vf
 
   -- Insert the transaction record
@@ -416,27 +413,24 @@ insertTxIn _tracer txInTxId (Byron.TxInUtxo _txHash inIndex, txOutTxId, _, _) =
 resolveTxInputsByron ::
   DB.TxOutVariantType ->
   Byron.TxIn ->
-  ExceptT SyncNodeError DB.DbM (Either DB.DbError (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace))
+  ExceptT SyncNodeError DB.DbM (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)
 resolveTxInputsByron txOutVariantType txIn@(Byron.TxInUtxo txHash index) = do
-  result <- lift $ DB.queryTxOutIdValueEither txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
-  pure $ case result of
-    Right res -> Right $ convert res
-    Left dbErr -> Left dbErr -- Return Either instead of throwing
+  result <- liftDbLookup mkSyncNodeCallStack $ DB.queryTxOutIdValueEither txOutVariantType (Byron.unTxHash txHash, fromIntegral index)
+  pure $ convert result
   where
     convert (txId, txOutId, lovelace) = (txIn, txId, txOutId, lovelace)
 
 calculateTxFee :: Byron.Tx -> [(Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace)] -> Either SyncNodeError ValueFee
 calculateTxFee tx resolvedInputs = do
-  outval <- first (SNErrDefault cs . textShow) output
+  outval <- first (SNErrDefault mkSyncNodeCallStack . textShow) output
   when (null resolvedInputs) $
     Left $
-      SNErrDefault cs "List of transaction inputs is zero."
+      SNErrDefault mkSyncNodeCallStack "List of transaction inputs is zero."
   let inval = sum $ map (unDbLovelace . forth4) resolvedInputs
   if inval < outval
     then Left $ SNErrInvariant "calculateTxFee" $ EInvInOut inval outval
     else Right $ ValueFee (DbLovelace outval) (DbLovelace $ inval - outval)
   where
-    cs = mkSyncNodeCallStack "calculateTxFee"
     output :: Either Byron.LovelaceError Word64
     output =
       Byron.unsafeGetLovelace

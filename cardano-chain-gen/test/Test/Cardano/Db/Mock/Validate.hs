@@ -150,20 +150,20 @@ assertBackoff env query delays check errMsg = go delays
 
 assertQuery :: DBSyncEnv -> DB.DbM a -> (a -> Bool) -> (a -> String) -> IO (Maybe String)
 assertQuery env query check errMsg = do
-  ma <- try @DB.DbError $ queryDBSync env query
+  ma <- try @DB.DbSessionError $ queryDBSync env query
   case ma of
-    Left dbErr | migrationNotDoneYet (DB.dbErrorMessage dbErr) -> do
+    Left dbErr | migrationNotDoneYet (DB.dbSessionErrMsg dbErr) -> do
       threadDelay 1_000_000
-      pure $ Just $ Text.unpack $ DB.dbErrorMessage dbErr
+      pure $ Just $ Text.unpack $ DB.dbSessionErrMsg dbErr
     Left err -> throwIO err
     Right a | not (check a) -> pure $ Just $ errMsg a
     _ -> pure Nothing
 
 runQuery :: DBSyncEnv -> DB.DbM a -> IO a
 runQuery env query = do
-  ma <- try @DB.DbError $ queryDBSync env query
+  ma <- try @DB.DbSessionError $ queryDBSync env query
   case ma of
-    Left dbErr | migrationNotDoneYet (DB.dbErrorMessage dbErr) -> do
+    Left dbErr | migrationNotDoneYet (DB.dbSessionErrMsg dbErr) -> do
       threadDelay 1_000_000
       runQuery env query
     Left err -> throwIO err

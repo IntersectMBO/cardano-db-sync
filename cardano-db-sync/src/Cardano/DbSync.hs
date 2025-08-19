@@ -211,7 +211,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
                   then DB.createDbEnv dbConn (Just pool) (Just trce)
                   else DB.createDbEnv dbConn (Just pool) Nothing
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
-          isJsonbInSchema <- liftDbError $ DB.queryJsonbInSchemaExists dbConn
+          isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
           syncEnv <-
             ExceptT $

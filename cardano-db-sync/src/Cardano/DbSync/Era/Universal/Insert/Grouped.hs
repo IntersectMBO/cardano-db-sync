@@ -190,7 +190,7 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
         Nothing ->
           throwError $
             SNErrDefault
-              (mkSyncNodeCallStack "resolveTxInputs")
+              mkSyncNodeCallStack
               ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
     (True, False) -> do
       -- Consumed mode use cache
@@ -212,7 +212,7 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
           -- Only throw if in-memory resolution also fails
           throwError $
             SNErrDefault
-              (mkSyncNodeCallStack "resolveTxInputs")
+              mkSyncNodeCallStack
               ("TxIn not found in memory: " <> textShow txIn)
         (Just eutxo, True, True) ->
           pure $ convertFoundValue (etoTxOut eutxo)
@@ -263,11 +263,11 @@ resolveScriptHash syncEnv groupedOutputs txIn = do
     Just ret -> pure $ Just ret
     Nothing ->
       case resolveInMemory txIn groupedOutputs of
-        Nothing -> throwError $ SNErrDefault (mkSyncNodeCallStack "resolveScriptHash") "resolveInMemory: VATxOutW with Nothing address"
+        Nothing -> throwError $ SNErrDefault mkSyncNodeCallStack "resolveInMemory: VATxOutW with Nothing address"
         Just eutxo -> case etoTxOut eutxo of
           DB.VCTxOutW cTxOut -> pure $ VC.txOutCorePaymentCred cTxOut
           DB.VATxOutW _ vAddress -> case vAddress of
-            Nothing -> throwError $ SNErrDefault (mkSyncNodeCallStack "resolveScriptHash") "VATxOutW with Nothing address"
+            Nothing -> throwError $ SNErrDefault mkSyncNodeCallStack "VATxOutW with Nothing address"
             Just vAddr -> pure $ VA.addressPaymentCred vAddr
 
 resolveInMemory :: Generic.TxIn -> [ExtendedTxOut] -> Maybe ExtendedTxOut

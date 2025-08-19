@@ -19,9 +19,8 @@ readByronGenesisConfig ::
   ExceptT SyncNodeError IO Byron.Config
 readByronGenesisConfig enc = do
   let file = unGenesisFile $ dncByronGenesisFile enc
-      cs = mkSyncNodeCallStack "readByronGenesisConfig"
   genHash <-
-    firstExceptT (SNErrDefault cs)
+    firstExceptT (SNErrDefault mkSyncNodeCallStack)
       . hoistEither
       $ decodeAbstractHash (unGenesisHashByron $ dncByronGenesisHash enc)
   firstExceptT (SNErrByronConfig file) $

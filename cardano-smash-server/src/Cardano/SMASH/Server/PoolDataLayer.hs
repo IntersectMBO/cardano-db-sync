@@ -154,7 +154,7 @@ dbToServantFetchError poolId (fetchError, metaHash) =
 
 -- For each pool return the latest certificate action. Also return the
 -- current epoch.
-getCertActions :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Either Db.DbError (Maybe Word64, Map ByteString Db.PoolCertAction))
+getCertActions :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Either Db.DbSessionError (Maybe Word64, Map ByteString Db.PoolCertAction))
 getCertActions tracer conn mPoolId = do
   result <- Db.runDbWithPool conn tracer $ do
     poolRetired <- Db.queryRetiredPools (fromDbPoolId <$> mPoolId)
@@ -167,7 +167,7 @@ getCertActions tracer conn mPoolId = do
       let poolActions = findLatestPoolAction certs
       pure $ Right (epoch, poolActions)
 
-getActivePools :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Either Db.DbError (Map ByteString ByteString))
+getActivePools :: Trace IO Text -> Pool HsqlCon.Connection -> Maybe PoolId -> IO (Either Db.DbSessionError (Map ByteString ByteString))
 getActivePools tracer conn mPoolId = do
   result <- Db.runDbWithPool conn tracer $ do
     poolRetired <- Db.queryRetiredPools (fromDbPoolId <$> mPoolId)
@@ -178,7 +178,7 @@ getActivePools tracer conn mPoolId = do
     Left dbErr -> pure $ Left dbErr
     Right (certs, epoch) -> pure $ Right $ groupByPoolMeta epoch certs
 
-isPoolActive :: Trace IO Text -> Pool HsqlCon.Connection -> PoolId -> IO (Either Db.DbError Bool)
+isPoolActive :: Trace IO Text -> Pool HsqlCon.Connection -> PoolId -> IO (Either Db.DbSessionError Bool)
 isPoolActive tracer conn poolId = do
   result <- getActiveMetaHash tracer conn poolId
   case result of
@@ -186,7 +186,7 @@ isPoolActive tracer conn poolId = do
     Right mHash -> pure $ Right $ isJust mHash
 
 -- If the pool is not retired, it will return the pool Hash and the latest metadata hash.
-getActiveMetaHash :: Trace IO Text -> Pool HsqlCon.Connection -> PoolId -> IO (Either Db.DbError (Maybe (ByteString, ByteString)))
+getActiveMetaHash :: Trace IO Text -> Pool HsqlCon.Connection -> PoolId -> IO (Either Db.DbSessionError (Maybe (ByteString, ByteString)))
 getActiveMetaHash tracer conn poolId = do
   result <- getActivePools tracer conn (Just poolId)
   case result of
@@ -238,7 +238,7 @@ toDbServantMetaHash bs = PoolMetadataHash $ Text.decodeUtf8 $ Base16.encode bs
 createCachedPoolDataLayer :: Maybe () -> IO PoolDataLayer
 createCachedPoolDataLayer _ = panic "createCachedPoolDataLayer not defined yet"
 
-_getUsedTickers :: Trace IO Text -> Pool HsqlCon.Connection -> IO (Either Db.DbError [(TickerName, PoolMetadataHash)])
+_getUsedTickers :: Trace IO Text -> Pool HsqlCon.Connection -> IO (Either Db.DbSessionError [(TickerName, PoolMetadataHash)])
 _getUsedTickers tracer conn = do
   poolsResult <- getActivePools tracer conn Nothing
   case poolsResult of
@@ -251,7 +251,7 @@ _getUsedTickers tracer conn = do
         Left dbErr -> pure $ Left dbErr
         Right tickers -> pure $ Right $ catMaybes tickers
 
-_checkUsedTicker :: Trace IO Text -> Pool HsqlCon.Connection -> TickerName -> IO (Either Db.DbError (Maybe TickerName))
+_checkUsedTicker :: Trace IO Text -> Pool HsqlCon.Connection -> TickerName -> IO (Either Db.DbSessionError (Maybe TickerName))
 _checkUsedTicker tracer conn ticker = do
   poolsResult <- getActivePools tracer conn Nothing
   case poolsResult of
