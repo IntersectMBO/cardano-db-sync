@@ -203,16 +203,18 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
     HsqlC.release
     ( \dbConn -> do
         runOrThrowIO $ runExceptT $ do
-          let isLogingEnabled = dncEnableDbLogging syncNodeConfigFromFile
           -- Create connection pool for parallel operations
           pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
-          let dbEnv =
-                if isLogingEnabled
-                  then DB.createDbEnv dbConn (Just pool) (Just trce)
-                  else DB.createDbEnv dbConn (Just pool) Nothing
+          let dbEnv = DB.createDbEnv dbConn (Just pool) (Just trce)
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+
+          -- Determine the final JSONB state after any schema migrations
+          let finalJsonbInSchema = case (isJsonbInSchema, removeJsonbFromSchemaConfig) of
+                (True, True) -> False -- Will be removed
+                (False, False) -> True -- Will be added
+                (s, _) -> s -- No change
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
@@ -224,6 +226,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
                 syncNodeConfigFromFile
                 syncNodeParams
                 runNearTipMigrationFnc
+                finalJsonbInSchema
 
           -- Warn the user that jsonb datatypes are being removed from the database schema.
           when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do
@@ -250,8 +253,8 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
               id
               [ runDbThread syncEnv threadChannels
               , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile
-              , runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile
+              , runFetchOffChainPoolThread syncEnv
+              , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
               ]
     )

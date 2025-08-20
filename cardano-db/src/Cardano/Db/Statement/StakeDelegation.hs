@@ -8,7 +8,7 @@
 
 module Cardano.Db.Statement.StakeDelegation where
 
-import Cardano.Prelude (ByteString, Proxy (..))
+import Cardano.Prelude (ByteString, Proxy (..), traverse_)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -95,6 +95,12 @@ insertBulkEpochStake dbConstraintEpochStake epochStakes =
     HsqlSes.statement epochStakes $
       insertBulkEpochStakeStmt dbConstraintEpochStake
 
+insertBulkEpochStakePiped :: Bool -> [[SS.EpochStake]] -> DbM ()
+insertBulkEpochStakePiped dbConstraintEpochStake epochStakeChunks =
+  runSession mkDbCallStack $
+    HsqlSes.pipeline $
+      traverse_ (\chunk -> HsqlP.statement chunk (insertBulkEpochStakeStmt dbConstraintEpochStake)) epochStakeChunks
+
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
 queryEpochStakeCountStmt =
@@ -179,6 +185,12 @@ insertBulkRewards dbConstraintRewards rewards =
   runSession mkDbCallStack $
     HsqlSes.statement rewards $
       insertBulkRewardsStmt dbConstraintRewards
+
+insertBulkRewardsPiped :: Bool -> [[SS.Reward]] -> DbM ()
+insertBulkRewardsPiped dbConstraintRewards rewardChunks =
+  runSession mkDbCallStack $
+    HsqlSes.pipeline $
+      traverse_ (\chunk -> HsqlP.statement chunk (insertBulkRewardsStmt dbConstraintRewards)) rewardChunks
 
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -324,6 +336,12 @@ insertBulkRewardRests :: [SS.RewardRest] -> DbM ()
 insertBulkRewardRests rewardRests =
   runSession mkDbCallStack $
     HsqlSes.statement rewardRests insertBulkRewardRestsStmt
+
+insertBulkRewardRestsPiped :: [[SS.RewardRest]] -> DbM ()
+insertBulkRewardRestsPiped rewardRestChunks =
+  runSession mkDbCallStack $
+    HsqlSes.pipeline $
+      traverse_ (\chunk -> HsqlP.statement chunk insertBulkRewardRestsStmt) rewardRestChunks
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: DbM Word64

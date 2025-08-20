@@ -63,54 +63,6 @@ data ThreadChannels = ThreadChannels
 --
 -- This is the primary transaction runner for sequential database operations in db-sync.
 -- All operations within the ExceptT stack are executed atomically in one database transaction.
---
--- == Transaction Behavior:
--- * Uses the main database connection from DbEnv for sequential operations
--- * All DbM operations are combined into a single Hasql session
--- * Entire transaction commits on success or rolls back on any failure
--- * Provides atomic all-or-nothing semantics for blockchain data consistency
---
--- == Error Handling:
--- * Captures full call stack with HasCallStack for precise error location
--- * Converts low-level Hasql SessionErrors to high-level SyncNodeErrors
--- * Returns Either for explicit error handling rather than throwing exceptions
--- * Database errors include 8-frame call chain showing exact failure path
---
--- == Usage:
--- * Primary use: insertListBlocks and other critical sync operations
--- * Sequential operations that must maintain strict consistency
--- * Operations where blocking the main connection is acceptable
---
--- == Example:
--- @
--- insertBlockWithValidation :: BlockData -> ExceptT SyncNodeError DB.DbM BlockId
--- insertBlockWithValidation blockData = do
---   liftIO $ logInfo tracer "Starting block insertion"
---   blockId <- lift $ insertBlock blockData  -- lift DbM to ExceptT
---   liftIO $ logDebug tracer $ "Inserted block with ID: " <> show blockId
---   pure blockId
---
--- result <- runDbSyncTransaction tracer dbEnv $ do
---   blockId <- insertBlockWithValidation blockData
---   lift $ updateSyncProgress blockId
---   pure blockId
--- -- All operations succeed together or all fail together
--- @
--- runDbSyncTransaction ::
---   forall m a.
---   (MonadUnliftIO m, HasCallStack) =>
---   Trace IO Text ->
---   DB.DbEnv ->
---   ExceptT SyncNodeError DB.DbM a ->
---   m (Either SyncNodeError a)
--- runDbSyncTransaction tracer dbEnv exceptTAction = do
---   let dbAction = runExceptT exceptTAction
---   eResult <- liftIO $ try $ DB.runDbDirectLogged tracer dbEnv dbAction
---   case eResult of
---     Left (dbErr :: DB.DbSessionError) -> do
---       let cs = mkSyncNodeCallStack "runDbSyncTransaction"
---       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
---     Right appResult -> pure appResult
 runDbSyncTransaction ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
@@ -119,15 +71,15 @@ runDbSyncTransaction ::
   ExceptT SyncNodeError DB.DbM a ->
   m (Either SyncNodeError a)
 runDbSyncTransaction tracer dbEnv exceptTAction = do
-  -- OUTER TRY: Catch any exceptions from the entire database operation
-  -- This includes connection errors, DB.DbSessionError exceptions thrown from runDbTransLogged,
-  -- or any other unexpected exceptions during database access
+  -- Catch database exceptions and convert to Either
   eResult <- liftIO $ try $ DB.runDbTransLogged tracer dbEnv (runExceptT exceptTAction)
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
+-- | Execute database operations in a single transaction without logging.
+-- Same as runDbSyncTransaction but uses silent database runner.
 runDbSyncTransactionNoLogging ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
@@ -142,6 +94,8 @@ runDbSyncTransactionNoLogging dbEnv exceptTAction = do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
+-- | Execute database operations without transaction wrapper.
+-- Operations run directly against the database without atomicity guarantees.
 runDbSyncNoTransaction ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
@@ -156,6 +110,8 @@ runDbSyncNoTransaction tracer dbEnv exceptTAction = do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
+-- | Execute database operations without transaction wrapper and without logging.
+-- Direct database access with no atomicity guarantees or logging output.
 runDbSyncNoTransactionNoLogging ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
@@ -185,6 +141,8 @@ runDbSyncTransactionPool tracer dbEnv exceptTAction = do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
     Right appResult -> pure appResult
 
+-- | Lift a database operation that returns Either DbSessionError to ExceptT SyncNodeError.
+-- Converts database session errors to sync node errors with call stack context.
 liftDbSession :: SyncNodeCallStack -> DB.DbM (Either DB.DbSessionError a) -> ExceptT SyncNodeError DB.DbM a
 liftDbSession cs dbAction = do
   result <- lift dbAction
@@ -200,6 +158,8 @@ liftDbLookup cs dbAction = do
     Left dbErr -> throwError $ SNErrDbLookupError cs dbErr
     Right val -> pure val
 
+-- | Lift a nested ExceptT operation that returns Either DbSessionError.
+-- Handles both SyncNodeError and DbSessionError, converting the latter to SyncNodeError.
 liftDbSessionEither :: SyncNodeCallStack -> ExceptT SyncNodeError DB.DbM (Either DB.DbSessionError a) -> ExceptT SyncNodeError DB.DbM a
 liftDbSessionEither cs mResult = do
   resultE <- lift $ runExceptT mResult
@@ -209,6 +169,8 @@ liftDbSessionEither cs mResult = do
       Left dbErr -> throwError $ SNErrDbSessionErr cs dbErr
       Right val -> pure val
 
+-- | Lift a nested ExceptT operation that returns Either DbLookupError.
+-- Handles both SyncNodeError and DbLookupError, converting the latter to SyncNodeError.
 liftDbLookupEither :: SyncNodeCallStack -> ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError a) -> ExceptT SyncNodeError DB.DbM a
 liftDbLookupEither cs mResult = do
   resultE <- lift $ runExceptT mResult

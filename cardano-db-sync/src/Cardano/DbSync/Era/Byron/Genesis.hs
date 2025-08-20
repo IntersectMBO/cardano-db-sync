@@ -45,7 +45,6 @@ insertValidateByronGenesisDist ::
   Byron.Config ->
   ExceptT SyncNodeError IO ()
 insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
-  -- Use the new transaction runner - it handles tracing based on DbEnv.dbTracer
   ExceptT $ runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) insertAction
   where
     tracer = getTrace syncEnv
@@ -64,14 +63,13 @@ insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
           when (not disInOut && count > 0) $
             throwError $
               SNErrDefault mkSyncNodeCallStack ("Genesis data mismatch. " <> show err)
-          void $
-            lift $
-              DB.insertMeta $
-                DB.Meta
-                  { DB.metaStartTime = Byron.configStartTime cfg
-                  , DB.metaNetworkName = networkName
-                  , DB.metaVersion = textShow version
-                  }
+          void . lift $
+            DB.insertMeta $
+              DB.Meta
+                { DB.metaStartTime = Byron.configStartTime cfg
+                , DB.metaNetworkName = networkName
+                , DB.metaVersion = textShow version
+                }
 
           -- Insert an 'artificial' Genesis block (with a genesis specific slot leader). We
           -- need this block to attach the genesis distribution transactions to.

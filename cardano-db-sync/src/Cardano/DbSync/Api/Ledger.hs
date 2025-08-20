@@ -43,7 +43,6 @@ import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
 import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util (maxBulkSize)
 
 bootStrapMaybe ::
   SyncEnv ->
@@ -105,12 +104,13 @@ storeUTxO env mp = do
         [ "Inserting "
         , textShow size
         , " tx_out as pages of "
-        , textShow maxBulkSize
+        , textShow bulkSize
         ]
-  mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf maxBulkSize . Map.toList $ mp
+  mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf bulkSize . Map.toList $ mp
   where
     trce = getTrace env
-    npages = size `div` maxBulkSize
+    bulkSize = DB.getTxOutBulkSize (getTxOutVariantType env)
+    npages = size `div` bulkSize
     pagePerc :: Float = if npages == 0 then 100.0 else 100.0 / fromIntegral npages
     size = Map.size mp
 

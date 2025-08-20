@@ -51,7 +51,7 @@ data ConsumedTriplet = ConsumedTriplet
 runConsumedTxOutMigrations ::
   -- | Tracer for logging
   Trace IO Text.Text ->
-  -- |  Bulk size
+  -- | Bulk size
   Int ->
   -- | TxOut table type being used
   TxOutVariantType ->
@@ -227,7 +227,7 @@ migrateTxOut ::
   TxOutVariantType ->
   Maybe MigrationValues ->
   DbM ()
-migrateTxOut pageSize trce txOutVariantType mMvs = do
+migrateTxOut bulkSize trce txOutVariantType mMvs = do
   whenJust mMvs $ \mvs -> do
     when (pcmConsumedTxOut (pruneConsumeMigration mvs) && not (isTxOutAddressPreviouslySet mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding consumed-by-id Index"
@@ -235,7 +235,7 @@ migrateTxOut pageSize trce txOutVariantType mMvs = do
     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
       createPruneConstraintTxOut
-  migrateNextPageTxOut pageSize (Just trce) txOutVariantType 0
+  migrateNextPageTxOut bulkSize (Just trce) txOutVariantType 0
 
 -- | Process the tx_out table in pages for migration
 migrateNextPageTxOut ::

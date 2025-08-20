@@ -6,6 +6,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -51,7 +52,7 @@ import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
-import Cardano.DbSync.Util (maxBulkSize, whenDefault, whenStrictJust, whenStrictJustDefault)
+import Cardano.DbSync.Util (whenDefault, whenStrictJust, whenStrictJustDefault)
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -217,10 +218,10 @@ insertEpochStake ::
 insertEpochStake syncEnv nw epochNo stakeChunk = do
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   dbStakes <- mapM mkStake stakeChunk
-  let chunckDbStakes = splittRecordsEvery maxBulkSize dbStakes
+  let chunckDbStakes = DB.chunkForBulkQuery (Proxy @DB.EpochStake) Nothing dbStakes
 
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbStakes $ \dbs -> lift $ DB.insertBulkEpochStake dbConstraintEpochStake dbs
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
+  lift $ DB.insertBulkEpochStakePiped dbConstraintEpochStake chunckDbStakes
   where
     mkStake ::
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
@@ -248,9 +249,9 @@ insertRewards ::
 insertRewards syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  let chunckDbRewards = splittRecordsEvery maxBulkSize dbRewards
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> lift $ DB.insertBulkRewards dbConstraintRewards rws
+  let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing dbRewards
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
+  lift $ DB.insertBulkRewardsPiped dbConstraintRewards chunckDbRewards
   where
     mkRewards ::
       (StakeCred, Set Generic.Reward) ->
@@ -292,9 +293,9 @@ insertRewardRests ::
   ExceptT SyncNodeError DB.DbM ()
 insertRewardRests syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
-  let chunckDbRewards = splittRecordsEvery maxBulkSize dbRewards
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  forM_ chunckDbRewards $ \rws -> lift $ DB.insertBulkRewardRests rws
+  let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.RewardRest) Nothing dbRewards
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
+  lift $ DB.insertBulkRewardRestsPiped chunckDbRewards
   where
     mkRewards ::
       (StakeCred, Set Generic.RewardRest) ->
@@ -340,14 +341,6 @@ insertProposalRefunds syncEnv nw earnedEpoch spendableEpoch refunds = do
           , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
           , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
           }
-
-splittRecordsEvery :: Int -> [a] -> [[a]]
-splittRecordsEvery val = go
-  where
-    go [] = []
-    go ys =
-      let (as, bs) = splitAt val ys
-       in as : go bs
 
 insertPoolDepositRefunds ::
   SyncEnv ->

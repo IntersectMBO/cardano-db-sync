@@ -263,15 +263,15 @@ insertByronTx' ::
   Word64 ->
   ExceptT SyncNodeError DB.DbM Word64
 insertByronTx' syncEnv blkId tx blockIndex = do
-  -- Resolve all transaction inputs - any failure will throw via MonadError
+  -- Resolve all blockchain transaction inputs - any failure will throw via MonadError
   resolvedInputs <- mapM (resolveTxInputsByron txOutVariantType) (toList $ Byron.txInputs (Byron.taTx tx))
 
-  -- Calculate transaction fee
+  -- Calculate blockchain transaction fee
   valFee <- case calculateTxFee (Byron.taTx tx) resolvedInputs of
     Left err -> throwError $ SNErrDefault mkSyncNodeCallStack (show (annotateTx err))
     Right vf -> pure vf
 
-  -- Insert the transaction record
+  -- Insert the blockchain transaction record
   txId <-
     lift $
       DB.insertTx $
@@ -302,12 +302,12 @@ insertByronTx' syncEnv blkId tx blockIndex = do
             , DB.txCborBytes = serialize' $ Byron.taTx tx
             }
 
-  -- Insert outputs for a transaction before inputs in case the inputs for this transaction
-  -- references the output (not sure this can even happen).
+  -- Insert outputs for this blockchain transaction before inputs in case the inputs
+  -- reference the output (not sure this can even happen).
   disInOut <- liftIO $ getDisableInOutState syncEnv
   zipWithM_ (insertTxOutByron syncEnv (getHasConsumedOrPruneTxOut syncEnv) disInOut txId) [0 ..] (toList . Byron.txOutputs $ Byron.taTx tx)
 
-  -- Insert transaction inputs (only if we have resolved inputs and TxIn is not disabled)
+  -- Insert blockchain transaction inputs (only if we have resolved inputs and TxIn is not disabled)
   unless (getSkipTxIn syncEnv) $
     mapM_ (insertTxIn tracer txId) resolvedInputs
 

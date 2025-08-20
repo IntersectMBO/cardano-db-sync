@@ -26,8 +26,8 @@ import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Types (initCacheStatistics)
 import Cardano.DbSync.Error (SyncNodeError)
 
--- If `db-sync` is started in epoch `N`, the number of seconds to sync that epoch will be recorded
--- as `Nothing`.
+-- Records the time it took to sync an epoch. Calculates sync duration from when
+-- epoch statistics were initialised until the provided end time.
 insertEpochSyncTime ::
   EpochNo ->
   DB.SyncState ->

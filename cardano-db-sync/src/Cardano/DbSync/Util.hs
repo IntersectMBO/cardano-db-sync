@@ -11,7 +11,6 @@
 #endif
 
 module Cardano.DbSync.Util (
-  maxBulkSize,
   cardanoBlockSlotNo,
   getSyncStatus,
   isSyncedWithinSeconds,
@@ -58,9 +57,6 @@ import Ouroboros.Consensus.Shelley.HFEras ()
 import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import Ouroboros.Network.Block (blockSlot, getPoint)
 import qualified Ouroboros.Network.Point as Point
-
-maxBulkSize :: Int
-maxBulkSize = 20000
 
 cardanoBlockSlotNo :: Consensus.CardanoBlock StandardCrypto -> SlotNo
 cardanoBlockSlotNo = blockSlot

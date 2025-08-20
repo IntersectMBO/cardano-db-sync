@@ -89,7 +89,7 @@ cleanCachesForTip cache =
   case cache of
     NoCache -> pure ()
     ActiveCache c ->
-      withCacheCleanedForTipCheck c (pure ()) $
+      withCacheCleanedCheck c (pure ()) $
         liftIO $ do
           -- empty caches not to be used anymore
           atomically $ modifyTVar (cTxIds c) FIFO.cleanupCache
@@ -174,7 +174,7 @@ queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.RewardAccount _ cred) = 
   case envCache syncEnv of
     NoCache -> (,bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do
-      result <- withCacheCleanedForTipCheck ci (resolveStakeAddress bs) $ do
+      result <- withCacheCleanedCheck ci (resolveStakeAddress bs) $ do
         stakeCache <- liftIO $ readTVarIO (cStake ci)
         case queryStakeCache cred stakeCache of
           Just (addrId, stakeCache') -> do
@@ -379,7 +379,7 @@ queryMAWithCache syncEnv policyId asset =
   case envCache syncEnv of
     NoCache -> lift queryDb
     ActiveCache ci -> do
-      withCacheCleanedForTipCheck ci (lift queryDb) $ do
+      withCacheCleanedCheck ci (lift queryDb) $ do
         mp <- liftIO $ readTVarIO (cMultiAssets ci)
         case LRU.lookup (policyId, asset) mp of
           Just (maId, mp') -> do
@@ -437,7 +437,7 @@ queryTxIdWithCache syncEnv txIdLedger = do
     -- Direct database query if no cache.
     NoCache -> lift qTxHash
     ActiveCache ci ->
-      withCacheCleanedForTipCheck ci (lift qTxHash) $ do
+      withCacheCleanedCheck ci (lift qTxHash) $ do
         -- Read current cache state.
         cacheTx <- liftIO $ readTVarIO (cTxIds ci)
 
@@ -485,7 +485,7 @@ insertBlockAndCache syncEnv block =
   case envCache syncEnv of
     NoCache -> lift insBlck
     ActiveCache ci ->
-      withCacheCleanedForTipCheck ci (lift insBlck) $ do
+      withCacheCleanedCheck ci (lift insBlck) $ do
         bid <- lift insBlck
         liftIO $ do
           missPrevBlock syncEnv
@@ -502,7 +502,7 @@ queryDatum syncEnv hsh = do
   case envCache syncEnv of
     NoCache -> lift queryDtm
     ActiveCache ci -> do
-      withCacheCleanedForTipCheck ci (lift queryDtm) $ do
+      withCacheCleanedCheck ci (lift queryDtm) $ do
         mp <- liftIO $ readTVarIO (cDatum ci)
         case LRU.lookup hsh mp of
           Just (datumId, mp') -> do
@@ -527,24 +527,24 @@ insertDatumAndCache cache hsh dt = do
   case cache of
     NoCache -> pure datumId
     ActiveCache ci ->
-      withCacheCleanedForTipCheck ci (pure datumId) $ do
+      withCacheCleanedCheck ci (pure datumId) $ do
         liftIO $
           atomically $
             modifyTVar (cDatum ci) $
               LRU.insert hsh datumId
         pure datumId
 
-withCacheCleanedForTipCheck ::
+withCacheCleanedCheck ::
   MonadIO m =>
   CacheInternal ->
   m a -> -- Action to perform if cache is cleaned for tip
   m a -> -- Action to perform if cache is not cleaned for tip
   m a
-withCacheCleanedForTipCheck ci ifCleanedForTip ifNotCleanedForTip = do
+withCacheCleanedCheck ci actionIfCleaned actionIfNotCleaned = do
   isCacheCleanedForTip <- liftIO $ readTVarIO (cIsCacheCleanedForTip ci)
   if isCacheCleanedForTip
-    then ifCleanedForTip
-    else ifNotCleanedForTip
+    then actionIfCleaned
+    else actionIfNotCleaned
 
 -- Creds
 hitCreds :: SyncEnv -> IO ()

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Adjust (
@@ -7,7 +8,6 @@ module Cardano.DbSync.Era.Universal.Adjust (
 ) where
 
 import Data.List (unzip4)
-import Data.List.Extra (chunksOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
@@ -26,7 +26,6 @@ import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic.Rewards as Generic
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Types (StakeCred)
-import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.Ledger.BaseTypes (Network)
 
 -- Hlint warns about another version of this operator.
@@ -63,7 +62,7 @@ adjustEpochRewards syncEnv nw epochNo rwds creds = do
 
   -- Process rewards in batches
   unless (null rewardsToDelete) $ do
-    forM_ (chunksOf maxBulkSize rewardsToDelete) $ \batch -> do
+    forM_ (DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing rewardsToDelete) $ \batch -> do
       params <- prepareRewardsForDeletion syncEnv nw epochNo batch
       unless (areParamsEmpty params) $
         lift $
@@ -71,7 +70,7 @@ adjustEpochRewards syncEnv nw epochNo rwds creds = do
 
   -- Handle orphaned rewards in batches
   crds <- catMaybes <$> forM (Set.toList creds) (queryStakeAddrWithCache syncEnv DoNotUpdateCache nw)
-  forM_ (chunksOf maxBulkSize crds) $ \batch ->
+  forM_ (DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing crds) $ \batch ->
     lift $ DB.deleteOrphanedRewardsBulk (unEpochNo epochNo) batch
 
 prepareRewardsForDeletion ::

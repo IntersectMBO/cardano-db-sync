@@ -106,7 +106,7 @@ isConsistent env = do
   cst <- getConsistentLevel env
   case cst of
     Consistent -> pure True
-    _otherwise -> pure False
+    _ -> pure False
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
@@ -142,11 +142,13 @@ runConsumedTxOutMigrationsMaybe :: SyncEnv -> IO ()
 runConsumedTxOutMigrationsMaybe syncEnv = do
   let pcm = getPruneConsume syncEnv
       txOutVariantType = getTxOutVariantType syncEnv
+      bulkSize = DB.getTxOutBulkSize txOutVariantType
+
   logInfo (getTrace syncEnv) $ "runConsumedTxOutMigrationsMaybe: " <> textShow pcm
   DB.runDbDirectSilent (envDbEnv syncEnv) $
     DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
-      maxBulkSize
+      bulkSize
       txOutVariantType
       (getSafeBlockNoDiff syncEnv)
       pcm
@@ -308,8 +310,9 @@ mkSyncEnv ::
   SyncNodeConfig ->
   SyncNodeParams ->
   RunMigration ->
+  Bool ->
   IO SyncEnv
-mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc = do
+mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
   dbCNamesVar <- newTVarIO =<< DB.runDbDirectSilent dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
@@ -376,6 +379,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart 
       , envOptions = syncOptions
       , envRunNearTipMigration = runNearTipMigrationFnc
       , envSyncNodeConfig = syncNodeConfigFromFile
+      , envIsJsonbInSchema = isJsonbInSchema
       , envSystemStart = systemStart
       }
   where
@@ -392,8 +396,9 @@ mkSyncEnvFromConfig ::
   SyncNodeParams ->
   -- | run migration function
   RunMigration ->
+  Bool ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc =
+mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc isJsonbInSchema =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -430,6 +435,7 @@ mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigF
               syncNodeConfigFromFile
               syncNodeParams
               runNearTipMigrationFnc
+              isJsonbInSchema
 
 -- | 'True' is for in memory points and 'False' for on disk
 getLatestPoints :: SyncEnv -> IO [(CardanoPoint, Bool)]

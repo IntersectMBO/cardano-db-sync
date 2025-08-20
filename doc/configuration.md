@@ -22,8 +22,6 @@ Below is a sample `insert_options` section that shows all the defaults:
 {
   // <-- Rest of configuration -->
   // ...
-  "EnableDbLogging": true,
-
   "insert_options": {
     "tx_cbor": "disable",
     "tx_out": {
@@ -604,59 +602,3 @@ Stops db-sync after processing the specified block number. Useful for testing an
 }
 ```
 
-## EnableDbLogging Configuration
-
-`EnableDbLogging` controls whether db-sync logs detailed database query information and performance metrics. This is useful for debugging database-related issues and monitoring query performance.
-
-### Configuration
-
-`EnableDbLogging`
-
-* Type: `boolean`
-* Default: `false`
-
-### Example
-
-```json
-{
-  "EnableDbLogging": true,
-  "EnableLogging": true,
-  // ... rest of configuration
-}
-```
-
-### Behavior
-
-**Enable (`true`)**
-
-When enabled, db-sync will log:
-- Individual SQL queries being executed
-- Query execution times and performance metrics
-- Database connection pool statistics
-- Transaction commit/rollback information
-- Detailed error information for failed database operations
-
-This provides comprehensive visibility into database operations but will significantly increase log volume.
-
-**Disable (`false`)**
-
-When disabled (default), only high-level database operations and errors are logged, keeping log output minimal.
-
-### Performance Impact
-
-Enabling database logging has minimal performance overhead but will:
-- Increase log file sizes significantly
-- Generate verbose output that may impact log processing tools
-- Should primarily be used for development, debugging, or performance analysis
-
-## Related Configuration
-
-This setting works in conjunction with:
-- `EnableLogging`: Must be `true` for any logging to occur
-
-## Use Cases
-
-- Debugging slow query performance
-- Monitoring database connection health
-- Troubleshooting database-related sync issues
-- Development and testing environments

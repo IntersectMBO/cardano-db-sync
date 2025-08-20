@@ -1,5 +1,6 @@
 module Cardano.Db.Statement (
   module Cardano.Db.Statement.Base,
+  module Cardano.Db.Statement.BulkConfig,
   module Cardano.Db.Statement.Constraint,
   module Cardano.Db.Statement.ConsumedTxOut,
   module Cardano.Db.Statement.DbTool,
@@ -22,6 +23,7 @@ module Cardano.Db.Statement (
 ) where
 
 import Cardano.Db.Statement.Base
+import Cardano.Db.Statement.BulkConfig
 import Cardano.Db.Statement.ChainGen
 import Cardano.Db.Statement.Constraint
 import Cardano.Db.Statement.ConsumedTxOut

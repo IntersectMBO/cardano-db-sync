@@ -231,8 +231,8 @@ logInsertOffChainResults offChainType resLength resErrorsLength =
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Run OffChain threads
 ---------------------------------------------------------------------------------------------------------------------------------
-runFetchOffChainPoolThread :: SyncEnv -> SyncNodeConfig -> IO ()
-runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
+runFetchOffChainPoolThread :: SyncEnv -> IO ()
+runFetchOffChainPoolThread syncEnv = do
   -- if disable gov is active then don't run voting anchor thread
   when (ioOffChainPoolData iopts) $ do
     logInfo trce "Running Offchain Pool fetch thread"
@@ -245,10 +245,7 @@ runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
       (DB.acquireConnection [connSetting])
       HsqlC.release
       ( \dbConn -> do
-          let dbEnv =
-                if dncEnableDbLogging syncNodeConfigFromFile
-                  then DB.createDbEnv dbConn Nothing (Just trce)
-                  else DB.createDbEnv dbConn Nothing Nothing
+          let dbEnv = DB.createDbEnv dbConn Nothing (Just trce)
               -- Create a new SyncEnv with the new DbEnv but preserving all other fields
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           forever $ do
@@ -269,8 +266,8 @@ runFetchOffChainPoolThread syncEnv syncNodeConfigFromFile = do
     queuePoolInsert :: OffChainPoolResult -> IO ()
     queuePoolInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
 
-runFetchOffChainVoteThread :: SyncEnv -> SyncNodeConfig -> IO ()
-runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
+runFetchOffChainVoteThread :: SyncEnv -> IO ()
+runFetchOffChainVoteThread syncEnv = do
   -- if disable gov is active then don't run voting anchor thread
   when (ioGov iopts) $ do
     logInfo trce "Running Offchain Vote Anchor fetch thread"
@@ -283,10 +280,7 @@ runFetchOffChainVoteThread syncEnv syncNodeConfigFromFile = do
       (DB.acquireConnection [connSetting])
       HsqlC.release
       ( \dbConn -> do
-          let dbEnv =
-                if dncEnableDbLogging syncNodeConfigFromFile
-                  then DB.createDbEnv dbConn Nothing (Just trce)
-                  else DB.createDbEnv dbConn Nothing Nothing
+          let dbEnv = DB.createDbEnv dbConn Nothing (Just trce)
               -- Create a new SyncEnv with the new DbEnv but preserving all other fields
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           -- Use the thread-specific SyncEnv for all operations

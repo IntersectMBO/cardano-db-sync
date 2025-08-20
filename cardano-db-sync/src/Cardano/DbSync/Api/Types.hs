@@ -60,6 +60,7 @@ data SyncEnv = SyncEnv
   , envSyncNodeConfig :: !SyncNodeConfig
   , envRunNearTipMigration :: RunMigration
   , envSystemStart :: !SystemStart
+  , envIsJsonbInSchema :: !Bool
   }
 
 data SyncOptions = SyncOptions

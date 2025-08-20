@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
-import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.DbTool
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Applicative (optional)
@@ -62,7 +62,8 @@ runCommand cmd =
         void $
           runMigrations Nothing pgConfig False mdir mldir NearTip txOutTabletype
     CmdTxOutMigration txOutVariantType -> do
-      runDbStandaloneTransSilent PGPassDefaultEnv $ migrateTxOutDbTool maxBulkSize txOutVariantType
+      let bulkSize = getTxOutBulkSize txOutVariantType
+      runDbStandaloneTransSilent PGPassDefaultEnv $ migrateTxOutDbTool bulkSize txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType

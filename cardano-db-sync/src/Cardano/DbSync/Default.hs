@@ -227,16 +227,18 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     commitOrIndexes withinTwoMin withinHalfHour = do
       commited <-
         if withinTwoMin || tookSnapshot
-          then pure True
+          then do
+            -- Commit the transaction if we are within two minutes or took a snapshot
+            lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
+            pure True
           else pure False
       when withinHalfHour $ do
         bootStrapMaybe syncEnv
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
-
         unless ranIndexes $ do
-          -- We need to commit the transaction as we are going to run indexes migrations
-          lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
+          -- Only commit if we haven't already committed above to avoid double-commit
+          unless commited $ lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
           liftIO $ runNearTipMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk

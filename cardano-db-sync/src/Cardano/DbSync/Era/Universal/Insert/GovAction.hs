@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -62,7 +63,6 @@ import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
-import Data.List.Extra (chunksOf)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Ouroboros.Consensus.Cardano.Block (ConwayEra)
@@ -126,16 +126,18 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
       ExceptT SyncNodeError DB.DbM ()
     insertTreasuryWithdrawalsBulk _ [] = pure ()
     insertTreasuryWithdrawalsBulk gaId withdrawals = do
-      let withdrawalChunks = chunksOf maxBulkSize withdrawals
-      mapM_ processChunk withdrawalChunks
+      let withdrawalChunks = DB.chunkForBulkQuery (Proxy @DB.TreasuryWithdrawal) Nothing withdrawals
+      -- Process all chunks to create treasury withdrawals with resolved IDs
+      allTreasuryWithdrawals <- mapM processChunk withdrawalChunks
+      -- Insert all chunks in a single pipeline operation
+      lift $ DB.insertBulkTreasuryWithdrawal allTreasuryWithdrawals
       where
         processChunk chunk = do
           -- Bulk resolve all reward accounts for this chunk
           let rewardAccounts = map fst chunk
           addrIds <- mapM (queryOrInsertRewardAccount syncEnv UpdateCache) rewardAccounts
           -- Create treasury withdrawals with resolved IDs for this chunk
-          let treasuryWithdrawals = zipWith createTreasuryWithdrawal addrIds (map snd chunk)
-          lift $ DB.insertBulkTreasuryWithdrawal treasuryWithdrawals
+          pure $ zipWith createTreasuryWithdrawal addrIds (map snd chunk)
 
         createTreasuryWithdrawal addrId coin =
           DB.TreasuryWithdrawal
@@ -376,12 +378,13 @@ insertCredDrepHash cred = do
 insertDrepDistr :: EpochNo -> PulsingSnapshot ConwayEra -> ExceptT SyncNodeError DB.DbM ()
 insertDrepDistr e pSnapshot = do
   let drepEntries = Map.toList $ psDRepDistr pSnapshot
-      drepChunks = chunksOf maxBulkSize drepEntries
-  mapM_ processChunk drepChunks
+      drepChunks = DB.chunkForBulkQuery (Proxy @DB.DrepDistr) Nothing drepEntries
+  -- Process all chunks to create DRep distribution entries
+  allDrepDistrs <- mapM processChunk drepChunks
+  -- Insert all chunks in a single pipeline operation
+  lift $ DB.insertBulkDrepDistrPiped allDrepDistrs
   where
-    processChunk chunk = do
-      drepsDB <- mapM mkEntry chunk
-      lift $ DB.insertBulkDrepDistr drepsDB
+    processChunk = mapM mkEntry
 
     mkEntry :: (DRep, Ledger.CompactForm Coin) -> ExceptT SyncNodeError DB.DbM DB.DrepDistr
     mkEntry (drep, coin) = do

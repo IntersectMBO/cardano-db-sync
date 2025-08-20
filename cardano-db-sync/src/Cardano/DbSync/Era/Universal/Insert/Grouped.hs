@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Insert.Grouped (
@@ -32,9 +33,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Util (unTxHash)
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
-import Cardano.DbSync.Util (maxBulkSize)
 import Cardano.Prelude
-import Data.List.Extra (chunksOf)
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -104,7 +103,10 @@ insertBlockGroupedData syncEnv grouped = do
     a1 <- async $ pure $ prepareTxInProcessing syncEnv grouped
     a2 <- async $ pure $ prepareMetadataProcessing syncEnv grouped
     a3 <- async $ pure $ prepareMintProcessing syncEnv grouped
-    a4 <- async $ pure $ chunksOf maxBulkSize $ etoTxOut . fst <$> groupedTxOut grouped
+    a4 <- async $ do
+      let txOutData = etoTxOut . fst <$> groupedTxOut grouped
+          bulkSize = DB.getTxOutBulkSize (getTxOutVariantType syncEnv)
+      pure $ DB.chunkForBulkQueryWith bulkSize txOutData
 
     r1 <- wait a1
     r2 <- wait a2
@@ -311,7 +313,7 @@ data PreparedMint = PreparedMint
 prepareTxInProcessing :: SyncEnv -> BlockGroupedData -> PreparedTxIn
 prepareTxInProcessing syncEnv grouped =
   PreparedTxIn
-    { ptiChunks = chunksOf maxBulkSize $ etiTxIn <$> groupedTxIn grouped
+    { ptiChunks = DB.chunkForBulkQuery (Proxy @DB.TxIn) Nothing $ etiTxIn <$> groupedTxIn grouped
     , ptiSkip = getSkipTxIn syncEnv
     }
 
@@ -319,7 +321,7 @@ prepareTxInProcessing syncEnv grouped =
 prepareMetadataProcessing :: SyncEnv -> BlockGroupedData -> PreparedMetadata
 prepareMetadataProcessing syncEnv grouped =
   PreparedMetadata
-    { pmChunks = chunksOf maxBulkSize $ groupedTxMetadata grouped
+    { pmChunks = DB.chunkForBulkQuery (Proxy @DB.TxMetadata) (Just $ envIsJsonbInSchema syncEnv) $ groupedTxMetadata grouped
     , pmRemoveJsonb = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
     }
 
@@ -327,7 +329,7 @@ prepareMetadataProcessing syncEnv grouped =
 prepareMintProcessing :: SyncEnv -> BlockGroupedData -> PreparedMint
 prepareMintProcessing _syncEnv grouped =
   PreparedMint
-    { pmtChunks = chunksOf maxBulkSize $ groupedTxMint grouped
+    { pmtChunks = DB.chunkForBulkQuery (Proxy @DB.MaTxMint) Nothing $ groupedTxMint grouped
     }
 
 -- | Execute prepared TxIn operations (using pipeline)
@@ -354,7 +356,7 @@ processMaTxOuts syncEnv txOutIds grouped = do
       maTxOuts =
         concatMap (mkmaTxOuts txOutVariantType) $
           zip txOutIds (snd <$> groupedTxOut grouped)
-      maTxOutChunks = chunksOf maxBulkSize maTxOuts
+      maTxOutChunks = DB.chunkForBulkQueryWith (DB.getMaTxOutBulkSize txOutVariantType) maTxOuts
   lift $ DB.insertBulkMaTxOutPiped maTxOutChunks
 
 -- | Process UTxO consumption updates (depends on TxOut IDs)
@@ -368,8 +370,8 @@ processUtxoConsumption syncEnv grouped txOutIds = do
     etis <- resolveRemainingInputs (groupedTxIn grouped) $ zip txOutIds (fst <$> groupedTxOut grouped)
     -- Categorise resolved inputs for bulk vs individual processing
     let (hashBasedUpdates, idBasedUpdates, failedInputs) = categorizeResolvedInputs etis
-        hashUpdateChunks = chunksOf maxBulkSize hashBasedUpdates
-        idUpdateChunks = chunksOf maxBulkSize idBasedUpdates
+        hashUpdateChunks = DB.chunkForBulkQuery (Proxy @DB.TxIn) Nothing hashBasedUpdates
+        idUpdateChunks = DB.chunkForBulkQuery (Proxy @DB.TxIn) Nothing idBasedUpdates
 
     -- Bulk process hash-based updates
     unless (null hashBasedUpdates) $

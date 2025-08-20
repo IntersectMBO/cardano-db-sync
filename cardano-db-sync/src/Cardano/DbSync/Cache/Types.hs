@@ -111,7 +111,8 @@ data CacheCapacity = CacheCapacity
   , cacheCapacityDatum :: !Word64
   , cacheCapacityMultiAsset :: !Word64
   , cacheCapacityTx :: !Word64
-  , -- Optimisation target sizes for Map-based caches (used every 100k blocks)
+  , -- Used by optimiseCaches function to trim Map-based caches that can grow without bounds,
+    -- unlike LRU caches which have built-in capacity limits. Trimming keeps most recent entries.
     cacheOptimisePools :: !Word64
   , cacheOptimiseStake :: !Word64
   }
@@ -154,7 +155,7 @@ textShowCacheStats stats (ActiveCache ic) = do
       , textLruSection "  Datums" datums (datumHits stats) (datumQueries stats)
       , textLruSection "  Addresses" address (addressHits stats) (addressQueries stats)
       , textLruSection "  Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
-      , textPrevBlockSection
+      , textPrevBlockSection "  Previous Block"
       , textFifoSection "  TxId" txIds (txIdsHits stats) (txIdsQueries stats)
       ]
   where
@@ -196,9 +197,9 @@ textShowCacheStats stats (ActiveCache ic) = do
         , hitMissStats hits queries
         ]
 
-    textPrevBlockSection =
+    textPrevBlockSection title =
       mconcat
-        [ "\nPrevious Block: "
+        [ "\n" <> title <> ": "
         , hitMissStats (prevBlockHits stats) (prevBlockQueries stats)
         ]
 
@@ -231,8 +232,9 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
-  pure . ActiveCache $
-    CacheInternal
+  pure
+    . ActiveCache
+    $ CacheInternal
       { cIsCacheCleanedForTip = cIsCacheCleanedForTip
       , cStake = cStake
       , cPools = cPools

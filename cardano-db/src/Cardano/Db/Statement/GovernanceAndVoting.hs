@@ -8,12 +8,13 @@
 
 module Cardano.Db.Statement.GovernanceAndVoting where
 
-import Cardano.Prelude (HasCallStack, Int64, Proxy (..), Word64)
+import Cardano.Prelude (HasCallStack, Int64, Proxy (..), Word64, traverse_)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -256,10 +257,11 @@ insertBulkDrepDistrStmt =
       , map SGV.drepDistrActiveUntil xs
       )
 
-insertBulkDrepDistr :: HasCallStack => [SGV.DrepDistr] -> DbM ()
-insertBulkDrepDistr drepDistrs = do
+insertBulkDrepDistrPiped :: HasCallStack => [[SGV.DrepDistr]] -> DbM ()
+insertBulkDrepDistrPiped drepDistrChunks =
   runSession mkDbCallStack $
-    HsqlSes.statement drepDistrs insertBulkDrepDistrStmt
+    HsqlSes.pipeline $
+      traverse_ (\chunk -> HsqlP.statement chunk insertBulkDrepDistrStmt) drepDistrChunks
 
 -- | QUERY
 queryDrepHashSpecialStmt ::
@@ -499,9 +501,11 @@ insertBulkTreasuryWithdrawalStmt =
       , map SGV.treasuryWithdrawalAmount xs
       )
 
-insertBulkTreasuryWithdrawal :: HasCallStack => [SGV.TreasuryWithdrawal] -> DbM ()
-insertBulkTreasuryWithdrawal treasuryWithdrawals = do
-  runSession mkDbCallStack $ HsqlSes.statement treasuryWithdrawals insertBulkTreasuryWithdrawalStmt
+insertBulkTreasuryWithdrawal :: HasCallStack => [[SGV.TreasuryWithdrawal]] -> DbM ()
+insertBulkTreasuryWithdrawal treasuryWithdrawalChunks =
+  runSession mkDbCallStack $
+    HsqlSes.pipeline $
+      traverse_ (\chunk -> HsqlP.statement chunk insertBulkTreasuryWithdrawalStmt) treasuryWithdrawalChunks
 
 --------------------------------------------------------------------------------
 -- Voting

@@ -1,8 +1,5 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Functor law" #-}
 
 module Cardano.DbSync.Gen (
   -- * Config/Api Type generators
@@ -58,7 +55,6 @@ syncPreConfig =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
-    <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
     <*> syncInsertConfig
     <*> Gen.list (Range.linear 0 10) (Gen.text (Range.linear 0 100) Gen.unicode)
@@ -87,7 +83,6 @@ syncNodeConfig loggingCfg =
     <*> (NodeConfigFile <$> filePath)
     <*> Gen.constant SyncProtocolCardano
     <*> Gen.element [RequiresNoMagic, RequiresMagic]
-    <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.int (Range.linear 0 10000)
