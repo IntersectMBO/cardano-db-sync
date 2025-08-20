@@ -12,9 +12,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-#if __GLASGOW_HASKELL__ >= 908
-{-# OPTIONS_GHC -Wno-x-partial #-}
-#endif
+
+
+
 
 module Cardano.DbSync.Ledger.State (
   applyBlock,
@@ -68,7 +68,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVar,
   writeTVar,
  )
-import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
+import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue)
 import qualified Control.Exception as Exception
 
 import qualified Data.ByteString.Base16 as Base16
@@ -114,11 +114,14 @@ import Ouroboros.Consensus.Ledger.Abstract (
   LedgerResult (..),
   getTip,
   ledgerTipHash,
-  ledgerTipPoint,
   ledgerTipSlot,
   tickThenReapplyLedgerResult,
  )
-import Ouroboros.Consensus.Ledger.Basics (ComputeLedgerEvents (..), CanStowLedgerTables (..), DiffMK)
+import Ouroboros.Consensus.Ledger.Basics
+    ( ComputeLedgerEvents(..),
+      CanStowLedgerTables(..),
+      DiffMK,
+      ValuesMK )
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
@@ -129,11 +132,10 @@ import Ouroboros.Network.AnchoredSeq (AnchoredSeq (..))
 import qualified Ouroboros.Network.AnchoredSeq as AS
 import Ouroboros.Network.Block (HeaderHash, Point (..), blockNo)
 import qualified Ouroboros.Network.Point as Point
-import System.Directory (doesFileExist, listDirectory, removeFile)
+import System.Directory (listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
 import System.Mem (performMajorGC)
-import Prelude (String, id)
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
+import Prelude (id)
 import Ouroboros.Consensus.Ledger.Tables.Utils (applyDiffs, forgetLedgerTables)
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
@@ -229,6 +231,7 @@ applyBlock :: HasLedgerEnv -> CardanoBlock -> IO (CardanoLedgerState, ApplyResul
 applyBlock env blk = do
   time <- getCurrentTime
   atomically $ do
+    -- Read the current ledger state
     !ledgerDB <- readStateUnsafe env
     let oldState = ledgerDbCurrent ledgerDB
     -- Calculate ledger diffs
@@ -241,10 +244,12 @@ applyBlock env blk = do
     let !newLedgerState = finaliseDrepDistr (lrResult result)
     -- Apply the ledger diffs
     let !newLedgerState' = applyDiffs (clsState oldState) newLedgerState
+    -- Construct the new ledger state
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
     !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldState) newLedgerState' (findAdaPots ledgerEvents)
     let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
     let !newState = CardanoLedgerState newLedgerState' newEpochBlockNo
+    -- Add the new ledger state to the in-memory db
     let !ledgerDB' = pushLedgerDB ledgerDB newState
     writeTVar (leStateVar env) (Strict.Just ledgerDB')
     let !appResult =
@@ -360,17 +365,7 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
         (SyncLagging, _) -> False
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
-saveCurrentLedgerState env lState mEpochNo = do
-  case mkLedgerStateFilename (leDir env) (clsState lState) mEpochNo of
-    Origin -> pure () -- we don't store genesis
-    At file -> do
-      exists <- doesFileExist file
-      if exists
-        then
-          logInfo (leTrace env) $
-            mconcat
-              ["File ", Text.pack file, " exists"]
-        else atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
+saveCurrentLedgerState _ _ _ = pure ()
 
 runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
 runLedgerStateWriteThread tracer lenv =
@@ -413,11 +408,6 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
           , "."
           ]
 
-mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock mk -> Maybe EpochNo -> WithOrigin FilePath
-mkLedgerStateFilename dir ledger mEpochNo =
-  lsfFilePath . dbPointToFileName dir mEpochNo
-    <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
-
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
   let st = clsState ledger
@@ -430,34 +420,6 @@ hashToAnnotation = Base16.encode . BS.take 5
 
 mkRawHash :: HeaderHash CardanoBlock -> ByteString
 mkRawHash = toRawHash (Proxy @CardanoBlock)
-
-mkShortHash :: HeaderHash CardanoBlock -> ByteString
-mkShortHash = hashToAnnotation . mkRawHash
-
-dbPointToFileName :: LedgerStateDir -> Maybe EpochNo -> Point.Block SlotNo (HeaderHash CardanoBlock) -> LedgerStateFile
-dbPointToFileName (LedgerStateDir stateDir) mEpochNo (Point.Block slot hash) =
-  LedgerStateFile
-    { lsfSlotNo = slot
-    , lsfHash = shortHash
-    , lsNewEpoch = maybeToStrict mEpochNo
-    , lsfFilePath =
-        mconcat
-          [ stateDir </> show (unSlotNo slot)
-          , "-"
-          , BS.unpack shortHash
-          , epochSuffix
-          , ".lstate"
-          ]
-    }
-  where
-    shortHash :: ByteString
-    shortHash = mkShortHash hash
-
-    epochSuffix :: String
-    epochSuffix =
-      case mEpochNo of
-        Nothing -> ""
-        Just epoch -> "-" ++ show (unEpochNo epoch)
 
 parseLedgerStateFileName :: LedgerStateDir -> FilePath -> Maybe LedgerStateFile
 parseLedgerStateFileName (LedgerStateDir stateDir) fp =
@@ -689,7 +651,7 @@ loadLedgerStateFromFile tracer config delete point lsf = do
     decodeState :: (forall s. Decoder s CardanoLedgerState)
     decodeState =
       decodeCardanoLedgerState $
-        unstowLedgerTables <$> 
+        unstowLedgerTables <$>
           Consensus.decodeExtLedgerState
             (decodeDisk codecConfig)
             (decodeDisk codecConfig)
@@ -786,9 +748,9 @@ tickThenReapplyCheckHash ::
   ExtLedgerCfg CardanoBlock ->
   CardanoBlock ->
   ExtLedgerState CardanoBlock ValuesMK ->
-  Either 
-    SyncNodeError 
-    ( LedgerResult 
+  Either
+    SyncNodeError
+    ( LedgerResult
         (ExtLedgerState CardanoBlock)
         (ExtLedgerState CardanoBlock DiffMK)
     )
