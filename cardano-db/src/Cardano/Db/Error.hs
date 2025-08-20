@@ -34,6 +34,8 @@ data LookupFail
   | DBMultipleGenesis
   | DBExtraMigration !String
   | DBPruneConsumed !String
+  | DBCreateAddress !String
+  | DBAddressMigration !String
   | DBRJsonbInSchema !String
   | DBTxOutVariant !String
   deriving (Eq, Generic)
@@ -55,7 +57,9 @@ instance Show LookupFail where
       DbMetaMultipleRows -> "Multiple rows in Meta table which should only contain one"
       DBMultipleGenesis -> "Multiple Genesis blocks found. These are blocks without an EpochNo"
       DBExtraMigration e -> "DBExtraMigration : " <> e
-      DBPruneConsumed e -> "DBExtraMigration" <> e
+      DBPruneConsumed e -> "DBPruneConsumed" <> e
+      DBCreateAddress e -> "DBCreateAddress" <> e
+      DBAddressMigration e -> "DBAddressMigration" <> e
       DBRJsonbInSchema e -> "DBRJsonbInSchema" <> e
       DBTxOutVariant e -> "DbTxOutVariant" <> e
 
