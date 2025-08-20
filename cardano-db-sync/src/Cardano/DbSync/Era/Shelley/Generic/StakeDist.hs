@@ -86,7 +86,7 @@ getStakeSlice pInfo !epochBlockNo els isMigration =
     LedgerStateConway cls -> genericStakeSlice pInfo epochBlockNo cls isMigration
 
 genericStakeSlice ::
-  forall era blk mk p.
+  forall era blk p mk.
   ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
   Word64 ->
@@ -188,7 +188,7 @@ getPoolDistr els =
     LedgerStateConway cls -> Just $ genericPoolDistr cls
 
 genericPoolDistr ::
-  forall era mk p.
+  forall era p mk.
   LedgerState (ShelleyBlock p era) mk ->
   (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
 genericPoolDistr lstate =

@@ -216,6 +216,7 @@ library
                       , stm
                       , strict
                       , sop-core
+                      , sop-extras
                       , strict-sop-core
                       , strict-stm
                       , swagger2
