@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -63,16 +62,18 @@ data ThreadChannels = ThreadChannels
 --
 -- This is the primary transaction runner for sequential database operations in db-sync.
 -- All operations within the ExceptT stack are executed atomically in one database transaction.
+-- Accepts an optional isolation level (Nothing uses RepeatableRead default).
 runDbSyncTransaction ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
   Trace IO Text ->
   DB.DbEnv ->
+  Maybe DB.IsolationLevel ->
   ExceptT SyncNodeError DB.DbM a ->
   m (Either SyncNodeError a)
-runDbSyncTransaction tracer dbEnv exceptTAction = do
+runDbSyncTransaction tracer dbEnv mIsolationLevel exceptTAction = do
   -- Catch database exceptions and convert to Either
-  eResult <- liftIO $ try $ DB.runDbTransLogged tracer dbEnv (runExceptT exceptTAction)
+  eResult <- liftIO $ try $ DB.runDbTransLogged tracer dbEnv mIsolationLevel (runExceptT exceptTAction)
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
@@ -88,7 +89,7 @@ runDbSyncTransactionNoLogging ::
   m (Either SyncNodeError a)
 runDbSyncTransactionNoLogging dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
-  eResult <- liftIO $ try $ DB.runDbTransSilent dbEnv dbAction
+  eResult <- liftIO $ try $ DB.runDbTransSilent dbEnv Nothing dbAction
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
@@ -135,7 +136,7 @@ runDbSyncTransactionPool ::
   m (Either SyncNodeError a)
 runDbSyncTransactionPool tracer dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
-  eResult <- liftIO $ try $ DB.runDbPoolTransLogged tracer dbEnv dbAction -- Use pool
+  eResult <- liftIO $ try $ DB.runDbPoolTransLogged tracer dbEnv Nothing dbAction -- Use pool
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr

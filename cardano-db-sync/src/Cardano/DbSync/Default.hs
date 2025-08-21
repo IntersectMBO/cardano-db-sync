@@ -46,15 +46,17 @@ import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 
 insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
 insertListBlocks syncEnv blocks = do
+  isolationLevel <- determineIsolationLevel syncEnv
   -- stop at the exact block number if the option is set
   case sioStopAtBlock $ dncInsertOptions $ envSyncNodeConfig syncEnv of
-    Nothing -> runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) $ do
+    Nothing -> runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $ do
       traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocks
     Just targetBlock ->
       insertListBlocksWithStopCondition syncEnv blocks targetBlock
@@ -70,7 +72,8 @@ insertListBlocksWithStopCondition syncEnv blocks targetBlock = do
   -- Check if we hit the stop condition in this batch
   let hitStopCondition = any (\cblk -> unBlockNo (blockNo cblk) >= targetBlock) blocks
   -- Process the blocks in transaction
-  result <- runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) $ do
+  isolationLevel <- determineIsolationLevel syncEnv
+  result <- runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $ do
     traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocksToProcess
   -- If we hit the stop condition and transaction succeeded, shutdown
   case result of
@@ -242,6 +245,14 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
           liftIO $ runNearTipMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
+
+-- | Determine isolation level based on current sync state
+determineIsolationLevel :: SyncEnv -> IO (Maybe DB.IsolationLevel)
+determineIsolationLevel syncEnv = do
+  syncState <- readTVarIO (envDbIsolationState syncEnv)
+  pure $ case syncState of
+    DB.SyncLagging -> Just DB.ReadCommitted    -- Syncing: use ReadCommitted for performance
+    DB.SyncFollowing -> Nothing                -- Following: use default RepeatableRead for consistency
 
 isWithinTwoMin :: SlotDetails -> Bool
 isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing

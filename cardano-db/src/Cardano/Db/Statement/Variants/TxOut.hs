@@ -15,6 +15,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -31,7 +32,6 @@ import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Statement.Function.Query (adaDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (entityVal))
 import Cardano.Db.Types (Ada (..), DbLovelace, DbM, DbWord64, dbLovelaceDecoder)
-import qualified Hasql.Pipeline as HsqlP
 
 --------------------------------------------------------------------------------
 -- TxOut

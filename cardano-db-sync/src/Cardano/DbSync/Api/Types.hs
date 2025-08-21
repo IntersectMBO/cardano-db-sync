@@ -50,6 +50,7 @@ data SyncEnv = SyncEnv
   , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
   , envIndexes :: !(StrictTVar IO Bool)
   , envBootstrap :: !(StrictTVar IO Bool)
+  , envDbIsolationState :: !(StrictTVar IO DB.SyncState)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)

@@ -45,7 +45,8 @@ insertValidateByronGenesisDist ::
   Byron.Config ->
   ExceptT SyncNodeError IO ()
 insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
-  ExceptT $ runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) insertAction
+  -- Genesis insertion is always syncing, use ReadCommitted for better performance
+  ExceptT $ runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) (Just DB.ReadCommitted) insertAction
   where
     tracer = getTrace syncEnv
 

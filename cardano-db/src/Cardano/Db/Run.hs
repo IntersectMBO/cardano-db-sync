@@ -53,13 +53,15 @@ import Cardano.Db.Types (DbEnv (..), DbM (..))
 -- This is the primary runner used for cardano-db-sync block processing.
 -- Wraps all operations in a single database transaction with full ACID guarantees.
 -- Automatically handles BEGIN/COMMIT/ROLLBACK and provides comprehensive logging.
+-- Accepts an optional isolation level (defaults to RepeatableRead).
 runDbTransLogged ::
   MonadUnliftIO m =>
   Trace IO Text ->
   DbEnv ->
+  Maybe IsolationLevel ->  -- Optional isolation level
   DbM a ->
   m a
-runDbTransLogged tracer dbEnv action = do
+runDbTransLogged tracer dbEnv mIsolationLevel action = do
   result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
   case result of
     Left sessionErr -> do
@@ -67,8 +69,9 @@ runDbTransLogged tracer dbEnv action = do
       throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
     Right dbResult -> pure dbResult
   where
+    isolationLevel = fromMaybe RepeatableRead mIsolationLevel
     transactionSession = do
-      HsqlS.statement () (beginTransactionStmt RepeatableRead)
+      HsqlS.statement () (beginTransactionStmt isolationLevel)
 
       result <- liftIO $ try @SomeException $ runIohkLogging tracer $ liftIO $ runReaderT (runDbM action) dbEnv
       case result of
@@ -83,12 +86,14 @@ runDbTransLogged tracer dbEnv action = do
 --
 -- Same transaction guarantees as runDbTransLogged but without logging.
 -- Useful for performance-critical operations or testing where log output isn't needed.
+-- Accepts an optional isolation level (defaults to RepeatableRead).
 runDbTransSilent ::
   MonadUnliftIO m =>
   DbEnv ->
+  Maybe IsolationLevel ->  -- Optional isolation level
   DbM a ->
   m a
-runDbTransSilent dbEnv action = do
+runDbTransSilent dbEnv mIsolationLevel action = do
   runNoLoggingT $ do
     result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
     case result of
@@ -96,8 +101,9 @@ runDbTransSilent dbEnv action = do
         throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
       Right dbResult -> pure dbResult
   where
+    isolationLevel = fromMaybe RepeatableRead mIsolationLevel
     transactionSession = do
-      HsqlS.statement () (beginTransactionStmt RepeatableRead)
+      HsqlS.statement () (beginTransactionStmt isolationLevel)
 
       result <- liftIO $ try @SomeException $ runReaderT (runDbM action) dbEnv
       case result of
@@ -159,13 +165,15 @@ runDbDirectSilent dbEnv action = do
 -- Uses a connection from the pool rather than the main DbEnv connection.
 -- Wraps operations in a transaction with logging. Designed for concurrent operations
 -- where multiple threads need independent database connections.
+-- Accepts an optional isolation level (defaults to RepeatableRead).
 runDbPoolTransLogged ::
   MonadUnliftIO m =>
   Trace IO Text ->
   DbEnv ->
+  Maybe IsolationLevel ->  -- Optional isolation level
   DbM a ->
   m a
-runDbPoolTransLogged tracer dbEnv action = do
+runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
   case dbPoolConnection dbEnv of
     Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
     Just pool -> do
@@ -176,8 +184,9 @@ runDbPoolTransLogged tracer dbEnv action = do
             Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
             Right dbResult -> pure dbResult
   where
+    isolationLevel = fromMaybe RepeatableRead mIsolationLevel
     transactionSession conn = do
-      HsqlS.statement () (beginTransactionStmt RepeatableRead)
+      HsqlS.statement () (beginTransactionStmt isolationLevel)
       result <- liftIO $ try @SomeException $ do
         let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
         runReaderT (runDbM action) tempDbEnv
@@ -233,7 +242,7 @@ runDbStandaloneTransSilent source action = do
     HsqlCon.release
     ( \connection -> do
         let dbEnv = createDbEnv connection Nothing Nothing
-        runDbTransSilent dbEnv action
+        runDbTransSilent dbEnv Nothing action
     )
 
 -- | Standalone runner without transaction management

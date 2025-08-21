@@ -31,7 +31,7 @@ import Cardano.DbSync.Types
 
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Metrics (setDbEpochSyncDuration, setDbEpochSyncNumber)
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad.Extra (whenJust)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -76,8 +76,11 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
           currentTime <- liftIO getCurrentTime
           -- Get current epoch statistics
           epochStats <- liftIO $ readTVarIO (envEpochStatistics syncEnv)
+          -- Update the database isolation state for transaction optimisation
+          let syncState = toSyncState ss
+          liftIO $ atomically $ writeTVar (envDbIsolationState syncEnv) syncState
           -- Insert the epoch sync time into the database
-          insertEpochSyncTime en (toSyncState ss) epochStats currentTime
+          insertEpochSyncTime en syncState epochStats currentTime
           -- Text of the epoch sync time
           let epochDurationText = formatEpochDuration (elsStartTime epochStats) currentTime
 

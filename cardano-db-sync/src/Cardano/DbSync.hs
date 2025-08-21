@@ -144,7 +144,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
   whenJust (enpMaybeRollback params) $ \slotNo ->
     void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
 
-  -- This runMigration is ONLY for delayed migrations during sync (like indexes)
+  -- These migrations will be ran when near the tip of the chain eg: indexes.
   let runNearTipMigration mode = do
         msg <- DB.getMaintenancePsqlConf pgConfig
         logInfo trce $ "Running NearTip database migrations in mode " <> textShow mode
