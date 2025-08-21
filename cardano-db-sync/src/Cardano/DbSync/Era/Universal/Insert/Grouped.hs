@@ -14,13 +14,11 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
   insertBlockGroupedData,
   insertReverseIndex,
   resolveTxInputs,
-  resolveTxInputsBulk,
   resolveScriptHash,
   mkmaTxOuts,
 ) where
 
 import qualified Data.List as List
-import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 
 import Cardano.BM.Trace (logWarning)

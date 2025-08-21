@@ -200,9 +200,7 @@ insertOffChainVoteResults trce resultQueue = do
               )
               metadata
       -- Insert and get IDs
-      ids <-
-        DB.runSession DB.mkDbCallStack $
-          HsqlSes.statement deduplicatedMetadata DB.insertBulkOffChainVoteDataStmt
+      ids <- DB.insertBulkOffChainVoteData deduplicatedMetadata
 
       -- Return original data with IDs (note: length mismatch possible if duplicates were removed)
       pure $ zipWith (\(md, acc) id -> (md, acc, id)) metadataWithAccessors ids
