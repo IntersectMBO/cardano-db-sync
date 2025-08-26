@@ -40,6 +40,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Data.Map.Strict as Map
+import Data.SOP.Functors (Flip (..))
 import Data.SOP.Strict
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
@@ -48,13 +49,13 @@ import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerState)
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
+import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerTables, ValuesMK)
+import qualified Ouroboros.Consensus.Ledger.Basics as Consensus
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
 import Prelude (fail, id)
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
-import Data.SOP.Functors (Flip (..))
 
 --------------------------------------------------------------------------
 -- Ledger Types
@@ -77,7 +78,8 @@ data HasLedgerEnv = HasLedgerEnv
   }
 
 data CardanoLedgerState = CardanoLedgerState
-  { clsState :: !(ExtLedgerState CardanoBlock ValuesMK)
+  { clsState :: !(ExtLedgerState CardanoBlock EmptyMK)
+  , clsTables :: !(LedgerTables (ExtLedgerState CardanoBlock) ValuesMK)
   , clsEpochBlockNo :: !EpochBlockNo
   }
 
@@ -103,7 +105,10 @@ instance FromCBOR EpochBlockNo where
       2 -> EpochBlockNo <$> fromCBOR
       n -> fail $ "unexpected EpochBlockNo value " <> show n
 
-encodeCardanoLedgerState :: (ExtLedgerState CardanoBlock ValuesMK -> Encoding) -> CardanoLedgerState -> Encoding
+encodeCardanoLedgerState ::
+  (ExtLedgerState CardanoBlock EmptyMK -> Encoding) ->
+  CardanoLedgerState ->
+  Encoding
 encodeCardanoLedgerState encodeExt cls =
   mconcat
     [ encodeExt (clsState cls)
@@ -111,11 +116,12 @@ encodeCardanoLedgerState encodeExt cls =
     ]
 
 decodeCardanoLedgerState ::
-  (forall s. Decoder s (ExtLedgerState CardanoBlock ValuesMK)) ->
+  (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK)) ->
   (forall s. Decoder s CardanoLedgerState)
 decodeCardanoLedgerState decodeExt = do
   ldgrState <- decodeExt
-  CardanoLedgerState ldgrState <$> fromCBOR
+  let ldgrTables = Consensus.projectLedgerTables (Consensus.unstowLedgerTables ldgrState)
+  CardanoLedgerState ldgrState ldgrTables <$> fromCBOR
 
 data LedgerStateFile = LedgerStateFile
   { lsfSlotNo :: !SlotNo
@@ -217,7 +223,13 @@ instance HasNewEpochState ShelleyEra where
 
   applyNewEpochState st =
     hApplyExtLedgerState $
-      fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* fn id :* Nil
+      fn (applyNewEpochState' st)
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* Nil
 
 instance HasNewEpochState AllegraEra where
   getNewEpochState st = case ledgerState st of
@@ -226,7 +238,13 @@ instance HasNewEpochState AllegraEra where
 
   applyNewEpochState st =
     hApplyExtLedgerState $
-      fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* fn id :* Nil
+      fn id
+        :* fn (applyNewEpochState' st)
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* Nil
 
 instance HasNewEpochState MaryEra where
   getNewEpochState st = case ledgerState st of
@@ -235,7 +253,13 @@ instance HasNewEpochState MaryEra where
 
   applyNewEpochState st =
     hApplyExtLedgerState $
-      fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* fn id :* Nil
+      fn id
+        :* fn id
+        :* fn (applyNewEpochState' st)
+        :* fn id
+        :* fn id
+        :* fn id
+        :* Nil
 
 instance HasNewEpochState AlonzoEra where
   getNewEpochState st = case ledgerState st of
@@ -244,7 +268,13 @@ instance HasNewEpochState AlonzoEra where
 
   applyNewEpochState st =
     hApplyExtLedgerState $
-      fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* fn id :* Nil
+      fn id
+        :* fn id
+        :* fn id
+        :* fn (applyNewEpochState' st)
+        :* fn id
+        :* fn id
+        :* Nil
 
 instance HasNewEpochState BabbageEra where
   getNewEpochState st = case ledgerState st of
@@ -253,7 +283,13 @@ instance HasNewEpochState BabbageEra where
 
   applyNewEpochState st =
     hApplyExtLedgerState $
-      fn id :* fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* fn id :* Nil
+      fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn (applyNewEpochState' st)
+        :* fn id
+        :* Nil
 
 instance HasNewEpochState ConwayEra where
   getNewEpochState st = case ledgerState st of
@@ -262,7 +298,13 @@ instance HasNewEpochState ConwayEra where
 
   applyNewEpochState st =
     hApplyExtLedgerState $
-      fn id :* fn id :* fn id :* fn id :* fn id :* fn (applyNewEpochState' st) :* Nil
+      fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn (applyNewEpochState' st)
+        :* Nil
 
 hApplyExtLedgerState ::
   NP (Flip LedgerState mk -.-> Flip LedgerState mk) (CardanoShelleyEras StandardCrypto) ->
