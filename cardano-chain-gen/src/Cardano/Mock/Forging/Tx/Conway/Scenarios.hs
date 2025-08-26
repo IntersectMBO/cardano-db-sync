@@ -31,10 +31,10 @@ import Cardano.Prelude
 import Data.List.Extra (chunksOf)
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock ())
 import qualified Prelude
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 
 newtype ShelleyLedgerState era mk = ShelleyLedgerState
   {unState :: LedgerState (ShelleyBlock PraosStandard era) mk}

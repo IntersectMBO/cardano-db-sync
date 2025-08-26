@@ -24,8 +24,8 @@ import qualified Data.Map.Strict as Map
 import Ouroboros.Consensus.Block (HasHeader, HeaderHash, Point, blockPoint, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
-import Ouroboros.Network.Block (ChainUpdate (..))
 import Ouroboros.Consensus.Ledger.Tables (ValuesMK)
+import Ouroboros.Network.Block (ChainUpdate (..))
 
 data ChainProducerState block = ChainProducerState
   { chainDB :: ChainDB block
@@ -54,7 +54,7 @@ data FollowerNext
   | FollowerForwardFrom
   deriving (Eq, Show)
 
-initChainProducerState :: 
+initChainProducerState ::
   TopLevelConfig block ->
   Chain.State block ValuesMK ->
   ChainProducerState block

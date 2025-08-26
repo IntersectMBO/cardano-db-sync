@@ -1,10 +1,10 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE BangPatterns #-}
 
 module Cardano.Mock.ChainDB (
   ChainDB (..),
@@ -19,17 +19,17 @@ module Cardano.Mock.ChainDB (
   currentBlockNo,
 ) where
 
-import Ouroboros.Consensus.Cardano.Ledger ()
-import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
-import Ouroboros.Consensus.Cardano.CanHardFork ()
 import Cardano.Mock.Chain
 import Ouroboros.Consensus.Block
+import Ouroboros.Consensus.Cardano.CanHardFork ()
+import Ouroboros.Consensus.Cardano.Ledger ()
 import Ouroboros.Consensus.Config
 import Ouroboros.Consensus.Ledger.Abstract
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
-import Ouroboros.Consensus.Ledger.Tables.Utils (applyDiffs)
-import Ouroboros.Network.Block (Tip (..))
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
+import Ouroboros.Consensus.Ledger.Tables.Utils (applyDiffs)
+import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
+import Ouroboros.Network.Block (Tip (..))
 
 -- | Thin layer around 'Chain' that knows how to apply blocks and maintain
 -- new and old states. The state here, which is the 'Chain', is not a MVar,
@@ -72,7 +72,7 @@ replaceGenesisDB ::
 replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
 
 extendChainDB ::
-  LedgerSupportsProtocol block => 
+  LedgerSupportsProtocol block =>
   ChainDB block ->
   block ->
   ChainDB block
@@ -81,14 +81,14 @@ extendChainDB chainDB blk = do
       -- Get the current ledger state
       !tipState = getTipState chain
       -- Apply the block and compute the diffs
-      !diffState = tickThenReapply 
-        ComputeLedgerEvents
-        (Consensus.ExtLedgerCfg $ chainConfig chainDB)
-        blk
-        tipState
+      !diffState =
+        tickThenReapply
+          ComputeLedgerEvents
+          (Consensus.ExtLedgerCfg $ chainConfig chainDB)
+          blk
+          tipState
       -- Apply the diffs
       !newTipState = applyDiffs tipState diffState
-
    in chainDB {cchain = chain :> (blk, newTipState)}
 
 findFirstPoint :: HasHeader block => [Point block] -> ChainDB block -> Maybe (Point block)

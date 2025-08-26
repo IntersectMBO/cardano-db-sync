@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE PartialTypeSignatures #-}
 
 module Cardano.Mock.Chain (
   Chain' (..),
@@ -18,10 +18,10 @@ module Cardano.Mock.Chain (
 ) where
 
 import Ouroboros.Consensus.Block
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import qualified Ouroboros.Network.AnchoredFragment as AF
 import Ouroboros.Network.Block
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 
 -- | This looks a lot like the 'Chain' defined in Ouroboros.Network.MockChain.Chain
 -- but this version includes also the ledger states.

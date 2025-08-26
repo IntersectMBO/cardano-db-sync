@@ -109,7 +109,7 @@ withAlonzoFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
 withBabbageFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock PraosStandard BabbageEra) ValuesMK -> 
+  ( LedgerState (ShelleyBlock PraosStandard BabbageEra) ValuesMK ->
     Either ForgingError (Core.Tx BabbageEra)
   ) ->
   IO CardanoBlock

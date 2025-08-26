@@ -32,7 +32,6 @@ module Cardano.Mock.Forging.Interpreter (
   mkTxId,
 ) where
 
-import Ouroboros.Consensus.Shelley.Ledger.Ledger
 import Cardano.Ledger.Core (txIdTx)
 import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
@@ -89,6 +88,7 @@ import Ouroboros.Consensus.Config (
   configLedger,
   topLevelConfigLedger,
  )
+import Ouroboros.Consensus.Shelley.Ledger.Ledger
 
 import Ouroboros.Consensus.Forecast (Forecast (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
@@ -365,7 +365,7 @@ forgeNextLeaders interpreter txes possibleLeaders = do
           -- Tick the ledger state for the 'SlotNo' we're producing a block for
           let ledgerState' = ledgerState $ currentState (istChain interState)
 
-              tickedLedgerSt = 
+              tickedLedgerSt =
                 applyChainTick
                   ComputeLedgerEvents
                   (configLedger cfg)

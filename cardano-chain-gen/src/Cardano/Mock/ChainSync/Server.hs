@@ -55,7 +55,8 @@ import Network.TypedProtocol.Stateful.Codec ()
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
-import Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery, QueryFootprint (..), BlockSupportsLedgerQuery)
+import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
+import Ouroboros.Consensus.Ledger.Query (BlockQuery, BlockSupportsLedgerQuery, QueryFootprint (..), ShowQuery)
 import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
@@ -107,7 +108,6 @@ import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQu
 import Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy (..))
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -126,17 +126,17 @@ readChain :: MonadSTM m => ServerHandle m blk -> STM m (Chain blk)
 readChain handle = do
   cchain . chainDB <$> readTVar (chainProducerState handle)
 
-addBlock :: 
-  (LedgerSupportsProtocol blk, MonadSTM m) => 
-  ServerHandle m blk -> 
-  blk -> 
+addBlock ::
+  (LedgerSupportsProtocol blk, MonadSTM m) =>
+  ServerHandle m blk ->
+  blk ->
   STM m ()
 addBlock handle blk =
   modifyTVar (chainProducerState handle) $
     addBlockState blk
 
-rollback :: 
-  (LedgerSupportsProtocol blk, MonadSTM m) => 
+rollback ::
+  (LedgerSupportsProtocol blk, MonadSTM m) =>
   ServerHandle m blk ->
   Point blk ->
   STM m ()

@@ -67,9 +67,9 @@ vBErr :: String
 vBErr = "Validation Balance Error - "
 
 -- Given an address, return it's current UTxO balance.
-ledgerAddrBalance :: 
-  Text -> 
-  LedgerState (CardanoBlock StandardCrypto) mk -> 
+ledgerAddrBalance ::
+  Text ->
+  LedgerState (CardanoBlock StandardCrypto) mk ->
   Either ValidateBalanceError Word64
 ledgerAddrBalance addr lsc =
   case lsc of
