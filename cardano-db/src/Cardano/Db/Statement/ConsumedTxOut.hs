@@ -403,9 +403,9 @@ findMaxTxInIdStmt =
           [ "WITH target_block_no AS ("
           , "  SELECT MAX(block_no) - $1 AS target_block_no FROM block"
           , ")"
-          , "SELECT MAX(tx.id) AS max_tx_id"
-          , "FROM tx"
-          , "INNER JOIN block ON tx.block_id = block.id"
+          , "SELECT MAX(tx.id) AS max_tx_id "
+          , "FROM tx "
+          , "INNER JOIN block ON tx.block_id = block.id "
           , "WHERE block.block_no <= (SELECT target_block_no FROM target_block_no)"
           ]
 

@@ -339,7 +339,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart 
   oarq <- newTBQueueIO 1000
   epochVar <- newTVarIO initCurrentEpochNo
   epochStatistics <- initEpochStatistics
-  dbIsolationStateVar <- newTVarIO DB.SyncLagging  -- For database transaction isolation optimisation
+  dbIsolationStateVar <- newTVarIO DB.SyncLagging -- For database transaction isolation optimisation
   ledgerEnvType <-
     case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
       (Just dir, True) ->

@@ -67,7 +67,9 @@ runDbThread syncEnv queue = do
 
       -- Handle the result of running the actions
       case result of
-        Left err -> logError tracer $ show err
+        Left err -> do
+          logError tracer $ show err
+          throwIO err
         Right Continue -> processQueue -- Continue processing
         Right Done -> pure () -- Stop processing
 
@@ -83,8 +85,8 @@ runDbThread syncEnv queue = do
     updateBlockMetrics :: IO ()
     updateBlockMetrics = do
       let metricsSetters = envMetricSetters syncEnv
-      void $ async $ DB.runDbDirectLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) $ do
-        mBlock <- DB.queryLatestBlock
+      void $ async $ do
+        mBlock <- DB.runDbPoolLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) DB.queryLatestBlock
         liftIO $ whenJust mBlock $ \block -> do
           let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block
               slotNo = SlotNo $ fromMaybe 0 $ DB.blockSlotNo block

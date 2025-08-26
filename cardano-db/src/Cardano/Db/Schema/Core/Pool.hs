@@ -32,6 +32,7 @@ import Cardano.Db.Types (
   DbLovelace (..),
   DbWord64 (..),
   dbLovelaceEncoder,
+  dbWord64ValueEncoder,
  )
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -89,10 +90,10 @@ poolStatBulkEncoder =
   contrazip6
     (bulkEncoder $ E.nonNullable $ Id.getPoolHashId >$< E.int8) -- poolHashId
     (bulkEncoder $ E.nonNullable $ fromIntegral >$< E.int4) -- epoch_no
-    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_blocks
-    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- number_of_delegators
-    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.numeric) -- stake
-    (bulkEncoder $ E.nullable $ fromIntegral . unDbWord64 >$< E.numeric) -- voting_power
+    (bulkEncoder $ E.nonNullable dbWord64ValueEncoder) -- number_of_blocks
+    (bulkEncoder $ E.nonNullable dbWord64ValueEncoder) -- number_of_delegators
+    (bulkEncoder $ E.nonNullable dbWord64ValueEncoder) -- stake
+    (bulkEncoder $ E.nullable dbWord64ValueEncoder) -- voting_power
 
 -- |
 -- Table Name: pool_update

@@ -122,8 +122,7 @@ applyAndInsertBlockMaybe syncEnv tracer cblk = do
         Right _
           | Just epochNo <- getNewEpoch applyRes -> do
               liftIO $ logInfo tracer $ "Reached " <> textShow epochNo
-        _otherwise -> do
-          pure ()
+        _ -> pure ()
   where
     mkApplyResult :: Bool -> IO (ApplyResult, Bool)
     mkApplyResult isCons = do
@@ -240,7 +239,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
         ranIndexes <- liftIO $ getRanIndexes syncEnv
         addConstraintsIfNotExist syncEnv tracer
         unless ranIndexes $ do
-          -- Only commit if we haven't already committed above to avoid double-commit
+          -- Only commit if we haven't already committed above to avoid double commits
           unless commited $ lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
           liftIO $ runNearTipMigrations syncEnv
 
@@ -251,8 +250,8 @@ determineIsolationLevel :: SyncEnv -> IO (Maybe DB.IsolationLevel)
 determineIsolationLevel syncEnv = do
   syncState <- readTVarIO (envDbIsolationState syncEnv)
   pure $ case syncState of
-    DB.SyncLagging -> Just DB.ReadCommitted    -- Syncing: use ReadCommitted for performance
-    DB.SyncFollowing -> Nothing                -- Following: use default RepeatableRead for consistency
+    DB.SyncLagging -> Just DB.ReadCommitted -- Syncing: use ReadCommitted for performance
+    DB.SyncFollowing -> Nothing -- Following: use default RepeatableRead for consistency
 
 isWithinTwoMin :: SlotDetails -> Bool
 isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing

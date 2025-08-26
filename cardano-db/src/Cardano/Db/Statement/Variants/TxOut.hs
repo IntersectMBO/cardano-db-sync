@@ -297,15 +297,19 @@ queryTxOutIdByTxIdStmt =
     decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
 
 resolveInputTxOutIdFromTxId ::
+  TxOutVariantType ->
   Id.TxId ->
   Word64 ->
   DbM (Either DbLookupError TxOutIdW)
-resolveInputTxOutIdFromTxId txId index = do
+resolveInputTxOutIdFromTxId txOutVariantType txId index = do
   result <-
     runSession mkDbCallStack $
       HsqlSes.statement (txId, index) queryTxOutIdByTxIdStmt
   case result of
-    Just txOutId -> pure $ Right $ VCTxOutIdW (Id.TxOutCoreId txOutId) -- Adjust based on your variant
+    Just txOutId ->
+      pure $ Right $ case txOutVariantType of
+        TxOutVariantCore -> VCTxOutIdW (Id.TxOutCoreId txOutId)
+        TxOutVariantAddress -> VATxOutIdW (Id.TxOutAddressId txOutId)
     Nothing ->
       pure $
         Left $

@@ -53,7 +53,7 @@
 
                   haskellBuildUtils = prev.haskellBuildUtils.override {
                     compiler-nix-name = "ghc96";
-                    index-state = "2025-06-19T03:58:53Z";
+                    index-state = "2025-06-25T13:51:34Z";
                   };
                 })
 

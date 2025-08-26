@@ -42,7 +42,7 @@ rollbackFromBlockNo ::
 rollbackFromBlockNo syncEnv blkNo = do
   nBlocks <- lift $ DB.queryBlockCountAfterBlockNo (unBlockNo blkNo) True
   mres <- lift $ DB.queryBlockNoAndEpoch (unBlockNo blkNo)
-  -- Use whenJust like the original - silently skip if block not found
+  -- Use whenJust to silently skip if block not found
   whenJust mres $ \(blockId, epochNo) -> do
     liftIO . logInfo trce $
       mconcat
@@ -135,13 +135,12 @@ rollbackLedger syncEnv point =
           Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
     NoLedger _ -> pure Nothing
 
--- For testing and debugging.
--- Enhanced rollback that logs more info and handles the rollback more carefully
+-- For testing and debugging. A rollback that logs more information.
 unsafeRollback :: Trace IO Text -> DB.TxOutVariantType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce txOutVariantType config slotNo = do
   logWarning trce $ "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
 
-  -- Perform rollback with improved diagnostics
+  -- Perform rollback with diagnostics
   Right
     <$> DB.runDbStandaloneDirectSilent
       (DB.PGPassCached config)

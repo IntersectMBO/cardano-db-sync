@@ -55,6 +55,7 @@ class Typeable a => DbInfo a where
   default columnNames :: (Generic a, GRecordFieldNames (Rep a)) => Proxy a -> NE.NonEmpty Text
   columnNames p =
     let typeName = tyConName $ typeRepTyCon $ typeRep p
+        -- Safe use of undefined: acts as type witness, never evaluated
         fieldNames = gRecordFieldNames (from (undefined :: a))
      in case fieldNames of
           [] -> error "No fields found"
@@ -155,12 +156,15 @@ instance GRecordFieldNames U1 where
   gRecordFieldNames _ = []
 
 instance (GRecordFieldNames a, GRecordFieldNames b) => GRecordFieldNames (a :*: b) where
+  -- Safe use of undefined: type witnesses for generic recursion, never evaluated
   gRecordFieldNames _ = gRecordFieldNames (undefined :: a p) ++ gRecordFieldNames (undefined :: b p)
 
 instance GRecordFieldNames a => GRecordFieldNames (M1 D c a) where
+  -- Safe use of undefined: type witness for generic metadata, never evaluated
   gRecordFieldNames _ = gRecordFieldNames (undefined :: a p)
 
 instance GRecordFieldNames a => GRecordFieldNames (M1 C c a) where
+  -- Safe use of undefined: type witness for generic metadata, never evaluated
   gRecordFieldNames _ = gRecordFieldNames (undefined :: a p)
 
 instance Selector c => GRecordFieldNames (M1 S c (K1 i a)) where

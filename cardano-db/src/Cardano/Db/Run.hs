@@ -58,7 +58,7 @@ runDbTransLogged ::
   MonadUnliftIO m =>
   Trace IO Text ->
   DbEnv ->
-  Maybe IsolationLevel ->  -- Optional isolation level
+  Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
   m a
 runDbTransLogged tracer dbEnv mIsolationLevel action = do
@@ -90,7 +90,7 @@ runDbTransLogged tracer dbEnv mIsolationLevel action = do
 runDbTransSilent ::
   MonadUnliftIO m =>
   DbEnv ->
-  Maybe IsolationLevel ->  -- Optional isolation level
+  Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
   m a
 runDbTransSilent dbEnv mIsolationLevel action = do
@@ -170,7 +170,7 @@ runDbPoolTransLogged ::
   MonadUnliftIO m =>
   Trace IO Text ->
   DbEnv ->
-  Maybe IsolationLevel ->  -- Optional isolation level
+  Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
   m a
 runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
@@ -187,6 +187,36 @@ runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
     isolationLevel = fromMaybe RepeatableRead mIsolationLevel
     transactionSession conn = do
       HsqlS.statement () (beginTransactionStmt isolationLevel)
+      result <- liftIO $ try @SomeException $ do
+        let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
+        runReaderT (runDbM action) tempDbEnv
+      case result of
+        Left err -> do
+          HsqlS.statement () rollbackTransactionStmt
+          liftIO $ throwIO err
+        Right value -> do
+          HsqlS.statement () commitTransactionStmt
+          pure value
+
+runDbPoolLogged ::
+  MonadUnliftIO m =>
+  Trace IO Text ->
+  DbEnv ->
+  DbM a ->
+  m a
+runDbPoolLogged tracer dbEnv action = do
+  case dbPoolConnection dbEnv of
+    Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
+    Just pool -> do
+      runIohkLogging tracer $ do
+        liftIO $ withResource pool $ \conn -> do
+          result <- HsqlS.run (transactionSession conn) conn
+          case result of
+            Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
+            Right dbResult -> pure dbResult
+  where
+    transactionSession conn = do
+      HsqlS.statement () (beginTransactionStmt RepeatableRead)
       result <- liftIO $ try @SomeException $ do
         let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
         runReaderT (runDbM action) tempDbEnv

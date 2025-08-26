@@ -143,57 +143,33 @@ minIdsAddressToText minIds =
 textToMinIds :: TxOutVariantType -> Text -> Maybe MinIdsWrapper
 textToMinIds txOutVariantType txt =
   case Text.split (== ':') txt of
-    [tminTxInId, tminTxOutId, tminMaTxOutId, typeId] ->
+    [tminTxInId, tminTxOutId, tminMaTxOutId] ->
       let
         mTxInId =
           if Text.null tminTxInId
             then Nothing
             else Just $ Id.TxInId $ read $ Text.unpack tminTxInId
 
-        mTxOutId =
-          if Text.null tminTxOutId
-            then Nothing
-            else case Text.head tminTxOutId of
-              'C' ->
-                Just $
-                  VCTxOutIdW $
-                    Id.TxOutCoreId $
-                      read $
-                        Text.unpack $
-                          Text.tail tminTxOutId
-              'V' ->
-                Just $
-                  VATxOutIdW $
-                    Id.TxOutAddressId $
-                      read $
-                        Text.unpack $
-                          Text.tail tminTxOutId
-              _ -> Nothing
-
-        mMaTxOutId =
-          if Text.null tminMaTxOutId
-            then Nothing
-            else case Text.head tminMaTxOutId of
-              'C' ->
-                Just $
-                  CMaTxOutIdW $
-                    Id.MaTxOutCoreId $
-                      read $
-                        Text.unpack $
-                          Text.tail tminMaTxOutId
-              'V' ->
-                Just $
-                  VMaTxOutIdW $
-                    Id.MaTxOutAddressId $
-                      read $
-                        Text.unpack $
-                          Text.tail tminMaTxOutId
-              _ -> Nothing
-
-        minIds = MinIds mTxInId mTxOutId mMaTxOutId
+        -- Based on txOutVariantType, parse the appropriate ID types
+        (mTxOutId, mMaTxOutId, wrapper) = case txOutVariantType of
+          TxOutVariantCore ->
+            ( if Text.null tminTxOutId
+                then Nothing
+                else Just $ VCTxOutIdW $ Id.TxOutCoreId $ read $ Text.unpack tminTxOutId
+            , if Text.null tminMaTxOutId
+                then Nothing
+                else Just $ CMaTxOutIdW $ Id.MaTxOutCoreId $ read $ Text.unpack tminMaTxOutId
+            , CMinIdsWrapper
+            )
+          TxOutVariantAddress ->
+            ( if Text.null tminTxOutId
+                then Nothing
+                else Just $ VATxOutIdW $ Id.TxOutAddressId $ read $ Text.unpack tminTxOutId
+            , if Text.null tminMaTxOutId
+                then Nothing
+                else Just $ VMaTxOutIdW $ Id.MaTxOutAddressId $ read $ Text.unpack tminMaTxOutId
+            , VMinIdsWrapper
+            )
        in
-        case (txOutVariantType, typeId) of
-          (TxOutVariantCore, "C") -> Just $ CMinIdsWrapper minIds
-          (TxOutVariantAddress, "V") -> Just $ VMinIdsWrapper minIds
-          _otherwise -> Nothing
-    _otherwise -> Nothing
+        Just $ wrapper $ MinIds mTxInId mTxOutId mMaTxOutId
+    _ -> Nothing

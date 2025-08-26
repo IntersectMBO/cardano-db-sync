@@ -82,7 +82,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
         Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
-      _otherwise -> pure Nothing
+      _ -> pure Nothing
   prevGovActionDBId <- case mprevGovAction of
     Nothing -> pure Nothing
     Just prevGovActionId -> Just <$> resolveGovActionProposal syncEnv prevGovActionId
@@ -109,7 +109,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
     TreasuryWithdrawals mp _ -> insertTreasuryWithdrawalsBulk govActionProposalId (Map.toList mp)
     UpdateCommittee {} -> insertNewCommittee govActionProposalId
     NewConstitution _ constitution -> void $ insertConstitution blkId (Just govActionProposalId) constitution
-    _otherwise -> pure ()
+    _ -> pure ()
   where
     mprevGovAction :: Maybe GovActionId = case pProcGovAction pp of
       ParameterChange prv _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
@@ -117,7 +117,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
       NoConfidence prv -> unGovPurposeId <$> strictMaybeToMaybe prv
       UpdateCommittee prv _ _ _ -> unGovPurposeId <$> strictMaybeToMaybe prv
       NewConstitution prv _ -> unGovPurposeId <$> strictMaybeToMaybe prv
-      _otherwise -> Nothing
+      _ -> Nothing
 
     -- Bulk insert treasury withdrawals
     insertTreasuryWithdrawalsBulk ::

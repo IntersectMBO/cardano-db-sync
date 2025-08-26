@@ -7,7 +7,7 @@ module Cardano.Db.Schema.Variants.TxOutCore where
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
-import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
+import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder, dbWord64Decoder, dbWord64ValueEncoder)
 import Contravariant.Extras (contrazip11, contrazip3)
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant ((>$<))
@@ -193,17 +193,18 @@ instance DbInfo MaTxOutCore where
       , "tx_out_id"
       , "ident"
       ]
+  unnestParamTypes _ = [("quantity", "numeric[]"), ("tx_out_id", "bigint[]"), ("ident", "bigint[]")]
 
 maTxOutCoreDecoder :: D.Row MaTxOutCore
 maTxOutCoreDecoder =
   MaTxOutCore
-    <$> D.column (D.nonNullable $ DbWord64 . fromIntegral <$> D.int8) -- maTxOutCoreQuantity
+    <$> dbWord64Decoder -- maTxOutCoreQuantity
     <*> Id.idDecoder Id.TxOutCoreId -- maTxOutCoreTxOutId
     <*> Id.idDecoder Id.MultiAssetId -- maTxOutCoreIdent
 
 maTxOutCoreBulkEncoder :: E.Params ([DbWord64], [Id.TxOutCoreId], [Id.MultiAssetId])
 maTxOutCoreBulkEncoder =
   contrazip3
-    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    (bulkEncoder $ E.nonNullable dbWord64ValueEncoder)
     (bulkEncoder $ E.nonNullable $ Id.getTxOutCoreId >$< E.int8)
     (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8)

@@ -18,7 +18,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (textDecoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Key)
-import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder)
+import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder, dbWord64ValueEncoder)
 
 -- |
 -- Table Name: tx_out
@@ -200,11 +200,11 @@ type instance Key MaTxOutAddress = Id.MaTxOutAddressId
 instance DbInfo MaTxOutAddress where
   tableName _ = "ma_tx_out"
   columnNames _ = NE.fromList ["quantity", "tx_out_id", "ident"]
-  unnestParamTypes _ = [("ident", "bigint[]"), ("quantity", "bigint[]"), ("tx_out_id", "bigint[]")]
+  unnestParamTypes _ = [("ident", "bigint[]"), ("quantity", "numeric[]"), ("tx_out_id", "bigint[]")]
 
 maTxOutAddressBulkEncoder :: E.Params ([Id.MultiAssetId], [DbWord64], [Id.TxOutAddressId])
 maTxOutAddressBulkEncoder =
   contrazip3
     (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8) -- maTxOutAddressIdent
-    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8) -- maTxOutAddressQuantity
+    (bulkEncoder $ E.nonNullable dbWord64ValueEncoder) -- maTxOutAddressQuantity
     (bulkEncoder $ E.nonNullable $ Id.getTxOutAddressId >$< E.int8) -- maTxOutAddressTxOutId

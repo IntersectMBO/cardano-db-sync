@@ -28,7 +28,7 @@ import Data.Fixed (Micro, showFixed)
 import Data.Functor.Contravariant ((>$<))
 import Data.Int (Int64)
 import Data.Pool (Pool)
-import Data.Scientific (Scientific (..), scientific, toBoundedInteger)
+import Data.Scientific (Scientific (..), coefficient, scientific, toBoundedInteger)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.WideWord (Word128 (..))
@@ -89,7 +89,7 @@ instance ToJSON Ada where
   -- `Number` results in it becoming `7.3112484749601107e10` while the old explorer is returning `73112484749.601107`
   toEncoding (Ada ada) =
     unsafeToEncoding $
-      Builder.string8 $ -- convert ByteString to Aeson's
+      Builder.string8 $ -- convert ByteString to Aeson's -- convert ByteString to Aeson's
         showFixed True ada -- convert String to ByteString using Latin1 encoding
         -- convert Micro to String chopping off trailing zeros
 
@@ -176,11 +176,31 @@ newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
   deriving (Eq, Generic, Num)
   deriving (Read, Show) via (Quiet DbWord64)
 
+-- Helper to replicate the original Persistent fromPersistValue behavior for DbWord64
+-- This matches the PersistRational case: fromIntegral $ numerator r
+scientificToWord64 :: Scientific -> Word64
+scientificToWord64 s = case toBoundedInteger @Word64 s of
+  Just w64 -> w64
+  Nothing -> fromIntegral $ coefficient s -- Fallback to coefficient for out-of-bounds values
+
+-- Value encoder for DbWord64 using numeric (matches word64type domain)
+dbWord64ValueEncoder :: HsqlE.Value DbWord64
+dbWord64ValueEncoder = (\x -> scientific (toInteger $ unDbWord64 x) 0) >$< HsqlE.numeric
+
+-- Non-nullable encoder for DbWord64 parameters
+dbWord64Encoder :: HsqlE.Params DbWord64
+dbWord64Encoder = HsqlE.param $ HsqlE.nonNullable dbWord64ValueEncoder
+
+-- Non-nullable decoder for DbWord64
+dbWord64Decoder :: HsqlD.Row DbWord64
+dbWord64Decoder = HsqlD.column (HsqlD.nonNullable (DbWord64 . scientificToWord64 <$> HsqlD.numeric))
+
+-- Nullable encoder for DbWord64 parameters
 maybeDbWord64Encoder :: HsqlE.Params (Maybe DbWord64)
-maybeDbWord64Encoder = HsqlE.param $ HsqlE.nullable $ fromIntegral . unDbWord64 >$< HsqlE.int8
+maybeDbWord64Encoder = HsqlE.param $ HsqlE.nullable dbWord64ValueEncoder
 
 maybeDbWord64Decoder :: HsqlD.Row (Maybe DbWord64)
-maybeDbWord64Decoder = HsqlD.column (HsqlD.nullable (DbWord64 . fromIntegral <$> HsqlD.int8))
+maybeDbWord64Decoder = HsqlD.column (HsqlD.nullable (DbWord64 . scientificToWord64 <$> HsqlD.numeric))
 
 --------------------------------------------------------------------------------
 -- The following must be in alphabetic order.

@@ -35,6 +35,7 @@ import Cardano.Db.Types (
   ScriptType,
   dbLovelaceDecoder,
   dbLovelaceEncoder,
+  dbWord64ValueEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
   scriptPurposeEncoder,
@@ -210,7 +211,7 @@ type instance Key TxMetadata = TxMetadataId
 instance DbInfo TxMetadata where
   jsonbFields _ = ["json"]
   unnestParamTypes _ =
-    [ ("key", "bigint[]")
+    [ ("key", "numeric[]")
     , ("json", "text[]")
     , ("bytes", "bytea[]")
     , ("tx_id", "bigint[]")
@@ -219,7 +220,7 @@ instance DbInfo TxMetadata where
 txMetadataBulkEncoder :: E.Params ([DbWord64], [Maybe Text], [ByteString], [TxId])
 txMetadataBulkEncoder =
   contrazip4
-    (bulkEncoder $ E.nonNullable $ fromIntegral . unDbWord64 >$< E.int8)
+    (bulkEncoder $ E.nonNullable dbWord64ValueEncoder)
     (bulkEncoder $ E.nullable E.text)
     (bulkEncoder $ E.nonNullable E.bytea)
     (bulkEncoder $ E.nonNullable $ getTxId >$< E.int8)

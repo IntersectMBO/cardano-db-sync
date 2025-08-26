@@ -193,7 +193,7 @@ getActiveMetaHash tracer conn poolId = do
     Left dbErr -> pure $ Left dbErr
     Right mp -> case Map.toList mp of
       [(poolHash, metaHash)] -> pure $ Right $ Just (poolHash, metaHash)
-      _otherwise -> pure $ Right Nothing
+      _ -> pure $ Right Nothing
 
 filterRetired :: (Maybe Word64, Map ByteString Db.PoolCertAction) -> [ByteString]
 filterRetired (mEpochNo, certs) =

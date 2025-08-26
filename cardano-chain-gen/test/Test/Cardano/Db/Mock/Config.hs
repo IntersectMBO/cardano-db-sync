@@ -231,7 +231,7 @@ getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
 queryDBSync :: DBSyncEnv -> DB.DbM a -> IO a
 queryDBSync env = do
-  DB.runDbStandaloneTransSilent (getDBSyncPGPass env)
+  DB.runDbStandaloneDirectSilent (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do

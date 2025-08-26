@@ -45,8 +45,14 @@ newtype TxId = TxId {getTxId :: Int64}
 newtype TxMetadataId = TxMetadataId {getTxMetadataId :: Int64}
   deriving (Eq, Show, Ord)
 
+-----------------------------------------------------------------------------------------------------------------------------------
 newtype TxInId = TxInId {getTxInId :: Int64}
   deriving (Eq, Show, Ord)
+
+instance Read TxInId where
+  readsPrec p s = [(TxInId x, r) | (x, r) <- readsPrec p s]
+
+-----------------------------------------------------------------------------------------------------------------------------------
 
 newtype CollateralTxInId = CollateralTxInId {getCollateralTxInId :: Int64}
   deriving (Eq, Show, Ord)
@@ -97,12 +103,25 @@ newtype ExtraMigrationsId = ExtraMigrationsId {getExtraMigrationsId :: Int64}
 -- VARIANTS
 -----------------------------------------------------------------------------------------------------------------------------------
 
+-----------------------------------------------------------------------------------------------------------------------------------
+
 -- | TxOut variants
 newtype TxOutCoreId = TxOutCoreId {getTxOutCoreId :: Int64}
   deriving (Eq, Ord, Show)
 
+instance Read TxOutCoreId where
+  readsPrec p s = [(TxOutCoreId x, r) | (x, r) <- readsPrec p s]
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-----------------------------------------------------------------------------------------------------------------------------------
 newtype TxOutAddressId = TxOutAddressId {getTxOutAddressId :: Int64}
   deriving (Eq, Ord, Show)
+
+instance Read TxOutAddressId where
+  readsPrec p s = [(TxOutAddressId x, r) | (x, r) <- readsPrec p s]
+
+-----------------------------------------------------------------------------------------------------------------------------------
 
 newtype TxOutUtxoHdId = TxOutUtxoHdId {getTxOutUtxoHdId :: Int64}
   deriving (Eq, Ord, Show)
@@ -123,12 +142,25 @@ newtype CollateralTxOutUtxoHdId = CollateralTxOutUtxoHdId {getCollateralTxOutUtx
 newtype CollateralTxOutUtxoHdAddressId = CollateralTxOutUtxoHdAddressId {getCollateralTxOutUtxoHdAddressId :: Int64}
   deriving (Eq, Ord, Show)
 
+-----------------------------------------------------------------------------------------------------------------------------------
+
 -- | Multi-asset variants
 newtype MaTxOutCoreId = MaTxOutCoreId {getMaTxOutCoreId :: Int64}
   deriving (Eq, Ord, Show)
 
+instance Read MaTxOutCoreId where
+  readsPrec p s = [(MaTxOutCoreId x, r) | (x, r) <- readsPrec p s]
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+-----------------------------------------------------------------------------------------------------------------------------------
 newtype MaTxOutAddressId = MaTxOutAddressId {getMaTxOutAddressId :: Int64}
   deriving (Eq, Ord, Show)
+
+instance Read MaTxOutAddressId where
+  readsPrec p s = [(MaTxOutAddressId x, r) | (x, r) <- readsPrec p s]
+
+-----------------------------------------------------------------------------------------------------------------------------------
 
 newtype MaTxOutUtxoHdId = MaTxOutUtxoHdId {getMaTxOutUtxoHdId :: Int64}
   deriving (Eq, Ord, Show)

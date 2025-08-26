@@ -31,5 +31,5 @@ tmux send-keys -t 1 "export PGPASSFILE=$CARDANO_DB_SYNC_DIR/config/pgpass-mainne
 tmux send-keys -t 1 "PGPASSFILE=$CARDANO_DB_SYNC_DIR/config/pgpass-mainnet $dbsync --config $TESTNET_DIR/db-sync-config.json --socket-path $TESTNET_DIR/db/node.socket --state-dir $TESTNET_DIR/ledger-state --schema-dir $CARDANO_DB_SYNC_DIR/schema/" 'C-m'
 # tmux send-keys -t 1 "$dbsync --config $TESTNET_DIR/db-sync-config.json --socket-path $TESTNET_DIR/db/node.socket --state-dir $TESTNET_DIR/ledger-state --schema-dir $CARDANO_DB_SYNC_DIR/schema/ +RTS -p -hc -L200 -RTS" 'C-m'
 
-tmux attach-session -t $session
+tmux -CC attach-session -t $session
 # tmux send-keys -t 1 "$dbsync --config $HOMEIOG/testnet/db-sync-config.json --socket-path $HOMEIOG/testnet/db/node.socket --state-dir $HOMEIOG/testnet/ledger-state --schema-dir $HOMEIOG/cardano-db-sync/schema/ +RTS -p -hc -L200 -RTS" 'C-m'

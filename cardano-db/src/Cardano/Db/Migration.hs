@@ -106,7 +106,6 @@ runMigrations trce pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantTy
       putStrLn "Running:"
       (scripts', ranAll) <- filterMigrations scripts
 
-      -- Replace just this forM_ with progress bar
       withProgress trce (length scripts') "Migration" $ \progressRef -> do
         forM_ (zip [1 :: Integer ..] scripts') $ \(i, script) -> do
           updateProgress trce progressRef (fromIntegral i) "Migration"
@@ -120,7 +119,6 @@ runMigrations trce pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantTy
         unless quiet $ putStrLn "Running:"
         (scripts', ranAll) <- filterMigrations scripts
 
-        -- Replace just this forM_ with progress bar
         withProgress trce (length scripts') "Migration" $ \progressRef -> do
           forM_ (zip [1 :: Integer ..] scripts') $ \(i, script) -> do
             updateProgress trce progressRef (fromIntegral i) "Migration"

@@ -98,7 +98,6 @@ insertBlockGroupedData syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
 
   -- Parallel preparation of independent data
-  -- Parallel preparation of independent data
   (preparedTxIn, preparedMetadata, preparedMint, txOutChunks) <- liftIO $ do
     a1 <- async $ pure $ prepareTxInProcessing syncEnv grouped
     a2 <- async $ pure $ prepareMetadataProcessing syncEnv grouped
@@ -200,7 +199,8 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       case eTxId of
         Right txId -> do
           -- Now get the TxOutId separately
-          eTxOutId <- lift $ DB.resolveInputTxOutIdFromTxId txId (Generic.txInIndex txIn)
+          let txOutVariantType = getTxOutVariantType syncEnv
+          eTxOutId <- lift $ DB.resolveInputTxOutIdFromTxId txOutVariantType txId (Generic.txInIndex txIn)
           case eTxOutId of
             Right txOutId -> pure $ Right $ convertFoundTxOutId (txId, txOutId)
             Left err -> pure $ Left err
@@ -239,7 +239,6 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
     convertnotFound txOutWrapper = case txOutWrapper of
       DB.VCTxOutW cTxOut -> (txIn, VC.txOutCoreTxId cTxOut, Left txIn, Nothing)
       DB.VATxOutW vTxOut _ -> (txIn, VA.txOutAddressTxId vTxOut, Left txIn, Nothing)
-
 
 resolveRemainingInputs ::
   [ExtendedTxIn] ->
@@ -387,31 +386,9 @@ processUtxoConsumption syncEnv grouped txOutIds = do
     -- Log failures
     mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
 
--- | Helper function to categorize resolved inputs for parallel processing
-categorizeResolvedInputs :: [ExtendedTxIn] -> ([DB.BulkConsumedByHash], [(DB.TxOutIdW, DB.TxId)], [ExtendedTxIn])
-categorizeResolvedInputs etis =
-  let (hashBased, idBased, failed) = foldr categorizeOne ([], [], []) etis
-   in (hashBased, idBased, failed)
-  where
-    categorizeOne ExtendedTxIn {..} (hAcc, iAcc, fAcc) =
-      case etiTxOutId of
-        Right txOutId ->
-          (hAcc, (txOutId, DB.txInTxInId etiTxIn) : iAcc, fAcc)
-        Left genericTxIn ->
-          let bulkData =
-                DB.BulkConsumedByHash
-                  { bchTxHash = unTxHash (Generic.txInTxId genericTxIn)
-                  , bchOutputIndex = Generic.txInIndex genericTxIn
-                  , bchConsumingTxId = DB.txInTxInId etiTxIn
-                  }
-           in (bulkData : hAcc, iAcc, fAcc)
-
 -----------------------------------------------------------------------------------------------------------------------------------
 -- PARALLEL PROCESSING HELPER FUNCTIONS (NO PIPELINES)
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- Pipelines aren't suitable here due to data dependencies.
--- The current approach using async for truly independent operations is optimal.
 
 -- | Helper function to create MinIds result
 makeMinId :: SyncEnv -> [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper
@@ -431,3 +408,25 @@ makeMinId syncEnv txInIds txOutIds maTxOutIds =
           , minTxOutId = listToMaybe txOutIds
           , minMaTxOutId = listToMaybe maTxOutIds
           }
+
+-- | Helper function to categorize resolved inputs for parallel processing
+-- Note: Inputs with Left (unresolved to TxOutId) are treated as hash-based updates
+-- and also tracked as potentially failed for logging purposes.
+categorizeResolvedInputs :: [ExtendedTxIn] -> ([DB.BulkConsumedByHash], [(DB.TxOutIdW, DB.TxId)], [ExtendedTxIn])
+categorizeResolvedInputs =
+  foldr categorizeOne ([], [], [])
+  where
+    categorizeOne eti@ExtendedTxIn {..} (hAcc, iAcc, fAcc) =
+      case etiTxOutId of
+        Right txOutId ->
+          -- Successfully resolved to a TxOutId
+          (hAcc, (txOutId, DB.txInTxInId etiTxIn) : iAcc, fAcc)
+        Left genericTxIn ->
+          -- Try to resolve by hash, but also track as potentially failed
+          let bulkData =
+                DB.BulkConsumedByHash
+                  { bchTxHash = unTxHash (Generic.txInTxId genericTxIn)
+                  , bchOutputIndex = Generic.txInIndex genericTxIn
+                  , bchConsumingTxId = DB.txInTxInId etiTxIn
+                  }
+           in (bulkData : hAcc, iAcc, eti : fAcc)
