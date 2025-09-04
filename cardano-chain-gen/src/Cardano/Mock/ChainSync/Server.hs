@@ -55,7 +55,6 @@ import Network.TypedProtocol.Stateful.Codec ()
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
 import Ouroboros.Consensus.Ledger.Query (BlockQuery, BlockSupportsLedgerQuery, QueryFootprint (..), ShowQuery)
 import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
@@ -117,7 +116,7 @@ data ServerHandle m blk = ServerHandle
   , forkAgain :: m (Async ())
   }
 
-replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk ValuesMK -> STM m ()
+replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk -> STM m ()
 replaceGenesis handle st =
   modifyTVar (chainProducerState handle) $ \cps ->
     cps {chainDB = replaceGenesisDB (chainDB cps) st}
@@ -180,7 +179,7 @@ forkServerThread ::
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
-  State blk ValuesMK ->
+  State blk ->
   NetworkMagic ->
   FilePath ->
   IO (ServerHandle IO blk)
@@ -195,7 +194,7 @@ withServerHandle ::
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
-  State blk ValuesMK ->
+  State blk ->
   NetworkMagic ->
   FilePath ->
   (ServerHandle IO blk -> IO a) ->

@@ -40,7 +40,7 @@ import Ouroboros.Consensus.Cardano.Block (
   ConwayEra,
   ShelleyEra,
  )
-import Ouroboros.Consensus.Ledger.Basics (LedgerState, ValuesMK)
+import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerState)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
 forgeNextAndSubmit :: Interpreter -> ServerHandle IO CardanoBlock -> MockBlock -> IO CardanoBlock
@@ -68,7 +68,7 @@ forgeAndSubmitBlocks interpreter mockServer blocksToCreate =
 withAlonzoFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock TPraosStandard AlonzoEra) ValuesMK ->
+  ( LedgerState (ShelleyBlock TPraosStandard AlonzoEra) EmptyMK ->
     Either ForgingError [Core.Tx AlonzoEra]
   ) ->
   IO CardanoBlock
@@ -79,7 +79,7 @@ withAlonzoFindLeaderAndSubmit interpreter mockServer mkTxs = do
 withBabbageFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  (LedgerState (ShelleyBlock PraosStandard BabbageEra) ValuesMK -> Either ForgingError [Core.Tx BabbageEra]) ->
+  (LedgerState (ShelleyBlock PraosStandard BabbageEra) EmptyMK -> Either ForgingError [Core.Tx BabbageEra]) ->
   IO CardanoBlock
 withBabbageFindLeaderAndSubmit interpreter mockServer mkTxs = do
   alTxs <- withBabbageLedgerState interpreter mkTxs
@@ -88,7 +88,7 @@ withBabbageFindLeaderAndSubmit interpreter mockServer mkTxs = do
 withConwayFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  (LedgerState (ShelleyBlock PraosStandard ConwayEra) ValuesMK -> Either ForgingError [Core.Tx ConwayEra]) ->
+  (LedgerState (ShelleyBlock PraosStandard ConwayEra) EmptyMK -> Either ForgingError [Core.Tx ConwayEra]) ->
   IO CardanoBlock
 withConwayFindLeaderAndSubmit interpreter mockServer mkTxs = do
   txs' <- withConwayLedgerState interpreter mkTxs
@@ -97,7 +97,7 @@ withConwayFindLeaderAndSubmit interpreter mockServer mkTxs = do
 withAlonzoFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock TPraosStandard AlonzoEra) ValuesMK ->
+  ( LedgerState (ShelleyBlock TPraosStandard AlonzoEra) EmptyMK ->
     Either ForgingError (Core.Tx AlonzoEra)
   ) ->
   IO CardanoBlock
@@ -109,7 +109,7 @@ withAlonzoFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
 withBabbageFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock PraosStandard BabbageEra) ValuesMK ->
+  ( LedgerState (ShelleyBlock PraosStandard BabbageEra) EmptyMK ->
     Either ForgingError (Core.Tx BabbageEra)
   ) ->
   IO CardanoBlock
@@ -121,7 +121,7 @@ withBabbageFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
 withConwayFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock PraosStandard ConwayEra) ValuesMK ->
+  ( LedgerState (ShelleyBlock PraosStandard ConwayEra) EmptyMK ->
     Either ForgingError (Core.Tx ConwayEra)
   ) ->
   IO CardanoBlock
@@ -133,7 +133,7 @@ withConwayFindLeaderAndSubmitTx interpreter mockServer mkTx =
 withShelleyFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock TPraosStandard ShelleyEra) ValuesMK ->
+  ( LedgerState (ShelleyBlock TPraosStandard ShelleyEra) EmptyMK ->
     Either ForgingError [Core.Tx ShelleyEra]
   ) ->
   IO CardanoBlock
@@ -144,7 +144,7 @@ withShelleyFindLeaderAndSubmit interpreter mockServer mkTxs = do
 withShelleyFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  ( LedgerState (ShelleyBlock TPraosStandard ShelleyEra) ValuesMK ->
+  ( LedgerState (ShelleyBlock TPraosStandard ShelleyEra) EmptyMK ->
     Either ForgingError (Core.Tx ShelleyEra)
   ) ->
   IO CardanoBlock
@@ -153,16 +153,16 @@ withShelleyFindLeaderAndSubmitTx interpreter mockServer mkTxs =
     tx <- mkTxs st
     pure [tx]
 
-getShelleyLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard ShelleyEra) ValuesMK)
+getShelleyLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard ShelleyEra) EmptyMK)
 getShelleyLedgerState interpreter = withShelleyLedgerState interpreter Right
 
-getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard AlonzoEra) ValuesMK)
+getAlonzoLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock TPraosStandard AlonzoEra) EmptyMK)
 getAlonzoLedgerState interpreter = withAlonzoLedgerState interpreter Right
 
-getBabbageLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock PraosStandard BabbageEra) ValuesMK)
+getBabbageLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock PraosStandard BabbageEra) EmptyMK)
 getBabbageLedgerState interpreter = withBabbageLedgerState interpreter Right
 
-getConwayLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock PraosStandard ConwayEra) ValuesMK)
+getConwayLedgerState :: Interpreter -> IO (LedgerState (ShelleyBlock PraosStandard ConwayEra) EmptyMK)
 getConwayLedgerState interpreter = withConwayLedgerState interpreter Right
 
 skipUntilNextEpoch :: Interpreter -> ServerHandle IO CardanoBlock -> [TxEra] -> IO CardanoBlock
