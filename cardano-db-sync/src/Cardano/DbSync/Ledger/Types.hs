@@ -50,8 +50,8 @@ import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerStat
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
 import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerTables, ValuesMK)
-import qualified Ouroboros.Consensus.Ledger.Basics as Consensus
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+import Ouroboros.Consensus.Ledger.Tables (valuesMKDecoder, valuesMKEncoder)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
@@ -112,15 +112,17 @@ encodeCardanoLedgerState encodeExt cls =
   mconcat
     [ encodeExt (clsState cls)
     , toCBOR (clsEpochBlockNo cls)
+    , valuesMKEncoder (clsState cls) (clsTables cls)
     ]
 
 decodeCardanoLedgerState ::
   (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK)) ->
   (forall s. Decoder s CardanoLedgerState)
 decodeCardanoLedgerState decodeExt = do
-  ldgrState <- decodeExt
-  let ldgrTables = Consensus.projectLedgerTables (Consensus.unstowLedgerTables ldgrState)
-  CardanoLedgerState ldgrState ldgrTables <$> fromCBOR
+  lState <- decodeExt
+  eBlockNo <- fromCBOR
+  lTables <- valuesMKDecoder lState
+  pure $ CardanoLedgerState lState lTables eBlockNo
 
 data LedgerStateFile = LedgerStateFile
   { lsfSlotNo :: !SlotNo
