@@ -33,7 +33,7 @@ import Cardano.Prelude
 import Data.List.Extra (chunksOf)
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
-import Ouroboros.Consensus.Ledger.Basics (ValuesMK)
+import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock ())
 import qualified Prelude
@@ -89,7 +89,7 @@ mkPaymentBlocks utxoIx addresses interpreter =
 forgeBlocksChunked ::
   Interpreter ->
   [a] ->
-  ([a] -> ShelleyLedgerState ConwayEra ValuesMK -> Either ForgingError (Tx ConwayEra)) ->
+  ([a] -> ShelleyLedgerState ConwayEra EmptyMK -> Either ForgingError (Tx ConwayEra)) ->
   IO [CardanoBlock]
 forgeBlocksChunked interpreter vs f = forM (chunksOf 500 vs) $ \blockCreds -> do
   blockTxs <- withConwayLedgerState interpreter $ \state' ->
