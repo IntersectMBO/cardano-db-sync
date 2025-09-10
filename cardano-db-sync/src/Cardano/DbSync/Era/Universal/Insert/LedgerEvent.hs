@@ -18,7 +18,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..), UnicodeNullSource, formatUnicodeNullSource)
+import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..), InsertOptions (..), UnicodeNullSource, formatUnicodeNullSource)
 import Cardano.DbSync.Cache.Types (textShowCacheStats)
 import Cardano.DbSync.Era.Cardano.Util (insertEpochSyncTime, resetEpochStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -54,6 +54,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     ntw = getNetwork syncEnv
+    iopts = getInsertOptions syncEnv
 
     subFromCurrentEpoch :: Word64 -> EpochNo
     subFromCurrentEpoch m =
@@ -127,19 +128,20 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo enacted dropped expired uncl -> do
-          unless (Set.null uncl) $
-            liftIO $
-              logInfo tracer $
-                "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
-          updateDropped syncEnv (EpochNo curEpoch) (garGovActionId <$> (dropped <> expired))
-          let refunded = filter (\e -> Set.notMember (garGovActionId e) uncl) (enacted <> dropped <> expired)
-          insertProposalRefunds syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo refunded -- TODO: check if they are disjoint to avoid double entries.
-          forM_ enacted $ \gar -> do
-            gaId <- resolveGovActionProposal syncEnv (garGovActionId gar)
-            void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
-            whenJust (garMTreasury gar) $ \treasuryMap -> do
-              let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
-              insertRewardRests syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo (Map.toList rewards)
+          when (ioGov iopts) $ do
+            unless (Set.null uncl) $
+              liftIO $
+                logInfo tracer $
+                  "Found " <> textShow (Set.size uncl) <> " unclaimed proposal refunds"
+            updateDropped syncEnv (EpochNo curEpoch) (garGovActionId <$> (dropped <> expired))
+            let refunded = filter (\e -> Set.notMember (garGovActionId e) uncl) (enacted <> dropped <> expired)
+            insertProposalRefunds syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo refunded -- TODO: check if they are disjoint to avoid double entries.
+            forM_ enacted $ \gar -> do
+              gaId <- resolveGovActionProposal syncEnv (garGovActionId gar)
+              void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
+              whenJust (garMTreasury gar) $ \treasuryMap -> do
+                let rewards = Map.mapKeys Ledger.raCredential $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
+                insertRewardRests syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo (Map.toList rewards)
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do
             let rewards = Map.toList rwd
