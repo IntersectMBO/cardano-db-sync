@@ -186,24 +186,30 @@
               "https://chap.intersectmbo.org/" = inputs.CHaP;
             };
 
-            shell.tools = {
-              cabal = "latest";
-              fourmolu = "latest";
-              haskell-language-server = {
-                src = nixpkgs.haskell-nix.sources."hls-2.11";
+            shell = {
+              tools = {
+                cabal = "latest";
+                fourmolu = "latest";
+                hlint = "latest";
+
+                haskell-language-server = {
+                  src = nixpkgs.haskell-nix.sources."hls-2.11";
+                };
+              } // lib.optionalAttrs (config.compiler-nix-name == "ghc967") {
+                weeder = "latest";
               };
-              hlint = "latest";
-            } // lib.optionalAttrs (config.compiler-nix-name == "ghc967") {
-              weeder = "latest";
+
+              # Now we use pkgsBuildBuild, to make sure that even in the cross
+              # compilation setting, we don't run into issues where we pick tools
+              # for the target.
+              buildInputs = with nixpkgs.pkgsBuildBuild; [
+                git
+              ];
+
+              withHoogle = true;
+
+              crossPlatforms = _: [];
             };
-            # Now we use pkgsBuildBuild, to make sure that even in the cross
-            # compilation setting, we don't run into issues where we pick tools
-            # for the target.
-            shell.buildInputs = with nixpkgs.pkgsBuildBuild; [
-              gitAndTools.git
-            ];
-            shell.withHoogle = true;
-            shell.crossPlatforms = _: [];
 
             modules = [
               ({ lib, pkgs, ... }: {
@@ -229,11 +235,11 @@
               })
 
               ({ lib, pkgs, config, ... }: {
-                  # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
-                  # to call out to all kinds of silly tools that GHC doesn't really provide.
-                  # For this reason, we try to get away without re-installing lib:ghc for now.
-                  reinstallableLibGhc = false;
-                })
+                # lib:ghc is a bit annoying in that it comes with it's own build-type:Custom, and then tries
+                # to call out to all kinds of silly tools that GHC doesn't really provide.
+                # For this reason, we try to get away without re-installing lib:ghc for now.
+                reinstallableLibGhc = false;
+              })
 
               (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
                 (let
@@ -265,6 +271,9 @@
                   packages.cardano-db.ghcOptions = ghcOptions;
                   packages.cardano-db-tool.ghcOptions = ghcOptions;
                   packages.cardano-smash-server.ghcOptions = ghcOptions;
+
+                  doHoogle = false;
+                  doHaddock = false;
                 }))
 
               ({
