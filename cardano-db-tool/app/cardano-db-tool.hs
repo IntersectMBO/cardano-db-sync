@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)

@@ -261,7 +261,7 @@ insertBulkDrepDistrPiped :: HasCallStack => [[SGV.DrepDistr]] -> DbM ()
 insertBulkDrepDistrPiped drepDistrChunks =
   runSession mkDbCallStack $
     HsqlSes.pipeline $
-      traverse_ (\chunk -> HsqlP.statement chunk insertBulkDrepDistrStmt) drepDistrChunks
+      traverse_ (`HsqlP.statement` insertBulkDrepDistrStmt) drepDistrChunks
 
 -- | QUERY
 queryDrepHashSpecialStmt ::
@@ -505,7 +505,7 @@ insertBulkTreasuryWithdrawal :: HasCallStack => [[SGV.TreasuryWithdrawal]] -> Db
 insertBulkTreasuryWithdrawal treasuryWithdrawalChunks =
   runSession mkDbCallStack $
     HsqlSes.pipeline $
-      traverse_ (\chunk -> HsqlP.statement chunk insertBulkTreasuryWithdrawalStmt) treasuryWithdrawalChunks
+      traverse_ (`HsqlP.statement` insertBulkTreasuryWithdrawalStmt) treasuryWithdrawalChunks
 
 --------------------------------------------------------------------------------
 -- Voting

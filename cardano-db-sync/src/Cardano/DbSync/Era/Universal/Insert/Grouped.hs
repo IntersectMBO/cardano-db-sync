@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -305,9 +306,8 @@ data PreparedMetadata = PreparedMetadata
   }
 
 -- | Prepared Mint data for async execution
-data PreparedMint = PreparedMint
-  { pmtChunks :: ![[DB.MaTxMint]]
-  }
+data PreparedMint where
+  PreparedMint :: {pmtChunks :: ![[DB.MaTxMint]]} -> PreparedMint
 
 -- | Prepare TxIn processing (can run in parallel with TxOut)
 prepareTxInProcessing :: SyncEnv -> BlockGroupedData -> PreparedTxIn

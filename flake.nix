@@ -243,8 +243,12 @@
                   ghcOptions = [
                     # libpq static is pretty broken in nixpkgs. We can't rely on the
                     # pkg-config, so we have to add the correct libraries ourselves
-                    "-optl-Wl,-lpgcommon"
-                    "-optl-Wl,-lpgport"
+                    #
+                    # TODO[sgillespie]: Are these still required? Review the
+                    # postgresql/nixpkgs packaging scripts
+                    #
+                    # "-optl-Wl,-lpgcommon"
+                    # "-optl-Wl,-lpgport"
                     "-optl-Wl,-lm"
 
                     # Since we aren't using pkg-config, it won't automatically include
@@ -262,7 +266,7 @@
                     "-optl-Wl,-lcrypto"
                   ];
                 in {
-                  packages.cardano-chain-gen.ghcOptions = ghcOptions;
+                  packages.cardano-chain-gen.components.tests.cardano-chain-gen.ghcOptions = ghcOptions;
                   packages.cardano-db-sync.ghcOptions = ghcOptions;
                   packages.cardano-db.ghcOptions = ghcOptions;
                   packages.cardano-db-tool.ghcOptions = ghcOptions;

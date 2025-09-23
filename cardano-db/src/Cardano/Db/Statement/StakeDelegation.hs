@@ -341,7 +341,7 @@ insertBulkRewardRestsPiped :: [[SS.RewardRest]] -> DbM ()
 insertBulkRewardRestsPiped rewardRestChunks =
   runSession mkDbCallStack $
     HsqlSes.pipeline $
-      traverse_ (\chunk -> HsqlP.statement chunk insertBulkRewardRestsStmt) rewardRestChunks
+      traverse_ (`HsqlP.statement` insertBulkRewardRestsStmt) rewardRestChunks
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: DbM Word64

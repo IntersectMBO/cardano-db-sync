@@ -107,21 +107,20 @@ createAndInsertBlocks blockCount =
           then pure mTxOutId
           else do
             txId <-
-              ( insertTx $
-                  Tx
-                    (mkTxHash blkId 0)
-                    blkId
-                    0
-                    (DbLovelace 0)
-                    (DbLovelace 0)
-                    (Just 0)
-                    12
-                    Nothing
-                    Nothing
-                    True
-                    0
-                    (DbLovelace 0)
-              )
+              insertTx $
+                Tx
+                  (mkTxHash blkId 0)
+                  blkId
+                  0
+                  (DbLovelace 0)
+                  (DbLovelace 0)
+                  (Just 0)
+                  12
+                  Nothing
+                  Nothing
+                  True
+                  0
+                  (DbLovelace 0)
 
             void $ insertTxOut (mkTxOutCore blkId txId)
             pure $ Just txId
