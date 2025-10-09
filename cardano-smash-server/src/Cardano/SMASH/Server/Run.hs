@@ -8,20 +8,13 @@ module Cardano.SMASH.Server.Run (
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Db (
-  PGPassSource (PGPassDefaultEnv),
-  readPGPass,
-  runOrThrowIODb,
-  toConnectionString,
- )
-import qualified Cardano.Db as Db
+import qualified Cardano.Db as DB
 import Cardano.Prelude
 import Cardano.SMASH.Server.Api
 import Cardano.SMASH.Server.Config
 import Cardano.SMASH.Server.Impl
 import Cardano.SMASH.Server.PoolDataLayer
 import Cardano.SMASH.Server.Types
-import Database.Persist.Postgresql (withPostgresqlPool)
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 import Servant (
   Application,
@@ -31,6 +24,7 @@ import Servant (
   Context (..),
   serveWithContext,
  )
+import Prelude (userError)
 
 runSmashServer :: SmashServerConfig -> IO ()
 runSmashServer config = do
@@ -41,11 +35,17 @@ runSmashServer config = do
             (logInfo trce $ "SMASH listening on port " <> textShow (sscSmashPort config))
             defaultSettings
 
-  pgconfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
-  Db.runIohkLogging trce $ withPostgresqlPool (toConnectionString pgconfig) (sscSmashPort config) $ \pool -> do
-    let poolDataLayer = postgresqlPoolDataLayer trce pool
-    app <- liftIO $ mkApp (sscTrace config) poolDataLayer (sscAdmins config)
-    liftIO $ runSettings settings app
+  pgconfig <- DB.runOrThrowIODb (DB.readPGPass DB.PGPassDefaultEnv)
+  connSetting <- case DB.toConnectionSetting pgconfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+
+  -- Create the Hasql connection pool
+  pool <- DB.createHasqlConnectionPool [connSetting] 4
+  -- Setup app with the pool
+  app <- mkApp (sscTrace config) (postgresqlPoolDataLayer trce pool) (sscAdmins config)
+  -- Run the web server
+  runSettings settings app
 
 mkApp :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> IO Application
 mkApp trce dataLayer appUsers = do

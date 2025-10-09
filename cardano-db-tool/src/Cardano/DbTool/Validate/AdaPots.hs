@@ -1,27 +1,15 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Cardano.DbTool.Validate.AdaPots (
   validateSumAdaPots,
 ) where
 
-import Cardano.Db
+import qualified Cardano.Db as DB
 import Cardano.DbTool.Validate.Util
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import Data.Word (Word64)
-import Database.Esqueleto.Experimental (
-  Entity (..),
-  SqlBackend,
-  Value (..),
-  from,
-  select,
-  table,
-  (^.),
- )
 
 -- | Validate that for all epochs, the sum of the AdaPots values are always the
 -- same.
@@ -29,7 +17,7 @@ validateSumAdaPots :: IO ()
 validateSumAdaPots = do
   putStrF "Sum of AdaPots amounts is constant across epochs: "
 
-  xs <- runDbNoLoggingEnv queryAdaPotsAccounting
+  xs <- DB.runDbStandaloneSilent queryAdaPotsAccounting
   let uniqueCount = List.length $ List.nubOrd (map accSumAdaPots xs)
 
   if
@@ -42,29 +30,16 @@ validateSumAdaPots = do
 
 data Accounting = Accounting
   { accEpochNo :: Word64
-  , accSumAdaPots :: Ada
+  , accSumAdaPots :: DB.Ada
   }
 
-queryAdaPotsAccounting :: MonadIO m => ReaderT SqlBackend m [Accounting]
+queryAdaPotsAccounting :: DB.DbM [Accounting]
 queryAdaPotsAccounting = do
-  -- AdaPots
-  res <- select $ do
-    ap <- from $ table @AdaPots
-    pure (ap ^. AdaPotsEpochNo, ap)
-  pure $ map convert res
+  map convertToAccounting <$> DB.queryAdaPotsSum
   where
-    convert :: (Value Word64, Entity AdaPots) -> Accounting
-    convert (Value epochNum, Entity _ ap) =
+    convertToAccounting :: DB.AdaPotsSum -> Accounting
+    convertToAccounting aps =
       Accounting
-        { accEpochNo = epochNum
-        , accSumAdaPots =
-            word64ToAda $
-              unDbLovelace (adaPotsTreasury ap)
-                + unDbLovelace (adaPotsReserves ap)
-                + unDbLovelace (adaPotsRewards ap)
-                + unDbLovelace (adaPotsUtxo ap)
-                + unDbLovelace (adaPotsDepositsStake ap)
-                + unDbLovelace (adaPotsDepositsDrep ap)
-                + unDbLovelace (adaPotsDepositsProposal ap)
-                + unDbLovelace (adaPotsFees ap)
+        { accEpochNo = DB.apsEpochNo aps
+        , accSumAdaPots = DB.word64ToAda $ DB.apsSum aps
         }

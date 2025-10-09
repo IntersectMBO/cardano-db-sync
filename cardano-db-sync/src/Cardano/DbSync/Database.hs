@@ -4,33 +4,26 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Database (
-  DbAction (..),
-  ThreadChannels,
-  lengthDbActionQueue,
-  mkDbApply,
   runDbThread,
 ) where
 
 import Cardano.BM.Trace (logDebug, logError, logInfo)
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..))
-import Cardano.DbSync.DbAction
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), SyncEnv (..))
+import Cardano.DbSync.DbEvent
 import Cardano.DbSync.Default
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
-import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Prelude hiding (atomically)
-import Cardano.Slotting.Slot (WithOrigin (..))
+import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
 import Control.Monad.Extra (whenJust)
-import Control.Monad.Trans.Except.Extra (newExceptT)
-import Ouroboros.Consensus.HeaderValidation hiding (TipInfo)
-import Ouroboros.Consensus.Ledger.Extended
-import Ouroboros.Network.Block (BlockNo, Point (..))
+import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
 
 data NextState
@@ -40,67 +33,86 @@ data NextState
 
 runDbThread ::
   SyncEnv ->
-  MetricSetters ->
   ThreadChannels ->
   IO ()
-runDbThread syncEnv metricsSetters queue = do
-  logInfo trce "Running DB thread"
-  logException trce "runDBThread: " loop
-  logInfo trce "Shutting down DB thread"
+runDbThread syncEnv queue = do
+  logInfo tracer "Starting DB thread"
+  logException tracer "runDbThread: " processQueue
+  logInfo tracer "Shutting down DB thread"
   where
-    trce = getTrace syncEnv
-    loop = do
-      xs <- blockingFlushDbActionQueue queue
+    tracer = getTrace syncEnv
 
-      when (length xs > 1) $ do
-        logDebug trce $ "runDbThread: " <> textShow (length xs) <> " blocks"
+    -- Main loop to process the queue
+    processQueue :: IO ()
+    processQueue = do
+      actions <- blockingFlushDbEventQueue queue
 
-      case hasRestart xs of
-        Nothing -> do
-          eNextState <- runExceptT $ runActions syncEnv xs
+      -- Log the number of blocks being processed if there are multiple
+      when (length actions > 1) $ do
+        logDebug tracer $ "Processing " <> textShow (length actions) <> " blocks"
 
-          mBlock <- getDbLatestBlockInfo (envBackend syncEnv)
-          whenJust mBlock $ \block -> do
-            setDbBlockHeight metricsSetters $ bBlockNo block
-            setDbSlotHeight metricsSetters $ bSlotNo block
+      -- Handle the case where the syncing thread has restarted
+      case hasRestart actions of
+        Just resultVar -> handleRestart resultVar
+        Nothing -> processActions actions
 
-          case eNextState of
-            Left err -> logError trce $ show err
-            Right Continue -> loop
-            Right Done -> pure ()
-        Just resultVar -> do
-          -- In this case the syncing thread has restarted, so ignore all blocks that are not
-          -- inserted yet.
-          logInfo trce "Chain Sync client thread has restarted"
-          latestPoints <- getLatestPoints syncEnv
-          currentTip <- getCurrentTipBlockNo syncEnv
-          logDbState syncEnv
-          atomically $ putTMVar resultVar (latestPoints, currentTip)
-          loop
+    -- Process a list of actions
+    processActions :: [DbEvent] -> IO ()
+    processActions actions = do
+      -- runActions is where we start inserting information we recieve from the node.
+      result <- runExceptT $ runActions syncEnv actions
 
--- | Run the list of 'DbAction's. Block are applied in a single set (as a transaction)
+      -- Update metrics with the latest block information
+      updateBlockMetrics
+
+      -- Handle the result of running the actions
+      case result of
+        Left err -> do
+          logError tracer $ show err
+          throwIO err
+        Right Continue -> processQueue -- Continue processing
+        Right Done -> pure () -- Stop processing
+
+    -- Handle the case where the syncing thread has restarted
+    handleRestart :: StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo) -> IO ()
+    handleRestart resultVar = do
+      logInfo tracer "Chain Sync client thread has restarted"
+      latestPoints <- getLatestPoints syncEnv
+      currentTip <- getCurrentTipBlockNo syncEnv
+      logDbState syncEnv
+      atomically $ putTMVar resultVar (latestPoints, currentTip)
+      processQueue -- Continue processing
+    updateBlockMetrics :: IO ()
+    updateBlockMetrics = do
+      let metricsSetters = envMetricSetters syncEnv
+      void $ async $ do
+        mBlock <- DB.runDbPoolLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) DB.queryLatestBlock
+        liftIO $ whenJust mBlock $ \block -> do
+          let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block
+              slotNo = SlotNo $ fromMaybe 0 $ DB.blockSlotNo block
+          setDbBlockHeight metricsSetters blockNo
+          setDbSlotHeight metricsSetters slotNo
+
+-- | Run the list of 'DbEvent's. Block are applied in a single set (as a transaction)
 -- and other operations are applied one-by-one.
 runActions ::
   SyncEnv ->
-  [DbAction] ->
+  [DbEvent] ->
   ExceptT SyncNodeError IO NextState
 runActions syncEnv actions = do
-  dbAction Continue actions
+  dbEvent Continue actions
   where
-    dbAction :: NextState -> [DbAction] -> ExceptT SyncNodeError IO NextState
-    dbAction next [] = pure next
-    dbAction Done _ = pure Done
-    dbAction Continue xs =
+    dbEvent :: NextState -> [DbEvent] -> ExceptT SyncNodeError IO NextState
+    dbEvent next [] = pure next
+    dbEvent Done _ = pure Done
+    dbEvent Continue xs =
       case spanDbApply xs of
         ([], DbFinish : _) -> do
           pure Done
         ([], DbRollBackToPoint chainSyncPoint serverTip resultVar : ys) -> do
-          deletedAllBlocks <- newExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
+          deletedAllBlocks <- ExceptT $ prepareRollback syncEnv chainSyncPoint serverTip
           points <- lift $ rollbackLedger syncEnv chainSyncPoint
 
-          -- Ledger state always rollbacks at least back to the 'point' given by the Node.
-          -- It needs to rollback even further, if 'points' is not 'Nothing'.
-          -- The db may not rollback to the Node point.
           case (deletedAllBlocks, points) of
             (True, Nothing) -> do
               liftIO $ setConsistentLevel syncEnv Consistent
@@ -108,53 +120,28 @@ runActions syncEnv actions = do
             (False, Nothing) -> do
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
               liftIO $ validateConsistentLevel syncEnv chainSyncPoint
-            _anyOtherOption ->
-              -- No need to validate here
+            _anyOtherOption -> do
               liftIO $ setConsistentLevel syncEnv DBAheadOfLedger
           blockNo <- lift $ getDbTipBlockNo syncEnv
           lift $ atomically $ putTMVar resultVar (points, blockNo)
-          dbAction Continue ys
+          dbEvent Continue ys
         (ys, zs) -> do
-          newExceptT $ insertListBlocks syncEnv ys
+          ExceptT $ insertListBlocks syncEnv ys
           if null zs
             then pure Continue
-            else dbAction Continue zs
-
-rollbackLedger :: SyncEnv -> CardanoPoint -> IO (Maybe [CardanoPoint])
-rollbackLedger syncEnv point =
-  case envLedgerEnv syncEnv of
-    HasLedger hle -> do
-      mst <- loadLedgerAtPoint hle point
-      case mst of
-        Right st -> do
-          let statePoint = headerStatePoint $ headerState $ clsState st
-          -- This is an extra validation that should always succeed.
-          unless (point == statePoint) $
-            logAndThrowIO (getTrace syncEnv) $
-              SNErrDatabaseRollBackLedger $
-                mconcat
-                  [ "Ledger "
-                  , show statePoint
-                  , " and ChainSync "
-                  , show point
-                  , " don't match."
-                  ]
-          pure Nothing
-        Left lsfs ->
-          Just . fmap fst <$> verifySnapshotPoint syncEnv (OnDisk <$> lsfs)
-    NoLedger _ -> pure Nothing
+            else dbEvent Continue zs
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
 -- 'Consistent' Level is correct based on the db tip.
 validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
 validateConsistentLevel syncEnv stPoint = do
-  dbTipInfo <- getDbLatestBlockInfo (envBackend syncEnv)
+  dbTipInfo <- getDbLatestBlockInfo (envDbEnv syncEnv)
   cLevel <- getConsistentLevel syncEnv
   compareTips stPoint dbTipInfo cLevel
   where
     compareTips _ dbTip Unchecked =
       logAndThrowIO tracer $
-        SNErrDatabaseValConstLevel $
+        SNErrDbSessionErrValConstLevel $
           "Found Unchecked Consistent Level. " <> showContext dbTip Unchecked
     compareTips (Point Origin) Nothing Consistent = pure ()
     compareTips (Point Origin) _ DBAheadOfLedger = pure ()
@@ -166,7 +153,7 @@ validateConsistentLevel syncEnv stPoint = do
       | blockPointSlot blk <= bSlotNo tip = pure ()
     compareTips _ dbTip cLevel =
       logAndThrowIO tracer $
-        SNErrDatabaseValConstLevel $
+        SNErrDbSessionErrValConstLevel $
           "Unexpected Consistent Level. " <> showContext dbTip cLevel
 
     tracer = getTrace syncEnv
@@ -180,14 +167,14 @@ validateConsistentLevel syncEnv stPoint = do
         , show cLevel
         ]
 
--- | Split the DbAction list into a prefix containing blocks to apply and a postfix.
-spanDbApply :: [DbAction] -> ([CardanoBlock], [DbAction])
+-- | Split the DbEvent list into a prefix containing blocks to apply and a postfix.
+spanDbApply :: [DbEvent] -> ([CardanoBlock], [DbEvent])
 spanDbApply lst =
   case lst of
     (DbApplyBlock bt : xs) -> let (ys, zs) = spanDbApply xs in (bt : ys, zs)
     xs -> ([], xs)
 
-hasRestart :: [DbAction] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
+hasRestart :: [DbEvent] -> Maybe (StrictTMVar IO ([(CardanoPoint, Bool)], WithOrigin BlockNo))
 hasRestart = go
   where
     go [] = Nothing

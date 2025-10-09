@@ -27,11 +27,10 @@ module Cardano.DbSync.Cache.Types (
 
   -- * CacheStatistics
   CacheStatistics (..),
-  textShowStats,
+  textShowCacheStats,
 ) where
 
 import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import Cardano.DbSync.Cache.FIFO (FIFOCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import Cardano.DbSync.Cache.LRU (LRUCache)
@@ -74,16 +73,18 @@ data CacheAction
   deriving (Eq)
 
 data CacheInternal = CacheInternal
-  { cIsCacheOptimised :: !(StrictTVar IO Bool)
+  { cIsCacheCleanedForTip :: !(StrictTVar IO Bool)
   , cStake :: !(StrictTVar IO StakeCache)
   , cPools :: !(StrictTVar IO StakePoolCache)
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
-  , cStats :: !(StrictTVar IO CacheStatistics)
   , cEpoch :: !(StrictTVar IO CacheEpoch)
-  , cAddress :: !(StrictTVar IO (LRUCache ByteString VA.AddressId))
+  , cAddress :: !(StrictTVar IO (LRUCache ByteString DB.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
+  , -- Optimisation target sizes for Map-based caches
+    cOptimisePools :: !Word64
+  , cOptimiseStake :: !Word64
   }
 
 data CacheStatistics = CacheStatistics
@@ -110,6 +111,10 @@ data CacheCapacity = CacheCapacity
   , cacheCapacityDatum :: !Word64
   , cacheCapacityMultiAsset :: !Word64
   , cacheCapacityTx :: !Word64
+  , -- Used by optimiseCaches function to trim Map-based caches that can grow without bounds,
+    -- unlike LRU caches which have built-in capacity limits. Trimming keeps most recent entries.
+    cacheOptimisePools :: !Word64
+  , cacheOptimiseStake :: !Word64
   }
 
 -- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
@@ -131,11 +136,10 @@ data CacheEpoch = CacheEpoch
   }
   deriving (Show)
 
-textShowStats :: CacheStatus -> IO Text
-textShowStats NoCache = pure "No Caches"
-textShowStats (ActiveCache ic) = do
-  isCacheOptimised <- readTVarIO $ cIsCacheOptimised ic
-  stats <- readTVarIO $ cStats ic
+textShowCacheStats :: CacheStatistics -> CacheStatus -> IO Text
+textShowCacheStats _ NoCache = pure "No Caches"
+textShowCacheStats stats (ActiveCache ic) = do
+  isCacheCleanedForTip <- readTVarIO $ cIsCacheCleanedForTip ic
   stakeHashRaws <- readTVarIO (cStake ic)
   pools <- readTVarIO (cPools ic)
   datums <- readTVarIO (cDatum ic)
@@ -144,20 +148,20 @@ textShowStats (ActiveCache ic) = do
   address <- readTVarIO (cAddress ic)
   pure $
     mconcat
-      [ "\nCache Statistics:"
-      , "\n  Caches Optimised: " <> textShow isCacheOptimised
-      , textCacheSection "Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
-      , textMapSection "Pools" pools (poolsHits stats) (poolsQueries stats)
-      , textLruSection "Datums" datums (datumHits stats) (datumQueries stats)
-      , textLruSection "Addresses" address (addressHits stats) (addressQueries stats)
-      , textLruSection "Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
-      , textPrevBlockSection stats
-      , textFifoSection "TxId" txIds (txIdsHits stats) (txIdsQueries stats)
+      [ "\n\nEpoch Cache Statistics: "
+      , "\n  Caches Cleaned For Tip: " <> textShow isCacheCleanedForTip
+      , textCacheSection "  Stake Addresses" (scLruCache stakeHashRaws) (scStableCache stakeHashRaws) (credsHits stats) (credsQueries stats)
+      , textMapSection "  Pools" pools (poolsHits stats) (poolsQueries stats)
+      , textLruSection "  Datums" datums (datumHits stats) (datumQueries stats)
+      , textLruSection "  Addresses" address (addressHits stats) (addressQueries stats)
+      , textLruSection "  Multi Assets" mAssets (multiAssetsHits stats) (multiAssetsQueries stats)
+      , textPrevBlockSection "  Previous Block"
+      , textFifoSection "  TxId" txIds (txIdsHits stats) (txIdsQueries stats)
       ]
   where
     textCacheSection title cacheLru cacheStable hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache sizes: "
         , textShow (Map.size cacheStable)
         , " and "
@@ -167,7 +171,7 @@ textShowStats (ActiveCache ic) = do
 
     textMapSection title cache hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache size: "
         , textShow (Map.size cache)
         , hitMissStats hits queries
@@ -175,7 +179,7 @@ textShowStats (ActiveCache ic) = do
 
     textLruSection title cache hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache capacity: "
         , textShow (LRU.getCapacity cache)
         , ", cache size: "
@@ -185,7 +189,7 @@ textShowStats (ActiveCache ic) = do
 
     textFifoSection title cache hits queries =
       mconcat
-        [ "\n  " <> title <> ": "
+        [ "\n" <> title <> ": "
         , "cache size: "
         , textShow (FIFO.getSize cache)
         , ", cache capacity: "
@@ -193,9 +197,9 @@ textShowStats (ActiveCache ic) = do
         , hitMissStats hits queries
         ]
 
-    textPrevBlockSection stats =
+    textPrevBlockSection title =
       mconcat
-        [ "\n  Previous Block: "
+        [ "\n" <> title <> ": "
         , hitMissStats (prevBlockHits stats) (prevBlockQueries stats)
         ]
 
@@ -218,29 +222,30 @@ useNoCache = NoCache
 
 newEmptyCache :: MonadIO m => CacheCapacity -> m CacheStatus
 newEmptyCache CacheCapacity {..} = liftIO $ do
-  cIsCacheOptimised <- newTVarIO False
+  cIsCacheCleanedForTip <- newTVarIO False
   cStake <- newTVarIO (StakeCache Map.empty (LRU.empty cacheCapacityStake))
   cPools <- newTVarIO Map.empty
   cDatum <- newTVarIO (LRU.empty cacheCapacityDatum)
   cAddress <- newTVarIO (LRU.empty cacheCapacityAddress)
   cMultiAssets <- newTVarIO (LRU.empty cacheCapacityMultiAsset)
   cPrevBlock <- newTVarIO Nothing
-  cStats <- newTVarIO initCacheStatistics
   cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
-  pure . ActiveCache $
-    CacheInternal
-      { cIsCacheOptimised = cIsCacheOptimised
+  pure
+    . ActiveCache
+    $ CacheInternal
+      { cIsCacheCleanedForTip = cIsCacheCleanedForTip
       , cStake = cStake
       , cPools = cPools
       , cDatum = cDatum
       , cMultiAssets = cMultiAssets
       , cPrevBlock = cPrevBlock
-      , cStats = cStats
       , cEpoch = cEpoch
       , cAddress = cAddress
       , cTxIds = cTxIds
+      , cOptimisePools = cacheOptimisePools
+      , cOptimiseStake = cacheOptimiseStake
       }
 
 initCacheStatistics :: CacheStatistics

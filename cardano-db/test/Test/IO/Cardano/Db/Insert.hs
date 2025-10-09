@@ -9,8 +9,8 @@ import Cardano.Db
 import Control.Monad (void)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
+import Data.Maybe (fromJust)
 import Data.Time.Clock
-import Database.Persist.Sql (Entity, deleteWhere, selectList, (>=.))
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
@@ -27,7 +27,7 @@ tests =
 
 insertZeroTest :: IO ()
 insertZeroTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     -- Delete the blocks if they exist.
     slid <- insertSlotLeader testSlotLeader
@@ -35,34 +35,34 @@ insertZeroTest =
     void $ deleteBlock TxOutVariantCore (blockZero slid)
     -- Insert the same block twice. The first should be successful (resulting
     -- in a 'Right') and the second should return the same value in a 'Left'.
-    bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked (blockZero slid)
+    bid0 <- insertCheckUniqueBlock (blockZero slid)
+    bid1 <- insertCheckUniqueBlock (blockZero slid)
     assertBool (show bid0 ++ " /= " ++ show bid1) (bid0 == bid1)
 
 insertFirstTest :: IO ()
 insertFirstTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     -- Delete the block if it exists.
     slid <- insertSlotLeader testSlotLeader
     void $ deleteBlock TxOutVariantCore (blockOne slid)
     -- Insert the same block twice.
-    bid0 <- insertBlockChecked (blockZero slid)
-    bid1 <- insertBlockChecked $ (\b -> b {blockPreviousId = Just bid0}) (blockOne slid)
+    bid0 <- insertCheckUniqueBlock (blockZero slid)
+    bid1 <- insertCheckUniqueBlock $ (\b -> b {blockPreviousId = Just bid0}) (blockOne slid)
     assertBool (show bid0 ++ " == " ++ show bid1) (bid0 /= bid1)
 
 insertTwice :: IO ()
 insertTwice =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
-    bid <- insertBlockChecked (blockZero slid)
+    bid <- insertCheckUniqueBlock (blockZero slid)
     let adaPots = adaPotsZero bid
     _ <- insertAdaPots adaPots
-    Just pots0 <- queryAdaPots bid
+    pots0 <- fromJust <$> queryAdaPotsIdTest bid
     -- Insert with same Unique key, different first field
     _ <- insertAdaPots (adaPots {adaPotsSlotNo = 1 + adaPotsSlotNo adaPots})
-    Just pots0' <- queryAdaPots bid
+    pots0' <- fromJust <$> queryAdaPotsIdTest bid
     assertBool
       (show (adaPotsSlotNo pots0) ++ " /= " ++ show (adaPotsSlotNo pots0'))
       (adaPotsSlotNo pots0 == adaPotsSlotNo pots0')
@@ -70,35 +70,31 @@ insertTwice =
 insertForeignKeyMissing :: IO ()
 insertForeignKeyMissing = do
   time <- getCurrentTime
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     deleteAllBlocks
     slid <- insertSlotLeader testSlotLeader
-    bid <- insertBlockChecked (blockZero slid)
+    bid <- insertCheckUniqueBlock (blockZero slid)
     txid <- insertTx (txZero bid)
     phid <- insertPoolHash poolHash0
-    pmrid <- insertPoolMetadataRef $ poolMetadataRef txid phid
+    pmrid <- insertPoolMetadataRef (poolMetadataRef txid phid)
+
     let fe = offChainPoolFetchError phid pmrid time
     insertCheckOffChainPoolFetchError fe
 
-    count0 <- offChainPoolFetchErrorCount
+    count0 <- countOffChainPoolFetchError
     assertBool (show count0 ++ "/= 1") (count0 == 1)
 
-    -- Delete all OffChainFetchErrorTypeCount after pmrid
-    queryDelete OffChainPoolFetchErrorPmrId pmrid
-    deleteWhere [PoolMetadataRefId >=. pmrid]
-    count1 <- offChainPoolFetchErrorCount
+    -- Delete with extracted functions
+    deleteOffChainPoolFetchErrorByPmrId pmrid
+    deletePoolMetadataRefById pmrid
+
+    count1 <- countOffChainPoolFetchError
     assertBool (show count1 ++ "/= 0") (count1 == 0)
 
-    -- The references check will fail below will fail, so the insertion
-    -- will not be attempted
     insertCheckOffChainPoolFetchError fe
 
-    count2 <- offChainPoolFetchErrorCount
+    count2 <- countOffChainPoolFetchError
     assertBool (show count2 ++ "/= 0") (count2 == 0)
-  where
-    offChainPoolFetchErrorCount = do
-      ls :: [Entity OffChainPoolFetchError] <- selectList [] []
-      pure $ length ls
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =

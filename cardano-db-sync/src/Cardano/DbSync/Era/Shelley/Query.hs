@@ -5,37 +5,30 @@
 
 module Cardano.DbSync.Era.Shelley.Query (
   resolveStakeAddress,
-  resolveInputTxOutId,
-  resolveInputValue,
   resolveInputTxOutIdValue,
   queryResolveInputCredentials,
 ) where
 
-import Cardano.Db
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getTxOutVariantType)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
-import Cardano.DbSync.Util
+import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.Prelude hiding (Ptr, from, maybeToEither, on)
-import Database.Esqueleto.Experimental (
-  SqlBackend,
- )
 
-resolveStakeAddress :: MonadIO m => ByteString -> ReaderT SqlBackend m (Either LookupFail StakeAddressId)
-resolveStakeAddress addr = queryStakeAddress addr renderByteArray
+resolveStakeAddress :: ByteString -> ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId)
+resolveStakeAddress = lift . DB.queryStakeAddress
 
-resolveInputTxOutId :: MonadIO m => SyncEnv -> Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdW))
-resolveInputTxOutId syncEnv txIn =
-  queryTxOutId (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
-
-resolveInputValue :: MonadIO m => SyncEnv -> Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, DbLovelace))
-resolveInputValue syncEnv txIn =
-  queryTxOutValue (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
-
-resolveInputTxOutIdValue :: MonadIO m => SyncEnv -> Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (TxId, TxOutIdW, DbLovelace))
+resolveInputTxOutIdValue ::
+  SyncEnv ->
+  Generic.TxIn ->
+  ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError (DB.TxId, DB.TxOutIdW, DB.DbLovelace))
 resolveInputTxOutIdValue syncEnv txIn =
-  queryTxOutIdValue (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+  lift $ DB.queryTxOutIdValueEither (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
 
-queryResolveInputCredentials :: MonadIO m => SyncEnv -> Generic.TxIn -> ReaderT SqlBackend m (Either LookupFail (Maybe ByteString, Bool))
+queryResolveInputCredentials ::
+  SyncEnv ->
+  Generic.TxIn ->
+  ExceptT SyncNodeError DB.DbM (Maybe ByteString)
 queryResolveInputCredentials syncEnv txIn = do
-  queryTxOutCredentials (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))
+  lift $ DB.queryTxOutCredentials (getTxOutVariantType syncEnv) (Generic.toTxHash txIn, fromIntegral (Generic.txInIndex txIn))

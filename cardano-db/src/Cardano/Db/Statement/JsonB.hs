@@ -1,0 +1,107 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
+module Cardano.Db.Statement.JsonB where
+
+import Cardano.Prelude (ExceptT, HasCallStack, forM_, liftIO, throwError)
+import Data.ByteString (ByteString)
+import Data.Int (Int64)
+import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Decoders as HsqlD
+import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Session as HsqlSes
+import qualified Hasql.Statement as HsqlStmt
+
+import Cardano.Db.Error (DbSessionError (..), formatSessionError, mkDbCallStack)
+import Cardano.Db.Statement.Function.Core (runSession)
+import Cardano.Db.Types (DbM)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TextEnc
+
+--------------------------------------------------------------------------------
+-- Enable JSONB for specific fields in the schema
+--------------------------------------------------------------------------------
+enableJsonbInSchema :: HasCallStack => DbM ()
+enableJsonbInSchema =
+  runSession mkDbCallStack $ do
+    forM_ jsonbColumns $ \(table, column) ->
+      HsqlSes.sql $
+        "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE jsonb USING " <> column <> "::jsonb"
+  where
+    jsonbColumns :: [(ByteString, ByteString)]
+    jsonbColumns =
+      [ ("tx_metadata", "json")
+      , ("script", "json")
+      , ("datum", "value")
+      , ("redeemer_data", "value")
+      , ("cost_model", "costs")
+      , ("gov_action_proposal", "description")
+      , ("off_chain_pool_data", "json")
+      , ("off_chain_vote_data", "json")
+      ]
+
+--------------------------------------------------------------------------------
+-- Disable JSONB for specific fields in the schema
+--------------------------------------------------------------------------------
+disableJsonbInSchema :: HasCallStack => DbM ()
+disableJsonbInSchema =
+  runSession mkDbCallStack $ do
+    forM_ jsonColumnsToRevert $ \(table, column) ->
+      HsqlSes.sql $
+        "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE VARCHAR"
+  where
+    -- List of table and column pairs to convert back from JSONB
+    jsonColumnsToRevert :: [(ByteString, ByteString)]
+    jsonColumnsToRevert =
+      [ ("tx_metadata", "json")
+      , ("script", "json")
+      , ("datum", "value")
+      , ("redeemer_data", "value")
+      , ("cost_model", "costs")
+      , ("gov_action_proposal", "description")
+      , ("off_chain_pool_data", "json")
+      , ("off_chain_vote_data", "json")
+      ]
+
+-- | Check if the JSONB column exists in the schema
+jsonbSchemaStatement :: HsqlStmt.Statement () Int64
+jsonbSchemaStatement =
+  HsqlStmt.Statement
+    query
+    HsqlE.noParams
+    decoder
+    True
+  where
+    query =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)"
+          , " FROM information_schema.columns"
+          , " WHERE table_name = 'tx_metadata'"
+          , " AND column_name = 'json'"
+          , " AND data_type = 'jsonb'"
+          ]
+
+    decoder :: HsqlD.Result Int64
+    decoder =
+      HsqlD.singleRow $
+        HsqlD.column $
+          HsqlD.nonNullable HsqlD.int8
+
+-- Original function for direct connection use
+queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbSessionError IO Bool
+queryJsonbInSchemaExists conn = do
+  result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
+  case result of
+    Left err -> throwError $ DbSessionError mkDbCallStack (formatSessionError err)
+    Right countRes -> pure $ countRes == 1
+
+-- Test function using DbAction monad
+queryJsonbInSchemaExistsTest :: HasCallStack => DbM Bool
+queryJsonbInSchemaExistsTest = do
+  result <-
+    runSession mkDbCallStack $
+      HsqlSes.statement () jsonbSchemaStatement
+  pure $ result == 1

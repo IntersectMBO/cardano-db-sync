@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -10,42 +11,46 @@ module Cardano.DbSync.Api.Types (
   RunMigration,
   ConsistentLevel (..),
   CurrentEpochNo (..),
+  UnicodeNullSource (..),
+  EpochStatistics (..),
+  formatUnicodeNullSource,
 ) where
 
+import Cardano.Prelude (Bool, Eq, IO, Ord, Show, Text, Word64)
+import Cardano.Slotting.Slot (EpochNo (..))
+import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar)
+import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
+import qualified Data.Map.Strict as Map
+import qualified Data.Strict.Maybe as Strict
+import Data.Time.Clock (UTCTime)
+import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
+import Ouroboros.Network.Magic (NetworkMagic (..))
+
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Cache.Types (CacheStatus)
+import Cardano.DbSync.Cache.Types (CacheStatistics, CacheStatus)
 import Cardano.DbSync.Config.Types (SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
+  MetricSetters,
   OffChainPoolResult,
   OffChainPoolWorkQueue,
   OffChainVoteResult,
   OffChainVoteWorkQueue,
  )
-import Cardano.Prelude (Bool, Eq, IO, Show, Word64)
-import Cardano.Slotting.Slot (EpochNo (..))
-import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
- )
-import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
-import qualified Data.Strict.Maybe as Strict
-import Data.Time.Clock (UTCTime)
-import Database.Persist.Postgresql (ConnectionString)
-import Database.Persist.Sql (SqlBackend)
-import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Network.Magic (NetworkMagic (..))
 
+-- | SyncEnv is the main environment for the whole application.
 data SyncEnv = SyncEnv
-  { envBackend :: !SqlBackend
+  { envDbEnv :: !DB.DbEnv
+  , envMetricSetters :: !MetricSetters
   , envCache :: !CacheStatus
-  , envConnectionString :: !ConnectionString
+  , envEpochStatistics :: !(StrictTVar IO EpochStatistics)
   , envConsistentLevel :: !(StrictTVar IO ConsistentLevel)
   , envDbConstraints :: !(StrictTVar IO DB.ManualDbConstraints)
   , envCurrentEpochNo :: !(StrictTVar IO CurrentEpochNo)
-  , envEpochSyncTime :: !(StrictTVar IO UTCTime)
   , envIndexes :: !(StrictTVar IO Bool)
   , envBootstrap :: !(StrictTVar IO Bool)
+  , envDbIsolationState :: !(StrictTVar IO DB.SyncState)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
@@ -54,8 +59,9 @@ data SyncEnv = SyncEnv
   , envOffChainVoteWorkQueue :: !(StrictTBQueue IO OffChainVoteWorkQueue)
   , envOptions :: !SyncOptions
   , envSyncNodeConfig :: !SyncNodeConfig
-  , envRunDelayedMigration :: RunMigration
+  , envRunNearTipMigration :: RunMigration
   , envSystemStart :: !SystemStart
+  , envIsJsonbInSchema :: !Bool
   }
 
 data SyncOptions = SyncOptions
@@ -99,4 +105,24 @@ data ConsistentLevel = Consistent | DBAheadOfLedger | Unchecked
 
 newtype CurrentEpochNo = CurrentEpochNo
   { cenEpochNo :: Strict.Maybe EpochNo
+  }
+
+data UnicodeNullSource
+  = InsertDatum
+  | InsertRedeemerData
+  | InsertScript
+  | PrepareTxMetadata
+  deriving (Eq, Ord, Show)
+
+formatUnicodeNullSource :: UnicodeNullSource -> Text
+formatUnicodeNullSource source = case source of
+  InsertDatum -> "insertDatum: Column 'value' in table 'datum'"
+  InsertRedeemerData -> "insertRedeemerData: Column 'value' in table 'redeemer'"
+  InsertScript -> "insertScript: Column 'json' in table 'script'"
+  PrepareTxMetadata -> "prepareTxMetadata: Column 'json' in table 'tx_metadata'"
+
+data EpochStatistics = EpochStatistics
+  { elsStartTime :: !UTCTime
+  , elsCaches :: !CacheStatistics
+  , elsUnicodeNull :: !(Map.Map UnicodeNullSource [DB.TxId])
   }

@@ -3,7 +3,6 @@
 
 #if __GLASGOW_HASKELL__ >= 908
 {-# OPTIONS_GHC -Wno-x-partial #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DataKinds #-}
 #endif
 
@@ -11,12 +10,13 @@ module Test.IO.Cardano.Db.TotalSupply (
   tests,
 ) where
 
-import Cardano.Db
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import qualified Data.Text as Text
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
+
+import Cardano.Db
+import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore (..))
 
 tests :: TestTree
 tests =
@@ -27,7 +27,7 @@ tests =
 
 initialSupplyTest :: IO ()
 initialSupplyTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     -- Delete the blocks if they exist.
     deleteAllBlocks
 
@@ -35,7 +35,7 @@ initialSupplyTest =
     slid <- insertSlotLeader testSlotLeader
     bid0 <- insertBlock (mkBlock 0 slid)
     (tx0Ids :: [TxId]) <- mapM insertTx $ mkTxs bid0 4
-    mapM_ (insertTxOut . mkTxOutVariantCore bid0) tx0Ids
+    mapM_ (insertTxOut . mkTxOutCore bid0) tx0Ids
     count <- queryBlockCount
     assertBool ("Block count should be 1, got " ++ show count) (count == 1)
     supply0 <- queryTotalSupply TxOutVariantCore
@@ -63,19 +63,19 @@ initialSupplyTest =
     let addr = mkAddressHash bid1 tx1Id
     _ <-
       insertTxOut $
-        CTxOutW $
-          VC.TxOut
-            { VC.txOutTxId = tx1Id
-            , VC.txOutIndex = 0
-            , VC.txOutAddress = Text.pack addr
-            , VC.txOutAddressHasScript = False
-            , VC.txOutPaymentCred = Nothing
-            , VC.txOutStakeAddressId = Nothing
-            , VC.txOutValue = DbLovelace 500000000
-            , VC.txOutDataHash = Nothing
-            , VC.txOutInlineDatumId = Nothing
-            , VC.txOutReferenceScriptId = Nothing
-            , VC.txOutConsumedByTxId = Nothing
+        VCTxOutW $
+          TxOutCore
+            { txOutCoreTxId = tx1Id
+            , txOutCoreIndex = 0
+            , txOutCoreAddress = Text.pack addr
+            , txOutCoreAddressHasScript = False
+            , txOutCorePaymentCred = Nothing
+            , txOutCoreStakeAddressId = Nothing
+            , txOutCoreValue = DbLovelace 500000000
+            , txOutCoreDataHash = Nothing
+            , txOutCoreInlineDatumId = Nothing
+            , txOutCoreReferenceScriptId = Nothing
+            , txOutCoreConsumedByTxId = Nothing
             }
     supply1 <- queryTotalSupply TxOutVariantCore
     assertBool ("Total supply should be < " ++ show supply0) (supply1 < supply0)

@@ -189,6 +189,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioStopAtBlock :: Maybe Word64
   }
   deriving (Eq, Show)
 
@@ -388,7 +389,7 @@ isPlutusEnabled PlutusDisable = False
 isPlutusEnabled PlutusEnable = True
 isPlutusEnabled (PlutusScripts _) = True
 
--- -------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------
 
 instance FromJSON SyncPreConfig where
   parseJSON =
@@ -455,6 +456,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj .:? "stop_at_block" .!= sioStopAtBlock baseOptions
 
 instance ToJSON SyncInsertConfig where
   toJSON (SyncInsertConfig preset options) =
@@ -476,6 +478,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
+    , toJsonIfSet "stop_at_block" sioStopAtBlock
     ]
 
 toJsonIfSet :: ToJSON a => Text -> a -> Maybe Pair
@@ -497,6 +500,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj .:? "stop_at_block" .!= sioStopAtBlock def
 
 instance ToJSON SyncInsertOptions where
   toJSON SyncInsertOptions {..} =
@@ -513,6 +517,7 @@ instance ToJSON SyncInsertOptions where
       , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
+      , "stop_at_block" .= sioStopAtBlock
       ]
 
 instance ToJSON RewardsConfig where
@@ -742,6 +747,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioStopAtBlock = Nothing
       }
 
 fullInsertOptions :: SyncInsertOptions
@@ -760,6 +766,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioStopAtBlock = Nothing
     }
 
 onlyUTxOInsertOptions :: SyncInsertOptions
@@ -778,6 +785,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioStopAtBlock = Nothing
     }
 
 onlyGovInsertOptions :: SyncInsertOptions
@@ -804,6 +812,7 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioStopAtBlock = Nothing
     }
 
 addressTypeToEnableDisable :: IsString s => TxOutVariantType -> s

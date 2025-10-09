@@ -49,7 +49,6 @@ import Cardano.Mock.Forging.Interpreter (withConwayLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples as Examples
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types
-import Cardano.Mock.Query (queryMultiAssetCount)
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Data.Maybe.Strict (StrictMaybe (..))
@@ -80,7 +79,7 @@ simpleScript :: IOManager -> [(Text, Text)] -> Assertion
 simpleScript =
   withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
-    let txOutTableType = txOutVariantTypeFromConfig dbSync
+    let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
     -- Forge a block with stake credentials
     void $ Api.registerAllStakeCreds interpreter mockServer
@@ -96,26 +95,26 @@ simpleScript =
     assertBlockNoBackoff dbSync (length epoch + 2)
     assertEqQuery
       dbSync
-      (map getOutFields <$> DB.queryScriptOutputs txOutTableType)
+      (map getOutFields <$> DB.queryScriptOutputs txOutVariantType)
       [expectedFields]
       "Unexpected script outputs"
   where
     testLabel = "conwaySimpleScript"
     getOutFields txOut =
       case txOut of
-        DB.CTxOutW txOut' ->
-          ( VC.txOutAddress txOut'
-          , VC.txOutAddressHasScript txOut'
-          , VC.txOutValue txOut'
-          , VC.txOutDataHash txOut'
+        DB.VCTxOutW txOut' ->
+          ( VC.txOutCoreAddress txOut'
+          , VC.txOutCoreAddressHasScript txOut'
+          , VC.txOutCoreValue txOut'
+          , VC.txOutCoreDataHash txOut'
           )
-        DB.VTxOutW txOut' mAddress ->
+        DB.VATxOutW txOut' mAddress ->
           case mAddress of
             Just address ->
               ( VA.addressAddress address
               , VA.addressHasScript address
-              , VA.txOutValue txOut'
-              , VA.txOutDataHash txOut'
+              , VA.txOutAddressValue txOut'
+              , VA.txOutAddressDataHash txOut'
               )
             Nothing -> error "conwaySimpleScript: expected an address"
 
@@ -792,7 +791,7 @@ swapMultiAssets =
     -- Verify script counts
     assertBlockNoBackoff dbSync 1
     assertAlonzoCounts dbSync (2, 6, 1, 2, 4, 2, 0, 0)
-    assertEqBackoff dbSync queryMultiAssetCount 4 [] "Expected multi-assets"
+    assertEqBackoff dbSync DB.queryMultiAssetCount 4 [] "Expected multi-assets"
   where
     testLabel = "conwaySwapMultiAssets"
 
@@ -825,7 +824,7 @@ swapMultiAssetsDisabled =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 1
     -- Verify multi-assets
-    assertEqBackoff dbSync queryMultiAssetCount 0 [] "Unexpected multi-assets"
+    assertEqBackoff dbSync DB.queryMultiAssetCount 0 [] "Unexpected multi-assets"
   where
     args =
       initCommandLineArgs

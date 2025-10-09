@@ -31,26 +31,17 @@ library
 
   build-depends:        base                            >= 4.14         && < 5
                       , aeson
-                      , bytestring
-                      , cardano-db
-                      , cardano-ledger-byron
-                      , extra
-                      , hedgehog
-                      , persistent
-                      , text
-                      , time
-                      , transformers
-                      , wide-word
-
                       , base16-bytestring
                       , bytestring
-                      , aeson
                       , cardano-crypto-class
                       , cardano-db
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-mary
-                      , persistent
+                      , cardano-slotting
+                      , extra
                       , hedgehog
                       , text
+                      , time
+                      , transformers
                       , wide-word

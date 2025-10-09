@@ -7,6 +7,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled a
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Schema as Schema
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Governance as Governance
 import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
@@ -41,6 +42,11 @@ unitTests iom knownMigrations =
             , test
                 "remove jsonb from schema and add back"
                 Config.configJsonbInSchemaShouldRemoveThenAdd
+            ]
+        , testGroup
+            "Schema"
+            [ test "validate schema table columns" Schema.validateSchemaColumns
+            , test "validate schema table columns address variant" Schema.validateVariantAddressSchemaColumns
             ]
         , testGroup
             "tx-out"

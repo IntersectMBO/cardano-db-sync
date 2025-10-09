@@ -136,6 +136,8 @@ data MetricSetters = MetricSetters
   , metricsSetDbQueueLength :: Natural -> IO ()
   , metricsSetDbBlockHeight :: BlockNo -> IO ()
   , metricsSetDbSlotHeight :: SlotNo -> IO ()
+  , metricsSetDbEpochSyncDuration :: Double -> IO ()
+  , metricsSetDbEpochSyncNumber :: Word64 -> IO ()
   }
 
 data SyncState = SyncLagging | SyncFollowing

@@ -51,6 +51,7 @@ module Test.Cardano.Db.Mock.Config (
   withDBSyncEnv,
   withFullConfig,
   withFullConfigDropDB,
+  withFullConfigDropDBLog,
   withFullConfigLog,
   withCustomConfigDropDBLog,
   withCustomConfig,
@@ -61,20 +62,6 @@ module Test.Cardano.Db.Mock.Config (
   txOutVariantTypeFromConfig,
 ) where
 
-import Cardano.Api (NetworkMagic (..))
-import qualified Cardano.Db as DB
-import Cardano.DbSync
-import Cardano.DbSync.Config
-import Cardano.DbSync.Config.Cardano
-import Cardano.DbSync.Config.Types
-import Cardano.DbSync.Error (runOrThrowIO)
-import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
-import Cardano.Mock.ChainSync.Server
-import Cardano.Mock.Forging.Interpreter
-import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
-import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (NonEmpty ((:|)), ReaderT, panic, stderr, textShow)
-import Cardano.SMASH.Server.PoolDataLayer
 import Control.Concurrent.Async (Async, async, cancel, poll)
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TMVar (
@@ -87,12 +74,14 @@ import Control.Concurrent.STM.TMVar (
 import Control.Exception (SomeException, bracket)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
-import Control.Monad.Logger (NoLoggingT, runNoLoggingT)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
 import Data.Text (Text)
-import Database.Persist.Postgresql (createPostgresqlPool)
-import Database.Persist.Sql (SqlBackend)
+import System.Directory (createDirectoryIfMissing, removePathForcibly)
+import System.FilePath.Posix (takeDirectory, (</>))
+import System.IO.Silently (hSilence)
+
+import Cardano.Api (NetworkMagic (..))
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Byron.Ledger.Mempool ()
 import Ouroboros.Consensus.Config (TopLevelConfig)
@@ -101,9 +90,20 @@ import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
-import System.Directory (createDirectoryIfMissing, removePathForcibly)
-import System.FilePath.Posix (takeDirectory, (</>))
-import System.IO.Silently (hSilence)
+
+import qualified Cardano.Db as DB
+import Cardano.DbSync
+import Cardano.DbSync.Config
+import Cardano.DbSync.Config.Cardano
+import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
+import Cardano.Mock.ChainSync.Server
+import Cardano.Mock.Forging.Interpreter
+import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
+import Cardano.Node.Types (ProtocolFilepaths (..))
+import Cardano.Prelude (NonEmpty ((:|)), panic, stderr, textShow, throwIO)
+import Cardano.SMASH.Server.PoolDataLayer
 
 data Config = Config
   { topLevelConfig :: TopLevelConfig CardanoBlock
@@ -212,7 +212,7 @@ startDBSync env = do
     Just _a -> error "db-sync already running"
     Nothing -> do
       let appliedRunDbSync = partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
-      -- we async the fully applied runDbSync here ad put it into the thread
+      -- we async the fully applied runDbSync here and put it into the thread
       asyncApplied <- async appliedRunDbSync
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
 
@@ -229,13 +229,19 @@ withDBSyncEnv mkEnv = bracket mkEnv stopDBSyncIfRunning
 getDBSyncPGPass :: DBSyncEnv -> DB.PGPassSource
 getDBSyncPGPass = enpPGPassSource . dbSyncParams
 
-queryDBSync :: DBSyncEnv -> ReaderT SqlBackend (NoLoggingT IO) a -> IO a
-queryDBSync env = DB.runWithConnectionNoLogging (getDBSyncPGPass env)
+queryDBSync :: DBSyncEnv -> DB.DbM a -> IO a
+queryDBSync env = do
+  DB.runDbStandaloneDirectSilent (getDBSyncPGPass env)
 
 getPoolLayer :: DBSyncEnv -> IO PoolDataLayer
 getPoolLayer env = do
   pgconfig <- runOrThrowIO $ DB.readPGPass (enpPGPassSource $ dbSyncParams env)
-  pool <- runNoLoggingT $ createPostgresqlPool (DB.toConnectionString pgconfig) 1 -- Pool size of 1 for tests
+  connSetting <- case DB.toConnectionSetting pgconfig of
+    Left err -> throwIO $ userError err
+    Right setting -> pure setting
+
+  -- Create the Hasql connection pool, using port as pool identifier
+  pool <- DB.createHasqlConnectionPool [connSetting] 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
       nullTracer
@@ -378,6 +384,8 @@ emptyMetricsSetters =
     , metricsSetDbQueueLength = \_ -> pure ()
     , metricsSetDbBlockHeight = \_ -> pure ()
     , metricsSetDbSlotHeight = \_ -> pure ()
+    , metricsSetDbEpochSyncDuration = \_ -> pure ()
+    , metricsSetDbEpochSyncNumber = \_ -> pure ()
     }
 
 withFullConfig ::
@@ -415,6 +423,26 @@ withFullConfigDropDB =
     ( WithConfigArgs
         { hasFingerprint = True
         , shouldLog = False
+        , shouldDropDB = True
+        }
+    )
+    initCommandLineArgs
+    Nothing
+
+withFullConfigDropDBLog ::
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigDropDBLog =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = True
+        , shouldLog = True
         , shouldDropDB = True
         }
     )
@@ -557,7 +585,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
       then configureLogging syncNodeConfig "db-sync-node"
       else pure nullTracer
   -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters migr iom trce params cfg' True
+  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
       initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
   withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
@@ -578,6 +606,14 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
           if null tableNames || shouldDropDB
             then void . hSilence [stderr] $ DB.recreateDB pgPass
             else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
+
+          -- Run migrations synchronously first
+          runMigrationsOnly
+            migr
+            trce
+            (syncNodeParams cfg)
+            syncNodeConfig
+
           action interpreter mockServer dbSyncEnv
   where
     mutableDir = mkMutableDir testLabelFilePath

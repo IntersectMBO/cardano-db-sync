@@ -54,14 +54,13 @@ library
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
                         Cardano.DbSync.Database
-                        Cardano.DbSync.DbAction
+                        Cardano.DbSync.DbEvent
                         Cardano.DbSync.Error
 
                         Cardano.DbSync.Era
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Byron.Util
-                        Cardano.DbSync.Era.Cardano.Insert
                         Cardano.DbSync.Era.Cardano.Util
                         Cardano.DbSync.Era.Shelley.Generic
                         Cardano.DbSync.Era.Shelley.Generic.Block
@@ -96,10 +95,6 @@ library
                         Cardano.DbSync.Era.Universal.Insert.Other
                         Cardano.DbSync.Era.Universal.Insert.Pool
                         Cardano.DbSync.Era.Universal.Insert.Tx
-
-
-                        -- Temporary debugging validation
-                        Cardano.DbSync.Era.Shelley.ValidateWithdrawal
 
                         Cardano.DbSync.Era.Util
 
@@ -181,10 +176,10 @@ library
                       , directory
                       , data-default-class
                       , either
-                      , esqueleto
                       , extra
                       , filepath
                       , groups
+                      , hasql
                       , http-client
                       , http-client-tls
                       , http-types
@@ -192,8 +187,6 @@ library
                       , lifted-base
                       , memory
                       , microlens
-                      , monad-control
-                      , monad-logger
                       , network-mux
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
@@ -203,10 +196,7 @@ library
                       , ouroboros-network-api
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
-                      , persistent
-                      , persistent-postgresql
                       , plutus-ledger-api
-                      , pretty-show
                       , prometheus
                       , psqueues
                       , random-shuffle
@@ -224,7 +214,7 @@ library
                       , transformers
                       , transformers-except
                       , typed-protocols
-                      , unix
+                      , unliftio-core
                       , vector
                       , wide-word
                       , yaml
@@ -317,12 +307,10 @@ executable test-http-get-json-metadata
                       , bytestring
                       , cardano-db
                       , cardano-db-sync
-                      , esqueleto
                       , extra
                       , http-client
                       , http-client-tls
                       , text
-                      , transformers
                       , transformers-except
 
 test-suite test

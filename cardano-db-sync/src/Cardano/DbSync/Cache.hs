@@ -23,40 +23,39 @@ module Cardano.DbSync.Cache (
   queryStakeAddrWithCache,
   queryTxIdWithCache,
   rollbackCache,
+  cleanCachesForTip,
   optimiseCaches,
   tryUpdateCacheTx,
-
-  -- * CacheStatistics
-  getCacheStatistics,
 ) where
 
 import Cardano.BM.Trace
-import qualified Cardano.Db as DB
-import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
-import qualified Cardano.DbSync.Cache.FIFO as FIFO
-import qualified Cardano.DbSync.Cache.LRU as LRU
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), initCacheStatistics, shouldCache)
-import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
-import Cardano.DbSync.Era.Shelley.Query
-import Cardano.DbSync.Era.Util
-import Cardano.DbSync.Error
-import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Ledger.Mary.Value
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
   modifyTVar,
   readTVarIO,
   writeTVar,
  )
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Either.Combinators
 import qualified Data.Map.Strict as Map
-import Database.Persist.Postgresql (SqlBackend)
+import qualified Data.Text as Text
+
+import qualified Cardano.Db as DB
+import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
+import Cardano.DbSync.Api (getTrace)
+import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..))
+import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
+import qualified Cardano.DbSync.Cache.FIFO as FIFO
+import qualified Cardano.DbSync.Cache.LRU as LRU
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), shouldCache)
+import Cardano.DbSync.DbEvent (liftDbLookup, liftDbLookupMaybe)
+import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
+import Cardano.DbSync.Era.Shelley.Query
+import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
+import Cardano.DbSync.Types
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -73,7 +72,7 @@ import Database.Persist.Postgresql (SqlBackend)
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
-rollbackCache :: MonadIO m => CacheStatus -> DB.BlockId -> ReaderT SqlBackend m ()
+rollbackCache :: CacheStatus -> DB.BlockId -> ExceptT SyncNodeError DB.DbM ()
 rollbackCache NoCache _ = pure ()
 rollbackCache (ActiveCache cache) blockId = do
   liftIO $ do
@@ -82,15 +81,15 @@ rollbackCache (ActiveCache cache) blockId = do
     atomically $ modifyTVar (cTxIds cache) FIFO.cleanupCache
     void $ rollbackMapEpochInCache cache blockId
 
--- | When syncing and we get within 2 minutes of the tip, we can optimise the caches
--- and set the flag to True on ActiveCache.leaving the following caches as they are:
--- cPools, cPrevBlock, Cstats, cEpoch
-optimiseCaches :: MonadIO m => CacheStatus -> ReaderT SqlBackend m ()
-optimiseCaches cache =
+-- | When syncing and we get within 2 minutes of the tip, we clean certain caches
+-- and set the flag to True on ActiveCache. We disable the following caches:
+-- cStake, cDatum, cAddress. We keep: cPools, cPrevBlock, cMultiAssets, cEpoch, cTxIds
+cleanCachesForTip :: CacheStatus -> ExceptT SyncNodeError DB.DbM ()
+cleanCachesForTip cache =
   case cache of
     NoCache -> pure ()
     ActiveCache c ->
-      withCacheOptimisationCheck c (pure ()) $
+      withCacheCleanedCheck c (pure ()) $
         liftIO $ do
           -- empty caches not to be used anymore
           atomically $ modifyTVar (cTxIds c) FIFO.cleanupCache
@@ -99,99 +98,100 @@ optimiseCaches cache =
           -- empty then limit the capacity of the cache
           atomically $ writeTVar (cMultiAssets c) (LRU.empty 50000)
           -- set the flag to True
-          atomically $ writeTVar (cIsCacheOptimised c) True
+          atomically $ writeTVar (cIsCacheCleanedForTip c) True
           pure ()
 
-getCacheStatistics :: CacheStatus -> IO CacheStatistics
-getCacheStatistics cs =
-  case cs of
-    NoCache -> pure initCacheStatistics
-    ActiveCache ci -> readTVarIO (cStats ci)
+-- | Optimise caches during syncing to prevent unbounded growth.
+-- This function trims Map-based caches that can grow without bounds.
+-- LRU caches are skipped as they have built-in capacity limits.
+optimiseCaches :: CacheStatus -> ExceptT SyncNodeError DB.DbM ()
+optimiseCaches cache =
+  case cache of
+    NoCache -> pure ()
+    ActiveCache c -> do
+      liftIO $ do
+        -- Trim pools Map to target size (keep most recent entries)
+        atomically $ modifyTVar (cPools c) $ \poolMap ->
+          Map.fromList $ take (fromIntegral $ cOptimisePools c) $ Map.toList poolMap
+
+        -- Trim stake stable cache to target size
+        atomically $ modifyTVar (cStake c) $ \stakeCache ->
+          stakeCache {scStableCache = Map.fromList $ take (fromIntegral $ cOptimiseStake c) $ Map.toList (scStableCache stakeCache)}
 
 queryOrInsertRewardAccount ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   Ledger.RewardAccount ->
-  ReaderT SqlBackend m DB.StakeAddressId
-queryOrInsertRewardAccount trce cache cacheUA rewardAddr = do
-  eiAddrId <- queryStakeAddrWithCacheRetBs trce cache cacheUA rewardAddr
+  ExceptT SyncNodeError DB.DbM DB.StakeAddressId
+queryOrInsertRewardAccount syncEnv cacheUA rewardAddr = do
+  (eiAddrId, bs) <- queryStakeAddrWithCacheRetBs syncEnv cacheUA rewardAddr
   case eiAddrId of
-    Left (_err, bs) -> insertStakeAddress rewardAddr (Just bs)
-    Right addrId -> pure addrId
+    Just addrId -> pure addrId
+    Nothing -> insertStakeAddress rewardAddr (Just bs)
 
 queryOrInsertStakeAddress ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   Network ->
   StakeCred ->
-  ReaderT SqlBackend m DB.StakeAddressId
-queryOrInsertStakeAddress trce cache cacheUA nw cred =
-  queryOrInsertRewardAccount trce cache cacheUA $ Ledger.RewardAccount nw cred
+  ExceptT SyncNodeError DB.DbM DB.StakeAddressId
+queryOrInsertStakeAddress syncEnv cacheUA nw cred =
+  queryOrInsertRewardAccount syncEnv cacheUA $ Ledger.RewardAccount nw cred
 
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
-  (MonadBaseControl IO m, MonadIO m) =>
   Ledger.RewardAccount ->
   Maybe ByteString ->
-  ReaderT SqlBackend m DB.StakeAddressId
+  ExceptT SyncNodeError DB.DbM DB.StakeAddressId
 insertStakeAddress rewardAddr stakeCredBs = do
-  DB.insertStakeAddress $
-    DB.StakeAddress
-      { DB.stakeAddressHashRaw = addrBs
-      , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
-      , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
-      }
+  lift $
+    DB.insertStakeAddress $
+      DB.StakeAddress
+        { DB.stakeAddressHashRaw = addrBs
+        , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
+        , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
+        }
   where
     addrBs = fromMaybe (Ledger.serialiseRewardAccount rewardAddr) stakeCredBs
 
 queryStakeAddrWithCache ::
-  forall m.
-  MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   Network ->
   StakeCred ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.StakeAddressId)
-queryStakeAddrWithCache trce cache cacheUA nw cred =
-  mapLeft fst <$> queryStakeAddrWithCacheRetBs trce cache cacheUA (Ledger.RewardAccount nw cred)
+  ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId)
+queryStakeAddrWithCache syncEnv cacheUA nw cred =
+  fst <$> queryStakeAddrWithCacheRetBs syncEnv cacheUA (Ledger.RewardAccount nw cred)
 
 queryStakeAddrWithCacheRetBs ::
-  forall m.
-  MonadIO m =>
-  Trace IO Text ->
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   Ledger.RewardAccount ->
-  ReaderT SqlBackend m (Either (DB.LookupFail, ByteString) DB.StakeAddressId)
-queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred) = do
+  ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId, ByteString)
+queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.RewardAccount _ cred) = do
   let bs = Ledger.serialiseRewardAccount ra
-  case cache of
-    NoCache -> rsStkAdrrs bs
+  case envCache syncEnv of
+    NoCache -> (,bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do
-      withCacheOptimisationCheck ci (rsStkAdrrs bs) $ do
+      result <- withCacheCleanedCheck ci (resolveStakeAddress bs) $ do
         stakeCache <- liftIO $ readTVarIO (cStake ci)
         case queryStakeCache cred stakeCache of
           Just (addrId, stakeCache') -> do
-            liftIO $ hitCreds (cStats ci)
+            liftIO $ hitCreds syncEnv
             case cacheUA of
               EvictAndUpdateCache -> do
                 liftIO $ atomically $ writeTVar (cStake ci) $ deleteStakeCache cred stakeCache'
-                pure $ Right addrId
+                pure $ Just addrId
               _other -> do
                 liftIO $ atomically $ writeTVar (cStake ci) stakeCache'
-                pure $ Right addrId
+                pure $ Just addrId
           Nothing -> do
-            queryRes <- mapLeft (,bs) <$> resolveStakeAddress bs
-            liftIO $ missCreds (cStats ci)
+            queryRes <- resolveStakeAddress bs
+            liftIO $ missCreds syncEnv
             case queryRes of
-              Left _ -> pure queryRes
-              Right stakeAddrsId -> do
+              Nothing -> pure queryRes
+              Just stakeAddrsId -> do
                 let !stakeCache' = case cacheUA of
                       UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
                       UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
@@ -199,9 +199,8 @@ queryStakeAddrWithCacheRetBs _trce cache cacheUA ra@(Ledger.RewardAccount _ cred
                 liftIO $
                   atomically $
                     writeTVar (cStake ci) stakeCache'
-                pure $ Right stakeAddrsId
-  where
-    rsStkAdrrs bs = mapLeft (,bs) <$> resolveStakeAddress bs
+                pure $ Just stakeAddrsId
+      pure (result, bs)
 
 -- | True if it was found in LRU
 queryStakeCache :: StakeCred -> StakeCache -> Maybe (DB.StakeAddressId, StakeCache)
@@ -216,23 +215,19 @@ deleteStakeCache scred scache =
   scache {scStableCache = Map.delete scred (scStableCache scache)}
 
 queryPoolKeyWithCache ::
-  MonadIO m =>
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   PoolKeyHash ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.PoolHashId)
-queryPoolKeyWithCache cache cacheUA hsh =
-  case cache of
+  ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError DB.PoolHashId)
+queryPoolKeyWithCache syncEnv cacheUA hsh =
+  case envCache syncEnv of
     NoCache -> do
-      mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
-      case mPhId of
-        Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
-        Just phId -> pure $ Right phId
+      liftDbLookupMaybe DB.mkDbCallStack "NoCache queryPoolHashId" $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cPools ci)
       case Map.lookup hsh mp of
         Just phId -> do
-          liftIO $ hitPools (cStats ci)
+          liftIO $ hitPools syncEnv
           -- hit so we can't cache even with 'CacheNew'
           when (cacheUA == EvictAndUpdateCache) $
             liftIO $
@@ -241,11 +236,11 @@ queryPoolKeyWithCache cache cacheUA hsh =
                   Map.delete hsh
           pure $ Right phId
         Nothing -> do
-          liftIO $ missPools (cStats ci)
-          mPhId <- DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
-          case mPhId of
-            Nothing -> pure $ Left (DB.DbLookupMessage "PoolKeyHash")
-            Just phId -> do
+          liftIO $ missPools syncEnv
+          ePhId <- liftDbLookupMaybe DB.mkDbCallStack "ActiveCache queryPoolHashId" $ DB.queryPoolHashId (Generic.unKeyHashRaw hsh)
+          case ePhId of
+            Left err -> pure $ Left err
+            Right phId -> do
               -- missed so we can't evict even with 'EvictAndReturn'
               when (shouldCache cacheUA) $
                 liftIO $
@@ -255,32 +250,31 @@ queryPoolKeyWithCache cache cacheUA hsh =
               pure $ Right phId
 
 insertAddressUsingCache ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   ByteString ->
   VA.Address ->
-  ReaderT SqlBackend m VA.AddressId
-insertAddressUsingCache cache cacheUA addrRaw vAdrs = do
-  case cache of
+  ExceptT SyncNodeError DB.DbM DB.AddressId
+insertAddressUsingCache syncEnv cacheUA addrRaw vAdrs = do
+  case envCache syncEnv of
     NoCache -> do
       -- Directly query the database for the address ID when no caching is active.
-      mAddrId <- DB.queryAddressId addrRaw
-      processResult mAddrId
+      mAddrId <- lift $ DB.queryAddressId addrRaw
+      lift $ processResult mAddrId
     ActiveCache ci -> do
       -- Use active cache to attempt fetching the address ID from the cache.
       adrs <- liftIO $ readTVarIO (cAddress ci)
       case LRU.lookup addrRaw adrs of
         Just (addrId, adrs') -> do
           -- If found in cache, record a cache hit and update the cache state.
-          liftIO $ hitAddress (cStats ci)
+          liftIO $ hitAddress syncEnv
           liftIO $ atomically $ writeTVar (cAddress ci) adrs'
           pure addrId
         Nothing -> do
           -- If not found in cache, log a miss, and query the database.
-          liftIO $ missAddress (cStats ci)
-          mAddrId <- DB.queryAddressId addrRaw
-          processWithCache mAddrId ci
+          liftIO $ missAddress syncEnv
+          mAddrId <- lift $ DB.queryAddressId addrRaw
+          lift $ processWithCache mAddrId ci
   where
     processResult mAddrId =
       case mAddrId of
@@ -310,24 +304,24 @@ insertAddressUsingCache cache cacheUA addrRaw vAdrs = do
               LRU.insert addrRaw addrId
 
 insertPoolKeyWithCache ::
-  (MonadBaseControl IO m, MonadIO m) =>
-  CacheStatus ->
+  SyncEnv ->
   CacheAction ->
   PoolKeyHash ->
-  ReaderT SqlBackend m DB.PoolHashId
-insertPoolKeyWithCache cache cacheUA pHash =
-  case cache of
+  ExceptT SyncNodeError DB.DbM DB.PoolHashId
+insertPoolKeyWithCache syncEnv cacheUA pHash =
+  case envCache syncEnv of
     NoCache ->
-      DB.insertPoolHash $
-        DB.PoolHash
-          { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
-          , DB.poolHashView = Generic.unKeyHashView pHash
-          }
+      lift $
+        DB.insertPoolHash $
+          DB.PoolHash
+            { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
+            , DB.poolHashView = Generic.unKeyHashView pHash
+            }
     ActiveCache ci -> do
       mp <- liftIO $ readTVarIO (cPools ci)
       case Map.lookup pHash mp of
         Just phId -> do
-          liftIO $ hitPools (cStats ci)
+          liftIO $ hitPools syncEnv
           when (cacheUA == EvictAndUpdateCache) $
             liftIO $
               atomically $
@@ -335,13 +329,14 @@ insertPoolKeyWithCache cache cacheUA pHash =
                   Map.delete pHash
           pure phId
         Nothing -> do
-          liftIO $ missPools (cStats ci)
+          liftIO $ missPools syncEnv
           phId <-
-            DB.insertPoolHash $
-              DB.PoolHash
-                { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
-                , DB.poolHashView = Generic.unKeyHashView pHash
-                }
+            lift $
+              DB.insertPoolHash $
+                DB.PoolHash
+                  { DB.poolHashHashRaw = Generic.unKeyHashRaw pHash
+                  , DB.poolHashView = Generic.unKeyHashView pHash
+                  }
           when (shouldCache cacheUA) $
             liftIO $
               atomically $
@@ -350,22 +345,20 @@ insertPoolKeyWithCache cache cacheUA pHash =
           pure phId
 
 queryPoolKeyOrInsert ::
-  (MonadBaseControl IO m, MonadIO m) =>
+  SyncEnv ->
   Text ->
-  Trace IO Text ->
-  CacheStatus ->
   CacheAction ->
   Bool ->
   PoolKeyHash ->
-  ReaderT SqlBackend m DB.PoolHashId
-queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
-  pk <- queryPoolKeyWithCache cache cacheUA hsh
+  ExceptT SyncNodeError DB.DbM DB.PoolHashId
+queryPoolKeyOrInsert syncEnv txt cacheUA logsWarning hsh = do
+  pk <- queryPoolKeyWithCache syncEnv cacheUA hsh
   case pk of
     Right poolHashId -> pure poolHashId
     Left err -> do
       when logsWarning $
         liftIO $
-          logWarning trce $
+          logWarning (getTrace syncEnv) $
             mconcat
               [ "Failed with "
               , textShow err
@@ -375,31 +368,30 @@ queryPoolKeyOrInsert txt trce cache cacheUA logsWarning hsh = do
               , txt
               , ". We will assume that the pool exists and move on."
               ]
-      insertPoolKeyWithCache cache cacheUA hsh
+      insertPoolKeyWithCache syncEnv cacheUA hsh
 
 queryMAWithCache ::
-  MonadIO m =>
-  CacheStatus ->
+  SyncEnv ->
   PolicyID ->
   AssetName ->
-  ReaderT SqlBackend m (Either (ByteString, ByteString) DB.MultiAssetId)
-queryMAWithCache cache policyId asset =
-  case cache of
-    NoCache -> queryDb
+  ExceptT SyncNodeError DB.DbM (Either (ByteString, ByteString) DB.MultiAssetId)
+queryMAWithCache syncEnv policyId asset =
+  case envCache syncEnv of
+    NoCache -> lift queryDb
     ActiveCache ci -> do
-      withCacheOptimisationCheck ci queryDb $ do
+      withCacheCleanedCheck ci (lift queryDb) $ do
         mp <- liftIO $ readTVarIO (cMultiAssets ci)
         case LRU.lookup (policyId, asset) mp of
           Just (maId, mp') -> do
-            liftIO $ hitMAssets (cStats ci)
+            liftIO $ hitMAssets syncEnv
             liftIO $ atomically $ writeTVar (cMultiAssets ci) mp'
             pure $ Right maId
           Nothing -> do
-            liftIO $ missMAssets (cStats ci)
+            liftIO $ missMAssets syncEnv
             -- miss. The lookup doesn't change the cache on a miss.
             let !policyBs = Generic.unScriptHash $ policyID policyId
             let !assetNameBs = Generic.unAssetName asset
-            maId <- maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
+            maId <- maybe (Left (policyBs, assetNameBs)) Right <$> lift (DB.queryMultiAssetId policyBs assetNameBs)
             whenRight maId $
               liftIO . atomically . modifyTVar (cMultiAssets ci) . LRU.insert (policyId, asset)
             pure maId
@@ -410,14 +402,14 @@ queryMAWithCache cache policyId asset =
       maybe (Left (policyBs, assetNameBs)) Right <$> DB.queryMultiAssetId policyBs assetNameBs
 
 queryPrevBlockWithCache ::
-  MonadIO m =>
-  Text ->
-  CacheStatus ->
+  SyncEnv ->
   ByteString ->
-  ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
-queryPrevBlockWithCache msg cache hsh =
-  case cache of
-    NoCache -> liftLookupFail msg $ DB.queryBlockId hsh
+  Text.Text ->
+  ExceptT SyncNodeError DB.DbM DB.BlockId
+queryPrevBlockWithCache syncEnv hsh errMsg =
+  case envCache syncEnv of
+    NoCache ->
+      liftDbLookup mkSyncNodeCallStack $ DB.queryBlockId hsh errMsg
     ActiveCache ci -> do
       mCachedPrev <- liftIO $ readTVarIO (cPrevBlock ci)
       case mCachedPrev of
@@ -425,53 +417,55 @@ queryPrevBlockWithCache msg cache hsh =
         Just (cachedBlockId, cachedHash) ->
           if cachedHash == hsh
             then do
-              liftIO $ hitPBlock (cStats ci)
+              liftIO $ hitPBlock syncEnv
               pure cachedBlockId
-            else queryFromDb ci
-        Nothing -> queryFromDb ci
+            else queryFromDb
+        Nothing -> queryFromDb
   where
     queryFromDb ::
-      MonadIO m =>
-      CacheInternal ->
-      ExceptT SyncNodeError (ReaderT SqlBackend m) DB.BlockId
-    queryFromDb ci = do
-      liftIO $ missPrevBlock (cStats ci)
-      liftLookupFail msg $ DB.queryBlockId hsh
+      ExceptT SyncNodeError DB.DbM DB.BlockId
+    queryFromDb = do
+      liftIO $ missPrevBlock syncEnv
+      liftDbLookup mkSyncNodeCallStack $ DB.queryBlockId hsh errMsg
 
 queryTxIdWithCache ::
-  MonadIO m =>
-  CacheStatus ->
+  SyncEnv ->
   Ledger.TxId ->
-  ReaderT SqlBackend m (Either DB.LookupFail DB.TxId)
-queryTxIdWithCache cache txIdLedger = do
-  case cache of
+  ExceptT SyncNodeError DB.DbM (Either DB.DbLookupError DB.TxId)
+queryTxIdWithCache syncEnv txIdLedger = do
+  case envCache syncEnv of
     -- Direct database query if no cache.
-    NoCache -> qTxHash
+    NoCache -> lift qTxHash
     ActiveCache ci ->
-      withCacheOptimisationCheck ci qTxHash $ do
+      withCacheCleanedCheck ci (lift qTxHash) $ do
         -- Read current cache state.
         cacheTx <- liftIO $ readTVarIO (cTxIds ci)
 
         case FIFO.lookup txIdLedger cacheTx of
           -- Cache hit, return the transaction ID.
           Just txId -> do
-            liftIO $ hitTxIds (cStats ci)
+            liftIO $ hitTxIds syncEnv
             pure $ Right txId
           -- Cache miss.
           Nothing -> do
-            eTxId <- qTxHash
-            liftIO $ missTxIds (cStats ci)
+            eTxId <- lift qTxHash
+            liftIO $ missTxIds syncEnv
             case eTxId of
               Right txId -> do
-                -- Update cache.
+                -- Update cache ONLY on successful lookup.
                 liftIO $ atomically $ modifyTVar (cTxIds ci) $ FIFO.insert txIdLedger txId
                 -- Return ID after updating cache.
                 pure $ Right txId
-              -- Return lookup failure.
-              Left _ -> pure $ Left $ DB.DbLookupTxHash txHash
+              -- Return lookup failure - DON'T update cache.
+              Left err -> pure $ Left err
   where
     txHash = Generic.unTxHash txIdLedger
-    qTxHash = DB.queryTxId txHash
+    qTxHash = do
+      result <- DB.queryTxId txHash
+      case result of
+        Just txId -> pure $ Right txId
+        Nothing ->
+          pure $ Left $ DB.DbLookupError DB.mkDbCallStack ("TxId not found for hash: " <> textShow txHash)
 
 tryUpdateCacheTx ::
   MonadIO m =>
@@ -484,136 +478,147 @@ tryUpdateCacheTx (ActiveCache ci) ledgerTxId txId =
 tryUpdateCacheTx _ _ _ = pure ()
 
 insertBlockAndCache ::
-  (MonadIO m, MonadBaseControl IO m) =>
-  CacheStatus ->
+  SyncEnv ->
   DB.Block ->
-  ReaderT SqlBackend m DB.BlockId
-insertBlockAndCache cache block =
-  case cache of
-    NoCache -> insBlck
+  ExceptT SyncNodeError DB.DbM DB.BlockId
+insertBlockAndCache syncEnv block =
+  case envCache syncEnv of
+    NoCache -> lift insBlck
     ActiveCache ci ->
-      withCacheOptimisationCheck ci insBlck $ do
-        bid <- insBlck
+      withCacheCleanedCheck ci (lift insBlck) $ do
+        bid <- lift insBlck
         liftIO $ do
-          missPrevBlock (cStats ci)
+          missPrevBlock syncEnv
           atomically $ writeTVar (cPrevBlock ci) $ Just (bid, DB.blockHash block)
         pure bid
   where
     insBlck = DB.insertBlock block
 
 queryDatum ::
-  MonadIO m =>
-  CacheStatus ->
+  SyncEnv ->
   DataHash ->
-  ReaderT SqlBackend m (Maybe DB.DatumId)
-queryDatum cache hsh = do
-  case cache of
-    NoCache -> queryDtm
+  ExceptT SyncNodeError DB.DbM (Maybe DB.DatumId)
+queryDatum syncEnv hsh = do
+  case envCache syncEnv of
+    NoCache -> lift queryDtm
     ActiveCache ci -> do
-      withCacheOptimisationCheck ci queryDtm $ do
+      withCacheCleanedCheck ci (lift queryDtm) $ do
         mp <- liftIO $ readTVarIO (cDatum ci)
         case LRU.lookup hsh mp of
           Just (datumId, mp') -> do
-            liftIO $ hitDatum (cStats ci)
+            liftIO $ hitDatum syncEnv
             liftIO $ atomically $ writeTVar (cDatum ci) mp'
             pure $ Just datumId
           Nothing -> do
-            liftIO $ missDatum (cStats ci)
+            liftIO $ missDatum syncEnv
             -- miss. The lookup doesn't change the cache on a miss.
-            queryDtm
+            lift queryDtm
   where
     queryDtm = DB.queryDatum $ Generic.dataHashToBytes hsh
 
 -- This assumes the entry is not cached.
 insertDatumAndCache ::
-  (MonadIO m, MonadBaseControl IO m) =>
   CacheStatus ->
   DataHash ->
   DB.Datum ->
-  ReaderT SqlBackend m DB.DatumId
+  ExceptT SyncNodeError DB.DbM DB.DatumId
 insertDatumAndCache cache hsh dt = do
-  datumId <- DB.insertDatum dt
+  datumId <- lift $ DB.insertDatum dt
   case cache of
     NoCache -> pure datumId
     ActiveCache ci ->
-      withCacheOptimisationCheck ci (pure datumId) $ do
+      withCacheCleanedCheck ci (pure datumId) $ do
         liftIO $
           atomically $
             modifyTVar (cDatum ci) $
               LRU.insert hsh datumId
         pure datumId
 
-withCacheOptimisationCheck ::
+withCacheCleanedCheck ::
   MonadIO m =>
   CacheInternal ->
-  m a -> -- Action to perform if cache is optimised
-  m a -> -- Action to perform if cache is not optimised
+  m a -> -- Action to perform if cache is cleaned for tip
+  m a -> -- Action to perform if cache is not cleaned for tip
   m a
-withCacheOptimisationCheck ci ifOptimised ifNotOptimised = do
-  isCachedOptimised <- liftIO $ readTVarIO (cIsCacheOptimised ci)
-  if isCachedOptimised
-    then ifOptimised
-    else ifNotOptimised
+withCacheCleanedCheck ci actionIfCleaned actionIfNotCleaned = do
+  isCacheCleanedForTip <- liftIO $ readTVarIO (cIsCacheCleanedForTip ci)
+  if isCacheCleanedForTip
+    then actionIfCleaned
+    else actionIfNotCleaned
 
--- Stakes
-hitCreds :: StrictTVar IO CacheStatistics -> IO ()
-hitCreds ref =
-  atomically $ modifyTVar ref (\cs -> cs {credsHits = 1 + credsHits cs, credsQueries = 1 + credsQueries cs})
+-- Creds
+hitCreds :: SyncEnv -> IO ()
+hitCreds syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {credsHits = 1 + credsHits (elsCaches epochStats), credsQueries = 1 + credsQueries (elsCaches epochStats)}}
 
-missCreds :: StrictTVar IO CacheStatistics -> IO ()
-missCreds ref =
-  atomically $ modifyTVar ref (\cs -> cs {credsQueries = 1 + credsQueries cs})
+missCreds :: SyncEnv -> IO ()
+missCreds syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {credsQueries = 1 + credsQueries (elsCaches epochStats)}}
 
 -- Pools
-hitPools :: StrictTVar IO CacheStatistics -> IO ()
-hitPools ref =
-  atomically $ modifyTVar ref (\cs -> cs {poolsHits = 1 + poolsHits cs, poolsQueries = 1 + poolsQueries cs})
+hitPools :: SyncEnv -> IO ()
+hitPools syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {poolsHits = 1 + poolsHits (elsCaches epochStats), poolsQueries = 1 + poolsQueries (elsCaches epochStats)}}
 
-missPools :: StrictTVar IO CacheStatistics -> IO ()
-missPools ref =
-  atomically $ modifyTVar ref (\cs -> cs {poolsQueries = 1 + poolsQueries cs})
+missPools :: SyncEnv -> IO ()
+missPools syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {poolsQueries = 1 + poolsQueries (elsCaches epochStats)}}
 
 -- Datum
-hitDatum :: StrictTVar IO CacheStatistics -> IO ()
-hitDatum ref =
-  atomically $ modifyTVar ref (\cs -> cs {datumHits = 1 + datumHits cs, datumQueries = 1 + datumQueries cs})
+hitDatum :: SyncEnv -> IO ()
+hitDatum syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {datumHits = 1 + datumHits (elsCaches epochStats), datumQueries = 1 + datumQueries (elsCaches epochStats)}}
 
-missDatum :: StrictTVar IO CacheStatistics -> IO ()
-missDatum ref =
-  atomically $ modifyTVar ref (\cs -> cs {datumQueries = 1 + datumQueries cs})
+missDatum :: SyncEnv -> IO ()
+missDatum syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {datumQueries = 1 + datumQueries (elsCaches epochStats)}}
 
 -- Assets
-hitMAssets :: StrictTVar IO CacheStatistics -> IO ()
-hitMAssets ref =
-  atomically $ modifyTVar ref (\cs -> cs {multiAssetsHits = 1 + multiAssetsHits cs, multiAssetsQueries = 1 + multiAssetsQueries cs})
+hitMAssets :: SyncEnv -> IO ()
+hitMAssets syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {multiAssetsHits = 1 + multiAssetsHits (elsCaches epochStats), multiAssetsQueries = 1 + multiAssetsQueries (elsCaches epochStats)}}
 
-missMAssets :: StrictTVar IO CacheStatistics -> IO ()
-missMAssets ref =
-  atomically $ modifyTVar ref (\cs -> cs {multiAssetsQueries = 1 + multiAssetsQueries cs})
+missMAssets :: SyncEnv -> IO ()
+missMAssets syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {multiAssetsQueries = 1 + multiAssetsQueries (elsCaches epochStats)}}
 
 -- Address
-hitAddress :: StrictTVar IO CacheStatistics -> IO ()
-hitAddress ref =
-  atomically $ modifyTVar ref (\cs -> cs {addressHits = 1 + addressHits cs, addressQueries = 1 + addressQueries cs})
+hitAddress :: SyncEnv -> IO ()
+hitAddress syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {addressHits = 1 + addressHits (elsCaches epochStats), addressQueries = 1 + addressQueries (elsCaches epochStats)}}
 
-missAddress :: StrictTVar IO CacheStatistics -> IO ()
-missAddress ref =
-  atomically $ modifyTVar ref (\cs -> cs {addressQueries = 1 + addressQueries cs})
+missAddress :: SyncEnv -> IO ()
+missAddress syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {addressQueries = 1 + addressQueries (elsCaches epochStats)}}
 
 -- Blocks
-hitPBlock :: StrictTVar IO CacheStatistics -> IO ()
-hitPBlock ref =
-  atomically $ modifyTVar ref (\cs -> cs {prevBlockHits = 1 + prevBlockHits cs, prevBlockQueries = 1 + prevBlockQueries cs})
+hitPBlock :: SyncEnv -> IO ()
+hitPBlock syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {prevBlockHits = 1 + prevBlockHits (elsCaches epochStats), prevBlockQueries = 1 + prevBlockQueries (elsCaches epochStats)}}
 
-missPrevBlock :: StrictTVar IO CacheStatistics -> IO ()
-missPrevBlock ref =
-  atomically $ modifyTVar ref (\cs -> cs {prevBlockQueries = 1 + prevBlockQueries cs})
+missPrevBlock :: SyncEnv -> IO ()
+missPrevBlock syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {prevBlockQueries = 1 + prevBlockQueries (elsCaches epochStats)}}
 
 -- TxIds
-hitTxIds :: StrictTVar IO CacheStatistics -> IO ()
-hitTxIds ref =
-  atomically $ modifyTVar ref (\cs -> cs {txIdsHits = 1 + txIdsHits cs, txIdsQueries = 1 + txIdsQueries cs})
+hitTxIds :: SyncEnv -> IO ()
+hitTxIds syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {txIdsHits = 1 + txIdsHits (elsCaches epochStats), txIdsQueries = 1 + txIdsQueries (elsCaches epochStats)}}
 
-missTxIds :: StrictTVar IO CacheStatistics -> IO ()
-missTxIds ref =
-  atomically $ modifyTVar ref (\cs -> cs {txIdsQueries = 1 + txIdsQueries cs})
+missTxIds :: SyncEnv -> IO ()
+missTxIds syncEnv =
+  atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
+    epochStats {elsCaches = (elsCaches epochStats) {txIdsQueries = 1 + txIdsQueries (elsCaches epochStats)}}

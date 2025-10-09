@@ -53,15 +53,16 @@ runCommand cmd =
     CmdRollback slotNo txOutAddressType -> runRollback slotNo txOutAddressType
     CmdRunMigrations mdir forceIndexes mldir txOutTabletype -> do
       pgConfig <- runOrThrowIODb (readPGPass PGPassDefaultEnv)
-      unofficial <- snd <$> runMigrations pgConfig False mdir mldir Initial txOutTabletype
+      unofficial <- snd <$> runMigrations Nothing pgConfig False mdir mldir Initial txOutTabletype
       unless (null unofficial) $
         putStrLn $
           "Unofficial migration scripts found: " ++ show unofficial
       when forceIndexes $
         void $
-          runMigrations pgConfig False mdir mldir Indexes txOutTabletype
-    CmdTxOutMigration txOutTableType -> do
-      runWithConnectionNoLogging PGPassDefaultEnv $ migrateTxOutDbTool txOutTableType
+          runMigrations Nothing pgConfig False mdir mldir NearTip txOutTabletype
+    CmdTxOutMigration txOutVariantType -> do
+      let bulkSize = getTxOutBulkSize txOutVariantType
+      runDbStandaloneTransSilent PGPassDefaultEnv $ migrateTxOutDbTool bulkSize txOutVariantType
     CmdUtxoSetAtBlock blkid txOutAddressType -> utxoSetAtSlot txOutAddressType blkid
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType
@@ -69,15 +70,15 @@ runCommand cmd =
     CmdVersion -> runVersionCommand
 
 runCreateMigration :: MigrationDir -> TxOutVariantType -> IO ()
-runCreateMigration mdir txOutTableType = do
-  mfp <- createMigration PGPassDefaultEnv mdir txOutTableType
+runCreateMigration mdir txOutVariantType = do
+  mfp <- createMigration PGPassDefaultEnv mdir txOutVariantType
   case mfp of
     Nothing -> putStrLn "No migration needed."
     Just fp -> putStrLn $ "New migration '" ++ fp ++ "' created."
 
 runRollback :: SlotNo -> TxOutVariantType -> IO ()
-runRollback slotNo txOutTableType =
-  print =<< runDbNoLoggingEnv (deleteBlocksSlotNoNoTrace txOutTableType slotNo)
+runRollback slotNo txOutVariantType =
+  print =<< runDbStandaloneSilent (deleteBlocksSlotNoNoTrace txOutVariantType slotNo)
 
 runVersionCommand :: IO ()
 runVersionCommand = do

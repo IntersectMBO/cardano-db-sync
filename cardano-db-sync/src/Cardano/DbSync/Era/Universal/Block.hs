@@ -9,13 +9,22 @@
 
 module Cardano.DbSync.Era.Universal.Block (
   insertBlockUniversal,
-) where
+)
+where
+
+import Data.Either.Extra (eitherToMaybe)
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Keys
+import Cardano.Prelude
+
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache (
+  cleanCachesForTip,
   insertBlockAndCache,
   optimiseCaches,
   queryPoolKeyWithCache,
@@ -23,35 +32,23 @@ import Cardano.DbSync.Cache (
  )
 import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
-
+import Cardano.DbSync.DbEvent (liftDbLookup)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Era.Universal.Insert.Grouped
+import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTx)
-import Cardano.DbSync.Era.Util (liftLookupFail)
-import Cardano.DbSync.Error
+import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.OffChain
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-
-import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
-import Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.Keys
-import Cardano.Prelude
-
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Except.Extra (newExceptT)
-import Data.Either.Extra (eitherToMaybe)
-import Database.Persist.Sql (SqlBackend)
 
 --------------------------------------------------------------------------------------------
 -- Insert a universal Block.
 -- This is the entry point for inserting a block into the database, used for all eras appart from Byron.
 --------------------------------------------------------------------------------------------
 insertBlockUniversal ::
-  (MonadBaseControl IO m, MonadIO m) =>
   SyncEnv ->
   -- | Should log
   Bool ->
@@ -63,20 +60,22 @@ insertBlockUniversal ::
   SlotDetails ->
   IsPoolMember ->
   ApplyResult ->
-  ReaderT SqlBackend m (Either SyncNodeError ())
+  ExceptT SyncNodeError DB.DbM ()
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
-  -- if we're syncing within 2 mins of the tip, we optimise the caches.
-  when (isSyncedWithintwoMinutes details) $ optimiseCaches cache
-  runExceptT $ do
+  -- if we're syncing within 2 mins of the tip, we clean certain caches for tip following.
+  when (isSyncedWithintwoMinutes details) $ cleanCachesForTip cache
+  -- Optimise caches every 100k blocks to prevent unbounded growth
+  when (unBlockNo (Generic.blkBlockNo blk) `mod` 100000 == 0) $ optimiseCaches cache
+  do
     pbid <- case Generic.blkPreviousHash blk of
-      Nothing -> liftLookupFail (renderErrorMessage (Generic.blkEra blk)) DB.queryGenesis -- this is for networks that fork from Byron on epoch 0.
-      Just pHash -> queryPrevBlockWithCache (renderErrorMessage (Generic.blkEra blk)) cache pHash
-    mPhid <- lift $ queryPoolKeyWithCache cache UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
+      Nothing -> liftDbLookup mkSyncNodeCallStack $ DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.
+      Just pHash -> queryPrevBlockWithCache syncEnv pHash (renderErrorMessage (Generic.blkEra blk))
+    mPhid <- queryPoolKeyWithCache syncEnv UpdateCache $ coerceKeyRole $ Generic.blkSlotLeader blk
     let epochNo = sdEpochNo details
 
-    slid <- lift . DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
+    slid <- lift $ DB.insertSlotLeader $ Generic.mkSlotLeader (ioShelley iopts) (Generic.unKeyHashRaw $ Generic.blkSlotLeader blk) (eitherToMaybe mPhid)
     blkId <-
-      lift . insertBlockAndCache cache $
+      insertBlockAndCache syncEnv $
         DB.Block
           { DB.blockHash = Generic.blkHash blk
           , DB.blockEpochNo = Just $ unEpochNo epochNo
@@ -99,14 +98,14 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp) mempty zippedTx
+
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
     -- now that we've inserted the Block and all it's txs lets cache what we'll need
     -- when we later update the epoch values.
     -- if have --dissable-epoch && --dissable-cache then no need to cache data.
-    when (soptEpochAndCacheEnabled $ envOptions syncEnv)
-      . newExceptT
-      $ writeEpochBlockDiffToCache
+    when (soptEpochAndCacheEnabled $ envOptions syncEnv) $
+      writeEpochBlockDiffToCache
         cache
         EpochBlockDiff
           { ebdBlockId = blkId
@@ -154,13 +153,13 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
 
     insertStakeSlice syncEnv $ apStakeSlice applyResult
 
-    when (ioGov iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
-      . lift
-      $ insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
+    when (ioGov iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0)) $
+      lift $
+        insertOffChainVoteResults tracer (envOffChainVoteResultQueue syncEnv)
 
-    when (ioOffChainPoolData iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0))
-      . lift
-      $ insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
+    when (ioOffChainPoolData iopts && (withinHalfHour || unBlockNo (Generic.blkBlockNo blk) `mod` 10000 == 0)) $
+      lift $
+        insertOffChainPoolResults tracer (envOffChainPoolResultQueue syncEnv)
   where
     iopts = getInsertOptions syncEnv
 

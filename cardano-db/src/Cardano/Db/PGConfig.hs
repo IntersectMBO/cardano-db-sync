@@ -13,15 +13,21 @@ module Cardano.Db.PGConfig (
   readPGPassFileEnv,
   readPGPassFile,
   readPGPassFileExit,
-  toConnectionString,
+  toConnectionSetting,
 ) where
 
+import Cardano.Prelude (decodeUtf8)
 import Control.Exception (IOException)
 import qualified Control.Exception as Exception
+import Control.Monad.Extra (unless)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
-import Database.Persist.Postgresql (ConnectionString)
+import qualified Data.Text.Read as Text (decimal)
+import Data.Word (Word16)
+import qualified Hasql.Connection.Setting as HsqlSet
+import qualified Hasql.Connection.Setting.Connection as HsqlSetC
+import qualified Hasql.Connection.Setting.Connection.Param as HsqlSetP
 import System.Environment (lookupEnv, setEnv)
 import System.Posix.User (getEffectiveUserName)
 
@@ -31,38 +37,50 @@ data PGPassSource
   | PGPassCached PGConfig
   deriving (Show)
 
--- | PGConfig as specified by https://www.postgresql.org/docs/11/libpq-pgpass.html
--- However, this module expects the config data to be on the first line.
+-- | Preconstructed connection string according to <https://www.postgresql.org/docs/17/libpq-connect.html#LIBPQ-CONNSTRING the PostgreSQL format>.
 data PGConfig = PGConfig
-  { pgcHost :: ByteString
-  , pgcPort :: ByteString
-  , pgcDbname :: ByteString
-  , pgcUser :: ByteString
-  , pgcPassword :: ByteString
+  { pgcHost :: Text.Text
+  , pgcPort :: Text.Text
+  , pgcDbname :: Text.Text
+  , pgcUser :: Text.Text
+  , pgcPassword :: Text.Text
   }
   deriving (Show)
 
 newtype PGPassFile
   = PGPassFile FilePath
 
-toConnectionString :: PGConfig -> ConnectionString
-toConnectionString pgc =
-  BS.concat
-    [ "host="
-    , pgcHost pgc
-    , " "
-    , "port="
-    , pgcPort pgc
-    , " "
-    , "user="
-    , pgcUser pgc
-    , " "
-    , "dbname="
-    , pgcDbname pgc
-    , " "
-    , "password="
-    , pgcPassword pgc
-    ]
+-- | Convert PGConfig to Hasql connection settings, or return an error message.
+toConnectionSetting :: PGConfig -> Either String HsqlSet.Setting
+toConnectionSetting pgc = do
+  -- Convert the port from Text to Word16
+  portWord16 <- textToWord16 (pgcPort pgc)
+  -- Build the connection settings
+  pure $ HsqlSet.connection (HsqlSetC.params [host, port portWord16, user, dbname, password])
+  where
+    host = HsqlSetP.host (pgcHost pgc)
+    port = HsqlSetP.port
+    user = HsqlSetP.user (pgcUser pgc)
+    dbname = HsqlSetP.dbname (pgcDbname pgc)
+    password = HsqlSetP.password (pgcPassword pgc)
+
+-- | Convert a Text port to Word16, or return an error message.
+textToWord16 :: Text.Text -> Either String Word16
+textToWord16 portText =
+  case Text.decimal portText of
+    Left err ->
+      Left $ "Invalid port: '" <> Text.unpack portText <> "'. " <> err
+    Right (portInt, remainder) -> do
+      -- Check for leftover characters (e.g., "123abc" is invalid)
+      unless (Text.null remainder) $
+        Left $
+          "Invalid port: '" <> Text.unpack portText <> "'. Contains non-numeric characters."
+      -- Check if the port is within the valid Word16 range (0-65535)
+      unless (portInt >= (0 :: Integer) && portInt <= 65535) $
+        Left $
+          "Invalid port: '" <> Text.unpack portText <> "'. Port must be between 0 and 65535."
+      -- Convert to Word16
+      Right (fromIntegral portInt)
 
 readPGPassDefault :: IO (Either PGPassError PGConfig)
 readPGPassDefault = readPGPass PGPassDefaultEnv
@@ -94,24 +112,32 @@ readPGPassFile (PGPassFile fpath) = do
     extract bs =
       case BS.lines bs of
         (b : _) -> parsePGConfig b
-        _ -> pure $ Left (FailedToParsePGPassConfig bs)
+        _otherwise -> pure $ Left (FailedToParsePGPassConfig bs)
 
 parsePGConfig :: ByteString -> IO (Either PGPassError PGConfig)
 parsePGConfig bs =
   case BS.split ':' bs of
-    [h, pt, d, u, pwd] -> replaceUser (PGConfig h pt d u pwd)
-    _ -> pure $ Left (FailedToParsePGPassConfig bs)
+    [h, pt, d, u, pwd] ->
+      replaceUser
+        ( PGConfig
+            (decodeUtf8 h)
+            (decodeUtf8 pt)
+            (decodeUtf8 d)
+            (decodeUtf8 u)
+            (decodeUtf8 pwd)
+        )
+    _otherwise -> pure $ Left (FailedToParsePGPassConfig bs)
   where
     replaceUser :: PGConfig -> IO (Either PGPassError PGConfig)
     replaceUser pgc
-      | pgcUser pgc /= "*" = pure $ Right pgc
+      | pgcUser pgc /= Text.pack "*" = pure $ Right pgc
       | otherwise = do
           euser <- Exception.try getEffectiveUserName
           case euser of
             Left (err :: IOException) ->
               pure $ Left (UserFailed err)
             Right user ->
-              pure $ Right (pgc {pgcUser = BS.pack user})
+              pure $ Right (pgc {pgcUser = Text.pack user})
 
 -- | Read 'PGPassFile' into 'PGConfig'.
 -- If it fails it will raise an error.

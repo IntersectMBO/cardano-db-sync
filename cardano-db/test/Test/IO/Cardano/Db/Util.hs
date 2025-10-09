@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -5,45 +6,53 @@ module Test.IO.Cardano.Db.Util (
   assertBool,
   deleteAllBlocks,
   dummyUTCTime,
+  extractDbResult,
   mkAddressHash,
   mkBlock,
   mkBlockHash,
   mkTxHash,
   mkTxs,
-  mkTxOutVariantCore,
+  mkTxOutCore,
   testSlotLeader,
 ) where
 
-import Cardano.Db
-import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
+import Control.Exception (throwIO)
 import Control.Monad (unless)
-import Control.Monad.Extra (whenJust)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Reader (ReaderT)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import Data.Time.Calendar (Day (..))
 import Data.Time.Clock (UTCTime (..))
 import Data.Word (Word64)
-import Database.Persist.Sql (SqlBackend)
 import Text.Printf (printf)
+
+import Cardano.Db
+import Cardano.Db.Schema.Variants.TxOutCore (TxOutCore (..))
 
 assertBool :: MonadIO m => String -> Bool -> m ()
 assertBool msg bool =
   liftIO $ unless bool (error msg)
 
-deleteAllBlocks :: MonadIO m => ReaderT SqlBackend m ()
+extractDbResult :: MonadIO m => Either DbLookupError a -> m a
+extractDbResult (Left err) = liftIO $ throwIO err
+extractDbResult (Right val) = pure val
+
+deleteAllBlocks :: DbM ()
 deleteAllBlocks = do
-  mblkId <- queryMinBlock
-  whenJust mblkId $ uncurry (deleteBlocksForTests TxOutVariantCore)
+  result <- queryMinBlock
+  case result of
+    Nothing -> pure ()
+    Just (blockId, word64) -> do
+      deleteResult <- deleteBlocksForTests TxOutVariantCore blockId word64
+      extractDbResult deleteResult
 
 dummyUTCTime :: UTCTime
 dummyUTCTime = UTCTime (ModifiedJulianDay 0) 0
 
 mkAddressHash :: BlockId -> TxId -> String
 mkAddressHash blkId txId =
-  take 28 $ printf "tx out #%d, tx #%d" (unBlockId blkId) (unTxId txId) ++ replicate 28 ' '
+  take 28 $ printf "tx out #%d, tx #%d" (getBlockId blkId) (getTxId txId) ++ replicate 28 ' '
 
 mkBlock :: Word64 -> SlotLeaderId -> Block
 mkBlock blk slid =
@@ -71,7 +80,7 @@ mkBlockHash blkId =
 
 mkTxHash :: BlockId -> Word64 -> ByteString
 mkTxHash blk tx =
-  BS.pack (take 32 $ printf "block #%d, tx #%d" (unBlockId blk) tx ++ replicate 32 ' ')
+  BS.pack (take 32 $ printf "block #%d, tx #%d" (getBlockId blk) tx ++ replicate 32 ' ')
 
 mkTxs :: BlockId -> Word -> [Tx]
 mkTxs blkId count =
@@ -97,20 +106,20 @@ testSlotLeader :: SlotLeader
 testSlotLeader =
   SlotLeader (BS.pack . take 28 $ "test slot leader" ++ replicate 28 ' ') Nothing "Dummy test slot leader"
 
-mkTxOutVariantCore :: BlockId -> TxId -> TxOutW
-mkTxOutVariantCore blkId txId =
+mkTxOutCore :: BlockId -> TxId -> TxOutW
+mkTxOutCore blkId txId =
   let addr = mkAddressHash blkId txId
-   in CTxOutW $
-        VC.TxOut
-          { VC.txOutAddress = Text.pack addr
-          , VC.txOutAddressHasScript = False
-          , VC.txOutConsumedByTxId = Nothing
-          , VC.txOutDataHash = Nothing
-          , VC.txOutIndex = 0
-          , VC.txOutInlineDatumId = Nothing
-          , VC.txOutPaymentCred = Nothing
-          , VC.txOutReferenceScriptId = Nothing
-          , VC.txOutStakeAddressId = Nothing
-          , VC.txOutTxId = txId
-          , VC.txOutValue = DbLovelace 1000000000
+   in VCTxOutW $
+        TxOutCore
+          { txOutCoreAddress = Text.pack addr
+          , txOutCoreAddressHasScript = False
+          , txOutCoreConsumedByTxId = Nothing
+          , txOutCoreDataHash = Nothing
+          , txOutCoreIndex = 0
+          , txOutCoreInlineDatumId = Nothing
+          , txOutCorePaymentCred = Nothing
+          , txOutCoreReferenceScriptId = Nothing
+          , txOutCoreStakeAddressId = Nothing
+          , txOutCoreTxId = txId
+          , txOutCoreValue = DbLovelace 1000000000
           }

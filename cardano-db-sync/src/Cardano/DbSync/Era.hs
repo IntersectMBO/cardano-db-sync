@@ -22,5 +22,5 @@ insertValidateGenesisDist ::
 insertValidateGenesisDist syncEnv nname genCfg shelleyInitiation =
   case genCfg of
     GenesisCardano _ bCfg sCfg _aCfg _ -> do
-      Byron.insertValidateGenesisDist syncEnv nname bCfg
-      Shelley.insertValidateGenesisDist syncEnv (unNetworkName nname) (scConfig sCfg) shelleyInitiation
+      Byron.insertValidateByronGenesisDist syncEnv nname bCfg
+      Shelley.insertValidateShelleyGenesisDist syncEnv (unNetworkName nname) (scConfig sCfg) shelleyInitiation

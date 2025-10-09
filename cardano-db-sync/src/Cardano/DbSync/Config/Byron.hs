@@ -19,7 +19,7 @@ readByronGenesisConfig ::
 readByronGenesisConfig enc = do
   let file = unGenesisFile $ dncByronGenesisFile enc
   genHash <-
-    firstExceptT SNErrDefault
+    firstExceptT (SNErrDefault mkSyncNodeCallStack)
       . hoistEither
       $ decodeAbstractHash (unGenesisHashByron $ dncByronGenesisHash enc)
   firstExceptT (SNErrByronConfig file) $

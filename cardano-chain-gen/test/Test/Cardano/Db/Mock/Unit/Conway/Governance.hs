@@ -21,7 +21,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   infoAction,
 ) where
 
-import qualified Cardano.Db as Db
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash, unTxHash)
 import Cardano.Ledger.Address (RewardAccount (..))
 import Cardano.Ledger.Alonzo.Tx (AlonzoTx)
@@ -36,19 +36,18 @@ import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types
-import qualified Cardano.Mock.Query as Query
-import Cardano.Prelude
+import Cardano.Prelude (MonadIO (..), void)
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Maybe.Strict (StrictMaybe (..))
+import Data.Text (Text)
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion, assertFailure)
-import qualified Prelude
 
 drepDistr :: IOManager -> [(Text, Text)] -> Assertion
 drepDistr =
@@ -65,7 +64,7 @@ drepDistr =
     let drepId = Prelude.head Forging.unregisteredDRepIds
     assertEqQuery
       dbSync
-      (Query.queryDRepDistrAmount (unCredentialHash drepId) 1)
+      (DB.queryDRepDistrAmount (unCredentialHash drepId) 1)
       10_000
       "Unexpected drep distribution amount"
   where
@@ -99,7 +98,7 @@ newCommittee =
     -- Should now have a committee member
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 1, 0, 0)
       "Unexpected governance action counts"
   where
@@ -119,7 +118,7 @@ rollbackNewCommittee =
     -- Should now have a committee member
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 1, 0, 0)
       "Unexpected governance action counts"
 
@@ -130,7 +129,7 @@ rollbackNewCommittee =
     -- Should not have a new committee member
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 0, 0, 0)
       "Unexpected governance action counts"
 
@@ -140,7 +139,7 @@ rollbackNewCommittee =
     -- Should now have 2 identical committees
     assertEqQuery
       dbSync
-      (Query.queryEpochStateCount 3)
+      (DB.queryEpochStateCount 3)
       2
       "Unexpected epoch state count for epoch 3"
   where
@@ -159,7 +158,7 @@ chainedNewCommittee =
     -- Should start with 4 committee members
     assertEqQuery
       dbSync
-      (Query.queryCommitteeMemberCountByTxHash Nothing)
+      (DB.queryCommitteeMemberCountByTxHash Nothing)
       4
       "Unexpected committee member count"
 
@@ -188,7 +187,7 @@ chainedNewCommittee =
     -- Should now have 6 members
     assertEqQuery
       dbSync
-      (Query.queryCommitteeMemberCountByTxHash $ Just proposal2TxHash)
+      (DB.queryCommitteeMemberCountByTxHash $ Just proposal2TxHash)
       6
       "Unexpected committee member count"
   where
@@ -213,7 +212,7 @@ rollbackNewCommitteeProposal =
     -- Should have a new committee
     assertBackoff
       dbSync
-      (Query.queryCommitteeByTxHash proposalTxHash)
+      (DB.queryCommitteeByTxHash proposalTxHash)
       defaultDelays
       isJust
       (const "Expected at least one new committee")
@@ -225,7 +224,7 @@ rollbackNewCommitteeProposal =
     -- Should NOT have a new committee
     assertBackoff
       dbSync
-      (Query.queryCommitteeByTxHash proposalTxHash)
+      (DB.queryCommitteeByTxHash proposalTxHash)
       defaultDelays
       isNothing
       (const "Unexpected new committee")
@@ -329,7 +328,7 @@ updateConstitution =
     (EpochNo epochNo) <- getCurrentEpoch interpreter
     assertEqQuery
       dbSync
-      (Query.queryConstitutionAnchor epochNo)
+      (DB.queryConstitutionAnchor epochNo)
       (Just ("constitution.new", originalBytes dataHash))
       "Unexpected constution voting anchor"
   where
@@ -383,8 +382,8 @@ treasuryWithdrawal =
     -- Should now have a treasury reward
     assertEqQuery
       dbSync
-      Query.queryRewardRests
-      [(Db.RwdTreasury, 10_000)]
+      DB.queryRewardRests
+      [(DB.RwdTreasury, 10_000)]
       "Unexpected constution voting anchor"
   where
     testLabel = "conwayTreasuryWithdrawal"
@@ -430,7 +429,7 @@ parameterChange =
     -- Should now have a ratified/enacted governance action
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 1, 0, 0)
       "Unexpected governance action counts"
     -- Should have updated param
@@ -443,8 +442,8 @@ parameterChange =
     testLabel = "conwayGovParameterChange"
     queryMaxTxSize interpreter = do
       epochNo <- getEpochNo interpreter
-      param <- Query.queryParamFromEpoch epochNo
-      pure (Db.epochParamMaxTxSize <$> param)
+      param <- DB.queryParamWithEpochNo epochNo
+      pure (DB.epochParamMaxTxSize <$> param)
     getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
 
 hardFork :: IOManager -> [(Text, Text)] -> Assertion
@@ -462,13 +461,17 @@ hardFork =
     -- Should now have a ratified/enacted governance action
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 1, 0, 0)
       "Unexpected governance action counts"
     -- Should have a new major protocol version
     assertEqQuery
       dbSync
-      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      ( do
+          epochNo <- getEpochNo interpreter
+          mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
+          pure $ DB.epochParamProtocolMajor <$> mEpochParam
+      )
       (Just 11)
       "Unexpected governance action counts"
   where
@@ -490,13 +493,17 @@ rollbackHardFork =
     -- Should now have a ratified/enacted governance action
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 1, 0, 0)
       "Unexpected governance action counts"
     -- Should have a new major protocol version
     assertEqQuery
       dbSync
-      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      ( do
+          epochNo <- getEpochNo interpreter
+          mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
+          pure $ DB.epochParamProtocolMajor <$> mEpochParam
+      )
       (Just 11)
       "Unexpected governance action counts"
 
@@ -507,13 +514,17 @@ rollbackHardFork =
     -- Should not have a new committee member
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (1, 0, 0, 0)
       "Unexpected governance action counts"
     -- Should have the old major protocol version
     assertEqQuery
       dbSync
-      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      ( do
+          epochNo <- getEpochNo interpreter
+          mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
+          pure $ DB.epochParamProtocolMajor <$> mEpochParam
+      )
       (Just 10)
       "Unexpected governance action counts"
 
@@ -523,7 +534,11 @@ rollbackHardFork =
     -- Should once again have a new major protocol version
     assertEqQuery
       dbSync
-      (Query.queryVersionMajorFromEpoch =<< getEpochNo interpreter)
+      ( do
+          epochNo <- getEpochNo interpreter
+          mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
+          pure $ DB.epochParamProtocolMajor <$> mEpochParam
+      )
       (Just 11)
       "Unexpected governance action counts"
   where
@@ -611,13 +626,13 @@ infoAction =
     -- Should now be expired and dropped
     assertEqQuery
       dbSync
-      Query.queryGovActionCounts
+      DB.queryGovActionCounts
       (0, 0, 1, 1)
       "Unexpected governance action counts"
     -- Should have votes
     assertEqQuery
       dbSync
-      (Query.queryVoteCounts (unTxHash $ txIdTx addVoteTx) 0)
+      (DB.queryVoteCounts (unTxHash $ txIdTx addVoteTx) 0)
       (1, 1, 1)
       "Unexpected governance action counts"
   where

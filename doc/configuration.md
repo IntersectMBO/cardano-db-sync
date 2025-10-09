@@ -22,7 +22,6 @@ Below is a sample `insert_options` section that shows all the defaults:
 {
   // <-- Rest of configuration -->
   // ...
-
   "insert_options": {
     "tx_cbor": "disable",
     "tx_out": {
@@ -66,6 +65,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [offchain\_pool\_data](#offchain-pool-data)  | `enum`     | Optional |
 | [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
+| [stop\_at\_block](#stop-at-block)            | `integer`  | Optional |
 
 ## Preset
 
@@ -582,3 +582,23 @@ When enabling this config, the following columns will no longer have the `jsonb`
 | `gov_action_proposal` | `description` |
 | `off_chain_pool_data` | `json`        |
 | `off_chain_vote_data` | `json`        |
+
+## Stop At Block
+
+`stop_at_block`
+
+* Type: `integer`
+* Optional: When not specified, db-sync runs indefinitely
+
+Stops db-sync after processing the specified block number. Useful for testing and debugging.
+
+### Example
+
+```json
+{
+  "insert_options": {
+    "stop_at_block": 12345
+  }
+}
+```
+

@@ -1,12 +1,7 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
-#if __GLASGOW_HASKELL__ >= 908
-{-# OPTIONS_GHC -Wno-x-partial #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
-#endif
 
 module Test.IO.Cardano.Db.Rollback (
   tests,
@@ -15,11 +10,8 @@ module Test.IO.Cardano.Db.Rollback (
 import Cardano.Db
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (void)
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Trans.Control (MonadBaseControl)
-import Control.Monad.Trans.Reader (ReaderT)
+import Data.Maybe (fromJust)
 import Data.Word (Word64)
-import Database.Persist.Sql (SqlBackend)
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
 
@@ -33,7 +25,7 @@ tests =
 
 _rollbackTest :: IO ()
 _rollbackTest =
-  runDbNoLoggingEnv $ do
+  runDbStandaloneSilent $ do
     -- Delete the blocks if they exist.
     deleteAllBlocks
     setupBlockCount <- queryBlockCount
@@ -50,7 +42,7 @@ _rollbackTest =
     assertBool ("TxIn count before rollback is " ++ show beforeTxInCount ++ " but should be 1.") $ beforeTxInCount == 1
     -- Rollback a set of blocks.
     latestSlotNo <- queryLatestSlotNo
-    Just pSlotNo <- queryWalkChain 5 latestSlotNo
+    pSlotNo <- fromJust <$> queryWalkChain 5 latestSlotNo
     void $ deleteBlocksSlotNoNoTrace TxOutVariantCore (SlotNo pSlotNo)
     -- Assert the expected final state.
     afterBlocks <- queryBlockCount
@@ -64,7 +56,7 @@ _rollbackTest =
 
 -- -----------------------------------------------------------------------------
 
-queryWalkChain :: (MonadBaseControl IO m, MonadIO m) => Int -> Word64 -> ReaderT SqlBackend m (Maybe Word64)
+queryWalkChain :: Int -> Word64 -> DbM (Maybe Word64)
 queryWalkChain count blkNo
   | count <= 0 = pure $ Just blkNo
   | otherwise = do
@@ -73,23 +65,21 @@ queryWalkChain count blkNo
         Nothing -> pure Nothing
         Just pBlkNo -> queryWalkChain (count - 1) pBlkNo
 
-createAndInsertBlocks :: (MonadBaseControl IO m, MonadIO m) => Word64 -> ReaderT SqlBackend m ()
+createAndInsertBlocks :: Word64 -> DbM ()
 createAndInsertBlocks blockCount =
   void $ loop (0, Nothing, Nothing)
   where
     loop ::
-      (MonadBaseControl IO m, MonadIO m) =>
       (Word64, Maybe BlockId, Maybe TxId) ->
-      ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+      DbM (Word64, Maybe BlockId, Maybe TxId)
     loop (indx, mPrevId, mOutId) =
       if indx < blockCount
         then loop =<< createAndInsert (indx, mPrevId, mOutId)
         else pure (0, Nothing, Nothing)
 
     createAndInsert ::
-      (MonadBaseControl IO m, MonadIO m) =>
       (Word64, Maybe BlockId, Maybe TxId) ->
-      ReaderT SqlBackend m (Word64, Maybe BlockId, Maybe TxId)
+      DbM (Word64, Maybe BlockId, Maybe TxId)
     createAndInsert (indx, mPrevId, mTxOutId) = do
       slid <- insertSlotLeader testSlotLeader
       let newBlock =
@@ -132,15 +122,18 @@ createAndInsertBlocks blockCount =
                   0
                   (DbLovelace 0)
 
-            void $ insertTxOut (mkTxOutVariantCore blkId txId)
+            void $ insertTxOut (mkTxOutCore blkId txId)
             pure $ Just txId
       case (indx, mTxOutId) of
         (8, Just txOutId) -> do
           -- Insert Txs here to test that they are cascade deleted when the blocks
           -- they are associcated with are deleted.
 
-          txId <- head <$> mapM insertTx (mkTxs blkId 8)
+          txIds <- mapM insertTx (mkTxs blkId 8)
+          let txId = case txIds of
+                (x : _) -> x
+                [] -> error "mkTxs returned empty list" -- This shouldn't happen with mkTxs blkId 8
           void $ insertTxIn (TxIn txId txOutId 0 Nothing)
-          void $ insertTxOut (mkTxOutVariantCore blkId txId)
+          void $ insertTxOut (mkTxOutCore blkId txId)
         _otherwise -> pure ()
       pure (indx + 1, Just blkId, newMTxOutId)

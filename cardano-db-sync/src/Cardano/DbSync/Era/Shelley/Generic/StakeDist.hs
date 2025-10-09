@@ -136,7 +136,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
     epochSliceSize =
       max minSliceSize defaultEpochSliceSize
       where
-        -- On mainnet this is 21600
+        -- On mainnet this is 2160
         expectedBlocks :: Word64
         expectedBlocks = 10 * k
 
