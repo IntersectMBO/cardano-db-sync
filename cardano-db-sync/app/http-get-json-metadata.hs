@@ -143,8 +143,8 @@ runGetVote :: Text.Text -> Maybe VoteMetaHash -> DB.AnchorType -> IO ()
 runGetVote file mExpectedHash vtype = do
   respBs <- BS.readFile (Text.unpack file)
   let respLBs = fromStrict respBs
-  (ocvd, val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash vtype Nothing
-  print ocvd
+  (mocvd, val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash vtype Nothing
+  print mocvd
   print val
   print $ bsBase16Encode hsh
   print mWarning
