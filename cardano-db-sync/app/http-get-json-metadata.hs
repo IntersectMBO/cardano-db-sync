@@ -143,11 +143,12 @@ runGetVote :: Text.Text -> Maybe VoteMetaHash -> DB.AnchorType -> IO ()
 runGetVote file mExpectedHash vtype = do
   respBs <- BS.readFile (Text.unpack file)
   let respLBs = fromStrict respBs
-  (mocvd, val, hsh, mWarning) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash vtype Nothing
+  (mocvd, val, hsh, mWarning, isValidJson) <- runOrThrowIO $ runExceptT $ parseAndValidateVoteData respBs respLBs mExpectedHash vtype Nothing
   print mocvd
   print val
   print $ bsBase16Encode hsh
   print mWarning
+  putStrLn $ "Is valid JSON: " ++ show isValidJson
 
 -- ------------------------------------------------------------------------------------------------
 

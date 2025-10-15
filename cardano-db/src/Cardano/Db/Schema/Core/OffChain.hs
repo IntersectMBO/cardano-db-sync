@@ -90,7 +90,15 @@ offChainPoolFetchErrorEncoder =
 
 -- |
 -- Table Name: off_chain_vote_data
--- Description:
+-- Description: Stores off-chain voting anchor data with validation status
+--
+-- The is_valid column indicates the parsing status:
+--   • TRUE: Content is valid JSON AND conforms to CIP schema
+--           All related tables are populated
+--   • FALSE: Content is valid JSON BUT does not conform to CIP schema
+--           The json column contains the actual JSON, but related tables are empty
+--   • NULL: Content is not valid JSON at all
+--           The json column contains an error message, bytes column has raw data
 data OffChainVoteData = OffChainVoteData
   { offChainVoteDataVotingAnchorId :: !Id.VotingAnchorId -- noreference
   , offChainVoteDataHash :: !ByteString

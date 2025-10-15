@@ -349,8 +349,9 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
     convert eres =
       case eres of
         Right sVoteData ->
-          case sovaOffChainVoteData sVoteData of
-            Just offChainData ->
+          case (sovaIsValidJson sVoteData, sovaOffChainVoteData sVoteData) of
+            -- Scenario 1: Valid JSON + Valid CIP schema
+            (True, Just offChainData) ->
               let
                 minimalBody = Vote.getMinimalBody offChainData
                 vdt =
@@ -371,7 +372,8 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
                 externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
                in
                 OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
-            Nothing ->
+            -- Scenario 2 & 3: Valid JSON but invalid CIP schema OR Invalid JSON
+            (_, _) ->
               let
                 vdt =
                   DB.OffChainVoteData
@@ -382,7 +384,11 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
                     , DB.offChainVoteDataJson = sovaJson sVoteData
                     , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
                     , DB.offChainVoteDataWarning = sovaWarning sVoteData
-                    , DB.offChainVoteDataIsValid = Just False
+                    , -- Just False if valid JSON but invalid schema, NULL if unparseable JSON
+                      DB.offChainVoteDataIsValid =
+                        if sovaIsValidJson sVoteData
+                          then Just False
+                          else Nothing
                     }
                 gaF _ = Nothing
                 drepF _ = Nothing
