@@ -295,8 +295,7 @@ extractSyncOptions snp aop snc =
           isTxOutConsumedBootstrap'
           forceTxIn'
     , soptInsertOptions = iopts
-    , snapshotEveryFollowing = enpSnEveryFollowing snp
-    , snapshotEveryLagging = enpSnEveryLagging snp
+    , soptSnapshotInterval = dncSnapshotInterval snc
     }
   where
     maybeKeepMNames =

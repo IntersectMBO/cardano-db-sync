@@ -89,8 +89,6 @@ pRunDbSyncNode = do
     <*> pHasCache
     <*> pForceIndexes
     <*> pHasInOut
-    <*> pure 500
-    <*> pure 10000
     <*> optional pRollbackSlotNo
 
 pConfigFile :: Parser ConfigFile

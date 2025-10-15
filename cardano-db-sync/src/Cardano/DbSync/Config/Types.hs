@@ -39,6 +39,7 @@ module Cardano.DbSync.Config.Types (
   GovernanceConfig (..),
   OffchainPoolDataConfig (..),
   JsonTypeConfig (..),
+  SnapshotIntervalConfig (..),
   LedgerStateDir (..),
   LogFileDir (..),
   NetworkName (..),
@@ -109,8 +110,6 @@ data SyncNodeParams = SyncNodeParams
   , enpHasCache :: !Bool
   , enpForceIndexes :: !Bool
   , enpHasInOut :: !Bool
-  , enpSnEveryFollowing :: !Word64
-  , enpSnEveryLagging :: !Word64
   , enpMaybeRollback :: !(Maybe SlotNo)
   }
   deriving (Show)
@@ -147,6 +146,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
   , dncInsertOptions :: !SyncInsertOptions
   , dncIpfsGateway :: [Text]
+  , dncSnapshotInterval :: !SnapshotIntervalConfig
   }
 
 data SyncPreConfig = SyncPreConfig
@@ -159,6 +159,7 @@ data SyncPreConfig = SyncPreConfig
   , pcPrometheusPort :: !Int
   , pcInsertConfig :: !SyncInsertConfig
   , pcIpfsGateway :: ![Text]
+  , pcSnapshotInterval :: !SnapshotIntervalConfig
   }
   deriving (Show)
 
@@ -277,6 +278,12 @@ data JsonTypeConfig
   = JsonTypeText
   | JsonTypeJsonb
   | JsonTypeDisable
+  deriving (Eq, Show)
+
+data SnapshotIntervalConfig = SnapshotIntervalConfig
+  { sicFollowing :: !Word64
+  , sicLagging :: !Word64
+  }
   deriving (Eq, Show)
 
 newtype GenesisFile = GenesisFile
@@ -407,6 +414,7 @@ parseGenSyncNodeConfig o =
     <*> fmap (fromMaybe 8080) (o .:? "PrometheusPort")
     <*> o .:? "insert_options" .!= def
     <*> o .:? "ipfs_gateway" .!= ["https://ipfs.io/ipfs"]
+    <*> o .:? "snapshot_interval" .!= def
 
 instance FromJSON SyncProtocol where
   parseJSON o =
@@ -727,6 +735,26 @@ instance FromJSON JsonTypeConfig where
     "jsonb" -> pure JsonTypeJsonb
     "disable" -> pure JsonTypeDisable
     other -> fail $ "unexpected json_type: " <> show other
+
+instance ToJSON SnapshotIntervalConfig where
+  toJSON cfg =
+    Aeson.object
+      [ "following" .= sicFollowing cfg
+      , "lagging" .= sicLagging cfg
+      ]
+
+instance FromJSON SnapshotIntervalConfig where
+  parseJSON = Aeson.withObject "snapshot_interval" $ \obj ->
+    SnapshotIntervalConfig
+      <$> obj .: "following"
+      <*> obj .: "lagging"
+
+instance Default SnapshotIntervalConfig where
+  def =
+    SnapshotIntervalConfig
+      { sicFollowing = 500 -- Every 500 blocks when near tip
+      , sicLagging = 100000 -- Every 100,000 blocks when syncing (less frequent)
+      }
 
 instance Default SyncInsertConfig where
   def = SyncInsertConfig Nothing def
