@@ -66,6 +66,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 | [stop\_at\_block](#stop-at-block)            | `integer`  | Optional |
+| [snapshot\_interval](#snapshot-interval)     | `object`   | Optional |
 
 ## Preset
 
@@ -601,4 +602,56 @@ Stops db-sync after processing the specified block number. Useful for testing an
   }
 }
 ```
+
+## Snapshot Interval
+
+`snapshot_interval`
+
+* Type: `object`
+* Optional: When not specified, uses default values
+
+Controls how frequently ledger state snapshots are taken during sync. Taking snapshots less frequently during initial sync can significantly improve sync performance by reducing IOPS and disk throughput consumption.
+
+Snapshot Interval Properties:
+
+| Property                         | Type      | Required | Default |
+| :------------------------------- | :-------- | :------- | :------ |
+| [following](#following)          | `integer` | Optional | 500     |
+| [lagging](#lagging)              | `integer` | Optional | 100000  |
+
+### Following
+
+`snapshot_interval.following`
+
+* Type: `integer`
+* Default: `500`
+
+Number of blocks between snapshots when db-sync is near the tip of the chain (within approximately 10 minutes). More frequent snapshots when following the tip ensure faster recovery from rollbacks.
+
+### Lagging
+
+`snapshot_interval.lagging`
+
+* Type: `integer`
+* Default: `100000`
+
+Number of blocks between snapshots when db-sync is syncing and significantly behind the tip of the chain. Less frequent snapshots during initial sync improves performance by reducing expensive disk operations.
+
+### Example
+
+```json
+{
+  "snapshot_interval": {
+    "following": 500,
+    "lagging": 100000
+  }
+}
+```
+
+### Performance Considerations
+
+- **Smaller `following` value**: Faster recovery from rollbacks when near the tip, but more frequent disk writes
+- **Larger `lagging` value**: Faster initial sync with reduced IOPS, but slower recovery if rollback is needed during sync
+- **Recommended for initial sync**: Use a large `lagging` value (50000-100000) to maximise sync speed
+- **Recommended when near tip**: Use a small `following` value (500-1000) to enable quick rollback recovery
 

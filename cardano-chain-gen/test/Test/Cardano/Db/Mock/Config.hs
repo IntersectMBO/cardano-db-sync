@@ -295,8 +295,6 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpHasCache = claHasCache
       , enpForceIndexes = claForceIndexes
       , enpHasInOut = True
-      , enpSnEveryFollowing = 35
-      , enpSnEveryLagging = 35
       , enpMaybeRollback = Nothing
       }
 

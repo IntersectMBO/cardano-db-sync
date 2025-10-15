@@ -58,6 +58,13 @@ syncPreConfig =
     <*> Gen.int (Range.linear 0 10000)
     <*> syncInsertConfig
     <*> Gen.list (Range.linear 0 10) (Gen.text (Range.linear 0 100) Gen.unicode)
+    <*> snapshotIntervalConfig
+
+snapshotIntervalConfig :: Gen SnapshotIntervalConfig
+snapshotIntervalConfig =
+  SnapshotIntervalConfig
+    <$> Gen.word64 (Range.linear 100 1000)
+    <*> Gen.word64 (Range.linear 10000 100000)
 
 syncNodeParams :: MonadGen m => m SyncNodeParams
 syncNodeParams =
@@ -71,8 +78,6 @@ syncNodeParams =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
-    <*> Gen.word64 (Range.linear 0 1000)
-    <*> Gen.word64 (Range.linear 0 1000)
     <*> pure Nothing
 
 syncNodeConfig :: Logging.Configuration -> Gen SyncNodeConfig
@@ -104,6 +109,7 @@ syncNodeConfig loggingCfg =
     <*> triggerHardFork
     <*> syncInsertOptions
     <*> pure []
+    <*> snapshotIntervalConfig
 
 syncInsertConfig :: Gen SyncInsertConfig
 syncInsertConfig =

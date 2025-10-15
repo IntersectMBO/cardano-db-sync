@@ -186,8 +186,8 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leNetwork = nw
       , leSystemStart = systemStart
       , leAbortOnPanic = soptAbortOnInvalid syncOptions
-      , leSnapshotEveryFollowing = snapshotEveryFollowing syncOptions
-      , leSnapshotEveryLagging = snapshotEveryLagging syncOptions
+      , leSnapshotEveryFollowing = sicFollowing $ soptSnapshotInterval syncOptions
+      , leSnapshotEveryLagging = sicLagging $ soptSnapshotInterval syncOptions
       , leInterpreter = intervar
       , leStateVar = svar
       , leStateWriteQueue = swQueue
@@ -330,7 +330,8 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
     Just newEpoch
       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
       , newEpochNo > 0
-      , isCons || (newEpochNo `mod` 10 == 0) || newEpochNo >= 530 ->
+      , -- Snapshot every epoch when near tip, every 10 epochs when lagging, or always for epoch >= 580
+        (isCons && syncState == SyncFollowing) || (newEpochNo `mod` 10 == 0) || newEpochNo >= 580 ->
           do
             -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
             liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
@@ -403,7 +404,8 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
-  lsfFilePath . dbPointToFileName dir mEpochNo
+  lsfFilePath
+    . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
