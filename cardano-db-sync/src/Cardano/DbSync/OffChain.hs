@@ -349,8 +349,9 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
     convert eres =
       case eres of
         Right sVoteData ->
-          case sovaOffChainVoteData sVoteData of
-            Just offChainData ->
+          case (sovaIsValidJson sVoteData, sovaOffChainVoteData sVoteData) of
+            -- Scenario 1: Valid JSON + Valid CIP schema
+            (True, Just offChainData) ->
               let
                 minimalBody = Vote.getMinimalBody offChainData
                 vdt =
@@ -371,7 +372,8 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
                 externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
                in
                 OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
-            Nothing ->
+            -- Scenario 2: Valid JSON but invalid CIP schema
+            (True, Nothing) ->
               let
                 vdt =
                   DB.OffChainVoteData
@@ -383,6 +385,27 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
                     , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
                     , DB.offChainVoteDataWarning = sovaWarning sVoteData
                     , DB.offChainVoteDataIsValid = Just False
+                    }
+                gaF _ = Nothing
+                drepF _ = Nothing
+                authorsF _ = []
+                referencesF _ = []
+                externalUpdatesF _ = []
+               in
+                OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
+            -- Scenario 3: Invalid JSON (hash matches but content is not parseable as JSON)
+            (False, _) ->
+              let
+                vdt =
+                  DB.OffChainVoteData
+                    { DB.offChainVoteDataLanguage = ""
+                    , DB.offChainVoteDataComment = Nothing
+                    , DB.offChainVoteDataBytes = sovaBytes sVoteData
+                    , DB.offChainVoteDataHash = sovaHash sVoteData
+                    , DB.offChainVoteDataJson = sovaJson sVoteData -- This will be the error message JSON
+                    , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
+                    , DB.offChainVoteDataWarning = sovaWarning sVoteData
+                    , DB.offChainVoteDataIsValid = Nothing -- NULL for unparseable JSON
                     }
                 gaF _ = Nothing
                 drepF _ = Nothing
