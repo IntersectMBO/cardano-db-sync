@@ -17,6 +17,13 @@ build-type:             Custom
 extra-source-files:     CHANGELOG.md
                         schema/*.sql
 
+flag enable-ghc-debug
+  description: Enable ghc-debug profiling support for heap analysis.
+               Build with: cabal build --flag enable-ghc-debug cardano-db-sync
+               Zero overhead when disabled (production builds).
+  default: False
+  manual: True
+
 custom-setup
   setup-depends:
                         base
@@ -251,6 +258,12 @@ executable cardano-db-sync
                       , cardano-slotting
                       , optparse-applicative
                       , text
+
+  if flag(enable-ghc-debug)
+    build-depends:      ghc-debug-stub
+    cpp-options:        -DGHC_DEBUG_ENABLED
+    ghc-options:        -finfo-table-map
+                        -fdistinct-constructor-tables
 
 executable http-get-json-metadata
   default-language:     Haskell2010
