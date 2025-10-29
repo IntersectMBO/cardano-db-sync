@@ -18,7 +18,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..), InsertOptions (..), UnicodeNullSource, formatUnicodeNullSource)
+import Cardano.DbSync.Api.Types (EpochStatistics (..), InsertOptions (..), SyncEnv (..), UnicodeNullSource, formatUnicodeNullSource)
 import Cardano.DbSync.Cache.Types (textShowCacheStats)
 import Cardano.DbSync.Era.Cardano.Util (insertEpochSyncTime, resetEpochStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -54,7 +54,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     tracer = getTrace syncEnv
     cache = envCache syncEnv
     ntw = getNetwork syncEnv
-    iopts = getInsertOptions syncEnv
+    iopts = getInsertOptions syncEnv
 
     subFromCurrentEpoch :: Word64 -> EpochNo
     subFromCurrentEpoch m =

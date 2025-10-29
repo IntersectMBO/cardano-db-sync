@@ -187,12 +187,18 @@ queryBlockNoAndEpochStmt =
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       pure (blockId, epochNo)
 
+    -- Get the block ID of the rollback point, but the epoch_no of the previous block.
+    -- This handles the edge case where rollback is to the first block of a new epoch
+    -- (where DrepDistr will be inserted). Using the previous block's epoch ensures
+    -- DrepDistr for the current epoch gets deleted, preventing duplicates
+    -- when replaying through the epoch boundary.
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT id, epoch_no"
-          , " FROM " <> tableName (Proxy @a)
-          , " WHERE block_no = $1"
+          [ "SELECT curr.id, prev.epoch_no"
+          , " FROM " <> tableName (Proxy @a) <> " curr"
+          , " JOIN " <> tableName (Proxy @a) <> " prev ON prev.block_no = $1 - 1"
+          , " WHERE curr.block_no = $1"
           ]
 
 queryBlockNoAndEpoch :: Word64 -> DbM (Maybe (Id.BlockId, Word64))
@@ -686,6 +692,9 @@ deleteBlocksBlockId ::
 deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
   let rb = "Rollback - "
 
+  -- Log the epoch being used (comes from previous block's epoch for epoch boundary rollbacks)
+  liftIO $ logInfo trce $ rb <> "Using epoch " <> textShow epochN <> " (from previous block) for epoch-related deletions"
+
   withProgress (Just trce) 6 rb $ \progressRef -> do
     -- Step 0: Initialize
     liftIO $ updateProgress (Just trce) progressRef 0 (rb <> "Initializing rollback...")
@@ -781,6 +790,9 @@ deleteUsingEpochNo trce epochN = do
   let epochEncoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
       epochInt64 = fromIntegral epochN
 
+  -- Log which epoch is being used for deletion (this comes from previous block's epoch for boundary rollbacks)
+  liftIO $ logInfo trce $ "Rollback - Using epoch " <> textShow epochN <> " for deletion (DrepDistr: epoch_no > " <> textShow epochN <> ")"
+
   -- First, count what we're about to delete for progress tracking
   totalCounts <- withProgress (Just trce) 5 "Counting epoch records..." $ \progressRef -> do
     liftIO $ updateProgress (Just trce) progressRef 0 "Counting Epoch records..."
@@ -788,6 +800,7 @@ deleteUsingEpochNo trce epochN = do
 
     liftIO $ updateProgress (Just trce) progressRef 1 "Counting DrepDistr records..."
     dc <- runSession mkDbCallStack $ HsqlSes.statement epochN (parameterisedCountWhere @SC.DrepDistr "epoch_no" "> $1" epochEncoder)
+    liftIO $ logInfo trce $ "Rollback - Found " <> textShow dc <> " DrepDistr records to delete for epochs > " <> textShow epochN
 
     liftIO $ updateProgress (Just trce) progressRef 2 "Counting RewardRest records..."
     rrc <- runSession mkDbCallStack $ HsqlSes.statement epochN (parameterisedCountWhere @SC.RewardRest "spendable_epoch" "> $1" epochEncoder)
