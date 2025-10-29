@@ -92,6 +92,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncConwayHardFork = ncConwayHardFork ncfg
       , dncInsertOptions = extractInsertOptions pcfg
       , dncIpfsGateway = endsInSlash <$> pcIpfsGateway pcfg
+      , dncSnapshotInterval = pcSnapshotInterval pcfg
       }
 
 mkAdjustPath :: SyncPreConfig -> (FilePath -> FilePath)
