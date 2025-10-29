@@ -18,6 +18,8 @@ they exist, the names of those queries will be included in parentheses.
 ### Chain meta data (`queryMeta`)
 ```sql
 select * from meta ;
+```
+```sql
  id |     start_time      | network_name
 ----+---------------------+--------------
   1 | 2017-09-23 21:44:51 | mainnet
@@ -40,6 +42,8 @@ select sum (value) / 1000000 as current_supply from tx_out as tx_outer where
           on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
           where tx_outer.id = tx_out.id
       ) ;
+```
+```sql
     current_supply
 ----------------------
  31112120630.27526800
@@ -50,6 +54,8 @@ select sum (value) / 1000000 as current_supply from tx_out as tx_outer where
 ```sql
 select slot_no from block where block_no is not null
     order by block_no desc limit 1 ;
+```
+```sql
  slot_no
 ---------
  4011090
@@ -60,6 +66,8 @@ select slot_no from block where block_no is not null
 ### Size of the cexplorer database
 ```sql
 select pg_size_pretty (pg_database_size ('cexplorer'));
+```
+```sql
  pg_size_pretty
 ----------------
  116 GB
@@ -69,6 +77,8 @@ select pg_size_pretty (pg_database_size ('cexplorer'));
 ### Size of the cexplorer database table
 ```sql
 select pg_size_pretty (pg_total_relation_size ('block'));
+```
+```sql
  pg_size_pretty
 ----------------
  2760 MB
@@ -86,6 +96,8 @@ select
       / (extract (epoch from (now () at time zone 'UTC')) - extract (epoch from (min (time) at time zone 'UTC')))
   as sync_percent
   from block ;
+```
+```sql
    sync_percent
 ------------------
  97.4357948804029
@@ -98,6 +110,8 @@ transactions.
 To find out how far behind `db-sync` is:
 ```sql
 select now () - max (time) as behind_by from block ;
+```
+```sql
        behind_by
 ------------------------
  4 days 20:59:39.134497
@@ -133,6 +147,8 @@ select * from pool_update inner join pool_hash on pool_update.hash_id = pool_has
 select stake_address.id as stake_address_id, tx_out.address, stake_address.view as stake_address
 	from tx_out inner join stake_address on tx_out.stake_address_id = stake_address.id
 	where address = 'addr1qx2kd28nq8ac5pr...08ly3tu9sy0f4qd' ;
+```
+```sql
  stake_address_id |         address                      |           stake_address
 ------------------+--------------------------------------+-------------------------------------
                42 | addr1qx2kd28nq8ac5p...8ly3tu9sy0f4qd | stake1u9ylzsgxaa6xct...nljg47zctvm3rc
@@ -142,6 +158,8 @@ select stake_address.id as stake_address_id, tx_out.address, stake_address.view 
 ```sql
 select tx.id, tx.fee from tx
     where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+```
+```sql
    id    |  fee
 ---------+--------
  1000000 | 172433
@@ -152,6 +170,8 @@ select tx.id, tx.fee from tx
 ```sql
 select tx_out.* from tx_out inner join tx on tx_out.tx_id = tx.id
     where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+```
+```sql
    id    |  tx_id  | index |         address         |    value     |        address_raw        | payment_cred
 ---------+---------+-------+-------------------------+--------------+---------------------------+--------------
  2205593 | 1000000 |     1 | DdzFFzCqrh...u6v9fWDrML | 149693067531 | \x82d8185842...1a20a42e6f |
@@ -165,6 +185,8 @@ select tx_out.* from tx_out
     inner join tx_in on tx_out.tx_id = tx_in.tx_out_id
     inner join tx on tx.id = tx_in.tx_in_id and tx_in.tx_out_index = tx_out.index
     where tx.hash = '\xf9c0997afc8159dbe0568eadf0823112e0cc29cd097c8dc939ff44c372388bc0' ;
+```
+```sql
    id    | tx_id  | index |        address          |    value     |        address_raw        | payment_cred
 ---------+--------+-------+-------------------------+--------------+---------------------------+--------------
  2195714 | 996126 |     4 | DdzFFzCqrh...dtq1FQQSCN | 158685237964 | \x82d8185842...1a330b42df |
@@ -194,7 +216,8 @@ select epoch_no, max (sync_secs) as sync_secs, sum (tx_count) as tx_count, sum (
       from epoch_sync_time
   )
   as derived_table group by epoch_no ;
-
+```
+```sql
  epoch_no |   sync_secs    | tx_count | sum_tx_size | reward_count | stake_count
 ----------+----------------+----------+-------------+--------------+-------------
         0 |              0 |       33 |        6093 |            0 |           0
@@ -220,6 +243,8 @@ Withdrawals are a feature of some transactions of the Shelley era and later.
 select withdrawal.* from withdrawal
     inner join tx on withdrawal.tx_id = tx.id
     where tx.hash = '\x0b8c5be678209bb051a02904dd18896a929f9aca8aecd48850939a590175f7e8' ;
+```
+```sql
   id   | addr_id |  amount   |  tx_id
 -------+---------+-----------+---------
  27684 |   30399 | 154619825 | 2788211
@@ -230,7 +255,8 @@ Simplest query is:
 ```sql
 select pool_id, sum (amount) from epoch_stake
     where epoch_no = 216 group by pool_id ;
-
+```
+```sql
  pool_id |       sum
 ---------+-----------------
        1 |  25326935163066
@@ -245,6 +271,8 @@ Or, to use the Bech32 pool identifier instead of the Postgres generated `pool_id
 select pool_hash.view, sum (amount) as lovelace from epoch_stake
     inner join pool_hash on epoch_stake.pool_id = pool_hash.id
     where epoch_no = 216 group by pool_hash.id ;
+```
+```sql
                            view                           |    lovelace
 ----------------------------------------------------------+-----------------
  pool10p6wd9k0fwk2zqkqnqr8efyr7gms627ujk9dxgk6majskhawr6r |    789466838780
@@ -263,6 +291,8 @@ select delegation.active_epoch_no, pool_hash.view from delegation
     inner join pool_hash on delegation.pool_hash_id = pool_hash.id
     where stake_address.view = 'stake1u8gsndukzghdukmqdsd7r7wd6kvamvjv2pzcgag8v6jd69qfqyl5h'
     order by active_epoch_no asc;
+```
+```sql
  active_epoch_no |                           view
 -----------------+----------------------------------------------------------
              212 | pool1hwlghkwnjsjk8370qt3dvp23d7urwm36f95fmxcz3np2kghknj9
@@ -284,6 +314,8 @@ select reward.earned_epoch, pool_hash.view as delegated_pool, reward.amount as l
     inner join pool_hash on reward.pool_id = pool_hash.id
     where stake_address.view = 'stake1u8gsndukzghdukmqdsd7r7wd6kvamvjv2pzcgag8v6jd69qfqyl5h'
     order by earned_epoch asc ;
+```
+```sql
  epoch_no |                      delegated_pool                      | lovelace
 ----------+----------------------------------------------------------+----------
       212 | pool1hwlghkwnjsjk8370qt3dvp23d7urwm36f95fmxcz3np2kghknj9 |  2953284
@@ -307,6 +339,8 @@ select block.block_no, block.epoch_no, pool_hash.view as pool_view
     inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
     where block.epoch_no = 220
     and pool_hash.view = 'pool137x32lrkprphrd0aa8x4jqz98z6lc0wawlc88hdjeps4qe408ad' ;
+```
+```sql
  block_no | epoch_no |                        pool_view
 ----------+----------+----------------------------------------------------------
   4760198 |      220 | pool137x32lrkprphrd0aa8x4jqz98z6lc0wawlc88hdjeps4qe408ad
@@ -322,6 +356,8 @@ select block.epoch_no, count (*) as block_count
     inner join pool_hash on slot_leader.pool_hash_id = pool_hash.id
     where pool_hash.view = 'pool1nux6acnlx0du7ss9fhg2phjlaqe87l4wcurln5r6f0k8xreluez'
     group by block.epoch_no, pool_hash.view ;
+```
+```sql
  epoch_no | block_count
 ----------+-------------
       212 |           1
@@ -336,6 +372,8 @@ select block.epoch_no, count (*) as block_count
 select tx.id as tx_id, tx.block_id as tx_block_id, tx_out.address as tx_out_address
     from tx inner join tx_out on tx.id = tx_out.tx_id
     where tx.hash = '\x9053a4cf0c6c9fb29792c78e688c5915a02909d0073371d8fff1abba0bed3065';
+```
+```sql
   tx_id  | tx_block_id |                       tx_out_address
 ---------+-------------+------------------------------------------------------------
  3192730 |     5083822 | addr1vy6d0htdaa9k8du2262p2ju74s25g6rjyjsc9x2fky9r6jq402r08
@@ -353,6 +391,8 @@ cardano-cli transaction txid --tx-file metadata.txsigned
 select stake_address.view as stake_address, epoch_stake.epoch_no, epoch_stake.amount
     from stake_address inner join epoch_stake on stake_address.id = epoch_stake.addr_id
     where stake_address.view = 'stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n' ;
+```
+```sql
                         stake_address                        | epoch_no |   amount
 -------------------------------------------------------------+----------+-------------
  stake1u8mt5gqclkq0swmvzx9lvq4jgwsnx9yh030yrxwqwllu0mq2m0l4n |      211 |  1561003730
@@ -367,6 +407,8 @@ from the treasury. These can be coalesced into single query via an SQL `union` o
 select addr_id, amount, NULL as reward_epoch_no, tx_id as treasury_tx_id from treasury
     union
     select addr_id, amount, earned_epoch as reward_epoch_no, NULL as treasury_tx_id from reward ;
+```
+```sql
  addr_id |    amount     | reward_epoch_no | treasury_tx_id
 ---------+---------------+-----------------+----------------
        3 |       1071786 |             216 |
@@ -401,7 +443,8 @@ The UTxO set is dependent on time, this will return it for a given timestamp
       and ( -- Only outputs consumed in the future or unconsumed outputs
 		const.effective_time_ <= consuming_block.time or consuming_input.id IS NULL
 		) ;
-
+```
+```sql
                            address                           |   lovelace    |      timestamp
 -------------------------------------------------------------+---------------+---------------------
  Ae2tdPwUPEZFdcW8MaYNxoJJkKmkSwJD5D4AdJPBLLn7PCVMenKMvwtWV8K |       1000000 | 2017-09-23 21:44:51
@@ -435,7 +478,8 @@ select
     left join tx as redemption_tx on redemption_tx.id = redemption_input.tx_in_id
     left join block as redemption_block on redemption_block.id = redemption_tx.block_id
     where genesis_block.epoch_no is null ;
-
+```
+```sql
                            address                           |    ada     |     redeemed_at     |      origin
 -------------------------------------------------------------+------------+---------------------+------------------
  Ae2tdPwUPEZJkVfTW9cFmxAxsp1WtgV4hde53p5eLccUUFzQu8amyrLHcTL |     385509 | 2017-11-19 06:36:11 | Pre-Sale
@@ -455,6 +499,8 @@ select sum (value) / 1000000 as script_locked from tx_out as tx_outer where
           on tx_out.tx_id = tx_in.tx_out_id and tx_out.index = tx_in.tx_out_index
           where tx_outer.id = tx_out.id
       ) ;
+```
+```sql
     script_locked
 ----------------------
  3695300.068246000000
@@ -467,6 +513,8 @@ select sum (value) / 1000000 as script_locked from tx_out as tx_outer where
 select tx.id as tx_id, tx.fee as fees, SUM(redeemer.fee) as script_fees, SUM(redeemer.unit_mem) as unit_mem,
        SUM (redeemer.unit_steps) as unit_steps, tx.valid_contract as valid, count(redeemer.id) scripts, tx.script_size
        from tx join redeemer on tx.id = redeemer.tx_id group by tx.id;
+```
+```sql
  tx_id | fees     |script_fees |unit_mem  |unit_steps | valid|scripts|script_size
  ------+----------+------------+----------+-----------+------+-------+-----------
  11812 |200193089 |  200000000 | 100000000|  100000000| t    |      1|         92
@@ -487,6 +535,8 @@ select SUM(value)/1000000 as lost_amount
   join tx_in on tx.id = tx_in.tx_in_id
   join tx_out on tx_in.tx_out_id = tx_out.id
     where tx.valid_contract = false ;
+```
+```sql
   lost_amount
 --------------------
  592003625.28471400
@@ -500,6 +550,8 @@ select tx.id as tx_id, tx_out.value as tx_out_value, redeemer.unit_mem, redeemer
   join tx_in on tx_in.redeemer_id = redeemer.id
   join tx_out on tx_in.tx_out_id = tx_out.tx_id and tx_in.tx_out_index = tx_out.index
     where redeemer.script_hash = '\x8a08f851b22e5c54de087be307eeab3b5c8588a8cea8319867c786e0';
+```
+```sql
  tx_id | tx_out_value |  unit_mem   | unit_steps  |    fee     | purpose
 -------+--------------+-------------+-------------+------------+---------
  10184 |    200000000 |    70000000 |    70000000 |  140000000 | spend
@@ -518,6 +570,8 @@ select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer
     join multi_asset on redeemer.script_hash = multi_asset.policy
     join ma_tx_mint on ma_tx_mint.ident = multi_asset.id and redeemer.tx_id = ma_tx_mint.tx_id
       where purpose = 'mint';
+```
+```sql
  tx_id  | unit_mem | unit_steps | redeemer_fee | purpose |                           policy                           |           name           | quantity
 --------+----------+------------+--------------+---------+------------------------------------------------------------+--------------------------+----------
  572051 |   994524 |  365737701 |        83754 | mint    | \xfda1b6b487bee2e7f64ecf24d24b1224342484c0195ee1b7b943db50 | \x506c75747573436f696e   |      100
@@ -544,6 +598,8 @@ select redeemer.tx_id as tx_id, redeemer.unit_mem, redeemer.unit_steps, redeemer
      LEFT JOIN multi_asset ON multi_asset.id = a.ident
      LEFT JOIN tx ON tx.id = a.mtx
      LEFT JOIN block ON block.id = tx.block_id;
+```
+```sql
                       fingerprint                  |                           policy                           |       name       | ident | mints |    quantity    |       created
 ----------------------------------------------+------------------------------------------------------------+------------------+-------+-------+----------------+---------------------
  asset1jtqefvdycrenq2ly6ct8rwcu5e58va432vj586 | \x476039a0949cf0b22f6a800f56780184c44533887ca6e821007840c3 | \x6e7574636f696e |     1 |     1 |              1 | 2021-02-03 20:20:46
@@ -562,8 +618,8 @@ select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, po
     left join offchain_pool_data on offchain_pool_data.pmr_id = pool_metadata_ref.id
   where tx_count = 0 and epoch_no > 150
   order by block.hash, pool_update.active_epoch_no desc;
-
-
+```
+```sql
                              block_hash                             | epoch_no | tx_count |                         pool_hash                          |     pledge      | active_epoch_no |                               url                                | ticker_name
 --------------------------------------------------------------------+----------+----------+------------------------------------------------------------+-----------------+-----------------+------------------------------------------------------------------+-------------
  \x0000f4b44d1484d7280f087c1df94f068a02e23570e8ed9eb5c0dd980d4c46c1 |      165 |        0 | \xe402f5894b8a7073f198bb0710d6294f2ac354ede2577b5ce15159a4 |     50000000000 |             137 | https://www.canadastakes.ca/metadata/can1-testnet-metadata.json  |
@@ -605,8 +661,8 @@ select distinct on(block.hash) block.hash as block_hash , epoch_no, tx_count, po
      LEFT JOIN tx txr ON txr.id = re.tx_id
      LEFT JOIN block br ON br.id = txr.block_id
   WHERE (de.tx_id < re.tx_id OR de.* IS NULL);
-
-
+```
+```sql
                            address                           |                   delegated_now_poolid                   | delegated_now_epoch |                 delegated_before_poolid                  | delegated_before_epoch | addr_id | stake_key_registered
 -------------------------------------------------------------+----------------------------------------------------------+---------------------+----------------------------------------------------------+------------------------+---------+----------------------
  stake1u9ylzsgxaa6xctf4juup682ar3juj85n8tx3hthnljg47zctvm3rc | pool1pu5jlj4q9w9jlxeu370a3c9myx47md5j5m2str0naunn2q3lkdy |                 210 |                                                          |                        |       1 | 2020-07-29 22:41:31
