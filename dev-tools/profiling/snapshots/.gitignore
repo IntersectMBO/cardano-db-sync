@@ -1,0 +1,6 @@
+# Ignore profiling snapshots (can be GBs)
+*.bin
+*.snapshot
+
+# Keep directory
+!.gitignore

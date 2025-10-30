@@ -1,0 +1,10 @@
+# Ignore memory logs
+*.csv
+*.log
+
+# Ignore compressed logs
+*.csv.gz
+*.log.gz
+
+# Keep directory
+!.gitignore

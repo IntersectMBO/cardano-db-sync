@@ -1,0 +1,5 @@
+# Ignore all Prometheus TSDB data
+*
+
+# But keep the directory
+!.gitignore
