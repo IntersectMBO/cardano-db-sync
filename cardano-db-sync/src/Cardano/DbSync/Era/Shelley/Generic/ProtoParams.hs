@@ -74,7 +74,7 @@ data Deposits = Deposits
   , poolDeposit :: Coin
   }
 
-epochProtoParams :: ExtLedgerState CardanoBlock -> Maybe ProtoParams
+epochProtoParams :: ExtLedgerState CardanoBlock mk -> Maybe ProtoParams
 epochProtoParams lstate =
   case ledgerState lstate of
     LedgerStateByron _ -> Nothing
@@ -87,11 +87,11 @@ epochProtoParams lstate =
 
 getProtoParams ::
   EraGov era =>
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   PParams era
 getProtoParams st = Shelley.nesEs (Consensus.shelleyLedgerState st) ^. Shelley.curPParamsEpochStateL
 
-getDeposits :: ExtLedgerState CardanoBlock -> Maybe Deposits
+getDeposits :: ExtLedgerState CardanoBlock mk -> Maybe Deposits
 getDeposits lstate =
   case ledgerState lstate of
     LedgerStateByron _ -> Nothing

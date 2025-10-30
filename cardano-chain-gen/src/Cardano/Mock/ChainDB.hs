@@ -2,13 +2,15 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Cardano.Mock.ChainDB (
   ChainDB (..),
+  currentState,
   initChainDB,
   headTip,
-  currentState,
   replaceGenesisDB,
   extendChainDB,
   findFirstPoint,
@@ -19,10 +21,15 @@ module Cardano.Mock.ChainDB (
 
 import Cardano.Mock.Chain
 import Ouroboros.Consensus.Block
+import Ouroboros.Consensus.Cardano.CanHardFork ()
+import Ouroboros.Consensus.Cardano.Ledger ()
 import Ouroboros.Consensus.Config
 import Ouroboros.Consensus.Ledger.Abstract
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
-import Ouroboros.Consensus.Ledger.SupportsProtocol
+import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
+import qualified Ouroboros.Consensus.Ledger.Tables as Consensus
+import Ouroboros.Consensus.Ledger.Tables.Utils (applyDiffsMK, forgetLedgerTables, restrictValuesMK)
+import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
 import Ouroboros.Network.Block (Tip (..))
 
 -- | Thin layer around 'Chain' that knows how to apply blocks and maintain
@@ -41,7 +48,10 @@ instance Eq (Chain block) => Eq (ChainDB block) where
 instance Show (Chain block) => Show (ChainDB block) where
   show = show . cchain
 
-initChainDB :: TopLevelConfig block -> State block -> ChainDB block
+initChainDB ::
+  TopLevelConfig block ->
+  State block ->
+  ChainDB block
 initChainDB config st = ChainDB config (Genesis st)
 
 headTip :: HasHeader block => ChainDB block -> Tip block
@@ -56,14 +66,42 @@ currentState chainDB =
     Genesis st -> st
     _ :> (_, st) -> st
 
-replaceGenesisDB :: ChainDB block -> State block -> ChainDB block
+replaceGenesisDB ::
+  ChainDB block ->
+  State block ->
+  ChainDB block
 replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
 
-extendChainDB :: LedgerSupportsProtocol block => ChainDB block -> block -> ChainDB block
+extendChainDB ::
+  forall block.
+  LedgerSupportsProtocol block =>
+  ChainDB block ->
+  block ->
+  ChainDB block
 extendChainDB chainDB blk = do
   let !chain = cchain chainDB
-      !st = tickThenReapply ComputeLedgerEvents (Consensus.ExtLedgerCfg $ chainConfig chainDB) blk (getTipState chain)
-   in chainDB {cchain = chain :> (blk, st)}
+      -- Get the current ledger state
+      (tipState, tables) = getTipState chain
+      -- Apply the block and compute the diffs
+      keys :: LedgerTables (Consensus.ExtLedgerState block) KeysMK
+      keys = getBlockKeySets blk
+      ledgerTables = Consensus.getLedgerTables tables
+      restrictedTables = restrictValuesMK ledgerTables (Consensus.getLedgerTables keys)
+      ledgerState = Consensus.withLedgerTables tipState (Consensus.LedgerTables restrictedTables)
+      !diffState =
+        tickThenReapply
+          ComputeLedgerEvents
+          (Consensus.ExtLedgerCfg $ chainConfig chainDB)
+          blk
+          ledgerState
+      !ledgerTables' =
+        Consensus.LedgerTables
+          . applyDiffsMK ledgerTables
+          . Consensus.getLedgerTables
+          . Consensus.projectLedgerTables
+          $ diffState
+      !ledgerState' = forgetLedgerTables diffState
+   in chainDB {cchain = chain :> (blk, (ledgerState', ledgerTables'))}
 
 findFirstPoint :: HasHeader block => [Point block] -> ChainDB block -> Maybe (Point block)
 findFirstPoint points chainDB = findFirstPointChain points (cchain chainDB)
