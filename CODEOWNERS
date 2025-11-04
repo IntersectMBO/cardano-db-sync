@@ -1,20 +1,2 @@
 # General reviewers per PR
-* @IntersectMBO/core-tech-dbsync
-
-# Specific reviewers for code pieces
-# NB - The last matching pattern takes precedence
-
-# /doc folder and README.* needs to be owned by @docs-access
-doc                          @input-output-hk/docs-access @IntersectMBO/core-tech-dbsync
-Readme.*                     @input-output-hk/docs-access @IntersectMBO/core-tech-dbsync
-CONTRIBUTING.rst             @input-output-hk/docs-access @IntersectMBO/core-tech-dbsync
-
-# DevOps
-.github                      @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-/config                      @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-nix                          @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-*.nix                        @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-flake.lock                   @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-bors.toml                    @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-docker-compose.yml           @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
-scripts/postgresql-setup.sh  @IntersectMBO/core-tech-devx @IntersectMBO/core-tech-release
+* @IntersectMBO/core-tech-dbsync-maintainers
