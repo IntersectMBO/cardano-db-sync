@@ -244,11 +244,8 @@
                     # libpq static is pretty broken in nixpkgs. We can't rely on the
                     # pkg-config, so we have to add the correct libraries ourselves
                     #
-                    # TODO[sgillespie]: Are these still required? Review the
-                    # postgresql/nixpkgs packaging scripts
-                    #
-                    # "-optl-Wl,-lpgcommon"
-                    # "-optl-Wl,-lpgport"
+                    "-optl-Wl,-lpgcommon"
+                    "-optl-Wl,-lpgport"
                     "-optl-Wl,-lm"
 
                     # Since we aren't using pkg-config, it won't automatically include
