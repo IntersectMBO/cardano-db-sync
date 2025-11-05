@@ -1,8 +1,13 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 import Cardano.Db (MigrationDir (..), PGPassSource (PGPassDefaultEnv, PGPassEnv), gitRev)
 import Cardano.DbSync (runDbSyncNode)
+
+#ifdef GHC_DEBUG_ENABLED
+import GHC.Debug.Stub (withGhcDebug)
+#endif
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Metrics (withMetricSetters)
@@ -21,8 +26,16 @@ import Prelude (error)
 ---------------------------------------------------------------------------------------------------
 -- Main entry point into the app
 ---------------------------------------------------------------------------------------------------
+
 main :: IO ()
-main = do
+#ifdef GHC_DEBUG_ENABLED
+main = withGhcDebug dbSyncMain
+#else
+main = dbSyncMain
+#endif
+
+dbSyncMain :: IO ()
+dbSyncMain = do
   cmd <- Opt.execParser opts
   case cmd of
     CmdVersion -> runVersionCommand

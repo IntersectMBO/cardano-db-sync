@@ -1,0 +1,42 @@
+# Prometheus Configuration for Cardano DB Sync Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'cardano-db-sync-dev'
+
+# Scrape configurations
+scrape_configs:
+  # PostgreSQL metrics via postgres_exporter
+  - job_name: 'postgres-cexplorer'
+    static_configs:
+      - targets: ['localhost:9187']
+        labels:
+          instance: 'cardano-db-sync-db'
+          environment: 'development'
+    scrape_interval: 5s
+
+  # System metrics via node_exporter
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+        labels:
+          instance: 'cardano-db-sync-host'
+          environment: 'development'
+    scrape_interval: 10s
+
+  # Cardano DB Sync application metrics
+  - job_name: 'cardano-db-sync'
+    static_configs:
+      - targets: ['localhost:8080']
+        labels:
+          instance: 'cardano-db-sync'
+          environment: 'development'
+    scrape_interval: 10s
+    # This endpoint will expose:
+    # - Sync progress metrics
+    # - Database operation metrics
+    # - Memory/GC metrics from ghc-debug integration
+    # - Cache hit/miss rates
+    # - Transaction processing rates
