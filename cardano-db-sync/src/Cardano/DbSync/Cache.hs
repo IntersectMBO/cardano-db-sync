@@ -192,9 +192,16 @@ queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.RewardAccount _ cred) = 
             case queryRes of
               Nothing -> pure queryRes
               Just stakeAddrsId -> do
-                let !stakeCache' = case cacheUA of
+                let stable = scStableCache stakeCache
+                    maxSize = 150000
+                    trimSize = 145000 -- Trim to 145k when hitting 150k (less aggressive, better hit rate)
+                    trimmedStable =
+                      if Map.size stable >= maxSize
+                        then Map.fromList $ take trimSize $ Map.toList stable
+                        else stable
+                    !stakeCache' = case cacheUA of
                       UpdateCache -> stakeCache {scLruCache = LRU.insert cred stakeAddrsId (scLruCache stakeCache)}
-                      UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId (scStableCache stakeCache)}
+                      UpdateCacheStrong -> stakeCache {scStableCache = Map.insert cred stakeAddrsId trimmedStable}
                       _otherwise -> stakeCache
                 liftIO $
                   atomically $
