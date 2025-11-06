@@ -1,4 +1,5 @@
 {-# LANGUAGE NumericUnderscores #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 
 module Test.Cardano.Db.Mock.Unit.Conway.Rollback (
   simpleRollback,
@@ -10,14 +11,18 @@ module Test.Cardano.Db.Mock.Unit.Conway.Rollback (
   stakeAddressRollback,
   rollbackChangeTxOrder,
   rollbackFullTx,
+  drepDistrRollback,
 ) where
 
+import qualified Cardano.Db as DB
+import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.TxCert (ConwayDelegCert (..), Delegatee (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
+import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types (PoolIndex (..), StakeIndex (..), UTxOIndex (..))
 import Cardano.Prelude
 import Data.Maybe.Strict (StrictMaybe (..))
@@ -25,9 +30,9 @@ import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi
-import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertTxCount)
+import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount)
 import Test.Tasty.HUnit (Assertion ())
-import Prelude (last)
+import Prelude (error, head, last)
 
 simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
 simpleRollback =
@@ -55,7 +60,7 @@ simpleRollback =
 
 bigChain :: IOManager -> [(Text, Text)] -> Assertion
 bigChain =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
 
@@ -81,7 +86,7 @@ bigChain =
 
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
 
@@ -109,7 +114,7 @@ restartAndRollback =
 
 lazyRollback :: IOManager -> [(Text, Text)] -> Assertion
 lazyRollback =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -134,7 +139,7 @@ lazyRollback =
 
 lazyRollbackRestart :: IOManager -> [(Text, Text)] -> Assertion
 lazyRollbackRestart =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -162,7 +167,7 @@ lazyRollbackRestart =
 
 doubleRollback :: IOManager -> [(Text, Text)] -> Assertion
 doubleRollback =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create points to rollback to
@@ -197,7 +202,7 @@ doubleRollback =
 
 stakeAddressRollback :: IOManager -> [(Text, Text)] -> Assertion
 stakeAddressRollback =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollbackTo
@@ -231,7 +236,7 @@ stakeAddressRollback =
 
 rollbackChangeTxOrder :: IOManager -> [(Text, Text)] -> Assertion
 rollbackChangeTxOrder =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -262,7 +267,7 @@ rollbackChangeTxOrder =
 
 rollbackFullTx :: IOManager -> [(Text, Text)] -> Assertion
 rollbackFullTx =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -291,3 +296,76 @@ rollbackFullTx =
     assertTxCount dbSync 14
   where
     testLabel = "conwayRollbackFullTx"
+
+-- | Test for DrepDistr rollback edge case when rolling back to an epoch boundary.
+-- Verifies that DrepDistr records are properly deleted during rollback and replay succeeds
+-- without duplicate key constraint violations.
+drepDistrRollback :: IOManager -> [(Text, Text)] -> Assertion
+drepDistrRollback =
+  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Register stake credentials and DReps
+    void $ registerAllStakeCreds interpreter mockServer
+    void $ registerDRepsAndDelegateVotes interpreter mockServer
+
+    -- Fill the rest of epoch 0 and cross into epoch 1
+    -- This triggers insertDrepDistr for epoch 1 at the epoch boundary (first block of epoch 1)
+    epoch0 <- fillUntilNextEpoch interpreter mockServer
+    assertBlockNoBackoff dbSync (2 + length epoch0)
+
+    -- Verify DrepDistr for epoch 1 was inserted
+    let drepId = Prelude.head Forging.unregisteredDRepIds
+    assertEqQuery
+      dbSync
+      (DB.queryDRepDistrAmount (unCredentialHash drepId) 1)
+      10_000
+      "Expected DrepDistr for epoch 1 after crossing boundary"
+
+    -- Fill all of epoch 1 and cross into epoch 2
+    epoch1 <- fillUntilNextEpoch interpreter mockServer
+    assertBlockNoBackoff dbSync (2 + length epoch0 + length epoch1)
+
+    -- Verify DrepDistr for epoch 2 was inserted
+    assertEqQuery
+      dbSync
+      (DB.queryDRepDistrAmount (unCredentialHash drepId) 2)
+      10_000
+      "Expected DrepDistr for epoch 2 after crossing boundary"
+
+    -- Identify the epoch 2 boundary block (last block of epoch1 list)
+    rollbackPoint <- case reverse epoch1 of
+      [] -> error "fillUntilNextEpoch returned empty list for epoch 1"
+      (epoch2Boundary : _) -> pure $ blockPoint epoch2Boundary
+
+    -- Continue a bit into epoch 2 (after DrepDistr insertion at the boundary)
+    blksAfter <- forgeAndSubmitBlocks interpreter mockServer 3
+    assertBlockNoBackoff dbSync (2 + length epoch0 + length epoch1 + length blksAfter)
+
+    -- Rollback to the epoch 2 boundary (first block of epoch 2)
+    rollbackTo interpreter mockServer rollbackPoint
+
+    -- Create fork - replay through the epoch 2 boundary
+    -- This will re-insert DrepDistr for epoch 2
+    -- SUCCESS: No duplicate key constraint violation because epoch 2 was properly deleted
+    -- (If the fix didn't work, we'd get a unique constraint violation here)
+    blksFork <- forgeAndSubmitBlocks interpreter mockServer 5
+
+    -- Verify DrepDistr for epoch 1 still exists (not affected by rollback)
+    assertEqQuery
+      dbSync
+      (DB.queryDRepDistrAmount (unCredentialHash drepId) 1)
+      10_000
+      "DrepDistr for epoch 1 should still exist after rollback"
+
+    -- Verify final state
+    assertBlockNoBackoff dbSync (2 + length epoch0 + length epoch1 + length blksFork)
+
+    -- Verify DrepDistr for both epochs exist after replay
+    assertEqQuery
+      dbSync
+      (DB.queryDRepDistrAmount (unCredentialHash drepId) 2)
+      10_000
+      "DrepDistr for epoch 2 should be re-inserted after replay through boundary"
+  where
+    testLabel = "conwayDrepDistrRollback"

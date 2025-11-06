@@ -118,6 +118,7 @@ unitTests iom knownMigrations =
     , testGroup
         "rollbacks"
         [ test "simple rollback" Rollback.simpleRollback
+        , test "drepDistr rollback" Rollback.drepDistrRollback
         , test "sync bigger chain" Rollback.bigChain
         , test "rollback while db-sync is off" Rollback.restartAndRollback
         , test "big rollback executed lazily" Rollback.lazyRollback
