@@ -320,12 +320,12 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart 
         newEmptyCache
           CacheCapacity
             { cacheCapacityAddress = 50000
-            , cacheCapacityStake = 50000
+            , cacheCapacityStake = 150000
             , cacheCapacityDatum = 125000
             , cacheCapacityMultiAsset = 125000
             , cacheCapacityTx = 50000
             , cacheOptimisePools = 50000
-            , cacheOptimiseStake = 50000
+            , cacheOptimiseStake = 150000
             }
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
