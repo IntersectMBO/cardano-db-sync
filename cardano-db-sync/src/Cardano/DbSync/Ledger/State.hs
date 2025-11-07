@@ -186,7 +186,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leNetwork = nw
       , leSystemStart = systemStart
       , leAbortOnPanic = soptAbortOnInvalid syncOptions
-      , leSnapshotEveryFollowing = sicFollowing $ soptSnapshotInterval syncOptions
+      , leSnapshotNearTipEpoch = sicNearTipEpoch $ soptSnapshotInterval syncOptions
       , leSnapshotEveryLagging = sicLagging $ soptSnapshotInterval syncOptions
       , leInterpreter = intervar
       , leStateVar = svar
@@ -218,7 +218,8 @@ readStateUnsafe env = do
 applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
 applyBlockAndSnapshot ledgerEnv blk isCons = do
   (oldState, appResult) <- applyBlock ledgerEnv blk
-  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+  -- 864000 seconds = 10 days; consider synced "near tip" if within 10 days of current time
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 864000)
   pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
@@ -330,8 +331,8 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
     Just newEpoch
       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
       , newEpochNo > 0
-      , -- Snapshot every epoch when near tip, every 10 epochs when lagging, or always for epoch >= 580
-        (isCons && syncState == SyncFollowing) || (newEpochNo `mod` 10 == 0) || newEpochNo >= 580 ->
+      , -- Snapshot every epoch when near tip, every 10 epochs when lagging, or always for epoch >= threshold
+        (isCons && syncState == SyncFollowing) || (newEpochNo `mod` 10 == 0) || newEpochNo >= leSnapshotNearTipEpoch env ->
           do
             -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
             liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
@@ -346,8 +347,8 @@ storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
     timeToSnapshot :: SyncState -> BlockNo -> Bool
     timeToSnapshot syncSt bNo =
       case (syncSt, unBlockNo bNo) of
-        (SyncFollowing, bno) -> bno `mod` leSnapshotEveryFollowing env == 0
-        (SyncLagging, _) -> False
+        (SyncFollowing, _) -> False -- No block-based snapshots when following
+        (SyncLagging, bno) -> bno `mod` leSnapshotEveryLagging env == 0
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env lState mEpochNo = do

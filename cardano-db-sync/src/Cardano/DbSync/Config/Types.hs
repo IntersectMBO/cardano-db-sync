@@ -281,7 +281,7 @@ data JsonTypeConfig
   deriving (Eq, Show)
 
 data SnapshotIntervalConfig = SnapshotIntervalConfig
-  { sicFollowing :: !Word64
+  { sicNearTipEpoch :: !Word64
   , sicLagging :: !Word64
   }
   deriving (Eq, Show)
@@ -739,20 +739,20 @@ instance FromJSON JsonTypeConfig where
 instance ToJSON SnapshotIntervalConfig where
   toJSON cfg =
     Aeson.object
-      [ "following" .= sicFollowing cfg
+      [ "near_tip_epoch" .= sicNearTipEpoch cfg
       , "lagging" .= sicLagging cfg
       ]
 
 instance FromJSON SnapshotIntervalConfig where
   parseJSON = Aeson.withObject "snapshot_interval" $ \obj ->
     SnapshotIntervalConfig
-      <$> obj .: "following"
-      <*> obj .: "lagging"
+      <$> obj .:? "near_tip_epoch" .!= sicNearTipEpoch def
+      <*> obj .:? "lagging" .!= sicLagging def
 
 instance Default SnapshotIntervalConfig where
   def =
     SnapshotIntervalConfig
-      { sicFollowing = 500 -- Every 500 blocks when near tip
+      { sicNearTipEpoch = 580 -- Epoch threshold to consider being near tip
       , sicLagging = 100000 -- Every 100,000 blocks when syncing (less frequent)
       }
 

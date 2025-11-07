@@ -616,17 +616,17 @@ Snapshot Interval Properties:
 
 | Property                         | Type      | Required | Default |
 | :------------------------------- | :-------- | :------- | :------ |
-| [following](#following)          | `integer` | Optional | 500     |
+| [near\_tip\_epoch](#near-tip-epoch) | `integer` | Optional | 580     |
 | [lagging](#lagging)              | `integer` | Optional | 100000  |
 
-### Following
+### Near Tip Epoch
 
-`snapshot_interval.following`
+`snapshot_interval.near_tip_epoch`
 
 * Type: `integer`
-* Default: `500`
+* Default: `580`
 
-Number of blocks between snapshots when db-sync is near the tip of the chain (within approximately 10 minutes). More frequent snapshots when following the tip ensure faster recovery from rollbacks.
+Epoch threshold used to determine snapshot behavior. When syncing reaches this epoch or later, db-sync is considered to be approaching or at the current tip of the chain. Combined with time-based detection (within 10 days of current time), this ensures snapshots are taken every epoch when near the tip for fast rollback recovery. During earlier epochs or when syncing behind, snapshots are taken every 10 epochs or according to the `lagging` block interval.
 
 ### Lagging
 
@@ -635,14 +635,14 @@ Number of blocks between snapshots when db-sync is near the tip of the chain (wi
 * Type: `integer`
 * Default: `100000`
 
-Number of blocks between snapshots when db-sync is syncing and significantly behind the tip of the chain. Less frequent snapshots during initial sync improves performance by reducing expensive disk operations.
+Number of blocks between snapshots when db-sync is syncing and significantly behind the tip of the chain (more than 10 days behind current time). Less frequent snapshots during initial sync improves performance by reducing expensive disk operations.
 
 ### Example
 
 ```json
 {
   "snapshot_interval": {
-    "following": 500,
+    "near_tip_epoch": 580,
     "lagging": 100000
   }
 }
@@ -650,8 +650,9 @@ Number of blocks between snapshots when db-sync is syncing and significantly beh
 
 ### Performance Considerations
 
-- **Smaller `following` value**: Faster recovery from rollbacks when near the tip, but more frequent disk writes
+- **Lower `near_tip_epoch` value**: Start taking frequent epoch-based snapshots earlier in the chain history
+- **Higher `near_tip_epoch` value**: Delay frequent snapshots until later in the chain, improving sync speed for longer
 - **Larger `lagging` value**: Faster initial sync with reduced IOPS, but slower recovery if rollback is needed during sync
-- **Recommended for initial sync**: Use a large `lagging` value (50000-100000) to maximise sync speed
-- **Recommended when near tip**: Use a small `following` value (500-1000) to enable quick rollback recovery
+- **Recommended for initial sync**: Use a large `lagging` value (100000+) and appropriate `near_tip_epoch` to maximize sync speed
+- **Near tip detection**: Automatically switches to epoch-based snapshots when within 10 days of current time, regardless of epoch number
 
