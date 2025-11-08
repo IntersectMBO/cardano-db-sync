@@ -272,11 +272,11 @@ context in `docker/` with a minimal `Dockerfile` designed for static executables
 Quick example (assumes a static executable):
 
 ```bash
-# Build a static executable using Nix
+# Build the cardano-db-sync package with Nix
 nix build .#cardano-db-sync-linux
 
-# Copy the built binary into the docker context
-cp -L result/bin/cardano-db-sync docker/
+# Extract the binary from the tarball into the docker context
+tar xf result/cardano-db-sync-*-linux.tar.gz -C docker/ --strip-components=1 bin/cardano-db-sync
 
 # Build the lightweight image
 docker build -t cardano-db-sync:lightweight docker/

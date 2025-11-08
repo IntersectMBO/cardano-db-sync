@@ -15,16 +15,16 @@ configuration at runtime via volumes or create their own derived images.
 Quickstart
 ----------
 
-1. Build a static `cardano-db-sync` binary with Nix:
+1. Build the cardano-db-sync package with Nix:
 
    ```bash
    nix build .#cardano-db-sync-linux
    ```
 
-2. Copy the binary to this directory (follow symlinks):
+2. Extract the binary from the tarball and copy it to this directory:
 
    ```bash
-   cp -L result/bin/cardano-db-sync docker/
+   tar xf result/cardano-db-sync-*-linux.tar.gz -C docker/ --strip-components=1 bin/cardano-db-sync
    ```
 
 3. Build the image:
