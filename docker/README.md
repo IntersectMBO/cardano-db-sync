@@ -44,7 +44,7 @@ Quickstart
    ```bash
    docker run -v $PWD/environments/mainnet:/config \
      --env POSTGRES_HOST=postgres --env POSTGRES_PORT=5432 \
-     cardano-db-sync:lightweight run --config /config/db-sync-config.json
+     cardano-db-sync:lightweight --config /config/db-sync-config.json
    ```
 
 Notes
