@@ -21,10 +21,16 @@ Quickstart
    nix build .#cardano-db-sync-linux
    ```
 
-2. Extract the binary from the tarball and copy it to this directory:
+2. a) Extract the binary from the tarball and copy it to this directory:
 
    ```bash
    tar xf result/cardano-db-sync-*-linux.tar.gz -C docker/ --strip-components=1 ./bin/cardano-db-sync
+   ```
+
+2. b) move the binary:
+
+   ```bash
+   mv docker/bin/cardano-db-sync ./docker && rm -r docker/bin/
    ```
 
 3. Build the image:
