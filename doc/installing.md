@@ -12,8 +12,8 @@ This guide assumes you have the following tools:
 
 In addition, Cardano DB Sync requires the following software (instructions below):
 
- * [GHC](https://www.haskell.org/ghcup/install/) >= 8.10.7
- * [Cabal](https://www.haskell.org/ghcup/install/) >= 3.10.1.0
+ * [GHC](https://www.haskell.org/ghcup/install/) >= 9.6.7
+ * [Cabal](https://www.haskell.org/ghcup/install/) >= 3.12.1.0
  * [libsodium-vrf](https://github.com/IntersectMBO/libsodium)
  * [secp256k1](https://github.com/bitcoin-core/secp256k1)
  * [blst](https://github.com/supranational/blst)
@@ -42,10 +42,10 @@ dependencies.
 Once GHCup is installed, open a new terminal (to get an updated environment) and run:
 
 ```bash
-ghcup install ghc 8.10.7
-ghcup install cabal 3.10.1.0
-ghcup set ghc 8.10.7
-ghcup set cabal 3.10.1.0
+ghcup install ghc 9.6.7
+ghcup install cabal 3.12.1.0
+ghcup set ghc 9.6.7
+ghcup set cabal 3.12.1.0
 ```
 
 Check that you will use the GHCup tools (and not any other installation on the system):
@@ -236,7 +236,7 @@ Explicitly set the GHC version that we installed earlier. This avoids defaulting
 system version of GHC that might be different than the one you have installed.
 
 ```bash
-echo "with-compiler: ghc-8.10.7" >> cabal.project.local
+echo "with-compiler: ghc-9.6.7" >> cabal.project.local
 ```
 
 macOS installs OpenSSL in a different location than expected by default. If you have

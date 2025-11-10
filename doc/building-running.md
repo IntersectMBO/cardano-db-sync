@@ -100,7 +100,7 @@ If building locally, to find `cardano-db-sync` executable location use:
 
 ```
 find . -name cardano-db-sync -executable -type f
-./dist-newstyle/build/x86_64-linux/ghc-8.10.4/cardano-db-sync-12.0.0/build/cardano-db-sync/cardano-db-sync
+./dist-newstyle/build/x86_64-linux/ghc-9.6.7/cardano-db-sync-12.0.0/build/cardano-db-sync/cardano-db-sync
 ```
 
 On macOS `brew install postgresl openssl@1.1` and extend PKG_CONFIG_PATH with
