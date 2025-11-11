@@ -192,12 +192,13 @@ queryBlockNoAndEpochStmt =
     -- (where DrepDistr will be inserted). Using the previous block's epoch ensures
     -- DrepDistr for the current epoch gets deleted, preventing duplicates
     -- when replaying through the epoch boundary.
+    -- For genesis (block 0), there's no previous block, so use the current epoch.
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT curr.id, prev.epoch_no"
+          [ "SELECT curr.id, COALESCE(prev.epoch_no, curr.epoch_no)"
           , " FROM " <> tableName (Proxy @a) <> " curr"
-          , " JOIN " <> tableName (Proxy @a) <> " prev ON prev.block_no = $1 - 1"
+          , " LEFT JOIN " <> tableName (Proxy @a) <> " prev ON prev.block_no = $1 - 1"
           , " WHERE curr.block_no = $1"
           ]
 
