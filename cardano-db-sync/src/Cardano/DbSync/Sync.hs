@@ -60,6 +60,7 @@ import Ouroboros.Consensus.Network.NodeToClient (
   clientCodecs,
  )
 import Ouroboros.Consensus.Node.NetworkProtocolVersion (BlockNodeToClientVersion, supportedNodeToClientVersions)
+import Ouroboros.Consensus.Protocol.Praos.Translate ()
 import Ouroboros.Network.Block (
   BlockNo (..),
   Point (..),
