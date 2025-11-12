@@ -212,9 +212,6 @@
                 packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
                 packages.ekg.components.library.enableSeparateDataOutput = true;
-                # Haddock is failing for these two packages (at least with GHC 8.10.7)                
-                packages.ouroboros-network.doHaddock = config.compiler-nix-name != "ghc8107";
-                packages.cardano-node.doHaddock = config.compiler-nix-name != "ghc8107";
               })
 
               ({
