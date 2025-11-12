@@ -1,4 +1,4 @@
-#Community tools
+# Community tools
 
 This section provides a list of community-developed tools that integrate with cardano-db-sync. We appreciate the efforts of these developers in expanding the ecosystem. If you have a tool you'd like to add to this list, please open an issue or a pull request.
 

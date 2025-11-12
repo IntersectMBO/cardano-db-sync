@@ -12,7 +12,6 @@
   - `--fix-only`: Runs only the db-sync fix procedure for the wrong datum, redeemer_data, and plutus script bytes and exits.
   - `--disable-cache`: Disables the db-sync caches. Reduces memory usage but it takes longer to sync.
   - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot.
-  - `--disable-in-out`: Disables the `tx_in` and `tx_out` table.
 
 - **Deprecated Options (for historical reference only):**
   - For more details, refer to [Configuration Documentation](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md)
@@ -26,6 +25,7 @@
   - `--disable-plutus-extra`
   - `--disable-gov`
   - `--disable-offchain-pool-data`
+  - `--disable-in-out`
   - `--force-tx-in`
   - `--disable-all`
   - `--full`

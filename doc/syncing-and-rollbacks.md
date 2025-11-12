@@ -26,7 +26,7 @@ argument to `db-sync`. This ledger state directory must persist across machine r
 Each ledger state is valid only for a specific block. It is not valid for any block before
 or any block after the block it is valid for.
 
-The option `--state-dir` can be ommited when one doesn't want to use local ledger, for the omittion to work a `--disable-ledger` flag should be used, more information on what this flag does can be found [here](./configuration.md#--disable-ledger).
+The option `--state-dir` can be ommited when one doesn't want to use local ledger, for the omittion to work a `--disable-ledger` flag should be used, more information on what this flag does can be found [here](./configuration.md#ledger).
 
 
 ## Concurrency
