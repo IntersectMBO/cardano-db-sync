@@ -186,8 +186,8 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
             newCommitteeMembers
             newQuorum
 
-data LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: !(AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState)
+newtype LedgerDB = LedgerDB
+  { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
   }
 
 instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where
