@@ -617,7 +617,6 @@ Snapshot Interval Properties:
 | Property                         | Type      | Required | Default |
 | :------------------------------- | :-------- | :------- | :------ |
 | [near\_tip\_epoch](#near-tip-epoch) | `integer` | Optional | 580     |
-| [lagging](#lagging)              | `integer` | Optional | 100000  |
 
 ### Near Tip Epoch
 
@@ -626,24 +625,14 @@ Snapshot Interval Properties:
 * Type: `integer`
 * Default: `580`
 
-Epoch threshold used to determine snapshot behavior. When syncing reaches this epoch or later, db-sync is considered to be approaching or at the current tip of the chain. Combined with time-based detection (within 10 days of current time), this ensures snapshots are taken every epoch when near the tip for fast rollback recovery. During earlier epochs or when syncing behind, snapshots are taken every 10 epochs or according to the `lagging` block interval.
-
-### Lagging
-
-`snapshot_interval.lagging`
-
-* Type: `integer`
-* Default: `100000`
-
-Number of blocks between snapshots when db-sync is syncing and significantly behind the tip of the chain (more than 10 days behind current time). Less frequent snapshots during initial sync improves performance by reducing expensive disk operations.
+Epoch threshold used to determine snapshot behavior. When syncing reaches this epoch or later, db-sync is considered to be approaching or at the current tip of the chain. Combined with time-based detection (within 10 days of current time), this ensures snapshots are taken every epoch when near the tip for fast rollback recovery. During earlier epochs or when syncing behind, snapshots are taken every 10 epochs.
 
 ### Example
 
 ```json
 {
   "snapshot_interval": {
-    "near_tip_epoch": 580,
-    "lagging": 100000
+    "near_tip_epoch": 580
   }
 }
 ```
@@ -651,8 +640,6 @@ Number of blocks between snapshots when db-sync is syncing and significantly beh
 ### Performance Considerations
 
 - **Lower `near_tip_epoch` value**: Start taking frequent epoch-based snapshots earlier in the chain history
-- **Higher `near_tip_epoch` value**: Delay frequent snapshots until later in the chain, improving sync speed for longer
-- **Larger `lagging` value**: Faster initial sync with reduced IOPS, but slower recovery if rollback is needed during sync
-- **Recommended for initial sync**: Use a large `lagging` value (100000+) and appropriate `near_tip_epoch` to maximize sync speed
+- **Higher `near_tip_epoch` value**: Delay frequent snapshots until later in the chain, improving sync speed for longer. During initial sync (before reaching `near_tip_epoch`), snapshots are taken every 10 epochs
 - **Near tip detection**: Automatically switches to epoch-based snapshots when within 10 days of current time, regardless of epoch number
 

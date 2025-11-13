@@ -86,6 +86,8 @@ import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
+{- HLINT ignore "Reduce duplication" -}
+
 newtype LogFileDir = LogFileDir
   { unLogFileDir :: FilePath
   }
@@ -280,9 +282,8 @@ data JsonTypeConfig
   | JsonTypeDisable
   deriving (Eq, Show)
 
-data SnapshotIntervalConfig = SnapshotIntervalConfig
-  { sicNearTipEpoch :: !Word64
-  , sicLagging :: !Word64
+newtype SnapshotIntervalConfig = SnapshotIntervalConfig
+  { sicNearTipEpoch :: Word64
   }
   deriving (Eq, Show)
 
@@ -740,20 +741,17 @@ instance ToJSON SnapshotIntervalConfig where
   toJSON cfg =
     Aeson.object
       [ "near_tip_epoch" .= sicNearTipEpoch cfg
-      , "lagging" .= sicLagging cfg
       ]
 
 instance FromJSON SnapshotIntervalConfig where
   parseJSON = Aeson.withObject "snapshot_interval" $ \obj ->
     SnapshotIntervalConfig
       <$> obj .:? "near_tip_epoch" .!= sicNearTipEpoch def
-      <*> obj .:? "lagging" .!= sicLagging def
 
 instance Default SnapshotIntervalConfig where
   def =
     SnapshotIntervalConfig
       { sicNearTipEpoch = 580 -- Epoch threshold to consider being near tip
-      , sicLagging = 100000 -- Every 100,000 blocks when syncing (less frequent)
       }
 
 instance Default SyncInsertConfig where

@@ -64,7 +64,6 @@ snapshotIntervalConfig :: Gen SnapshotIntervalConfig
 snapshotIntervalConfig =
   SnapshotIntervalConfig
     <$> Gen.word64 (Range.linear 100 1000)
-    <*> Gen.word64 (Range.linear 10000 100000)
 
 syncNodeParams :: MonadGen m => m SyncNodeParams
 syncNodeParams =
