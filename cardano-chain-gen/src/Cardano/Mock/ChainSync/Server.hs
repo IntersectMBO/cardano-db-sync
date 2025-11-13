@@ -55,7 +55,7 @@ import Network.TypedProtocol.Stateful.Codec ()
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
-import Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
+import Ouroboros.Consensus.Ledger.Query (BlockQuery, BlockSupportsLedgerQuery, QueryFootprint (..), ShowQuery)
 import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
@@ -125,12 +125,20 @@ readChain :: MonadSTM m => ServerHandle m blk -> STM m (Chain blk)
 readChain handle = do
   cchain . chainDB <$> readTVar (chainProducerState handle)
 
-addBlock :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> blk -> STM m ()
+addBlock ::
+  (LedgerSupportsProtocol blk, MonadSTM m) =>
+  ServerHandle m blk ->
+  blk ->
+  STM m ()
 addBlock handle blk =
   modifyTVar (chainProducerState handle) $
     addBlockState blk
 
-rollback :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> Point blk -> STM m ()
+rollback ::
+  (LedgerSupportsProtocol blk, MonadSTM m) =>
+  ServerHandle m blk ->
+  Point blk ->
+  STM m ()
 rollback handle point =
   modifyTVar (chainProducerState handle) $ \st ->
     case rollbackState point st of
@@ -153,7 +161,8 @@ stopServer sh = do
 
 type MockServerConstraint blk =
   ( SerialiseNodeToClientConstraints blk
-  , ShowQuery (BlockQuery blk)
+  , BlockSupportsLedgerQuery blk
+  , ShowQuery (BlockQuery blk 'QFNoTables)
   , StandardHash blk
   , ShowProxy (ApplyTxErr blk)
   , Serialise (HeaderHash blk)
@@ -167,7 +176,6 @@ type MockServerConstraint blk =
   )
 
 forkServerThread ::
-  forall blk.
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
@@ -183,7 +191,6 @@ forkServerThread iom config initSt netMagic path = do
   pure $ ServerHandle chainSt threadVar runThread
 
 withServerHandle ::
-  forall blk a.
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
