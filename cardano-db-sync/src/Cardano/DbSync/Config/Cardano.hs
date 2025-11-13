@@ -38,6 +38,9 @@ import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import Cardano.Node.Protocol.Dijkstra
+import Control.Tracer (nullTracer)
+import Cardano.Prelude (second)
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
@@ -82,8 +85,8 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
-  (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
-mkProtocolInfoCardano genesisConfig shelleyCred =
+  (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
+mkProtocolInfoCardano genesisConfig shelleyCred = second (\f -> f nullTracer) $
   protocolInfoCardano $
     CardanoProtocolParams
       { byronProtocolParams =
@@ -105,6 +108,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
             shelleyGenesis
             alonzoGenesis
             conwayGenesis
+            emptyDijkstraGenesis -- TODO(Dijkstra)
       , cardanoHardForkTriggers =
           Consensus.CardanoHardForkTriggers'
             { triggerHardForkShelley = dncShelleyHardFork dnc
@@ -113,6 +117,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
             , triggerHardForkAlonzo = dncAlonzoHardFork dnc
             , triggerHardForkBabbage = dncBabbageHardFork dnc
             , triggerHardForkConway = dncConwayHardFork dnc
+            , triggerHardForkDijkstra = Consensus.CardanoTriggerHardForkAtDefaultVersion -- TODO(Dijkstra)
             }
       , cardanoCheckpoints = emptyCheckpointsMap
       }

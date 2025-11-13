@@ -37,7 +37,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Core (PoolCert (..))
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
-import qualified Cardano.Ledger.PoolParams as PoolP
+import qualified Cardano.Ledger.State as PoolP
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Prelude
 

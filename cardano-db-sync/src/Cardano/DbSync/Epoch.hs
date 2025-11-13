@@ -55,6 +55,7 @@ epochHandler syncEnv trce cache isNewEpochEvent (BlockDetails cblk details) =
     BlockAlonzo {} -> epochSlotTimecheck
     BlockBabbage {} -> epochSlotTimecheck
     BlockConway {} -> epochSlotTimecheck
+    BlockDijkstra {} -> epochSlotTimecheck
   where
     -- What we do here is completely independent of Shelley/Allegra/Mary eras.
     epochSlotTimecheck :: ExceptT SyncNodeError DB.DbM ()

@@ -255,8 +255,9 @@ mkConfig staticDir mutableDir cmdLineArgs config = do
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
-  let (pInfoForger, forging) = mkProtocolInfoCardano genCfg creds
-  forging' <- forging
+  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg creds
+  forgings <- mkForgings
+  forgings' <- mapM mkBlockForging forgings
   syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
 

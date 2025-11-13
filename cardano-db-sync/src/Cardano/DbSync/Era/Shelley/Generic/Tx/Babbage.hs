@@ -24,7 +24,6 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
-import qualified Cardano.Ledger.Babbage.TxBody as Babbage
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
@@ -48,7 +47,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
           then collInputs
           else Map.elems $ rmInps finalMaps
     , txCollateralInputs = collInputs
-    , txReferenceInputs = map fromTxIn . toList $ Babbage.referenceInputs' txBody
+    , txReferenceInputs = map fromTxIn . toList $ txBody ^. referenceInputsTxBodyL
     , txOutputs =
         if not isValid2
           then collOutputs
@@ -57,8 +56,8 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
         collOutputs
     , txFees =
         if not isValid2
-          then strictMaybeToMaybe $ Babbage.totalCollateral' txBody
-          else Just $ Babbage.txfee' txBody
+          then strictMaybeToMaybe $ txBody ^. totalCollateralTxBodyL
+          else Just $ txBody ^. feeTxBodyL
     , txOutSum =
         if not isValid2
           then sumTxOutCoin collOutputs
@@ -70,7 +69,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     , txCertificates = snd <$> rmCerts finalMaps
     , txWithdrawals = Map.elems $ rmWdrl finalMaps
     , txParamProposal = mkTxParamProposal (Babbage Standard) txBody
-    , txMint = Babbage.mint' txBody
+    , txMint = txBody ^. mintTxBodyL
     , txRedeemer = redeemers
     , txData = txDataWitness tx
     , txScriptSizes = getPlutusSizes tx
@@ -85,12 +84,12 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
-    outputs = zipWith fromTxOut [0 ..] $ toList (Babbage.outputs' txBody)
+    outputs = zipWith fromTxOut [0 ..] $ toList (txBody ^. outputsTxBodyL)
 
     -- TODO when collateral output is used as output, its index is not 0, but length of outputs
     -- even though it is the unique output of the tx.
     collOutputs :: [TxOut]
-    collOutputs = zipWith fromTxOut [collIndex ..] . toList $ Babbage.collateralReturn' txBody
+    collOutputs = zipWith fromTxOut [collIndex ..] . toList $ txBody ^. collateralReturnTxBodyL
 
     collIndex :: Word64
     collIndex =
@@ -101,10 +100,10 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
     isValid2 =
-      case Alonzo.isValid tx of
+      case tx ^. Alonzo.isValidTxL of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (Left . toShelleyCert)
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (SCert . toShelleyCert)
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody

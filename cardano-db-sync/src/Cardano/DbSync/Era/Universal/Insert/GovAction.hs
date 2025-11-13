@@ -47,7 +47,7 @@ import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.CertState (DRep (..))
+import Cardano.Ledger.State (DRep (..))
 import Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Ledger.Compactible (Compactible (..))

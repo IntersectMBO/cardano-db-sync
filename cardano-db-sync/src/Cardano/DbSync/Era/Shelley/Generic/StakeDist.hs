@@ -84,6 +84,7 @@ getStakeSlice pInfo !epochBlockNo els isMigration =
     LedgerStateAlonzo als -> genericStakeSlice pInfo epochBlockNo als isMigration
     LedgerStateBabbage bls -> genericStakeSlice pInfo epochBlockNo bls isMigration
     LedgerStateConway cls -> genericStakeSlice pInfo epochBlockNo cls isMigration
+    LedgerStateDijkstra dls -> genericStakeSlice pInfo epochBlockNo dls isMigration
 
 genericStakeSlice ::
   forall era blk p mk.
@@ -186,6 +187,7 @@ getPoolDistr els =
     LedgerStateAlonzo als -> Just $ genericPoolDistr als
     LedgerStateBabbage bls -> Just $ genericPoolDistr bls
     LedgerStateConway cls -> Just $ genericPoolDistr cls
+    LedgerStateDijkstra dls -> Just $ genericPoolDistr dls
 
 genericPoolDistr ::
   forall era p mk.

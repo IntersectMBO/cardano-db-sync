@@ -28,7 +28,7 @@ import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (Parser ())
 import Data.Sequence.Strict (fromList)
 import Text.Show (Show (..))
-import Prelude ()
+import Prelude (error)
 
 -- | Shelley multi signature scripts
 newtype MultiSigScript era = MultiSigScript {unMultiSigScript :: Shelley.MultiSig era}
@@ -81,6 +81,7 @@ instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra
       timelockToJSON (Shelley.RequireSignature sig) = requireSignatureToJSON sig
       timelockToJSON (Allegra.RequireTimeStart slot) = requireTimeStartToJSON slot
       timelockToJSON (Allegra.RequireTimeExpire slot) = requireTimeExpireToJSON slot
+      timelockToJSON _ = error "Impossible: All NativeScripts should have been accounted for"
 
 instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => FromJSON (TimelockScript era) where
   parseJSON v = TimelockScript <$> parseTimelock v

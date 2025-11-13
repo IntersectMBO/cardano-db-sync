@@ -138,17 +138,16 @@ resolveStakeCreds indx st = case indx of
     rewardAccs =
       Map.toList $
         UMap.rewardMap $
-          dsUnified dstate
+          dsAccounts dstate
 
     poolParams :: Map (KeyHash 'StakePool) PoolParams
     poolParams =
-      psStakePoolParams $
         let certState =
               lsCertState $
                 esLState $
                   nesEs $
                     Consensus.shelleyLedgerState st
-         in certState ^. certPStateL
+         in certState ^. certPStateL . psStakePoolsL
 
     delegs = UMap.sPoolMap $ dsUnified dstate
 
@@ -185,28 +184,26 @@ resolvePool pix st = case pix of
   PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams =
-      Map.elems $
-        psStakePoolParams $
           let certState =
                 lsCertState $
                   esLState $
                     nesEs $
                       Consensus.shelleyLedgerState st
-           in certState ^. certPStateL
+           in Map.elems (certState ^. certPStateL . psStakePoolsL)
 
 allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) mk -> [ShelleyTxCert era]
 allPoolStakeCert st =
   ShelleyTxCertDelegCert . ShelleyRegCert <$> nub creds
   where
+    poolParms :: Int
     poolParms =
-      Map.elems $
-        psStakePoolParams $
-          let certState =
+          let certState :: Int
+              certState =
                 lsCertState $
                   esLState $
                     nesEs $
                       Consensus.shelleyLedgerState st
-           in certState ^. certPStateL
+           in Map.elems (certState ^. certPStateL . psStakePoolsL)
     creds = concatMap getPoolStakeCreds poolParms
 
 getPoolStakeCreds :: PoolParams -> [StakeCredential]
