@@ -14,16 +14,13 @@ BEGIN
     );
 
     -- Then add constraint if it doesn't exist
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'unique_pool_stat_epoch'
-      ) THEN
-        ALTER TABLE "pool_stat" ADD CONSTRAINT "unique_pool_stat_epoch"
-        UNIQUE ("pool_hash_id", "epoch_no");
-      END IF;
-    END $$;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'unique_pool_stat_epoch'
+    ) THEN
+      ALTER TABLE "pool_stat" ADD CONSTRAINT "unique_pool_stat_epoch"
+          UNIQUE ("pool_hash_id", "epoch_no");
+    END IF;
 
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
