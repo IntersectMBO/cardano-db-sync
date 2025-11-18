@@ -209,6 +209,53 @@ insertBulkPoolStat poolStats =
   runSession mkDbCallStack $ HsqlSes.statement poolStats insertBulkPoolStatStmt
 
 --------------------------------------------------------------------------------
+queryPoolStatCountStmt :: HsqlStmt.Statement () Int64
+queryPoolStatCountStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    poolStatTable = tableName (Proxy @SCP.PoolStat)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::bigint FROM "
+          , poolStatTable
+          ]
+
+    encoder = mempty
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
+
+queryPoolStatCount :: DbM Int64
+queryPoolStatCount =
+  runSession mkDbCallStack $ HsqlSes.statement () queryPoolStatCountStmt
+
+--------------------------------------------------------------------------------
+queryPoolStatDuplicatesStmt :: HsqlStmt.Statement () Int64
+queryPoolStatDuplicatesStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    poolStatTable = tableName (Proxy @SCP.PoolStat)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::bigint FROM ("
+          , "  SELECT pool_hash_id, epoch_no"
+          , "  FROM "
+          , poolStatTable
+          , "  GROUP BY pool_hash_id, epoch_no"
+          , "  HAVING COUNT(*) > 1"
+          , ") AS duplicates"
+          ]
+
+    encoder = mempty
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
+
+queryPoolStatDuplicates :: DbM Int64
+queryPoolStatDuplicates =
+  runSession mkDbCallStack $ HsqlSes.statement () queryPoolStatDuplicatesStmt
+
+--------------------------------------------------------------------------------
 -- PoolOwner
 --------------------------------------------------------------------------------
 

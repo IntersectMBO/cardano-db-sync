@@ -34,8 +34,8 @@ import Cardano.Mock.Forging.Types (PoolIndex (..), StakeIndex (..), UTxOIndex (.
 import Cardano.Prelude
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config
-import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
+import Test.Cardano.Db.Mock.Config (claFullMode, configPoolStats, conwayConfigDir, initCommandLineArgs, queryDBSync, startDBSync, stopDBSync, withCustomConfigDropDB, withFullConfigDropDB)
+import Test.Cardano.Db.Mock.Examples
 import Test.Cardano.Db.Mock.UnifiedApi
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount)
 import Test.Tasty.HUnit (Assertion (), assertBool, assertEqual)
@@ -134,9 +134,9 @@ lazyRollback =
     rollbackTo interpreter mockServer (blockPoint lastBlk)
 
     -- Here we create the fork
-    void
-      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
-      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void $
+      withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 40
     -- Verify the new block count
@@ -162,9 +162,9 @@ lazyRollbackRestart =
     startDBSync dbSync
 
     -- Here we create the fork
-    void
-      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
-      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void $
+      withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 30
     -- Verify the new block count
@@ -188,18 +188,18 @@ doubleRollback =
     -- Rollback to second block point
     rollbackTo interpreter mockServer (blockPoint lastBlk2)
     -- Here we create a fork
-    void
-      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
-      $ Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+    void $
+      withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
 
     -- Rollback to first block point
     rollbackTo interpreter mockServer (blockPoint lastBlk1)
     -- Create another fork
-    void
-      $ withConwayFindLeaderAndSubmitTx interpreter mockServer
-      $ Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert $ SJust (Coin 100))]
+    void $
+      withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert $ SJust (Coin 100))]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
     -- Wait for it to sync
@@ -379,8 +379,8 @@ drepDistrRollback =
 
 poolStatBasicTest :: IOManager -> [(Text, Text)] -> Assertion
 poolStatBasicTest =
-  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel
-    $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel $
+    \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
       -- Test basic pool stats functionality
@@ -391,10 +391,10 @@ poolStatBasicTest =
       void $ forgeAndSubmitBlocks interpreter mockServer 200
       assertBlockNoBackoff dbSync 201
 
-      poolStatCount <- queryDBSync dbSync Db.queryPoolStatCount
+      poolStatCount <- queryDBSync dbSync DB.queryPoolStatCount
 
       -- Verify pool stats are created and no duplicates exist
-      duplicateCount <- queryDBSync dbSync Db.queryPoolStatDuplicates
+      duplicateCount <- queryDBSync dbSync DB.queryPoolStatDuplicates
       assertEqual "Should have no duplicate pool stats" 0 duplicateCount
       assertBool "Should have some pool stats" (poolStatCount > 0)
   where
@@ -403,8 +403,8 @@ poolStatBasicTest =
 
 poolStatRollbackNoDuplicates :: IOManager -> [(Text, Text)] -> Assertion
 poolStatRollbackNoDuplicates =
-  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel
-    $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel $
+    \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
       -- Simple setup: create some blocks with pool stats
@@ -429,7 +429,7 @@ poolStatRollbackNoDuplicates =
       assertBlockNoBackoff dbSync 351 -- Should stay same due to rollbackExpand commentComment on line R349ResolvedCode has comments. Press enter to view.
 
       -- The main test: no duplicates after rollback + re-sync
-      duplicateCount <- queryDBSync dbSync Db.queryPoolStatDuplicates
+      duplicateCount <- queryDBSync dbSync DB.queryPoolStatDuplicates
       assertEqual "Should have no duplicate pool stats after rollback" 0 duplicateCount
   where
     args = initCommandLineArgs {claFullMode = False}
@@ -437,8 +437,8 @@ poolStatRollbackNoDuplicates =
 
 poolStatRollbackGeneral :: IOManager -> [(Text, Text)] -> Assertion
 poolStatRollbackGeneral =
-  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel
-    $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel $
+    \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
       -- Create pools and stake to generate pool stats
@@ -451,7 +451,7 @@ poolStatRollbackGeneral =
       assertBlockNoBackoff dbSync totalBeforeRollback
 
       -- Check initial pool stat count
-      initialCount <- queryDBSync dbSync Db.queryPoolStatCount
+      initialCount <- queryDBSync dbSync DB.queryPoolStatCount
 
       -- Forge more blocks to create additional pool stats
       epochBlks2 <- fillEpochs interpreter mockServer 1
@@ -459,7 +459,7 @@ poolStatRollbackGeneral =
       assertBlockNoBackoff dbSync totalAfterEpoch
 
       -- Verify pool stats increased
-      afterCount <- queryDBSync dbSync Db.queryPoolStatCount
+      afterCount <- queryDBSync dbSync DB.queryPoolStatCount
       assertBool "Pool stats should have increased" (afterCount > initialCount)
 
       -- Rollback to previous point
@@ -470,13 +470,13 @@ poolStatRollbackGeneral =
       epochBlks3 <- fillEpochs interpreter mockServer 1
       let finalTotal = totalBeforeRollback + length epochBlks3 + 1
       assertBlockNoBackoff dbSync finalTotal
-      finalCount <- queryDBSync dbSync Db.queryPoolStatCount
+      finalCount <- queryDBSync dbSync DB.queryPoolStatCount
 
       -- Verify count matches and no constraint violations occurred
       assertEqual "Pool stat count should match after rollback" afterCount finalCount
 
       -- Also verify no duplicates
-      duplicateCount <- queryDBSync dbSync Db.queryPoolStatDuplicates
+      duplicateCount <- queryDBSync dbSync DB.queryPoolStatDuplicates
       assertEqual "Should have no duplicate pool stats" 0 duplicateCount
   where
     args = initCommandLineArgs {claFullMode = False}
