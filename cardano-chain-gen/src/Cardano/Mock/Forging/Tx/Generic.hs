@@ -68,10 +68,10 @@ import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 resolveAddress ::
-  forall era p.
+  forall era p mk.
   (Core.EraTxOut era, EraCertState era) =>
   UTxOIndex era ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   Either ForgingError Addr
 resolveAddress index st = case index of
   UTxOAddressNew n -> Right $ Addr Testnet (unregisteredAddresses !! n) StakeRefNull
@@ -84,10 +84,10 @@ resolveAddress index st = case index of
   _ -> (^. Core.addrTxOutL) . snd . fst <$> resolveUTxOIndex index st
 
 resolveUTxOIndex ::
-  forall era p.
+  forall era p mk.
   (Core.EraTxOut era, EraCertState era) =>
   UTxOIndex era ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   Either ForgingError ((TxIn, Core.TxOut era), UTxOIndex era)
 resolveUTxOIndex index st = toLeft $ case index of
   UTxOIndex n -> utxoPairs !? n
@@ -122,10 +122,10 @@ resolveUTxOIndex index st = toLeft $ case index of
     toLeft (Just (txIn, txOut)) = Right ((txIn, txOut), UTxOInput txIn)
 
 resolveStakeCreds ::
-  forall era p.
+  forall era p mk.
   EraCertState era =>
   StakeIndex ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   Either ForgingError StakeCredential
 resolveStakeCreds indx st = case indx of
   StakeIndex n -> toEither $ fst <$> (rewardAccs !? n)
@@ -138,17 +138,16 @@ resolveStakeCreds indx st = case indx of
     rewardAccs =
       Map.toList $
         UMap.rewardMap $
-          dsUnified dstate
+          dsAccounts dstate
 
     poolParams :: Map (KeyHash 'StakePool) PoolParams
     poolParams =
-      psStakePoolParams $
         let certState =
               lsCertState $
                 esLState $
                   nesEs $
                     Consensus.shelleyLedgerState st
-         in certState ^. certPStateL
+         in certState ^. certPStateL . psStakePoolsL
 
     delegs = UMap.sPoolMap $ dsUnified dstate
 
@@ -177,7 +176,7 @@ resolveStakeCreds indx st = case indx of
 resolvePool ::
   EraCertState era =>
   PoolIndex ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   KeyHash 'StakePool
 resolvePool pix st = case pix of
   PoolIndexId key -> key
@@ -185,28 +184,26 @@ resolvePool pix st = case pix of
   PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams =
-      Map.elems $
-        psStakePoolParams $
           let certState =
                 lsCertState $
                   esLState $
                     nesEs $
                       Consensus.shelleyLedgerState st
-           in certState ^. certPStateL
+           in Map.elems (certState ^. certPStateL . psStakePoolsL)
 
-allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) -> [ShelleyTxCert era]
+allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) mk -> [ShelleyTxCert era]
 allPoolStakeCert st =
   ShelleyTxCertDelegCert . ShelleyRegCert <$> nub creds
   where
+    poolParms :: Int
     poolParms =
-      Map.elems $
-        psStakePoolParams $
-          let certState =
+          let certState :: Int
+              certState =
                 lsCertState $
                   esLState $
                     nesEs $
                       Consensus.shelleyLedgerState st
-           in certState ^. certPStateL
+           in Map.elems (certState ^. certPStateL . psStakePoolsL)
     creds = concatMap getPoolStakeCreds poolParms
 
 getPoolStakeCreds :: PoolParams -> [StakeCredential]
@@ -337,7 +334,7 @@ consPoolParams poolId rwCred owners =
 
 resolveStakePoolVoters ::
   EraCertState era =>
-  LedgerState (ShelleyBlock proto era) ->
+  LedgerState (ShelleyBlock proto era) mk ->
   [Voter]
 resolveStakePoolVoters ledger =
   [ StakePoolVoter (resolvePool (PoolIndex 0) ledger)

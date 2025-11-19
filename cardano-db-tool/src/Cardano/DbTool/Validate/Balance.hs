@@ -12,7 +12,7 @@ module Cardano.DbTool.Validate.Balance (
   ledgerAddrBalance,
 ) where
 
-import qualified Cardano.Api.Shelley as Api
+import qualified Cardano.Api as Api
 import qualified Cardano.Chain.Block as Byron
 import Cardano.Chain.Common (
   CompactAddress,
@@ -47,8 +47,7 @@ data ValidateBalanceError
   | VBErrAllegra String
   | VBErrMary String
   | VBErrAlonzo String
-  | VBErrBabbage String
-  | VBErrConway String
+  | VBErrUndefined String
 
 instance Exception ValidateBalanceError
 
@@ -60,14 +59,16 @@ instance Show ValidateBalanceError where
       VBErrAllegra err -> vBErr <> "Allegra: " <> err
       VBErrMary err -> vBErr <> "Mary: " <> err
       VBErrAlonzo err -> vBErr <> "Alonzo: " <> err
-      VBErrBabbage err -> vBErr <> "Babbage: " <> err
-      VBErrConway err -> vBErr <> "Conway: " <> err
+      VBErrUndefined err -> vBErr <> "Era: " <> err
 
 vBErr :: String
 vBErr = "Validation Balance Error - "
 
 -- Given an address, return it's current UTxO balance.
-ledgerAddrBalance :: Text -> LedgerState (CardanoBlock StandardCrypto) -> Either ValidateBalanceError Word64
+ledgerAddrBalance ::
+  Text ->
+  LedgerState (CardanoBlock StandardCrypto) mk ->
+  Either ValidateBalanceError Word64
 ledgerAddrBalance addr lsc =
   case lsc of
     LedgerStateByron st -> getByronBalance addr $ Byron.cvsUtxo $ byronLedgerState st
@@ -75,10 +76,9 @@ ledgerAddrBalance addr lsc =
     LedgerStateAllegra st -> getShelleyBalance addr $ getUTxO st
     LedgerStateMary st -> getShelleyBalance addr $ getUTxO st
     LedgerStateAlonzo st -> getAlonzoBalance addr $ getUTxO st
-    LedgerStateBabbage _st -> Left $ VBErrBabbage "undefined Babbage ledgerAddrBalance"
-    LedgerStateConway _st -> Left $ VBErrConway "undefined Conway ledgerAddrBalance"
+    _ -> Left $ VBErrUndefined "undefined era ledgerAddrBalance"
   where
-    getUTxO :: LedgerState (ShelleyBlock p era) -> Shelley.UTxO era
+    getUTxO :: LedgerState (ShelleyBlock p era) mk -> Shelley.UTxO era
     getUTxO = Shelley.utxosUtxo . Shelley.lsUTxOState . Shelley.esLState . Shelley.nesEs . shelleyLedgerState
 
 getByronBalance :: Text -> Byron.UTxO -> Either ValidateBalanceError Word64

@@ -95,6 +95,7 @@ data BlockEra
   = Byron
   | Shelley
   | Allegra
+  | Dijkstra
   | Mary
   | Alonzo
   | Babbage

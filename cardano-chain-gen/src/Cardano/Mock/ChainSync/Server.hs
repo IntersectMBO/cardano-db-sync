@@ -51,11 +51,11 @@ import Data.Maybe (fromJust)
 import Data.Void (Void)
 import qualified Network.Mux as Mux
 import Network.TypedProtocol.Peer (Peer (..))
-import Network.TypedProtocol.Stateful.Codec ()
-import qualified Network.TypedProtocol.Stateful.Peer as St
+-- import Network.TypedProtocol.Stateful.Codec ()
+-- import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
-import Ouroboros.Consensus.Ledger.Query (BlockQuery, ShowQuery)
+import Ouroboros.Consensus.Ledger.Query (BlockQuery, BlockSupportsLedgerQuery, QueryFootprint (..), ShowQuery)
 import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import Ouroboros.Consensus.Network.NodeToClient (Apps (..), Codecs' (..), DefaultCodecs)
@@ -92,8 +92,7 @@ import Ouroboros.Network.IOManager (IOManager)
 import qualified Ouroboros.Network.IOManager as IOManager
 import Ouroboros.Network.Magic (NetworkMagic)
 import Ouroboros.Network.Mux (OuroborosApplicationWithMinimalCtx)
-import Ouroboros.Network.NodeToClient (NodeToClientVersionData (..))
-import qualified Ouroboros.Network.NodeToClient as NodeToClient
+import Ouroboros.Network.NodeToClient
 import Ouroboros.Network.NodeToNode (Versions)
 import Ouroboros.Network.Protocol.ChainSync.Server (
   ChainSyncServer (..),
@@ -107,6 +106,7 @@ import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQu
 import Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy (..))
+import Ouroboros.Network.Socket
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -125,12 +125,20 @@ readChain :: MonadSTM m => ServerHandle m blk -> STM m (Chain blk)
 readChain handle = do
   cchain . chainDB <$> readTVar (chainProducerState handle)
 
-addBlock :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> blk -> STM m ()
+addBlock ::
+  (LedgerSupportsProtocol blk, MonadSTM m) =>
+  ServerHandle m blk ->
+  blk ->
+  STM m ()
 addBlock handle blk =
   modifyTVar (chainProducerState handle) $
     addBlockState blk
 
-rollback :: (LedgerSupportsProtocol blk, MonadSTM m) => ServerHandle m blk -> Point blk -> STM m ()
+rollback ::
+  (LedgerSupportsProtocol blk, MonadSTM m) =>
+  ServerHandle m blk ->
+  Point blk ->
+  STM m ()
 rollback handle point =
   modifyTVar (chainProducerState handle) $ \st ->
     case rollbackState point st of
@@ -153,7 +161,8 @@ stopServer sh = do
 
 type MockServerConstraint blk =
   ( SerialiseNodeToClientConstraints blk
-  , ShowQuery (BlockQuery blk)
+  , BlockSupportsLedgerQuery blk
+  , ShowQuery (BlockQuery blk 'QFNoTables)
   , StandardHash blk
   , ShowProxy (ApplyTxErr blk)
   , Serialise (HeaderHash blk)
@@ -167,7 +176,6 @@ type MockServerConstraint blk =
   )
 
 forkServerThread ::
-  forall blk.
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
@@ -183,7 +191,6 @@ forkServerThread iom config initSt netMagic path = do
   pure $ ServerHandle chainSt threadVar runThread
 
 withServerHandle ::
-  forall blk a.
   MockServerConstraint blk =>
   IOManager ->
   TopLevelConfig blk ->
@@ -206,16 +213,16 @@ runLocalServer ::
   StrictTVar IO (ChainProducerState blk) ->
   IO ()
 runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
+  withSnocket nullTracer noAttenuation Map.empty $ \localSocket localSnocket -> do
+
   withSnocket iom localDomainSock $ \localSocket localSnocket -> do
-    networkState <- NodeToClient.newNetworkMutableState
     _ <-
-      NodeToClient.withServer
+      runServer
         localSnocket
-        NodeToClient.nullNetworkServerTracers -- debuggingNetworkServerTracers
-        networkState
+        nullNetworkConnectTracers -- debuggingNetworkServerTracers
         localSocket
         (versions chainProdState)
-        NodeToClient.networkErrorPolicies
+        networkErrorPolicies
     pure ()
   where
     versions ::
@@ -256,8 +263,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
             nullTracer -- TODO add a tracer!
             (cChainSyncCodec codecs)
             channel
-            $ chainSyncServerPeer
-            $ chainSyncServer state codecConfig blockVersion
+            (chainSyncServerPeer $ chainSyncServer state codecConfig blockVersion)
 
         txSubmitServer ::
           localPeer ->
@@ -275,12 +281,11 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
           Channel IO ByteString ->
           IO ((), Maybe ByteString)
         stateQueryServer _them channel =
-          St.runPeer
+          runPeer
             nullTracer
             (cStateQueryCodec codecs)
             channel
-            LocalStateQuery.StateIdle
-            (St.Effect (forever $ threadDelay 3_600_000_000))
+            (LocalStateQuery.StateIdle (Effect (forever $ threadDelay 3_600_000_000)))
 
         txMonitorServer ::
           localPeer ->

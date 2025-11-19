@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -52,7 +53,10 @@ data FollowerNext
   | FollowerForwardFrom
   deriving (Eq, Show)
 
-initChainProducerState :: TopLevelConfig block -> Chain.State block -> ChainProducerState block
+initChainProducerState ::
+  TopLevelConfig block ->
+  Chain.State block ->
+  ChainProducerState block
 initChainProducerState config st = ChainProducerState (initChainDB config st) Map.empty 0
 
 -- | Add a block to the chain. It does not require any follower's state changes.

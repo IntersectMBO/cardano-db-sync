@@ -97,10 +97,9 @@ library
                       , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
                       , strict-sop-core
-                      , strict-stm
+                      , io-classes:strict-stm
                       , text
                       , typed-protocols
-                      , typed-protocols-stateful
 
 test-suite cardano-chain-gen
   type:                 exitcode-stdio-1.0
@@ -161,7 +160,6 @@ test-suite cardano-chain-gen
                       , async
                       , base
                       , bytestring
-                      , cardano-api
                       , cardano-crypto-class
                       , cardano-db
                       , cardano-db-sync
@@ -185,7 +183,6 @@ test-suite cardano-chain-gen
                       , int-cast
                       , silently
                       , stm
-                      , strict-stm
                       , tasty
                       , tasty-quickcheck
                       , text

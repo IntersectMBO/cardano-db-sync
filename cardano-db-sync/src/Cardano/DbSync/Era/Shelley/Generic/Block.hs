@@ -16,6 +16,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
   fromAlonzoBlock,
   fromBabbageBlock,
   fromConwayBlock,
+  fromDijkstraBlock,
   getTxs,
   blockHash,
   blockPrevHash,
@@ -44,6 +45,7 @@ import Ouroboros.Consensus.Cardano.Block (
   AlonzoEra,
   BabbageEra,
   ConwayEra,
+  DijkstraEra,
   MaryEra,
   ShelleyEra,
  )
@@ -53,6 +55,7 @@ import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import Ouroboros.Consensus.Shelley.Protocol.Abstract
 import Ouroboros.Network.Block (BlockNo (..))
+import Lens.Micro ((^.))
 
 data Block = Block
   { blkEra :: !BlockEra
@@ -171,10 +174,27 @@ fromConwayBlock iope mprices blk =
     , blkTxs = map (fromConwayTx iope mprices) (getTxs blk)
     }
 
+fromDijkstraBlock :: Bool -> Maybe Prices -> ShelleyBlock (PraosStandard StandardCrypto) DijkstraEra -> Block
+fromDijkstraBlock iope mprices blk =
+  Block
+    { blkEra = Dijkstra
+    , blkHash = blockHash blk
+    , blkPreviousHash = blockPrevHash blk
+    , blkSlotLeader = blockIssuer blk
+    , blkSlotNo = slotNumber blk
+    , blkBlockNo = blockNumber blk
+    , blkSize = blockSize blk
+    , blkProto = blockProtoVersionPraos blk
+    , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
+    , blkOpCert = blockOpCertKeyPraos blk
+    , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkTxs = map (fromDijkstraTx iope mprices) (getTxs blk)
+    }
+
 -- -------------------------------------------------------------------------------------------------
 
-getTxs :: forall p era. Ledger.EraSegWits era => ShelleyBlock p era -> [(Word64, Ledger.Tx era)]
-getTxs = zip [0 ..] . toList . Ledger.fromTxSeq @era . Ledger.bbody . Consensus.shelleyBlockRaw
+getTxs :: forall p era. Ledger.EraBlockBody era => ShelleyBlock p era -> [(Word64, Ledger.Tx era)]
+getTxs blk = zip [0 ..] $ toList (Ledger.bbody (Consensus.shelleyBlockRaw blk) ^. Ledger.txSeqBlockBodyL)
 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
 blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw

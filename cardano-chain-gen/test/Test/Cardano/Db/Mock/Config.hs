@@ -86,6 +86,8 @@ import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Byron.Ledger.Mempool ()
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import Ouroboros.Consensus.HardFork.Combinator.Mempool ()
+import Ouroboros.Consensus.Ledger.Abstract (projectLedgerTables)
+import Ouroboros.Consensus.Ledger.Tables.Utils (forgetLedgerTables)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
@@ -253,8 +255,9 @@ mkConfig staticDir mutableDir cmdLineArgs config = do
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
-  let (pInfoForger, forging) = mkProtocolInfoCardano genCfg creds
-  forging' <- forging
+  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg creds
+  forgings <- mkForgings
+  forgings' <- mapM mkBlockForging forgings
   syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
   pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
 
@@ -593,7 +596,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
     withServerHandle @CardanoBlock
       iom
       (topLevelConfig cfg)
-      initSt
+      (forgetLedgerTables initSt, projectLedgerTables initSt)
       (NetworkMagic 42)
       (unSocketPath (enpSocketPath $ syncNodeParams cfg))
       $ \mockServer ->

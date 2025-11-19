@@ -75,11 +75,12 @@ migrateBootstrapUTxO syncEnv = do
 
 storeUTxOFromLedger ::
   SyncEnv ->
-  ExtLedgerState CardanoBlock ->
+  ExtLedgerState CardanoBlock mk ->
   ExceptT SyncNodeError DB.DbM ()
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
   LedgerStateConway stc -> storeUTxO env (getUTxO stc)
+  LedgerStateDijkstra stc -> storeUTxO env (getUTxO stc)
   _otherwise -> liftIO $ logError trce "storeUTxOFromLedger is only supported after Babbage"
   where
     trce = getTrace env

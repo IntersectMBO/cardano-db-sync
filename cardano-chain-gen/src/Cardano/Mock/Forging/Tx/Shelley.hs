@@ -45,7 +45,7 @@ mkPaymentTx ::
   ShelleyUTxOIndex ->
   Integer ->
   Integer ->
-  ShelleyLedgerState ->
+  ShelleyLedgerState mk ->
   Either ForgingError ShelleyTx
 mkPaymentTx inputIndex outputIndex amount fees st = do
   (inputPair, _) <- resolveUTxOIndex inputIndex st
@@ -59,7 +59,7 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
 
   Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
-mkDCertTxPools :: ShelleyLedgerState -> Either ForgingError ShelleyTx
+mkDCertTxPools :: ShelleyLedgerState mk -> Either ForgingError ShelleyTx
 mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
 mkSimpleTx :: ShelleyTxBody ShelleyEra -> ShelleyTx
@@ -74,7 +74,7 @@ mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential -> ShelleyTxCert ShelleyEra)] ->
-  ShelleyLedgerState ->
+  ShelleyLedgerState mk ->
   Either ForgingError ShelleyTx
 mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do

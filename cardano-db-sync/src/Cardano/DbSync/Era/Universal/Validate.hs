@@ -9,7 +9,6 @@ module Cardano.DbSync.Era.Universal.Validate (
 ) where
 
 import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
-import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Shelley.API (Network)
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
 import Cardano.Prelude hiding (from, on)
@@ -73,7 +72,7 @@ logFullRewardMap tracer epochNo network ledgerMap = do
     liftIO $
       diffRewardMap tracer network dbMap (Map.mapKeys (Generic.stakingCredHash network) $ Map.map convert $ Generic.unRewards ledgerMap)
   where
-    convert :: Set Generic.Reward -> [(DB.RewardSource, Coin)]
+    convert :: Set Generic.Reward -> [(DB.RewardSource, Word64)]
     convert = map (\rwd -> (Generic.rewardSource rwd, Generic.rewardAmount rwd)) . Set.toList
 
 queryRewardMap :: EpochNo -> ExceptT SyncNodeError DB.DbM (Map ByteString [(DB.RewardSource, DB.DbLovelace)])
@@ -98,7 +97,7 @@ diffRewardMap ::
   Trace IO Text ->
   Network ->
   Map ByteString [(DB.RewardSource, DB.DbLovelace)] ->
-  Map ByteString [(DB.RewardSource, Coin)] ->
+  Map ByteString [(DB.RewardSource, Word64)] ->
   IO ()
 diffRewardMap tracer _nw dbMap ledgerMap = do
   when (Map.size diffMap > 0) $ do
@@ -108,22 +107,22 @@ diffRewardMap tracer _nw dbMap ledgerMap = do
     keys :: [ByteString]
     keys = List.nubOrd (Map.keys dbMap ++ Map.keys ledgerMap)
 
-    diffMap :: Map ByteString ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Coin)])
+    diffMap :: Map ByteString ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Word64)])
     diffMap = List.foldl' mkDiff mempty keys
 
     mkDiff ::
-      Map ByteString ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Coin)]) ->
+      Map ByteString ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Word64)]) ->
       ByteString ->
-      Map ByteString ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Coin)])
+      Map ByteString ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Word64)])
     mkDiff !acc addr =
       case (Map.lookup addr dbMap, Map.lookup addr ledgerMap) of
         (Just xs, Just ys) ->
-          if fromIntegral (sum $ map (DB.unDbLovelace . snd) xs) == sum (map (unCoin . snd) ys)
+          if fromIntegral (sum $ map (DB.unDbLovelace . snd) xs) == sum (map snd ys)
             then acc
             else Map.insert addr (xs, ys) acc
         (Nothing, Just ys) -> Map.insert addr ([], ys) acc
         (Just xs, Nothing) -> Map.insert addr (xs, []) acc
         (Nothing, Nothing) -> acc
 
-    render :: (ByteString, ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Coin)])) -> Text
+    render :: (ByteString, ([(DB.RewardSource, DB.DbLovelace)], [(DB.RewardSource, Word64)])) -> Text
     render (cred, (xs, ys)) = mconcat ["  ", show cred, ": ", show xs, " /= ", show ys]

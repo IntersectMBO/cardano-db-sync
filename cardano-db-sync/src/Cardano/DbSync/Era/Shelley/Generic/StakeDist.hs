@@ -72,7 +72,7 @@ getStakeSlice ::
   ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
   Word64 ->
-  ExtLedgerState CardanoBlock ->
+  ExtLedgerState CardanoBlock mk ->
   Bool ->
   StakeSliceRes
 getStakeSlice pInfo !epochBlockNo els isMigration =
@@ -84,13 +84,14 @@ getStakeSlice pInfo !epochBlockNo els isMigration =
     LedgerStateAlonzo als -> genericStakeSlice pInfo epochBlockNo als isMigration
     LedgerStateBabbage bls -> genericStakeSlice pInfo epochBlockNo bls isMigration
     LedgerStateConway cls -> genericStakeSlice pInfo epochBlockNo cls isMigration
+    LedgerStateDijkstra dls -> genericStakeSlice pInfo epochBlockNo dls isMigration
 
 genericStakeSlice ::
-  forall era blk p.
+  forall era blk p mk.
   ConsensusProtocol (BlockProtocol blk) =>
   ProtocolInfo blk ->
   Word64 ->
-  LedgerState (ShelleyBlock p era) ->
+  LedgerState (ShelleyBlock p era) mk ->
   Bool ->
   StakeSliceRes
 genericStakeSlice pInfo epochBlockNo lstate isMigration
@@ -175,7 +176,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
               VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced
 
 getPoolDistr ::
-  ExtLedgerState CardanoBlock ->
+  ExtLedgerState CardanoBlock mk ->
   Maybe (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
 getPoolDistr els =
   case ledgerState els of
@@ -186,10 +187,11 @@ getPoolDistr els =
     LedgerStateAlonzo als -> Just $ genericPoolDistr als
     LedgerStateBabbage bls -> Just $ genericPoolDistr bls
     LedgerStateConway cls -> Just $ genericPoolDistr cls
+    LedgerStateDijkstra dls -> Just $ genericPoolDistr dls
 
 genericPoolDistr ::
-  forall era p.
-  LedgerState (ShelleyBlock p era) ->
+  forall era p mk.
+  LedgerState (ShelleyBlock p era) mk ->
   (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural)
 genericPoolDistr lstate =
   (stakePerPool, blocksPerPool)
