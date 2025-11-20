@@ -66,6 +66,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 | [stop\_at\_block](#stop-at-block)            | `integer`  | Optional |
+| [snapshot\_interval](#snapshot-interval)     | `object`   | Optional |
 
 ## Preset
 
@@ -601,4 +602,44 @@ Stops db-sync after processing the specified block number. Useful for testing an
   }
 }
 ```
+
+## Snapshot Interval
+
+`snapshot_interval`
+
+* Type: `object`
+* Optional: When not specified, uses default values
+
+Controls how frequently ledger state snapshots are taken during sync. Taking snapshots less frequently during initial sync can significantly improve sync performance by reducing IOPS and disk throughput consumption.
+
+Snapshot Interval Properties:
+
+| Property                         | Type      | Required | Default |
+| :------------------------------- | :-------- | :------- | :------ |
+| [near\_tip\_epoch](#near-tip-epoch) | `integer` | Optional | 580     |
+
+### Near Tip Epoch
+
+`snapshot_interval.near_tip_epoch`
+
+* Type: `integer`
+* Default: `580`
+
+Epoch threshold used to determine snapshot behavior. When syncing reaches this epoch or later, db-sync is considered to be approaching or at the current tip of the chain. Combined with time-based detection (within 10 days of current time), this ensures snapshots are taken every epoch when near the tip for fast rollback recovery. During earlier epochs or when syncing behind, snapshots are taken every 10 epochs.
+
+### Example
+
+```json
+{
+  "snapshot_interval": {
+    "near_tip_epoch": 580
+  }
+}
+```
+
+### Performance Considerations
+
+- **Lower `near_tip_epoch` value**: Start taking frequent epoch-based snapshots earlier in the chain history
+- **Higher `near_tip_epoch` value**: Delay frequent snapshots until later in the chain, improving sync speed for longer. During initial sync (before reaching `near_tip_epoch`), snapshots are taken every 10 epochs
+- **Near tip detection**: Automatically switches to epoch-based snapshots when within 10 days of current time, regardless of epoch number
 

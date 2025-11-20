@@ -67,8 +67,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leNetwork :: !Ledger.Network
   , leSystemStart :: !SystemStart
   , leAbortOnPanic :: !Bool
-  , leSnapshotEveryFollowing :: !Word64
-  , leSnapshotEveryLagging :: !Word64
+  , leSnapshotNearTipEpoch :: !Word64
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))

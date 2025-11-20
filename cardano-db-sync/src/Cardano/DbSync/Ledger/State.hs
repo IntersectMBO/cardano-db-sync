@@ -54,7 +54,6 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Shelley.AdaPots (AdaPots)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
-import Cardano.Slotting.Block (BlockNo (..))
 import Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import Cardano.Slotting.Slot (
   EpochNo (..),
@@ -128,7 +127,7 @@ import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 import Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
 import Ouroboros.Network.AnchoredSeq (AnchoredSeq (..))
 import qualified Ouroboros.Network.AnchoredSeq as AS
-import Ouroboros.Network.Block (HeaderHash, Point (..), blockNo)
+import Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
@@ -186,8 +185,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leNetwork = nw
       , leSystemStart = systemStart
       , leAbortOnPanic = soptAbortOnInvalid syncOptions
-      , leSnapshotEveryFollowing = snapshotEveryFollowing syncOptions
-      , leSnapshotEveryLagging = snapshotEveryLagging syncOptions
+      , leSnapshotNearTipEpoch = sicNearTipEpoch $ soptSnapshotInterval syncOptions
       , leInterpreter = intervar
       , leStateVar = svar
       , leStateWriteQueue = swQueue
@@ -218,7 +216,8 @@ readStateUnsafe env = do
 applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
 applyBlockAndSnapshot ledgerEnv blk isCons = do
   (oldState, appResult) <- applyBlock ledgerEnv blk
-  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult (blockNo blk) isCons (isSyncedWithinSeconds (apSlotDetails appResult) 600)
+  -- 864000 seconds = 10 days; consider synced "near tip" if within 10 days of current time
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult isCons (isSyncedWithinSeconds (apSlotDetails appResult) 864000)
   pure (appResult, tookSnapshot)
 
 -- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
@@ -321,32 +320,21 @@ storeSnapshotAndCleanupMaybe ::
   HasLedgerEnv ->
   CardanoLedgerState ->
   ApplyResult ->
-  BlockNo ->
   Bool ->
   SyncState ->
   IO Bool
-storeSnapshotAndCleanupMaybe env oldState appResult blkNo isCons syncState =
+storeSnapshotAndCleanupMaybe env oldState appResult isCons syncState =
   case maybeFromStrict (apNewEpoch appResult) of
     Just newEpoch
       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
       , newEpochNo > 0
-      , isCons || (newEpochNo `mod` 10 == 0) || newEpochNo >= 530 ->
+      , -- Snapshot every epoch when near tip, every 10 epochs when lagging, or always for epoch >= threshold
+        (isCons && syncState == SyncFollowing) || (newEpochNo `mod` 10 == 0) || newEpochNo >= leSnapshotNearTipEpoch env ->
           do
             -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
             liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
             pure True
-    _ ->
-      if timeToSnapshot syncState blkNo && isCons
-        then do
-          liftIO $ saveCleanupState env oldState Nothing
-          pure True
-        else pure False
-  where
-    timeToSnapshot :: SyncState -> BlockNo -> Bool
-    timeToSnapshot syncSt bNo =
-      case (syncSt, unBlockNo bNo) of
-        (SyncFollowing, bno) -> bno `mod` leSnapshotEveryFollowing env == 0
-        (SyncLagging, _) -> False
+    _ -> pure False
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env lState mEpochNo = do
@@ -403,7 +391,8 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock -> Maybe EpochNo -> WithOrigin FilePath
 mkLedgerStateFilename dir ledger mEpochNo =
-  lsfFilePath . dbPointToFileName dir mEpochNo
+  lsfFilePath
+    . dbPointToFileName dir mEpochNo
     <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
