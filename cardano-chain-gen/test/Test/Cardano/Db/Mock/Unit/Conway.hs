@@ -127,6 +127,9 @@ unitTests iom knownMigrations =
         , test "rollback stake address cache" Rollback.stakeAddressRollback
         , test "rollback change order of txs" Rollback.rollbackChangeTxOrder
         , test "rollback full tx" Rollback.rollbackFullTx
+        , test "basic pool stats functionality" Rollback.poolStatBasicTest
+        , test "pool stat rollback no duplicates" Rollback.poolStatRollbackNoDuplicates
+        , test "pool stat rollback general" Rollback.poolStatRollbackGeneral
         ]
     , testGroup
         "different configs"

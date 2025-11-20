@@ -35,6 +35,7 @@ module Test.Cardano.Db.Mock.Config (
   configMetadataEnable,
   configMetadataDisable,
   configMetadataKeys,
+  configPoolStats,
   mkFingerPrint,
   mkMutableDir,
   mkDBSyncEnv,
@@ -356,6 +357,10 @@ configMetadataDisable cfg = do
 configMetadataKeys :: SyncNodeConfig -> SyncNodeConfig
 configMetadataKeys cfg = do
   cfg {dncInsertOptions = (dncInsertOptions cfg) {sioMetadata = MetadataKeys $ 1 :| []}}
+
+configPoolStats :: SyncNodeConfig -> SyncNodeConfig
+configPoolStats cfg = do
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioPoolStats = PoolStatsConfig True}}
 
 initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =
