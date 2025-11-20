@@ -507,7 +507,9 @@ insertBulkOffChainVoteData offChainVoteData = do
 
 insertBulkOffChainVoteDrepDataStmt :: HsqlStmt.Statement [SO.OffChainVoteDrepData] ()
 insertBulkOffChainVoteDrepDataStmt =
-  insertBulk
+  insertBulkWith
+    (ReplaceWithColumns ["off_chain_vote_data_id"])
+    False
     extractOffChainVoteDrepData
     SO.offChainVoteDrepDataBulkEncoder
     NoResultBulk
