@@ -207,16 +207,19 @@ isPossiblyJsonObject bs =
 -------------------------------------------------------------------------------------
 parseOffChainUrl :: OffChainUrlType -> ExceptT OffChainFetchError IO Http.Request
 parseOffChainUrl url =
-  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (showUrl url)
+  handleExceptT wrapHttpException $ applyHeaders <$> Http.parseRequest (showUrl url)
   where
     wrapHttpException :: HttpException -> OffChainFetchError
     wrapHttpException err = OCFErrHttpException url (textShow err)
 
-applyContentType :: Http.Request -> Http.Request
-applyContentType req =
+applyHeaders :: Http.Request -> Http.Request
+applyHeaders req =
   req
     { Http.requestHeaders =
-        Http.requestHeaders req ++ [(CI.mk "content-type", "application/json")]
+        Http.requestHeaders req
+          ++ [ (CI.mk "content-type", "application/json")
+             , (CI.mk "user-agent", "cardano-db-sync")
+             ]
     }
 
 -------------------------------------------------------------------------------------
