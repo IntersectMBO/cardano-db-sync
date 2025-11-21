@@ -195,8 +195,7 @@ runSyncNode metricsSetters trce iomgr dbConnString runMigrationFnc syncNodeConfi
             liftIO $ runAddJsonbToSchema syncEnv
           liftIO $ runExtraMigrationsMaybe syncEnv
           unless useLedger $ liftIO $ do
-            logInfo trce "Migrating to a no ledger schema"
-            Db.noLedgerMigrations backend trce
+            logInfo trce "Skipping migrating to a no ledger schema"
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
 
           -- communication channel between datalayer thread and chainsync-client thread
