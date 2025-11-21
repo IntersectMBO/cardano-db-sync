@@ -1,5 +1,11 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.6
+- Fix "hash bytes wrong size" on preview
+- Add support for GHC 9.12 [#1968]
+- Speed up no ledger migration [#1964]
+- Shutdown container gracefully on exit [#1946]
+
 ## 13.6.0.5
 - Fix offchain data so it supports files up to 3MB [#1928]
 - Upgrade to PostgreSQL 17
