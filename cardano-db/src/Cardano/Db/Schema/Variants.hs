@@ -5,6 +5,21 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Prelude (ByteString, Text)
 
+-- |
+-- This module implements a schema variants system that allows db-sync to support different
+-- database layouts for the same logical data. Currently used for TxOut-related tables.
+--
+-- Two variants exist:
+-- - Core (default): Stores address data inline in tx_out tables (denormalised)
+-- - Address: Normalises addresses into a separate 'address' table for storage efficiency
+--
+-- Users configure this via 'tx_out.use_address_table' in the config file (see doc/configuration.md).
+-- Since the schema variant is determined by runtime configuration rather than compile time,
+-- we cannot use the type system alone to handle the different schemas. The wrapper types
+-- (TxOutW, TxOutIdW, etc.) use sum types to provide runtime polymorphism, allowing code to
+-- work with either variant through pattern matching. This design can be extended to other
+-- tables following the same pattern.
+
 --------------------------------------------------------------------------------
 -- TxOutVariantType
 --------------------------------------------------------------------------------
