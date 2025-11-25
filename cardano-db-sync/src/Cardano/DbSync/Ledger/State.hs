@@ -402,7 +402,7 @@ mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock mk -> May
 mkLedgerStateFilename dir ledger mEpochNo =
   lsfFilePath
     . dbPointToFileName dir mEpochNo
-    <$> getPoint (ledgerTipPoint @CardanoBlock (ledgerState ledger))
+    <$> getPoint (Consensus.ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
 saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
