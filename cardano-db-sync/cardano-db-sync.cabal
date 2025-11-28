@@ -16,6 +16,7 @@ category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
                         schema/*.sql
+                        test/testfiles/*.jsonld
 
 custom-setup
   setup-depends:

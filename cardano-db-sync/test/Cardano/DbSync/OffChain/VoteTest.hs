@@ -31,7 +31,7 @@ tests =
 prop_parseInvalidCIPFormat :: Property
 prop_parseInvalidCIPFormat = withTests 1 $ property $ do
   -- Read the test file with invalid doNotList field (string instead of bool)
-  fileContent <- liftIO $ BS.readFile "../cardano-chain-gen/test/testfiles/invalid-vote-doNotList.jsonld"
+  fileContent <- liftIO $ BS.readFile "test/testfiles/invalid-vote-doNotList.jsonld"
   let lbsContent = LBS.fromStrict fileContent
 
   -- Run the parser

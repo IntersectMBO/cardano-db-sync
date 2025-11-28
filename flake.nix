@@ -218,6 +218,8 @@
                 # Override extra-source-files
                 packages.cardano-db-sync.package.extraSrcFiles =
                   [ "../schema/*.sql" ];
+                packages.cardano-db-sync.components.tests.test.extraSrcFiles =
+                  [ "test/testfiles/*.jsonld" ];
                 packages.cardano-db.package.extraSrcFiles =
                   ["../config/pgpass-testnet"];
                 packages.cardano-db.components.tests.schema-rollback.extraSrcFiles =
