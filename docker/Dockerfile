@@ -3,25 +3,27 @@
 # Usage (example):
 # 1. Build a static executable with Nix:
 #      nix build .#cardano-db-sync-linux
-# 2. Copy the executable into this folder (follow symlinks):
-#      cp -L result/bin/cardano-db-sync docker/
-# 3. Build the image:
-#      docker build -t cardano-db-sync:lightweight docker/
+# 2. Build the image from the project root:
+#      docker build -f docker/Dockerfile -t cardano-db-sync:lightweight .
+#
+# Note: Since result/ is a Nix symlink, Docker may have issues following it.
+# If this fails, you can dereference the symlink first:
+#      mkdir -p docker/build && cp -L result/*.tar.gz docker/build/
+#      docker build -f docker/Dockerfile -t cardano-db-sync:lightweight .
 #
 # Important: this Dockerfile assumes the binary is a fully static executable
 # (statically linked). If it's not static, use a small base image (see docs).
 
+# Stage 1: Extract the binary from the tarball
+FROM busybox:latest AS extractor
+ARG TARBALL
+# ADD automatically extracts tarballs
+ADD ${TARBALL} /tmp/extract/
+RUN find /tmp/extract -name cardano-db-sync -type f -exec mv {} /cardano-db-sync \; && \
+    chmod +x /cardano-db-sync
+
+# Stage 2: Minimal runtime image
 FROM scratch
-
-# Add the static executable produced by Nix. The builder step places
-# the binary next to this Dockerfile before running `docker build`.
-COPY cardano-db-sync /usr/local/bin/cardano-db-sync
-
-# Minimal entrypoint; configuration should be supplied via mounted files
-# or environment variables. We avoid baked-in configs to keep images small
-# and easier to customize.
+COPY --from=extractor /cardano-db-sync /usr/local/bin/cardano-db-sync
 ENTRYPOINT ["/usr/local/bin/cardano-db-sync"]
-
-# Default to printing help if no args supplied (preserves normal CLI behaviour)
 CMD ["--help"]
-

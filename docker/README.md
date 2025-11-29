@@ -39,12 +39,17 @@ Quickstart
    docker build -t cardano-db-sync:lightweight docker/
    ```
 
+4. get the configs:
+- https://book.world.dev.cardano.org/environments/preprod/db-sync-config.json
+
 4. Run the container and mount your configuration (recommended):
 
    ```bash
-   docker run -v $PWD/environments/mainnet:/config \
+   docker run -v $PWD/environments/preprod:/config \
      --env POSTGRES_HOST=postgres --env POSTGRES_PORT=5432 \
-     cardano-db-sync:lightweight --config /config/db-sync-config.json
+     cardano-db-sync:lightweight --config $PWD/config/db-sync-config.json \
+     --socket-path "$HOME/workshop/cardano-node/configuration/preprod/db/node.socket" \
+     --schema-dir /schema
    ```
 
 Notes
