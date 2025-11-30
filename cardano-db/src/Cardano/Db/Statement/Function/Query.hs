@@ -12,7 +12,6 @@
 module Cardano.Db.Statement.Function.Query where
 
 import Cardano.Prelude (HasCallStack, Proxy (..), Word64, listToMaybe)
-import Data.Fixed (Fixed (..))
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as Text
@@ -265,5 +264,5 @@ adaSumDecoder :: HsqlD.Row Ada
 adaSumDecoder = do
   amount <- HsqlD.column (HsqlD.nullable HsqlD.int8)
   case amount of
-    Just value -> pure $ lovelaceToAda (MkFixed $ fromIntegral value)
+    Just value -> pure $ lovelaceToAda (fromIntegral value)
     Nothing -> pure $ Ada 0
