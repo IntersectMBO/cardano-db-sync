@@ -34,7 +34,6 @@ import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Statement.Function.Query (adaDecoder)
 import Cardano.Db.Statement.Types (tableName)
 import Cardano.Db.Types (Ada (..), DbLovelace, DbM, dbLovelaceDecoder, lovelaceToAda)
-import Data.Fixed (Fixed (..))
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool Epcoh
@@ -805,9 +804,9 @@ queryOutputsCoreStmt =
       fees <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
       deposit <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
       pure
-        ( lovelaceToAda (MkFixed $ fromIntegral outputs)
-        , lovelaceToAda (MkFixed $ fromIntegral fees)
-        , lovelaceToAda (MkFixed $ fromIntegral deposit)
+        ( lovelaceToAda (fromIntegral outputs)
+        , lovelaceToAda (fromIntegral fees)
+        , lovelaceToAda (fromIntegral deposit)
         )
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
     txTable = tableName (Proxy @SVC.Tx)
@@ -843,9 +842,9 @@ queryOutputsAddressStmt =
       fees <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
       deposit <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
       pure
-        ( lovelaceToAda (MkFixed $ fromIntegral outputs)
-        , lovelaceToAda (MkFixed $ fromIntegral fees)
-        , lovelaceToAda (MkFixed $ fromIntegral deposit)
+        ( lovelaceToAda (fromIntegral outputs)
+        , lovelaceToAda (fromIntegral fees)
+        , lovelaceToAda (fromIntegral deposit)
         )
     txOutAddressTable = tableName (Proxy @SVA.TxOutAddress)
     addressTable = tableName (Proxy @SVA.Address)
