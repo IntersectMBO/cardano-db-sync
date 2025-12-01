@@ -22,7 +22,7 @@ import Ouroboros.Consensus.Cardano.CanHardFork ()
 data Reward = Reward
   { rewardSource :: !RewardSource
   , rewardPool :: !PoolKeyHash
-  , rewardAmount :: !Coin
+  , rewardAmount :: !Word64
   }
   deriving (Eq, Ord, Show)
 

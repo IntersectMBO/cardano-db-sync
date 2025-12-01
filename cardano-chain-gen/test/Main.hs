@@ -3,7 +3,7 @@ import Cardano.Prelude (Text)
 import Control.Monad (when, (>=>))
 import Data.Maybe (isNothing)
 import MigrationValidations (KnownMigration (..), knownMigrations)
-import System.Directory (getCurrentDirectory)
+import System.Directory (getCurrentDirectory) -- , setCurrentDirectory)
 import System.Environment (lookupEnv, setEnv)
 import System.FilePath ((</>))
 import qualified Test.Cardano.Db.Mock.Property.Property as Property
@@ -20,7 +20,8 @@ main = do
   mPgPassFile <- lookupEnv "PGPASSFILE"
   when (isNothing mPgPassFile) $ do
     currentDir <- getCurrentDirectory
-    setEnv "PGPASSFILE" (currentDir </> "test/testfiles/pgpass-testing")
+    print currentDir
+    setEnv "PGPASSFILE" (currentDir </> "cardano-chain-gen/test/testfiles/pgpass-testing")
   withIOManager $
     tests >=> defaultMain
 

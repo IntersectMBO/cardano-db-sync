@@ -48,10 +48,11 @@ import Control.Tracer (nullTracer)
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
-import Data.Void (Void)
-import qualified Network.Mux as Mux
 import Network.TypedProtocol.Peer (Peer (..))
-import Network.TypedProtocol.Stateful.Codec ()
+
+-- import Network.TypedProtocol.Stateful.Codec ()
+
+import qualified Network.Socket as Socket
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
@@ -65,7 +66,6 @@ import Ouroboros.Consensus.Node.DbMarker ()
 import Ouroboros.Consensus.Node.InitStorage ()
 import Ouroboros.Consensus.Node.NetworkProtocolVersion (
   BlockNodeToClientVersion,
-  NodeToClientVersion,
   SupportedNetworkProtocolVersion,
   latestReleasedNodeVersion,
   supportedNodeToClientVersions,
@@ -87,14 +87,9 @@ import Ouroboros.Network.Block (
  )
 import Ouroboros.Network.Channel (Channel)
 import Ouroboros.Network.Driver.Simple (runPeer)
-import qualified Ouroboros.Network.Driver.Stateful as St (runPeer)
-import Ouroboros.Network.IOManager (IOManager)
-import qualified Ouroboros.Network.IOManager as IOManager
+import qualified Ouroboros.Network.Driver.Stateful as Stateful
 import Ouroboros.Network.Magic (NetworkMagic)
-import Ouroboros.Network.Mux (OuroborosApplicationWithMinimalCtx)
-import Ouroboros.Network.NodeToClient (NodeToClientVersionData (..))
-import qualified Ouroboros.Network.NodeToClient as NodeToClient
-import Ouroboros.Network.NodeToNode (Versions)
+import Ouroboros.Network.NodeToClient
 import Ouroboros.Network.Protocol.ChainSync.Server (
   ChainSyncServer (..),
   ServerStIdle (..),
@@ -102,11 +97,15 @@ import Ouroboros.Network.Protocol.ChainSync.Server (
   ServerStNext (SendMsgRollBackward, SendMsgRollForward),
   chainSyncServerPeer,
  )
-import Ouroboros.Network.Protocol.Handshake.Version (simpleSingletonVersions)
+import Ouroboros.Network.Protocol.Handshake
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
-import Ouroboros.Network.Snocket (LocalAddress, LocalSnocket, LocalSocket (..))
+import Ouroboros.Network.Server.Simple as Server
+import Ouroboros.Network.Snocket
 import qualified Ouroboros.Network.Snocket as Snocket
+import Ouroboros.Network.Socket
 import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy (..))
+
+-- import qualified Network.TypedProtocol.Stateful.Codec as Stateful
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -212,25 +211,33 @@ runLocalServer ::
   FilePath ->
   StrictTVar IO (ChainProducerState blk) ->
   IO ()
-runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
-  withSnocket iom localDomainSock $ \localSocket localSnocket -> do
-    networkState <- NodeToClient.newNetworkMutableState
-    _ <-
-      NodeToClient.withServer
-        localSnocket
-        NodeToClient.nullNetworkServerTracers -- debuggingNetworkServerTracers
-        networkState
-        localSocket
-        (versions chainProdState)
-        NodeToClient.networkErrorPolicies
-    pure ()
+runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
+  _ <-
+    Server.with
+      (Snocket.socketSnocket iom)
+      makeSocketBearer -- makeLocalBearer --
+      (\_ _ -> pure ())
+      (Socket.SockAddrUnix localDomainSock)
+      ( HandshakeArguments
+          { haHandshakeTracer = nullTracer
+          , haBearerTracer = nullTracer
+          , haHandshakeCodec = codecHandshake nodeToClientVersionCodec
+          , haVersionDataCodec = cborTermVersionDataCodec nodeToClientCodecCBORTerm
+          , haAcceptVersion = acceptableVersion
+          , haQueryVersion = queryVersion
+          , haTimeLimits = noTimeLimitsHandshake
+          }
+      )
+      (versions chainProdState)
+      (\_ serverAsync -> wait serverAsync)
+  pure ()
   where
     versions ::
       StrictTVar IO (ChainProducerState blk) ->
       Versions
         NodeToClientVersion
         NodeToClientVersionData
-        (OuroborosApplicationWithMinimalCtx 'Mux.ResponderMode LocalAddress ByteString IO Void ())
+        (SomeResponderApplication Socket.SockAddr ByteString IO ())
     versions state =
       let version = fromJust $ snd $ latestReleasedNodeVersion (Proxy @blk)
           allVersions = supportedNodeToClientVersions (Proxy @blk)
@@ -238,7 +245,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
        in simpleSingletonVersions
             version
             (NodeToClientVersionData netMagic False)
-            (\versionData -> NTC.responder version versionData $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
+            (\versionData' -> SomeResponderApplication $ NTC.responder version versionData' $ mkApps state version blockVersion (NTC.defaultCodecs codecConfig blockVersion version))
 
     mkApps ::
       StrictTVar IO (ChainProducerState blk) ->
@@ -263,8 +270,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
             nullTracer -- TODO add a tracer!
             (cChainSyncCodec codecs)
             channel
-            $ chainSyncServerPeer
-            $ chainSyncServer state codecConfig blockVersion
+            (chainSyncServerPeer $ chainSyncServer state codecConfig blockVersion)
 
         txSubmitServer ::
           localPeer ->
@@ -277,12 +283,12 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState =
             channel
             (Effect (forever $ threadDelay 3_600_000_000))
 
-        stateQueryServer ::
-          localPeer ->
-          Channel IO ByteString ->
-          IO ((), Maybe ByteString)
+        --        stateQueryServer ::
+        --          localPeer ->
+        --          Channel IO ByteString ->
+        --          IO ((), Maybe ByteString)
         stateQueryServer _them channel =
-          St.runPeer
+          Stateful.runPeer
             nullTracer
             (cStateQueryCodec codecs)
             channel
@@ -405,6 +411,7 @@ chainSyncServer state codec _blockVersion =
             let chain = chainDB cps'
             pure (castTip (headTip chain), u)
 
+{-}
 withSnocket ::
   forall a.
   IOManager ->
@@ -434,6 +441,4 @@ withSnocket iocp localDomainSock k =
       Snocket.bind sn sd (Snocket.localAddressFromPath localDomainSock)
       Snocket.listen sn sd
       k sd sn
-
-withIOManager :: (IOManager -> IO a) -> IO a
-withIOManager = IOManager.withIOManager
+-}

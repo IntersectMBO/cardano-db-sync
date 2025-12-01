@@ -78,7 +78,7 @@ consTxBody ::
   MultiAsset ->
   [ShelleyTxCert AlonzoEra] ->
   Withdrawals ->
-  AlonzoTxBody AlonzoEra
+  TxBody AlonzoEra
 consTxBody ins cols outs fees minted certs wdrl =
   AlonzoTxBody
     ins
@@ -96,15 +96,15 @@ consTxBody ins cols outs fees minted certs wdrl =
     (Strict.SJust Testnet)
 
 addValidityInterval ::
-  AlonzoEraTxBody era =>
+  forall era.
+  (AlonzoEraTxBody era, EraTx era) =>
   SlotNo ->
-  AlonzoTx era ->
-  AlonzoTx era
+  Core.Tx era ->
+  Core.Tx era
 addValidityInterval slotNo tx =
-  tx {body = txBody'}
+  set (bodyTxL @era . vldtTxBodyL @era) interval tx
   where
     interval = ValidityInterval Strict.SNothing (Strict.SJust slotNo)
-    txBody' = set vldtTxBodyL interval (body tx)
 
 consPaymentTxBody ::
   Set TxIn ->
@@ -112,10 +112,10 @@ consPaymentTxBody ::
   StrictSeq (AlonzoTxOut AlonzoEra) ->
   Coin ->
   MultiAsset ->
-  AlonzoTxBody AlonzoEra
+  TxBody AlonzoEra
 consPaymentTxBody ins cols outs fees minted = consTxBody ins cols outs fees minted mempty (Withdrawals mempty)
 
-consCertTxBody :: [ShelleyTxCert AlonzoEra] -> Withdrawals -> AlonzoTxBody AlonzoEra
+consCertTxBody :: [ShelleyTxCert AlonzoEra] -> Withdrawals -> TxBody AlonzoEra
 consCertTxBody = consTxBody mempty mempty mempty (Coin 0) mempty
 
 mkPaymentTx ::
@@ -124,7 +124,7 @@ mkPaymentTx ::
   Integer ->
   Integer ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkPaymentTx inputIndex outputIndex amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
   addr <- resolveAddress outputIndex sta
@@ -139,7 +139,7 @@ mkPaymentTx' ::
   AlonzoUTxOIndex ->
   [(AlonzoUTxOIndex, MaryValue)] ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkPaymentTx' inputIndex outputIndex sta = do
   inputPair <- fst <$> resolveUTxOIndex inputIndex sta
   outps <- mapM mkOuts outputIndex
@@ -160,7 +160,7 @@ mkLockByScriptTx ::
   Integer ->
   Integer ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkLockByScriptTx inputIndex spendable amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
 
@@ -184,7 +184,7 @@ mkUnlockScriptTx ::
   Integer ->
   Integer ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
   (colInputPair, _) <- resolveUTxOIndex colInputIndex sta
@@ -194,6 +194,7 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
       colInput = Set.singleton $ fst colInputPair
       output = AlonzoTxOut addr (valueFromList (Coin amount) []) Strict.SNothing
   Right
+    $ MkAlonzoTx
     $ mkScriptTx
       succeeds
       (mapMaybe mkScriptInp' $ zip [0 ..] inputPairs)
@@ -250,7 +251,7 @@ mkMAssetsScriptTx ::
   Bool ->
   Integer ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
   colInput <- Set.singleton . fst . fst <$> resolveUTxOIndex colInputIndex sta
@@ -258,6 +259,7 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta 
   let inpts = Set.fromList $ fst <$> inputPairs
 
   Right
+    $ MkAlonzoTx
     $ mkScriptTx
       succeeds
       ( mapMaybe mkScriptInp' (zip [0 ..] inputPairs)
@@ -272,13 +274,13 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex minted succeeds fees sta 
 mkDCertTx ::
   [ShelleyTxCert AlonzoEra] ->
   Withdrawals ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential -> ShelleyTxCert AlonzoEra)] ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
@@ -292,7 +294,7 @@ mkDCertPoolTx ::
     )
   ] ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkDCertPoolTx consDert st = do
   dcerts <- forM consDert $ \(stakeIxs, poolIx, mkDCert) -> do
     stakeCreds <- forM stakeIxs $ \stix -> resolveStakeCreds stix st
@@ -304,14 +306,15 @@ mkScriptDCertTx ::
   [(StakeIndex, Bool, StakeCredential -> ShelleyTxCert AlonzoEra)] ->
   Bool ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkScriptDCertTx consDert valid st = do
   dcerts <- forM consDert $ \(stakeIndex, _, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
   Right $
-    mkScriptTx valid (mapMaybe (map (second Just) . prepareRedeemer) $ zip [0 ..] consDert) $
-      consCertTxBody dcerts (Withdrawals mempty)
+    MkAlonzoTx $
+      mkScriptTx valid (mapMaybe (map (second Just) . prepareRedeemer) $ zip [0 ..] consDert) $
+        consCertTxBody dcerts (Withdrawals mempty)
   where
     prepareRedeemer (n, (StakeIndexScript bl, addRedeemer, _)) =
       if not addRedeemer
@@ -327,7 +330,7 @@ mkDepositTxPools ::
   AlonzoUTxOIndex ->
   Integer ->
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkDepositTxPools inputIndex deposit sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
 
@@ -338,17 +341,18 @@ mkDepositTxPools inputIndex deposit sta = do
 
 mkDCertTxPools ::
   AlonzoLedgerState mk ->
-  Either ForgingError (AlonzoTx AlonzoEra)
+  Either ForgingError (Core.Tx AlonzoEra)
 mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
-mkSimpleTx :: Bool -> AlonzoTxBody AlonzoEra -> AlonzoTx AlonzoEra
+mkSimpleTx :: Bool -> TxBody AlonzoEra -> Core.Tx AlonzoEra
 mkSimpleTx valid txBody =
-  AlonzoTx
-    { body = txBody
-    , wits = mempty
-    , isValid = IsValid valid
-    , auxiliaryData = maybeToStrictMaybe Nothing
-    }
+  MkAlonzoTx $
+    AlonzoTx
+      { atBody = txBody
+      , atWits = mempty
+      , atIsValid = IsValid valid
+      , atAuxData = maybeToStrictMaybe Nothing
+      }
 
 consPoolParamsTwoOwners ::
   [StakeCredential] ->
@@ -370,10 +374,10 @@ mkScriptTx ::
   AlonzoTx era
 mkScriptTx valid rdmrs txBody =
   AlonzoTx
-    { body = txBody
-    , wits = witnesses
-    , isValid = IsValid valid
-    , auxiliaryData = maybeToStrictMaybe Nothing
+    { atBody = txBody
+    , atWits = witnesses
+    , atIsValid = IsValid valid
+    , atAuxData = maybeToStrictMaybe Nothing
     }
   where
     witnesses =
@@ -402,18 +406,19 @@ mkWitnesses rdmrs datas =
         (fst <$> rdmrs)
 
 mkUTxOAlonzo ::
-  (Core.EraTx era, Core.Tx era ~ AlonzoTx era) =>
-  AlonzoTx era ->
+  forall era.
+  Core.EraTx era =>
+  Core.Tx era ->
   [(TxIn, Core.TxOut era)]
 mkUTxOAlonzo tx =
   [ (TxIn transId idx, out)
   | (out, idx) <- zip (toList (tx ^. outputsL)) (TxIx <$> [0 ..])
   ]
   where
-    transId = txIdTx tx
+    transId = txIdTx @era tx
     outputsL = Core.bodyTxL . Core.outputsTxBodyL
 
-emptyTxBody :: AlonzoTxBody AlonzoEra
+emptyTxBody :: TxBody AlonzoEra
 emptyTxBody =
   AlonzoTxBody
     mempty
@@ -430,11 +435,12 @@ emptyTxBody =
     Strict.SNothing
     (Strict.SJust Testnet)
 
-emptyTx :: AlonzoTx AlonzoEra
+emptyTx :: Core.Tx AlonzoEra
 emptyTx =
-  AlonzoTx
-    { body = emptyTxBody
-    , wits = mempty
-    , isValid = IsValid True
-    , auxiliaryData = maybeToStrictMaybe Nothing
-    }
+  MkAlonzoTx $
+    AlonzoTx
+      { atBody = emptyTxBody
+      , atWits = mempty
+      , atIsValid = IsValid True
+      , atAuxData = maybeToStrictMaybe Nothing
+      }

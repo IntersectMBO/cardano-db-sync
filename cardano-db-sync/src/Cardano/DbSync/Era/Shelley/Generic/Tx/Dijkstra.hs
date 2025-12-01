@@ -4,8 +4,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Cardano.DbSync.Era.Shelley.Generic.Tx.Conway (
-  fromConwayTx,
+module Cardano.DbSync.Era.Shelley.Generic.Tx.Dijkstra (
+  fromDijkstraTx,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
@@ -19,16 +19,16 @@ import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Babbage.Core as Core hiding (Tx, TxOut)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Conway.Governance
-import Cardano.Ledger.Conway.TxBody
 import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Dijkstra.TxBody
 import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
 import Lens.Micro
-import Ouroboros.Consensus.Cardano.Block (ConwayEra)
+import Ouroboros.Consensus.Cardano.Block (DijkstraEra)
 
-fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx ConwayEra) -> Tx
-fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
+fromDijkstraTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx DijkstraEra) -> Tx
+fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
     , txLedgerTxId = mkTxId tx
@@ -68,13 +68,13 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txData = txDataWitness tx
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getScripts tx
-    , txExtraKeyWitnesses = extraKeyWits txBody
-    , txVotingProcedure = Map.toList $ fmap Map.toList (unVotingProcedures $ ctbVotingProcedures txBody)
-    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ toList $ ctbProposalProcedures txBody
-    , txTreasuryDonation = ctbTreasuryDonation txBody
+    , txExtraKeyWitnesses = [] -- TODO(Dijkstra)
+    , txVotingProcedure = [] -- TODO(Dijkstra) Map.toList $ fmap Map.toList (unVotingProcedures $ dtbrVotingProcedures txBody)
+    , txProposalProcedure = [] -- TODO (Dijkskra) zipWith mkProposalIndex [0 ..] $ toList $ dtbProposalProcedures txBody
+    , txTreasuryDonation = dtbTreasuryDonation txBody
     }
   where
-    txBody :: Core.TxBody ConwayEra
+    txBody :: Core.TxBody DijkstraEra
     txBody = tx ^. Core.bodyTxL
 
     txId :: TxId
@@ -100,10 +100,10 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
       case tx ^. Alonzo.isValidTxL of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx CCert
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx DCert
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody
 
-    mkProposalIndex :: Word16 -> a -> (GovActionId, a)
-    mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
+    _mkProposalIndex :: Word16 -> a -> (GovActionId, a)
+    _mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)

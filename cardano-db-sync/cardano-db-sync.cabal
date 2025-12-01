@@ -77,6 +77,7 @@ library
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Conway
+                        Cardano.DbSync.Era.Shelley.Generic.Tx.Dijkstra
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Mary
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
                         Cardano.DbSync.Era.Shelley.Generic.Tx.Types
@@ -162,6 +163,7 @@ library
                       , cardano-ledger-core
                       , cardano-ledger-conway >= 1.17.3
                       , cardano-ledger-binary
+                      , cardano-ledger-dijkstra
                       , cardano-ledger-mary
                       , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-node
@@ -194,6 +196,7 @@ library
                       , ouroboros-consensus-protocol
                       , ouroboros-network
                       , ouroboros-network-api
+                      -- Note this has moved to ouroboros-network:framework on HEAD
                       , ouroboros-network-framework
                       , ouroboros-network-protocols
                       , plutus-ledger-api
@@ -205,10 +208,10 @@ library
                       , small-steps
                       , stm
                       , strict
+                      , io-classes:strict-stm
                       , sop-core
                       , sop-extras
                       , strict-sop-core
-                      , strict-stm
                       , swagger2
                       , text
                       , time

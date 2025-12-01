@@ -84,6 +84,7 @@ epochProtoParams lstate =
     LedgerStateAlonzo st -> Just $ fromAlonzoParams $ getProtoParams st
     LedgerStateBabbage st -> Just $ fromBabbageParams $ getProtoParams st
     LedgerStateConway st -> Just $ fromConwayParams $ getProtoParams st
+    LedgerStateDijkstra st -> Just $ fromDijkstraParams $ getProtoParams st -- TODO(Dijkstra):
 
 getProtoParams ::
   EraGov era =>
@@ -101,6 +102,7 @@ getDeposits lstate =
     LedgerStateAlonzo st -> Just $ getDopositsShelley $ getProtoParams st
     LedgerStateBabbage st -> Just $ getDopositsShelley $ getProtoParams st
     LedgerStateConway st -> Just $ getDopositsShelley $ getProtoParams st
+    LedgerStateDijkstra st -> Just $ getDopositsShelley $ getProtoParams st
   where
     getDopositsShelley :: EraPParams era => PParams era -> Deposits
     getDopositsShelley pp =
@@ -110,6 +112,48 @@ getDeposits lstate =
         }
 
 -- -------------------------------------------------------------------------------------------------
+
+fromDijkstraParams :: PParams DijkstraEra -> ProtoParams
+fromDijkstraParams params =
+  ProtoParams
+    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    , ppMaxBBSize = params ^. ppMaxBBSizeL
+    , ppMaxTxSize = params ^. ppMaxTxSizeL
+    , ppMaxBHSize = params ^. ppMaxBHSizeL
+    , ppKeyDeposit = params ^. ppKeyDepositL
+    , ppPoolDeposit = params ^. ppPoolDepositL
+    , ppMaxEpoch = params ^. ppEMaxL
+    , ppOptimalPoolCount = params ^. ppNOptL
+    , ppInfluence = Ledger.unboundRational $ params ^. ppA0L
+    , ppMonetaryExpandRate = params ^. ppRhoL
+    , ppTreasuryGrowthRate = params ^. ppTauL
+    , ppDecentralisation = minBound -- can't change in Babbage
+    , ppExtraEntropy = NeutralNonce -- no extra entropy in Babbage
+    , ppProtocolVersion = params ^. ppProtocolVersionL
+    , ppMinUTxOValue = Coin 0
+    , ppMinPoolCost = params ^. ppMinPoolCostL
+    , ppCoinsPerUtxo = Just $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
+    , ppCostmdls = Just $ Alonzo.costModelsValid $ params ^. ppCostModelsL
+    , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (params ^. ppPricesL)
+    , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (params ^. ppPricesL)
+    , ppMaxTxExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxTxExUnitsL)
+    , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxTxExUnitsL)
+    , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxBlockExUnitsL)
+    , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxBlockExUnitsL)
+    , ppMaxValSize = Just $ params ^. ppMaxValSizeL
+    , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
+    , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
+    , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
+    , ppCommitteeMinSize = Just $ params ^. ppCommitteeMinSizeL
+    , ppCommitteeMaxTermLength = Just $ params ^. ppCommitteeMaxTermLengthL
+    , ppGovActionLifetime = Just $ params ^. ppGovActionLifetimeL
+    , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
+    , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
+    , ppDRepActivity = Just $ params ^. ppDRepActivityL
+    , ppMinFeeRefScriptCostPerByte = Just $ Ledger.unboundRational $ params ^. ppMinFeeRefScriptCostPerByteL
+    }
 
 fromConwayParams :: PParams ConwayEra -> ProtoParams
 fromConwayParams params =
