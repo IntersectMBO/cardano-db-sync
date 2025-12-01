@@ -140,10 +140,7 @@ addEpochStakeTableConstraint trce = do
   alterTableAddUniqueConstraint
     proxy
     constraintNameEpochStake
-    [ FieldNameDB "epoch_no"
-    , FieldNameDB "addr_id"
-    , FieldNameDB "pool_id"
-    ]
+    (FieldNameDB <$> uniqueFields proxy)
   liftIO $ logNewConstraint trce tbName (unConstraintNameDB constraintNameEpochStake)
 
 -- | Log new constraint creation

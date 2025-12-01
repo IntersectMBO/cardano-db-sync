@@ -270,7 +270,7 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
         DB.Reward
           { DB.rewardAddrId = saId
           , DB.rewardType = Generic.rewardSource rwd
-          , DB.rewardAmount = Generic.coinToDbLovelace (Generic.rewardAmount rwd)
+          , DB.rewardAmount = DB.DbLovelace (Generic.rewardAmount rwd)
           , DB.rewardEarnedEpoch = unEpochNo earnedEpoch
           , DB.rewardSpendableEpoch = unEpochNo spendableEpoch
           , DB.rewardPoolId = poolId

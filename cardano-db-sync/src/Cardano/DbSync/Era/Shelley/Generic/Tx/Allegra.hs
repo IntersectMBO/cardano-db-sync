@@ -38,7 +38,6 @@ import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Allegra.TxAuxData
 import Cardano.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Shelley.Tx (ShelleyTx)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import qualified Data.Aeson as Aeson
@@ -94,8 +93,8 @@ fromAllegraTx (blkIndex, tx) =
 
 getScripts ::
   forall era.
-  (NativeScript era ~ Timelock era, AllegraEraScript era, Core.Tx era ~ ShelleyTx era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
-  ShelleyTx era ->
+  (NativeScript era ~ Timelock era, AllegraEraScript era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
+  Core.Tx era ->
   [TxScript]
 getScripts tx =
   mkTxScript
@@ -105,7 +104,7 @@ getScripts tx =
 
 getAuxScripts ::
   forall era.
-  (EraScript era, Script era ~ Timelock era) =>
+  (NativeScript era ~ Timelock era, EraScript era, Script era ~ Timelock era) =>
   StrictMaybe (AllegraTxAuxData era) ->
   [(ScriptHash, Timelock era)]
 getAuxScripts maux =

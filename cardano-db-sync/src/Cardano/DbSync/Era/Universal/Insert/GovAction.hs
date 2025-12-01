@@ -47,7 +47,6 @@ import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.CertState (DRep (..))
 import Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Ledger.Compactible (Compactible (..))
@@ -59,6 +58,7 @@ import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
 import Cardano.Ledger.Shelley.API (Coin (..), RewardAccount)
+import Cardano.Ledger.State (DRep (..))
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
 import qualified Data.Aeson as Aeson
