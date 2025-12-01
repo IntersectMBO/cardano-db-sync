@@ -20,6 +20,7 @@ main = do
   mPgPassFile <- lookupEnv "PGPASSFILE"
   when (isNothing mPgPassFile) $ do
     currentDir <- getCurrentDirectory
+    print currentDir
     setEnv "PGPASSFILE" (currentDir </> "test/testfiles/pgpass-testing")
   withIOManager $
     tests >=> defaultMain

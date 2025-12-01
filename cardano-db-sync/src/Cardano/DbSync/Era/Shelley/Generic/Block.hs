@@ -16,6 +16,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
   fromAlonzoBlock,
   fromBabbageBlock,
   fromConwayBlock,
+  fromDijkstraBlock,
   getTxs,
   blockHash,
   blockPrevHash,
@@ -39,11 +40,13 @@ import Cardano.Protocol.Crypto (Crypto, StandardCrypto, VRF)
 import qualified Cardano.Protocol.TPraos.BHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
 import Cardano.Slotting.Slot (SlotNo (..))
+import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (
   AllegraEra,
   AlonzoEra,
   BabbageEra,
   ConwayEra,
+  DijkstraEra,
   MaryEra,
   ShelleyEra,
  )
@@ -171,10 +174,27 @@ fromConwayBlock iope mprices blk =
     , blkTxs = map (fromConwayTx iope mprices) (getTxs blk)
     }
 
+fromDijkstraBlock :: Bool -> Maybe Prices -> ShelleyBlock (PraosStandard StandardCrypto) DijkstraEra -> Block
+fromDijkstraBlock iope mprices blk =
+  Block
+    { blkEra = Dijkstra
+    , blkHash = blockHash blk
+    , blkPreviousHash = blockPrevHash blk
+    , blkSlotLeader = blockIssuer blk
+    , blkSlotNo = slotNumber blk
+    , blkBlockNo = blockNumber blk
+    , blkSize = blockSize blk
+    , blkProto = blockProtoVersionPraos blk
+    , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
+    , blkOpCert = blockOpCertKeyPraos blk
+    , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkTxs = map (fromDijkstraTx iope mprices) (getTxs blk)
+    }
+
 -- -------------------------------------------------------------------------------------------------
 
-getTxs :: forall p era. Ledger.EraSegWits era => ShelleyBlock p era -> [(Word64, Ledger.Tx era)]
-getTxs = zip [0 ..] . toList . Ledger.fromTxSeq @era . Ledger.bbody . Consensus.shelleyBlockRaw
+getTxs :: forall p era. Ledger.EraBlockBody era => ShelleyBlock p era -> [(Word64, Ledger.Tx era)]
+getTxs blk = zip [0 ..] $ toList (Ledger.bbody (Consensus.shelleyBlockRaw blk) ^. Ledger.txSeqBlockBodyL)
 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
 blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw

@@ -25,13 +25,13 @@ module Cardano.SMASH.Server.Types (
 ) where
 
 import Cardano.Api (
-  AsType (..),
   Hash,
   deserialiseFromBech32,
   deserialiseFromRawBytesHex,
   serialiseToRawBytes,
  )
-import Cardano.Api.Shelley (StakePoolKey)
+import Cardano.Api.Key (StakePoolKey)
+
 import Cardano.Db (DbSessionError, PoolMetaHash (..))
 import Cardano.Prelude
 import Control.Monad.Fail (fail)
@@ -99,7 +99,7 @@ parsePoolId poolId =
     pHexStakePoolId :: Text -> Maybe (Hash StakePoolKey)
     pHexStakePoolId =
       either (const Nothing) Just
-        . deserialiseFromRawBytesHex (AsHash AsStakePoolKey)
+        . deserialiseFromRawBytesHex
         . BS.pack
         . toS
 
@@ -107,7 +107,7 @@ parsePoolId poolId =
     pBech32StakePoolId :: Text -> Maybe (Hash StakePoolKey)
     pBech32StakePoolId =
       either (const Nothing) Just
-        . deserialiseFromBech32 (AsHash AsStakePoolKey)
+        . deserialiseFromBech32
 
 -- | The hash of a stake pool's metadata.
 --

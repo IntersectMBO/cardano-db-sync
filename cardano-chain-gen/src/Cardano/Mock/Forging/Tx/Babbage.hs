@@ -122,7 +122,7 @@ consTxBody ::
   MultiAsset ->
   [ShelleyTxCert BabbageEra] ->
   Withdrawals ->
-  BabbageTxBody BabbageEra
+  TxBody BabbageEra
 consTxBody ins cols ref outs collOut fees minted certs wdrl =
   BabbageTxBody
     ins
@@ -150,10 +150,10 @@ consPaymentTxBody ::
   StrictMaybe (BabbageTxOut BabbageEra) ->
   Coin ->
   MultiAsset ->
-  BabbageTxBody BabbageEra
+  TxBody BabbageEra
 consPaymentTxBody ins cols ref outs colOut fees minted = consTxBody ins cols ref outs colOut fees minted mempty (Withdrawals mempty)
 
-consCertTxBody :: Maybe TxIn -> [ShelleyTxCert BabbageEra] -> Withdrawals -> BabbageTxBody BabbageEra
+consCertTxBody :: Maybe TxIn -> [ShelleyTxCert BabbageEra] -> Withdrawals -> TxBody BabbageEra
 consCertTxBody ref = consTxBody mempty mempty (toSet ref) mempty SNothing (Coin 0) mempty
   where
     toSet Nothing = mempty
@@ -165,7 +165,7 @@ mkPaymentTx ::
   Integer ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkPaymentTx inputIndex outputIndex amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
   addr <- resolveAddress outputIndex sta
@@ -180,7 +180,7 @@ mkPaymentTx' ::
   BabbageUTxOIndex ->
   [(BabbageUTxOIndex, MaryValue)] ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkPaymentTx' inputIndex outputIndex sta = do
   inputPair <- fst <$> resolveUTxOIndex inputIndex sta
   outps <- mapM mkOuts outputIndex
@@ -222,7 +222,7 @@ mkLockByScriptTx ::
   Integer ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkLockByScriptTx inputIndex txOutTypes amount fees sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
 
@@ -255,7 +255,7 @@ mkUnlockScriptTx ::
   Integer ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
   (colInputPair, _) <- resolveUTxOIndex colInputIndex sta
@@ -265,6 +265,7 @@ mkUnlockScriptTx inputIndex colInputIndex outputIndex succeeds amount fees sta =
       colInput = Set.singleton $ fst colInputPair
       output = BabbageTxOut addr (valueFromList (Coin amount) []) Alonzo.NoDatum SNothing
   Right
+    $ MkBabbageTx
     $ mkScriptTx
       succeeds
       (mapMaybe mkScriptInp' $ zip [0 ..] inputPairs)
@@ -280,7 +281,7 @@ mkUnlockScriptTxBabbage ::
   Integer ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succeeds amount fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInput
@@ -293,6 +294,7 @@ mkUnlockScriptTxBabbage inputIndex colInputIndex outputIndex refInput compl succ
       colInput = Set.singleton $ fst colInputPair
       output = BabbageTxOut addr (valueFromList (Coin amount) []) Alonzo.NoDatum SNothing
   Right
+    $ MkBabbageTx
     $ mkScriptTx
       succeeds
       (mapMaybe mkScriptInp' $ zip [0 ..] inputPairs)
@@ -340,7 +342,7 @@ mkMAssetsScriptTx ::
   Bool ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkMAssetsScriptTx inputIndex colInputIndex outputIndex refInput minted succeeds fees sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inputIndex
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInput
@@ -349,6 +351,7 @@ mkMAssetsScriptTx inputIndex colInputIndex outputIndex refInput minted succeeds 
   let inpts = Set.fromList $ fst <$> inputPairs
       refInpts = Set.fromList $ fst <$> refInputPairs
   Right
+    $ MkBabbageTx
     $ mkScriptTx
       succeeds
       ( mapMaybe mkScriptInp' (zip [0 ..] inputPairs)
@@ -364,20 +367,20 @@ mkDCertTx ::
   [ShelleyTxCert BabbageEra] ->
   Withdrawals ->
   Maybe TxIn ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkDCertTx certs wdrl ref = Right $ mkSimpleTx True $ consCertTxBody ref certs wdrl
 
 mkSimpleDCertTx ::
   [(StakeIndex, StakeCredential -> ShelleyTxCert BabbageEra)] ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
-mkDummyRegisterTx :: Int -> Int -> Either ForgingError (AlonzoTx BabbageEra)
+mkDummyRegisterTx :: Int -> Int -> Either ForgingError (Core.Tx BabbageEra)
 mkDummyRegisterTx n m =
   mkDCertTx
     (ShelleyTxCertDelegCert . ShelleyRegCert . KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH) . fromIntegral <$> [n, m])
@@ -391,7 +394,7 @@ mkDCertPoolTx ::
     )
   ] ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkDCertPoolTx consDert st = do
   dcerts <- forM consDert $ \(stakeIxs, poolIx, mkDCert) -> do
     stakeCreds <- forM stakeIxs $ \stix -> resolveStakeCreds stix st
@@ -403,14 +406,15 @@ mkScriptDCertTx ::
   [(StakeIndex, Bool, StakeCredential -> ShelleyTxCert BabbageEra)] ->
   Bool ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkScriptDCertTx consDert valid st = do
   dcerts <- forM consDert $ \(stakeIndex, _, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
   Right $
-    mkScriptTx valid (mapMaybe prepareRedeemer $ zip [0 ..] consDert) $
-      consCertTxBody Nothing dcerts (Withdrawals mempty)
+    MkBabbageTx $
+      mkScriptTx valid (mapMaybe prepareRedeemer $ zip [0 ..] consDert) $
+        consCertTxBody Nothing dcerts (Withdrawals mempty)
   where
     prepareRedeemer (n, (StakeIndexScript bl, addRedeemer, _)) =
       if not addRedeemer
@@ -426,7 +430,7 @@ mkDepositTxPools ::
   BabbageUTxOIndex ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkDepositTxPools inputIndex deposit sta = do
   (inputPair, _) <- resolveUTxOIndex inputIndex sta
 
@@ -437,17 +441,18 @@ mkDepositTxPools inputIndex deposit sta = do
 
 mkDCertTxPools ::
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkDCertTxPools sta = Right $ mkSimpleTx True $ consCertTxBody Nothing (allPoolStakeCert sta) (Withdrawals mempty)
 
-mkSimpleTx :: Bool -> BabbageTxBody BabbageEra -> AlonzoTx BabbageEra
+mkSimpleTx :: Bool -> TxBody BabbageEra -> Core.Tx BabbageEra
 mkSimpleTx valid txBody =
-  AlonzoTx
-    { body = txBody
-    , wits = mempty
-    , isValid = IsValid valid
-    , auxiliaryData = maybeToStrictMaybe Nothing
-    }
+  MkBabbageTx $
+    AlonzoTx
+      { atBody = txBody
+      , atWits = mempty
+      , atIsValid = IsValid valid
+      , atAuxData = maybeToStrictMaybe Nothing
+      }
 
 consPoolParamsTwoOwners ::
   [StakeCredential] ->
@@ -457,16 +462,16 @@ consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
   ShelleyTxCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
 consPoolParamsTwoOwners _ _ = panic "expected 2 pool owners"
 
-mkUTxOBabbage :: AlonzoTx BabbageEra -> [(TxIn, BabbageTxOut BabbageEra)]
+mkUTxOBabbage :: Core.Tx BabbageEra -> [(TxIn, BabbageTxOut BabbageEra)]
 mkUTxOBabbage = mkUTxOAlonzo
 
 mkUTxOCollBabbage ::
-  BabbageEraTxBody era =>
-  AlonzoTx era ->
+  (BabbageEraTxBody era, EraTx era) =>
+  Core.Tx era ->
   [(TxIn, TxOut era)]
-mkUTxOCollBabbage tx = Map.toList $ unUTxO $ collOuts $ getField @"body" tx
+mkUTxOCollBabbage tx = Map.toList $ unUTxO $ collOuts (tx ^. bodyTxL)
 
-emptyTxBody :: BabbageTxBody BabbageEra
+emptyTxBody :: TxBody BabbageEra
 emptyTxBody =
   BabbageTxBody
     mempty
@@ -486,16 +491,17 @@ emptyTxBody =
     Strict.SNothing
     (Strict.SJust Testnet)
 
-emptyTx :: AlonzoTx BabbageEra
+emptyTx :: Core.Tx BabbageEra
 emptyTx =
-  AlonzoTx
-    { body = emptyTxBody
-    , wits = mempty
-    , isValid = IsValid True
-    , auxiliaryData = maybeToStrictMaybe Nothing
-    }
+  MkBabbageTx $
+    AlonzoTx
+      { atBody = emptyTxBody
+      , atWits = mempty
+      , atIsValid = IsValid True
+      , atAuxData = maybeToStrictMaybe Nothing
+      }
 
-mkParamUpdateTx :: Either ForgingError (AlonzoTx BabbageEra)
+mkParamUpdateTx :: Either ForgingError (Core.Tx BabbageEra)
 mkParamUpdateTx = Right (mkSimpleTx True txBody)
   where
     txBody =
@@ -530,7 +536,7 @@ mkFullTx ::
   Int ->
   Integer ->
   BabbageLedgerState mk ->
-  Either ForgingError (AlonzoTx BabbageEra)
+  Either ForgingError (Core.Tx BabbageEra)
 mkFullTx n m sta = do
   inputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) inps
   let rdmrs = mapMaybe mkScriptInp' $ zip [0 ..] inputPairs
@@ -538,12 +544,13 @@ mkFullTx n m sta = do
   refInputPairs <- fmap fst <$> mapM (`resolveUTxOIndex` sta) refInps
   colInput <- Set.singleton . fst . fst <$> resolveUTxOIndex colInps sta
   Right $
-    AlonzoTx
-      { body = txBody (mkInps inputPairs) (mkInps refInputPairs) colInput
-      , wits = witnesses
-      , isValid = IsValid True
-      , auxiliaryData = Strict.SJust auxiliaryData'
-      }
+    MkBabbageTx $
+      AlonzoTx
+        { atBody = txBody (mkInps inputPairs) (mkInps refInputPairs) colInput
+        , atWits = witnesses
+        , atIsValid = IsValid True
+        , atAuxData = Strict.SJust auxiliaryData'
+        }
   where
     mkInps ins = Set.fromList $ fst <$> ins
     txBody ins cols ref =

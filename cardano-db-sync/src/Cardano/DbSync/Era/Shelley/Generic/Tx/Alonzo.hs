@@ -89,7 +89,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     , txFees =
         if not isValid2
           then Nothing
-          else Just $ Alonzo.txfee' txBody
+          else Just $ txBody ^. Core.feeTxBodyL
     , txOutSum =
         if not isValid2
           then Coin 0
@@ -101,7 +101,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     , txCertificates = snd <$> rmCerts finalMaps
     , txWithdrawals = Map.elems $ rmWdrl finalMaps
     , txParamProposal = mkTxParamProposal (Alonzo Standard) txBody
-    , txMint = Alonzo.mint' txBody
+    , txMint = txBody ^. Alonzo.mintTxBodyL
     , txRedeemer = redeemers
     , txData = txDataWitness tx
     , txScriptSizes = getPlutusSizes tx
@@ -112,11 +112,11 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Alonzo does not support treasury donations
     }
   where
-    txBody :: Alonzo.AlonzoTxBody AlonzoEra
+    --    txBody :: Alonzo.AlonzoTxBody AlonzoEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
-    outputs = zipWith fromTxOut [0 ..] $ toList (Alonzo.outputs' txBody)
+    outputs = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
 
     fromTxOut :: Word64 -> AlonzoTxOut AlonzoEra -> TxOut
     fromTxOut index txOut =
@@ -132,12 +132,12 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
         MaryValue ada (MultiAsset maMap) = txOut ^. Core.valueTxOutL
         mDataHash = txOut ^. Alonzo.dataHashTxOutL
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (Left . toShelleyCert)
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (SCert . toShelleyCert)
 
     -- This is true if second stage contract validation passes or there are no contracts.
     isValid2 :: Bool
     isValid2 =
-      case Alonzo.isValid tx of
+      case tx ^. Alonzo.isValidTxL of
         Alonzo.IsValid x -> x
 
     (invalidBefore, invalidAfter) = getInterval txBody
@@ -307,20 +307,20 @@ mkTxScript (hsh, script) =
     getScriptType :: DB.ScriptType
     getScriptType =
       case script of
-        Alonzo.TimelockScript {} -> DB.Timelock
+        Alonzo.NativeScript {} -> DB.Timelock
         Alonzo.PlutusScript ps -> getPlutusScriptType ps
 
     timelockJsonScript :: Maybe ByteString
     timelockJsonScript =
       case script of
-        Alonzo.TimelockScript s ->
+        Alonzo.NativeScript s ->
           Just . LBS.toStrict . Aeson.encode $ fromTimelock s
         Alonzo.PlutusScript {} -> Nothing
 
     plutusCborScript :: Maybe ByteString
     plutusCborScript =
       case script of
-        Alonzo.TimelockScript {} -> Nothing
+        Alonzo.NativeScript {} -> Nothing
         plScript -> Just $ Core.originalBytes plScript
 
 getPlutusSizes ::
@@ -341,16 +341,16 @@ getPlutusSizes tx =
 getPlutusScriptSize :: Alonzo.AlonzoEraScript era => Alonzo.AlonzoScript era -> Maybe Word64
 getPlutusScriptSize script =
   case script of
-    Alonzo.TimelockScript {} -> Nothing
+    Alonzo.NativeScript {} -> Nothing
     Alonzo.PlutusScript ps ->
       Just $ fromIntegral $ SBS.length $ unPlutusBinary $ Alonzo.plutusScriptBinary ps
 
 txDataWitness ::
-  (Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era) =>
+  (Alonzo.AlonzoEraScript era, Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era) =>
   Core.Tx era ->
   [PlutusData]
 txDataWitness tx =
-  mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats' (tx ^. Core.witsTxL))
+  mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats (tx ^. Core.witsTxL))
 
 mkTxData :: (DataHash, Alonzo.Data era) -> PlutusData
 mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Core.originalBytes dt)
@@ -362,7 +362,7 @@ mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Core.originalBytes 
         . ScriptData
 
 extraKeyWits ::
-  AlonzoEraTxBody era =>
+  (AlonzoEraTxBody era, Core.AtMostEra "Conway" era) =>
   Core.TxBody era ->
   [ByteString]
 extraKeyWits txBody =
@@ -375,8 +375,9 @@ scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.raCredential reward
 
 scriptHashCert :: Cert -> Maybe ByteString
 scriptHashCert cert = case cert of
-  Left scert -> scriptHashCertShelley scert
-  Right ccert -> scriptHashCertConway ccert
+  SCert scert -> scriptHashCertShelley scert
+  CCert ccert -> scriptHashCertConway ccert
+  DCert _ -> Nothing -- TODO(Dijkstra)
 
 scriptHashCertConway :: ConwayCert -> Maybe ByteString
 scriptHashCertConway cert = unScriptHash <$> getScriptWitnessTxCert cert

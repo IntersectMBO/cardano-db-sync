@@ -28,7 +28,7 @@ import Cardano.Ledger.Address (RewardAccount)
 import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
-import Cardano.Ledger.Coin (Coin (..))
+import Cardano.Ledger.Coin (Coin (..), CompactForm (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
@@ -154,6 +154,9 @@ instance ConvertLedgerEvent (ShelleyBlock protocol ConwayEra) where
       LEDepositsConway hsh coin -> Just $ LedgerDeposits hsh coin
       _ -> toLedgerEventConway evt hasRewards
 
+instance ConvertLedgerEvent (ShelleyBlock protocol DijkstraEra) where
+  toLedgerEvent _ _ = Nothing -- TODO(Dijkstra)
+
 toLedgerEventShelley ::
   ( Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
   , Event (Ledger.EraRule "NEWEPOCH" ledgerera) ~ ShelleyNewEpochEvent ledgerera
@@ -270,18 +273,18 @@ whenHasRew has a = if has then Just a else Nothing
 --------------------------------------------------------------------------------
 
 convertPoolDepositRefunds ::
-  Map StakeCred (Map PoolKeyHash Coin) ->
+  Map StakeCred (Map PoolKeyHash (CompactForm Coin)) ->
   Generic.Rewards
 convertPoolDepositRefunds rwds =
   Generic.Rewards $
     Map.map (Set.fromList . map convert . Map.toList) rwds
   where
-    convert :: (PoolKeyHash, Coin) -> Generic.Reward
+    convert :: (PoolKeyHash, CompactForm Coin) -> Generic.Reward
     convert (kh, coin) =
       Generic.Reward
         { Generic.rewardSource = RwdDepositRefund
         , Generic.rewardPool = kh
-        , Generic.rewardAmount = coin
+        , Generic.rewardAmount = unCompactCoin coin
         }
 
 convertMirRewards ::
@@ -323,7 +326,7 @@ convertPoolRewards rmap =
     convertReward sr =
       Generic.Reward
         { Generic.rewardSource = rewardTypeToSource $ Ledger.rewardType sr
-        , Generic.rewardAmount = Ledger.rewardAmount sr
+        , Generic.rewardAmount = fromIntegral $ unCoin $ Ledger.rewardAmount sr
         , Generic.rewardPool = Ledger.rewardPool sr
         }
 
