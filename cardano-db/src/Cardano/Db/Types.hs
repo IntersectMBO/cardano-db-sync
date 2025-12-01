@@ -532,16 +532,16 @@ word128Encoder = fromInteger . toInteger >$< HsqlE.numeric
 word128Decoder :: HsqlD.Value Word128
 word128Decoder = fromInteger . fromIntegral . coefficient <$> HsqlD.numeric
 
-lovelaceToAda :: Micro -> Ada
+lovelaceToAda :: Integer -> Ada
 lovelaceToAda ll =
-  Ada (ll / 1000000)
+  Ada (fromIntegral ll / 1000000)
 
 renderAda :: Ada -> Text
 renderAda (Ada a) = Text.pack (show a)
 
 scientificToAda :: Scientific -> Ada
 scientificToAda s =
-  word64ToAda $ floor (s * 1000000)
+  lovelaceToAda $ floor (s * 1000000)
 
 word64ToAda :: Word64 -> Ada
 word64ToAda w =
