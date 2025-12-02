@@ -384,16 +384,15 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
     writeLedgerStateFile file ledger = do
       startTime <- getCurrentTime
       -- Use streaming builder to avoid loading entire state into memory
-      IO.withBinaryFile file IO.WriteMode $ \h -> do
-        let encoding =
-              encodeCardanoLedgerState
-                ( Consensus.encodeExtLedgerState
-                    (encodeDisk codecConfig)
-                    (encodeDisk codecConfig)
-                    (encodeDisk codecConfig)
-                )
-                ledger
-        Builder.hPutBuilder h (toBuilder encoding)
+      let encoding =
+            encodeCardanoLedgerState
+              ( Consensus.encodeExtLedgerState
+                  (encodeDisk codecConfig)
+                  (encodeDisk codecConfig)
+                  (encodeDisk codecConfig)
+              )
+              ledger
+      Builder.writeFile file (toBuilder encoding)
       endTime <- getCurrentTime
       logInfo tracer $
         mconcat
