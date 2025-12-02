@@ -81,12 +81,11 @@
 
                 (final: prev: {
                   hlint = final.haskell-nix.tool "ghc96" "hlint" {
-                    version = "latest";
+                    version = "3.8";
                   };
 
-                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
                   fourmolu = final.haskell-nix.tool "ghc96" "fourmolu" {
-                    version = "latest";
+                    version = "0.17.0.0";
                   };
                 })
 
@@ -190,7 +189,10 @@
               tools = {
                 cabal = "3.14.2.0";
                 fourmolu = "0.17.0.0";
-                hlint = "3.10";
+
+                # We'd prefer 3.8, but it won't work on all compilers we support. Instead
+                # we'll let solver sort it out.
+                hlint = "latest";
 
                 haskell-language-server = {
                   src = nixpkgs.haskell-nix.sources."hls-2.11";
