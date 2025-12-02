@@ -101,8 +101,8 @@ addValidityInterval ::
   SlotNo ->
   Core.Tx era ->
   Core.Tx era
-addValidityInterval slotNo tx =
-  set (bodyTxL @era . vldtTxBodyL @era) interval tx
+addValidityInterval slotNo =
+  set (bodyTxL @era . vldtTxBodyL @era) interval
   where
     interval = ValidityInterval Strict.SNothing (Strict.SJust slotNo)
 

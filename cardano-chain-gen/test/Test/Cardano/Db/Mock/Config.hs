@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+#if __GLASGOW_HASKELL__ >= 908
+{-# OPTIONS_GHC -Wno-x-partial #-}
+#endif
 
 module Test.Cardano.Db.Mock.Config (
   Config (..),
@@ -164,7 +168,7 @@ mkMutableDir :: FilePath -> FilePath
 mkMutableDir testLabel = rootTestDir </> "temp" </> testLabel
 
 mkConfigDir :: FilePath -> FilePath
-mkConfigDir config = "cardano-chain-gen" </> rootTestDir </> config
+mkConfigDir config = rootTestDir </> config
 
 fingerprintRoot :: FilePath
 fingerprintRoot = rootTestDir </> "fingerprint"
@@ -256,7 +260,7 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
-  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg [(head creds)]
+  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg [head creds]
   bracket
     (allocateRes mkForgings)
     (mapM finalize)
@@ -272,6 +276,8 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
       forgings' <- mapM mkBlockForging forgings
       -- _ <- throwIO $ userError "B"
       pure forgings'
+
+{-# ANN withConfig ("HLint: ignore Redundant pure" :: String) #-}
 
 mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig
 mkSyncNodeConfig configFilePath cmdLineArgs =
