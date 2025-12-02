@@ -188,9 +188,9 @@
 
             shell = {
               tools = {
-                cabal = "latest";
-                fourmolu = "latest";
-                hlint = "latest";
+                cabal = "3.14.2.0";
+                fourmolu = "0.17.0.0";
+                hlint = "3.8";
 
                 haskell-language-server = {
                   src = nixpkgs.haskell-nix.sources."hls-2.11";
