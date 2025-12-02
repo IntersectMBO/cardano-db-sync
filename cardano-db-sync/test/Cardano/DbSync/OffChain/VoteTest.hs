@@ -20,10 +20,46 @@ tests =
   checkParallel $
     Group
       "Cardano.DbSync.OffChain.Vote"
-      [ ("parseAndValidateVoteData handles invalid CIP format", prop_parseInvalidCIPFormat)
+      [ ("parseAndValidateVoteData handles valid CIP-119 format", prop_parseValidCIPFormat)
+      , ("parseAndValidateVoteData handles invalid CIP format (type error)", prop_parseInvalidCIPFormat)
       , ("parseAndValidateVoteData handles valid JSON but invalid structure", prop_parseValidJsonInvalidStructure)
       , ("parseAndValidateVoteData handles unparseable JSON", prop_parseUnparseableJson)
       ]
+
+-- | Test that we can parse valid CIP-119 format correctly
+-- Scenario: Valid JSON + Valid CIP schema -> is_valid = true
+prop_parseValidCIPFormat :: Property
+prop_parseValidCIPFormat = withTests 1 $ property $ do
+  -- Read the test file with valid CIP-119 format
+  fileContent <- liftIO $ BS.readFile "test/testfiles/valid-vote-minimal.jsonld"
+  let lbsContent = LBS.fromStrict fileContent
+
+  -- Run the parser
+  result <- liftIO $ runOrThrowIO $ runExceptT $ parseAndValidateVoteData fileContent lbsContent Nothing DB.DrepAnchor Nothing
+
+  let (mocvd, val, _hash, _warning, isValidJson) = result
+
+  -- Should succeed in parsing generic JSON
+  annotate "Successfully parsed as generic JSON"
+  assert isValidJson
+
+  -- Should successfully parse into strongly-typed OffChainVoteData
+  case mocvd of
+    Just _ocvd -> do
+      annotate "Successfully parsed into OffChainVoteData"
+      success
+    Nothing -> do
+      annotate "Failed to parse into OffChainVoteData"
+      failure
+
+  -- Should have valid Aeson.Value
+  case Aeson.toJSON val of
+    Aeson.Object _obj -> do
+      annotate "Has valid JSON object"
+      success
+    _ -> do
+      annotate "Expected JSON object"
+      failure
 
 -- | Test that we can parse JSON with incorrect field types (e.g., doNotList as string instead of bool)
 -- This is based on the issue https://github.com/IntersectMBO/cardano-db-sync/issues/1995
@@ -31,7 +67,7 @@ tests =
 prop_parseInvalidCIPFormat :: Property
 prop_parseInvalidCIPFormat = withTests 1 $ property $ do
   -- Read the test file with invalid doNotList field (string instead of bool)
-  fileContent <- liftIO $ BS.readFile "test/testfiles/invalid-vote-doNotList.jsonld"
+  fileContent <- liftIO $ BS.readFile "test/testfiles/invalid-vote-type-error.jsonld"
   let lbsContent = LBS.fromStrict fileContent
 
   -- Run the parser
@@ -58,14 +94,13 @@ prop_parseInvalidCIPFormat = withTests 1 $ property $ do
 -- | Test with completely valid JSON but not matching the CIP schema
 -- Scenario: Valid JSON but invalid CIP schema -> is_valid = false
 prop_parseValidJsonInvalidStructure :: Property
-prop_parseValidJsonInvalidStructure = property $ do
-  -- Create a valid JSON that doesn't match CIP schema at all
-  let invalidJson = "{\"randomField\": \"value\", \"number\": 42}"
-      bs = encodeUtf8 invalidJson
-      lbs = LBS.fromStrict bs
+prop_parseValidJsonInvalidStructure = withTests 1 $ property $ do
+  -- Read the test file with valid JSON but wrong structure
+  fileContent <- liftIO $ BS.readFile "test/testfiles/invalid-vote-wrong-structure.jsonld"
+  let lbsContent = LBS.fromStrict fileContent
 
   -- This should succeed because it's valid JSON, just not matching the schema
-  result <- liftIO $ runOrThrowIO $ runExceptT $ parseAndValidateVoteData bs lbs Nothing DB.DrepAnchor Nothing
+  result <- liftIO $ runOrThrowIO $ runExceptT $ parseAndValidateVoteData fileContent lbsContent Nothing DB.DrepAnchor Nothing
 
   let (mocvd, _val, _hash, _warning, isValidJson) = result
 
@@ -77,14 +112,13 @@ prop_parseValidJsonInvalidStructure = property $ do
 -- | Test with completely unparseable content (not valid JSON at all)
 -- Scenario: Invalid JSON but hash matches -> is_valid = NULL
 prop_parseUnparseableJson :: Property
-prop_parseUnparseableJson = property $ do
-  -- Create content that is not valid JSON
-  let notJson = "This is just plain text, not JSON at all!"
-      bs = encodeUtf8 notJson
-      lbs = LBS.fromStrict bs
+prop_parseUnparseableJson = withTests 1 $ property $ do
+  -- Read the test file with malformed JSON
+  fileContent <- liftIO $ BS.readFile "test/testfiles/invalid-vote-malformed-json.jsonld"
+  let lbsContent = LBS.fromStrict fileContent
 
   -- This should not fail, but instead return an error message in the JSON field
-  result <- liftIO $ runOrThrowIO $ runExceptT $ parseAndValidateVoteData bs lbs Nothing DB.DrepAnchor Nothing
+  result <- liftIO $ runOrThrowIO $ runExceptT $ parseAndValidateVoteData fileContent lbsContent Nothing DB.DrepAnchor Nothing
 
   let (mocvd, val, _hash, _warning, isValidJson) = result
 
