@@ -47,6 +47,11 @@ jobs:
           minimal: false
           # enable IOG-full flavour to bring in all the crypto libraries we need.
           iog-full: true
+      # TODO: remove when input-output-hk/devx is fixed
+      - name: Install system dependencies
+        uses: input-output-hk/actions/base@latest
+        with:
+          use-sodium-vrf: true
       - name: cache cabal
         uses: actions/cache@v3
         with:
