@@ -36,6 +36,15 @@ unitTests iom knownMigrations =
         , testCase "default insert config" Config.defaultInsertConfig
         , testCase "insert config" Config.insertConfig
         , testGroup
+            "simple"
+            [ test "simple forge blocks" Simple.forgeBlocks
+            , test "sync one block" Simple.addSimple
+            , test "sync small chain" Simple.addSimpleChain
+            , test "restart db-sync" Simple.restartDBSync
+            , test "node restart" Simple.nodeRestart
+            , test "node restart boundary" Simple.nodeRestartBoundary
+            ]
+        , testGroup
             "jsonb-in-schema"
             [ test "jsonb in schema true" Config.configRemoveJsonbFromSchemaEnabled
             , test "jsonb in schema false" Config.configRemoveJsonbFromSchemaDisabled
@@ -91,15 +100,6 @@ unitTests iom knownMigrations =
                 "populate db then reset with use_address_table config config active"
                 $ MigrateConsumedPruneTxOut.populateDbRestartWithAddressConfig iom knownMigrations
             ]
-        ]
-    , testGroup
-        "simple"
-        [ test "simple forge blocks" Simple.forgeBlocks
-        , test "sync one block" Simple.addSimple
-        , test "sync small chain" Simple.addSimpleChain
-        , test "restart db-sync" Simple.restartDBSync
-        , test "node restart" Simple.nodeRestart
-        , test "node restart boundary" Simple.nodeRestartBoundary
         ]
     , testGroup
         "Command Line Arguments"

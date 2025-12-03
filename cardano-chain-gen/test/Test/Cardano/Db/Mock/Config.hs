@@ -87,6 +87,8 @@ import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Byron.Ledger.Mempool ()
 import Ouroboros.Consensus.Config (TopLevelConfig)
 import Ouroboros.Consensus.HardFork.Combinator.Mempool ()
+import Ouroboros.Consensus.Ledger.Abstract (projectLedgerTables)
+import Ouroboros.Consensus.Ledger.Tables.Utils (forgetLedgerTables)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
@@ -596,7 +598,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
     withServerHandle @CardanoBlock
       iom
       (topLevelConfig cfg)
-      initSt
+      (forgetLedgerTables initSt, projectLedgerTables initSt)
       (NetworkMagic 42)
       (unSocketPath (enpSocketPath $ syncNodeParams cfg))
       $ \mockServer ->
