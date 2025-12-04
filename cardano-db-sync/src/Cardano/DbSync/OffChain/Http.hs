@@ -13,6 +13,7 @@ import qualified Cardano.Crypto.Hash.Blake2b as Crypto
 import qualified Cardano.Crypto.Hash.Class as Crypto
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Config.Types (OffChainUserAgent (..))
 import Cardano.DbSync.OffChain.Types (
   PoolOffChainMetadata (..),
   PoolTicker (..),
@@ -81,30 +82,32 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
 httpGetOffChainVoteData ::
   [Text] ->
   VoteUrl ->
+  OffChainUserAgent ->
   Maybe VoteMetaHash ->
   DB.AnchorType ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-httpGetOffChainVoteData gateways vurl metaHash anchorType = do
+httpGetOffChainVoteData gateways vurl userAgent metaHash anchorType = do
   case useIpfsGatewayMaybe vurl gateways of
-    Nothing -> httpGetOffChainVoteDataSingle vurl metaHash anchorType
+    Nothing -> httpGetOffChainVoteDataSingle vurl userAgent metaHash anchorType
     Just [] -> left $ OCFErrNoIpfsGateway (OffChainVoteUrl vurl)
     Just urls -> tryAllGatewaysRec urls []
   where
     tryAllGatewaysRec [] acc = left $ OCFErrIpfsGatewayFailures (OffChainVoteUrl vurl) (reverse acc)
     tryAllGatewaysRec (url : rest) acc = do
-      msocd <- liftIO $ runExceptT $ httpGetOffChainVoteDataSingle url metaHash anchorType
+      msocd <- liftIO $ runExceptT $ httpGetOffChainVoteDataSingle url userAgent metaHash anchorType
       case msocd of
         Right socd -> pure socd
         Left err -> tryAllGatewaysRec rest (err : acc)
 
 httpGetOffChainVoteDataSingle ::
   VoteUrl ->
+  OffChainUserAgent ->
   Maybe VoteMetaHash ->
   DB.AnchorType ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-httpGetOffChainVoteDataSingle vurl metaHash anchorType = do
+httpGetOffChainVoteDataSingle vurl userAgent metaHash anchorType = do
   manager <- liftIO $ Http.newManager tlsManagerSettings
-  request <- parseOffChainUrl url
+  request <- parseOffChainUrl url userAgent
   let req = httpGetBytes manager request 3000000 3000000 url
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
@@ -205,22 +208,24 @@ isPossiblyJsonObject bs =
 -------------------------------------------------------------------------------------
 -- Url
 -------------------------------------------------------------------------------------
-parseOffChainUrl :: OffChainUrlType -> ExceptT OffChainFetchError IO Http.Request
-parseOffChainUrl url =
-  handleExceptT wrapHttpException $ applyHeaders <$> Http.parseRequest (showUrl url)
+parseOffChainUrl :: OffChainUrlType -> OffChainUserAgent -> ExceptT OffChainFetchError IO Http.Request
+parseOffChainUrl url userAgent =
+  handleExceptT wrapHttpException $ applyHeaders userAgent <$> Http.parseRequest (showUrl url)
   where
     wrapHttpException :: HttpException -> OffChainFetchError
     wrapHttpException err = OCFErrHttpException url (textShow err)
 
-applyHeaders :: Http.Request -> Http.Request
-applyHeaders req =
+applyHeaders :: OffChainUserAgent -> Http.Request -> Http.Request
+applyHeaders (OffChainUserAgent mUserAgent) req =
   req
     { Http.requestHeaders =
         Http.requestHeaders req
           ++ [ (CI.mk "content-type", "application/json")
-             , (CI.mk "user-agent", "cardano-db-sync")
+             , (CI.mk "user-agent", Text.encodeUtf8 userAgent)
              ]
     }
+  where
+    userAgent = fromMaybe "cardano-db-sync" mUserAgent
 
 -------------------------------------------------------------------------------------
 -- Exceptions to Error
