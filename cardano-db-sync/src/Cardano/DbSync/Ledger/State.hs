@@ -705,7 +705,7 @@ listMemorySnapshots env = do
       case AS.toNewestFirst $ ledgerDbCheckpoints ldb of
         [] -> []
         [a] -> [a]
-        ls -> [List.head ls, List.last ls]
+        (h : ls) -> catMaybes [Just h, lastMay ls]
     notGenesis GenesisPoint = False
     notGenesis (BlockPoint _ _) = True
 
