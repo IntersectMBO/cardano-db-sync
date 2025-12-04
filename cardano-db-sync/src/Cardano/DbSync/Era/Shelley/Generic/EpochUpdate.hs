@@ -59,6 +59,7 @@ extractEpochNonce extLedgerState =
     ChainDepStateAlonzo st -> extractNonce st
     ChainDepStateBabbage st -> extractNoncePraos st
     ChainDepStateConway st -> extractNoncePraos st
+    ChainDepStateDijkstra st -> extractNoncePraos st
   where
     extractNonce :: Consensus.TPraosState -> Ledger.Nonce
     extractNonce =

@@ -38,7 +38,7 @@ type ShelleyUTxOIndex = UTxOIndex ShelleyEra
 
 type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard ShelleyEra)
 
-type ShelleyTx = ShelleyTx.ShelleyTx ShelleyEra
+type ShelleyTx = Core.Tx ShelleyEra
 
 mkPaymentTx ::
   ShelleyUTxOIndex ->
@@ -62,12 +62,13 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
 mkDCertTxPools :: ShelleyLedgerState mk -> Either ForgingError ShelleyTx
 mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
 
-mkSimpleTx :: ShelleyTxBody ShelleyEra -> ShelleyTx
+mkSimpleTx :: TxBody ShelleyEra -> ShelleyTx
 mkSimpleTx txBody =
-  ShelleyTx.ShelleyTx
-    txBody
-    mempty
-    (maybeToStrictMaybe Nothing)
+  ShelleyTx.MkShelleyTx $
+    ShelleyTx.ShelleyTx
+      txBody
+      mempty
+      (maybeToStrictMaybe Nothing)
 
 mkDCertTx :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> Either ForgingError ShelleyTx
 mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
@@ -86,10 +87,10 @@ consPaymentTxBody ::
   Set TxIn ->
   StrictSeq (ShelleyTxOut ShelleyEra) ->
   Coin ->
-  ShelleyTxBody ShelleyEra
+  TxBody ShelleyEra
 consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Withdrawals mempty)
 
-consCertTxBody :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> ShelleyTxBody ShelleyEra
+consCertTxBody :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> TxBody ShelleyEra
 consCertTxBody = consTxBody mempty mempty (Coin 0)
 
 consTxBody ::
@@ -98,7 +99,7 @@ consTxBody ::
   Coin ->
   [ShelleyTxCert ShelleyEra] ->
   Withdrawals ->
-  ShelleyTxBody ShelleyEra
+  TxBody ShelleyEra
 consTxBody ins outs fees certs wdrl =
   ShelleyTxBody
     ins

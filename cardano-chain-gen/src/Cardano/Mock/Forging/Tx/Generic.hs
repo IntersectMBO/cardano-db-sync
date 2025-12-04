@@ -44,11 +44,10 @@ import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
 import Cardano.Ledger.Hashes (ADDRHASH, ScriptHash (ScriptHash))
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), hashWithSerialiser)
-import Cardano.Ledger.PoolParams
 import Cardano.Ledger.Shelley.LedgerState hiding (LedgerState)
 import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.State
 import Cardano.Ledger.TxIn (TxIn (..))
-import qualified Cardano.Ledger.UMap as UMap
 import Cardano.Mock.Forging.Crypto
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
@@ -128,29 +127,26 @@ resolveStakeCreds ::
   LedgerState (ShelleyBlock p era) mk ->
   Either ForgingError StakeCredential
 resolveStakeCreds indx st = case indx of
-  StakeIndex n -> toEither $ fst <$> (rewardAccs !? n)
+  StakeIndex n -> toEither $ fst <$> (Map.toList rewardAccs !? n)
   StakeAddress addr -> Right addr
   StakeIndexNew n -> toEither $ unregisteredStakeCredentials !? n
   StakeIndexScript bl -> Right $ if bl then alwaysSucceedsScriptStake else alwaysFailsScriptStake
   StakeIndexPoolLeader poolIndex -> Right $ raCredential $ ppRewardAccount $ findPoolParams poolIndex
   StakeIndexPoolMember n poolIndex -> Right $ resolvePoolMember n poolIndex
   where
-    rewardAccs =
-      Map.toList $
-        UMap.rewardMap $
-          dsUnified dstate
+    rewardAccs :: Map StakeCredential (AccountState era)
+    rewardAccs = dsAccounts dstate ^. accountsMapL
 
     poolParams :: Map (KeyHash 'StakePool) PoolParams
     poolParams =
-      psStakePoolParams $
-        let certState =
-              lsCertState $
-                esLState $
-                  nesEs $
-                    Consensus.shelleyLedgerState st
-         in certState ^. certPStateL
-
-    delegs = UMap.sPoolMap $ dsUnified dstate
+      let certState =
+            lsCertState $
+              esLState $
+                nesEs $
+                  Consensus.shelleyLedgerState st
+       in Map.mapWithKey stakePoolStateToPoolParams $ psStakePools (certState ^. certPStateL) -- . psStakePoolsL
+    delegs :: Map StakeCredential (KeyHash 'StakePool)
+    delegs = Map.mapMaybe (^. stakePoolDelegationAccountStateL) rewardAccs
 
     dstate =
       let certState =
@@ -185,28 +181,24 @@ resolvePool pix st = case pix of
   PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams =
-      Map.elems $
-        psStakePoolParams $
-          let certState =
-                lsCertState $
-                  esLState $
-                    nesEs $
-                      Consensus.shelleyLedgerState st
-           in certState ^. certPStateL
+      let certState =
+            lsCertState $
+              esLState $
+                nesEs $
+                  Consensus.shelleyLedgerState st
+       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
 
 allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) mk -> [ShelleyTxCert era]
 allPoolStakeCert st =
   ShelleyTxCertDelegCert . ShelleyRegCert <$> nub creds
   where
     poolParms =
-      Map.elems $
-        psStakePoolParams $
-          let certState =
-                lsCertState $
-                  esLState $
-                    nesEs $
-                      Consensus.shelleyLedgerState st
-           in certState ^. certPStateL
+      let certState =
+            lsCertState $
+              esLState $
+                nesEs $
+                  Consensus.shelleyLedgerState st
+       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
     creds = concatMap getPoolStakeCreds poolParms
 
 getPoolStakeCreds :: PoolParams -> [StakeCredential]

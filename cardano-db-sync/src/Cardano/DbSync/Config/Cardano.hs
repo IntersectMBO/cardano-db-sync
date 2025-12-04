@@ -28,7 +28,10 @@ import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
 import qualified Cardano.Ledger.Api.Transition as Ledger
 import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
+import Cardano.Node.Protocol.Dijkstra
+import Cardano.Prelude (second)
 import Control.Monad.Trans.Except (ExceptT)
+import Control.Tracer (nullTracer)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
@@ -82,40 +85,43 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
-  (ProtocolInfo CardanoBlock, IO [BlockForging IO CardanoBlock])
+  (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
 mkProtocolInfoCardano genesisConfig shelleyCred =
-  protocolInfoCardano $
-    CardanoProtocolParams
-      { byronProtocolParams =
-          Consensus.ProtocolParamsByron
-            { Consensus.byronGenesis = bGenesis
-            , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
-            , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
-            , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
-            , Consensus.byronLeaderCredentials = Nothing
-            }
-      , shelleyBasedProtocolParams =
-          Consensus.ProtocolParamsShelleyBased
-            { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
-            , Consensus.shelleyBasedLeaderCredentials = shelleyCred
-            }
-      , cardanoProtocolVersion = ProtVer (natVersion @10) 0
-      , cardanoLedgerTransitionConfig =
-          Ledger.mkLatestTransitionConfig
-            shelleyGenesis
-            alonzoGenesis
-            conwayGenesis
-      , cardanoHardForkTriggers =
-          Consensus.CardanoHardForkTriggers'
-            { triggerHardForkShelley = dncShelleyHardFork dnc
-            , triggerHardForkAllegra = dncAllegraHardFork dnc
-            , triggerHardForkMary = dncMaryHardFork dnc
-            , triggerHardForkAlonzo = dncAlonzoHardFork dnc
-            , triggerHardForkBabbage = dncBabbageHardFork dnc
-            , triggerHardForkConway = dncConwayHardFork dnc
-            }
-      , cardanoCheckpoints = emptyCheckpointsMap
-      }
+  second (\f -> f nullTracer) $
+    protocolInfoCardano $
+      CardanoProtocolParams
+        { byronProtocolParams =
+            Consensus.ProtocolParamsByron
+              { Consensus.byronGenesis = bGenesis
+              , Consensus.byronPbftSignatureThreshold = Consensus.PBftSignatureThreshold <$> dncPBftSignatureThreshold dnc
+              , Consensus.byronProtocolVersion = dncByronProtocolVersion dnc
+              , Consensus.byronSoftwareVersion = mkByronSoftwareVersion
+              , Consensus.byronLeaderCredentials = Nothing
+              }
+        , shelleyBasedProtocolParams =
+            Consensus.ProtocolParamsShelleyBased
+              { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
+              , Consensus.shelleyBasedLeaderCredentials = shelleyCred
+              }
+        , cardanoProtocolVersion = ProtVer (natVersion @10) 0
+        , cardanoLedgerTransitionConfig =
+            Ledger.mkLatestTransitionConfig
+              shelleyGenesis
+              alonzoGenesis
+              conwayGenesis
+              emptyDijkstraGenesis -- TODO(Dijkstra)
+        , cardanoHardForkTriggers =
+            Consensus.CardanoHardForkTriggers'
+              { triggerHardForkShelley = dncShelleyHardFork dnc
+              , triggerHardForkAllegra = dncAllegraHardFork dnc
+              , triggerHardForkMary = dncMaryHardFork dnc
+              , triggerHardForkAlonzo = dncAlonzoHardFork dnc
+              , triggerHardForkBabbage = dncBabbageHardFork dnc
+              , triggerHardForkConway = dncConwayHardFork dnc
+              , triggerHardForkDijkstra = Consensus.CardanoTriggerHardForkAtDefaultVersion -- TODO(Dijkstra)
+              }
+        , cardanoCheckpoints = emptyCheckpointsMap
+        }
   where
     GenesisCardano
       dnc

@@ -285,6 +285,7 @@ data ScriptType
   | PlutusV1
   | PlutusV2
   | PlutusV3
+  | PlutusV4
   deriving (Eq, Generic, Show)
 
 scriptTypeDecoder :: HsqlD.Value ScriptType
@@ -294,6 +295,7 @@ scriptTypeDecoder = HsqlD.enum $ \case
   "plutusV1" -> Just PlutusV1
   "plutusV2" -> Just PlutusV2
   "plutusV3" -> Just PlutusV3
+  "plutusV4" -> Just PlutusV4 -- TODO(Dijkstra): Add to Schema
   _ -> Nothing
 
 scriptTypeEncoder :: HsqlE.Value ScriptType
@@ -303,6 +305,7 @@ scriptTypeEncoder = HsqlE.enum $ \case
   PlutusV1 -> "plutusV1"
   PlutusV2 -> "plutusV2"
   PlutusV3 -> "plutusV3"
+  PlutusV4 -> "plutusV4"
 
 --------------------------------------------------------------------------------
 data PoolCertAction

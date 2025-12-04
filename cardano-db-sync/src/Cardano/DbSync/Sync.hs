@@ -148,6 +148,8 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
         { stMuxTracer = muxTracer
         , stHandshakeTracer = handshakeTracer
         , stSubscriptionTracer = subscriptionTracer
+        , stMuxChannelTracer = Logging.nullTracer
+        , stMuxBearerTracer = Logging.nullTracer
         }
 
     muxTracer :: Tracer IO (Mux.WithBearer (ConnectionId LocalAddress) MuxTrace)
