@@ -27,33 +27,42 @@ import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 import Cardano.DbSync.Ledger.Types
 import qualified Data.Strict.Maybe as Strict
+import Cardano.DbSync.Api.Types
+import Cardano.DbSync.Api
+import Cardano.DbSync.Era.Universal.Epoch
+import Cardano.DbSync.Util.Constraint
 
 validateEpochStake ::
-  Trace IO Text ->
+  SyncEnv ->
   ApplyResult -> ExceptT SyncNodeError DB.DbM ()
-validateEpochStake tracer applyRes = case apOldLedger applyRes of
-  Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
-    actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
-    if actualCount /= expectedCount then
-      liftIO
-        . logWarning tracer
-        $ mconcat
-          [ "validateEpochStake: epoch stake in epoch "
-          , textShow (unEpochNo epoch)
-          , " expected total of "
-          , textShow expectedCount
-          , " but got "
-          , textShow actualCount
-          ]
-    else
-      liftIO $ logInfo tracer
-        $ mconcat
-          [ "Validate Epoch Stake: total entries in epoch "
-          , textShow (unEpochNo epoch)
-          , " are "
-          , textShow actualCount
-          ]
-  _ -> pure ()
+validateEpochStake syncEnv applyRes = case apOldLedger applyRes of
+    Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
+      actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
+      if actualCount /= expectedCount then do
+        liftIO
+          . logWarning tracer
+          $ mconcat
+            [ "validateEpochStake: epoch stake in epoch "
+            , textShow (unEpochNo epoch)
+            , " expected total of "
+            , textShow expectedCount
+            , " but got "
+            , textShow actualCount
+            ]
+        let slice = Generic.fullEpochStake (clsState lstate)
+        addStakeConstraintsIfNotExist syncEnv tracer
+        insertStakeSlice syncEnv slice
+      else
+        liftIO $ logInfo tracer
+          $ mconcat
+            [ "Validate Epoch Stake: total entries in epoch "
+            , textShow (unEpochNo epoch)
+            , " are "
+            , textShow actualCount
+            ]
+    _ -> pure ()
+  where
+    tracer = getTrace syncEnv
 
 
 validateEpochRewards ::

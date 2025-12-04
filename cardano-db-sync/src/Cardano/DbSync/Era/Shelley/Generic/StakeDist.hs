@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Shelley.Generic.StakeDist (
   getSecurityParameter,
   getStakeSlice,
   countEpochStake,
+  fullEpochStake,
   getPoolDistr,
 ) where
 
@@ -215,6 +216,70 @@ genericCountEpochStake lstate =
 
     hasStake :: Credential 'Staking -> Bool
     hasStake cred = isJust (VMap.lookup cred stakes)
+
+fullEpochStake ::
+  ExtLedgerState CardanoBlock mk ->
+  StakeSliceRes
+fullEpochStake els =
+  case ledgerState els of
+    LedgerStateByron _ -> NoSlices
+    LedgerStateShelley sls -> genericFullStakeSlice sls
+    LedgerStateAllegra als -> genericFullStakeSlice als
+    LedgerStateMary mls -> genericFullStakeSlice mls
+    LedgerStateAlonzo als -> genericFullStakeSlice als
+    LedgerStateBabbage bls -> genericFullStakeSlice bls
+    LedgerStateConway cls -> genericFullStakeSlice cls
+    LedgerStateDijkstra dls -> genericFullStakeSlice dls
+
+genericFullStakeSlice ::
+  forall era p mk.
+  LedgerState (ShelleyBlock p era) mk ->
+  StakeSliceRes
+genericFullStakeSlice lstate =
+    Slice stakeSlice True
+  where
+    epoch :: EpochNo
+    epoch = EpochNo $ 1 + unEpochNo (Shelley.nesEL (Consensus.shelleyLedgerState lstate))
+
+    -- We use 'ssStakeMark' here. That means that when these values
+    -- are added to the database, the epoch number where they become active is the current
+    -- epoch plus one.
+    stakeSnapshot :: Ledger.SnapShot
+    stakeSnapshot =
+      Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
+        Consensus.shelleyLedgerState lstate
+
+    delegations :: VMap.KVVector VB VB (Credential 'Staking, KeyHash 'StakePool)
+    delegations = VMap.unVMap $ Ledger.ssDelegations stakeSnapshot
+
+    delegationsLen :: Word64
+    delegationsLen = fromIntegral $ VG.length delegations
+
+    stakes :: VMap VB VP (Credential 'Staking) (Ledger.CompactForm Coin)
+    stakes = Ledger.unStake $ Ledger.ssStake stakeSnapshot
+
+    lookupStake :: Credential 'Staking -> Maybe Coin
+    lookupStake cred = Ledger.fromCompact <$> VMap.lookup cred stakes
+
+    -- The starting index of the data in the delegation vector.
+    index :: Word64
+    index = 0
+
+    stakeSlice :: StakeSlice
+    stakeSlice =
+      StakeSlice
+        { sliceEpochNo = epoch
+        , sliceDistr = distribution
+        }
+      where
+        delegationsSliced :: VMap VB VB (Credential 'Staking) (KeyHash 'StakePool)
+        delegationsSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral delegationsLen) delegations
+
+        distribution :: Map StakeCred (Coin, PoolKeyHash)
+        distribution =
+          VMap.toMap $
+            VMap.mapMaybe id $
+              VMap.mapWithKey (\a p -> (,p) <$> lookupStake a) delegationsSliced
 
 getPoolDistr ::
   ExtLedgerState CardanoBlock mk ->

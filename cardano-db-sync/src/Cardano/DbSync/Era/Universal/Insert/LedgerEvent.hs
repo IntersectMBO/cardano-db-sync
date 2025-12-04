@@ -74,7 +74,7 @@ insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
-          validateEpochStake tracer applyRes
+          validateEpochStake syncEnv applyRes
           databaseCacheSize <- lift DB.queryStatementCacheSize
           liftIO . logInfo tracer $ "Database Statement Cache size is " <> textShow databaseCacheSize
           currentTime <- liftIO getCurrentTime
