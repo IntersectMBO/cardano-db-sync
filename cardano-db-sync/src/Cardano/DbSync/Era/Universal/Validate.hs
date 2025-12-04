@@ -5,6 +5,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Validate (
+  validateEpochStake,
   validateEpochRewards,
 ) where
 
@@ -24,6 +25,36 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
+import Cardano.DbSync.Ledger.Types
+import qualified Data.Strict.Maybe as Strict
+
+validateEpochStake ::
+  Trace IO Text ->
+  ApplyResult -> ExceptT SyncNodeError DB.DbM ()
+validateEpochStake tracer applyRes = case apOldLedger applyRes of
+  Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
+    actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
+    if actualCount /= expectedCount then
+      liftIO
+        . logWarning tracer
+        $ mconcat
+          [ "validateEpochStake: epoch stake in epoch "
+          , textShow (unEpochNo epoch)
+          , " expected total of "
+          , textShow expectedCount
+          , " but got "
+          , textShow actualCount
+          ]
+    else
+      liftIO $ logInfo tracer
+        $ mconcat
+          [ "Validate Epoch Stake: total entries in epoch "
+          , textShow (unEpochNo epoch)
+          , " are "
+          , textShow actualCount
+          ]
+  _ -> pure ()
+
 
 validateEpochRewards ::
   Trace IO Text ->

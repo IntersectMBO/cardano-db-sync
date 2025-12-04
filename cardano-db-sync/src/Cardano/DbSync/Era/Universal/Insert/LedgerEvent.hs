@@ -25,7 +25,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
 import Cardano.DbSync.Era.Universal.Epoch (insertPoolDepositRefunds, insertProposalRefunds, insertRewardRests, insertRewards)
 import Cardano.DbSync.Era.Universal.Insert.GovAction
-import Cardano.DbSync.Era.Universal.Validate (validateEpochRewards)
+import Cardano.DbSync.Era.Universal.Validate (validateEpochStake, validateEpochRewards)
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 
@@ -38,16 +38,18 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Text.Printf (printf)
+import Cardano.DbSync.Ledger.Types
 
 --------------------------------------------------------------------------------------------
 -- Insert LedgerEvents
 --------------------------------------------------------------------------------------------
 insertNewEpochLedgerEvents ::
   SyncEnv ->
+  ApplyResult ->
   EpochNo ->
   [LedgerEvent] ->
   ExceptT SyncNodeError DB.DbM ()
-insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
+insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
   mapM_ handler
   where
     metricSetters = envMetricSetters syncEnv
@@ -72,6 +74,7 @@ insertNewEpochLedgerEvents syncEnv currentEpochNo@(EpochNo curEpoch) =
     handler ev =
       case ev of
         LedgerNewEpoch en ss -> do
+          validateEpochStake tracer applyRes
           databaseCacheSize <- lift DB.queryStatementCacheSize
           liftIO . logInfo tracer $ "Database Statement Cache size is " <> textShow databaseCacheSize
           currentTime <- liftIO getCurrentTime
