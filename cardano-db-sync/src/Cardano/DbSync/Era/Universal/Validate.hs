@@ -34,8 +34,10 @@ import Cardano.DbSync.Util.Constraint
 
 validateEpochStake ::
   SyncEnv ->
-  ApplyResult -> ExceptT SyncNodeError DB.DbM ()
-validateEpochStake syncEnv applyRes = case apOldLedger applyRes of
+  ApplyResult ->
+  Bool ->
+  ExceptT SyncNodeError DB.DbM ()
+validateEpochStake syncEnv applyRes firstCall = case apOldLedger applyRes of
     Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
       actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
       if actualCount /= expectedCount then do
@@ -52,6 +54,7 @@ validateEpochStake syncEnv applyRes = case apOldLedger applyRes of
         let slice = Generic.fullEpochStake (clsState lstate)
         addStakeConstraintsIfNotExist syncEnv tracer
         insertStakeSlice syncEnv slice
+        when firstCall $ validateEpochStake syncEnv applyRes False
       else
         liftIO $ logInfo tracer
           $ mconcat
