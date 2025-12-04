@@ -38,6 +38,7 @@ module Cardano.DbSync.Config.Types (
   PlutusConfig (..),
   GovernanceConfig (..),
   OffchainPoolDataConfig (..),
+  OffChainUserAgent (..),
   JsonTypeConfig (..),
   LedgerStateDir (..),
   LogFileDir (..),
@@ -189,6 +190,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioOffchainUserAgent :: OffChainUserAgent
   , sioStopAtBlock :: Maybe Word64
   }
   deriving (Eq, Show)
@@ -262,6 +264,12 @@ newtype OffchainPoolDataConfig = OffchainPoolDataConfig
   { isOffchainPoolDataEnabled :: Bool
   }
   deriving (Eq, Show)
+
+newtype OffChainUserAgent = OffChainUserAgent
+  { unOffChainUserAgent :: Maybe Text
+  }
+  deriving (Eq, Show)
+  deriving newtype (ToJSON, FromJSON)
 
 newtype RemoveJsonbFromSchemaConfig = RemoveJsonbFromSchemaConfig
   { isRemoveJsonbFromSchemaEnabled :: Bool
@@ -456,6 +464,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj .:? "offchain_user_agent" .!= sioOffchainUserAgent baseOptions
     <*> obj .:? "stop_at_block" .!= sioStopAtBlock baseOptions
 
 instance ToJSON SyncInsertConfig where
@@ -478,6 +487,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
+    , toJsonIfSet "offchain_user_agent" sioOffchainUserAgent
     , toJsonIfSet "stop_at_block" sioStopAtBlock
     ]
 
@@ -500,6 +510,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj .:? "offchain_user_agent" .!= sioOffchainUserAgent def
       <*> obj .:? "stop_at_block" .!= sioStopAtBlock def
 
 instance ToJSON SyncInsertOptions where
@@ -517,6 +528,7 @@ instance ToJSON SyncInsertOptions where
       , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
+      , "offchain_user_agent" .= sioOffchainUserAgent
       , "stop_at_block" .= sioStopAtBlock
       ]
 
@@ -747,6 +759,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioOffchainUserAgent = OffChainUserAgent Nothing
       , sioStopAtBlock = Nothing
       }
 
@@ -766,6 +779,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioOffchainUserAgent = OffChainUserAgent Nothing
     , sioStopAtBlock = Nothing
     }
 
@@ -785,6 +799,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioOffchainUserAgent = OffChainUserAgent Nothing
     , sioStopAtBlock = Nothing
     }
 
@@ -812,6 +827,7 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioOffchainUserAgent = OffChainUserAgent Nothing
     , sioStopAtBlock = Nothing
     }
 
