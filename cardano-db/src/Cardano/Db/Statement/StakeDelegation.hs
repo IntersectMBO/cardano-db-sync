@@ -216,6 +216,29 @@ queryNormalEpochRewardCount epochNum =
   runSession mkDbCallStack $
     HsqlSes.statement epochNum queryNormalEpochRewardCountStmt
 
+-- | QUERY ---------------------------------------------------------------------
+queryNormalEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
+queryNormalEpochStakeCountStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*)::bigint"
+          , " FROM epoch_stake"
+          , " WHERE epoch_no = $1"
+          ]
+
+    encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+    decoder =
+      HsqlD.singleRow $
+        fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+queryNormalEpochStakeCount :: Word64 -> DbM Word64
+queryNormalEpochStakeCount epochNum =
+  runSession mkDbCallStack $
+    HsqlSes.statement epochNum queryNormalEpochStakeCountStmt
+
 --------------------------------------------------------------------------------
 queryRewardCount :: DbM Word64
 queryRewardCount =
