@@ -32,6 +32,7 @@
         "x86_64-linux"
         "x86_64-darwin"
         "aarch64-darwin"
+        "aarch64-linux"
       ];
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
@@ -176,10 +177,7 @@
             '';
 
             crossPlatforms = p:
-              lib.optional (system == "x86_64-linux") p.musl64 ++
-              lib.optional
-                (system == "x86_64-linux" && config.compiler-nix-name == "ghc967")
-                p.aarch64-multiplatform-musl;
+              lib.optional (system == "x86_64-linux") p.musl64;
 
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
