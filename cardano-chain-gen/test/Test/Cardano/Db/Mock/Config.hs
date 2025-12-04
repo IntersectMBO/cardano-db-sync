@@ -276,7 +276,6 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
       forgings' <- mapM mkBlockForging forgings
       -- _ <- throwIO $ userError "B"
       pure forgings'
-
 {-# ANN withConfig ("HLint: ignore Redundant pure" :: String) #-}
 
 mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig

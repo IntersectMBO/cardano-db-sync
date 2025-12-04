@@ -48,8 +48,8 @@ import Control.Tracer (nullTracer)
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
-import Network.TypedProtocol.Peer (Peer (..))
 import qualified Network.Socket as Socket
+import Network.TypedProtocol.Peer (Peer (..))
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
