@@ -28,7 +28,7 @@ import Ouroboros.Network.Magic (NetworkMagic (..))
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Cache.Types (CacheStatistics, CacheStatus)
-import Cardano.DbSync.Config.Types (SyncNodeConfig)
+import Cardano.DbSync.Config.Types (OffChainUserAgent, SyncNodeConfig)
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery (NoLedgerEnv)
 import Cardano.DbSync.Types (
@@ -89,6 +89,7 @@ data InsertOptions = InsertOptions
   , ioPoolStats :: !Bool
   , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
+  , ioOffChainUserAgent :: !OffChainUserAgent
   , ioTxOutVariantType :: !DB.TxOutVariantType
   }
   deriving (Show)

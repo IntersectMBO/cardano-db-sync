@@ -130,6 +130,7 @@ syncInsertOptions =
     <*> (PoolStatsConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
     <*> (RemoveJsonbFromSchemaConfig <$> Gen.bool)
+    <*> pure (OffChainUserAgent Nothing)
     <*> pure Nothing
 
 txOutConfig :: Gen TxOutConfig
