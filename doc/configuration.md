@@ -63,6 +63,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [plutus](#plutus)                            | `object`   | Optional |
 | [governance](#governance)                    | `enum`     | Optional |
 | [offchain\_pool\_data](#offchain-pool-data)  | `enum`     | Optional |
+| [offchain\_user\_agent](#offchain-user-agent) | `string`   | Optional |
 | [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 | [stop\_at\_block](#stop-at-block)            | `integer`  | Optional |
@@ -534,6 +535,25 @@ This will effect all governance related data/functionality.
 | :--------- | :---------------------------------------- |
 | `"enable"` | Enables fetching offchain metadata.       |
 | `"disable"`| Disables fetching pool offchain metadata. |
+
+## Offchain User Agent
+
+`offchain_user_agent`
+
+ * Type: `string`
+ * Optional: When not specified, defaults to "cardano-db-sync"
+
+Configures the User-Agent header sent when fetching offchain metadata (pool metadata, governance vote data, etc.). This allows operators to identify their db-sync instance in server logs.
+
+### Example
+
+```json
+{
+  "insert_options": {
+    "offchain_user_agent": "my-cardano-node-v1.0"
+  }
+}
+```
 
 ## Pool Stat
 
