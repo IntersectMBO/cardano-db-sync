@@ -83,7 +83,7 @@ library
                       , extra
                       , mtl
                       , microlens
-                      , network-mux
+                      , network
                       , nothunks
                       , ouroboros-consensus
                       , ouroboros-consensus-cardano
@@ -97,10 +97,10 @@ library
                       , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
                       , strict-sop-core
-                      , strict-stm
+                      , io-classes:strict-stm
                       , text
                       , typed-protocols
-                      , typed-protocols-stateful
+                      , typed-protocols:stateful
 
 test-suite cardano-chain-gen
   type:                 exitcode-stdio-1.0
@@ -183,9 +183,9 @@ test-suite cardano-chain-gen
                       , extra
                       , filepath
                       , int-cast
+                      , io-classes:strict-stm
                       , silently
                       , stm
-                      , strict-stm
                       , tasty
                       , tasty-quickcheck
                       , text

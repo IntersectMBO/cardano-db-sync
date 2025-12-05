@@ -738,6 +738,7 @@ getRegisteredPools st =
     LedgerStateAlonzo ats -> getRegisteredPoolShelley ats
     LedgerStateBabbage bts -> getRegisteredPoolShelley bts
     LedgerStateConway stc -> getRegisteredPoolShelley stc
+    LedgerStateDijkstra stc -> getRegisteredPoolShelley stc
 
 getRegisteredPoolShelley ::
   forall p era mk.
@@ -751,7 +752,7 @@ getRegisteredPoolShelley lState =
             Shelley.esLState $
               Shelley.nesEs $
                 Consensus.shelleyLedgerState lState
-     in Shelley.psStakePoolParams $ certState ^. Shelley.certPStateL
+     in certState ^. Shelley.certPStateL . Shelley.psStakePoolsL
 
 ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock mk -> Either SyncNodeError (Maybe EpochNo)
 ledgerEpochNo env cls =

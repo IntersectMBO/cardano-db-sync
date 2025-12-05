@@ -21,9 +21,9 @@ import Test.Tasty.HUnit (Assertion (), assertBool, (@?=))
 import Prelude ()
 
 conwayGenesis :: Assertion
-conwayGenesis =
-  mkSyncNodeConfig configDir initCommandLineArgs
-    >>= void . mkConfig configDir mutableDir cmdLineArgs
+conwayGenesis = do
+  cfg <- mkSyncNodeConfig configDir initCommandLineArgs
+  withConfig configDir mutableDir cmdLineArgs cfg (\_ -> pure ())
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigSimple"
@@ -33,7 +33,7 @@ missingConwayGenesis :: Assertion
 missingConwayGenesis = do
   res <- try $ do
     cfg <- mkSyncNodeConfig configDir initCommandLineArgs
-    mkConfig configDir mutableDir cmdLineArgs cfg
+    withConfig configDir mutableDir cmdLineArgs cfg pure
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
     configDir = "config-conway-missing-genesis"
@@ -44,8 +44,7 @@ noConwayGenesis :: Assertion
 noConwayGenesis = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisFile = Nothing}
-  void $
-    mkConfig configDir mutableDir cmdLineArgs cfg'
+  withConfig configDir mutableDir cmdLineArgs cfg' (\_ -> pure ())
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
@@ -55,8 +54,7 @@ noConwayGenesisHash :: Assertion
 noConwayGenesisHash = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisHash = Nothing}
-  void $
-    mkConfig configDir mutableDir initCommandLineArgs cfg'
+  withConfig configDir mutableDir initCommandLineArgs cfg' (\_ -> pure ())
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
@@ -66,8 +64,7 @@ wrongConwayGenesisHash = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   hash <- Aeson.throwDecode "\"0000000000000000000000000000000000000000000000000000000000000000\""
   let cfg' = cfg {dncConwayGenesisHash = Just hash}
-
-  res <- try (mkConfig configDir mutableDir initCommandLineArgs cfg')
+  res <- try (withConfig configDir mutableDir initCommandLineArgs cfg' (\_ -> pure ()))
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
     configDir = "config-conway"

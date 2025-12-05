@@ -40,7 +40,6 @@ import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Ledger.CertState
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Ledger.Conway.TxCert
@@ -50,6 +49,7 @@ import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.AdaPots as Shelley
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
+import Cardano.Ledger.State
 import Cardano.Prelude
 import Data.Group (invert)
 import qualified Data.Map.Strict as Map
@@ -67,21 +67,21 @@ insertCertificate ::
   ExceptT SyncNodeError DB.DbM ()
 insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers (Generic.TxCertificate ridx idx cert) =
   case cert of
-    Left (ShelleyTxCertDelegCert deleg) ->
+    Generic.SCert (ShelleyTxCertDelegCert deleg) ->
       when (ioShelley iopts) $ insertDelegCert syncEnv mDeposits network txId idx mRedeemerId epochNo slotNo deleg
-    Left (ShelleyTxCertPool pool) ->
+    Generic.SCert (ShelleyTxCertPool pool) ->
       when (ioShelley iopts) $ insertPoolCert syncEnv isMember mDeposits network epochNo blkId txId idx pool
-    Left (ShelleyTxCertMir mir) ->
+    Generic.SCert (ShelleyTxCertMir mir) ->
       when (ioShelley iopts) $ insertMirCert syncEnv network txId idx mir
-    Left (ShelleyTxCertGenesisDeleg _gen) ->
+    Generic.SCert (ShelleyTxCertGenesisDeleg _gen) ->
       when (ioShelley iopts) $
         liftIO $
           logWarning tracer "insertCertificate: Unhandled DCertGenesis certificate"
-    Right (ConwayTxCertDeleg deleg) ->
+    Generic.CCert (ConwayTxCertDeleg deleg) ->
       insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo deleg
-    Right (ConwayTxCertPool pool) ->
+    Generic.CCert (ConwayTxCertPool pool) ->
       when (ioShelley iopts) $ insertPoolCert syncEnv isMember mDeposits network epochNo blkId txId idx pool
-    Right (ConwayTxCertGov c) ->
+    Generic.CCert (ConwayTxCertGov c) ->
       when (ioGov iopts) $ case c of
         ConwayRegDRep cred coin anchor ->
           insertDrepRegistration blkId txId idx cred (Just coin) (strictMaybeToMaybe anchor)
@@ -93,6 +93,7 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
           insertCommitteeDeRegistration blkId txId idx khCold (strictMaybeToMaybe anchor)
         ConwayUpdateDRep cred anchor ->
           insertDrepRegistration blkId txId idx cred Nothing (strictMaybeToMaybe anchor)
+    Generic.DCert _ -> pure () -- TODO(Dijkstra)
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv

@@ -16,7 +16,6 @@ module Cardano.Mock.Forging.Tx.Conway.Scenarios (
 ) where
 
 import Cardano.Ledger.Address (Addr (..), Withdrawals (..))
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx (..))
 import Cardano.Ledger.BaseTypes (Network (..))
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.TxCert (Delegatee (..))
@@ -111,7 +110,7 @@ registerDRepAndDelegateVotes' ::
   Credential 'DRepRole ->
   StakeIndex ->
   Conway.ConwayLedgerState mk ->
-  Either ForgingError [AlonzoTx ConwayEra]
+  Either ForgingError [Tx ConwayEra]
 registerDRepAndDelegateVotes' drepId stakeIx ledger = do
   stakeCreds <- resolveStakeCreds stakeIx ledger
 
