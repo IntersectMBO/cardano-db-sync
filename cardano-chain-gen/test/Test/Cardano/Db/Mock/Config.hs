@@ -98,6 +98,7 @@ import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 
+import Cardano.Crypto.Init (cryptoInit)
 import qualified Cardano.Db as DB
 import Cardano.DbSync
 import Cardano.DbSync.Config
@@ -259,6 +260,7 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
   let cfgDir = mkConfigDir staticDir
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
+  cryptoInit
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
   let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg [head creds]
   bracket
@@ -276,7 +278,6 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
       forgings' <- mapM mkBlockForging forgings
       -- _ <- throwIO $ userError "B"
       pure forgings'
-
 {-# ANN withConfig ("HLint: ignore Redundant pure" :: String) #-}
 
 mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig
