@@ -463,12 +463,15 @@ poolStatRollbackGeneral =
       assertBool "Pool stats should have increased" (afterCount > initialCount)
 
       -- Rollback to previous point
-      atomically $ rollback mockServer (blockPoint $ last rollbackBlks)
-      assertBlockNoBackoff dbSync totalAfterEpoch -- Delayed rollbackExpand commentComment on line R387ResolvedCode has comments. Press enter to view.
+      rollbackTo interpreter mockServer (blockPoint $ last rollbackBlks)
+      _ <-
+        withConwayFindLeaderAndSubmitTx interpreter mockServer $
+          Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+      assertBlockNoBackoff dbSync $ totalBeforeRollback + 1
 
       -- Re-sync the same blocks - should not create duplicates
       epochBlks3 <- fillEpochs interpreter mockServer 1
-      let finalTotal = totalBeforeRollback + length epochBlks3 + 1
+      let finalTotal = totalBeforeRollback + 1 + length epochBlks3
       assertBlockNoBackoff dbSync finalTotal
       finalCount <- queryDBSync dbSync DB.queryPoolStatCount
 

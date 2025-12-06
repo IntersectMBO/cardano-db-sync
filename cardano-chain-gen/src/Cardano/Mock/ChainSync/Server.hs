@@ -44,7 +44,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Control.Exception (bracket)
 import Control.Monad (forever)
-import Control.Tracer (nullTracer)
+import Control.Tracer
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
@@ -210,12 +210,12 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
   _ <-
     Server.with
       (Snocket.socketSnocket iom)
-      makeSocketBearer -- makeLocalBearer --
+      makeSocketBearer
       (\_ _ -> pure ())
       (Socket.SockAddrUnix localDomainSock)
       ( HandshakeArguments
-          { haHandshakeTracer = nullTracer
-          , haBearerTracer = nullTracer
+          { haHandshakeTracer = nullTracer -- showTracing stdoutTracer
+          , haBearerTracer = nullTracer -- showTracing stdoutTracer
           , haHandshakeCodec = codecHandshake nodeToClientVersionCodec
           , haVersionDataCodec = cborTermVersionDataCodec nodeToClientCodecCBORTerm
           , haAcceptVersion = acceptableVersion
@@ -262,7 +262,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
           IO ((), Maybe ByteString)
         chainSyncServer' _them channel =
           runPeer
-            nullTracer
+            nullTracer -- (showTracing stdoutTracer)
             (cChainSyncCodec codecs)
             channel
             (chainSyncServerPeer $ chainSyncServer state codecConfig blockVersion)
@@ -280,7 +280,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
 
         stateQueryServer _them channel =
           Stateful.runPeer
-            nullTracer
+            nullTracer -- (showTracing stdoutTracer)
             (cStateQueryCodec codecs)
             channel
             LocalStateQuery.StateIdle

@@ -262,7 +262,7 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
   cryptoInit
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
-  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg [head creds]
+  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg creds
   bracket
     (allocateRes mkForgings)
     (mapM finalize)
@@ -274,10 +274,8 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
   where
     allocateRes mkForgings = do
       forgings <- mkForgings
-      -- _ <- throwIO $ userError "A"
-      forgings' <- mapM mkBlockForging forgings
-      -- _ <- throwIO $ userError "B"
-      pure forgings'
+      mapM mkBlockForging forgings
+
 {-# ANN withConfig ("HLint: ignore Redundant pure" :: String) #-}
 
 mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig
