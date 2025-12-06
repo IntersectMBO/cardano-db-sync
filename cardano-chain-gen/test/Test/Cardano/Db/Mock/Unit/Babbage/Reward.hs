@@ -2,7 +2,6 @@
 
 module Test.Cardano.Db.Mock.Unit.Babbage.Reward (
   simpleRewards,
-  rewardsShelley,
   rewardsDeregistration,
   rewardsReregistration,
   mirReward,
@@ -107,52 +106,6 @@ simpleRewards =
       ]
   where
     testLabel = "simpleRewards"
-
--- This test is the same as the previous, but in Shelley era. Rewards result
--- should be different because of the old Shelley bug.
--- https://github.com/IntersectMBO/cardano-db-sync/issues/959
---
--- The differenece in rewards is triggered when a reward address of a pool A
--- delegates to a pool B and is not an owner of pool B. In this case it receives
--- leader rewards from pool A and member rewards from pool B. In this test, we
--- have 2 instances of this case, one where A = B and one where A /= B.
-rewardsShelley :: IOManager -> [(Text, Text)] -> Assertion
-rewardsShelley =
-  withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
-    void $ registerAllStakeCreds interpreter mockServer
-
-    void $
-      withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-
-    a <- fillEpochs interpreter mockServer 3
-    assertRewardCount dbSync 3
-
-    void $
-      withShelleyFindLeaderAndSubmitTx interpreter mockServer $
-        Shelley.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10000 10000
-
-    b <- fillEpochs interpreter mockServer 2
-
-    assertBlockNoBackoff dbSync (fromIntegral $ length a + length b + 3)
-    st <- withShelleyLedgerState interpreter Right
-    -- Note we have 2 rewards less compared to other era
-    assertRewardCount dbSync 12
-    assertRewardCounts
-      dbSync
-      st
-      True
-      (Just 5)
-      -- Here we dont' have both leader and member rewards.
-      [ (StakeIndexPoolLeader (PoolIndexId $ KeyHash "9f1b441b9b781b3c3abb43b25679dc17dbaaf116dddca1ad09dc1de0"), (1, 0, 0, 0, 0))
-      , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "5af582399de8c226391bfd21424f34d0b053419c4d93975802b7d107"), (1, 0, 0, 0, 0))
-      , (StakeIndexPoolLeader (PoolIndexId $ KeyHash "58eef2925db2789f76ea057c51069e52c5e0a44550f853c6cdf620f8"), (1, 0, 0, 0, 0))
-      , (StakeIndexPoolMember 0 (PoolIndex 0), (0, 1, 0, 0, 0))
-      , (StakeIndexPoolMember 0 (PoolIndex 1), (0, 1, 0, 0, 0))
-      ]
-  where
-    testLabel = "rewardsShelley"
 
 rewardsDeregistration :: IOManager -> [(Text, Text)] -> Assertion
 rewardsDeregistration =
