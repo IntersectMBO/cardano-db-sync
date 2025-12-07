@@ -4,7 +4,7 @@
 
 module Cardano.Db.Statement.EpochAndProtocol where
 
-import Cardano.Prelude (Word64)
+import Cardano.Prelude (Int64, Proxy (..), Word64)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -22,7 +22,7 @@ import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 import Cardano.Db.Statement.Function.Core (ResultType (..), runSession, runSessionEntity)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertReplace)
 import Cardano.Db.Statement.Function.Query (countAll, replace, selectByFieldFirst)
-import Cardano.Db.Statement.Types (Entity (..))
+import Cardano.Db.Statement.Types (Entity (..), tableName)
 import Cardano.Db.Types (DbLovelace (..), DbM)
 
 --------------------------------------------------------------------------------
@@ -340,6 +340,47 @@ insertPotTransferStmt =
 insertPotTransfer :: SEnP.PotTransfer -> DbM Id.PotTransferId
 insertPotTransfer potTransfer =
   runSession mkDbCallStack $ HsqlSes.statement potTransfer insertPotTransferStmt
+
+--------------------------------------------------------------------------------
+-- AdaPots
+--------------------------------------------------------------------------------
+queryAdaPotsAllStmt :: HsqlStmt.Statement () [(Int64, Int64)]
+queryAdaPotsAllStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    adaPotsTable = tableName (Proxy @SEnP.AdaPots)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT "
+          , "  epoch_no, "
+          , "  ( treasury "
+          , "  + reserves "
+          , "  + rewards "
+          , "  + utxo "
+          , "  + deposits_stake "
+          , "  + deposits_drep "
+          , "  + deposits_proposal "
+          , "  + fees "
+          , "  )::bigint "
+          , "FROM "
+          , adaPotsTable
+          , " ORDER BY epoch_no"
+          ]
+
+    encoder = mempty
+
+    decoder =
+      HsqlD.rowList $
+        (,)
+          <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8) -- epoch_no
+          <*> HsqlD.column (HsqlD.nonNullable HsqlD.int8) -- computed total
+
+queryAdaPotsAll :: DbM [(Int64, Int64)]
+queryAdaPotsAll =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryAdaPotsAllStmt
 
 --------------------------------------------------------------------------------
 -- Reserve
