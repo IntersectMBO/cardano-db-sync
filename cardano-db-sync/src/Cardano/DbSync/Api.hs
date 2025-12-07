@@ -305,6 +305,7 @@ mkSyncEnv ::
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
   Ledger.Network ->
+  Word64 ->
   NetworkMagic ->
   SystemStart ->
   SyncNodeConfig ->
@@ -312,7 +313,7 @@ mkSyncEnv ::
   RunMigration ->
   Bool ->
   IO SyncEnv
-mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
+mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
   dbCNamesVar <- newTVarIO =<< DB.runDbDirectSilent dbEnv DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
@@ -349,6 +350,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw nwMagic systemStart 
             protoInfo
             dir
             nw
+            maxLovelaceSupply
             systemStart
             syncOptions
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
@@ -432,6 +434,7 @@ mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigF
               syncOptions
               (fst $ mkProtocolInfoCardano genCfg [])
               (Shelley.sgNetworkId $ scConfig sCfg)
+              (Shelley.sgMaxLovelaceSupply $ scConfig sCfg)
               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
               (SystemStart . Byron.gdStartTime $ Byron.configGenesisData bCfg)
               syncNodeConfigFromFile

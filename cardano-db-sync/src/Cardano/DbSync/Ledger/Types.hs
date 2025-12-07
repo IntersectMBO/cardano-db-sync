@@ -68,6 +68,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
+  , leMaxSupply :: !Word64
   , leSystemStart :: !SystemStart
   , leAbortOnPanic :: !Bool
   , leSnapshotNearTipEpoch :: !Word64
