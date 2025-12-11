@@ -20,7 +20,7 @@ import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (
 import Cardano.DbSync.Cache (insertAddressUsingCache, tryUpdateCacheTx)
 import Cardano.DbSync.Cache.Epoch (withNoCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
-import Cardano.DbSync.DbEvent (liftDbLookup, runDbSyncNoTransaction, runDbSyncNoTransactionNoLogging)
+import Cardano.DbSync.DbEvent (liftDbLookup, runDbSyncTransaction, runDbSyncTransactionNoLogging)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insertStakeRegistration)
 import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
@@ -69,8 +69,8 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
     throwError SNErrIgnoreShelleyInitiation
 
   case DB.dbTracer $ envDbEnv syncEnv of
-    Just trce -> ExceptT $ runDbSyncNoTransaction trce (envDbEnv syncEnv) (insertAction prunes)
-    Nothing -> ExceptT $ runDbSyncNoTransactionNoLogging (envDbEnv syncEnv) (insertAction prunes)
+    Just trce -> ExceptT $ runDbSyncTransaction trce (envDbEnv syncEnv) (Just DB.ReadCommitted) (insertAction prunes)
+    Nothing -> ExceptT $ runDbSyncTransactionNoLogging (envDbEnv syncEnv) (insertAction prunes)
   where
     tracer = getTrace syncEnv
 
