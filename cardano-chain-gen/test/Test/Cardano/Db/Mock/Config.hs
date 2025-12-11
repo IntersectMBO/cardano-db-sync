@@ -1,7 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+#if __GLASGOW_HASKELL__ >= 908
+{-# OPTIONS_GHC -Wno-x-partial #-}
+#endif
 
 module Test.Cardano.Db.Mock.Config (
   Config (..),
@@ -19,7 +23,7 @@ module Test.Cardano.Db.Mock.Config (
   getPoolLayer,
 
   -- * Configs
-  mkConfig,
+  withConfig,
   mkSyncNodeConfig,
   mkConfigDir,
   configPruneForceTxIn,
@@ -94,6 +98,7 @@ import Ouroboros.Consensus.Shelley.Eras (StandardCrypto)
 import Ouroboros.Consensus.Shelley.Ledger.Mempool ()
 import Ouroboros.Consensus.Shelley.Node (ShelleyLeaderCredentials)
 
+import Cardano.Crypto.Init (cryptoInit)
 import qualified Cardano.Db as DB
 import Cardano.DbSync
 import Cardano.DbSync.Config
@@ -250,16 +255,27 @@ getPoolLayer env = do
       nullTracer
       pool
 
-mkConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> IO Config
-mkConfig staticDir mutableDir cmdLineArgs config = do
+withConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> (Config -> IO a) -> IO a
+withConfig staticDir mutableDir cmdLineArgs config action = do
   let cfgDir = mkConfigDir staticDir
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
+  cryptoInit
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
-  let (pInfoForger, forging) = mkProtocolInfoCardano genCfg creds
-  forging' <- forging
-  syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
-  pure $ Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forging' syncPars
+  let (pInfoForger, mkForgings) = mkProtocolInfoCardano genCfg creds
+  bracket
+    (allocateRes mkForgings)
+    (mapM finalize)
+    ( \forgings -> do
+        syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
+        let cfg = Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forgings syncPars
+        action cfg
+    )
+  where
+    allocateRes mkForgings = do
+      forgings <- mkForgings
+      mapM mkBlockForging forgings
+{-# ANN withConfig ("HLint: ignore Redundant pure" :: String) #-}
 
 mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig
 mkSyncNodeConfig configFilePath cmdLineArgs =
@@ -582,44 +598,44 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
         pure $ updateFn initConfigFile
       Nothing -> mkSyncNodeConfig configFilePath cmdLineArgs
 
-  cfg <- mkConfig configFilePath mutableDir cmdLineArgs syncNodeConfig
-  fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
-  let dbsyncParams = syncNodeParams cfg
-  trce <-
-    if shouldLog
-      then configureLogging syncNodeConfig "db-sync-node"
-      else pure nullTracer
-  -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-  let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
-      initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+  withConfig configFilePath mutableDir cmdLineArgs syncNodeConfig $ \cfg -> do
+    fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
+    let dbsyncParams = syncNodeParams cfg
+    trce <-
+      if shouldLog
+        then configureLogging syncNodeConfig "db-sync-node"
+        else pure nullTracer
+    -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
+    let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
+        initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
-  withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
-    -- TODO: get 42 from config
-    withServerHandle @CardanoBlock
-      iom
-      (topLevelConfig cfg)
-      (forgetLedgerTables initSt, projectLedgerTables initSt)
-      (NetworkMagic 42)
-      (unSocketPath (enpSocketPath $ syncNodeParams cfg))
-      $ \mockServer ->
-        -- we dont fork dbsync here. Just prepare it as an action
-        withDBSyncEnv (mkDBSyncEnv dbsyncParams syncNodeConfig partialDbSyncRun) $ \dbSyncEnv -> do
-          let pgPass = getDBSyncPGPass dbSyncEnv
-          tableNames <- DB.getAllTableNames pgPass
-          -- We only want to create the table schema once for the tests so here we check
-          -- if there are any table names.
-          if null tableNames || shouldDropDB
-            then void . hSilence [stderr] $ DB.recreateDB pgPass
-            else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
+    withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
+      -- TODO: get 42 from config
+      withServerHandle @CardanoBlock
+        iom
+        (topLevelConfig cfg)
+        (forgetLedgerTables initSt, projectLedgerTables initSt)
+        (NetworkMagic 42)
+        (unSocketPath (enpSocketPath $ syncNodeParams cfg))
+        $ \mockServer ->
+          -- we dont fork dbsync here. Just prepare it as an action
+          withDBSyncEnv (mkDBSyncEnv dbsyncParams syncNodeConfig partialDbSyncRun) $ \dbSyncEnv -> do
+            let pgPass = getDBSyncPGPass dbSyncEnv
+            tableNames <- DB.getAllTableNames pgPass
+            -- We only want to create the table schema once for the tests so here we check
+            -- if there are any table names.
+            if null tableNames || shouldDropDB
+              then void . hSilence [stderr] $ DB.recreateDB pgPass
+              else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
 
-          -- Run migrations synchronously first
-          runMigrationsOnly
-            migr
-            trce
-            (syncNodeParams cfg)
-            syncNodeConfig
+            -- Run migrations synchronously first
+            runMigrationsOnly
+              migr
+              trce
+              (syncNodeParams cfg)
+              syncNodeConfig
 
-          action interpreter mockServer dbSyncEnv
+            action interpreter mockServer dbSyncEnv
   where
     mutableDir = mkMutableDir testLabelFilePath
 

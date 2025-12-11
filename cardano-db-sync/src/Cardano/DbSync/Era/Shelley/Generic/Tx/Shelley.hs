@@ -208,5 +208,5 @@ mkTxCertificate idx dcert =
   TxCertificate
     { txcRedeemerIndex = Nothing
     , txcIndex = idx
-    , txcCert = Left dcert
+    , txcCert = SCert dcert
     }

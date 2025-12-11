@@ -8,7 +8,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Tx (..),
   ShelleyCert,
   ConwayCert,
-  Cert,
+  Cert (..),
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
@@ -41,14 +41,15 @@ import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Scripts
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
-import Cardano.Ledger.Core (TxBody)
+import Cardano.Ledger.Dijkstra.Scripts
+import Cardano.Ledger.Dijkstra.TxCert
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
 import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
-import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, ConwayEra, ShelleyEra)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, ConwayEra, DijkstraEra, ShelleyEra)
 
 data Tx = Tx
   { txHash :: !ByteString
@@ -84,7 +85,9 @@ data Tx = Tx
 
 type ShelleyCert = ShelleyTxCert ShelleyEra
 type ConwayCert = ConwayTxCert ConwayEra
-type Cert = Either ShelleyCert ConwayCert
+type DijkstraCert = DijkstraTxCert DijkstraEra
+data Cert = SCert ShelleyCert | CCert ConwayCert | DCert DijkstraCert
+  deriving (Eq)
 
 data TxCertificate = TxCertificate
   { txcRedeemerIndex :: !(Maybe Word64)
@@ -222,6 +225,22 @@ instance DBScriptPurpose ConwayEra where
     ConwayProposing _ -> Nothing
     a -> Just $ Right a
 
+instance DBScriptPurpose DijkstraEra where
+  getPurpose = \case
+    DijkstraSpending idx -> (DB.Spend, unAsIx idx)
+    DijkstraMinting idx -> (DB.Mint, unAsIx idx)
+    DijkstraCertifying idx -> (DB.Cert, unAsIx idx)
+    DijkstraRewarding idx -> (DB.Rewrd, unAsIx idx)
+    DijkstraVoting idx -> (DB.Vote, unAsIx idx)
+    DijkstraProposing idx -> (DB.Propose, unAsIx idx)
+    DijkstraGuarding idx -> (DB.Propose, unAsIx idx) -- TODO(Dijkstra)
+
+  toAlonzoPurpose _ = \case
+    DijkstraVoting _ -> Nothing
+    DijkstraProposing _ -> Nothing
+    DijkstraGuarding _ -> Nothing
+    _ -> Nothing -- TODO(Dijkstra)
+
 class AlonzoEraScript era => DBPlutusScript era where
   getPlutusScriptType :: PlutusScript era -> DB.ScriptType
 
@@ -236,3 +255,9 @@ instance DBPlutusScript ConwayEra where
   getPlutusScriptType (ConwayPlutusV1 _) = DB.PlutusV1
   getPlutusScriptType (ConwayPlutusV2 _) = DB.PlutusV2
   getPlutusScriptType (ConwayPlutusV3 _) = DB.PlutusV3
+
+instance DBPlutusScript DijkstraEra where
+  getPlutusScriptType (DijkstraPlutusV1 _) = DB.PlutusV1
+  getPlutusScriptType (DijkstraPlutusV2 _) = DB.PlutusV2
+  getPlutusScriptType (DijkstraPlutusV3 _) = DB.PlutusV3
+  getPlutusScriptType (DijkstraPlutusV4 _) = DB.PlutusV4

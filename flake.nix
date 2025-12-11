@@ -32,6 +32,7 @@
         "x86_64-linux"
         "x86_64-darwin"
         "aarch64-darwin"
+        "aarch64-linux"
       ];
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
@@ -81,12 +82,11 @@
 
                 (final: prev: {
                   hlint = final.haskell-nix.tool "ghc96" "hlint" {
-                    version = "latest";
+                    version = "3.8";
                   };
 
-                  # Fourmolu 0.10.x requires GHC >= 9.0 && < 9.6
                   fourmolu = final.haskell-nix.tool "ghc96" "fourmolu" {
-                    version = "latest";
+                    version = "0.17.0.0";
                   };
                 })
 
@@ -177,10 +177,7 @@
             '';
 
             crossPlatforms = p:
-              lib.optional (system == "x86_64-linux") p.musl64 ++
-              lib.optional
-                (system == "x86_64-linux" && config.compiler-nix-name == "ghc967")
-                p.aarch64-multiplatform-musl;
+              lib.optional (system == "x86_64-linux") p.musl64;
 
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
@@ -188,14 +185,16 @@
 
             shell = {
               tools = {
-                cabal = "latest";
-                fourmolu = "latest";
-                hlint = "latest";
+                cabal = "3.14.2.0";
 
                 haskell-language-server = {
                   src = nixpkgs.haskell-nix.sources."hls-2.11";
                 };
               } // lib.optionalAttrs (config.compiler-nix-name == "ghc967") {
+                # These versions work with GHC 9.6, but not with 9.10 and 9.12
+                fourmolu = "0.17.0.0";
+                hlint = "3.8";
+
                 weeder = "latest";
               };
 

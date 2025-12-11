@@ -51,10 +51,11 @@ import qualified Cardano.Ledger.Alonzo.PParams as Alonzo
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.BaseTypes (StrictMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.Core as Shelley
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Conway.Governance as Shelley
-import Cardano.Ledger.Shelley.AdaPots (AdaPots)
+import Cardano.Ledger.Shelley.AdaPots (AdaPots (..), sumAdaPots)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
@@ -158,10 +159,11 @@ mkHasLedgerEnv ::
   Consensus.ProtocolInfo CardanoBlock ->
   LedgerStateDir ->
   Ledger.Network ->
+  Word64 ->
   SystemStart ->
   SyncOptions ->
   IO HasLedgerEnv
-mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
+mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions = do
   svar <- newTVarIO Strict.Nothing
   intervar <- newTVarIO Strict.Nothing
   swQueue <- newTBQueueIO 5 -- Should be relatively shallow.
@@ -173,6 +175,7 @@ mkHasLedgerEnv trce protoInfo dir nw systemStart syncOptions = do
       , leProtocolInfo = protoInfo
       , leDir = dir
       , leNetwork = nw
+      , leMaxSupply = maxLovelaceSupply
       , leSystemStart = systemStart
       , leAbortOnPanic = soptAbortOnInvalid syncOptions
       , leSnapshotNearTipEpoch = sicNearTipEpoch $ soptSnapshotInterval syncOptions
@@ -286,11 +289,19 @@ applyBlock env blk = do
           Generic.NewEpoch
             { Generic.neEpoch = currEpoch
             , Generic.neIsEBB = isJust $ blockIsEBB blk
-            , Generic.neAdaPots = maybeToStrict mPots
+            , Generic.neAdaPots = fixUTxOPots <$> maybeToStrict mPots
             , Generic.neEpochUpdate = Generic.epochUpdate newState
             , Generic.neDRepState = maybeToStrict $ getDrepState newState
             , Generic.neEnacted = maybeToStrict $ getGovState newState
             , Generic.nePoolDistr = maybeToStrict $ Generic.getPoolDistr newState
+            }
+
+        fixUTxOPots :: AdaPots -> AdaPots
+        fixUTxOPots adaPots =
+          adaPots
+            { utxoAdaPot =
+                Coin $
+                  fromIntegral (leMaxSupply env) - unCoin (sumAdaPots adaPots)
             }
 
     applyToEpochBlockNo :: Bool -> Bool -> EpochBlockNo -> EpochBlockNo
@@ -738,6 +749,7 @@ getRegisteredPools st =
     LedgerStateAlonzo ats -> getRegisteredPoolShelley ats
     LedgerStateBabbage bts -> getRegisteredPoolShelley bts
     LedgerStateConway stc -> getRegisteredPoolShelley stc
+    LedgerStateDijkstra stc -> getRegisteredPoolShelley stc
 
 getRegisteredPoolShelley ::
   forall p era mk.
@@ -751,7 +763,7 @@ getRegisteredPoolShelley lState =
             Shelley.esLState $
               Shelley.nesEs $
                 Consensus.shelleyLedgerState lState
-     in Shelley.psStakePoolParams $ certState ^. Shelley.certPStateL
+     in certState ^. Shelley.certPStateL . Shelley.psStakePoolsL
 
 ledgerEpochNo :: HasLedgerEnv -> ExtLedgerState CardanoBlock mk -> Either SyncNodeError (Maybe EpochNo)
 ledgerEpochNo env cls =

@@ -97,10 +97,10 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
     isValid2 =
-      case Alonzo.isValid tx of
+      case tx ^. Alonzo.isValidTxL of
         Alonzo.IsValid x -> x
 
-    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx Right
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx CCert
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody

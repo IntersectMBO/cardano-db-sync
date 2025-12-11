@@ -19,6 +19,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Rollback (
   poolStatBasicTest,
   poolStatRollbackNoDuplicates,
   poolStatRollbackGeneral,
+  adaPots,
 ) where
 
 import qualified Cardano.Db as DB
@@ -463,12 +464,15 @@ poolStatRollbackGeneral =
       assertBool "Pool stats should have increased" (afterCount > initialCount)
 
       -- Rollback to previous point
-      atomically $ rollback mockServer (blockPoint $ last rollbackBlks)
-      assertBlockNoBackoff dbSync totalAfterEpoch -- Delayed rollbackExpand commentComment on line R387ResolvedCode has comments. Press enter to view.
+      rollbackTo interpreter mockServer (blockPoint $ last rollbackBlks)
+      _ <-
+        withConwayFindLeaderAndSubmitTx interpreter mockServer $
+          Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+      assertBlockNoBackoff dbSync $ totalBeforeRollback + 1
 
       -- Re-sync the same blocks - should not create duplicates
       epochBlks3 <- fillEpochs interpreter mockServer 1
-      let finalTotal = totalBeforeRollback + length epochBlks3 + 1
+      let finalTotal = totalBeforeRollback + 1 + length epochBlks3
       assertBlockNoBackoff dbSync finalTotal
       finalCount <- queryDBSync dbSync DB.queryPoolStatCount
 
@@ -481,3 +485,33 @@ poolStatRollbackGeneral =
   where
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayPoolStatRollbackGeneral"
+
+adaPots :: IOManager -> [(Text, Text)] -> Assertion
+adaPots =
+  withFullConfigDropDB "config-conway-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+    blks0 <- fillEpochs interpreter mockServer 3
+    blks1 <- forgeAndSubmitBlocks interpreter mockServer 70
+    assertBlockNoBackoff dbSync $ length blks0 + 70
+    blks2 <- fillEpochs interpreter mockServer 1
+    assertBlockNoBackoff dbSync $ length blks0 + 70 + length blks2
+
+    potsPerEpoch0 <- queryDBSync dbSync DB.queryAdaPotsAll
+    assertEqual "Ada pots don't match" [(1, 60_000_000), (2, 60_000_000), (3, 60_000_000), (4, 60_000_000)] potsPerEpoch0
+
+    -- Rollback to previous point
+    rollbackTo interpreter mockServer (blockPoint $ last blks1)
+    void $
+      withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
+        Right $ Conway.mkDonationTx (Coin 500)
+    assertBlockNoBackoff dbSync $ length blks0 + 70 + 1
+
+    potsPerEpoch1 <- queryDBSync dbSync DB.queryAdaPotsAll
+    assertEqual "Ada pots don't match" [(1, 60_000_000), (2, 60_000_000), (3, 60_000_000)] potsPerEpoch1
+
+    blks3 <- fillEpochs interpreter mockServer 1
+    assertBlockNoBackoff dbSync $ length blks0 + 70 + 1 + length blks3
+    potsPerEpoch2 <- queryDBSync dbSync DB.queryAdaPotsAll
+    assertEqual "Ada pots don't match" [(1, 60_000_000), (2, 60_000_000), (3, 60_000_000), (4, 60_000_000)] potsPerEpoch2
+  where
+    testLabel = "adaPots"

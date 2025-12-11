@@ -24,12 +24,12 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash, unTxHash)
 import Cardano.Ledger.Address (RewardAccount (..))
-import Cardano.Ledger.Alonzo.Tx (AlonzoTx)
 import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), textToUrl)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..))
 import qualified Cardano.Ledger.Conway.Governance as Governance
 import Cardano.Ledger.Core (hashAnnotated, txIdTx)
+import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Hashes (SafeToHash (..))
 import Cardano.Mock.ChainSync.Server (IOManager, ServerHandle)
 import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
@@ -258,7 +258,7 @@ enactNewCommittee interpreter server = do
   epochs <- Api.fillEpochs interpreter server 2
   pure (blk : epochs)
 
-proposeNewCommittee :: AlonzoTx Consensus.ConwayEra
+proposeNewCommittee :: Core.Tx Consensus.ConwayEra
 proposeNewCommittee =
   Conway.mkAddCommitteeTx Nothing committeeCred
   where

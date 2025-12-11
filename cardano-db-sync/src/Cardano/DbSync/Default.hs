@@ -197,6 +197,9 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     BlockConway blk ->
       insertBlockUniversal' $
         Generic.fromConwayBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
+    BlockDijkstra blk ->
+      insertBlockUniversal' $
+        Generic.fromDijkstraBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
   -- update the epoch
   updateEpoch details isNewEpochEvent
   whenPruneTxOut syncEnv $

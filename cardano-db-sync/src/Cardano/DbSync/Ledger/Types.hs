@@ -68,6 +68,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
   , leDir :: !LedgerStateDir
   , leNetwork :: !Ledger.Network
+  , leMaxSupply :: !Word64
   , leSystemStart :: !SystemStart
   , leAbortOnPanic :: !Bool
   , leSnapshotNearTipEpoch :: !Word64
@@ -230,6 +231,7 @@ instance HasNewEpochState ShelleyEra where
         :* fn id
         :* fn id
         :* fn id
+        :* fn id
         :* Nil
 
 instance HasNewEpochState AllegraEra where
@@ -241,6 +243,7 @@ instance HasNewEpochState AllegraEra where
     hApplyExtLedgerState $
       fn id
         :* fn (applyNewEpochState' st)
+        :* fn id
         :* fn id
         :* fn id
         :* fn id
@@ -260,6 +263,7 @@ instance HasNewEpochState MaryEra where
         :* fn id
         :* fn id
         :* fn id
+        :* fn id
         :* Nil
 
 instance HasNewEpochState AlonzoEra where
@@ -273,6 +277,7 @@ instance HasNewEpochState AlonzoEra where
         :* fn id
         :* fn id
         :* fn (applyNewEpochState' st)
+        :* fn id
         :* fn id
         :* fn id
         :* Nil
@@ -290,6 +295,7 @@ instance HasNewEpochState BabbageEra where
         :* fn id
         :* fn (applyNewEpochState' st)
         :* fn id
+        :* fn id
         :* Nil
 
 instance HasNewEpochState ConwayEra where
@@ -305,6 +311,7 @@ instance HasNewEpochState ConwayEra where
         :* fn id
         :* fn id
         :* fn (applyNewEpochState' st)
+        :* fn id
         :* Nil
 
 hApplyExtLedgerState ::

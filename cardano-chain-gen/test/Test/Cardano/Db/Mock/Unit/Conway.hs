@@ -130,6 +130,7 @@ unitTests iom knownMigrations =
         , test "basic pool stats functionality" Rollback.poolStatBasicTest
         , test "pool stat rollback no duplicates" Rollback.poolStatRollbackNoDuplicates
         , test "pool stat rollback general" Rollback.poolStatRollbackGeneral
+        , test "ada pots max supply and rollback" Rollback.adaPots
         ]
     , testGroup
         "different configs"
