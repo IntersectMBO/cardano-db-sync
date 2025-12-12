@@ -25,11 +25,12 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
 import Cardano.DbSync.Era.Universal.Epoch (insertPoolDepositRefunds, insertProposalRefunds, insertRewardRests, insertRewards)
 import Cardano.DbSync.Era.Universal.Insert.GovAction
-import Cardano.DbSync.Era.Universal.Validate (validateEpochStake, validateEpochRewards)
+import Cardano.DbSync.Era.Universal.Validate (validateEpochRewards, validateEpochStake)
 import Cardano.DbSync.Ledger.Event
 import Cardano.DbSync.Types
 
 import Cardano.DbSync.Error (SyncNodeError)
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Metrics (setDbEpochSyncDuration, setDbEpochSyncNumber)
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad.Extra (whenJust)
@@ -38,7 +39,6 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Time (UTCTime, diffUTCTime, getCurrentTime)
 import Text.Printf (printf)
-import Cardano.DbSync.Ledger.Types
 
 --------------------------------------------------------------------------------------------
 -- Insert LedgerEvents

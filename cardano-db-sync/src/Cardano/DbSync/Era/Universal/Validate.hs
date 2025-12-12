@@ -21,16 +21,16 @@ import qualified Data.Set as Set
 import GHC.Err (error)
 
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.Event
-import Cardano.DbSync.Types
 import Cardano.DbSync.Ledger.Types
-import qualified Data.Strict.Maybe as Strict
-import Cardano.DbSync.Api.Types
-import Cardano.DbSync.Api
-import Cardano.DbSync.Era.Universal.Epoch
+import Cardano.DbSync.Types
 import Cardano.DbSync.Util.Constraint
+import qualified Data.Strict.Maybe as Strict
 
 validateEpochStake ::
   SyncEnv ->
@@ -38,9 +38,10 @@ validateEpochStake ::
   Bool ->
   ExceptT SyncNodeError DB.DbM ()
 validateEpochStake syncEnv applyRes firstCall = case apOldLedger applyRes of
-    Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
-      actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
-      if actualCount /= expectedCount then do
+  Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
+    actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
+    if actualCount /= expectedCount
+      then do
         liftIO
           . logWarning tracer
           $ mconcat
@@ -56,17 +57,17 @@ validateEpochStake syncEnv applyRes firstCall = case apOldLedger applyRes of
         insertStakeSlice syncEnv slice
         when firstCall $ validateEpochStake syncEnv applyRes False
       else
-        liftIO $ logInfo tracer
-          $ mconcat
-            [ "Validate Epoch Stake: total entries in epoch "
-            , textShow (unEpochNo epoch)
-            , " are "
-            , textShow actualCount
-            ]
-    _ -> pure ()
+        liftIO $
+          logInfo tracer $
+            mconcat
+              [ "Validate Epoch Stake: total entries in epoch "
+              , textShow (unEpochNo epoch)
+              , " are "
+              , textShow actualCount
+              ]
+  _ -> pure ()
   where
     tracer = getTrace syncEnv
-
 
 validateEpochRewards ::
   Trace IO Text ->

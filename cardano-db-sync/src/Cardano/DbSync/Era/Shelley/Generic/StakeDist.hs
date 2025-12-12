@@ -195,7 +195,7 @@ genericCountEpochStake ::
   LedgerState (ShelleyBlock p era) mk ->
   Maybe (Word64, EpochNo)
 genericCountEpochStake lstate =
-    Just (delegationsLen, epoch)
+  Just (delegationsLen, epoch)
   where
     epoch :: EpochNo
     epoch = EpochNo $ 1 + unEpochNo (Shelley.nesEL (Consensus.shelleyLedgerState lstate))
@@ -236,7 +236,7 @@ genericFullStakeSlice ::
   LedgerState (ShelleyBlock p era) mk ->
   StakeSliceRes
 genericFullStakeSlice lstate =
-    Slice stakeSlice True
+  Slice stakeSlice True
   where
     epoch :: EpochNo
     epoch = EpochNo $ 1 + unEpochNo (Shelley.nesEL (Consensus.shelleyLedgerState lstate))
