@@ -349,27 +349,54 @@ fetchOffChainVoteData gateways time oVoteWorkQ =
     convert eres =
       case eres of
         Right sVoteData ->
-          let
-            offChainData = sovaOffChainVoteData sVoteData
-            minimalBody = Vote.getMinimalBody offChainData
-            vdt =
-              DB.OffChainVoteData
-                { DB.offChainVoteDataLanguage = Vote.getLanguage offChainData
-                , DB.offChainVoteDataComment = Vote.textValue <$> Vote.comment minimalBody
-                , DB.offChainVoteDataBytes = sovaBytes sVoteData
-                , DB.offChainVoteDataHash = sovaHash sVoteData
-                , DB.offChainVoteDataJson = sovaJson sVoteData
-                , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
-                , DB.offChainVoteDataWarning = sovaWarning sVoteData
-                , DB.offChainVoteDataIsValid = Nothing
-                }
-            gaF ocvdId = mkGovAction ocvdId offChainData
-            drepF ocvdId = mkDrep ocvdId offChainData
-            authorsF ocvdId = map (mkAuthor ocvdId) $ Vote.getAuthors offChainData
-            referencesF ocvdId = map (mkReference ocvdId) $ mListToList $ Vote.references minimalBody
-            externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
-           in
-            OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
+          case (sovaIsValidJson sVoteData, sovaOffChainVoteData sVoteData) of
+            -- Scenario 1: Valid JSON + Valid CIP schema
+            (True, Just offChainData) ->
+              let
+                minimalBody = Vote.getMinimalBody offChainData
+                vdt =
+                  DB.OffChainVoteData
+                    { DB.offChainVoteDataLanguage = Vote.getLanguage offChainData
+                    , DB.offChainVoteDataComment = Vote.textValue <$> Vote.comment minimalBody
+                    , DB.offChainVoteDataBytes = sovaBytes sVoteData
+                    , DB.offChainVoteDataHash = sovaHash sVoteData
+                    , DB.offChainVoteDataJson = sovaJson sVoteData
+                    , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
+                    , DB.offChainVoteDataWarning = sovaWarning sVoteData
+                    , DB.offChainVoteDataIsValid = Just True
+                    }
+                gaF ocvdId = mkGovAction ocvdId offChainData
+                drepF ocvdId = mkDrep ocvdId offChainData
+                authorsF ocvdId = map (mkAuthor ocvdId) $ Vote.getAuthors offChainData
+                referencesF ocvdId = map (mkReference ocvdId) $ mListToList $ Vote.references minimalBody
+                externalUpdatesF ocvdId = map (mkexternalUpdates ocvdId) $ mListToList $ Vote.externalUpdates minimalBody
+               in
+                OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
+            -- Scenario 2 & 3: Valid JSON but invalid CIP schema OR Invalid JSON
+            (_, _) ->
+              let
+                vdt =
+                  DB.OffChainVoteData
+                    { DB.offChainVoteDataLanguage = ""
+                    , DB.offChainVoteDataComment = Nothing
+                    , DB.offChainVoteDataBytes = sovaBytes sVoteData
+                    , DB.offChainVoteDataHash = sovaHash sVoteData
+                    , DB.offChainVoteDataJson = sovaJson sVoteData
+                    , DB.offChainVoteDataVotingAnchorId = oVoteWqReferenceId oVoteWorkQ
+                    , DB.offChainVoteDataWarning = sovaWarning sVoteData
+                    , -- Just False if valid JSON but invalid schema, NULL if unparseable JSON
+                      DB.offChainVoteDataIsValid =
+                        if sovaIsValidJson sVoteData
+                          then Just False
+                          else Nothing
+                    }
+                gaF _ = Nothing
+                drepF _ = Nothing
+                authorsF _ = []
+                referencesF _ = []
+                externalUpdatesF _ = []
+               in
+                OffChainVoteResultMetadata vdt (OffChainVoteAccessors gaF drepF authorsF referencesF externalUpdatesF)
         Left err ->
           OffChainVoteResultError $
             DB.OffChainVoteFetchError
