@@ -5,6 +5,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Validate (
+  validateEpochStake,
   validateEpochRewards,
 ) where
 
@@ -20,10 +21,53 @@ import qualified Data.Set as Set
 import GHC.Err (error)
 
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Api
+import Cardano.DbSync.Api.Types
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
+import Cardano.DbSync.Era.Universal.Epoch
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.Event
+import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Types
+import Cardano.DbSync.Util.Constraint
+import qualified Data.Strict.Maybe as Strict
+
+validateEpochStake ::
+  SyncEnv ->
+  ApplyResult ->
+  Bool ->
+  ExceptT SyncNodeError DB.DbM ()
+validateEpochStake syncEnv applyRes firstCall = case apOldLedger applyRes of
+  Strict.Just lstate | Just (expectedCount, epoch) <- Generic.countEpochStake (clsState lstate) -> do
+    actualCount <- lift $ DB.queryNormalEpochStakeCount (unEpochNo epoch)
+    if actualCount /= expectedCount
+      then do
+        liftIO
+          . logWarning tracer
+          $ mconcat
+            [ "validateEpochStake: epoch stake in epoch "
+            , textShow (unEpochNo epoch)
+            , " expected total of "
+            , textShow expectedCount
+            , " but got "
+            , textShow actualCount
+            ]
+        let slice = Generic.fullEpochStake (clsState lstate)
+        addStakeConstraintsIfNotExist syncEnv tracer
+        insertStakeSlice syncEnv slice
+        when firstCall $ validateEpochStake syncEnv applyRes False
+      else
+        liftIO $
+          logInfo tracer $
+            mconcat
+              [ "Validate Epoch Stake: total entries in epoch "
+              , textShow (unEpochNo epoch)
+              , " are "
+              , textShow actualCount
+              ]
+  _ -> pure ()
+  where
+    tracer = getTrace syncEnv
 
 validateEpochRewards ::
   Trace IO Text ->

@@ -157,7 +157,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
   let !details = apSlotDetails applyResult
   let !withinTwoMin = isWithinTwoMin details
   let !withinHalfHour = isWithinHalfHour details
-  insertNewEpochLedgerEvents syncEnv (sdEpochNo details) (apEvents applyResult)
+  insertNewEpochLedgerEvents syncEnv applyResult (sdEpochNo details) (apEvents applyResult)
 
   let isNewEpochEvent = hasNewEpochEvent (apEvents applyResult)
   let isStartEventOrRollback = hasEpochStartEvent (apEvents applyResult) || firstAfterRollback
