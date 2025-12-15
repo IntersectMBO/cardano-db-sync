@@ -26,7 +26,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic (unCredentialHash)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.TxCert (ConwayDelegCert (..), Delegatee (..))
-import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
+import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Tx.Generic (resolvePool)
@@ -60,9 +60,9 @@ simpleRollback =
     -- Wait for them to sync
     assertBlockNoBackoff dbSync 3
 
-    -- Rollback
-    atomically $ rollback mockServer (blockPoint blk1)
-    assertBlockNoBackoff dbSync 3 -- Rollback effects are now delayed
+    -- Rollback (removes blk2, keeps blk0 and blk1, then forges new block)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint blk1)
+    assertBlockNoBackoff dbSync (2 + length rbBlock)
   where
     testLabel = "conwaySimpleRollback"
 
@@ -87,8 +87,8 @@ bigChain =
     assertBlockNoBackoff dbSync 206
 
     -- Rollback
-    atomically $ rollback mockServer (blockPoint $ last blks')
-    assertBlockNoBackoff dbSync 206 -- Rollback effects are now delayed
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint $ last blks')
+    assertBlockNoBackoff dbSync (201 + length rbBlock)
   where
     testLabel = "conwayBigChain"
 
@@ -113,10 +113,11 @@ restartAndRollback =
 
     -- Rollback and restart
     stopDBSync dbSync
-    atomically $ rollback mockServer (blockPoint $ last blks)
+    void $ rollbackTo interpreter mockServer (blockPoint $ last blks)
     startDBSync dbSync
 
-    assertBlockNoBackoff dbSync 206 -- Rollback effects are now delayed
+    -- TODO: DBSync doesn't detect rollbacks while stopped
+    assertBlockNoBackoff dbSync 206
   where
     testLabel = "conwayRestartAndRollback"
 
@@ -132,7 +133,7 @@ lazyRollback =
     -- Wait for them to sync
     assertBlockNoBackoff dbSync 270
 
-    rollbackTo interpreter mockServer (blockPoint lastBlk)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint lastBlk)
 
     -- Here we create the fork
     void $
@@ -141,7 +142,7 @@ lazyRollback =
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 40
     -- Verify the new block count
-    assertBlockNoBackoff dbSync 241
+    assertBlockNoBackoff dbSync (241 + length rbBlock)
   where
     testLabel = "conwayLazyRollback"
 
@@ -159,7 +160,7 @@ lazyRollbackRestart =
 
     -- Rollback and restart
     stopDBSync dbSync
-    rollbackTo interpreter mockServer (blockPoint lastBlk)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint lastBlk)
     startDBSync dbSync
 
     -- Here we create the fork
@@ -169,7 +170,7 @@ lazyRollbackRestart =
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 30
     -- Verify the new block count
-    assertBlockNoBackoff dbSync 251
+    assertBlockNoBackoff dbSync (251 + length rbBlock)
   where
     testLabel = "conwayLazyRollbackRestart"
 
@@ -187,7 +188,7 @@ doubleRollback =
     assertBlockNoBackoff dbSync 350
 
     -- Rollback to second block point
-    rollbackTo interpreter mockServer (blockPoint lastBlk2)
+    void $ rollbackTo interpreter mockServer (blockPoint lastBlk2)
     -- Here we create a fork
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
@@ -196,15 +197,15 @@ doubleRollback =
     void $ forgeAndSubmitBlocks interpreter mockServer 50
 
     -- Rollback to first block point
-    rollbackTo interpreter mockServer (blockPoint lastBlk1)
+    rbBlock2 <- rollbackTo interpreter mockServer (blockPoint lastBlk1)
     -- Create another fork
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $
         Conway.mkSimpleDCertTx [(StakeIndexNew 0, Conway.mkRegTxCert $ SJust (Coin 100))]
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 50
-    -- Wait for it to sync
-    assertBlockNoBackoff dbSync 201
+    -- Wait for it to sync (150 + rbBlock2 + fork + 50 blocks = 202)
+    assertBlockNoBackoff dbSync (150 + length rbBlock2 + 1 + 50)
   where
     testLabel = "conwayDoubleRollback"
 
@@ -228,17 +229,17 @@ stakeAddressRollback =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 2
 
-    rollbackTo interpreter mockServer (blockPoint blk)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint blk)
 
     -- Create a fork
     void $ withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
       Conway.mkDummyRegisterTx 1 2
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync 2
+    assertBlockNoBackoff dbSync (2 + length rbBlock)
     -- Add another block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Verify the new block count
-    assertBlockNoBackoff dbSync 3
+    assertBlockNoBackoff dbSync (3 + length rbBlock)
   where
     testLabel = "conwayStakeAddressRollback"
 
@@ -262,13 +263,13 @@ rollbackChangeTxOrder =
     assertBlockNoBackoff dbSync 2
     assertTxCount dbSync 13
 
-    rollbackTo interpreter mockServer (blockPoint blk0)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint blk0)
 
     -- Submit the transactions again, in a different order
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \_ ->
       sequence [tx1, tx0, tx2]
     -- Verify the new transaction counts
-    assertBlockNoBackoff dbSync 2
+    assertBlockNoBackoff dbSync (2 + length rbBlock)
     assertTxCount dbSync 14
   where
     testLabel = "conwayRollbackChangeTxOrder"
@@ -290,7 +291,7 @@ rollbackFullTx =
     assertBlockNoBackoff dbSync 2
     assertTxCount dbSync 13
 
-    rollbackTo interpreter mockServer (blockPoint blk0)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint blk0)
 
     -- Add some more blocks
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \state' ->
@@ -300,7 +301,7 @@ rollbackFullTx =
         , Conway.mkFullTx 2 200 state'
         ]
     -- Verify the new transaction counts
-    assertBlockNoBackoff dbSync 2
+    assertBlockNoBackoff dbSync (2 + length rbBlock)
     assertTxCount dbSync 14
   where
     testLabel = "conwayRollbackFullTx"
@@ -351,7 +352,7 @@ drepDistrRollback =
     assertBlockNoBackoff dbSync (2 + length epoch0 + length epoch1 + length blksAfter)
 
     -- Rollback to the epoch 2 boundary (first block of epoch 2)
-    rollbackTo interpreter mockServer rollbackPoint
+    rbBlock <- rollbackTo interpreter mockServer rollbackPoint
 
     -- Create fork - replay through the epoch 2 boundary
     -- This will re-insert DrepDistr for epoch 2
@@ -367,7 +368,7 @@ drepDistrRollback =
       "DrepDistr for epoch 1 should still exist after rollback"
 
     -- Verify final state
-    assertBlockNoBackoff dbSync (2 + length epoch0 + length epoch1 + length blksFork)
+    assertBlockNoBackoff dbSync (2 + (length (epoch0 <> epoch1 <> rbBlock <> blksFork)))
 
     -- Verify DrepDistr for both epochs exist after replay
     assertEqQuery
@@ -422,12 +423,12 @@ poolStatRollbackNoDuplicates =
       assertBlockNoBackoff dbSync 351
 
       -- Rollback (following exact pattern from bigChain test)
-      atomically $ rollback mockServer (blockPoint $ last rollbackBlks)
-      assertBlockNoBackoff dbSync 351 -- Delayed rollbackExpand commentComment on line R345ResolvedCode has comments. Press enter to view.
+      void $ rollbackTo interpreter mockServer (blockPoint $ last rollbackBlks)
+      assertBlockNoBackoff dbSync 351 -- Delayed rollbackExpand
 
       -- Re-sync some blocks
       void $ forgeAndSubmitBlocks interpreter mockServer 100
-      assertBlockNoBackoff dbSync 351 -- Should stay same due to rollbackExpand commentComment on line R349ResolvedCode has comments. Press enter to view.
+      assertBlockNoBackoff dbSync 352 -- Should stay same due to rollback
 
       -- The main test: no duplicates after rollback + re-sync
       duplicateCount <- queryDBSync dbSync DB.queryPoolStatDuplicates
@@ -464,15 +465,15 @@ poolStatRollbackGeneral =
       assertBool "Pool stats should have increased" (afterCount > initialCount)
 
       -- Rollback to previous point
-      rollbackTo interpreter mockServer (blockPoint $ last rollbackBlks)
+      rbBlocks <- rollbackTo interpreter mockServer (blockPoint $ last rollbackBlks)
       _ <-
         withConwayFindLeaderAndSubmitTx interpreter mockServer $
           Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
-      assertBlockNoBackoff dbSync $ totalBeforeRollback + 1
+      assertBlockNoBackoff dbSync $ totalBeforeRollback + 1 + (length rbBlocks) -- +1 from tx
 
       -- Re-sync the same blocks - should not create duplicates
       epochBlks3 <- fillEpochs interpreter mockServer 1
-      let finalTotal = totalBeforeRollback + 1 + length epochBlks3
+      let finalTotal = totalBeforeRollback + 2 + length epochBlks3 -- +1 from rollbackTo, +1 from tx
       assertBlockNoBackoff dbSync finalTotal
       finalCount <- queryDBSync dbSync DB.queryPoolStatCount
 
@@ -500,17 +501,17 @@ adaPots =
     assertEqual "Ada pots don't match" [(1, 60_000_000), (2, 60_000_000), (3, 60_000_000), (4, 60_000_000)] potsPerEpoch0
 
     -- Rollback to previous point
-    rollbackTo interpreter mockServer (blockPoint $ last blks1)
+    rbBlock <- rollbackTo interpreter mockServer (blockPoint $ last blks1)
+    let rbBlockLength = length rbBlock
     void $
       withConwayFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
         Right $ Conway.mkDonationTx (Coin 500)
-    assertBlockNoBackoff dbSync $ length blks0 + 70 + 1
-
+    assertBlockNoBackoff dbSync $ (length blks0) + 70 + rbBlockLength + 1 -- +1 from tx
     potsPerEpoch1 <- queryDBSync dbSync DB.queryAdaPotsAll
     assertEqual "Ada pots don't match" [(1, 60_000_000), (2, 60_000_000), (3, 60_000_000)] potsPerEpoch1
 
     blks3 <- fillEpochs interpreter mockServer 1
-    assertBlockNoBackoff dbSync $ length blks0 + 70 + 1 + length blks3
+    assertBlockNoBackoff dbSync $ length blks0 + 70 + 1 + rbBlockLength + length blks3 -- +1 from tx
     potsPerEpoch2 <- queryDBSync dbSync DB.queryAdaPotsAll
     assertEqual "Ada pots don't match" [(1, 60_000_000), (2, 60_000_000), (3, 60_000_000), (4, 60_000_000)] potsPerEpoch2
   where

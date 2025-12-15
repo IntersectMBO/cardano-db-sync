@@ -122,8 +122,8 @@ rollbackNewCommittee =
       (1, 1, 0, 0)
       "Unexpected governance action counts"
 
-    -- Rollback the last 2 blocks
-    epoch1' <- rollbackBlocks interpreter server 2 epoch3
+    -- Rollback the last 4 blocks
+    epoch1' <- rollbackBlocks interpreter server 4 epoch3
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (length $ epoch1 <> epoch1')
     -- Should not have a new committee member
@@ -277,13 +277,13 @@ rollbackBlocks interpreter server n blocks = do
       [] -> assertFailure $ "Expected at least " <> show n <> " blocks"
 
   -- Rollback to the previous epoch
-  Api.rollbackTo interpreter server rollbackPoint
+  rbBlocks <- Api.rollbackTo interpreter server rollbackPoint
   -- Create a fork
   newBlock <-
     Api.withConwayFindLeaderAndSubmitTx interpreter server $
       Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
 
-  pure $ reverse (newBlock : blocks')
+  pure $ reverse ([newBlock] <> rbBlocks <> blocks')
 
 updateConstitution :: IOManager -> [(Text, Text)] -> Assertion
 updateConstitution =
@@ -507,8 +507,8 @@ rollbackHardFork =
       (Just 11)
       "Unexpected governance action counts"
 
-    -- Rollback the last 2 blocks
-    epoch2 <- rollbackBlocks interpreter server 2 epoch3
+    -- Rollback the last 4 blocks
+    epoch2 <- rollbackBlocks interpreter server 4 epoch3
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (length $ epoch1 <> epoch2)
     -- Should not have a new committee member

@@ -126,9 +126,9 @@ performPruneWithSimpleRollback useTxOutAddress =
     assertUnspentTx dbSync
 
     -- Rollback
-    rollbackTo interpreter mockServer (blockPoint blk1)
+    rbBlocks <- rollbackTo interpreter mockServer (blockPoint blk1)
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 0 "Unexpected TxOutConsumedByTxId count after rollback"
-    assertBlockNoBackoff dbSync (fullBlockSize blks)
+    assertBlockNoBackoff dbSync (2 + length rbBlocks)
   where
     cmdLineArgs = initCommandLineArgs
     testLabel = "conwayConfigPruneSimpleRollback"
@@ -160,7 +160,7 @@ performPruneWithFullTxRollback useTxOutAddress =
     assertEqQuery dbSync (DB.queryTxOutCount txOutVariantType) 14 "new epoch didn't prune tx_out column that are null"
 
     -- Rollback
-    rollbackTo interpreter mockServer $ blockPoint blk0
+    rbBlocks <- rollbackTo interpreter mockServer $ blockPoint blk0
     -- Add more transactions
     void $ withConwayFindLeaderAndSubmit interpreter mockServer $ \st -> do
       tx0 <- Conway.mkFullTx 0 100 st
@@ -169,7 +169,7 @@ performPruneWithFullTxRollback useTxOutAddress =
       pure [tx1, tx2, tx0]
 
     -- Verify tx_out was pruned again
-    assertBlockNoBackoff dbSync 2
+    assertBlockNoBackoff dbSync (2 + length rbBlocks)
     assertTxCount dbSync 14
     assertEqQuery dbSync (DB.queryTxOutCount txOutVariantType) 16 "new epoch didn't prune tx_out column that are null"
     assertUnspentTx dbSync
@@ -244,18 +244,16 @@ performPruneAndRollBackOneBlock useTxOutAddress =
     assertBlockNoBackoff dbSync 101
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 2 "Unexpected TxOutConsumedByTxId count before rollback"
 
-    rollbackTo interpreter mockServer (blockPoint blk100)
+    rbBlocks <- rollbackTo interpreter mockServer (blockPoint blk100)
 
-    -- Add an empty block
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    -- Verify the transactions were removed in the rollback
-    assertBlockNoBackoff dbSync 101
+    -- Verify the transactions were removed in the rollback (100 is max block number at blk100)
+    assertBlockNoBackoff dbSync (100 + length rbBlocks)
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 1 "Unexpected TxOutConsumedByTxId count after rollback"
 
     -- Trigger a prune
     void $ forgeAndSubmitBlocks interpreter mockServer 102
     -- Verify everything was pruned
-    assertBlockNoBackoff dbSync 203
+    assertBlockNoBackoff dbSync (100 + length rbBlocks + 102)
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 0 "Unexpected TxOutConsumedByTxId count after rollback"
   where
     cmdLineArgs = initCommandLineArgs
@@ -290,18 +288,16 @@ performNoPruneAndRollBack useTxOutAddress =
     assertBlockNoBackoff dbSync 101
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 2 "Unexpected TxOutConsumedByTxId count before rollback"
 
-    rollbackTo interpreter mockServer (blockPoint blk100)
+    rbBlocks <- rollbackTo interpreter mockServer (blockPoint blk100)
 
-    -- Add an empty block
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    -- Verify transactions were removed
-    assertBlockNoBackoff dbSync 101
+    -- Verify transactions were removed (100 is max block number at blk100)
+    assertBlockNoBackoff dbSync (100 + length rbBlocks)
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 1 "Unexpected TxOutConsumedByTxId count after rollback"
 
     -- Add some more blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 102
     -- Verify nothing has been pruned
-    assertBlockNoBackoff dbSync 203
+    assertBlockNoBackoff dbSync (100 + length rbBlocks + 102)
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 1 "Unexpected TxOutConsumedByTxId count after rollback"
   where
     cmdLineArgs = initCommandLineArgs
@@ -338,12 +334,11 @@ performPruneSameBlock useTxOutAddress =
     assertBlockNoBackoff dbSync 100
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 0 "Unexpected TxOutConsumedByTxId after prune"
 
-    rollbackTo interpreter mockServer (blockPoint blk77)
+    rbBlocks <- rollbackTo interpreter mockServer (blockPoint blk77)
+    let rbBlocksLength = length rbBlocks
 
-    -- Add an empty block
-    void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
-    -- Verify the transactions were pruned again
-    assertBlockNoBackoff dbSync 78
+    -- Verify the transactions were pruned again (77 is max block number at blk77, + rbBlocks)
+    assertBlockNoBackoff dbSync (77 + rbBlocksLength)
     assertTxInCount dbSync 0
     assertEqQuery dbSync (DB.queryTxOutConsumedCount txOutVariantType) 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
@@ -375,14 +370,14 @@ performNoPruneSameBlock useTxOutAddress =
     -- Verify the blocks exist
     assertBlockNoBackoff dbSync 100
 
-    rollbackTo interpreter mockServer (blockPoint blk97)
+    rbBlocks <- rollbackTo interpreter mockServer (blockPoint blk97)
 
     -- Verify we haven't pruned anything yet
     assertBlockNoBackoff dbSync 100
     -- Add an empty block
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
     -- Verify everything was pruned
-    assertBlockNoBackoff dbSync 98
+    assertBlockNoBackoff dbSync (98 + length rbBlocks)
     assertEqQuery dbSync (DB.queryTxOutConsumedCount $ txOutVariantTypeFromConfig dbSync) 0 "Unexpected TxOutConsumedByTxId after rollback"
   where
     cmdLineArgs = initCommandLineArgs
