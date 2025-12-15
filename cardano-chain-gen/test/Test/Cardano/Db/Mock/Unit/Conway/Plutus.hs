@@ -376,9 +376,7 @@ multipleScriptsRollback =
     assertAlonzoCounts dbSync (1, 2, 1, 1, 3, 2, 0, 0)
 
     -- Roll back to genesis
-    Api.rollbackTo interpreter mockServer genesisPoint
-    -- Forge another block
-    void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
+    void $ Api.rollbackTo interpreter mockServer genesisPoint
 
     -- Submit the txs again
     void $
@@ -388,7 +386,7 @@ multipleScriptsRollback =
       Api.forgeNextAndSubmit interpreter mockServer $
         MockBlock [TxConway tx1] (NodeId 1)
 
-    -- Verify tx counts
+    -- Verify tx counts (rollbackTo forges 1 block, then we forge 2 more)
     assertBlockNoBackoff dbSync 3
     assertAlonzoCounts dbSync (1, 2, 1, 1, 3, 2, 0, 0)
   where
