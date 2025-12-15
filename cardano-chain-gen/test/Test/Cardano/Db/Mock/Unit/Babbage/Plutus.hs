@@ -241,7 +241,7 @@ multipleScriptsRollback =
     assertBlockNoBackoff dbSync 2
     assertAlonzoCounts dbSync (1, 2, 1, 1, 3, 2, 0, 0)
 
-    rollbackTo interpreter mockServer genesisPoint
+    void $ rollbackTo interpreter mockServer genesisPoint
     void $ forgeNextFindLeaderAndSubmit interpreter mockServer []
 
     void $ forgeNextAndSubmit interpreter mockServer $ MockBlock [TxBabbage tx0] (NodeId 1)

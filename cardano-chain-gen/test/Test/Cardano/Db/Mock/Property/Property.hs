@@ -21,6 +21,7 @@ import Cardano.Mock.Forging.Interpreter
 import Cardano.Mock.Forging.Tx.Babbage
 import Cardano.Mock.Forging.Types
 import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
+import Control.Monad (void)
 import Data.Foldable
 import Data.Maybe (isJust)
 import Data.Text (Text)
@@ -129,7 +130,8 @@ transition m cmd resp = case (cmd, resp) of
           , dbSyncMaxBlockNo = dbSyncMaxBlockNo'
           }
   (RollBack blkNo, _) ->
-    m {serverChain = rollbackChain blkNo (serverChain m)}
+    -- rollbackTo now forges an empty block after rollback
+    m {serverChain = rollbackChain blkNo (serverChain m) ++ [0]}
   (StopDBSync, _)
     | dbSynsIsOn m ->
         m {dbSynsIsOn = False}
@@ -178,12 +180,12 @@ postcondition _ _ resp = case resp of
 semantics :: Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> Command Concrete -> IO (Response Concrete)
 semantics interpreter mockServer dbSync cmd = case cmd of
   RollForward n -> NewBlockAdded . reference . Opaque <$> createBlock n interpreter mockServer
-  RollBack Nothing -> Unit <$> rollbackTo interpreter mockServer GenesisPoint
+  RollBack Nothing -> Unit <$> void (rollbackTo interpreter mockServer GenesisPoint)
   RollBack (Just blkNo) -> do
     chain <- atomically $ readChain mockServer
     case findFirstPointByBlockNo chain blkNo of
       Nothing -> pure $ Error $ "Failed to find point for " <> show blkNo
-      Just pnt -> Unit <$> rollbackTo interpreter mockServer pnt
+      Just pnt -> Unit <$> void (rollbackTo interpreter mockServer pnt)
   StopDBSync -> Unit <$> stopDBSync dbSync
   StartDBSync -> Unit <$> startDBSync dbSync
   RestartNode -> Unit <$> restartServer mockServer
