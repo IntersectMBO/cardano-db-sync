@@ -318,7 +318,11 @@ chainSyncClient metricsSetters trce latestPoints currentTip tc = do
       ClientPipelinedStIdle n CardanoBlock (Point CardanoBlock) (Tip CardanoBlock) IO ()
     go mkPipelineDecision n clientTip serverTip mPoint =
       case (mPoint, n, runPipelineDecision mkPipelineDecision n clientTip serverTip) of
-        (Just points, _, _) -> drainThePipe n $ clientPipelinedStIdle clientTip points
+        (Just points, _, _) ->
+          -- When re-intersecting after rollback failure, reset clientTip to Origin
+          -- if falling back to genesis, otherwise keep current clientTip
+          let newClientTip = if points == [genesisPoint] then Origin else clientTip
+           in drainThePipe n $ clientPipelinedStIdle newClientTip points
         (_, _Zero, (Request, mkPipelineDecision')) ->
           SendMsgRequestNext (pure ()) clientStNext
           where

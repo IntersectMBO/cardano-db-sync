@@ -121,6 +121,7 @@ unitTests iom knownMigrations =
         , test "drepDistr rollback" Rollback.drepDistrRollback
         , test "sync bigger chain" Rollback.bigChain
         , test "rollback while db-sync is off" Rollback.restartAndRollback
+        , test "large rollback while db-sync is off" Rollback.restartAndRollbackLarge
         , test "big rollback executed lazily" Rollback.lazyRollback
         , test "lazy rollback on restart" Rollback.lazyRollbackRestart
         , test "rollback while rollbacking" Rollback.doubleRollback

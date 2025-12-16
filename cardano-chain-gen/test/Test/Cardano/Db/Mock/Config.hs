@@ -57,6 +57,7 @@ module Test.Cardano.Db.Mock.Config (
   withFullConfig,
   withFullConfigDropDB,
   withFullConfigDropDBLog,
+  withFullConfigDropDBNoFingerprint,
   withFullConfigLog,
   withCustomConfigDropDBLog,
   withCustomConfig,
@@ -464,6 +465,27 @@ withFullConfigDropDBLog =
     ( WithConfigArgs
         { hasFingerprint = True
         , shouldLog = True
+        , shouldDropDB = True
+        }
+    )
+    initCommandLineArgs
+    Nothing
+
+-- For tests that rollback and restart, fingerprints create divergent chains
+withFullConfigDropDBNoFingerprint ::
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigDropDBNoFingerprint =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = False
+        , shouldLog = False
         , shouldDropDB = True
         }
     )

@@ -369,8 +369,10 @@ chainSyncServer state codec _blockVersion =
       atomically $ do
         cps <- readTVar state
         let chain = chainDB cps
+            chainTip = headTip chain
         case findFirstPoint (map castPoint points) chain of
-          Nothing -> pure (Nothing, castTip (headTip chain))
+          Nothing ->
+            pure (Nothing, castTip chainTip)
           Just ipoint -> do
             let !cps' = updateFollower rid ipoint cps
             writeTVar state cps'
