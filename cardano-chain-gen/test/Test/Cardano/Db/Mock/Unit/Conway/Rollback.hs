@@ -9,6 +9,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Rollback (
   simpleRollback,
   bigChain,
   restartAndRollback,
+  restartAndRollbackLarge,
   lazyRollback,
   lazyRollbackRestart,
   doubleRollback,
@@ -35,7 +36,7 @@ import Cardano.Mock.Forging.Types (PoolIndex (..), StakeIndex (..), UTxOIndex (.
 import Cardano.Prelude
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Network.Block (blockPoint)
-import Test.Cardano.Db.Mock.Config (claFullMode, configPoolStats, conwayConfigDir, initCommandLineArgs, queryDBSync, startDBSync, stopDBSync, withCustomConfigDropDB, withFullConfigDropDB)
+import Test.Cardano.Db.Mock.Config (claFullMode, configPoolStats, conwayConfigDir, initCommandLineArgs, queryDBSync, startDBSync, stopDBSync, withCustomConfigDropDB, withFullConfigDropDB, withFullConfigDropDBNoFingerprint)
 import Test.Cardano.Db.Mock.Examples
 import Test.Cardano.Db.Mock.UnifiedApi
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, assertTxCount)
@@ -94,7 +95,7 @@ bigChain =
 
 restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
 restartAndRollback =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigDropDBNoFingerprint conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
 
@@ -107,8 +108,8 @@ restartAndRollback =
     -- Wait for it to sync
     assertBlockNoBackoff dbSync 201
 
-    -- Forge some more blocks
-    forM_ (replicate 5 mockBlock2) (forgeNextAndSubmit interpreter mockServer)
+    -- Forge some more blocks (using mockBlock0 so the new block after rollback will have a different forger)
+    forM_ (replicate 5 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
     assertBlockNoBackoff dbSync 206
 
     -- Rollback and restart
@@ -116,10 +117,39 @@ restartAndRollback =
     void $ rollbackTo interpreter mockServer (blockPoint $ last blks)
     startDBSync dbSync
 
-    -- TODO: DBSync doesn't detect rollbacks while stopped
-    assertBlockNoBackoff dbSync 206
+    -- rollbackTo forges an empty block after rollback, so we expect 202 blocks
+    -- (rollback point at 201 + the new empty block)
+    assertBlockNoBackoff dbSync 202
   where
     testLabel = "conwayRestartAndRollback"
+
+restartAndRollbackLarge :: IOManager -> [(Text, Text)] -> Assertion
+restartAndRollbackLarge =
+  withFullConfigDropDBNoFingerprint conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    -- Forge initial blocks
+    forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+
+    startDBSync dbSync
+    assertBlockNoBackoff dbSync 101
+
+    -- First batch: blocks to rollback to
+    blks1 <- forM (replicate 100 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+    assertBlockNoBackoff dbSync 201
+
+    -- Second batch: blocks that will be rolled back
+    forM_ (replicate 100 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
+    assertBlockNoBackoff dbSync 301
+
+    -- Rollback and restart - rolling back 100 blocks
+    stopDBSync dbSync
+    void $ rollbackTo interpreter mockServer (blockPoint $ last blks1)
+    startDBSync dbSync
+
+    -- rollbackTo forges an empty block after rollback, so we expect 202 blocks
+    -- (rollback point at 201 + the new empty block)
+    assertBlockNoBackoff dbSync 202
+  where
+    testLabel = "conwayRestartAndRollbackLarge"
 
 lazyRollback :: IOManager -> [(Text, Text)] -> Assertion
 lazyRollback =
