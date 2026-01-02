@@ -23,7 +23,7 @@ RUN find /tmp/extract -name cardano-db-sync -type f -exec mv {} /cardano-db-sync
     chmod +x /cardano-db-sync
 
 # Stage 2: Minimal runtime image
-FROM scratch
+FROM ubuntu:24.04
 COPY --from=extractor /cardano-db-sync /usr/local/bin/cardano-db-sync
 ENTRYPOINT ["/usr/local/bin/cardano-db-sync"]
 CMD ["--help"]
