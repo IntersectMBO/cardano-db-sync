@@ -398,7 +398,7 @@ drepDistrRollback =
       "DrepDistr for epoch 1 should still exist after rollback"
 
     -- Verify final state
-    assertBlockNoBackoff dbSync (2 + (length (epoch0 <> epoch1 <> rbBlock <> blksFork)))
+    assertBlockNoBackoff dbSync (2 + length (epoch0 <> epoch1 <> rbBlock <> blksFork))
 
     -- Verify DrepDistr for both epochs exist after replay
     assertEqQuery
@@ -499,7 +499,7 @@ poolStatRollbackGeneral =
       _ <-
         withConwayFindLeaderAndSubmitTx interpreter mockServer $
           Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
-      assertBlockNoBackoff dbSync $ totalBeforeRollback + 1 + (length rbBlocks) -- +1 from tx
+      assertBlockNoBackoff dbSync $ totalBeforeRollback + 1 + length rbBlocks -- +1 from tx
 
       -- Re-sync the same blocks - should not create duplicates
       epochBlks3 <- fillEpochs interpreter mockServer 1

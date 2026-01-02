@@ -796,19 +796,17 @@ deleteUsingEpochNo trce epochN = do
 
   -- First, count what we're about to delete for progress tracking
   totalCounts <- withProgress (Just trce) 5 "Counting epoch records..." $ \progressRef -> do
-    liftIO $ updateProgress (Just trce) progressRef 0 "Counting Epoch records..."
-    ec <- runSession mkDbCallStack $ HsqlSes.statement epochN (parameterisedCountWhere @SC.Epoch "no" ">= $1" epochEncoder)
+    liftIO $ updateProgress (Just trce) progressRef 0 "Counting Epoch, DrepDistr, RewardRest, and PoolStat records..."
 
-    liftIO $ updateProgress (Just trce) progressRef 1 "Counting DrepDistr records..."
-    dc <- runSession mkDbCallStack $ HsqlSes.statement epochN (parameterisedCountWhere @SC.DrepDistr "epoch_no" "> $1" epochEncoder)
+    (ec, dc, rrc, psc) <- runSession mkDbCallStack $
+      HsqlSes.pipeline $ do
+        ec <- HsqlP.statement epochN (parameterisedCountWhere @SC.Epoch "no" ">= $1" epochEncoder)
+        dc <- HsqlP.statement epochN (parameterisedCountWhere @SC.DrepDistr "epoch_no" "> $1" epochEncoder)
+        rrc <- HsqlP.statement epochN (parameterisedCountWhere @SC.RewardRest "spendable_epoch" "> $1" epochEncoder)
+        psc <- HsqlP.statement epochN (parameterisedCountWhere @SC.PoolStat "epoch_no" "> $1" epochEncoder)
+        pure (ec, dc, rrc, psc)
+
     liftIO $ logInfo trce $ "Rollback - Found " <> textShow dc <> " DrepDistr records to delete for epochs > " <> textShow epochN
-
-    liftIO $ updateProgress (Just trce) progressRef 2 "Counting RewardRest records..."
-    rrc <- runSession mkDbCallStack $ HsqlSes.statement epochN (parameterisedCountWhere @SC.RewardRest "spendable_epoch" "> $1" epochEncoder)
-
-    liftIO $ updateProgress (Just trce) progressRef 3 "Counting PoolStat records..."
-    psc <- runSession mkDbCallStack $ HsqlSes.statement epochN (parameterisedCountWhere @SC.PoolStat "epoch_no" "> $1" epochEncoder)
-
     liftIO $ updateProgress (Just trce) progressRef 4 "Count completed"
     pure (ec, dc, rrc, psc)
 
@@ -819,26 +817,25 @@ deleteUsingEpochNo trce epochN = do
   -- Execute deletes with progress logging
   (epochDeletedCount, drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount) <-
     withProgress (Just trce) 5 "Deleting epoch records..." $ \progressRef -> do
-      liftIO $ updateProgress (Just trce) progressRef 1 $ "Deleting " <> textShow epochCount <> " Epochs..."
-      epochDeletedCount <- runSession mkDbCallStack $ HsqlSes.statement epochN (deleteWhereCount @SC.Epoch "no" "=" epochEncoder)
+      liftIO $ updateProgress (Just trce) progressRef 1 $ "Deleting " <> textShow totalRecords <> " records from Epoch, DrepDistr, RewardRest, and PoolStat..."
 
-      liftIO $ updateProgress (Just trce) progressRef 2 $ "Deleting " <> textShow drepCount <> " DrepDistr records..."
-      drepDeletedCount <- runSession mkDbCallStack $ HsqlSes.statement epochN (deleteWhereCount @SC.DrepDistr "epoch_no" ">" epochEncoder)
-
-      liftIO $ updateProgress (Just trce) progressRef 3 $ "Deleting " <> textShow rewardRestCount <> " RewardRest records..."
-      rewardRestDeletedCount <- runSession mkDbCallStack $ HsqlSes.statement epochN (deleteWhereCount @SC.RewardRest "spendable_epoch" ">" epochEncoder)
-
-      liftIO $ updateProgress (Just trce) progressRef 4 $ "Deleting " <> textShow poolStatCount <> " PoolStat records..."
-      poolStatDeletedCount <- runSession mkDbCallStack $ HsqlSes.statement epochN (deleteWhereCount @SC.PoolStat "epoch_no" ">" epochEncoder)
-
-      pure (epochDeletedCount, drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount)
+      runSession mkDbCallStack $
+        HsqlSes.pipeline $ do
+          epochDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.Epoch "no" "=" epochEncoder)
+          drepDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.DrepDistr "epoch_no" ">" epochEncoder)
+          rewardRestDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.RewardRest "spendable_epoch" ">" epochEncoder)
+          poolStatDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.PoolStat "epoch_no" ">" epochEncoder)
+          pure (epochDeletedCount, drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount)
 
   liftIO $ logInfo trce "Setting null values for governance actions..."
   -- Null operations
-  n1 <- runSession mkDbCallStack $ HsqlSes.statement epochInt64 setNullEnactedStmt
-  n2 <- runSession mkDbCallStack $ HsqlSes.statement epochInt64 setNullRatifiedStmt
-  n3 <- runSession mkDbCallStack $ HsqlSes.statement epochInt64 setNullDroppedStmt
-  n4 <- runSession mkDbCallStack $ HsqlSes.statement epochInt64 setNullExpiredStmt
+  (n1, n2, n3, n4) <- runSession mkDbCallStack $
+    HsqlSes.pipeline $ do
+      n1 <- HsqlP.statement epochInt64 setNullEnactedStmt
+      n2 <- HsqlP.statement epochInt64 setNullRatifiedStmt
+      n3 <- HsqlP.statement epochInt64 setNullDroppedStmt
+      n4 <- HsqlP.statement epochInt64 setNullExpiredStmt
+      pure (n1, n2, n3, n4)
 
   let nullTotal = n1 + n2 + n3 + n4
       countLogs =
