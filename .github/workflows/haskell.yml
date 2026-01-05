@@ -52,6 +52,22 @@ jobs:
         uses: input-output-hk/actions/base@latest
         with:
           use-sodium-vrf: true
+      - name: Add LMDB to Nix environment
+        run: |
+          nix-env -f '<nixpkgs>' -iA lmdb
+          LMDB_STORE=$(find /nix/store -maxdepth 1 -name '*lmdb*-dev' -type d | head -1)
+          echo "LMDB dev store path: $LMDB_STORE"
+          if [ -n "$LMDB_STORE" ]; then
+            ls -la "$LMDB_STORE/lib/pkgconfig/" || echo "No pkgconfig dir"
+            echo "PKG_CONFIG_PATH=${LMDB_STORE}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          fi
+        shell: devx {0}
+      - name: Verify LMDB availability
+        run: |
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          pkg-config --exists lmdb && echo "LMDB found by pkg-config" || echo "LMDB NOT found by pkg-config"
+          pkg-config --modversion lmdb || true
+        shell: devx {0}
       - name: cache cabal
         uses: actions/cache@v3
         with:
