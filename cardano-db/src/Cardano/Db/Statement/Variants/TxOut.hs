@@ -800,6 +800,53 @@ setNullTxOutConsumedBatchStmt =
     encoder = Id.idEncoder Id.getTxId
     decoder = HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable HsqlD.int8))
 
+--------------------------------------------------------------------------------
+-- Query to count tx_outs with NULL stake_address_id for Pointer addresses
+-- Used to verify that Pointer addresses in Conway era don't have stake keys
+--------------------------------------------------------------------------------
+queryPtrTxOutNullStakeCoreStmt :: HsqlStmt.Statement () Word64
+queryPtrTxOutNullStakeCoreStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*) FROM tx_out"
+          , " WHERE stake_address_id IS NULL"
+          , " AND address LIKE 'addr_test1g%'" -- Pointer address prefix for testnet
+          ]
+    decoder =
+      HsqlD.singleRow $
+        fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+queryPtrTxOutNullStakeAddressStmt :: HsqlStmt.Statement () Word64
+queryPtrTxOutNullStakeAddressStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*) FROM tx_out"
+          , " INNER JOIN address ON tx_out.address_id = address.id"
+          , " WHERE tx_out.stake_address_id IS NULL"
+          , " AND address.address LIKE 'addr_test1g%'" -- Pointer address prefix for testnet
+          ]
+    decoder =
+      HsqlD.singleRow $
+        fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+-- | Count tx_outs with NULL stake_address_id for Pointer addresses (Conway era check)
+queryPtrTxOutNullStake :: TxOutVariantType -> DbM Word64
+queryPtrTxOutNullStake txOutVariantType =
+  case txOutVariantType of
+    TxOutVariantCore ->
+      runSession mkDbCallStack $
+        HsqlSes.statement () queryPtrTxOutNullStakeCoreStmt
+    TxOutVariantAddress ->
+      runSession mkDbCallStack $
+        HsqlSes.statement () queryPtrTxOutNullStakeAddressStmt
+
+--------------------------------------------------------------------------------
 -- Main function to set NULL for tx_out consumed_by_tx_id
 querySetNullTxOut ::
   TxOutVariantType ->

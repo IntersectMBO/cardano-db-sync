@@ -78,9 +78,9 @@ storeUTxOFromLedger ::
   ExtLedgerState CardanoBlock mk ->
   ExceptT SyncNodeError DB.DbM ()
 storeUTxOFromLedger env st = case ledgerState st of
-  LedgerStateBabbage bts -> storeUTxO env (getUTxO bts)
-  LedgerStateConway stc -> storeUTxO env (getUTxO stc)
-  LedgerStateDijkstra stc -> storeUTxO env (getUTxO stc)
+  LedgerStateBabbage bts -> storeUTxO env Babbage (getUTxO bts)
+  LedgerStateConway stc -> storeUTxO env Conway (getUTxO stc)
+  LedgerStateDijkstra stc -> storeUTxO env Dijkstra (getUTxO stc)
   _otherwise -> liftIO $ logError trce "storeUTxOFromLedger is only supported after Babbage"
   where
     trce = getTrace env
@@ -96,9 +96,10 @@ storeUTxO ::
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
+  BlockEra ->
   Map TxIn (BabbageTxOut era) ->
   ExceptT SyncNodeError DB.DbM ()
-storeUTxO env mp = do
+storeUTxO env blkEra mp = do
   liftIO $
     logInfo trce $
       mconcat
@@ -107,7 +108,7 @@ storeUTxO env mp = do
         , " tx_out as pages of "
         , textShow bulkSize
         ]
-  mapM_ (storePage env pagePerc) . zip [0 ..] . chunksOf bulkSize . Map.toList $ mp
+  mapM_ (storePage env blkEra pagePerc) . zip [0 ..] . chunksOf bulkSize . Map.toList $ mp
   where
     trce = getTrace env
     bulkSize = DB.getTxOutBulkSize (getTxOutVariantType env)
@@ -124,12 +125,13 @@ storePage ::
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
+  BlockEra ->
   Float ->
   (Int, [(TxIn, BabbageTxOut era)]) ->
   ExceptT SyncNodeError DB.DbM ()
-storePage syncEnv percQuantum (n, ls) = do
+storePage syncEnv blkEra percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
-  txOuts <- mapM (prepareTxOut syncEnv) ls
+  txOuts <- mapM (prepareTxOut syncEnv blkEra) ls
   txOutIds <- lift $ DB.insertBulkTxOut False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertBulkMaTxOutPiped [maTxOuts]
@@ -147,12 +149,13 @@ prepareTxOut ::
   , NativeScript era ~ Timelock era
   ) =>
   SyncEnv ->
+  BlockEra ->
   (TxIn, BabbageTxOut era) ->
   ExceptT SyncNodeError DB.DbM (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut syncEnv (TxIn txIntxId (TxIx index), txOut) = do
+prepareTxOut syncEnv blkEra (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
   let genTxOut = fromTxOut (fromIntegral index) txOut
   txId <- liftDbLookupEither mkSyncNodeCallStack $ queryTxIdWithCache syncEnv txIntxId
-  insertTxOut syncEnv iopts (txId, txHashByteString) genTxOut
+  insertTxOut syncEnv iopts (txId, txHashByteString) genTxOut blkEra
   where
     iopts = soptInsertOptions $ envOptions syncEnv
