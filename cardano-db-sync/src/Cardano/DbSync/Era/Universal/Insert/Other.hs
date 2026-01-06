@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,6 +27,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error (SyncNodeError)
+import Cardano.DbSync.Types (BlockEra (..))
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -136,16 +138,21 @@ insertWithdrawals syncEnv txId redeemers txWdrl = do
 insertStakeAddressRefIfMissing ::
   SyncEnv ->
   Ledger.Addr ->
+  BlockEra ->
   ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId)
-insertStakeAddressRefIfMissing syncEnv addr =
+insertStakeAddressRefIfMissing syncEnv addr era =
   case addr of
     Ledger.AddrBootstrap {} -> pure Nothing
     Ledger.Addr nw _pcred sref ->
       case sref of
         Ledger.StakeRefBase cred -> do
           Just <$> queryOrInsertStakeAddress syncEnv UpdateCache nw cred
-        Ledger.StakeRefPtr ptr -> do
-          lift $ DB.queryStakeRefPtr ptr
+        Ledger.StakeRefPtr ptr ->
+          -- In Conway era onwards, Pointer addresses are treated as Enterprise addresses
+          case era of
+            Conway -> pure Nothing
+            Dijkstra -> pure Nothing
+            _ -> lift $ DB.queryStakeRefPtr ptr
         Ledger.StakeRefNull -> pure Nothing
 
 insertMultiAsset ::
