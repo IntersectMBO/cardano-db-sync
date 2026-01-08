@@ -96,6 +96,11 @@ jobs:
 
           # Run tests
           cabal test all -j1
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ failure() }}
+        with:
+          limit-access-to-actor: true
       - name: postgres shutdown
         if: ${{ always() }}
         run: |
