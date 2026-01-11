@@ -35,6 +35,7 @@ library
                         Cardano.Db.Schema.Variants
                         Cardano.Db.Schema.Variants.TxOutAddress
                         Cardano.Db.Schema.Variants.TxOutCore
+                        Cardano.Db.Types
 
   other-modules:        Cardano.Db.Error
                         Cardano.Db.Git.RevFromGit
@@ -76,7 +77,6 @@ library
                         Cardano.Db.Statement.StakeDelegation
                         Cardano.Db.Statement.Types
                         Cardano.Db.Statement.Variants.TxOut
-                        Cardano.Db.Types
 
   build-depends:        aeson
                       , base                            >= 4.14         && < 5
