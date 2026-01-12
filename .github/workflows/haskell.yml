@@ -56,17 +56,9 @@ jobs:
         run: |
           nix-env -f '<nixpkgs>' -iA lmdb
           LMDB_STORE=$(find /nix/store -maxdepth 1 -name '*lmdb*-dev' -type d | head -1)
-          echo "LMDB dev store path: $LMDB_STORE"
           if [ -n "$LMDB_STORE" ]; then
-            ls -la "$LMDB_STORE/lib/pkgconfig/" || echo "No pkgconfig dir"
-            echo "PKG_CONFIG_PATH=${LMDB_STORE}/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+            echo "LMDB_PKGCONFIG=${LMDB_STORE}/lib/pkgconfig" >> $GITHUB_ENV
           fi
-        shell: devx {0}
-      - name: Verify LMDB availability
-        run: |
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
-          pkg-config --exists lmdb && echo "LMDB found by pkg-config" || echo "LMDB NOT found by pkg-config"
-          pkg-config --modversion lmdb || true
         shell: devx {0}
       - name: cache cabal
         uses: actions/cache@v3
@@ -77,11 +69,22 @@ jobs:
           key: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-${{ hashFiles('**/*.cabal', '**/cabal.project', '**/cabal.project.freeze') }}
           restore-keys: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-
       - name: cabal update
-        run: cabal update
+        run: |
+          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          cabal update
       - name: cabal build dependencies
-        run: cabal build all -j --enable-tests --only-dependencies
+        run: |
+          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          cabal build all -j --enable-tests --only-dependencies
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+      #   if: ${{ failure() }}
+      #   with:
+      #     limit-access-to-actor: true
       - name: cabal build
-        run: cabal build all -j --enable-tests
+        run: |
+          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          cabal build all -j --enable-tests
       - name: postgres init
         working-directory:
         run: |
