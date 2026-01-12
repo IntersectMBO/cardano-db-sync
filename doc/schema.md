@@ -953,7 +953,7 @@ The table for the distribution of voting power per DRep per. Currently this has 
 | `hash_id` | integer (64) | The DrepHash table index that this distribution entry has information about. |
 | `amount` | integer (64) | The total amount of voting power this DRep is delegated. |
 | `epoch_no` | word31type | The epoch no this distribution is about. |
-| `active_until` | word31type | The epoch until which this drep is active. TODO: This currently remains null always. |
+| `active_until` | word31type | The epoch until which this drep is active. |
 
 ### `epoch_state`
 
