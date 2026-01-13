@@ -108,6 +108,7 @@ jobs:
             start
       - name: cabal test
         run: |
+          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
           # Create pgpass file
           export PGPASSFILE="${PG_DIR}/pgpass-testing"
           echo "${PG_DIR}:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
