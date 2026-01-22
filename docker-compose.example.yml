@@ -59,7 +59,7 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5
+    image: ghcr.io/intersectmbo/cardano-db-sync:13.7.0.0
     environment:
       - NETWORK=${NETWORK:-mainnet}
       - POSTGRES_HOST=postgres
