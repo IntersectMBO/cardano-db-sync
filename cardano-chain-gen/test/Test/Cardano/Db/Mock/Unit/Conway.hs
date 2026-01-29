@@ -156,6 +156,7 @@ unitTests iom knownMigrations =
         , test "stake address pointers" Stake.stakeAddressPtr
         , test "stake address pointers deregistration" Stake.stakeAddressPtrDereg
         , test "stake address pointers. Use before registering." Stake.stakeAddressPtrUseBefore
+        , test "stake address pointers have NULL stake_address_id in Conway" Stake.stakeAddressPtrNullInConway
         , test "register stake creds" Stake.registerStakeCreds
         , test "register stake creds with shelley disabled" Stake.registerStakeCredsNoShelley
         ]
