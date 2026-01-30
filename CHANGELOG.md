@@ -1,18 +1,16 @@
 # Revision history for cardano-db-sync
 
 ## 13.7.0.0
-
-### Summary
 - Complete migration from Persistent ORM to Hasql for direct PostgreSQL access.
-
-### Performance Improvements
-- 3-4x faster epoch processing: ~30min → ~8min per epoch
-- Improved cache efficiency: Stake address hit rates increased from 57-79% to 89-99%
-- Reduced memory overhead: Eliminated ORM abstraction layer
-
-### Compatibility
-- PostgreSQL schema remains unchanged
-- Existing database instances compatible without migration
+- Improved syncing speed performance and cache efficiency
+- Speed up no ledger migration pr[#1964]
+- Fix duplicate pool_stat entries [#1987]. Any existing duplicate entries will be deleted by the migration
+- Added insert_options "stop_at_block", which stops db-sync at a specified block.
+- DBSync takes less frequent snapshots during syncing (one every 10 epochs).
+- The epoch limit where the above holds can be configured with "snapshot_interval": {"near_tip_epoch": <Int>}
+- Fixed `epoch_stake` missing entries for not dense epoch - affected testnets [#2044]
+- Fixed pointer addresses existing on Conway [#2053]
+- Improved postgres scripts and fixed snapshot restoration [#1935]
 
 ## 13.6.0.5
 - Fix offchain data so it supports files up to 3MB [#1928]
