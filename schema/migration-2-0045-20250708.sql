@@ -13,6 +13,9 @@ BEGIN
       ORDER BY pool_hash_id, epoch_no, id
     );
 
+    -- Set all off_chain_vote_data records as valid
+    UPDATE off_chain_vote_data SET is_valid = true;
+
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
   END IF ;
