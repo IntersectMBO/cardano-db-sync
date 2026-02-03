@@ -585,14 +585,14 @@ insertBulkAddressMaTxOutStmt =
   where
     extractAddressMaTxOutValues ::
       [SVA.MaTxOutAddress] ->
-      ( [Id.MultiAssetId]
-      , [DbWord64]
+      ( [DbWord64]
       , [Id.TxOutAddressId]
+      , [Id.MultiAssetId]
       )
     extractAddressMaTxOutValues xs =
-      ( map SVA.maTxOutAddressIdent xs
-      , map SVA.maTxOutAddressQuantity xs
+      ( map SVA.maTxOutAddressQuantity xs
       , map SVA.maTxOutAddressTxOutId xs
+      , map SVA.maTxOutAddressIdent xs
       )
 
 insertBulkMaTxOutPiped :: [[MaTxOutW]] -> DbM [MaTxOutIdW]
