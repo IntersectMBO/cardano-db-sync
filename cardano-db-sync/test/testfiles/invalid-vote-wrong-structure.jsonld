@@ -1,0 +1,17 @@
+{
+  "title": "Some Random Document",
+  "description": "This is valid JSON but doesn't match CIP-100/119 schema at all",
+  "version": "1.0",
+  "data": {
+    "field1": "value1",
+    "field2": 42,
+    "field3": true,
+    "nested": {
+      "items": [1, 2, 3],
+      "metadata": {
+        "timestamp": "2025-01-01T00:00:00Z"
+      }
+    }
+  },
+  "tags": ["test", "example", "invalid-schema"]
+}

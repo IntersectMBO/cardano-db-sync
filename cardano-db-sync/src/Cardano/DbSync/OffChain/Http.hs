@@ -108,36 +108,46 @@ httpGetOffChainVoteDataSingle vurl metaHash anchorType = do
   let req = httpGetBytes manager request 3000000 3000000 url
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
-  (ocvd, decodedValue, metadataHash, mWarning) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
+  (mocvd, decodedValue, metadataHash, mWarning, isValidJson) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash
       , sovaBytes = respBS
       , sovaJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedValue)
       , sovaContentType = mContentType
-      , sovaOffChainVoteData = ocvd
+      , sovaOffChainVoteData = mocvd
       , sovaWarning = mWarning
+      , sovaIsValidJson = isValidJson
       }
   where
     url = OffChainVoteUrl vurl
 
-parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> DB.AnchorType -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text)
+parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> DB.AnchorType -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Maybe Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text, Bool)
 parseAndValidateVoteData bs lbs metaHash anchorType murl = do
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
+  -- First check if hash matches - this is critical and must fail if mismatch
   (hsh, mWarning) <- case unVoteMetaHash <$> metaHash of
     Just expectedMetaHashBs
       | metadataHash /= expectedMetaHashBs ->
           left $ OCFErrHashMismatch murl (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
     _ -> pure (metadataHash, Nothing)
-  decodedValue <-
+  -- Hash matches, now try to decode as generic JSON
+  -- If this fails, we still want to store the data with is_valid = NULL and an error message
+  (decodedValue, isValidJson) <-
     case Aeson.eitherDecode' @Aeson.Value lbs of
-      Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
-      Right res -> pure res
-  ocvd <-
-    case Vote.eitherDecodeOffChainVoteData lbs anchorType of
-      Left err -> left $ OCFErrJsonDecodeFail murl (Text.pack err)
-      Right res -> pure res
-  pure (ocvd, decodedValue, hsh, mWarning)
+      Left err ->
+        -- Not valid JSON - create an error message object
+        pure (Aeson.object [("error", Aeson.String "Content is not valid JSON. See bytes column for raw data."), ("parse_error", Aeson.String $ Text.pack err)], False)
+      Right res -> pure (res, True)
+  -- Try to decode into strongly-typed vote data structure (only if JSON was valid)
+  -- If this fails (e.g., doNotList is string instead of bool), we still store with is_valid = false
+  let ocvd =
+        if isValidJson
+          then case Vote.eitherDecodeOffChainVoteData lbs anchorType of
+            Left _err -> Nothing -- Don't fail, just return Nothing (will set is_valid = false)
+            Right res -> Just res
+          else Nothing -- Not valid JSON, so can't parse as CIP
+  pure (ocvd, decodedValue, hsh, mWarning, isValidJson)
 
 httpGetBytes ::
   Http.Manager ->
