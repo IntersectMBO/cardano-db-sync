@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## 13.7.0.0
+## 13.7.0.1
 - Complete migration from Persistent ORM to Hasql for direct PostgreSQL access.
 - Improved syncing speed performance and cache efficiency
 - Speed up no ledger migration pr[#1964]
@@ -11,6 +11,8 @@
 - Fixed `epoch_stake` missing entries for not dense epoch - affected testnets [#2044]
 - Fixed pointer addresses existing on Conway [#2053]
 - Improved postgres scripts and fixed snapshot restoration [#1935]
+- `off_chain_vote_data` now accepts data as long as the hash matches, even if they don't parse properly [#2005]
+- Fixed `off_chain_vote_data.is_valid` to not be null always. Existing nulls turned to true through a migration.
 
 ## 13.6.0.5
 - Fix offchain data so it supports files up to 3MB [#1928]
