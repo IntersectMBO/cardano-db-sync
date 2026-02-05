@@ -54,7 +54,7 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: ghcr.io/intersectmbo/cardano-db-sync:13.7.0.0
+    image: ghcr.io/intersectmbo/cardano-db-sync:13.7.0.1
     environment:
       - DB_SYNC_CONFIG=${DB_SYNC_CONFIG:-}
       - DISABLE_LEDGER=${DISABLE_LEDGER}

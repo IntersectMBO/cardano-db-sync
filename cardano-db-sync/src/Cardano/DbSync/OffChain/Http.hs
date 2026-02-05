@@ -126,11 +126,11 @@ parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -
 parseAndValidateVoteData bs lbs metaHash anchorType murl = do
   let metadataHash = Crypto.digest (Proxy :: Proxy Crypto.Blake2b_256) bs
   -- First check if hash matches - this is critical and must fail if mismatch
-  (hsh, mWarning) <- case unVoteMetaHash <$> metaHash of
+  case unVoteMetaHash <$> metaHash of
     Just expectedMetaHashBs
       | metadataHash /= expectedMetaHashBs ->
           left $ OCFErrHashMismatch murl (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
-    _ -> pure (metadataHash, Nothing)
+    _ -> pure ()
   -- Hash matches, now try to decode as generic JSON
   -- If this fails, we still want to store the data with is_valid = NULL and an error message
   (decodedValue, isValidJson) <-
@@ -141,13 +141,13 @@ parseAndValidateVoteData bs lbs metaHash anchorType murl = do
       Right res -> pure (res, True)
   -- Try to decode into strongly-typed vote data structure (only if JSON was valid)
   -- If this fails (e.g., doNotList is string instead of bool), we still store with is_valid = false
-  let ocvd =
+  let (ocvd, mWarning) =
         if isValidJson
           then case Vote.eitherDecodeOffChainVoteData lbs anchorType of
-            Left _err -> Nothing -- Don't fail, just return Nothing (will set is_valid = false)
-            Right res -> Just res
-          else Nothing -- Not valid JSON, so can't parse as CIP
-  pure (ocvd, decodedValue, hsh, mWarning, isValidJson)
+            Left err -> (Nothing, Just $ Text.pack err)
+            Right res -> (Just res, Nothing)
+          else (Nothing, Nothing) -- Not valid JSON, so can't parse as CIP
+  pure (ocvd, decodedValue, metadataHash, mWarning, isValidJson)
 
 httpGetBytes ::
   Http.Manager ->

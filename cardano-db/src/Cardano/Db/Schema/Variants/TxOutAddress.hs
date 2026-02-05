@@ -202,9 +202,9 @@ instance DbInfo MaTxOutAddress where
   columnNames _ = NE.fromList ["quantity", "tx_out_id", "ident"]
   unnestParamTypes _ = [("ident", "bigint[]"), ("quantity", "numeric[]"), ("tx_out_id", "bigint[]")]
 
-maTxOutAddressBulkEncoder :: E.Params ([Id.MultiAssetId], [DbWord64], [Id.TxOutAddressId])
+maTxOutAddressBulkEncoder :: E.Params ([DbWord64], [Id.TxOutAddressId], [Id.MultiAssetId])
 maTxOutAddressBulkEncoder =
   contrazip3
-    (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8) -- maTxOutAddressIdent
     (bulkEncoder $ E.nonNullable dbWord64ValueEncoder) -- maTxOutAddressQuantity
     (bulkEncoder $ E.nonNullable $ Id.getTxOutAddressId >$< E.int8) -- maTxOutAddressTxOutId
+    (bulkEncoder $ E.nonNullable $ Id.getMultiAssetId >$< E.int8) -- maTxOutMultiAssetIdent
