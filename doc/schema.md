@@ -775,7 +775,7 @@ A table for all committee credentials hot or cold
 
 ### `delegation_vote`
 
-A table containing delegations from a stake address to a stake pool. New in 13.2-Conway.
+A table containing delegations from a stake address to a drep. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -784,7 +784,7 @@ A table containing delegations from a stake address to a stake pool. New in 13.2
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this delegation within the certificates of this transaction. |
-| `drep_hash_id` | integer (64) | The DrepHash table index for the pool being delegated to. |
+| `drep_hash_id` | integer (64) | The DrepHash table index for the drep being delegated to. |
 | `tx_id` | integer (64) | The Tx table index of the transaction that contained this delegation. |
 | `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. TODO: can vote redeemers index these delegations? |
 
