@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -eu
+
+# compute runtime checksum deterministically (sorted file list)
+runtime_hash=$(cd /schema && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')
+
+# baked checksum will be substituted at build time
+if [ "$runtime_hash" != "@SCHEMA_HASH@" ]; then
+  echo "schema checksum mismatch: runtime=$runtime_hash baked=@SCHEMA_HASH@" >&2
+  exit 1
+fi
+
+exec /usr/local/bin/cardano-db-sync --schema-dir /schema "$@"
