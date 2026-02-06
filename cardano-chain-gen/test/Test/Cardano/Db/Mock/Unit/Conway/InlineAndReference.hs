@@ -324,10 +324,8 @@ spendCollateralOutputRollback =
     -- Create and spend collateral
     mkSpendCollOutput interpreter mockServer dbSync 0
 
-    -- Rollback past action above
-    Api.rollbackTo interpreter mockServer (blockPoint blk)
-    -- Forge and submit another block
-    void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
+    -- Rollback past action above (forges a block to establish new thread)
+    void $ Api.rollbackTo interpreter mockServer (blockPoint blk)
     -- Create and spend collateral
     mkSpendCollOutput interpreter mockServer dbSync 1
   where
