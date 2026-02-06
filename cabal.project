@@ -74,6 +74,8 @@ constraints:
   -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
+  , ouroboros-network-protocols == 0.15.0.0
+  , typed-protocols == 1.0.0.0
 
 if impl (ghc >= 9.12)
   allow-newer:
