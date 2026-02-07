@@ -62,7 +62,7 @@ import Prelude (fail, id)
 --------------------------------------------------------------------------
 
 data HasLedgerEnv = HasLedgerEnv
-  { leTrace :: Trace IO Text
+  { leTrace :: !(Trace IO Text)
   , leUseLedger :: !Bool
   , leHasRewards :: !Bool
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
@@ -196,8 +196,8 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
             newCommitteeMembers
             newQuorum
 
-newtype LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
+data LedgerDB = LedgerDB
+  { ledgerDbCheckpoints :: !(AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState)
   }
 
 instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where

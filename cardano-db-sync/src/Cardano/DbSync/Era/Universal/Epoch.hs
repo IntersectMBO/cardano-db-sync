@@ -39,6 +39,7 @@ import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
+import System.Mem (performMinorGC)
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
@@ -222,6 +223,8 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
 
   -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
   lift $ DB.insertBulkEpochStakePiped dbConstraintEpochStake chunckDbStakes
+
+  liftIO performMinorGC
   where
     mkStake ::
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
@@ -252,6 +255,8 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing dbRewards
   -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
   lift $ DB.insertBulkRewardsPiped dbConstraintRewards chunckDbRewards
+
+  liftIO performMinorGC
   where
     mkRewards ::
       (StakeCred, Set Generic.Reward) ->
