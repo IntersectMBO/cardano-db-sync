@@ -15,7 +15,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
-import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -149,13 +148,12 @@ insertBulkTxOutPiped disInOut chunks =
           concat
             <$> runSession
               mkDbCallStack
-              ( HsqlSes.pipeline $
-                  traverse
-                    ( \chunk ->
-                        let coreTxOuts = map extractCoreTxOut chunk
-                         in HsqlP.statement coreTxOuts insertBulkCoreTxOutStmt
-                    )
-                    chunks
+              ( traverse
+                  ( \chunk ->
+                      let coreTxOuts = map extractCoreTxOut chunk
+                       in HsqlSes.statement coreTxOuts insertBulkCoreTxOutStmt
+                  )
+                  chunks
               )
         pure $ map VCTxOutIdW coreIds
       Just (VATxOutW _ _) -> do
@@ -163,13 +161,12 @@ insertBulkTxOutPiped disInOut chunks =
           concat
             <$> runSession
               mkDbCallStack
-              ( HsqlSes.pipeline $
-                  traverse
-                    ( \chunk ->
-                        let variantTxOuts = map extractVariantTxOut chunk
-                         in HsqlP.statement variantTxOuts insertBulkAddressTxOutStmt
-                    )
-                    chunks
+              ( traverse
+                  ( \chunk ->
+                      let variantTxOuts = map extractVariantTxOut chunk
+                       in HsqlSes.statement variantTxOuts insertBulkAddressTxOutStmt
+                  )
+                  chunks
               )
         pure $ map VATxOutIdW addressIds
   where
@@ -605,13 +602,12 @@ insertBulkMaTxOutPiped chunks =
         concat
           <$> runSession
             mkDbCallStack
-            ( HsqlSes.pipeline $
-                traverse
-                  ( \chunk ->
-                      let coreMaTxOuts = map extractCoreMaTxOut chunk
-                       in HsqlP.statement coreMaTxOuts insertBulkCoreMaTxOutStmt
-                  )
-                  chunks
+            ( traverse
+                ( \chunk ->
+                    let coreMaTxOuts = map extractCoreMaTxOut chunk
+                     in HsqlSes.statement coreMaTxOuts insertBulkCoreMaTxOutStmt
+                )
+                chunks
             )
       pure $ map CMaTxOutIdW coreIds
     Just (VMaTxOutW _) -> do
@@ -619,13 +615,12 @@ insertBulkMaTxOutPiped chunks =
         concat
           <$> runSession
             mkDbCallStack
-            ( HsqlSes.pipeline $
-                traverse
-                  ( \chunk ->
-                      let addressMaTxOuts = map extractVariantMaTxOut chunk
-                       in HsqlP.statement addressMaTxOuts insertBulkAddressMaTxOutStmt
-                  )
-                  chunks
+            ( traverse
+                ( \chunk ->
+                    let addressMaTxOuts = map extractVariantMaTxOut chunk
+                     in HsqlSes.statement addressMaTxOuts insertBulkAddressMaTxOutStmt
+                )
+                chunks
             )
       pure $ map VMaTxOutIdW addressIds
   where
