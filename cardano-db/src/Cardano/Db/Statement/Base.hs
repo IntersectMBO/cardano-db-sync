@@ -24,7 +24,6 @@ import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
-import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -982,8 +981,7 @@ insertBulkTxMetadataStmt removeJsonb =
 insertBulkTxMetadataPiped :: HasCallStack => Bool -> [[SCB.TxMetadata]] -> DbM [Id.TxMetadataId]
 insertBulkTxMetadataPiped removeJsonb txMetaChunks =
   runSession mkDbCallStack $
-    HsqlSes.pipeline $
-      concat <$> traverse (\chunk -> HsqlP.statement chunk (insertBulkTxMetadataStmt removeJsonb)) txMetaChunks
+    concat <$> traverse (\chunk -> HsqlSes.statement chunk (insertBulkTxMetadataStmt removeJsonb)) txMetaChunks
 
 --------------------------------------------------------------------------------
 -- CollateralTxIn
@@ -1372,9 +1370,8 @@ insertBulkTxInPiped txInChunks =
   concat
     <$> runSession
       mkDbCallStack
-      ( HsqlSes.pipeline $
-          for txInChunks $ \chunk ->
-            HsqlP.statement chunk insertBulkTxInStmt
+      ( for txInChunks $ \chunk ->
+          HsqlSes.statement chunk insertBulkTxInStmt
       )
 
 --------------------------------------------------------------------------------
