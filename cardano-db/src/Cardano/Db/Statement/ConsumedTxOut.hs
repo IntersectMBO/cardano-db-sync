@@ -37,7 +37,6 @@ import Cardano.Db.Statement.Base (insertExtraMigration, queryAllExtraMigrations)
 import Cardano.Db.Statement.Function.Core (bulkEncoder, runSession)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (DbM, ExtraMigration (..), MigrationValues (..), PruneConsumeMigration (..), processMigrationValues)
-import qualified Hasql.Pipeline as HsqlP
 
 data ConsumedTriplet = ConsumedTriplet
   { ctTxOutTxId :: !Id.TxId -- The txId of the txOut
@@ -542,14 +541,12 @@ updateConsumedByTxHashPiped txOutVariantType consumedData = do
       TxOutVariantCore -> do
         !_result <-
           runSession mkDbCallStack $
-            HsqlSes.pipeline $
-              traverse (\chunk -> HsqlP.statement chunk (updateConsumedByTxHashBulkStmt @SVC.TxOutCore)) consumedData
+            traverse (\chunk -> HsqlSes.statement chunk (updateConsumedByTxHashBulkStmt @SVC.TxOutCore)) consumedData
         pure ()
       TxOutVariantAddress -> do
         !_result <-
           runSession mkDbCallStack $
-            HsqlSes.pipeline $
-              traverse (\chunk -> HsqlP.statement chunk (updateConsumedByTxHashBulkStmt @SVA.TxOutAddress)) consumedData
+            traverse (\chunk -> HsqlSes.statement chunk (updateConsumedByTxHashBulkStmt @SVA.TxOutAddress)) consumedData
         pure ()
 
 updateConsumedByTxHashBulkStmt ::
@@ -675,17 +672,16 @@ migrateTxOutDbTool bulkSize txOutVariantType = do
 
 --------------------------------------------------------------------------------
 
--- | Update a list of TxOut consumed by TxId mappings using bulked statemnts in a pipeline
+-- | Update a list of TxOut consumed by TxId mappings using bulked statements
 updateListTxOutConsumedByTxIdBP :: [[(TxOutIdW, Id.TxId)]] -> DbM ()
 updateListTxOutConsumedByTxIdBP chunks = do
   unless (null chunks) $ do
     !_results <-
       runSession mkDbCallStack $
-        HsqlSes.pipeline $
-          traverse executeUpdate chunks
+        traverse executeUpdate chunks
     pure ()
   where
-    executeUpdate :: [(TxOutIdW, Id.TxId)] -> HsqlP.Pipeline ()
+    executeUpdate :: [(TxOutIdW, Id.TxId)] -> HsqlSes.Session ()
     executeUpdate chunk =
       case chunk of
         [] -> pure () -- Empty chunk, do nothing
@@ -693,12 +689,12 @@ updateListTxOutConsumedByTxIdBP chunks = do
           -- All are Core type, extract Core IDs
           let coreChunk = [(coreId, txId) | (VCTxOutIdW coreId, txId) <- chunk]
               (coreIds, txIds) = unzip coreChunk
-           in HsqlP.statement (coreIds, txIds) updateBulkConsumedByTxIdCore
+           in HsqlSes.statement (coreIds, txIds) updateBulkConsumedByTxIdCore
         ((VATxOutIdW _, _) : _) ->
           -- All are Address type, extract Address IDs
           let addressChunk = [(addrId, txId) | (VATxOutIdW addrId, txId) <- chunk]
               (addrIds, txIds) = unzip addressChunk
-           in HsqlP.statement (addrIds, txIds) updateBulkConsumedByTxIdAddress
+           in HsqlSes.statement (addrIds, txIds) updateBulkConsumedByTxIdAddress
 
 updateBulkConsumedByTxId ::
   forall a b.
