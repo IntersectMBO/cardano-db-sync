@@ -260,6 +260,7 @@ unitTests iom knownMigrations =
         , test "treasury withdrawal" Governance.treasuryWithdrawal
         , test "parameter change" Governance.parameterChange
         , test "hard fork" Governance.hardFork
+        , test "hard fork post block" Governance.hardForkPostBlock
         , test "rollback hardfork" Governance.rollbackHardFork
         , test "info action" Governance.infoAction
         ]
