@@ -14,7 +14,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
-import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -260,8 +259,7 @@ insertBulkDrepDistrStmt =
 insertBulkDrepDistrPiped :: HasCallStack => [[SGV.DrepDistr]] -> DbM ()
 insertBulkDrepDistrPiped drepDistrChunks =
   runSession mkDbCallStack $
-    HsqlSes.pipeline $
-      traverse_ (`HsqlP.statement` insertBulkDrepDistrStmt) drepDistrChunks
+    traverse_ (`HsqlSes.statement` insertBulkDrepDistrStmt) drepDistrChunks
 
 -- | QUERY
 queryDrepHashSpecialStmt ::
@@ -504,8 +502,7 @@ insertBulkTreasuryWithdrawalStmt =
 insertBulkTreasuryWithdrawal :: HasCallStack => [[SGV.TreasuryWithdrawal]] -> DbM ()
 insertBulkTreasuryWithdrawal treasuryWithdrawalChunks =
   runSession mkDbCallStack $
-    HsqlSes.pipeline $
-      traverse_ (`HsqlP.statement` insertBulkTreasuryWithdrawalStmt) treasuryWithdrawalChunks
+    traverse_ (`HsqlSes.statement` insertBulkTreasuryWithdrawalStmt) treasuryWithdrawalChunks
 
 --------------------------------------------------------------------------------
 -- Voting

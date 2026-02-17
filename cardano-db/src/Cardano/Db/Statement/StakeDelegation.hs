@@ -98,8 +98,7 @@ insertBulkEpochStake dbConstraintEpochStake epochStakes =
 insertBulkEpochStakePiped :: Bool -> [[SS.EpochStake]] -> DbM ()
 insertBulkEpochStakePiped dbConstraintEpochStake epochStakeChunks =
   runSession mkDbCallStack $
-    HsqlSes.pipeline $
-      traverse_ (\chunk -> HsqlP.statement chunk (insertBulkEpochStakeStmt dbConstraintEpochStake)) epochStakeChunks
+    traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkEpochStakeStmt dbConstraintEpochStake)) epochStakeChunks
 
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -189,8 +188,7 @@ insertBulkRewards dbConstraintRewards rewards =
 insertBulkRewardsPiped :: Bool -> [[SS.Reward]] -> DbM ()
 insertBulkRewardsPiped dbConstraintRewards rewardChunks =
   runSession mkDbCallStack $
-    HsqlSes.pipeline $
-      traverse_ (\chunk -> HsqlP.statement chunk (insertBulkRewardsStmt dbConstraintRewards)) rewardChunks
+    traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkRewardsStmt dbConstraintRewards)) rewardChunks
 
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -363,8 +361,7 @@ insertBulkRewardRests rewardRests =
 insertBulkRewardRestsPiped :: [[SS.RewardRest]] -> DbM ()
 insertBulkRewardRestsPiped rewardRestChunks =
   runSession mkDbCallStack $
-    HsqlSes.pipeline $
-      traverse_ (`HsqlP.statement` insertBulkRewardRestsStmt) rewardRestChunks
+    traverse_ (`HsqlSes.statement` insertBulkRewardRestsStmt) rewardRestChunks
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: DbM Word64
