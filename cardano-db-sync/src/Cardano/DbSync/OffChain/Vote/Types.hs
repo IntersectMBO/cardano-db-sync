@@ -284,8 +284,9 @@ instance FromJSON Image where
         | (_, tb) <- Text.break (== '/') ctb
         , Text.isPrefixOf "/" tb
         , (_, b) <- Text.break (== ';') tb
-        , Just imageData <- Text.stripPrefix ";base64," b ->
-            pure $ Image (TextValue imageData) Nothing
+        , Just _ <- Text.stripPrefix ";base64," b ->
+            -- Store the full data URI including prefix
+            pure $ Image curl Nothing
       _ -> fromImageUrl <$> parseJSON v
     where
       withObjectV v' s p = withObject s p v'

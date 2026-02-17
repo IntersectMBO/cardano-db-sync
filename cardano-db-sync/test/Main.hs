@@ -4,7 +4,7 @@ import qualified Cardano.DbSync.ApiTest as Api
 import qualified Cardano.DbSync.Config.TypesTest as Types
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest as ScriptData
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptTest as Script
-import qualified Cardano.DbSync.OffChain.VoteTest as VoteTest
+import qualified Cardano.DbSync.OffChain.Vote.TypesTest as VoteTypes
 import qualified Cardano.DbSync.Util.AddressTest as Address
 import qualified Cardano.DbSync.Util.Bech32Test as Bech32
 import qualified Cardano.DbSync.Util.CborTest as Cbor
@@ -24,5 +24,5 @@ main =
     , DbSync.tests
     , Types.tests
     , Api.tests
-    , VoteTest.tests
+    , VoteTypes.tests
     ]
