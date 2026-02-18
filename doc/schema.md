@@ -775,7 +775,7 @@ A table for all committee credentials hot or cold
 
 ### `delegation_vote`
 
-A table containing delegations from a stake address to a stake pool. New in 13.2-Conway.
+A table containing delegations from a stake address to a drep. New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -784,7 +784,7 @@ A table containing delegations from a stake address to a stake pool. New in 13.2
 | `id` | integer (64) |  |
 | `addr_id` | integer (64) | The StakeAddress table index for the stake address. |
 | `cert_index` | integer (32) | The index of this delegation within the certificates of this transaction. |
-| `drep_hash_id` | integer (64) | The DrepHash table index for the pool being delegated to. |
+| `drep_hash_id` | integer (64) | The DrepHash table index for the drep being delegated to. |
 | `tx_id` | integer (64) | The Tx table index of the transaction that contained this delegation. |
 | `redeemer_id` | integer (64) | The Redeemer table index that is related with this certificate. TODO: can vote redeemers index these delegations? |
 
@@ -953,7 +953,7 @@ The table for the distribution of voting power per DRep per. Currently this has 
 | `hash_id` | integer (64) | The DrepHash table index that this distribution entry has information about. |
 | `amount` | integer (64) | The total amount of voting power this DRep is delegated. |
 | `epoch_no` | word31type | The epoch no this distribution is about. |
-| `active_until` | word31type | The epoch until which this drep is active. TODO: This currently remains null always. |
+| `active_until` | word31type | The epoch until which this drep is active. |
 
 ### `epoch_state`
 
@@ -1014,7 +1014,14 @@ A table containing pool offchain data fetch errors.
 
 ### `off_chain_vote_data`
 
-The table with the offchain metadata related to Vote Anchors. It accepts metadata in a more lenient way than what's decribed in CIP-100. New in 13.2-Conway.
+Stores off-chain voting anchor data with validation status. The table accepts metadata in a more lenient way than what's described in CIP-100. Only data with hash matches are stored here; hash mismatches are stored in off_chain_vote_fetch_error for retry.
+
+The is_valid column indicates the parsing status:
+  • TRUE: Content is valid JSON AND conforms to CIP-100 schema. All related fields (language, comment) and related tables (off_chain_vote_gov_action_data, off_chain_vote_drep_data, off_chain_vote_author, off_chain_vote_reference, off_chain_vote_external_update) are populated.
+  • FALSE: Hash matches and content is valid JSON BUT does not conform to CIP-100 schema. The json column contains the actual JSON, but language/comment fields and related tables remain empty.
+  • NULL: Hash matches but content is not valid JSON at all. The json column contains an error message, bytes column has raw data. Language/comment fields and related tables remain empty.
+
+New in 13.2-Conway.
 
 * Primary Id: `id`
 
@@ -1028,7 +1035,7 @@ The table with the offchain metadata related to Vote Anchors. It accepts metadat
 | `json` | jsonb | The payload as JSON. |
 | `bytes` | bytea | The raw bytes of the payload. |
 | `warning` | string | A warning that occured while validating the metadata. |
-| `is_valid` | boolean | False if the data is found invalid. db-sync leaves this field null since it normally populates off_chain_vote_fetch_error for invalid data. It can be used manually to mark some metadata invalid by clients. |
+| `is_valid` | boolean | Indicates validation status: TRUE for valid JSON conforming to CIP-100 schema, FALSE for valid JSON not conforming to CIP-100 schema, NULL for content that is not valid JSON at all. |
 
 ### `off_chain_vote_gov_action_data`
 

@@ -15,7 +15,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
-import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Hasql.Statement as HsqlStmt
 
@@ -149,13 +148,12 @@ insertBulkTxOutPiped disInOut chunks =
           concat
             <$> runSession
               mkDbCallStack
-              ( HsqlSes.pipeline $
-                  traverse
-                    ( \chunk ->
-                        let coreTxOuts = map extractCoreTxOut chunk
-                         in HsqlP.statement coreTxOuts insertBulkCoreTxOutStmt
-                    )
-                    chunks
+              ( traverse
+                  ( \chunk ->
+                      let coreTxOuts = map extractCoreTxOut chunk
+                       in HsqlSes.statement coreTxOuts insertBulkCoreTxOutStmt
+                  )
+                  chunks
               )
         pure $ map VCTxOutIdW coreIds
       Just (VATxOutW _ _) -> do
@@ -163,13 +161,12 @@ insertBulkTxOutPiped disInOut chunks =
           concat
             <$> runSession
               mkDbCallStack
-              ( HsqlSes.pipeline $
-                  traverse
-                    ( \chunk ->
-                        let variantTxOuts = map extractVariantTxOut chunk
-                         in HsqlP.statement variantTxOuts insertBulkAddressTxOutStmt
-                    )
-                    chunks
+              ( traverse
+                  ( \chunk ->
+                      let variantTxOuts = map extractVariantTxOut chunk
+                       in HsqlSes.statement variantTxOuts insertBulkAddressTxOutStmt
+                  )
+                  chunks
               )
         pure $ map VATxOutIdW addressIds
   where
@@ -585,14 +582,14 @@ insertBulkAddressMaTxOutStmt =
   where
     extractAddressMaTxOutValues ::
       [SVA.MaTxOutAddress] ->
-      ( [Id.MultiAssetId]
-      , [DbWord64]
+      ( [DbWord64]
       , [Id.TxOutAddressId]
+      , [Id.MultiAssetId]
       )
     extractAddressMaTxOutValues xs =
-      ( map SVA.maTxOutAddressIdent xs
-      , map SVA.maTxOutAddressQuantity xs
+      ( map SVA.maTxOutAddressQuantity xs
       , map SVA.maTxOutAddressTxOutId xs
+      , map SVA.maTxOutAddressIdent xs
       )
 
 insertBulkMaTxOutPiped :: [[MaTxOutW]] -> DbM [MaTxOutIdW]
@@ -605,13 +602,12 @@ insertBulkMaTxOutPiped chunks =
         concat
           <$> runSession
             mkDbCallStack
-            ( HsqlSes.pipeline $
-                traverse
-                  ( \chunk ->
-                      let coreMaTxOuts = map extractCoreMaTxOut chunk
-                       in HsqlP.statement coreMaTxOuts insertBulkCoreMaTxOutStmt
-                  )
-                  chunks
+            ( traverse
+                ( \chunk ->
+                    let coreMaTxOuts = map extractCoreMaTxOut chunk
+                     in HsqlSes.statement coreMaTxOuts insertBulkCoreMaTxOutStmt
+                )
+                chunks
             )
       pure $ map CMaTxOutIdW coreIds
     Just (VMaTxOutW _) -> do
@@ -619,13 +615,12 @@ insertBulkMaTxOutPiped chunks =
         concat
           <$> runSession
             mkDbCallStack
-            ( HsqlSes.pipeline $
-                traverse
-                  ( \chunk ->
-                      let addressMaTxOuts = map extractVariantMaTxOut chunk
-                       in HsqlP.statement addressMaTxOuts insertBulkAddressMaTxOutStmt
-                  )
-                  chunks
+            ( traverse
+                ( \chunk ->
+                    let addressMaTxOuts = map extractVariantMaTxOut chunk
+                     in HsqlSes.statement addressMaTxOuts insertBulkAddressMaTxOutStmt
+                )
+                chunks
             )
       pure $ map VMaTxOutIdW addressIds
   where
@@ -800,6 +795,53 @@ setNullTxOutConsumedBatchStmt =
     encoder = Id.idEncoder Id.getTxId
     decoder = HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable HsqlD.int8))
 
+--------------------------------------------------------------------------------
+-- Query to count tx_outs with NULL stake_address_id for Pointer addresses
+-- Used to verify that Pointer addresses in Conway era don't have stake keys
+--------------------------------------------------------------------------------
+queryPtrTxOutNullStakeCoreStmt :: HsqlStmt.Statement () Word64
+queryPtrTxOutNullStakeCoreStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*) FROM tx_out"
+          , " WHERE stake_address_id IS NULL"
+          , " AND address LIKE 'addr_test1g%'" -- Pointer address prefix for testnet
+          ]
+    decoder =
+      HsqlD.singleRow $
+        fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+queryPtrTxOutNullStakeAddressStmt :: HsqlStmt.Statement () Word64
+queryPtrTxOutNullStakeAddressStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT COUNT(*) FROM tx_out"
+          , " INNER JOIN address ON tx_out.address_id = address.id"
+          , " WHERE tx_out.stake_address_id IS NULL"
+          , " AND address.address LIKE 'addr_test1g%'" -- Pointer address prefix for testnet
+          ]
+    decoder =
+      HsqlD.singleRow $
+        fromIntegral <$> HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+-- | Count tx_outs with NULL stake_address_id for Pointer addresses (Conway era check)
+queryPtrTxOutNullStake :: TxOutVariantType -> DbM Word64
+queryPtrTxOutNullStake txOutVariantType =
+  case txOutVariantType of
+    TxOutVariantCore ->
+      runSession mkDbCallStack $
+        HsqlSes.statement () queryPtrTxOutNullStakeCoreStmt
+    TxOutVariantAddress ->
+      runSession mkDbCallStack $
+        HsqlSes.statement () queryPtrTxOutNullStakeAddressStmt
+
+--------------------------------------------------------------------------------
 -- Main function to set NULL for tx_out consumed_by_tx_id
 querySetNullTxOut ::
   TxOutVariantType ->

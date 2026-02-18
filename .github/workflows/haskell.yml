@@ -76,11 +76,6 @@ jobs:
         run: |
           export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
           cabal build all -j --enable-tests --only-dependencies
-      # - name: Setup tmate session
-      #   uses: mxschmitt/action-tmate@v3
-      #   if: ${{ failure() }}
-      #   with:
-      #     limit-access-to-actor: true
       - name: cabal build
         run: |
           export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}

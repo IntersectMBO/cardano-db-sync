@@ -56,6 +56,7 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Util (safeDecodeToJson)
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..), getGovExpiresAt, lookupDepositsMap)
+import Cardano.DbSync.Types (BlockEra)
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Cbor (serialiseTxMetadataToCbor)
 
@@ -72,8 +73,9 @@ insertTx ::
   Word64 ->
   Generic.Tx ->
   BlockGroupedData ->
+  BlockEra ->
   ExceptT SyncNodeError DB.DbM BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped = do
+insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped era = do
   let !txHash = Generic.txHash tx
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
@@ -140,7 +142,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
 
   if not (Generic.txValidContract tx)
     then do
-      !txOutsGrouped <- mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (\txOut -> insertTxOut syncEnv iopts (txId, txHash) txOut era) (Generic.txOutputs tx)
 
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
@@ -149,7 +151,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
-      !txOutsGrouped <- mapM (insertTxOut syncEnv iopts (txId, txHash)) (Generic.txOutputs tx)
+      !txOutsGrouped <- mapM (\txOut -> insertTxOut syncEnv iopts (txId, txHash) txOut era) (Generic.txOutputs tx)
 
       !redeemers <-
         Map.fromList
@@ -161,7 +163,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertDatum syncEnv txId) (Generic.txData tx)
         mapM_ (insertCollateralTxIn syncEnv tracer txId) (Generic.txCollateralInputs tx)
         mapM_ (insertReferenceTxIn syncEnv tracer txId) (Generic.txReferenceInputs tx)
-        mapM_ (insertCollateralTxOut syncEnv iopts (txId, txHash)) (Generic.txCollateralOutputs tx)
+        mapM_ (\txOut -> insertCollateralTxOut syncEnv iopts (txId, txHash) txOut era) (Generic.txCollateralOutputs tx)
 
       txMetadata <-
         whenFalseMempty (ioMetadata iopts) $
@@ -213,9 +215,10 @@ insertTxOut ::
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
+  BlockEra ->
   ExceptT SyncNodeError DB.DbM (ExtendedTxOut, [MissingMaTxOut])
-insertTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) = do
-  mSaId <- insertStakeAddressRefIfMissing syncEnv addr
+insertTxOut syncEnv iopts (txId, txHash) (Generic.TxOut index addr value maMap mScript dt) era = do
+  mSaId <- insertStakeAddressRefIfMissing syncEnv addr era
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $
@@ -387,9 +390,10 @@ insertCollateralTxOut ::
   InsertOptions ->
   (DB.TxId, ByteString) ->
   Generic.TxOut ->
+  BlockEra ->
   ExceptT SyncNodeError DB.DbM ()
-insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) = do
-  mSaId <- insertStakeAddressRefIfMissing syncEnv addr
+insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr value maMap mScript dt) era = do
+  mSaId <- insertStakeAddressRefIfMissing syncEnv addr era
   mDatumId <-
     whenFalseEmpty (ioPlutusExtra iopts) Nothing $
       Generic.whenInlineDatum dt $

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix with good defaults
-        uses: input-output-hk/install-nix-action@v21
+        uses: input-output-hk/install-nix-action@v31
         with:
           extra_nix_config: |
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
@@ -27,9 +27,6 @@ jobs:
             allow-import-from-derivation = true
             accept-flake-config = true
           nix_path: nixpkgs=channel:nixos-unstable
-          # cardano-parts requires nix >= 2.17.0; We can remove this after the next release
-          # to install-nix-action (v23)
-          install_url: https://releases.nixos.org/nix/nix-2.17.0/install
 
       - name: Checkout repository
         uses: actions/checkout@v3

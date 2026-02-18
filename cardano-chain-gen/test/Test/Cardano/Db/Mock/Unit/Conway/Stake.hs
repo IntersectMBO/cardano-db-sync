@@ -10,6 +10,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Stake (
   stakeAddressPtr,
   stakeAddressPtrDereg,
   stakeAddressPtrUseBefore,
+  stakeAddressPtrNullInConway,
   registerStakeCreds,
   registerStakeCredsNoShelley,
 
@@ -37,7 +38,7 @@ import Ouroboros.Network.Block (blockSlot)
 import Test.Cardano.Db.Mock.Config
 import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
-import Test.Tasty.HUnit (Assertion ())
+import Test.Tasty.HUnit (Assertion (), assertBool)
 import Prelude ()
 
 registrationTx :: IOManager -> [(Text, Text)] -> Assertion
@@ -228,6 +229,43 @@ stakeAddressPtrUseBefore =
     assertCertCounts dbSync (1, 0, 0, 0)
   where
     testLabel = "conwayStakeAddressPtrUseBefore"
+
+-- | Test that Pointer addresses in Conway era have NULL stake_address_id
+-- This verifies the fix for issue #2051: Pointer addresses in Conway era
+-- should be treated as Enterprise addresses with no stake key association
+stakeAddressPtrNullInConway :: IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtrNullInConway =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    -- Forge a block with a stake registration cert
+    blk <-
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkSimpleDCertTx [(StakeIndexNew 1, Conway.mkRegTxCert SNothing)]
+
+    -- Forge a block with a payment to a Pointer address
+    -- The pointer references the stake registration certificate we just created
+    let ptr = Ptr (unsafeToSlotNo32 $ blockSlot blk) (TxIx 0) (CertIx 0)
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOAddressNewWithPtr 0 ptr) 20_000 20_000 0
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync 2
+
+    -- Get the tx_out variant type for queries
+    let txOutVariantType = txOutVariantTypeFromConfig dbSync
+
+    -- Query for Pointer address tx_outs with NULL stake_address_id
+    -- In Conway era, Pointer addresses should NOT have stake_address_id populated
+    ptrCount <- runQuery dbSync $ DB.queryPtrTxOutNullStake txOutVariantType
+
+    -- Assert that we have at least one Pointer address with NULL stake_address_id
+    assertBool
+      "Pointer address in Conway should have NULL stake_address_id (treated as Enterprise address)"
+      (ptrCount > 0)
+  where
+    testLabel = "conwayStakeAddressPtrNullInConway"
 
 stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
 stakeDistGenesis =

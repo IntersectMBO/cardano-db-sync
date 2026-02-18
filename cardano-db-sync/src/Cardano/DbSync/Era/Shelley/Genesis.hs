@@ -26,6 +26,7 @@ import Cardano.DbSync.Era.Universal.Insert.Certificate (insertDelegation, insert
 import Cardano.DbSync.Era.Universal.Insert.Other (insertStakeAddressRefIfMissing)
 import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Error
+import Cardano.DbSync.Types (BlockEra (..))
 import Cardano.DbSync.Util
 import Cardano.Ledger.Address (serialiseAddr)
 import qualified Cardano.Ledger.Coin as Ledger
@@ -269,7 +270,7 @@ insertTxOuts syncEnv blkId (TxIn txInId _, txOut) = do
           }
 
   tryUpdateCacheTx (envCache syncEnv) txInId txId
-  _ <- insertStakeAddressRefIfMissing (withNoCache syncEnv) (txOut ^. Core.addrTxOutL)
+  _ <- insertStakeAddressRefIfMissing (withNoCache syncEnv) (txOut ^. Core.addrTxOutL) Shelley
   case ioTxOutVariantType . soptInsertOptions $ envOptions syncEnv of
     DB.TxOutVariantCore ->
       void

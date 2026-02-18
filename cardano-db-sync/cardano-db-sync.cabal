@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-db-sync
-version:                13.6.0.5
+version:                13.7.0.1
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -16,6 +16,7 @@ category:               Cryptocurrency
 build-type:             Custom
 extra-source-files:     CHANGELOG.md
                         schema/*.sql
+                        test/testfiles/*.jsonld
 
 flag enable-ghc-debug
   description: Enable ghc-debug profiling support for heap analysis.
@@ -351,6 +352,7 @@ test-suite test
                         Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptTest
                         Cardano.DbSync.Gen
+                        Cardano.DbSync.OffChain.VoteTest
                         Cardano.DbSync.Util.AddressTest
                         Cardano.DbSync.Util.Bech32Test
                         Cardano.DbSync.Util.CborTest
