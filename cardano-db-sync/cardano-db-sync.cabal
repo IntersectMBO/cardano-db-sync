@@ -352,7 +352,7 @@ test-suite test
                         Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptTest
                         Cardano.DbSync.Gen
-                        Cardano.DbSync.OffChain.VoteTest
+                        Cardano.DbSync.OffChain.Vote.TypesTest
                         Cardano.DbSync.Util.AddressTest
                         Cardano.DbSync.Util.Bech32Test
                         Cardano.DbSync.Util.CborTest
