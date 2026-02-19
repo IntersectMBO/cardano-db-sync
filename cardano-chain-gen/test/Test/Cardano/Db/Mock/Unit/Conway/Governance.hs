@@ -17,6 +17,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   parameterChange,
   chainedNewCommittee,
   hardFork,
+  hardForkPostBlock,
   rollbackHardFork,
   infoAction,
 ) where
@@ -476,6 +477,69 @@ hardFork =
       "Unexpected governance action counts"
   where
     testLabel = "conwayGovernanceHardFork"
+    getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
+
+-- | Tests that db-sync continues to sync correctly after an intra-era hard fork
+-- (PV 10 -> PV 11 within Conway). After enacting the HF, we forge additional blocks
+-- containing payment transactions and governance actions, then verify db-sync
+-- indexes them without errors.
+hardForkPostBlock :: IOManager -> [(Text, Text)] -> Assertion
+hardForkPostBlock =
+  withFullConfigLog conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
+    -- Propose, ratify, and enact a hard fork (PV 10 -> 11)
+    epoch3 <- enactHardFork interpreter server
+
+    -- Wait for it to sync
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
+    -- Verify the HF was enacted
+    assertEqQuery
+      dbSync
+      ( do
+          epochNo <- getEpochNo interpreter
+          mEpochParam <- DB.queryEpochParamWithEpochNo epochNo
+          pure $ DB.epochParamProtocolMajor <$> mEpochParam
+      )
+      (Just 11)
+      "Unexpected protocol major version after hard fork"
+
+    -- === Post-HF: forge blocks with transactions under PV 11 ===
+
+    -- 1. Simple payment transaction
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter server $
+        Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 1)
+
+    -- 2. Forge a few empty blocks to ensure the chain progresses
+    emptyBlks <- Api.forgeAndSubmitBlocks interpreter server 3
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 1 + length emptyBlks)
+
+    -- 3. A governance info action to verify governance still works post-HF
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ ->
+        pure [Conway.mkInfoTx]
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 1 + length emptyBlks + 1)
+
+    -- 4. Fill to next epoch boundary to exercise epoch processing post-HF
+    epochNext <- Api.fillUntilNextEpoch interpreter server
+    let totalBlocks = length (epoch1 <> epoch3) + 1 + length emptyBlks + 1 + length epochNext
+    assertBlockNoBackoff dbSync totalBlocks
+
+    -- Verify the HF governance action is still ratified/enacted
+    assertEqQuery
+      dbSync
+      DB.queryGovActionCounts
+      (1, 1, 0, 0)
+      "Unexpected governance action counts after post-HF blocks"
+
+    -- Verify db-sync is still running (hasn't crashed)
+    checkStillRuns dbSync
+  where
+    testLabel = "conwayGovernanceHardForkPostBlock"
     getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
 
 rollbackHardFork :: IOManager -> [(Text, Text)] -> Assertion
