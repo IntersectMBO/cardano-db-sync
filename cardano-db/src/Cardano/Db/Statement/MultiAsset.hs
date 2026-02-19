@@ -78,8 +78,8 @@ insertBulkMaTxMintStmt =
       , map SMA.maTxMintIdent xs
       )
 
-insertBulkMaTxMintPiped :: HasCallStack => [[SMA.MaTxMint]] -> DbM [Id.MaTxMintId]
-insertBulkMaTxMintPiped maTxMintChunks =
+insertBulkMaTxMintChunked :: HasCallStack => [[SMA.MaTxMint]] -> DbM [Id.MaTxMintId]
+insertBulkMaTxMintChunked maTxMintChunks =
   concat
     <$> runSession
       mkDbCallStack
