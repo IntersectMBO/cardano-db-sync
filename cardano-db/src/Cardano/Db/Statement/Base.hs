@@ -978,8 +978,8 @@ insertBulkTxMetadataStmt removeJsonb =
       , map SCB.txMetadataTxId xs
       )
 
-insertBulkTxMetadataPiped :: HasCallStack => Bool -> [[SCB.TxMetadata]] -> DbM [Id.TxMetadataId]
-insertBulkTxMetadataPiped removeJsonb txMetaChunks =
+insertBulkTxMetadataChunked :: HasCallStack => Bool -> [[SCB.TxMetadata]] -> DbM [Id.TxMetadataId]
+insertBulkTxMetadataChunked removeJsonb txMetaChunks =
   runSession mkDbCallStack $
     concat <$> traverse (\chunk -> HsqlSes.statement chunk (insertBulkTxMetadataStmt removeJsonb)) txMetaChunks
 
@@ -1365,8 +1365,8 @@ insertBulkTxInStmt =
       , map SCB.txInRedeemerId xs
       )
 
-insertBulkTxInPiped :: HasCallStack => [[SCB.TxIn]] -> DbM [Id.TxInId]
-insertBulkTxInPiped txInChunks =
+insertBulkTxInChunked :: HasCallStack => [[SCB.TxIn]] -> DbM [Id.TxInId]
+insertBulkTxInChunked txInChunks =
   concat
     <$> runSession
       mkDbCallStack

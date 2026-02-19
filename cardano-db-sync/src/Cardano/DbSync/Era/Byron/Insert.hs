@@ -314,7 +314,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
   -- Update consumed TxOut records if enabled
   whenConsumeOrPruneTxOut syncEnv $
     lift $
-      DB.updateListTxOutConsumedByTxIdBP [prepUpdate txId <$> resolvedInputs]
+      DB.updateListTxOutConsumedByTxIdChunked [prepUpdate txId <$> resolvedInputs]
 
   -- Return fee amount for caching/epoch calculations
   pure $ unDbLovelace $ vfFee valFee

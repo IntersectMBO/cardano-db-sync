@@ -95,8 +95,8 @@ insertBulkEpochStake dbConstraintEpochStake epochStakes =
     HsqlSes.statement epochStakes $
       insertBulkEpochStakeStmt dbConstraintEpochStake
 
-insertBulkEpochStakePiped :: Bool -> [[SS.EpochStake]] -> DbM ()
-insertBulkEpochStakePiped dbConstraintEpochStake epochStakeChunks =
+insertBulkEpochStakeChunked :: Bool -> [[SS.EpochStake]] -> DbM ()
+insertBulkEpochStakeChunked dbConstraintEpochStake epochStakeChunks =
   runSession mkDbCallStack $
     traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkEpochStakeStmt dbConstraintEpochStake)) epochStakeChunks
 
@@ -185,8 +185,8 @@ insertBulkRewards dbConstraintRewards rewards =
     HsqlSes.statement rewards $
       insertBulkRewardsStmt dbConstraintRewards
 
-insertBulkRewardsPiped :: Bool -> [[SS.Reward]] -> DbM ()
-insertBulkRewardsPiped dbConstraintRewards rewardChunks =
+insertBulkRewardsChunked :: Bool -> [[SS.Reward]] -> DbM ()
+insertBulkRewardsChunked dbConstraintRewards rewardChunks =
   runSession mkDbCallStack $
     traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkRewardsStmt dbConstraintRewards)) rewardChunks
 
@@ -358,8 +358,8 @@ insertBulkRewardRests rewardRests =
   runSession mkDbCallStack $
     HsqlSes.statement rewardRests insertBulkRewardRestsStmt
 
-insertBulkRewardRestsPiped :: [[SS.RewardRest]] -> DbM ()
-insertBulkRewardRestsPiped rewardRestChunks =
+insertBulkRewardRestsChunked :: [[SS.RewardRest]] -> DbM ()
+insertBulkRewardRestsChunked rewardRestChunks =
   runSession mkDbCallStack $
     traverse_ (`HsqlSes.statement` insertBulkRewardRestsStmt) rewardRestChunks
 
