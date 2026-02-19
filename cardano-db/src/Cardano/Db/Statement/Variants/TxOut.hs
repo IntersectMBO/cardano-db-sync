@@ -136,9 +136,9 @@ insertBulkAddressTxOutStmt =
       , map SVA.txOutAddressAddressId xs
       )
 
-insertBulkTxOutPiped :: Bool -> [[TxOutW]] -> DbM [TxOutIdW]
-insertBulkTxOutPiped _ [] = pure []
-insertBulkTxOutPiped disInOut chunks =
+insertBulkTxOutChunked :: Bool -> [[TxOutW]] -> DbM [TxOutIdW]
+insertBulkTxOutChunked _ [] = pure []
+insertBulkTxOutChunked disInOut chunks =
   if disInOut
     then pure []
     else case getFirstNonEmpty chunks of
@@ -592,9 +592,9 @@ insertBulkAddressMaTxOutStmt =
       , map SVA.maTxOutAddressIdent xs
       )
 
-insertBulkMaTxOutPiped :: [[MaTxOutW]] -> DbM [MaTxOutIdW]
-insertBulkMaTxOutPiped [] = pure []
-insertBulkMaTxOutPiped chunks =
+insertBulkMaTxOutChunked :: [[MaTxOutW]] -> DbM [MaTxOutIdW]
+insertBulkMaTxOutChunked [] = pure []
+insertBulkMaTxOutChunked chunks =
   case getFirstNonEmpty chunks of
     Nothing -> pure []
     Just (CMaTxOutW _) -> do

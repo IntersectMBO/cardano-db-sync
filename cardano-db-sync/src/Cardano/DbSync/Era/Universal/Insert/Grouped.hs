@@ -116,11 +116,11 @@ insertBlockGroupedData syncEnv grouped = do
   -- Sequential TxOut processing (generates required IDs)
   txOutIds <- concat <$> mapM (lift . DB.insertBulkTxOut disInOut) txOutChunks
   -- Execute independent operations (TxIn, Metadata, Mint) in parallel
-  txInIds <- executePreparedTxInPiped preparedTxIn
+  txInIds <- executePreparedTxInChunked preparedTxIn
   -- TxOut-dependent operations (MaTxOut + UTxO consumption)
   maTxOutIds <- processMaTxOuts syncEnv txOutIds grouped
-  executePreparedMetadataPiped preparedMetadata
-  executePreparedMintPiped preparedMint
+  executePreparedMetadataChunked preparedMetadata
+  executePreparedMintChunked preparedMint
 
   -- Process UTxO consumption (depends on txOutIds)
   processUtxoConsumption syncEnv grouped txOutIds
@@ -332,22 +332,22 @@ prepareMintProcessing _syncEnv grouped =
     { pmtChunks = DB.chunkForBulkQuery (Proxy @DB.MaTxMint) Nothing $ groupedTxMint grouped
     }
 
--- | Execute prepared TxIn operations (using pipeline)
-executePreparedTxInPiped :: PreparedTxIn -> ExceptT SyncNodeError DB.DbM [DB.TxInId]
-executePreparedTxInPiped prepared =
+-- | Execute prepared TxIn operations in chunks
+executePreparedTxInChunked :: PreparedTxIn -> ExceptT SyncNodeError DB.DbM [DB.TxInId]
+executePreparedTxInChunked prepared =
   if ptiSkip prepared
     then pure []
-    else lift $ DB.insertBulkTxInPiped (ptiChunks prepared)
+    else lift $ DB.insertBulkTxInChunked (ptiChunks prepared)
 
--- | Execute prepared Metadata operations (using pipeline)
-executePreparedMetadataPiped :: PreparedMetadata -> ExceptT SyncNodeError DB.DbM ()
-executePreparedMetadataPiped prepared =
-  void $ lift $ DB.insertBulkTxMetadataPiped (pmRemoveJsonb prepared) (pmChunks prepared)
+-- | Execute prepared Metadata operations in chunks
+executePreparedMetadataChunked :: PreparedMetadata -> ExceptT SyncNodeError DB.DbM ()
+executePreparedMetadataChunked prepared =
+  void $ lift $ DB.insertBulkTxMetadataChunked (pmRemoveJsonb prepared) (pmChunks prepared)
 
--- | Execute prepared Mint operations (using pipeline)
-executePreparedMintPiped :: PreparedMint -> ExceptT SyncNodeError DB.DbM ()
-executePreparedMintPiped prepared =
-  void $ lift $ DB.insertBulkMaTxMintPiped (pmtChunks prepared)
+-- | Execute prepared Mint operations in chunks
+executePreparedMintChunked :: PreparedMint -> ExceptT SyncNodeError DB.DbM ()
+executePreparedMintChunked prepared =
+  void $ lift $ DB.insertBulkMaTxMintChunked (pmtChunks prepared)
 
 -- | Process MaTxOut operations (depends on TxOut IDs)
 processMaTxOuts :: SyncEnv -> [DB.TxOutIdW] -> BlockGroupedData -> ExceptT SyncNodeError DB.DbM [DB.MaTxOutIdW]
@@ -357,7 +357,7 @@ processMaTxOuts syncEnv txOutIds grouped = do
         concatMap (mkmaTxOuts txOutVariantType) $
           zip txOutIds (snd <$> groupedTxOut grouped)
       maTxOutChunks = DB.chunkForBulkQueryWith (DB.getMaTxOutBulkSize txOutVariantType) maTxOuts
-  lift $ DB.insertBulkMaTxOutPiped maTxOutChunks
+  lift $ DB.insertBulkMaTxOutChunked maTxOutChunks
 
 -- | Process UTxO consumption updates (depends on TxOut IDs)
 processUtxoConsumption :: SyncEnv -> BlockGroupedData -> [DB.TxOutIdW] -> ExceptT SyncNodeError DB.DbM ()
@@ -377,12 +377,12 @@ processUtxoConsumption syncEnv grouped txOutIds = do
     unless (null hashBasedUpdates) $
       void $
         lift $
-          DB.updateConsumedByTxHashPiped txOutVariantType hashUpdateChunks
+          DB.updateConsumedByTxHashChunked txOutVariantType hashUpdateChunks
     -- Individual process ID-based updates
     unless (null idBasedUpdates) $
       void $
         lift $
-          DB.updateListTxOutConsumedByTxIdBP idUpdateChunks
+          DB.updateListTxOutConsumedByTxIdChunked idUpdateChunks
     -- Log failures
     mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
 
