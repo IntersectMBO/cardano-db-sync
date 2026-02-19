@@ -15,7 +15,7 @@ module Cardano.Db.Statement.Base where
 import Cardano.BM.Data.Trace (Trace)
 import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
-import Cardano.Prelude (ByteString, HasCallStack, Int64, MonadIO (..), Proxy (..), Word64, for, textShow, void)
+import Cardano.Prelude (ByteString, HasCallStack, Int64, MonadIO (..), Proxy (..), Word64, textShow, void)
 import Data.Functor.Contravariant ((>$<))
 import Data.List (partition)
 import Data.Maybe (fromMaybe, isJust)
@@ -978,11 +978,6 @@ insertBulkTxMetadataStmt removeJsonb =
       , map SCB.txMetadataTxId xs
       )
 
-insertBulkTxMetadataPiped :: HasCallStack => Bool -> [[SCB.TxMetadata]] -> DbM [Id.TxMetadataId]
-insertBulkTxMetadataPiped removeJsonb txMetaChunks =
-  runSession mkDbCallStack $
-    concat <$> traverse (\chunk -> HsqlSes.statement chunk (insertBulkTxMetadataStmt removeJsonb)) txMetaChunks
-
 --------------------------------------------------------------------------------
 -- CollateralTxIn
 --------------------------------------------------------------------------------
@@ -1363,15 +1358,6 @@ insertBulkTxInStmt =
       , map SCB.txInTxOutId xs
       , map SCB.txInTxOutIndex xs
       , map SCB.txInRedeemerId xs
-      )
-
-insertBulkTxInPiped :: HasCallStack => [[SCB.TxIn]] -> DbM [Id.TxInId]
-insertBulkTxInPiped txInChunks =
-  concat
-    <$> runSession
-      mkDbCallStack
-      ( for txInChunks $ \chunk ->
-          HsqlSes.statement chunk insertBulkTxInStmt
       )
 
 --------------------------------------------------------------------------------

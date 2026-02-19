@@ -134,7 +134,7 @@ storePage syncEnv blkEra percQuantum (n, ls) = do
   txOuts <- mapM (prepareTxOut syncEnv blkEra) ls
   txOutIds <- lift $ DB.insertBulkTxOut False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> txOuts)
-  void . lift $ DB.insertBulkMaTxOutPiped [maTxOuts]
+  void . lift $ DB.insertBulkMaTxOutChunked [maTxOuts]
   where
     txOutVariantType = getTxOutVariantType syncEnv
     trce = getTrace syncEnv

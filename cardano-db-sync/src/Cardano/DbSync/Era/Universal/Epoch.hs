@@ -220,8 +220,8 @@ insertEpochStake syncEnv nw epochNo stakeChunk = do
   dbStakes <- mapM mkStake stakeChunk
   let chunckDbStakes = DB.chunkForBulkQuery (Proxy @DB.EpochStake) Nothing dbStakes
 
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
-  lift $ DB.insertBulkEpochStakePiped dbConstraintEpochStake chunckDbStakes
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance
+  lift $ DB.insertBulkEpochStakeChunked dbConstraintEpochStake chunckDbStakes
   where
     mkStake ::
       (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
@@ -250,8 +250,8 @@ insertRewards syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
   let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing dbRewards
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
-  lift $ DB.insertBulkRewardsPiped dbConstraintRewards chunckDbRewards
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance
+  lift $ DB.insertBulkRewardsChunked dbConstraintRewards chunckDbRewards
   where
     mkRewards ::
       (StakeCred, Set Generic.Reward) ->
@@ -294,8 +294,8 @@ insertRewardRests ::
 insertRewardRests syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
   dbRewards <- concatMapM mkRewards rewardsChunk
   let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.RewardRest) Nothing dbRewards
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
-  lift $ DB.insertBulkRewardRestsPiped chunckDbRewards
+  -- minimising the bulk inserts into hundred thousand chunks to improve performance
+  lift $ DB.insertBulkRewardRestsChunked chunckDbRewards
   where
     mkRewards ::
       (StakeCred, Set Generic.RewardRest) ->
