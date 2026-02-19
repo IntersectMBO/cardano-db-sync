@@ -256,8 +256,8 @@ insertBulkDrepDistrStmt =
       , map SGV.drepDistrActiveUntil xs
       )
 
-insertBulkDrepDistrPiped :: HasCallStack => [[SGV.DrepDistr]] -> DbM ()
-insertBulkDrepDistrPiped drepDistrChunks =
+insertBulkDrepDistrChunked :: HasCallStack => [[SGV.DrepDistr]] -> DbM ()
+insertBulkDrepDistrChunked drepDistrChunks =
   runSession mkDbCallStack $
     traverse_ (`HsqlSes.statement` insertBulkDrepDistrStmt) drepDistrChunks
 
