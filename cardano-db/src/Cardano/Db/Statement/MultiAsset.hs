@@ -3,7 +3,7 @@
 
 module Cardano.Db.Statement.MultiAsset where
 
-import Cardano.Prelude (ByteString, HasCallStack, for)
+import Cardano.Prelude (ByteString, HasCallStack)
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -78,11 +78,3 @@ insertBulkMaTxMintStmt =
       , map SMA.maTxMintIdent xs
       )
 
-insertBulkMaTxMintChunked :: HasCallStack => [[SMA.MaTxMint]] -> DbM [Id.MaTxMintId]
-insertBulkMaTxMintChunked maTxMintChunks =
-  concat
-    <$> runSession
-      mkDbCallStack
-      ( for maTxMintChunks $ \chunk ->
-          HsqlSes.statement chunk insertBulkMaTxMintStmt
-      )
