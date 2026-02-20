@@ -64,8 +64,8 @@ insertBlockUniversal ::
 insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details isMember applyResult = do
   -- if we're syncing within 2 mins of the tip, we clean certain caches for tip following.
   when (isSyncedWithintwoMinutes details) $ cleanCachesForTip cache
-  -- Optimise caches every 100k blocks to prevent unbounded growth
-  when (unBlockNo (Generic.blkBlockNo blk) `mod` 100000 == 0) $ optimiseCaches cache
+  -- Optimise caches every 50k blocks to prevent unbounded growth
+  when (unBlockNo (Generic.blkBlockNo blk) `mod` 50000 == 0) $ optimiseCaches cache
   do
     pbid <- case Generic.blkPreviousHash blk of
       Nothing -> liftDbLookup mkSyncNodeCallStack $ DB.queryGenesis $ renderErrorMessage (Generic.blkEra blk) -- this is for networks that fork from Byron on epoch 0.

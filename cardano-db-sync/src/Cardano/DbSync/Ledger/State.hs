@@ -66,6 +66,7 @@ import Cardano.Slotting.Slot (
   at,
   fromWithOrigin,
  )
+import Codec.CBOR.Write (toBuilder)
 import Control.Concurrent.Class.MonadSTM.Strict (
   atomically,
   newTVarIO,
@@ -75,6 +76,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
 import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
 import qualified Control.Exception as Exception
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
@@ -122,6 +124,7 @@ import Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeFile)
 import System.FilePath (dropExtension, takeExtension, (</>))
+import qualified System.IO as IO
 import System.Mem (performMajorGC)
 import Prelude (String, id)
 
@@ -387,18 +390,17 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
     writeLedgerStateFile :: FilePath -> CardanoLedgerState -> IO ()
     writeLedgerStateFile file ledger = do
       startTime <- getCurrentTime
-      -- TODO: write the builder directly.
-      -- BB.writeFile file $ toBuilder $
-      LBS.writeFile file $
-        Serialize.serialize $
-          encodeCardanoLedgerState
-            ( Consensus.encodeExtLedgerState
-                (encodeDisk codecConfig)
-                (encodeDisk codecConfig)
-                (encodeDisk codecConfig)
-                . forgetLedgerTables
-            )
-            ledger
+      -- Use streaming builder to avoid loading entire state into memory
+      IO.withBinaryFile file IO.WriteMode $ \h -> do
+        let encoding =
+              encodeCardanoLedgerState
+                ( Consensus.encodeExtLedgerState
+                    (encodeDisk codecConfig)
+                    (encodeDisk codecConfig)
+                    (encodeDisk codecConfig)
+                )
+                ledger
+        Builder.hPutBuilder h (toBuilder encoding)
       endTime <- getCurrentTime
       logInfo tracer $
         mconcat
@@ -406,7 +408,6 @@ ledgerStateWriteLoop tracer swQueue codecConfig =
           , Text.pack file
           , " in "
           , textShow (diffUTCTime endTime startTime)
-          , "."
           ]
 
 mkLedgerStateFilename :: LedgerStateDir -> ExtLedgerState CardanoBlock mk -> Maybe EpochNo -> WithOrigin FilePath
@@ -652,12 +653,13 @@ loadLedgerStateFromFile tracer config delete point lsf = do
     safeReadFile :: FilePath -> IO (Either Text CardanoLedgerState)
     safeReadFile fp = do
       startTime <- getCurrentTime
-      mbs <- Exception.try $ BS.readFile fp
+      -- Use lazy ByteString to enable streaming read
+      mbs <- Exception.try $ LBS.readFile fp
       case mbs of
         Left (err :: IOException) -> pure $ Left (Text.pack $ displayException err)
-        Right bs -> do
+        Right lbs -> do
           mediumTime <- getCurrentTime
-          case decode bs of
+          case decode lbs of
             Left err -> pure $ Left $ textShow err
             Right ls -> do
               endTime <- getCurrentTime
@@ -667,7 +669,7 @@ loadLedgerStateFromFile tracer config delete point lsf = do
                   , renderPoint point
                   , ". It took "
                   , textShow (diffUTCTime mediumTime startTime)
-                  , " to read from disk and "
+                  , " to read from disk (streaming) and "
                   , textShow (diffUTCTime endTime mediumTime)
                   , " to parse."
                   ]
@@ -676,12 +678,11 @@ loadLedgerStateFromFile tracer config delete point lsf = do
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec config
 
-    decode :: ByteString -> Either DecoderError CardanoLedgerState
-    decode = do
+    decode :: LBS.ByteString -> Either DecoderError CardanoLedgerState
+    decode =
       Serialize.decodeFullDecoder
         "Ledger state file"
         decodeState
-        . LBS.fromStrict
 
     decodeState :: (forall s. Decoder s CardanoLedgerState)
     decodeState =

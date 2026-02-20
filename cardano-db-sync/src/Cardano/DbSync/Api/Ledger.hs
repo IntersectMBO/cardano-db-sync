@@ -29,6 +29,7 @@ import Numeric
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, ledgerState)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import System.Mem (performMinorGC)
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
@@ -135,6 +136,7 @@ storePage syncEnv blkEra percQuantum (n, ls) = do
   txOutIds <- lift $ DB.insertBulkTxOut False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertBulkMaTxOutPiped [maTxOuts]
+  liftIO performMinorGC
   where
     txOutVariantType = getTxOutVariantType syncEnv
     trce = getTrace syncEnv
