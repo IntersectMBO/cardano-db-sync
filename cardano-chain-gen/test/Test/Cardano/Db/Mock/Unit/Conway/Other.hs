@@ -30,7 +30,7 @@ import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
 import Cardano.Ledger.Core (PoolCert (..))
 import Cardano.Ledger.Credential (StakeCredential)
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..))
-import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
+import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -430,14 +430,14 @@ rollbackFork =
         Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 10_000 500 0
 
     -- Wait for it to sync
-    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1 <> epoch1')
+    assertBlockNoBackoff dbSync $ 1 + length (epoch0 <> epoch1 <> epoch1' <> [blk])
     -- Rollback
-    atomically $ rollback mockServer (blockPoint $ last epoch1)
+    rollbackBlocks <- Api.rollbackTo interpreter mockServer (blockPoint $ last epoch1)
     -- Replay remaining blocks
     forM_ (epoch1' <> [blk]) (atomically . addBlock mockServer)
 
     -- Verify block count
-    assertBlockNoBackoff dbSync $ 2 + length (epoch0 <> epoch1 <> epoch1')
+    assertBlockNoBackoff dbSync $ length (epoch0 <> epoch1 <> rollbackBlocks <> epoch1' <> [blk])
   where
     configDir = "config-conway-hf-epoch1"
     testLabel = "conwayRollbackFork"

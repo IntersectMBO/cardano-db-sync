@@ -17,7 +17,7 @@ import Cardano.Ledger.Shelley.TxBody (
   Withdrawals (..),
  )
 import Cardano.Ledger.Shelley.TxCert
-import Cardano.Mock.ChainSync.Server (IOManager, addBlock, rollback)
+import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (withShelleyLedgerState)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import Cardano.Mock.Forging.Tx.Babbage.Scenarios (delegateAndSendBlocks)
@@ -314,7 +314,7 @@ _mirRewardRollback =
     assertBlockNoBackoff dbSync (fromIntegral $ 4 + length (a <> b <> c <> d))
     assertRewardCounts dbSync st True Nothing [(StakeIndexNew 1, (0, 0, 0, 1, 0))]
 
-    rollbackTo interpreter mockServer (blockPoint $ last c)
+    void $ rollbackTo interpreter mockServer (blockPoint $ last c)
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->
       Babbage.mkDummyRegisterTx 1 1
     d' <- fillUntilNextEpoch interpreter mockServer
@@ -491,13 +491,13 @@ rollbackBoundary =
     blks' <- fillUntilNextEpoch interpreter mockServer
 
     assertRewardCount dbSync 3
-    atomically $ rollback mockServer (blockPoint $ last blks)
-    assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
+    rbBlocks <- rollbackTo interpreter mockServer (blockPoint $ last blks)
+    assertBlockNoBackoff dbSync (length (a <> blks <> blks' <> rbBlocks) + 1)
     forM_ blks' $ atomically . addBlock mockServer
-    assertBlockNoBackoff dbSync (2 + length a + length blks + length blks')
+    assertBlockNoBackoff dbSync (length (a <> blks <> rbBlocks <> blks') + 1)
     assertRewardCount dbSync 3
     blks'' <- fillUntilNextEpoch interpreter mockServer
-    assertBlockNoBackoff dbSync (2 + length a + length blks + length blks' + length blks'')
+    assertBlockNoBackoff dbSync (length (a <> blks <> rbBlocks <> blks'') + 2)
   where
     testLabel = "rollbackBoundary"
 

@@ -200,10 +200,15 @@ fillEpochPercentage interpreter mockServer percentage = do
   let blocksToCreate = div (percentage * blocksPerEpoch) 100
   replicateM blocksToCreate $ forgeNextFindLeaderAndSubmit interpreter mockServer []
 
-rollbackTo :: Interpreter -> ServerHandle IO CardanoBlock -> CardanoPoint -> IO ()
+rollbackTo :: Interpreter -> ServerHandle IO CardanoBlock -> CardanoPoint -> IO [CardanoBlock]
 rollbackTo interpreter mockServer point = do
   rollbackInterpreter interpreter point
   atomically $ rollback mockServer point
+  -- Forge an empty block to establish a new thread after rollback.
+  -- This ensures DBSync recognizes the rollback and deletes data.
+  blk <- forgeNextFindLeader interpreter []
+  atomically $ addBlock mockServer blk
+  pure [blk]
 
 registerAllStakeCreds :: Interpreter -> ServerHandle IO CardanoBlock -> IO CardanoBlock
 registerAllStakeCreds interpreter mockServer = do
