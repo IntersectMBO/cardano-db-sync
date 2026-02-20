@@ -140,11 +140,17 @@ genDefaultJson =
           },
           "governance": "enable",
           "offchain_pool_data": "enable",
+          "offchain_user_agent": null,
           "json_type": "text"
         }
       |]
     , [aesonQQ|
         { }
+      |]
+    , [aesonQQ|
+        {
+          "offchain_user_agent": null
+        }
       |]
     , [aesonQQ|
         {

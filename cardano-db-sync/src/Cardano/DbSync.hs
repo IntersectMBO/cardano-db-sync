@@ -320,6 +320,7 @@ extractSyncOptions snp aop snc =
         , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance
         , ioRemoveJsonbFromSchema = isRemoveJsonbFromSchemaEnabled (sioRemoveJsonbFromSchema (dncInsertOptions snc))
+        , ioOffChainUserAgent = sioOffchainUserAgent (dncInsertOptions snc)
         , ioTxOutVariantType = ioTxOutVariantType'
         }
 
