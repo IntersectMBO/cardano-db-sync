@@ -26,7 +26,8 @@ import qualified Cardano.Db.Schema.Core.StakeDelegation as SS
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, runSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
+import Cardano.Db.Statement.Constraint (constraintNameEpochStake, constraintNameReward, unConstraintNameDB)
+import Cardano.Db.Statement.Function.InsertBulk (ConflictStrategy (..), insertBulk, insertBulkWith)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (Ada, DbLovelace, DbM, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
@@ -75,11 +76,19 @@ queryDelegationScript =
 -- | INSERT --------------------------------------------------------------------
 insertBulkEpochStakeStmt :: Bool -> HsqlStmt.Statement [SS.EpochStake] ()
 insertBulkEpochStakeStmt dbConstraintEpochStake =
-  insertBulkMaybeIgnore
-    dbConstraintEpochStake
-    extractEpochStake
-    SS.epochStakeBulkEncoder
-    NoResultBulk
+  if dbConstraintEpochStake
+    then
+      insertBulkWith
+        (IgnoreWithConstraint $ unConstraintNameDB constraintNameEpochStake)
+        False
+        extractEpochStake
+        SS.epochStakeBulkEncoder
+        NoResultBulk
+    else
+      insertBulk
+        extractEpochStake
+        SS.epochStakeBulkEncoder
+        NoResultBulk
   where
     extractEpochStake :: [SS.EpochStake] -> ([Id.StakeAddressId], [Id.PoolHashId], [DbLovelace], [Word64])
     extractEpochStake xs =
@@ -88,12 +97,6 @@ insertBulkEpochStakeStmt dbConstraintEpochStake =
       , map SS.epochStakeAmount xs
       , map SS.epochStakeEpochNo xs
       )
-
-insertBulkEpochStake :: Bool -> [SS.EpochStake] -> DbM ()
-insertBulkEpochStake dbConstraintEpochStake epochStakes =
-  runSession mkDbCallStack $
-    HsqlSes.statement epochStakes $
-      insertBulkEpochStakeStmt dbConstraintEpochStake
 
 insertBulkEpochStakeChunked :: Bool -> [[SS.EpochStake]] -> DbM ()
 insertBulkEpochStakeChunked dbConstraintEpochStake epochStakeChunks =
@@ -158,9 +161,9 @@ insertBulkRewardsStmt :: Bool -> HsqlStmt.Statement [SS.Reward] ()
 insertBulkRewardsStmt dbConstraintRewards =
   if dbConstraintRewards
     then
-      insertBulkMaybeIgnoreWithConstraint
-        True
-        "unique_reward"
+      insertBulkWith
+        (IgnoreWithConstraint $ unConstraintNameDB constraintNameReward)
+        False
         extractReward
         SS.rewardBulkEncoder
         NoResultBulk
@@ -178,12 +181,6 @@ insertBulkRewardsStmt dbConstraintRewards =
       , map SS.rewardSpendableEpoch xs
       , map SS.rewardPoolId xs
       )
-
-insertBulkRewards :: Bool -> [SS.Reward] -> DbM ()
-insertBulkRewards dbConstraintRewards rewards =
-  runSession mkDbCallStack $
-    HsqlSes.statement rewards $
-      insertBulkRewardsStmt dbConstraintRewards
 
 insertBulkRewardsChunked :: Bool -> [[SS.Reward]] -> DbM ()
 insertBulkRewardsChunked dbConstraintRewards rewardChunks =
