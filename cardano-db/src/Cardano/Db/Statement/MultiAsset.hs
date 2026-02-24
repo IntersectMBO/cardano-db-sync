@@ -17,7 +17,7 @@ import Cardano.Db.Schema.Core.MultiAsset (MaTxMint)
 import qualified Cardano.Db.Schema.Core.MultiAsset as SMA
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), runSession)
-import Cardano.Db.Statement.Function.Insert (insert)
+import Cardano.Db.Statement.Function.Insert (insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk)
 import Cardano.Db.Types (DbInt65, DbM)
 
@@ -28,7 +28,7 @@ import Cardano.Db.Types (DbInt65, DbM)
 -- | INSERT --------------------------------------------------------------------
 insertMultiAssetStmt :: HsqlStmt.Statement SMA.MultiAsset Id.MultiAssetId
 insertMultiAssetStmt =
-  insert
+  insertCheckUnique
     SMA.multiAssetEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.MultiAssetId)
 
