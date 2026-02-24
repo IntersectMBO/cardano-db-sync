@@ -35,6 +35,8 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (unTxHash)
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.Prelude
+import qualified Hasql.Pipeline as HsqlP
+import qualified Hasql.Session as HsqlSes
 
 -- | Group data within the same block, to insert them together in batches
 --
@@ -90,7 +92,6 @@ instance Semigroup BlockGroupedData where
       (groupedTxFees tgd1 + groupedTxFees tgd2)
       (groupedTxOutSum tgd1 + groupedTxOutSum tgd2)
 
--- | Parallel implementation with single connection coordination
 insertBlockGroupedData ::
   SyncEnv ->
   BlockGroupedData ->
@@ -98,34 +99,55 @@ insertBlockGroupedData ::
 insertBlockGroupedData syncEnv grouped = do
   disInOut <- liftIO $ getDisableInOutState syncEnv
 
-  -- Parallel preparation of independent data
-  (preparedTxIn, preparedMetadata, preparedMint, txOutChunks) <- liftIO $ do
-    a1 <- async $ pure $ prepareTxInProcessing syncEnv grouped
-    a2 <- async $ pure $ prepareMetadataProcessing syncEnv grouped
-    a3 <- async $ pure $ prepareMintProcessing syncEnv grouped
-    a4 <- async $ do
-      let txOutData = etoTxOut . fst <$> groupedTxOut grouped
-          bulkSize = DB.getTxOutBulkSize (getTxOutVariantType syncEnv)
-      pure $ DB.chunkForBulkQueryWith bulkSize txOutData
+  let skipTxIn = getSkipTxIn syncEnv
+      rmJsonb = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
+      txOutVariantType = getTxOutVariantType syncEnv
 
-    r1 <- wait a1
-    r2 <- wait a2
-    r3 <- wait a3
-    r4 <- wait a4
-    pure (r1, r2, r3, r4)
-  -- Sequential TxOut processing (generates required IDs)
-  txOutIds <- concat <$> mapM (lift . DB.insertBulkTxOut disInOut) txOutChunks
-  -- Execute independent operations (TxIn, Metadata, Mint) in parallel
-  txInIds <- executePreparedTxInPiped preparedTxIn
-  -- TxOut-dependent operations (MaTxOut + UTxO consumption)
+      -- Chunk data for bulk inserts
+      txInChunks = DB.chunkForBulkQuery (Proxy @DB.TxIn) Nothing $ etiTxIn <$> groupedTxIn grouped
+      metaChunks = DB.chunkForBulkQuery (Proxy @DB.TxMetadata) (Just $ envIsJsonbInSchema syncEnv) $ groupedTxMetadata grouped
+      mintChunks = DB.chunkForBulkQuery (Proxy @DB.MaTxMint) Nothing $ groupedTxMint grouped
+      txOutData = etoTxOut . fst <$> groupedTxOut grouped
+      txOutChunks = DB.chunkForBulkQueryWith (DB.getTxOutBulkSize txOutVariantType) txOutData
+
+  -- Pipeline all bulk inserts: TxOut + TxIn + Metadata + Mint
+  (txOutIds, txInIds) <- lift $ DB.runSession DB.mkDbCallStack $ HsqlSes.pipeline $ do
+    -- TxOut
+    txOutResults <-
+      if disInOut
+        then pure []
+        else case txOutVariantType of
+          DB.TxOutVariantCore -> do
+            ids <- for txOutChunks $ \chunk ->
+              HsqlP.statement (map extractCoreTxOut chunk) DB.insertBulkCoreTxOutStmt
+            pure $ map DB.VCTxOutIdW (concat ids)
+          DB.TxOutVariantAddress -> do
+            ids <- for txOutChunks $ \chunk ->
+              HsqlP.statement (map extractVariantTxOut chunk) DB.insertBulkAddressTxOutStmt
+            pure $ map DB.VATxOutIdW (concat ids)
+    -- TxIn
+    txInResults <-
+      if skipTxIn
+        then pure []
+        else for txInChunks $ \chunk -> HsqlP.statement chunk DB.insertBulkTxInStmt
+    -- Metadata + Mint
+    for_ metaChunks $ \chunk -> HsqlP.statement chunk (DB.insertBulkTxMetadataStmt rmJsonb)
+    for_ mintChunks $ \chunk -> HsqlP.statement chunk DB.insertBulkMaTxMintStmt
+    pure (txOutResults, concat txInResults)
+
+  -- TxOut-dependent operations
   maTxOutIds <- processMaTxOuts syncEnv txOutIds grouped
-  executePreparedMetadataPiped preparedMetadata
-  executePreparedMintPiped preparedMint
-
-  -- Process UTxO consumption (depends on txOutIds)
   processUtxoConsumption syncEnv grouped txOutIds
 
   pure $ makeMinId syncEnv txInIds txOutIds maTxOutIds
+  where
+    extractCoreTxOut :: DB.TxOutW -> VC.TxOutCore
+    extractCoreTxOut (DB.VCTxOutW txOut) = txOut
+    extractCoreTxOut _ = panic "Unexpected VATxOutW in CoreTxOut list"
+
+    extractVariantTxOut :: DB.TxOutW -> VA.TxOutAddress
+    extractVariantTxOut (DB.VATxOutW txOut _) = txOut
+    extractVariantTxOut _ = panic "Unexpected VCTxOutW in VariantTxOut list"
 
 mkmaTxOuts :: DB.TxOutVariantType -> (DB.TxOutIdW, [MissingMaTxOut]) -> [DB.MaTxOutW]
 mkmaTxOuts _txOutVariantType (txOutId, mmtos) = mkmaTxOut <$> mmtos
@@ -290,64 +312,8 @@ matches txIn eutxo =
       DB.VATxOutW vTxOut _ -> VA.txOutAddressIndex vTxOut
 
 -----------------------------------------------------------------------------------------------------------------------------------
--- PARALLEL PROCESSING HELPER FUNCTIONS
+-- HELPER FUNCTIONS
 -----------------------------------------------------------------------------------------------------------------------------------
-
--- | Prepared TxIn data for async execution
-data PreparedTxIn = PreparedTxIn
-  { ptiChunks :: ![[DB.TxIn]]
-  , ptiSkip :: !Bool
-  }
-
--- | Prepared Metadata data for async execution
-data PreparedMetadata = PreparedMetadata
-  { pmChunks :: ![[DB.TxMetadata]]
-  , pmRemoveJsonb :: !Bool
-  }
-
--- | Prepared Mint data for async execution
-data PreparedMint where
-  PreparedMint :: {pmtChunks :: ![[DB.MaTxMint]]} -> PreparedMint
-
--- | Prepare TxIn processing (can run in parallel with TxOut)
-prepareTxInProcessing :: SyncEnv -> BlockGroupedData -> PreparedTxIn
-prepareTxInProcessing syncEnv grouped =
-  PreparedTxIn
-    { ptiChunks = DB.chunkForBulkQuery (Proxy @DB.TxIn) Nothing $ etiTxIn <$> groupedTxIn grouped
-    , ptiSkip = getSkipTxIn syncEnv
-    }
-
--- | Prepare Metadata processing (fully independent)
-prepareMetadataProcessing :: SyncEnv -> BlockGroupedData -> PreparedMetadata
-prepareMetadataProcessing syncEnv grouped =
-  PreparedMetadata
-    { pmChunks = DB.chunkForBulkQuery (Proxy @DB.TxMetadata) (Just $ envIsJsonbInSchema syncEnv) $ groupedTxMetadata grouped
-    , pmRemoveJsonb = ioRemoveJsonbFromSchema $ soptInsertOptions $ envOptions syncEnv
-    }
-
--- | Prepare Mint processing (fully independent)
-prepareMintProcessing :: SyncEnv -> BlockGroupedData -> PreparedMint
-prepareMintProcessing _syncEnv grouped =
-  PreparedMint
-    { pmtChunks = DB.chunkForBulkQuery (Proxy @DB.MaTxMint) Nothing $ groupedTxMint grouped
-    }
-
--- | Execute prepared TxIn operations (using pipeline)
-executePreparedTxInPiped :: PreparedTxIn -> ExceptT SyncNodeError DB.DbM [DB.TxInId]
-executePreparedTxInPiped prepared =
-  if ptiSkip prepared
-    then pure []
-    else lift $ DB.insertBulkTxInPiped (ptiChunks prepared)
-
--- | Execute prepared Metadata operations (using pipeline)
-executePreparedMetadataPiped :: PreparedMetadata -> ExceptT SyncNodeError DB.DbM ()
-executePreparedMetadataPiped prepared =
-  void $ lift $ DB.insertBulkTxMetadataPiped (pmRemoveJsonb prepared) (pmChunks prepared)
-
--- | Execute prepared Mint operations (using pipeline)
-executePreparedMintPiped :: PreparedMint -> ExceptT SyncNodeError DB.DbM ()
-executePreparedMintPiped prepared =
-  void $ lift $ DB.insertBulkMaTxMintPiped (pmtChunks prepared)
 
 -- | Process MaTxOut operations (depends on TxOut IDs)
 processMaTxOuts :: SyncEnv -> [DB.TxOutIdW] -> BlockGroupedData -> ExceptT SyncNodeError DB.DbM [DB.MaTxOutIdW]
@@ -357,7 +323,7 @@ processMaTxOuts syncEnv txOutIds grouped = do
         concatMap (mkmaTxOuts txOutVariantType) $
           zip txOutIds (snd <$> groupedTxOut grouped)
       maTxOutChunks = DB.chunkForBulkQueryWith (DB.getMaTxOutBulkSize txOutVariantType) maTxOuts
-  lift $ DB.insertBulkMaTxOutPiped maTxOutChunks
+  lift $ DB.insertBulkMaTxOutChunked maTxOutChunks
 
 -- | Process UTxO consumption updates (depends on TxOut IDs)
 processUtxoConsumption :: SyncEnv -> BlockGroupedData -> [DB.TxOutIdW] -> ExceptT SyncNodeError DB.DbM ()
@@ -377,18 +343,14 @@ processUtxoConsumption syncEnv grouped txOutIds = do
     unless (null hashBasedUpdates) $
       void $
         lift $
-          DB.updateConsumedByTxHashPiped txOutVariantType hashUpdateChunks
+          DB.updateConsumedByTxHashChunked txOutVariantType hashUpdateChunks
     -- Individual process ID-based updates
     unless (null idBasedUpdates) $
       void $
         lift $
-          DB.updateListTxOutConsumedByTxIdBP idUpdateChunks
+          DB.updateListTxOutConsumedByTxIdChunked idUpdateChunks
     -- Log failures
     mapM_ (liftIO . logWarning tracer . ("Failed to find output for " <>) . Text.pack . show) failedInputs
-
------------------------------------------------------------------------------------------------------------------------------------
--- PARALLEL PROCESSING HELPER FUNCTIONS (NO PIPELINES)
------------------------------------------------------------------------------------------------------------------------------------
 
 -- | Helper function to create MinIds result
 makeMinId :: SyncEnv -> [DB.TxInId] -> [DB.TxOutIdW] -> [DB.MaTxOutIdW] -> DB.MinIdsWrapper

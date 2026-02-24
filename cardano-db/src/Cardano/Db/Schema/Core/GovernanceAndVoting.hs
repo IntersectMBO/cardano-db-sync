@@ -103,7 +103,6 @@ data DrepDistr = DrepDistr
 
 type instance Key DrepDistr = Id.DrepDistrId
 instance DbInfo DrepDistr where
-  uniqueFields _ = ["hash_id", "epoch_no"]
   unnestParamTypes _ =
     [ ("hash_id", "bigint[]")
     , ("amount", "bigint[]")
