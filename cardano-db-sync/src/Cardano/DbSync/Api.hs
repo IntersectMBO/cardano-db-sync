@@ -91,6 +91,8 @@ import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), Sna
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import qualified Hasql.Pipeline as HsqlP
+import qualified Hasql.Session as HsqlSes
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -256,7 +258,7 @@ hasLedgerState syncEnv =
 getDbLatestBlockInfo :: DB.DbEnv -> IO (Maybe TipInfo)
 getDbLatestBlockInfo dbEnv = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbDirectSilent dbEnv DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $
@@ -266,6 +268,19 @@ getDbLatestBlockInfo dbEnv = do
         , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
         , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
         }
+
+-- | Pipeline block and points queries in a single transaction for better performance
+loadBlockAndPointsData :: DB.DbEnv -> IO (Maybe DB.Block, [(Maybe Word64, ByteString)])
+loadBlockAndPointsData dbEnv =
+  DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) $ do
+    (mBlockEntity, points) <- DB.runSession DB.mkDbCallStack $
+      HsqlSes.pipeline $ do
+        blk <- HsqlP.statement () DB.queryLatestBlockStmt
+        pts <- HsqlP.statement () DB.queryLatestPointsStmt
+        pure (blk, pts)
+    
+    let mBlock = DB.entityVal <$> mBlockEntity
+    pure (mBlock, points)
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
