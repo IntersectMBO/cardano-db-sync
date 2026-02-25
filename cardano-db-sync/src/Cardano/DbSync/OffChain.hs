@@ -23,7 +23,7 @@ module Cardano.DbSync.OffChain (
 
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Api
+import Cardano.DbSync.Api (determineIsolationLevel, getInsertOptions, getTrace)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.OffChain.Http
@@ -248,9 +248,10 @@ runFetchOffChainPoolThread syncEnv = do
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           forever $ do
             tDelay
-            -- load the offChain vote work queue using the db
+            -- Use dynamic isolation level based on sync state
+            mIsolationLevel <- determineIsolationLevel syncEnv
             _ <-
-              DB.runDbDirectLogged trce dbEnv $
+              DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
             poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
             manager <- Http.newManager tlsManagerSettings
@@ -284,9 +285,10 @@ runFetchOffChainVoteThread syncEnv = do
           -- Use the thread-specific SyncEnv for all operations
           forever $ do
             tDelay
-            -- load the offChain vote work queue using the db
+            -- Use dynamic isolation level based on sync state
+            mIsolationLevel <- determineIsolationLevel syncEnv
             _ <-
-              DB.runDbDirectLogged trce dbEnv $
+              DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
             now <- liftIO Time.getPOSIXTime

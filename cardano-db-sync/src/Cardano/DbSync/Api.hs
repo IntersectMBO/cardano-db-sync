@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -43,6 +44,7 @@ module Cardano.DbSync.Api (
   generateNewEpochEvents,
   logDbState,
   convertToPoint,
+  determineIsolationLevel,
 )
 where
 
@@ -245,7 +247,7 @@ getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
 getSlotHash :: DB.DbEnv -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend = DB.runDbDirectSilent backend . DB.querySlotHash
+getSlotHash backend slotNo = DB.runDbTransSilent backend (Just DB.ReadCommitted) (DB.querySlotHash slotNo)
 
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
@@ -256,7 +258,7 @@ hasLedgerState syncEnv =
 getDbLatestBlockInfo :: DB.DbEnv -> IO (Maybe TipInfo)
 getDbLatestBlockInfo dbEnv = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbDirectSilent dbEnv DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $
@@ -266,6 +268,14 @@ getDbLatestBlockInfo dbEnv = do
         , bSlotNo = SlotNo . fromMaybe 0 $ DB.blockSlotNo block
         , bBlockNo = BlockNo . fromMaybe 0 $ DB.blockBlockNo block
         }
+
+-- | Determine isolation level based on sync state
+determineIsolationLevel :: SyncEnv -> IO (Maybe DB.IsolationLevel)
+determineIsolationLevel syncEnv = do
+  syncState <- readTVarIO (envDbIsolationState syncEnv)
+  pure $ case syncState of
+    DB.SyncLagging -> Just DB.ReadCommitted
+    DB.SyncFollowing -> Nothing
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
@@ -314,7 +324,7 @@ mkSyncEnv ::
   Bool ->
   IO SyncEnv
 mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
-  dbCNamesVar <- newTVarIO =<< DB.runDbDirectSilent dbEnv DB.queryRewardAndEpochStakeConstraints
+  dbCNamesVar <- newTVarIO =<< DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
       then
@@ -451,7 +461,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbDirectSilent (envDbEnv env) DB.queryLatestPoints
+      lastPoints <- DB.runDbTransSilent (envDbEnv env) (Just DB.ReadCommitted) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -506,7 +516,7 @@ getBootstrapInProgress ::
   DB.DbEnv ->
   IO Bool
 getBootstrapInProgress trce bootstrapFlag dbEnv = do
-  DB.runDbDirectSilent dbEnv $ do
+  DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems
     case (bootstrapFlag, btsState) of

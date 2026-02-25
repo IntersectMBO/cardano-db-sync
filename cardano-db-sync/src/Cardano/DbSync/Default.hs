@@ -46,7 +46,6 @@ import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 
 insertListBlocks ::
   SyncEnv ->
@@ -249,13 +248,6 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
 
 -- | Determine isolation level based on current sync state
-determineIsolationLevel :: SyncEnv -> IO (Maybe DB.IsolationLevel)
-determineIsolationLevel syncEnv = do
-  syncState <- readTVarIO (envDbIsolationState syncEnv)
-  pure $ case syncState of
-    DB.SyncLagging -> Just DB.ReadCommitted -- Syncing: use ReadCommitted for performance
-    DB.SyncFollowing -> Nothing -- Following: use default RepeatableRead for consistency
-
 isWithinTwoMin :: SlotDetails -> Bool
 isWithinTwoMin sd = isSyncedWithinSeconds sd 120 == SyncFollowing
 
