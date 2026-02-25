@@ -23,10 +23,9 @@ module Cardano.DbSync.OffChain (
 
 import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
-import Cardano.DbSync.Api
+import Cardano.DbSync.Api (determineIsolationLevel, getInsertOptions, getTrace)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Config.Types
-import qualified Cardano.DbSync.Default as Default
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
 import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
@@ -249,9 +248,8 @@ runFetchOffChainPoolThread syncEnv = do
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           forever $ do
             tDelay
-            -- Determine isolation level based on sync state (dynamic optimization)
-            mIsolationLevel <- Default.determineIsolationLevel syncEnv
-            -- Use transaction runner with dynamic isolation level to eliminate redundant BEGIN/COMMIT
+            -- Use dynamic isolation level based on sync state
+            mIsolationLevel <- determineIsolationLevel syncEnv
             _ <-
               DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
@@ -287,9 +285,8 @@ runFetchOffChainVoteThread syncEnv = do
           -- Use the thread-specific SyncEnv for all operations
           forever $ do
             tDelay
-            -- Determine isolation level based on sync state (dynamic optimization)
-            mIsolationLevel <- Default.determineIsolationLevel syncEnv
-            -- Use transaction runner with dynamic isolation level to eliminate redundant BEGIN/COMMIT
+            -- Use dynamic isolation level based on sync state
+            mIsolationLevel <- determineIsolationLevel syncEnv
             _ <-
               DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
