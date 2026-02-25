@@ -26,6 +26,7 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Config.Types
+import qualified Cardano.DbSync.Default as Default
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
 import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
@@ -248,9 +249,11 @@ runFetchOffChainPoolThread syncEnv = do
               threadSyncEnv = syncEnv {envDbEnv = dbEnv}
           forever $ do
             tDelay
-            -- load the offChain vote work queue using the db
+            -- Determine isolation level based on sync state (dynamic optimization)
+            mIsolationLevel <- Default.determineIsolationLevel syncEnv
+            -- Use transaction runner with dynamic isolation level to eliminate redundant BEGIN/COMMIT
             _ <-
-              DB.runDbDirectLogged trce dbEnv $
+              DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
             poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
             manager <- Http.newManager tlsManagerSettings
@@ -284,9 +287,11 @@ runFetchOffChainVoteThread syncEnv = do
           -- Use the thread-specific SyncEnv for all operations
           forever $ do
             tDelay
-            -- load the offChain vote work queue using the db
+            -- Determine isolation level based on sync state (dynamic optimization)
+            mIsolationLevel <- Default.determineIsolationLevel syncEnv
+            -- Use transaction runner with dynamic isolation level to eliminate redundant BEGIN/COMMIT
             _ <-
-              DB.runDbDirectLogged trce dbEnv $
+              DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
             now <- liftIO Time.getPOSIXTime
