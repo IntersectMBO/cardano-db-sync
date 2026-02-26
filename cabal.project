@@ -74,6 +74,9 @@ constraints:
   -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
+  -- typed-protocols-1.1.0.0 pulls in QuickCheck-2.16.0.0 but ral (dependency
+  -- of plutus-core) only supports QuickCheck ^>=2.14.2 || ^>=2.15
+  , QuickCheck < 2.16
 
 if impl (ghc >= 9.12)
   allow-newer:
