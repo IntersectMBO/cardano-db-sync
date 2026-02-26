@@ -52,6 +52,10 @@ jobs:
         uses: input-output-hk/actions/base@latest
         with:
           use-sodium-vrf: true
+      # TODO: remove when input-output-hk/devx includes git in iog-full shells
+      - name: Install git
+        shell: bash
+        run: nix-env -f '<nixpkgs>' -iA git
       - name: Add LMDB to Nix environment
         run: |
           nix-env -f '<nixpkgs>' -iA lmdb
@@ -70,14 +74,17 @@ jobs:
           restore-keys: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-
       - name: cabal update
         run: |
+          export PATH="$HOME/.nix-profile/bin:$PATH"
           export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
           cabal update
       - name: cabal build dependencies
         run: |
+          export PATH="$HOME/.nix-profile/bin:$PATH"
           export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
           cabal build all -j --enable-tests --only-dependencies
       - name: cabal build
         run: |
+          export PATH="$HOME/.nix-profile/bin:$PATH"
           export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
           cabal build all -j --enable-tests
       - name: postgres init
@@ -103,6 +110,7 @@ jobs:
             start
       - name: cabal test
         run: |
+          export PATH="$HOME/.nix-profile/bin:$PATH"
           export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
           # Create pgpass file
           export PGPASSFILE="${PG_DIR}/pgpass-testing"

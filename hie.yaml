@@ -1,0 +1,33 @@
+cradle:
+  cabal:
+    # cardano-db
+    - path: "./cardano-db/src"
+      component: "lib:cardano-db"
+    - path: "./cardano-db/test"
+      component: "cardano-db:test:test"
+
+    # cardano-db-sync
+    - path: "./cardano-db-sync/src"
+      component: "lib:cardano-db-sync"
+    - path: "./cardano-db-sync/app"
+      component: "exe:cardano-db-sync"
+    - path: "./cardano-db-sync/test"
+      component: "cardano-db-sync:test:test"
+
+    # cardano-db-tool
+    - path: "./cardano-db-tool/src"
+      component: "lib:cardano-db-tool"
+    - path: "./cardano-db-tool/app"
+      component: "exe:cardano-db-tool"
+
+    # cardano-smash-server
+    - path: "./cardano-smash-server/src"
+      component: "lib:cardano-smash-server"
+    - path: "./cardano-smash-server/app"
+      component: "exe:cardano-smash-server"
+
+    # cardano-chain-gen
+    - path: "./cardano-chain-gen/src"
+      component: "lib:cardano-chain-gen"
+    - path: "./cardano-chain-gen/test"
+      component: "cardano-chain-gen:test:cardano-chain-gen"
