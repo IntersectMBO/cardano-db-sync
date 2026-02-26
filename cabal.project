@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2025-09-29T13:55:56Z
-  , cardano-haskell-packages 2026-02-09T17:36:58Z
+  , hackage.haskell.org 2026-02-26T00:00:00Z
+  , cardano-haskell-packages 2026-02-26T00:00:00Z
 
 packages:
   cardano-db
@@ -74,9 +74,6 @@ constraints:
   -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
-  -- typed-protocols-1.1.0.0 pulls in QuickCheck-2.16.0.0 but ral (dependency
-  -- of plutus-core) only supports QuickCheck ^>=2.14.2 || ^>=2.15
-  , QuickCheck < 2.16
 
 if impl (ghc >= 9.12)
   allow-newer:
