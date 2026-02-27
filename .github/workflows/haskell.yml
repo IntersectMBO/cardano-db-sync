@@ -50,8 +50,8 @@ jobs:
       - name: Export devx environment variables
         run: |
           export PATH="/usr/bin:$PATH"
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
       - name: cache cabal
         uses: actions/cache@v3
         with:
