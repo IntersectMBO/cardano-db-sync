@@ -29,7 +29,7 @@ jobs:
     env:
       # Increment this value to "invalidate" the cabal cache. Be sure to do this
       # after updating dependencies (Hackage or chap)
-      CABAL_CACHE_VERSION: 1
+      CABAL_CACHE_VERSION: 2
 
     steps:
       - name: Checkout code
@@ -50,8 +50,10 @@ jobs:
       - name: Export devx environment variables
         run: |
           export PATH="/usr/bin:$PATH"
-          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
+          echo "NIX_LDFLAGS=$NIX_LDFLAGS" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$(echo $NIX_LDFLAGS | tr ' ' '\n' | grep '^-L' | sed 's/^-L//' | tr '\n' ':')" >> $GITHUB_ENV
       - name: cache cabal
         uses: actions/cache@v3
         with:
