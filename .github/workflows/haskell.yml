@@ -29,7 +29,7 @@ jobs:
     env:
       # Increment this value to "invalidate" the cabal cache. Be sure to do this
       # after updating dependencies (Hackage or chap)
-      CABAL_CACHE_VERSION: 1
+      CABAL_CACHE_VERSION: 2
 
     steps:
       - name: Checkout code
@@ -47,19 +47,13 @@ jobs:
           minimal: false
           # enable IOG-full flavour to bring in all the crypto libraries we need.
           iog-full: true
-      # TODO: remove when input-output-hk/devx is fixed
-      - name: Install system dependencies
-        uses: input-output-hk/actions/base@latest
-        with:
-          use-sodium-vrf: true
-      - name: Add LMDB to Nix environment
+      - name: Export devx environment variables
         run: |
-          nix-env -f '<nixpkgs>' -iA lmdb
-          LMDB_STORE=$(find /nix/store -maxdepth 1 -name '*lmdb*-dev' -type d | head -1)
-          if [ -n "$LMDB_STORE" ]; then
-            echo "LMDB_PKGCONFIG=${LMDB_STORE}/lib/pkgconfig" >> $GITHUB_ENV
-          fi
-        shell: devx {0}
+          export PATH="/usr/bin:$PATH"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
+          echo "NIX_LDFLAGS=$NIX_LDFLAGS" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$(echo $NIX_LDFLAGS | tr ' ' '\n' | grep '^-L' | sed 's/^-L//' | tr '\n' ':')" >> $GITHUB_ENV
       - name: cache cabal
         uses: actions/cache@v3
         with:
@@ -70,19 +64,23 @@ jobs:
           restore-keys: ${{ env.CABAL_CACHE_VERSION }}-${{ runner.os }}-${{ matrix.compiler-nix-name }}-
       - name: cabal update
         run: |
-          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          export PATH="/usr/bin:$PATH"
           cabal update
       - name: cabal build dependencies
         run: |
-          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          export PATH="/usr/bin:$PATH"
           cabal build all -j --enable-tests --only-dependencies
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
       - name: cabal build
         run: |
-          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          export PATH="/usr/bin:$PATH"
           cabal build all -j --enable-tests
       - name: postgres init
         working-directory:
         run: |
+          export PATH="/usr/bin:$PATH"
           # Set up environment
           PG_DIR="$(mktemp -d)"
           DB_DIR="${PG_DIR}/db"
@@ -103,7 +101,7 @@ jobs:
             start
       - name: cabal test
         run: |
-          export PKG_CONFIG_PATH_FOR_TARGET=${{ env.LMDB_PKGCONFIG }}:${PKG_CONFIG_PATH_FOR_TARGET:-}
+          export PATH="/usr/bin:$PATH"
           # Create pgpass file
           export PGPASSFILE="${PG_DIR}/pgpass-testing"
           echo "${PG_DIR}:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE
@@ -114,4 +112,5 @@ jobs:
       - name: postgres shutdown
         if: ${{ always() }}
         run: |
+          export PATH="/usr/bin:$PATH"
           ./scripts/postgresql-test.sh -d "$DB_DIR" stop
