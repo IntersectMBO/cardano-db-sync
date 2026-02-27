@@ -79,7 +79,7 @@ restartDBSync =
 
 nodeRestart :: IOManager -> [(Text, Text)] -> Assertion
 nodeRestart =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigLog conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ forgeAndSubmitBlocks interpreter mockServer 5
     startDBSync dbSync
     assertBlockNoBackoff dbSync 5
@@ -93,7 +93,7 @@ nodeRestart =
 
 nodeRestartBoundary :: IOManager -> [(Text, Text)] -> Assertion
 nodeRestartBoundary =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withFullConfigLog conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blks <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync $ length blks
