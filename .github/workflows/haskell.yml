@@ -68,6 +68,9 @@ jobs:
         run: |
           export PATH="/usr/bin:$PATH"
           cabal build all -j --enable-tests --only-dependencies
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
       - name: cabal build
         run: |
           export PATH="/usr/bin:$PATH"
