@@ -47,14 +47,11 @@ jobs:
           minimal: false
           # enable IOG-full flavour to bring in all the crypto libraries we need.
           iog-full: true
-      - name: Install system dependencies
-        uses: input-output-hk/actions/base@latest
-        with:
-          use-sodium-vrf: true
-      - name: Export PKG_CONFIG_PATH from devx shell
+      - name: Export devx environment variables
         run: |
           export PATH="/usr/bin:$PATH"
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH" >> $GITHUB_ENV
       - name: cache cabal
         uses: actions/cache@v3
         with:
