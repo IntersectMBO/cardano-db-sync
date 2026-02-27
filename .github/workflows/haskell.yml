@@ -52,6 +52,8 @@ jobs:
           export PATH="/usr/bin:$PATH"
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
+          echo "NIX_LDFLAGS=$NIX_LDFLAGS" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$(echo $NIX_LDFLAGS | tr ' ' '\n' | grep '^-L' | sed 's/^-L//' | tr '\n' ':')" >> $GITHUB_ENV
       - name: cache cabal
         uses: actions/cache@v3
         with:
