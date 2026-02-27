@@ -47,6 +47,10 @@ jobs:
           minimal: false
           # enable IOG-full flavour to bring in all the crypto libraries we need.
           iog-full: true
+      - name: Export PKG_CONFIG_PATH from devx shell
+        run: |
+          export PATH="/usr/bin:$PATH"
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
       - name: cache cabal
         uses: actions/cache@v3
         with:
