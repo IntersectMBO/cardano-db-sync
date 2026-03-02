@@ -56,6 +56,8 @@ data Model r = Model
   , dbSyncMaxBlockNo :: Maybe BlockNo
   , dbSynsIsOn :: Bool
   , dbSynsHasSynced :: Bool -- This is used just to avoid restarting the node too early.
+  , dbSyncNeedsResync :: Bool -- True after RestartNode until at least one RollForward, to avoid
+  -- generating AssertBlockNo before db-sync has had a chance to reconnect.
   }
   deriving stock (Generic, Show)
 
@@ -103,7 +105,7 @@ instance ToExpr (Model Symbolic)
 instance ToExpr (Model Concrete)
 
 initModel :: Model r
-initModel = Model [] [] Nothing False False
+initModel = Model [] [] Nothing False False False
 
 data Response r
   = NewBlockAdded (Reference (Opaque CardanoBlock) r)
@@ -127,6 +129,7 @@ transition m cmd resp = case (cmd, resp) of
      in m
           { serverChain = serverChain'
           , dbSyncMaxBlockNo = dbSyncMaxBlockNo'
+          , dbSyncNeedsResync = False
           }
   (RollBack blkNo, _) ->
     m {serverChain = rollbackChain blkNo (serverChain m)}
@@ -144,7 +147,7 @@ transition m cmd resp = case (cmd, resp) of
       , dbSynsHasSynced = False
       }
   (RestartNode, _) ->
-    m
+    m {dbSyncNeedsResync = True}
   (AssertBlockNo n, _) ->
     m
       { dbSynsHasSynced = True
@@ -163,7 +166,7 @@ precondition m cmd = case cmd of
 
 canAssert :: Model Symbolic -> Maybe (Maybe BlockNo)
 canAssert m =
-  if stip >= dbtip
+  if not (dbSyncNeedsResync m) && stip >= dbtip
     then Just stip
     else Nothing
   where

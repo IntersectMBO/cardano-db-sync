@@ -8,7 +8,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Simple (
 ) where
 
 import Cardano.Ledger.BaseTypes (BlockNo (BlockNo))
-import Cardano.Mock.ChainSync.Server (IOManager, addBlock, restartServer)
+import Cardano.Mock.ChainSync.Server (IOManager, addBlock, restartServer, waitForNextConnection)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically)
 import Control.Monad (void)
@@ -80,13 +80,20 @@ restartDBSync =
 nodeRestart :: IOManager -> [(Text, Text)] -> Assertion
 nodeRestart =
   withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
-    startDBSync dbSync
+    -- Forge blocks before starting db-sync so it syncs them cleanly in one shot.
     void $ forgeAndSubmitBlocks interpreter mockServer 5
+    startDBSync dbSync
     assertBlockNoBackoff dbSync 5
 
     restartServer mockServer
-
-    void $ forgeAndSubmitBlocks interpreter mockServer 5
+    -- Wait for db-sync to actually reconnect to the restarted server before
+    -- forging new blocks. Without this, the mux bearer on macOS CI takes up to
+    -- 24s to detect the closed connection, and the 51s assertion budget may be
+    -- exhausted before db-sync reconnects.
+    waitForNextConnection mockServer
+    void $ forgeAndSubmitBlocks interpreter mockServer 1
+    assertBlockNoBackoff dbSync 6
+    void $ forgeAndSubmitBlocks interpreter mockServer 4
     assertBlockNoBackoff dbSync 10
   where
     testLabel = "nodeRestart"
@@ -99,8 +106,12 @@ nodeRestartBoundary =
     assertBlockNoBackoff dbSync $ length blks
 
     restartServer mockServer
-
-    void $ forgeAndSubmitBlocks interpreter mockServer 5
+    -- Wait for db-sync to actually reconnect to the restarted server before
+    -- forging new blocks and asserting.
+    waitForNextConnection mockServer
+    void $ forgeAndSubmitBlocks interpreter mockServer 1
+    assertBlockNoBackoff dbSync $ length blks + 1
+    void $ forgeAndSubmitBlocks interpreter mockServer 4
     assertBlockNoBackoff dbSync $ 5 + length blks
   where
     testLabel = "nodeRestartBoundary"
