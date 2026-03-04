@@ -160,7 +160,7 @@ precondition m cmd = case cmd of
   RollBack n -> n .< serverTip m -- can it be equal?
   StopDBSync -> Boolean $ dbSynsIsOn m && dbSynsHasSynced m
   StartDBSync -> Boolean $ not $ dbSynsIsOn m
-  RestartNode -> Boolean $ dbSynsHasSynced m
+  RestartNode -> Boolean $ dbSynsHasSynced m && dbSynsIsOn m
   AssertBlockNo n | Just n' <- canAssert m -> n .== n'
   _ -> Bot
 
@@ -189,7 +189,7 @@ semantics interpreter mockServer dbSync cmd = case cmd of
       Just pnt -> Unit <$> rollbackTo interpreter mockServer pnt
   StopDBSync -> Unit <$> stopDBSync dbSync
   StartDBSync -> Unit <$> startDBSync dbSync
-  RestartNode -> Unit <$> restartServer mockServer
+  RestartNode -> Unit <$> (restartServer mockServer >> waitForNextConnection mockServer)
   AssertBlockNo mBlkNo -> runAssert dbSync mBlkNo
 
 runAssert :: DBSyncEnv -> Maybe BlockNo -> IO (Response Concrete)
@@ -223,7 +223,7 @@ generator m =
       , (if not canRollback then 0 else if isOn then 10 else 20, genRollBack m)
       , (if isOn then 30 else 0, genStopDBSync m)
       , (if isOn then 0 else 60, genStartDBSync m)
-      , (if isOn then 20 else 5, genRestartNode m)
+      , (if isOn then 20 else 0, genRestartNode m)
       , (if isOn && isJust serverNotBehind then 30 else 0, genAssertBlockNo m)
       ]
   where

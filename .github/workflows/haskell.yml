@@ -49,7 +49,6 @@ jobs:
           iog-full: true
       - name: Export devx environment variables
         run: |
-          export PATH="/usr/bin:$PATH"
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH_FOR_TARGET=$PKG_CONFIG_PATH_FOR_TARGET" >> $GITHUB_ENV
           echo "NIX_LDFLAGS=$NIX_LDFLAGS" >> $GITHUB_ENV
@@ -70,17 +69,12 @@ jobs:
         run: |
           export PATH="/usr/bin:$PATH"
           cabal build all -j --enable-tests --only-dependencies
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
       - name: cabal build
         run: |
           export PATH="/usr/bin:$PATH"
           cabal build all -j --enable-tests
       - name: postgres init
-        working-directory:
         run: |
-          export PATH="/usr/bin:$PATH"
           # Set up environment
           PG_DIR="$(mktemp -d)"
           DB_DIR="${PG_DIR}/db"
@@ -112,5 +106,4 @@ jobs:
       - name: postgres shutdown
         if: ${{ always() }}
         run: |
-          export PATH="/usr/bin:$PATH"
           ./scripts/postgresql-test.sh -d "$DB_DIR" stop

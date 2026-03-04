@@ -44,12 +44,11 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   writeTVar,
  )
 import Control.Exception (IOException, bracket, try)
-import Control.Monad (forever)
+import Control.Monad (forever, unless)
 import Control.Tracer
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
-import Debug.Trace (traceM)
 import qualified Network.Socket as Socket
 import Network.TypedProtocol.Peer (Peer (..))
 import qualified Network.TypedProtocol.Stateful.Peer as St
@@ -145,19 +144,14 @@ rollback handle point =
 
 restartServer :: ServerHandle IO blk -> IO ()
 restartServer sh = do
-  putStrLn $ "[restartServer] stopping server, socket: " <> socketPath sh
   stopServer sh
-  putStrLn "[restartServer] server stopped"
   -- On Unix, closing the socket fd does not remove the socket file. If the
   -- file still exists when the new server tries to bind, bind() fails with
   -- EADDRINUSE and the server thread dies silently. Explicitly remove the
   -- file here so the new server can always bind successfully.
-  removeResult <- (try @IOException) $ removeFile (socketPath sh)
-  putStrLn $ "[restartServer] removeFile result: " <> show (fmap (const "()") removeResult)
+  _ <- (try @IOException) $ removeFile (socketPath sh)
   thread <- forkAgain sh
-  putStrLn "[restartServer] new server thread forked"
   atomically $ writeTVar (threadHandle sh) thread
-  putStrLn "[restartServer] done"
 
 stopServer :: ServerHandle IO blk -> IO ()
 stopServer sh = do
@@ -176,9 +170,7 @@ waitForNextConnection sh = do
   -- Block until a new follower (with a higher id) has been registered.
   atomically $ do
     cps <- readTVar (chainProducerState sh)
-    if nextFollowerId cps > currentId
-      then pure ()
-      else retry
+    unless (nextFollowerId cps > currentId) retry
 
 type MockServerConstraint blk =
   ( SerialiseNodeToClientConstraints blk
@@ -287,16 +279,12 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
           localPeer ->
           Channel IO ByteString ->
           IO ((), Maybe ByteString)
-        chainSyncServer' _them channel = do
-          putStrLn "[chainSyncServer'] new client connection, starting chainsync"
-          result <-
-            runPeer
-              nullTracer -- (showTracing stdoutTracer)
-              (cChainSyncCodec codecs)
-              channel
-              (chainSyncServerPeer $ chainSyncServer state codecConfig blockVersion)
-          putStrLn "[chainSyncServer'] chainsync peer finished"
-          pure result
+        chainSyncServer' _them channel =
+          runPeer
+            nullTracer
+            (cChainSyncCodec codecs)
+            channel
+            (chainSyncServerPeer $ chainSyncServer state codecConfig blockVersion)
 
         txSubmitServer ::
           localPeer ->
@@ -360,39 +348,23 @@ chainSyncServer state codec _blockVersion =
             (m (ServerStNext (Serialised blk) (Point blk) (Tip blk) m ()))
         )
     handleRequestNext r = do
-      traceM $ "[chainSyncServer] RequestNext follower=" <> show r
       mupdate <- tryReadChainUpdate r
       case mupdate of
-        Just update@(_, upd) -> do
-          traceM $ "[chainSyncServer] RequestNext immediate " <> describeUpdate upd <> " follower=" <> show r
-          pure (Left (sendNext r update))
-        Nothing -> do
-          traceM $ "[chainSyncServer] RequestNext blocking (no update yet) follower=" <> show r
-          pure $ Right $ do
-            update@(_, upd) <- readChainUpdate r
-            traceM $ "[chainSyncServer] RequestNext unblocked " <> describeUpdate upd <> " follower=" <> show r
-            pure (sendNext r update)
-    -- Follower is at the head, have to block and wait for
-    -- the producer's state to change.
+        Just update -> pure (Left (sendNext r update))
+        Nothing ->
+          -- Follower is at the head, have to block and wait for
+          -- the producer's state to change.
+          pure $ Right $ sendNext r <$> readChainUpdate r
 
     handleFindIntersect ::
       FollowerId ->
       [Point blk] ->
       m (ServerStIntersect (Serialised blk) (Point blk) (Tip blk) m ())
     handleFindIntersect r points = do
-      traceM $ "[chainSyncServer] FindIntersect follower=" <> show r <> " npoints=" <> show (length points)
       changed <- improveReadPoint r points
       case changed of
-        (Just _pt, _tip) -> do
-          traceM $ "[chainSyncServer] IntersectFound follower=" <> show r
-          pure $ SendMsgIntersectFound _pt _tip (idle' r)
-        (Nothing, _tip) -> do
-          traceM $ "[chainSyncServer] IntersectNotFound follower=" <> show r
-          pure $ SendMsgIntersectNotFound _tip (idle' r)
-
-    describeUpdate :: ChainUpdate blk blk -> String
-    describeUpdate (AddBlock _) = "AddBlock"
-    describeUpdate (RollBack _) = "RollBack"
+        (Just pt, tip) -> pure $ SendMsgIntersectFound pt tip (idle' r)
+        (Nothing, tip) -> pure $ SendMsgIntersectNotFound tip (idle' r)
 
     sendNext ::
       FollowerId ->
@@ -404,13 +376,10 @@ chainSyncServer state codec _blockVersion =
       SendMsgRollBackward (castPoint p) tip (idle' r)
 
     newFollower :: m FollowerId
-    newFollower = do
-      rid <- atomically $ do
-        cps <- readTVar state
-        let (cps', rid) = initFollower genesisPoint cps
-        _ <- writeTVar state cps'
-        pure rid
-      traceM $ "[chainSyncServer] newFollower -> id=" <> show rid
+    newFollower = atomically $ do
+      cps <- readTVar state
+      let (cps', rid) = initFollower genesisPoint cps
+      writeTVar state cps'
       pure rid
 
     improveReadPoint ::
