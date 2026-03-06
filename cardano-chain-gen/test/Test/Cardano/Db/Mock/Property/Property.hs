@@ -56,6 +56,8 @@ data Model r = Model
   , dbSyncMaxBlockNo :: Maybe BlockNo
   , dbSynsIsOn :: Bool
   , dbSynsHasSynced :: Bool -- This is used just to avoid restarting the node too early.
+  , dbSyncNeedsResync :: Bool -- True after RestartNode until at least one RollForward, to avoid
+  -- generating AssertBlockNo before db-sync has had a chance to reconnect.
   }
   deriving stock (Generic, Show)
 
@@ -103,7 +105,7 @@ instance ToExpr (Model Symbolic)
 instance ToExpr (Model Concrete)
 
 initModel :: Model r
-initModel = Model [] [] Nothing False False
+initModel = Model [] [] Nothing False False False
 
 data Response r
   = NewBlockAdded (Reference (Opaque CardanoBlock) r)
@@ -127,6 +129,7 @@ transition m cmd resp = case (cmd, resp) of
      in m
           { serverChain = serverChain'
           , dbSyncMaxBlockNo = dbSyncMaxBlockNo'
+          , dbSyncNeedsResync = False
           }
   (RollBack blkNo, _) ->
     m {serverChain = rollbackChain blkNo (serverChain m)}
@@ -144,7 +147,7 @@ transition m cmd resp = case (cmd, resp) of
       , dbSynsHasSynced = False
       }
   (RestartNode, _) ->
-    m
+    m {dbSyncNeedsResync = True}
   (AssertBlockNo n, _) ->
     m
       { dbSynsHasSynced = True
@@ -157,13 +160,13 @@ precondition m cmd = case cmd of
   RollBack n -> n .< serverTip m -- can it be equal?
   StopDBSync -> Boolean $ dbSynsIsOn m && dbSynsHasSynced m
   StartDBSync -> Boolean $ not $ dbSynsIsOn m
-  RestartNode -> Boolean $ dbSynsHasSynced m
+  RestartNode -> Boolean $ dbSynsHasSynced m && dbSynsIsOn m
   AssertBlockNo n | Just n' <- canAssert m -> n .== n'
   _ -> Bot
 
 canAssert :: Model Symbolic -> Maybe (Maybe BlockNo)
 canAssert m =
-  if stip >= dbtip
+  if not (dbSyncNeedsResync m) && stip >= dbtip
     then Just stip
     else Nothing
   where
@@ -186,7 +189,7 @@ semantics interpreter mockServer dbSync cmd = case cmd of
       Just pnt -> Unit <$> rollbackTo interpreter mockServer pnt
   StopDBSync -> Unit <$> stopDBSync dbSync
   StartDBSync -> Unit <$> startDBSync dbSync
-  RestartNode -> Unit <$> restartServer mockServer
+  RestartNode -> Unit <$> (restartServer mockServer >> waitForNextConnection mockServer)
   AssertBlockNo mBlkNo -> runAssert dbSync mBlkNo
 
 runAssert :: DBSyncEnv -> Maybe BlockNo -> IO (Response Concrete)
@@ -220,7 +223,7 @@ generator m =
       , (if not canRollback then 0 else if isOn then 10 else 20, genRollBack m)
       , (if isOn then 30 else 0, genStopDBSync m)
       , (if isOn then 0 else 60, genStartDBSync m)
-      , (if isOn then 20 else 5, genRestartNode m)
+      , (if isOn then 20 else 0, genRestartNode m)
       , (if isOn && isJust serverNotBehind then 30 else 0, genAssertBlockNo m)
       ]
   where

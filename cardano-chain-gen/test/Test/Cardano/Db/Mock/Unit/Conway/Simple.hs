@@ -8,7 +8,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Simple (
 ) where
 
 import Cardano.Ledger.BaseTypes (BlockNo (..))
-import Cardano.Mock.ChainSync.Server (IOManager, addBlock, restartServer)
+import Cardano.Mock.ChainSync.Server (IOManager, addBlock, restartServer, waitForNextConnection)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
 import Cardano.Prelude
 import Ouroboros.Network.Block (blockNo)
@@ -85,8 +85,11 @@ nodeRestart =
     assertBlockNoBackoff dbSync 5
 
     restartServer mockServer
-
-    void $ forgeAndSubmitBlocks interpreter mockServer 5
+    -- Wait for db-sync to actually reconnect before forging new blocks.
+    waitForNextConnection mockServer
+    void $ forgeAndSubmitBlocks interpreter mockServer 1
+    assertBlockNoBackoff dbSync 6
+    void $ forgeAndSubmitBlocks interpreter mockServer 4
     assertBlockNoBackoff dbSync 10
   where
     testLabel = "conwayNodeRestart"
@@ -99,8 +102,11 @@ nodeRestartBoundary =
     assertBlockNoBackoff dbSync $ length blks
 
     restartServer mockServer
-
-    void $ forgeAndSubmitBlocks interpreter mockServer 5
+    -- Wait for db-sync to actually reconnect before forging new blocks.
+    waitForNextConnection mockServer
+    void $ forgeAndSubmitBlocks interpreter mockServer 1
+    assertBlockNoBackoff dbSync $ length blks + 1
+    void $ forgeAndSubmitBlocks interpreter mockServer 4
     assertBlockNoBackoff dbSync $ 5 + length blks
   where
     testLabel = "conwayNodeRestartBoundary"

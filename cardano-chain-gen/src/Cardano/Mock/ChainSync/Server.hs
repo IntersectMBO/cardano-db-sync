@@ -14,6 +14,7 @@ module Cardano.Mock.ChainSync.Server (
   withServerHandle,
   stopServer,
   restartServer,
+  waitForNextConnection,
 
   -- * ServerHandle api
   ServerHandle (..),
@@ -42,8 +43,8 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   retry,
   writeTVar,
  )
-import Control.Exception (bracket)
-import Control.Monad (forever)
+import Control.Exception (IOException, bracket, try)
+import Control.Monad (forever, unless)
 import Control.Tracer
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
@@ -101,6 +102,7 @@ import Ouroboros.Network.Snocket
 import qualified Ouroboros.Network.Snocket as Snocket
 import Ouroboros.Network.Socket
 import Ouroboros.Network.Util.ShowProxy (Proxy (..), ShowProxy (..))
+import System.Directory (removeFile)
 
 {- HLINT ignore "Use readTVarIO" -}
 
@@ -108,6 +110,7 @@ data ServerHandle m blk = ServerHandle
   { chainProducerState :: StrictTVar m (ChainProducerState blk)
   , threadHandle :: StrictTVar m (Async ())
   , forkAgain :: m (Async ())
+  , socketPath :: FilePath
   }
 
 replaceGenesis :: MonadSTM m => ServerHandle m blk -> State blk -> STM m ()
@@ -142,9 +145,11 @@ rollback handle point =
 restartServer :: ServerHandle IO blk -> IO ()
 restartServer sh = do
   stopServer sh
-  -- TODO not sure why, but this delay is necessary. Without it reconnection doesn't happen
-  -- some times.
-  threadDelay 1_000_000
+  -- On Unix, closing the socket fd does not remove the socket file. If the
+  -- file still exists when the new server tries to bind, bind() fails with
+  -- EADDRINUSE and the server thread dies silently. Explicitly remove the
+  -- file here so the new server can always bind successfully.
+  _ <- (try @IOException) $ removeFile (socketPath sh)
   thread <- forkAgain sh
   atomically $ writeTVar (threadHandle sh) thread
 
@@ -152,6 +157,20 @@ stopServer :: ServerHandle IO blk -> IO ()
 stopServer sh = do
   srvThread <- atomically $ readTVar $ threadHandle sh
   cancel srvThread
+
+-- | Block until db-sync has made a new connection to the (restarted) server.
+-- This is detected by watching 'nextFollowerId' in 'ChainProducerState': each
+-- new client connection calls 'newFollower', incrementing the counter.
+-- Call this after 'restartServer' to ensure the test does not race ahead
+-- before db-sync has actually reconnected.
+waitForNextConnection :: ServerHandle IO blk -> IO ()
+waitForNextConnection sh = do
+  -- Snapshot the current follower id before the restart connection comes in.
+  currentId <- atomically $ nextFollowerId <$> readTVar (chainProducerState sh)
+  -- Block until a new follower (with a higher id) has been registered.
+  atomically $ do
+    cps <- readTVar (chainProducerState sh)
+    unless (nextFollowerId cps > currentId) retry
 
 type MockServerConstraint blk =
   ( SerialiseNodeToClientConstraints blk
@@ -182,7 +201,7 @@ forkServerThread iom config initSt netMagic path = do
   let runThread = async $ runLocalServer iom (configCodec config) netMagic path chainSt
   thread <- runThread
   threadVar <- newTVarIO thread
-  pure $ ServerHandle chainSt threadVar runThread
+  pure $ ServerHandle chainSt threadVar runThread path
 
 withServerHandle ::
   MockServerConstraint blk =>
@@ -262,7 +281,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
           IO ((), Maybe ByteString)
         chainSyncServer' _them channel =
           runPeer
-            nullTracer -- (showTracing stdoutTracer)
+            nullTracer
             (cChainSyncCodec codecs)
             channel
             (chainSyncServerPeer $ chainSyncServer state codecConfig blockVersion)
@@ -332,9 +351,10 @@ chainSyncServer state codec _blockVersion =
       mupdate <- tryReadChainUpdate r
       case mupdate of
         Just update -> pure (Left (sendNext r update))
-        Nothing -> pure (Right (sendNext r <$> readChainUpdate r))
-    -- Follower is at the head, have to block and wait for
-    -- the producer's state to change.
+        Nothing ->
+          -- Follower is at the head, have to block and wait for
+          -- the producer's state to change.
+          pure $ Right $ sendNext r <$> readChainUpdate r
 
     handleFindIntersect ::
       FollowerId ->
@@ -352,13 +372,14 @@ chainSyncServer state codec _blockVersion =
       ServerStNext (Serialised blk) (Point blk) (Tip blk) m ()
     sendNext r (tip, AddBlock b) =
       SendMsgRollForward (mkSerialised (encodeDisk codec) b) tip (idle' r)
-    sendNext r (tip, RollBack p) = SendMsgRollBackward (castPoint p) tip (idle' r)
+    sendNext r (tip, RollBack p) =
+      SendMsgRollBackward (castPoint p) tip (idle' r)
 
     newFollower :: m FollowerId
     newFollower = atomically $ do
       cps <- readTVar state
       let (cps', rid) = initFollower genesisPoint cps
-      _ <- writeTVar state cps'
+      writeTVar state cps'
       pure rid
 
     improveReadPoint ::

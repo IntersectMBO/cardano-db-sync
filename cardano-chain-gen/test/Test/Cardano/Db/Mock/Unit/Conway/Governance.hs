@@ -485,7 +485,7 @@ hardFork =
 -- indexes them without errors.
 hardForkPostBlock :: IOManager -> [(Text, Text)] -> Assertion
 hardForkPostBlock =
-  withFullConfigLog conwayConfigDir testLabel $ \interpreter server dbSync -> do
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
