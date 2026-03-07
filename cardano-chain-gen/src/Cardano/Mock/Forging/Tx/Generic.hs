@@ -190,16 +190,14 @@ resolvePool pix st = case pix of
 
 allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) mk -> [ShelleyTxCert era]
 allPoolStakeCert st =
-  ShelleyTxCertDelegCert . ShelleyRegCert <$> nub creds
+  ShelleyTxCertDelegCert . ShelleyRegCert <$> notRegisteredCreds
   where
-    poolParms =
-      let certState =
-            lsCertState $
-              esLState $
-                nesEs $
-                  Consensus.shelleyLedgerState st
-       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
+    certState =
+      Consensus.shelleyLedgerState st ^. nesEsL . esLStateL . lsCertStateL
+    poolParms = Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
     creds = concatMap getPoolStakeCreds poolParms
+    notRegisteredCreds =
+      filter (`Map.notMember` (certState ^. certDStateL . accountsL . accountsMapL)) $ nub creds
 
 getPoolStakeCreds :: PoolParams -> [StakeCredential]
 getPoolStakeCreds pparams =

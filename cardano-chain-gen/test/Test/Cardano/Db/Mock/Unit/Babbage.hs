@@ -36,8 +36,8 @@ unitTests iom knownMigrations =
         ]
     , testGroup
         "rewards"
-        [ -- test "rewards simple" BabReward.simpleRewards TODO: possible upstream changed in shelley genesis
-          test "rewards with deregistration" BabReward.rewardsDeregistration
+        [ test "rewards simple" BabReward.simpleRewards
+        , test "rewards with deregistration" BabReward.rewardsDeregistration
         , test "rewards with reregistration. Fixed in Babbage." BabReward.rewardsReregistration
         , test "Mir Cert" BabReward.mirReward
         , -- , test "Mir rollback" mirRewardRollback
