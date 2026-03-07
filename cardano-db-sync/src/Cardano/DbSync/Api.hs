@@ -448,7 +448,14 @@ getLatestPoints env = do
   case envLedgerEnv env of
     HasLedger hasLedgerEnv -> do
       snapshotPoints <- listKnownSnapshots hasLedgerEnv
-      verifySnapshotPoint env snapshotPoints
+      if null snapshotPoints
+        then do
+          -- Fallback: When no snapshots available (e.g., after restart),
+          -- query database for recent blocks to use as intersection points
+          lastPoints <- DB.runDbDirectSilent (envDbEnv env) DB.queryLatestPoints
+          pure $ mapMaybe convert lastPoints
+        else
+          verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
       lastPoints <- DB.runDbDirectSilent (envDbEnv env) DB.queryLatestPoints

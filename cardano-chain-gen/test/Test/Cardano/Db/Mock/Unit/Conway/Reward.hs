@@ -8,7 +8,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Reward (
 ) where
 
 import Cardano.Ledger.Keys (KeyHash (..))
-import Cardano.Mock.ChainSync.Server (IOManager (), addBlock, rollback)
+import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types (PoolIndex (..), StakeIndex (..), UTxOIndex (..))
 import Cardano.Prelude
@@ -104,17 +104,17 @@ rollbackBoundary =
     assertRewardCount dbSync 3
 
     -- Rollback
-    atomically $ rollback mockServer (blockPoint $ last blks)
+    rbBlocks <- Api.rollbackTo interpreter mockServer (blockPoint $ last blks)
     -- Rollback effects are delayed
-    assertBlockNoBackoff dbSync (2 + length (epochs <> blks <> epochs'))
+    assertBlockNoBackoff dbSync (1 + length (epochs <> blks <> rbBlocks <> epochs'))
 
     -- Add the blocks again
     forM_ epochs' $ atomically . addBlock mockServer
     -- Should have the same amount of rewards
-    assertBlockNoBackoff dbSync (2 + length (epochs <> blks <> epochs'))
+    assertBlockNoBackoff dbSync (1 + length (epochs <> blks <> rbBlocks <> epochs'))
     assertRewardCount dbSync 3
     -- Add some more blocks and verify
     epochs'' <- Api.fillUntilNextEpoch interpreter mockServer
-    assertBlockNoBackoff dbSync (2 + length (epochs <> blks <> epochs' <> epochs''))
+    assertBlockNoBackoff dbSync (2 + length (epochs <> blks <> rbBlocks <> epochs''))
   where
     testLabel = "conwayRollbackBoundary"
