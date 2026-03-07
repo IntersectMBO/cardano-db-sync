@@ -255,11 +255,12 @@ runFetchOffChainPoolThread syncEnv = do
             poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
             manager <- Http.newManager tlsManagerSettings
             now <- liftIO Time.getPOSIXTime
-            mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
+            mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now userAgent) poolq
       )
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
+    userAgent = ioOffChainUserAgent iopts
 
     queuePoolInsert :: OffChainPoolResult -> IO ()
     queuePoolInsert = atomically . writeTBQueue (envOffChainPoolResultQueue syncEnv)
@@ -290,12 +291,13 @@ runFetchOffChainVoteThread syncEnv = do
                 loadOffChainVoteWorkQueue trce (envOffChainVoteWorkQueue threadSyncEnv)
             voteq <- atomically $ flushTBQueue (envOffChainVoteWorkQueue threadSyncEnv)
             now <- liftIO Time.getPOSIXTime
-            mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways now) voteq
+            mapM_ (queueVoteInsert <=< fetchOffChainVoteData gateways userAgent now) voteq
       )
   where
     trce = getTrace syncEnv
     iopts = getInsertOptions syncEnv
     gateways = dncIpfsGateway $ envSyncNodeConfig syncEnv
+    userAgent = ioOffChainUserAgent iopts
 
     queueVoteInsert :: OffChainVoteResult -> IO ()
     queueVoteInsert = atomically . writeTBQueue (envOffChainVoteResultQueue syncEnv)
@@ -307,12 +309,12 @@ tDelay = threadDelay 300_000_000
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Fetch OffChain data
 ---------------------------------------------------------------------------------------------------------------------------------
-fetchOffChainPoolData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> OffChainPoolWorkQueue -> IO OffChainPoolResult
-fetchOffChainPoolData _tracer manager time oPoolWorkQ =
+fetchOffChainPoolData :: Trace IO Text -> Http.Manager -> Time.POSIXTime -> OffChainUserAgent -> OffChainPoolWorkQueue -> IO OffChainPoolResult
+fetchOffChainPoolData _tracer manager time ocUserAgent oPoolWorkQ =
   convert <<$>> runExceptT $ do
     let url = oPoolWqUrl oPoolWorkQ
         metaHash = oPoolWqMetaHash oPoolWorkQ
-    request <- parseOffChainUrl $ OffChainPoolUrl url
+    request <- parseOffChainUrl (OffChainPoolUrl url) ocUserAgent
     httpGetOffChainPoolData manager request url (Just metaHash)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainPoolData -> OffChainPoolResult
@@ -338,12 +340,12 @@ fetchOffChainPoolData _tracer manager time oPoolWorkQ =
               , DB.offChainPoolFetchErrorRetryCount = retryCount (oPoolWqRetry oPoolWorkQ)
               }
 
-fetchOffChainVoteData :: [Text] -> Time.POSIXTime -> OffChainVoteWorkQueue -> IO OffChainVoteResult
-fetchOffChainVoteData gateways time oVoteWorkQ =
+fetchOffChainVoteData :: [Text] -> OffChainUserAgent -> Time.POSIXTime -> OffChainVoteWorkQueue -> IO OffChainVoteResult
+fetchOffChainVoteData gateways userAgent time oVoteWorkQ =
   convert <<$>> runExceptT $ do
     let url = oVoteWqUrl oVoteWorkQ
         metaHash = oVoteWqMetaHash oVoteWorkQ
-    httpGetOffChainVoteData gateways url (Just metaHash) (oVoteWqType oVoteWorkQ)
+    httpGetOffChainVoteData gateways url userAgent (Just metaHash) (oVoteWqType oVoteWorkQ)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainVoteData -> OffChainVoteResult
     convert eres =
