@@ -89,7 +89,7 @@ runDbSyncTransactionNoLogging ::
   m (Either SyncNodeError a)
 runDbSyncTransactionNoLogging dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
-  eResult <- liftIO $ try $ DB.runDbTransSilent dbEnv Nothing dbAction
+  eResult <- liftIO $ try $ DB.runDbTransSilent dbEnv DB.RepeatableRead dbAction
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
