@@ -82,8 +82,10 @@ import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
+import System.Environment (lookupEnv)
 import System.FilePath.Posix (takeDirectory, (</>))
 import System.IO.Silently (hSilence)
 
@@ -623,8 +625,9 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
   withConfig configFilePath mutableDir cmdLineArgs syncNodeConfig $ \cfg -> do
     fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
     let dbsyncParams = syncNodeParams cfg
+    envLog <- lookupEnv "DBSYNC_TEST_LOG"
     trce <-
-      if shouldLog
+      if shouldLog || isJust envLog
         then configureLogging syncNodeConfig "db-sync-node"
         else pure nullTracer
     -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
