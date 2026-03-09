@@ -47,8 +47,6 @@ import qualified Data.Text as Text
 
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
-import qualified Hasql.Pipeline as HsqlP
-import qualified Hasql.Session as HsqlSes
 import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..))
 import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
@@ -60,6 +58,8 @@ import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Types
+import qualified Hasql.Pipeline as HsqlP
+import qualified Hasql.Session as HsqlSes
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -184,8 +184,11 @@ queryOrInsertStakeAddressBatch syncEnv cacheUA nw creds = do
     pipelineQueryList :: [(StakeCred, ByteString)] -> ExceptT SyncNodeError DB.DbM [DB.StakeAddressId]
     pipelineQueryList [] = pure []
     pipelineQueryList items = do
-      queryResults <- lift $ DB.runSession DB.mkDbCallStack $ HsqlSes.pipeline $
-        for items $ \(_c, bs) -> HsqlP.statement bs DB.queryStakeAddressStmt
+      queryResults <- lift $
+        DB.runSession DB.mkDbCallStack $
+          HsqlSes.pipeline $
+            for items $
+              \(_c, bs) -> HsqlP.statement bs DB.queryStakeAddressStmt
       liftIO $ missCredsN syncEnv (length items)
       -- For any not found, insert (rare / should not happen for epoch stake)
       forM (zip items queryResults) $ \((c, bs), mId) -> case mId of
@@ -465,8 +468,11 @@ queryPoolKeyOrInsertBatch syncEnv cacheUA pools = do
     pipelineQueryList :: [PoolKeyHash] -> ExceptT SyncNodeError DB.DbM [DB.PoolHashId]
     pipelineQueryList [] = pure []
     pipelineQueryList toQuery = do
-      queryResults <- lift $ DB.runSession DB.mkDbCallStack $ HsqlSes.pipeline $
-        for toQuery $ \p -> HsqlP.statement (Generic.unKeyHashRaw p) DB.queryPoolHashIdStmt
+      queryResults <- lift $
+        DB.runSession DB.mkDbCallStack $
+          HsqlSes.pipeline $
+            for toQuery $
+              \p -> HsqlP.statement (Generic.unKeyHashRaw p) DB.queryPoolHashIdStmt
       liftIO $ missPoolsN syncEnv (length toQuery)
       forM (zip toQuery queryResults) $ \(p, mId) -> case mId of
         Just phId -> pure phId

@@ -198,7 +198,6 @@ runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
           HsqlS.statement () commitTransactionStmt
           pure value
 
-
 -- | External service database runner with error handling
 --
 -- Designed for external services (like SMASH server) that manage their own connection pools.
