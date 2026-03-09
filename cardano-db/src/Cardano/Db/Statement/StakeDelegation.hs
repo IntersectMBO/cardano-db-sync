@@ -8,7 +8,7 @@
 
 module Cardano.Db.Statement.StakeDelegation where
 
-import Cardano.Prelude (ByteString, Proxy (..), traverse_)
+import Cardano.Prelude (ByteString, Proxy (..))
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -182,10 +182,10 @@ insertBulkRewardsStmt dbConstraintRewards =
       , map SS.rewardPoolId xs
       )
 
-insertBulkRewardsChunked :: Bool -> [[SS.Reward]] -> DbM ()
-insertBulkRewardsChunked dbConstraintRewards rewardChunks =
+insertBulkRewards :: Bool -> [SS.Reward] -> DbM ()
+insertBulkRewards dbConstraintRewards rewards =
   runSession mkDbCallStack $
-    traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkRewardsStmt dbConstraintRewards)) rewardChunks
+    HsqlSes.statement rewards (insertBulkRewardsStmt dbConstraintRewards)
 
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -355,10 +355,6 @@ insertBulkRewardRests rewardRests =
   runSession mkDbCallStack $
     HsqlSes.statement rewardRests insertBulkRewardRestsStmt
 
-insertBulkRewardRestsChunked :: [[SS.RewardRest]] -> DbM ()
-insertBulkRewardRestsChunked rewardRestChunks =
-  runSession mkDbCallStack $
-    traverse_ (`HsqlSes.statement` insertBulkRewardRestsStmt) rewardRestChunks
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: DbM Word64
