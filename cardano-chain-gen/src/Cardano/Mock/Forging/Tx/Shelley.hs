@@ -12,6 +12,7 @@ module Cardano.Mock.Forging.Tx.Shelley (
   consPaymentTxBody,
   consCertTxBody,
   consTxBody,
+  mkDummyTxWithSlot,
 ) where
 
 import Cardano.Ledger.BaseTypes
@@ -110,3 +111,22 @@ consTxBody ins outs fees certs wdrl =
     (SlotNo 1000000000) -- TODO ttl
     Strict.SNothing
     Strict.SNothing
+
+-- | Create a dummy tx with a unique TTL based on the slot.
+-- This ensures a unique tx body hash for each slot.
+mkDummyTxWithSlot :: SlotNo -> Core.Tx ShelleyEra
+mkDummyTxWithSlot slot =
+  ShelleyTx.MkShelleyTx $
+    ShelleyTx.ShelleyTx
+      ( ShelleyTxBody
+          mempty
+          mempty
+          mempty
+          (Withdrawals mempty)
+          (Coin 0)
+          slot
+          Strict.SNothing
+          Strict.SNothing
+      )
+      mempty
+      Strict.SNothing

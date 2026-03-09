@@ -204,9 +204,10 @@ rollbackTo :: Interpreter -> ServerHandle IO CardanoBlock -> CardanoPoint -> IO 
 rollbackTo interpreter mockServer point = do
   rollbackInterpreter interpreter point
   atomically $ rollback mockServer point
-  -- Forge an empty block to establish a new thread after rollback.
-  -- This ensures DBSync recognizes the rollback and deletes data.
-  blk <- forgeNextFindLeader interpreter []
+  -- Forge a block with dummy metadata to guarantee a different block hash.
+  -- Without this, the same leader/slot/empty body would produce an identical
+  -- block hash, making the rollback a no-op for DBSync.
+  blk <- forgeWithMetadata interpreter
   atomically $ addBlock mockServer blk
   pure [blk]
 

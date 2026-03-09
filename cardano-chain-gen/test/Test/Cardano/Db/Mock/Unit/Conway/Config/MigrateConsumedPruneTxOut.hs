@@ -170,7 +170,7 @@ performPruneWithFullTxRollback useTxOutAddress =
 
     -- Verify tx_out was pruned again
     assertBlockNoBackoff dbSync (2 + length rbBlocks)
-    assertTxCount dbSync 14
+    assertTxCount dbSync 15
     assertEqQuery dbSync (DB.queryTxOutCount txOutVariantType) 16 "new epoch didn't prune tx_out column that are null"
     assertUnspentTx dbSync
   where

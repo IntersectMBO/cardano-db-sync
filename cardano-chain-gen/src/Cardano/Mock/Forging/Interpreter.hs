@@ -26,6 +26,7 @@ module Cardano.Mock.Forging.Interpreter (
   getNextBlockNo,
   getCurrentSlot,
   forgeWithStakeCreds,
+  forgeWithMetadata,
   withBabbageLedgerState,
   withConwayLedgerState,
   withAlonzoLedgerState,
@@ -43,7 +44,7 @@ import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude (bimap, textShow, throwIO)
+import Cardano.Prelude (bimap, panic, textShow, throwIO)
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
   atomically,
@@ -303,6 +304,31 @@ forgeWithStakeCreds inter = do
     LedgerStateBabbage stb -> either throwIO (pure . TxBabbage) $ Babbage.mkDCertTxPools stb
     LedgerStateConway stc -> either throwIO (pure . TxConway) $ Conway.mkDCertTxPools stc
     _ -> throwIO UnexpectedEra
+  forgeNextFindLeader inter [tx]
+
+-- | Forge a block with a dummy metadata-only tx for the current era.
+-- The metadata makes the block hash differ from any empty block at the same slot.
+forgeWithMetadata :: Interpreter -> IO CardanoBlock
+forgeWithMetadata inter = do
+  st <- getCurrentLedgerState inter
+  SlotNo slot <- getCurrentSlot inter
+  -- Use the slot in the validity interval to ensure each tx body has a unique hash.
+  -- Metadata alone doesn't change the tx hash (it's not in the body).
+  let slotNo = SlotNo slot
+      tx = case ledgerState st of
+        LedgerStateShelley _ ->
+          TxShelley $
+            Shelley.mkDummyTxWithSlot slotNo
+        LedgerStateAlonzo _ ->
+          TxAlonzo $
+            Alonzo.mkDummyTxWithSlot slotNo
+        LedgerStateBabbage _ ->
+          TxBabbage $
+            Babbage.mkDummyTxWithSlot slotNo
+        LedgerStateConway _ ->
+          TxConway $
+            Conway.mkDummyTxWithSlot slotNo
+        _ -> panic "forgeWithMetadata: unexpected era"
   forgeNextFindLeader inter [tx]
 
 forgeNextAfter :: Interpreter -> Word64 -> [TxEra] -> IO CardanoBlock

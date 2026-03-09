@@ -29,6 +29,8 @@ module Cardano.Mock.Forging.Tx.Alonzo (
   mkDepositTxPools,
   mkDCertTxPools,
   mkSimpleTx,
+  mkAuxDataTx,
+  mkDummyTxWithSlot,
   consPoolParams,
   consPoolParamsTwoOwners,
   mkScriptTx,
@@ -42,6 +44,7 @@ import Cardano.Ledger.Address
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx
+import Cardano.Ledger.Alonzo.TxAuxData (mkAlonzoTxAuxData)
 import Cardano.Ledger.Alonzo.TxBody
 import Cardano.Ledger.Alonzo.TxWits
 import Cardano.Ledger.BaseTypes
@@ -50,6 +53,7 @@ import Cardano.Ledger.Core
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential
 import Cardano.Ledger.Mary.Value
+import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.TxIn (TxIn (..))
 import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
@@ -443,4 +447,42 @@ emptyTx =
       , atWits = mempty
       , atIsValid = IsValid True
       , atAuxData = maybeToStrictMaybe Nothing
+      }
+
+mkDummyTxWithSlot :: SlotNo -> Core.Tx AlonzoEra
+mkDummyTxWithSlot slot =
+  MkAlonzoTx $
+    AlonzoTx
+      { atBody =
+          AlonzoTxBody
+            mempty
+            mempty
+            mempty
+            mempty
+            (Withdrawals mempty)
+            (Coin 0)
+            (ValidityInterval Strict.SNothing (Strict.SJust slot))
+            Strict.SNothing
+            mempty
+            mempty
+            Strict.SNothing
+            Strict.SNothing
+            (Strict.SJust Testnet)
+      , atWits = mempty
+      , atIsValid = IsValid True
+      , atAuxData = Strict.SNothing
+      }
+
+mkAuxDataTx ::
+  Bool ->
+  TxBody AlonzoEra ->
+  Map Word64 Metadatum ->
+  Core.Tx AlonzoEra
+mkAuxDataTx isValid' txBody auxData =
+  MkAlonzoTx $
+    AlonzoTx
+      { atBody = txBody
+      , atWits = mempty
+      , atIsValid = IsValid isValid'
+      , atAuxData = Strict.SJust (mkAlonzoTxAuxData auxData [])
       }

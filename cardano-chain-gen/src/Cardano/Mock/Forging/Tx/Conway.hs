@@ -42,6 +42,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   mkNewConstitutionTx,
   mkDummyRegisterTx,
   mkDummyTxBody,
+  mkDummyTxWithSlot,
   mkTxDelegCert,
   mkRegTxCert,
   mkUnRegTxCert,
@@ -649,6 +650,39 @@ mkDummyTxBody =
     mempty
     (Withdrawals mempty)
     mempty
+
+-- | Create a dummy tx with a unique validity interval based on the slot.
+-- This ensures a unique tx body hash for each slot.
+mkDummyTxWithSlot :: SlotNo -> Core.Tx ConwayEra
+mkDummyTxWithSlot slot =
+  MkConwayTx $
+    AlonzoTx
+      { atBody =
+          ConwayTxBody
+            { ctbSpendInputs = mempty
+            , ctbCollateralInputs = mempty
+            , ctbReferenceInputs = mempty
+            , ctbOutputs = mempty
+            , ctbCollateralReturn = SNothing
+            , ctbTotalCollateral = SNothing
+            , ctbCerts = OSet.empty
+            , ctbWithdrawals = Withdrawals mempty
+            , ctbTxfee = mempty
+            , ctbVldt = ValidityInterval SNothing (SJust slot)
+            , ctbReqSignerHashes = mempty
+            , ctbMint = mempty
+            , ctbScriptIntegrityHash = SNothing
+            , ctbAdHash = SNothing
+            , ctbTxNetworkId = SJust Testnet
+            , ctbVotingProcedures = Governance.VotingProcedures mempty
+            , ctbProposalProcedures = mempty
+            , ctbCurrentTreasuryValue = SNothing
+            , ctbTreasuryDonation = mempty
+            }
+      , atWits = mempty
+      , atIsValid = IsValid True
+      , atAuxData = SNothing
+      }
 
 mkFullTx ::
   Int ->

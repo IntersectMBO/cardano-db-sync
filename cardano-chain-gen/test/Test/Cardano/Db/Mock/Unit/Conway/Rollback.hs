@@ -300,7 +300,7 @@ rollbackChangeTxOrder =
       sequence [tx1, tx0, tx2]
     -- Verify the new transaction counts
     assertBlockNoBackoff dbSync (2 + length rbBlock)
-    assertTxCount dbSync 14
+    assertTxCount dbSync 15
   where
     testLabel = "conwayRollbackChangeTxOrder"
 
@@ -332,7 +332,7 @@ rollbackFullTx =
         ]
     -- Verify the new transaction counts
     assertBlockNoBackoff dbSync (2 + length rbBlock)
-    assertTxCount dbSync 14
+    assertTxCount dbSync 15
   where
     testLabel = "conwayRollbackFullTx"
 
