@@ -247,7 +247,7 @@ getInsertOptions :: SyncEnv -> InsertOptions
 getInsertOptions = soptInsertOptions . envOptions
 
 getSlotHash :: DB.DbEnv -> SlotNo -> IO [(SlotNo, ByteString)]
-getSlotHash backend slotNo = DB.runDbTransSilent backend (Just DB.ReadCommitted) (DB.querySlotHash slotNo)
+getSlotHash backend slotNo = DB.runDbTransSilent backend DB.ReadCommitted (DB.querySlotHash slotNo)
 
 hasLedgerState :: SyncEnv -> Bool
 hasLedgerState syncEnv =
@@ -258,7 +258,7 @@ hasLedgerState syncEnv =
 getDbLatestBlockInfo :: DB.DbEnv -> IO (Maybe TipInfo)
 getDbLatestBlockInfo dbEnv = do
   runMaybeT $ do
-    block <- MaybeT $ DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) DB.queryLatestBlock
+    block <- MaybeT $ DB.runDbTransSilent dbEnv DB.ReadCommitted DB.queryLatestBlock
     -- The EpochNo, SlotNo and BlockNo can only be zero for the Byron
     -- era, but we need to make the types match, hence `fromMaybe`.
     pure $
@@ -324,7 +324,7 @@ mkSyncEnv ::
   Bool ->
   IO SyncEnv
 mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
-  dbCNamesVar <- newTVarIO =<< DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) DB.queryRewardAndEpochStakeConstraints
+  dbCNamesVar <- newTVarIO =<< DB.runDbTransSilent dbEnv DB.ReadCommitted DB.queryRewardAndEpochStakeConstraints
   cache <-
     if soptCache syncOptions
       then
@@ -461,7 +461,7 @@ getLatestPoints env = do
       verifySnapshotPoint env snapshotPoints
     NoLedger _ -> do
       -- Brings the 5 latest.
-      lastPoints <- DB.runDbTransSilent (envDbEnv env) (Just DB.ReadCommitted) DB.queryLatestPoints
+      lastPoints <- DB.runDbDirectSilent (envDbEnv env) DB.queryLatestPoints
       pure $ mapMaybe convert lastPoints
   where
     convert (Nothing, _) = Nothing
@@ -516,7 +516,7 @@ getBootstrapInProgress ::
   DB.DbEnv ->
   IO Bool
 getBootstrapInProgress trce bootstrapFlag dbEnv = do
-  DB.runDbTransSilent dbEnv (Just DB.ReadCommitted) $ do
+  DB.runDbTransSilent dbEnv DB.ReadCommitted $ do
     ems <- DB.queryAllExtraMigrations
     let btsState = DB.bootstrapState ems
     case (bootstrapFlag, btsState) of
