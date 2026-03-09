@@ -98,10 +98,10 @@ insertBulkEpochStakeStmt dbConstraintEpochStake =
       , map SS.epochStakeEpochNo xs
       )
 
-insertBulkEpochStakeChunked :: Bool -> [[SS.EpochStake]] -> DbM ()
-insertBulkEpochStakeChunked dbConstraintEpochStake epochStakeChunks =
+insertBulkEpochStake :: Bool -> [SS.EpochStake] -> DbM ()
+insertBulkEpochStake dbConstraintEpochStake epochStakes =
   runSession mkDbCallStack $
-    traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkEpochStakeStmt dbConstraintEpochStake)) epochStakeChunks
+    HsqlSes.statement epochStakes (insertBulkEpochStakeStmt dbConstraintEpochStake)
 
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64

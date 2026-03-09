@@ -43,7 +43,7 @@ import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
+import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryOrInsertStakeAddressBatch, queryPoolKeyOrInsert, queryPoolKeyOrInsertBatch)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
@@ -217,27 +217,23 @@ insertEpochStake ::
   ExceptT SyncNodeError DB.DbM ()
 insertEpochStake syncEnv nw epochNo stakeChunk = do
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  dbStakes <- mapM mkStake stakeChunk
-  let chunckDbStakes = DB.chunkForBulkQuery (Proxy @DB.EpochStake) Nothing dbStakes
-
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance
-  lift $ DB.insertBulkEpochStakeChunked dbConstraintEpochStake chunckDbStakes
+  let chunks = DB.chunkForBulkQuery (Proxy @DB.EpochStake) Nothing stakeChunk
+  forM_ chunks $ \chunk -> do
+    -- Pipeline stake address and pool hash lookups for this chunk
+    saIds <- queryOrInsertStakeAddressBatch syncEnv UpdateCacheStrong nw (map fst chunk)
+    poolIds <- queryPoolKeyOrInsertBatch syncEnv UpdateCache (map (snd . snd) chunk)
+    let coins = map (fst . snd) chunk
+        dbStakes = zipWith mkStake (zip saIds poolIds) coins
+    lift $ DB.insertBulkEpochStake dbConstraintEpochStake dbStakes
   where
-    mkStake ::
-      (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
-      ExceptT SyncNodeError DB.DbM DB.EpochStake
-    mkStake (saddr, (coin, pool)) = do
-      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
-      poolId <- queryPoolKeyOrInsert syncEnv "insertEpochStake" UpdateCache (ioShelley iopts) pool
-      pure $
-        DB.EpochStake
-          { DB.epochStakeAddrId = saId
-          , DB.epochStakePoolId = poolId
-          , DB.epochStakeAmount = Generic.coinToDbLovelace coin
-          , DB.epochStakeEpochNo = unEpochNo epochNo -- The epoch where this delegation becomes valid.
-          }
-
-    iopts = getInsertOptions syncEnv
+    mkStake :: (DB.StakeAddressId, DB.PoolHashId) -> Shelley.Coin -> DB.EpochStake
+    mkStake (saId, poolId) coin =
+      DB.EpochStake
+        { DB.epochStakeAddrId = saId
+        , DB.epochStakePoolId = poolId
+        , DB.epochStakeAmount = Generic.coinToDbLovelace coin
+        , DB.epochStakeEpochNo = unEpochNo epochNo
+        }
 
 insertRewards ::
   SyncEnv ->
