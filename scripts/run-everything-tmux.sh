@@ -31,4 +31,4 @@ tmux send-keys -t 1 "export PGPASSFILE=$CARDANO_DB_SYNC_DIR/config/pgpass-mainne
 tmux send-keys -t 1 "PGPASSFILE=$CARDANO_DB_SYNC_DIR/config/pgpass-mainnet-macos $dbsync --config $TESTNET_DIR/db-sync-config.json --socket-path $TESTNET_DIR/db/node.socket --state-dir $TESTNET_DIR/ledger-state --schema-dir $CARDANO_DB_SYNC_DIR/schema/" 'C-m'
 # tmux send-keys -t 1 "PGPASSFILE=$CARDANO_DB_SYNC_DIR/config/pgpass-mainnet-macos $dbsync --config $TESTNET_DIR/db-sync-config.json --socket-path $TESTNET_DIR/db/node.socket --state-dir $TESTNET_DIR/ledger-state --schema-dir $CARDANO_DB_SYNC_DIR/schema/ +RTS -l -p -hc -L200 -RTS" 'C-m'
 
-tmux -CC attach-session -t $session
+tmux attach-session $session
