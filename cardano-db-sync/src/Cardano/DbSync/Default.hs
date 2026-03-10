@@ -31,6 +31,7 @@ import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Config.Types (SyncInsertOptions (..), dncInsertOptions)
 import Cardano.DbSync.DbEvent (runDbSyncTransaction)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
@@ -53,10 +54,20 @@ insertListBlocks ::
   IO (Either SyncNodeError ())
 insertListBlocks syncEnv blocks = do
   isolationLevel <- determineIsolationLevel syncEnv
+  syncState <- readTVarIO (envDbIsolationState syncEnv)
   -- stop at the exact block number if the option is set
   case sioStopAtBlock $ dncInsertOptions $ envSyncNodeConfig syncEnv of
-    Nothing -> runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $ do
-      traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocks
+    Nothing -> case syncState of
+      -- During historical sync, use per-block transactions to enable parallelization
+      DB.SyncLagging -> do
+        results <- forM blocks $ \blk ->
+          runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $
+            applyAndInsertBlockMaybe syncEnv (getTrace syncEnv) blk
+        pure $ sequence_ results
+      -- When following tip, use batch transaction for atomicity
+      DB.SyncFollowing ->
+        runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $ do
+          traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocks
     Just targetBlock ->
       insertListBlocksWithStopCondition syncEnv blocks targetBlock
 
@@ -229,21 +240,30 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
 
     commitOrIndexes :: Bool -> Bool -> ExceptT SyncNodeError DB.DbM ()
     commitOrIndexes withinTwoMin withinHalfHour = do
-      commited <-
-        if withinTwoMin || tookSnapshot
-          then do
-            -- Commit the transaction if we are within two minutes or took a snapshot
-            lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
-            pure True
-          else pure False
-      when withinHalfHour $ do
-        bootStrapMaybe syncEnv
-        ranIndexes <- liftIO $ getRanIndexes syncEnv
-        addConstraintsIfNotExist syncEnv tracer
-        unless ranIndexes $ do
-          -- Only commit if we haven't already committed above to avoid double commits
-          unless commited $ lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
-          liftIO $ runNearTipMigrations syncEnv
+      syncState <- liftIO $ readTVarIO (envDbIsolationState syncEnv)
+      case syncState of
+        -- During historical sync, per-block outer transaction already commits
+        DB.SyncLagging ->
+          when withinHalfHour $ do
+            bootStrapMaybe syncEnv
+            ranIndexes <- liftIO $ getRanIndexes syncEnv
+            addConstraintsIfNotExist syncEnv tracer
+            unless ranIndexes $ liftIO $ runNearTipMigrations syncEnv
+        -- When following tip, use mid-transaction commits for large batches
+        DB.SyncFollowing -> do
+          commited <-
+            if withinTwoMin || tookSnapshot
+              then do
+                lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
+                pure True
+              else pure False
+          when withinHalfHour $ do
+            bootStrapMaybe syncEnv
+            ranIndexes <- liftIO $ getRanIndexes syncEnv
+            addConstraintsIfNotExist syncEnv tracer
+            unless ranIndexes $ do
+              unless commited $ lift $ DB.transactionSaveWithIsolation DB.RepeatableRead
+              liftIO $ runNearTipMigrations syncEnv
 
     blkNo = headerFieldBlockNo $ getHeaderFields cblk
 
