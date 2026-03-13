@@ -86,13 +86,13 @@ library
                       , network
                       , nothunks
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-consensus-diffusion
-                      , ouroboros-consensus-protocol
+                      , ouroboros-consensus:cardano
+                      , ouroboros-consensus:diffusion
+                      , ouroboros-consensus:protocol
                       , ouroboros-network
-                      , ouroboros-network-api
-                      , ouroboros-network-framework
-                      , ouroboros-network-protocols
+                      , ouroboros-network:api
+                      , ouroboros-network:framework
+                      , ouroboros-network:protocols
                       , plutus-core
                       , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
@@ -193,7 +193,7 @@ test-suite cardano-chain-gen
                       , tree-diff
                       , tasty-hunit
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-network-api
+                      , ouroboros-consensus:cardano
+                      , ouroboros-network:api
                       , QuickCheck
                       , quickcheck-state-machine:no-vendored-treediff

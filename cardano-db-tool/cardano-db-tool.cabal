@@ -71,9 +71,9 @@ library
                       , contra-tracer
                       , extra
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
+                      , ouroboros-consensus:cardano
                       , ouroboros-network
-                      , ouroboros-network-api
+                      , ouroboros-network:api
                       , random
                       , random-shuffle
                       , text
