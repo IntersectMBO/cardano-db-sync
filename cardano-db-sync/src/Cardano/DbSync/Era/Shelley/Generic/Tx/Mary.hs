@@ -19,7 +19,7 @@ import Cardano.Prelude
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (MaryEra)
 
-fromMaryTx :: (Word64, Core.Tx MaryEra) -> Tx
+fromMaryTx :: (Word64, Core.Tx Core.TopTx MaryEra) -> Tx
 fromMaryTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -53,7 +53,7 @@ fromMaryTx (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Mary does not support treasury donations
     }
   where
-    txBody :: Core.TxBody MaryEra
+    txBody :: Core.TxBody Core.TopTx MaryEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]

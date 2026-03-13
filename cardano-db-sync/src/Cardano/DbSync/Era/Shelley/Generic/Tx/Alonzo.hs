@@ -53,7 +53,6 @@ import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Hashes (ScriptHash)
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), policyID)
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert as Shelley
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
@@ -66,7 +65,7 @@ import qualified Data.Set as Set
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (AlonzoEra)
 
-fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx AlonzoEra) -> Tx
+fromAlonzoTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx Core.TopTx AlonzoEra) -> Tx
 fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -144,18 +143,18 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
 
     collInputs = mkCollTxIn txBody
 
-mkCollTxIn :: AlonzoEraTxBody era => Core.TxBody era -> [TxIn]
+mkCollTxIn :: AlonzoEraTxBody era => Core.TxBody Core.TopTx era -> [TxIn]
 mkCollTxIn txBody = map fromTxIn . toList $ txBody ^. Alonzo.collateralInputsTxBodyL
 
 getScripts ::
-  forall era.
+  forall l era.
   ( Core.Script era ~ Alonzo.AlonzoScript era
   , Core.TxAuxData era ~ AlonzoTxAuxData era
   , Core.EraTx era
   , DBPlutusScript era
   , Core.NativeScript era ~ Timelock era
   ) =>
-  Core.Tx era ->
+  Core.Tx l era ->
   [TxScript]
 getScripts tx =
   mkTxScript
@@ -175,14 +174,14 @@ getScripts tx =
               getAlonzoTxAuxDataScripts auxData
 
 resolveRedeemers ::
-  forall era.
+  forall l era.
   ( Alonzo.AlonzoEraTxWits era
   , Core.EraTx era
   , DBScriptPurpose era
   ) =>
   Bool ->
   Maybe Alonzo.Prices ->
-  Core.Tx era ->
+  Core.Tx l era ->
   (TxCert era -> Cert) ->
   (RedeemerMaps, [(Word64, TxRedeemer)])
 resolveRedeemers ioExtraPlutus mprices tx toCert =
@@ -193,13 +192,13 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
         zip [0 ..] $
           Map.toList (Alonzo.unRedeemers (tx ^. (Core.witsTxL . Alonzo.rdmrsTxWitsL)))
   where
-    txBody :: Core.TxBody era
+    txBody :: Core.TxBody l era
     txBody = tx ^. Core.bodyTxL
 
-    withdrawalsNoRedeemers :: Map Shelley.AccountAddress TxWithdrawal
+    withdrawalsNoRedeemers :: Map Ledger.AccountAddress TxWithdrawal
     withdrawalsNoRedeemers =
       Map.mapWithKey (curry mkTxWithdrawal) $
-        Shelley.unWithdrawals $
+        Ledger.unWithdrawals $
           txBody ^. Core.withdrawalsTxBodyL
 
     txCertsNoRedeemers :: [(Cert, TxCertificate)]
@@ -271,7 +270,7 @@ handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
     let gtxIn' = gtxIn {txInRedeemerIndex = Just rdmrIx}
      in (mps {rmInps = Map.insert txIn gtxIn' (rmInps mps)}, Just (Left gtxIn'))
 
-handleRewardPtr :: Word64 -> Shelley.AccountAddress -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+handleRewardPtr :: Word64 -> Ledger.AccountAddress -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleRewardPtr rdmrIx rwdAcnt mps = case Map.lookup rwdAcnt (rmWdrl mps) of
   Nothing -> (mps, Nothing)
   Just wdrl ->
@@ -286,7 +285,7 @@ handleCertPtr rdmrIx dcert mps =
     f x = x
 
 data RedeemerMaps = RedeemerMaps
-  { rmWdrl :: Map Shelley.AccountAddress TxWithdrawal
+  { rmWdrl :: Map Ledger.AccountAddress TxWithdrawal
   , rmCerts :: [(Cert, TxCertificate)]
   , rmInps :: Map Ledger.TxIn TxIn
   }
@@ -324,13 +323,13 @@ mkTxScript (hsh, script) =
         plScript -> Just $ Core.originalBytes plScript
 
 getPlutusSizes ::
-  forall era.
+  forall l era.
   ( Core.EraTx era
   , Core.TxWits era ~ Alonzo.AlonzoTxWits era
   , Core.Script era ~ Alonzo.AlonzoScript era
   , Alonzo.AlonzoEraScript era
   ) =>
-  Core.Tx era ->
+  Core.Tx l era ->
   [Word64]
 getPlutusSizes tx =
   mapMaybe getPlutusScriptSize $
@@ -347,7 +346,7 @@ getPlutusScriptSize script =
 
 txDataWitness ::
   (Alonzo.AlonzoEraScript era, Core.TxWits era ~ Alonzo.AlonzoTxWits era, Core.EraTx era) =>
-  Core.Tx era ->
+  Core.Tx l era ->
   [PlutusData]
 txDataWitness tx =
   mkTxData <$> Map.toList (Alonzo.unTxDats $ Alonzo.txdats (tx ^. Core.witsTxL))
@@ -363,14 +362,14 @@ mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Core.originalBytes 
 
 extraKeyWits ::
   (AlonzoEraTxBody era, Core.AtMostEra "Conway" era) =>
-  Core.TxBody era ->
+  Core.TxBody l era ->
   [ByteString]
 extraKeyWits txBody =
   Set.toList $
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
       txBody ^. Alonzo.reqSignerHashesTxBodyL
 
-scriptHashAcnt :: Shelley.AccountAddress -> Maybe ByteString
+scriptHashAcnt :: Ledger.AccountAddress -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.unAccountId (Ledger.aaId rewardAddr)
 
 scriptHashCert :: Cert -> Maybe ByteString

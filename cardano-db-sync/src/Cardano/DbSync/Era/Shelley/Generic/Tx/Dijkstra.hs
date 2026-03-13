@@ -28,7 +28,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (DijkstraEra)
 
-fromDijkstraTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx DijkstraEra) -> Tx
+fromDijkstraTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx Core.TopTx DijkstraEra) -> Tx
 fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -75,7 +75,7 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = dtbTreasuryDonation txBody
     }
   where
-    txBody :: Core.TxBody DijkstraEra
+    txBody :: Core.TxBody Core.TopTx DijkstraEra
     txBody = tx ^. Core.bodyTxL
 
     txId :: TxId
