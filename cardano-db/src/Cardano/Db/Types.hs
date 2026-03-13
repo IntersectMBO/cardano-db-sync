@@ -214,7 +214,7 @@ data RewardSource
   deriving (Bounded, Enum, Eq, Ord, Show)
 
 rewardSourceDecoder :: HsqlD.Value RewardSource
-rewardSourceDecoder = HsqlD.enum $ \case
+rewardSourceDecoder = HsqlD.enum Nothing "rewardtype" $ \case
   "leader" -> Just RwdLeader
   "member" -> Just RwdMember
   "reserves" -> Just RwdReserves
@@ -224,7 +224,7 @@ rewardSourceDecoder = HsqlD.enum $ \case
   _ -> Nothing
 
 rewardSourceEncoder :: HsqlE.Value RewardSource
-rewardSourceEncoder = HsqlE.enum $ \case
+rewardSourceEncoder = HsqlE.enum Nothing "rewardtype" $ \case
   RwdLeader -> "leader"
   RwdMember -> "member"
   RwdReserves -> "reserves"
@@ -239,13 +239,13 @@ data SyncState
   deriving (Eq, Show)
 
 syncStateDecoder :: HsqlD.Value SyncState
-syncStateDecoder = HsqlD.enum $ \case
+syncStateDecoder = HsqlD.enum Nothing "syncstatetype" $ \case
   "lagging" -> Just SyncLagging
   "following" -> Just SyncFollowing
   _ -> Nothing
 
 syncStateEncoder :: HsqlE.Value SyncState
-syncStateEncoder = HsqlE.enum $ \case
+syncStateEncoder = HsqlE.enum Nothing "syncstatetype" $ \case
   SyncLagging -> "lagging"
   SyncFollowing -> "following"
 
@@ -260,7 +260,7 @@ data ScriptPurpose
   deriving (Eq, Generic, Show)
 
 scriptPurposeDecoder :: HsqlD.Value ScriptPurpose
-scriptPurposeDecoder = HsqlD.enum $ \case
+scriptPurposeDecoder = HsqlD.enum Nothing "scriptpurposetype" $ \case
   "spend" -> Just Spend
   "mint" -> Just Mint
   "cert" -> Just Cert
@@ -270,7 +270,7 @@ scriptPurposeDecoder = HsqlD.enum $ \case
   _ -> Nothing
 
 scriptPurposeEncoder :: HsqlE.Value ScriptPurpose
-scriptPurposeEncoder = HsqlE.enum $ \case
+scriptPurposeEncoder = HsqlE.enum Nothing "scriptpurposetype" $ \case
   Spend -> "spend"
   Mint -> "mint"
   Cert -> "cert"
@@ -289,7 +289,7 @@ data ScriptType
   deriving (Eq, Generic, Show)
 
 scriptTypeDecoder :: HsqlD.Value ScriptType
-scriptTypeDecoder = HsqlD.enum $ \case
+scriptTypeDecoder = HsqlD.enum Nothing "scripttype" $ \case
   "multisig" -> Just MultiSig
   "timelock" -> Just Timelock
   "plutusV1" -> Just PlutusV1
@@ -299,7 +299,7 @@ scriptTypeDecoder = HsqlD.enum $ \case
   _ -> Nothing
 
 scriptTypeEncoder :: HsqlE.Value ScriptType
-scriptTypeEncoder = HsqlE.enum $ \case
+scriptTypeEncoder = HsqlE.enum Nothing "scripttype" $ \case
   MultiSig -> "multisig"
   Timelock -> "timelock"
   PlutusV1 -> "plutusV1"
@@ -422,14 +422,14 @@ data Vote = VoteYes | VoteNo | VoteAbstain
   deriving (Show) via (Quiet Vote)
 
 voteDecoder :: HsqlD.Value Vote
-voteDecoder = HsqlD.enum $ \case
+voteDecoder = HsqlD.enum Nothing "vote" $ \case
   "Yes" -> Just VoteYes
   "No" -> Just VoteNo
   "Abstain" -> Just VoteAbstain
   _ -> Nothing
 
 voteEncoder :: HsqlE.Value Vote
-voteEncoder = HsqlE.enum $ \case
+voteEncoder = HsqlE.enum Nothing "vote" $ \case
   VoteYes -> "Yes"
   VoteNo -> "No"
   VoteAbstain -> "Abstain"
@@ -440,14 +440,14 @@ data VoterRole = ConstitutionalCommittee | DRep | SPO
   deriving (Show) via (Quiet VoterRole)
 
 voterRoleDecoder :: HsqlD.Value VoterRole
-voterRoleDecoder = HsqlD.enum $ \case
+voterRoleDecoder = HsqlD.enum Nothing "voterrole" $ \case
   "ConstitutionalCommittee" -> Just ConstitutionalCommittee
   "DRep" -> Just DRep
   "SPO" -> Just SPO
   _ -> Nothing
 
 voterRoleEncoder :: HsqlE.Value VoterRole
-voterRoleEncoder = HsqlE.enum $ \case
+voterRoleEncoder = HsqlE.enum Nothing "voterrole" $ \case
   ConstitutionalCommittee -> "ConstitutionalCommittee"
   DRep -> "DRep"
   SPO -> "SPO"
@@ -467,7 +467,7 @@ data GovActionType
   deriving (Show) via (Quiet GovActionType)
 
 govActionTypeDecoder :: HsqlD.Value GovActionType
-govActionTypeDecoder = HsqlD.enum $ \case
+govActionTypeDecoder = HsqlD.enum Nothing "govactiontype" $ \case
   "ParameterChange" -> Just ParameterChange
   "HardForkInitiation" -> Just HardForkInitiation
   "TreasuryWithdrawals" -> Just TreasuryWithdrawals
@@ -478,7 +478,7 @@ govActionTypeDecoder = HsqlD.enum $ \case
   _ -> Nothing
 
 govActionTypeEncoder :: HsqlE.Value GovActionType
-govActionTypeEncoder = HsqlE.enum $ \case
+govActionTypeEncoder = HsqlE.enum Nothing "govactiontype" $ \case
   ParameterChange -> "ParameterChange"
   HardForkInitiation -> "HardForkInitiation"
   TreasuryWithdrawals -> "TreasuryWithdrawals"
@@ -501,7 +501,7 @@ data AnchorType
   deriving (Show) via (Quiet AnchorType)
 
 anchorTypeDecoder :: HsqlD.Value AnchorType
-anchorTypeDecoder = HsqlD.enum $ \case
+anchorTypeDecoder = HsqlD.enum Nothing "anchortype" $ \case
   "gov_action" -> Just GovActionAnchor
   "drep" -> Just DrepAnchor
   "other" -> Just OtherAnchor
@@ -511,7 +511,7 @@ anchorTypeDecoder = HsqlD.enum $ \case
   _ -> Nothing
 
 anchorTypeEncoder :: HsqlE.Value AnchorType
-anchorTypeEncoder = HsqlE.enum $ \case
+anchorTypeEncoder = HsqlE.enum Nothing "anchortype" $ \case
   GovActionAnchor -> "gov_action"
   DrepAnchor -> "drep"
   OtherAnchor -> "other"
