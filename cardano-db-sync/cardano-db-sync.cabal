@@ -155,7 +155,7 @@ library
                       , base58-bytestring
                       , case-insensitive
                       , cardano-binary
-                      , cardano-client
+                      , cardano-diffusion:subscription
                       , cardano-crypto
                       , cardano-crypto-class
                       , cardano-crypto-praos
@@ -199,14 +199,13 @@ library
                       , microlens
                       , network-mux
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-consensus-diffusion
-                      , ouroboros-consensus-protocol
+                      , ouroboros-consensus:cardano
+                      , ouroboros-consensus:diffusion
+                      , ouroboros-consensus:protocol
                       , ouroboros-network
-                      , ouroboros-network-api
-                      -- Note this has moved to ouroboros-network:framework on HEAD
-                      , ouroboros-network-framework
-                      , ouroboros-network-protocols
+                      , ouroboros-network:api
+                      , ouroboros-network:framework
+                      , ouroboros-network:protocols
                       , plutus-ledger-api
                       , prometheus
                       , psqueues
@@ -386,5 +385,5 @@ test-suite test
                       , iohk-monitoring
                       , hedgehog
                       , hedgehog-quickcheck
-                      , ouroboros-consensus-cardano
+                      , ouroboros-consensus:cardano
                       , text
