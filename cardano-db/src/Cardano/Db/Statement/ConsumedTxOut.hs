@@ -407,12 +407,9 @@ findMaxTxInIdStmt =
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
 
-    decoder = HsqlD.singleRow $ do
-      mTxId <- Id.maybeIdDecoder Id.TxId
-      let result = case mTxId of
-            Nothing -> Left "No transactions found before the specified block"
-            Just txId -> Right txId
-      pure result
+    decoder = HsqlD.singleRow $
+      maybe (Left "No transactions found before the specified block") Right
+        <$> Id.maybeIdDecoder Id.TxId
 
 findMaxTxInId :: Word64 -> DbM (Either Text.Text Id.TxId)
 findMaxTxInId blockNoDiff =

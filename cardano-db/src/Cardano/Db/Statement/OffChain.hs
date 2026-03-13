@@ -261,17 +261,16 @@ queryOffChainPoolFetchErrorStmt =
       fetchError <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
       retryCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       metadataHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
-
-      let fetchErr =
-            SO.OffChainPoolFetchError
-              { SO.offChainPoolFetchErrorPoolId = poolId
-              , SO.offChainPoolFetchErrorFetchTime = fetchTime
-              , SO.offChainPoolFetchErrorPmrId = pmrId
-              , SO.offChainPoolFetchErrorFetchError = fetchError
-              , SO.offChainPoolFetchErrorRetryCount = retryCount
-              }
-
-      pure (fetchErr, metadataHash)
+      pure
+        ( SO.OffChainPoolFetchError
+            { SO.offChainPoolFetchErrorPoolId = poolId
+            , SO.offChainPoolFetchErrorFetchTime = fetchTime
+            , SO.offChainPoolFetchErrorPmrId = pmrId
+            , SO.offChainPoolFetchErrorFetchError = fetchError
+            , SO.offChainPoolFetchErrorRetryCount = retryCount
+            }
+        , metadataHash
+        )
 
 queryOffChainPoolFetchError :: ByteString -> Maybe UTCTime -> DbM [(SO.OffChainPoolFetchError, ByteString)]
 queryOffChainPoolFetchError hash mFromTime =
