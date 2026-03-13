@@ -98,8 +98,8 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
 
     -- Ignore the network in the `RewardAccount` and use the provided one instead.
     -- This is a workaround for https://github.com/IntersectMBO/cardano-db-sync/issues/546
-    adjustNetworkTag :: Ledger.RewardAccount -> Ledger.RewardAccount
-    adjustNetworkTag (Shelley.RewardAccount _ cred) = Shelley.RewardAccount network cred
+    adjustNetworkTag :: Ledger.AccountAddress -> Ledger.AccountAddress
+    adjustNetworkTag (Shelley.AccountAddress _ cred) = Shelley.AccountAddress network cred
 
 insertPoolRetire ::
   SyncEnv ->

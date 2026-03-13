@@ -60,7 +60,7 @@ data Block = Block
   { blkEra :: !BlockEra
   , blkHash :: !ByteString
   , blkPreviousHash :: !(Maybe ByteString) -- Nothing is used for first block after Genesis.
-  , blkSlotLeader :: !(KeyHash 'BlockIssuer)
+  , blkSlotLeader :: !(KeyHash BlockIssuer)
   , blkSlotNo :: !SlotNo
   , blkBlockNo :: !BlockNo
   , blkSize :: !Word64
@@ -255,7 +255,7 @@ getHeaderBodyPraos (Praos.Header headerBody _) = headerBody
 blockIssuer ::
   ShelleyProtocol p =>
   ShelleyBlock p era ->
-  KeyHash 'BlockIssuer
+  KeyHash BlockIssuer
 blockIssuer = hashKey . pHeaderIssuer . blockHeader
 
 slotNumber :: ShelleyProtocol p => ShelleyBlock p era -> SlotNo

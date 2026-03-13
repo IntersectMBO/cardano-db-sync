@@ -66,7 +66,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   addValidityInterval,
 ) where
 
-import Cardano.Ledger.Address (Addr (..), RewardAccount (..), Withdrawals (..))
+import Cardano.Ledger.Address (Addr (..), AccountAddress (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))
@@ -82,7 +82,7 @@ import Cardano.Ledger.Conway.Tx (AlonzoTx (..), Tx (..))
 import Cardano.Ledger.Conway.TxBody (TxBody (..))
 import Cardano.Ledger.Conway.TxCert hiding (mkDelegTxCert)
 import Cardano.Ledger.Core (ADDRHASH)
-import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..), valueFromList)
 import Cardano.Ledger.Plutus.Data
@@ -180,8 +180,8 @@ consCertTxBody ref certs withdrawals =
     toSet (Just a) = Set.singleton a
 
 consTxCertPool ::
-  [StakeCredential] ->
-  KeyHash 'StakePool ->
+  [Credential Staking] ->
+  KeyHash StakePool ->
   ConwayTxCert ConwayEra
 consTxCertPool [] _ = panic "Expected at least 1 pool owner"
 consTxCertPool (rwCred : poolOwners) poolId =
@@ -332,8 +332,8 @@ mkDCertTx certs wdrl ref = Right (mkSimpleTx True $ consCertTxBody ref certs wdr
 mkDCertPoolTx ::
   [ ( [StakeIndex]
     , PoolIndex
-    , [StakeCredential] ->
-      KeyHash 'StakePool ->
+    , [Credential Staking] ->
+      KeyHash StakePool ->
       ConwayTxCert ConwayEra
     )
   ] ->
@@ -378,7 +378,7 @@ mkAuxDataTx isValid' txBody auxData =
       }
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential -> ConwayTxCert ConwayEra)] ->
+  [(StakeIndex -> ConwayTxCert ConwayEra)] ->
   ConwayLedgerState mk ->
   Either ForgingError (Core.Tx ConwayEra)
 mkSimpleDCertTx consDCert st = do
@@ -388,7 +388,7 @@ mkSimpleDCertTx consDCert st = do
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
 mkScriptDCertTx ::
-  [(StakeIndex, Bool, StakeCredential -> ConwayTxCert ConwayEra)] ->
+  [(StakeIndex, Bool -> ConwayTxCert ConwayEra)] ->
   Bool ->
   ConwayLedgerState mk ->
   Either ForgingError (Core.Tx ConwayEra)
@@ -488,7 +488,7 @@ mkDepositTxPools inputIndex deposit state' = do
         (Coin 0)
 
 mkRegisterDRepTx ::
-  Credential 'DRepRole ->
+  Credential DRepRole ->
   Either ForgingError (Core.Tx ConwayEra)
 mkRegisterDRepTx cred = mkDCertTx [cert] (Withdrawals mempty) Nothing
   where
@@ -496,8 +496,8 @@ mkRegisterDRepTx cred = mkDCertTx [cert] (Withdrawals mempty) Nothing
     deposit = Coin 500_000_000
 
 mkCommitteeAuthTx ::
-  Credential 'ColdCommitteeRole ->
-  Credential 'HotCommitteeRole ->
+  Credential ColdCommitteeRole ->
+  Credential HotCommitteeRole ->
   Either ForgingError (Core.Tx ConwayEra)
 mkCommitteeAuthTx cold hot = mkDCertTx [cert] (Withdrawals mempty) Nothing
   where
@@ -516,39 +516,39 @@ mkDummyRegisterTx n m = mkDCertTx consDelegCert (Withdrawals mempty) Nothing
 
 mkRegTxCert ::
   StrictMaybe Coin ->
-  StakeCredential ->
+  Credential Staking ->
   ConwayTxCert ConwayEra
 mkRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayRegCert cred coin'
 
 mkUnRegTxCert ::
   StrictMaybe Coin ->
-  StakeCredential ->
+  Credential Staking ->
   ConwayTxCert ConwayEra
 mkUnRegTxCert coin' = mkTxDelegCert $ \cred -> ConwayUnRegCert cred coin'
 
 mkRegDelegTxCert ::
   Coin ->
   Delegatee ->
-  StakeCredential ->
+  Credential Staking ->
   ConwayTxCert ConwayEra
 mkRegDelegTxCert deposit delegatee =
   mkTxDelegCert $ \cred -> ConwayRegDelegCert cred delegatee deposit
 
 mkDelegTxCert ::
   Delegatee ->
-  StakeCredential ->
+  Credential Staking ->
   ConwayTxCert ConwayEra
 mkDelegTxCert delegatee = mkTxDelegCert $ \cred -> ConwayDelegCert cred delegatee
 
 mkTxDelegCert ::
-  (StakeCredential -> ConwayDelegCert) ->
-  StakeCredential ->
+  (Credential Staking -> ConwayDelegCert) ->
+  Credential Staking ->
   ConwayTxCert ConwayEra
 mkTxDelegCert f = ConwayTxCertDeleg . f
 
 mkAddCommitteeTx ::
   Maybe (Governance.GovPurposeId 'Governance.CommitteePurpose) ->
-  Credential 'ColdCommitteeRole ->
+  Credential ColdCommitteeRole ->
   Core.Tx ConwayEra
 mkAddCommitteeTx prevGovAction cred = mkGovActionProposalTx govAction
   where
@@ -566,7 +566,7 @@ mkNewConstitutionTx anchor = mkGovActionProposalTx govAction
     constitution = Governance.Constitution anchor SNothing
 
 mkTreasuryWithdrawalTx ::
-  RewardAccount ->
+  AccountAddress ->
   Coin ->
   Core.Tx ConwayEra
 mkTreasuryWithdrawalTx rewardAccount amount = mkGovActionProposalTx govAction
@@ -604,7 +604,7 @@ mkGovActionProposalTx govAction = mkSimpleTx True txBody
       Governance.ProposalProcedure
         { Governance.pProcDeposit = Coin 50_000_000_000
         , Governance.pProcReturnAddr =
-            RewardAccount Testnet (Prelude.head unregisteredStakeCredentials)
+            AccountAddress Testnet (AccountId (Prelude.head unregisteredStakeCredentials))
         , Governance.pProcGovAction = govAction
         , Governance.pProcAnchor = anchor
         }
@@ -809,8 +809,8 @@ mkFullTx n m state' = do
     withdrawals =
       Withdrawals $
         Map.fromList
-          [ (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
-          , (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+          [ (AccountAddress Testnet (AccountId (unregisteredStakeCredentials !! 1)), Coin 100)
+          , (AccountAddress Testnet (AccountId (unregisteredStakeCredentials !! 1)), Coin 100)
           ]
 
     -- Witness keys

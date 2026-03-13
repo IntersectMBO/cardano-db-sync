@@ -170,7 +170,7 @@ mkTxWithdrawals ::
 mkTxWithdrawals bd =
   map mkTxWithdrawal $ Map.toList $ Shelley.unWithdrawals $ bd ^. Core.withdrawalsTxBodyL
 
-mkTxWithdrawal :: (Shelley.RewardAccount, Coin) -> TxWithdrawal
+mkTxWithdrawal :: (Shelley.AccountAddress, Coin) -> TxWithdrawal
 mkTxWithdrawal (ra, c) =
   TxWithdrawal
     { txwRedeemerIndex = Nothing
