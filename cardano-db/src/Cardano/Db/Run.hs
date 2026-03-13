@@ -30,7 +30,7 @@ import Data.Pool (Pool, defaultPoolConfig, destroyAllResources, newPool, withRes
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Hasql.Connection as HsqlCon
-import qualified Hasql.Connection.Setting as HsqlConS
+import qualified Hasql.Connection.Settings as HsqlConS
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
@@ -268,7 +268,7 @@ runDbStandaloneTransSilent source action = do
     Left err -> throwIO $ userError err
     Right setting -> pure setting
   bracket
-    (acquireConnection [connSetting])
+    (acquireConnection connSetting)
     HsqlCon.release
     ( \connection -> do
         let dbEnv = createDbEnv connection Nothing Nothing
@@ -287,7 +287,7 @@ runDbStandaloneDirectSilent source action = do
     Left err -> throwIO $ userError err
     Right setting -> pure setting
   bracket
-    (acquireConnection [connSetting])
+    (acquireConnection connSetting)
     HsqlCon.release
     ( \connection -> do
         let dbEnv = createDbEnv connection Nothing Nothing
@@ -377,7 +377,7 @@ checkTransactionStmt =
 -----------------------------------------------------------------------------------------
 
 -- | Acquire a single database connection with error handling
-acquireConnection :: [HsqlConS.Setting] -> IO HsqlCon.Connection
+acquireConnection :: HsqlConS.Settings -> IO HsqlCon.Connection
 acquireConnection settings = do
   result <- HsqlCon.acquire settings
   case result of
@@ -388,7 +388,7 @@ acquireConnection settings = do
       pure conn
 
 -- | Acquire a database connection without transaction management
-acquireDbConnectionNoTrans :: [HsqlConS.Setting] -> IO HsqlCon.Connection
+acquireDbConnectionNoTrans :: HsqlConS.Settings -> IO HsqlCon.Connection
 acquireDbConnectionNoTrans settings = do
   result <- HsqlCon.acquire settings
   case result of
@@ -399,7 +399,7 @@ acquireDbConnectionNoTrans settings = do
 --
 -- The pool uses a 30-second TTL and automatic connection cleanup.
 -- Connections are acquired lazily and released automatically.
-createHasqlConnectionPool :: [HsqlConS.Setting] -> Int -> IO (Pool HsqlCon.Connection)
+createHasqlConnectionPool :: HsqlConS.Settings -> Int -> IO (Pool HsqlCon.Connection)
 createHasqlConnectionPool settings numConnections = do
   newPool poolConfig
   where
@@ -433,7 +433,7 @@ createDbEnv conn pool mTracer =
 -- This function ensures that the connection pool is destroyed when the action
 -- completes, preventing resource leaks. Uses 'finally' to guarantee cleanup
 -- even if the action throws an exception.
-withManagedPool :: [HsqlConS.Setting] -> Int -> (Pool HsqlCon.Connection -> IO a) -> IO a
+withManagedPool :: HsqlConS.Settings -> Int -> (Pool HsqlCon.Connection -> IO a) -> IO a
 withManagedPool settings numConns action = do
   pool <- createHasqlConnectionPool settings numConns
   action pool `finally` destroyAllResources pool

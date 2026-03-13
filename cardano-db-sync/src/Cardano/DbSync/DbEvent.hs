@@ -39,7 +39,7 @@ import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Control.Concurrent.STM.TBQueue as TBQ
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Connection.Setting as HsqlSet
+import qualified Hasql.Connection.Settings as HsqlSet
 import Ouroboros.Network.Block (BlockNo, Tip (..))
 import qualified Ouroboros.Network.Point as Point
 
@@ -199,7 +199,7 @@ liftSessionIO cs dbAction = do
     Left dbErr -> throwError $ SNErrDbSessionErr cs dbErr
     Right val -> pure val
 
-acquireDbConnection :: [HsqlSet.Setting] -> IO HsqlC.Connection
+acquireDbConnection :: HsqlSet.Settings -> IO HsqlC.Connection
 acquireDbConnection settings = do
   result <- HsqlC.acquire settings
   case result of

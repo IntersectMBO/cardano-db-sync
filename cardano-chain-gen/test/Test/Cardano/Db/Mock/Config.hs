@@ -252,7 +252,7 @@ getPoolLayer env = do
     Right setting -> pure setting
 
   -- Create the Hasql connection pool, using port as pool identifier
-  pool <- DB.createHasqlConnectionPool [connSetting] 1 -- Pool size of 1 for tests
+  pool <- DB.createHasqlConnectionPool connSetting 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
       nullTracer

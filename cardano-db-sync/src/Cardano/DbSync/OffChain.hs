@@ -240,7 +240,7 @@ runFetchOffChainPoolThread syncEnv = do
       Right setting -> pure setting
 
     bracket
-      (DB.acquireConnection [connSetting])
+      (DB.acquireConnection connSetting)
       HsqlC.release
       ( \dbConn -> do
           let dbEnv = DB.createDbEnv dbConn Nothing (Just trce)
@@ -275,7 +275,7 @@ runFetchOffChainVoteThread syncEnv = do
       Right setting -> pure setting
 
     bracket
-      (DB.acquireConnection [connSetting])
+      (DB.acquireConnection connSetting)
       HsqlC.release
       ( \dbConn -> do
           let dbEnv = DB.createDbEnv dbConn Nothing (Just trce)

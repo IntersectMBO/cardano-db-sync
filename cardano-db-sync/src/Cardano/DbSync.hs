@@ -31,7 +31,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Version (showVersion)
 import qualified Hasql.Connection as HsqlC
-import qualified Hasql.Connection.Setting as HsqlSet
+import qualified Hasql.Connection.Settings as HsqlSet
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
 import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
@@ -181,7 +181,7 @@ runSyncNode ::
   Trace IO Text ->
   IOManager ->
   -- | Database connection settings
-  HsqlSet.Setting ->
+  HsqlSet.Settings ->
   -- | run migration function
   RunMigration ->
   SyncNodeConfig ->
@@ -199,12 +199,12 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
   -- The main thread
   bracket
-    (DB.acquireConnection [dbConnSetting])
+    (DB.acquireConnection dbConnSetting)
     HsqlC.release
     ( \dbConn -> do
         runOrThrowIO $ runExceptT $ do
           -- Create connection pool for parallel operations
-          pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
+          pool <- liftIO $ DB.createHasqlConnectionPool dbConnSetting 4 -- 4 connections for reasonable parallelism
           let dbEnv = DB.createDbEnv dbConn (Just pool) (Just trce)
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
