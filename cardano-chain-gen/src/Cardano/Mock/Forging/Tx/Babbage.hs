@@ -373,7 +373,7 @@ mkDCertTx ::
 mkDCertTx certs wdrl ref = Right $ mkSimpleTx True $ consCertTxBody ref certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential -> ShelleyTxCert BabbageEra)] ->
+  [(StakeIndex, Credential Staking -> ShelleyTxCert BabbageEra)] ->
   BabbageLedgerState mk ->
   Either ForgingError (Core.Tx BabbageEra)
 mkSimpleDCertTx consDert st = do
@@ -392,7 +392,7 @@ mkDummyRegisterTx n m =
 mkDCertPoolTx ::
   [ ( [StakeIndex]
     , PoolIndex
-    , [StakeCredential] -> KeyHash 'StakePool -> ShelleyTxCert BabbageEra
+    , [Credential Staking] -> KeyHash StakePool -> ShelleyTxCert BabbageEra
     )
   ] ->
   BabbageLedgerState mk ->
@@ -405,7 +405,7 @@ mkDCertPoolTx consDert st = do
   mkDCertTx dcerts (Withdrawals mempty) Nothing
 
 mkScriptDCertTx ::
-  [(StakeIndex, Bool, StakeCredential -> ShelleyTxCert BabbageEra)] ->
+  [(StakeIndex, Bool, Credential Staking -> ShelleyTxCert BabbageEra)] ->
   Bool ->
   BabbageLedgerState mk ->
   Either ForgingError (Core.Tx BabbageEra)
@@ -457,8 +457,8 @@ mkSimpleTx valid txBody =
       }
 
 consPoolParamsTwoOwners ::
-  [StakeCredential] ->
-  KeyHash 'StakePool ->
+  [Credential Staking] ->
+  KeyHash StakePool ->
   ShelleyTxCert BabbageEra
 consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
   ShelleyTxCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]
@@ -654,7 +654,7 @@ mkFullTx n m sta = do
             ReservesMIR
             ( StakeAddressesMIR $
                 Map.fromList
-                  [ (Prelude.head unregisteredStakeCredentials, DeltaCoin 100)
+                  [ (Prelude.head unregisteredStakeCredentials, DeltaCoin 100))
                   , (unregisteredStakeCredentials !! 2, DeltaCoin 200)
                   ]
             )
@@ -663,7 +663,7 @@ mkFullTx n m sta = do
             TreasuryMIR
             ( StakeAddressesMIR $
                 Map.fromList
-                  [ (Prelude.head unregisteredStakeCredentials, DeltaCoin 100)
+                  [ (Prelude.head unregisteredStakeCredentials, DeltaCoin 100))
                   , (unregisteredStakeCredentials !! 2, DeltaCoin 200)
                   ]
             )
@@ -673,8 +673,8 @@ mkFullTx n m sta = do
     wthdr =
       Withdrawals $
         Map.fromList
-          [ (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
-          , (RewardAccount Testnet (unregisteredStakeCredentials !! 1), Coin 100)
+          [ (AccountAddress Testnet (AccountId (unregisteredStakeCredentials !! 1)), Coin 100)
+          , (AccountAddress Testnet (AccountId (unregisteredStakeCredentials !! 1)), Coin 100)
           ]
 
     witKeys =

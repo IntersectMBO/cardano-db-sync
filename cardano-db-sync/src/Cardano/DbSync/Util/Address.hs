@@ -12,7 +12,8 @@ import Cardano.DbSync.Util.Bech32 (deserialiseFromBech32, serialiseToBech32)
 import qualified Cardano.Ledger.Address as Address
 import Cardano.Ledger.Api.Tx.Address (decodeAddrLenient)
 import Cardano.Ledger.BaseTypes (Network (..))
-import Cardano.Ledger.Credential (PaymentCredential (), StakeReference (..))
+import Cardano.Ledger.Credential (Credential, StakeReference (..))
+import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Prelude
 import Data.ByteString.Base58 (bitcoinAlphabet, decodeBase58, encodeBase58)
 import Prelude ()
@@ -37,16 +38,16 @@ deserialiseShelleyAddress bech32 = decodeAddrLenient =<< rawBytes
     rawBytes = rightToMaybe $ deserialiseFromBech32 bech32
 
 -- | Serialise a Shelley era stake address to bech32
-serialiseRewardAccount :: Address.RewardAccount -> Text
-serialiseRewardAccount acnt@(Address.RewardAccount net _) =
-  serialiseToBech32 (prefix net) (Address.serialiseRewardAccount acnt)
+serialiseRewardAccount :: Address.AccountAddress -> Text
+serialiseRewardAccount acnt@(Address.AccountAddress net _) =
+  serialiseToBech32 (prefix net) (Address.serialiseAccountAddress acnt)
   where
     prefix Mainnet = "stake"
     prefix Testnet = "stake_test"
 
 -- | Deserialise a Shelley era stake address from bech32
-deserialiseRewardAccount :: Text -> Maybe Address.RewardAccount
-deserialiseRewardAccount bech32 = Address.deserialiseRewardAccount =<< rawBytes
+deserialiseRewardAccount :: Text -> Maybe Address.AccountAddress
+deserialiseRewardAccount bech32 = Address.deserialiseAccountAddress =<< rawBytes
   where
     rawBytes = rightToMaybe $ deserialiseFromBech32 bech32
 
@@ -58,7 +59,7 @@ serialiseByronAddress addr = decodeUtf8 base58
 
 serialiseShelleyAddress ::
   Network ->
-  PaymentCredential ->
+  Credential Payment ->
   StakeReference ->
   Text
 serialiseShelleyAddress net payCred stakeRef =

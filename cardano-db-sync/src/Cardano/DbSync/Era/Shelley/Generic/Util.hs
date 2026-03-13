@@ -56,8 +56,8 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Text.Encoding as Text
 
-annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential -> Ledger.RewardAccount
-annotateStakingCred = Shelley.RewardAccount
+annotateStakingCred :: Ledger.Network -> Ledger.Credential Staking -> Ledger.AccountAddress
+annotateStakingCred nw cred = Shelley.AccountAddress nw (Ledger.AccountId cred)
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
@@ -106,11 +106,11 @@ nonceToBytes nonce =
 renderAddress :: Ledger.Addr -> Text
 renderAddress = serialiseAddress
 
-renderRewardAccount :: Ledger.RewardAccount -> Text
+renderRewardAccount :: Ledger.AccountAddress -> Text
 renderRewardAccount = serialiseRewardAccount
 
-stakingCredHash :: Ledger.Network -> Ledger.StakeCredential -> ByteString
-stakingCredHash network = Ledger.serialiseRewardAccount . annotateStakingCred network
+stakingCredHash :: Ledger.Network -> Ledger.Credential Staking -> ByteString
+stakingCredHash network = Ledger.serialiseAccountAddress . annotateStakingCred network
 
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Ledger.unboundRational

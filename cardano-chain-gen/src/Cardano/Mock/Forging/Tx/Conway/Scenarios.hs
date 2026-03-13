@@ -20,7 +20,7 @@ import Cardano.Ledger.BaseTypes (Network (..))
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.TxCert (Delegatee (..))
 import Cardano.Ledger.Core (Tx ())
-import Cardano.Ledger.Credential (Credential (..), StakeCredential (), StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
 import Cardano.Ledger.DRep (DRep (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..))
@@ -58,14 +58,14 @@ delegateAndSendBlocks n interpreter = do
         payCreds
         stakeCreds
 
-mkRegisterBlocks :: [StakeCredential] -> Interpreter -> IO [CardanoBlock]
+mkRegisterBlocks :: [Credential Staking] -> Interpreter -> IO [CardanoBlock]
 mkRegisterBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txCreds _ ->
   Conway.mkDCertTx
     (Conway.mkRegTxCert SNothing <$> txCreds)
     (Withdrawals mempty)
     Nothing
 
-mkDelegateBlocks :: [StakeCredential] -> Interpreter -> IO [CardanoBlock]
+mkDelegateBlocks :: [Credential Staking] -> Interpreter -> IO [CardanoBlock]
 mkDelegateBlocks creds interpreter = forgeBlocksChunked interpreter creds $ \txCreds state' ->
   Conway.mkDCertTx
     (zipWith (curry (mkDelegCert state')) (cycle [0, 1, 2]) txCreds)
@@ -107,7 +107,7 @@ registerDRepsAndDelegateVotes interpreter = do
   forgeNextFindLeader interpreter (map TxConway blockTxs)
 
 registerDRepAndDelegateVotes' ::
-  Credential 'DRepRole ->
+  Credential DRepRole ->
   StakeIndex ->
   Conway.ConwayLedgerState mk ->
   Either ForgingError [Tx ConwayEra]

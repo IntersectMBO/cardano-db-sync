@@ -75,7 +75,7 @@ mkDCertTx :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> Either ForgingError Sh
 mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential -> ShelleyTxCert ShelleyEra)] ->
+  [(StakeIndex, Credential Staking -> ShelleyTxCert ShelleyEra)] ->
   ShelleyLedgerState mk ->
   Either ForgingError ShelleyTx
 mkSimpleDCertTx consDert st = do
