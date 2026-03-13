@@ -15,12 +15,13 @@ import Cardano.Db.Types (DbEnv (..), DbM (..))
 import Cardano.Prelude (MonadIO (..), ask, throwIO)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
+import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Session as HsqlS
 
 runSession :: DbCallStack -> HsqlS.Session a -> DbM a
 runSession callStack session = do
   dbEnv <- ask
-  result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
+  result <- liftIO $ HsqlCon.use (dbConnection dbEnv) session
   case result of
     Left sessionErr -> liftIO $ throwIO $ DbSessionError callStack (formatSessionError sessionErr)
     Right a -> pure a
@@ -29,7 +30,7 @@ runSession callStack session = do
 runSessionEntity :: DbCallStack -> HsqlS.Session (Maybe (Entity record)) -> DbM (Maybe record)
 runSessionEntity callStack session = do
   dbEnv <- ask
-  result <- liftIO $ HsqlS.run session (dbConnection dbEnv)
+  result <- liftIO $ HsqlCon.use (dbConnection dbEnv) session
   case result of
     Left sessionErr -> liftIO $ throwIO $ DbSessionError callStack (formatSessionError sessionErr)
     Right a -> pure $ entityVal <$> a

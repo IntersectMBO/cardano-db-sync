@@ -8,7 +8,7 @@ module Cardano.Db.Statement.JsonB where
 import Cardano.Prelude (ExceptT, HasCallStack, forM_, liftIO, throwError)
 import Data.Int (Int64)
 import Data.Text (Text)
-import qualified Hasql.Connection as HsqlC
+import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -90,9 +90,9 @@ jsonbSchemaStatement =
           HsqlD.nonNullable HsqlD.int8
 
 -- Original function for direct connection use
-queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbSessionError IO Bool
+queryJsonbInSchemaExists :: HsqlCon.Connection -> ExceptT DbSessionError IO Bool
 queryJsonbInSchemaExists conn = do
-  result <- liftIO $ HsqlSes.run (HsqlSes.statement () jsonbSchemaStatement) conn
+  result <- liftIO $ HsqlCon.use conn (HsqlSes.statement () jsonbSchemaStatement)
   case result of
     Left err -> throwError $ DbSessionError mkDbCallStack (formatSessionError err)
     Right countRes -> pure $ countRes == 1

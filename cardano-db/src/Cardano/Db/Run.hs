@@ -28,6 +28,7 @@ import Control.Monad.Trans.Resource (MonadUnliftIO)
 import Control.Tracer (traceWith)
 import Data.Pool (Pool, defaultPoolConfig, destroyAllResources, newPool, withResource)
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Connection.Settings as HsqlConS
 import qualified Hasql.Decoders as HsqlD
@@ -61,7 +62,7 @@ runDbTransLogged ::
   DbM a ->
   m a
 runDbTransLogged tracer dbEnv mIsolationLevel action = do
-  result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
+  result <- liftIO $ HsqlCon.use (dbConnection dbEnv) transactionSession
   case result of
     Left sessionErr -> do
       liftIO $ logWarning tracer $ "Database transaction error: " <> Text.pack (show sessionErr)
@@ -94,7 +95,7 @@ runDbTransSilent ::
   m a
 runDbTransSilent dbEnv mIsolationLevel action = do
   runNoLoggingT $ do
-    result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
+    result <- liftIO $ HsqlCon.use (dbConnection dbEnv) transactionSession
     case result of
       Left sessionErr ->
         throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
@@ -125,7 +126,7 @@ runDbDirectLogged ::
   DbM a ->
   m a
 runDbDirectLogged tracer dbEnv action = do
-  result <- liftIO $ HsqlS.run simpleSession (dbConnection dbEnv)
+  result <- liftIO $ HsqlCon.use (dbConnection dbEnv) simpleSession
   case result of
     Left sessionErr -> do
       liftIO $ logWarning tracer $ "Database session error: " <> Text.pack (show sessionErr)
@@ -147,7 +148,7 @@ runDbDirectSilent ::
   m a
 runDbDirectSilent dbEnv action = do
   runNoLoggingT $ do
-    result <- liftIO $ HsqlS.run simpleSession (dbConnection dbEnv)
+    result <- liftIO $ HsqlCon.use (dbConnection dbEnv) simpleSession
     case result of
       Left sessionErr ->
         throwIO $ DbSessionError mkDbCallStack ("Database session error: " <> formatSessionError sessionErr)
@@ -178,7 +179,7 @@ runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
     Just pool -> do
       runIohkLogging tracer $ do
         liftIO $ withResource pool $ \conn -> do
-          result <- HsqlS.run (transactionSession conn) conn
+          result <- HsqlCon.use conn (transactionSession conn)
           case result of
             Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
             Right dbResult -> pure dbResult
@@ -209,7 +210,7 @@ runDbPoolLogged tracer dbEnv action = do
     Just pool -> do
       runIohkLogging tracer $ do
         liftIO $ withResource pool $ \conn -> do
-          result <- HsqlS.run (transactionSession conn) conn
+          result <- HsqlCon.use conn (transactionSession conn)
           case result of
             Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
             Right dbResult -> pure dbResult
@@ -351,7 +352,7 @@ transactionSaveWithIsolation isolationLevel = do
 
 setDefaultIsolationLevel :: HsqlCon.Connection -> IO ()
 setDefaultIsolationLevel conn = do
-  result <- HsqlS.run (HsqlS.statement () setIsolationStmt) conn
+  result <- HsqlCon.use conn (HsqlS.statement () setIsolationStmt)
   case result of
     Left err -> throwIO $ DbSessionError mkDbCallStack ("Failed to set isolation level: " <> formatSessionError err)
     Right _ -> pure ()
