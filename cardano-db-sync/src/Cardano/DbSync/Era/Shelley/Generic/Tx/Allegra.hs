@@ -46,7 +46,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (AllegraEra)
 
-fromAllegraTx :: (Word64, Core.Tx AllegraEra) -> Tx
+fromAllegraTx :: (Word64, Core.Tx Core.TopTx AllegraEra) -> Tx
 fromAllegraTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -80,7 +80,7 @@ fromAllegraTx (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Allegra does not support treasury donations
     }
   where
-    txBody :: Core.TxBody AllegraEra
+    txBody :: Core.TxBody Core.TopTx AllegraEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
@@ -92,9 +92,9 @@ fromAllegraTx (blkIndex, tx) =
     (invBefore, invAfter) = getInterval txBody
 
 getScripts ::
-  forall era.
+  forall l era.
   (NativeScript era ~ Timelock era, AllegraEraScript era, TxAuxData era ~ AllegraTxAuxData era, Script era ~ Timelock era, EraTx era) =>
-  Core.Tx era ->
+  Core.Tx l era ->
   [TxScript]
 getScripts tx =
   mkTxScript
@@ -130,7 +130,7 @@ mkTxScript (hsh, script) =
 
 getInterval ::
   AllegraEraTxBody era =>
-  TxBody era ->
+  TxBody l era ->
   (Maybe SlotNo, Maybe SlotNo)
 getInterval txBody =
   ( strictMaybeToMaybe $ invalidBefore interval

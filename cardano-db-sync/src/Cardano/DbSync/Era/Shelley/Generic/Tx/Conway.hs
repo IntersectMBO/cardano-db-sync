@@ -27,7 +27,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Cardano.Block (ConwayEra)
 
-fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx ConwayEra) -> Tx
+fromConwayTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx Core.TopTx ConwayEra) -> Tx
 fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -74,7 +74,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = ctbTreasuryDonation txBody
     }
   where
-    txBody :: Core.TxBody ConwayEra
+    txBody :: Core.TxBody Core.TopTx ConwayEra
     txBody = tx ^. Core.bodyTxL
 
     txId :: TxId
