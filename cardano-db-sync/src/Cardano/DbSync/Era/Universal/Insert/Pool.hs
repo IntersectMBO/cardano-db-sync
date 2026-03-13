@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -37,9 +38,11 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Core (PoolCert (..))
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import qualified Cardano.Ledger.State as PoolP
 import Cardano.Prelude
+import Data.Array.Byte (ByteArray (..))
+import qualified Data.ByteString.Short as SBS
+import Data.ByteString.Short (ShortByteString (SBS))
 
 type IsPoolMember = PoolKeyHash -> Bool
 
@@ -52,11 +55,11 @@ insertPoolRegister ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolP.PoolParams ->
+  PoolP.StakePoolParams ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
-  poolHashId <- insertPoolKeyWithCache syncEnv UpdateCache (PoolP.ppId params)
-  mdId <- case strictMaybeToMaybe $ PoolP.ppMetadata params of
+  poolHashId <- insertPoolKeyWithCache syncEnv UpdateCache (PoolP.sppId params)
+  mdId <- case strictMaybeToMaybe $ PoolP.sppMetadata params of
     Just md -> Just <$> insertPoolMetaDataRef poolHashId txId md
     Nothing -> pure Nothing
 
@@ -64,30 +67,30 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
   let epochActivationDelay = if isRegistration then 2 else 3
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
 
-  saId <- queryOrInsertRewardAccount syncEnv UpdateCache (adjustNetworkTag $ PoolP.ppRewardAccount params)
+  saId <- queryOrInsertRewardAccount syncEnv UpdateCache (adjustNetworkTag $ PoolP.sppAccountAddress params)
   poolUpdateId <-
     lift $
       DB.insertPoolUpdate $
         DB.PoolUpdate
           { DB.poolUpdateHashId = poolHashId
           , DB.poolUpdateCertIndex = idx
-          , DB.poolUpdateVrfKeyHash = hashToBytes $ Ledger.fromVRFVerKeyHash (PoolP.ppVrf params)
-          , DB.poolUpdatePledge = Generic.coinToDbLovelace (PoolP.ppPledge params)
+          , DB.poolUpdateVrfKeyHash = hashToBytes $ Ledger.fromVRFVerKeyHash (PoolP.sppVrf params)
+          , DB.poolUpdatePledge = Generic.coinToDbLovelace (PoolP.sppPledge params)
           , DB.poolUpdateRewardAddrId = saId
           , DB.poolUpdateActiveEpochNo = epoch + epochActivationDelay
           , DB.poolUpdateMetaId = mdId
-          , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (PoolP.ppMargin params)
-          , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (PoolP.ppCost params)
+          , DB.poolUpdateMargin = realToFrac $ Ledger.unboundRational (PoolP.sppMargin params)
+          , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (PoolP.sppCost params)
           , DB.poolUpdateDeposit = deposit
           , DB.poolUpdateRegisteredTxId = txId
           }
 
-  mapM_ (insertPoolOwner syncEnv network poolUpdateId) $ toList (PoolP.ppOwners params)
-  mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.ppRelays params)
+  mapM_ (insertPoolOwner syncEnv network poolUpdateId) $ toList (PoolP.sppOwners params)
+  mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.sppRelays params)
   where
     isPoolRegistration :: DB.PoolHashId -> ExceptT SyncNodeError DB.DbM Bool
     isPoolRegistration poolHashId =
-      if isMember (PoolP.ppId params)
+      if isMember (PoolP.sppId params)
         then pure False
         else do
           -- if the pool is not registered at the end of the previous block, check for
@@ -99,14 +102,14 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
     -- Ignore the network in the `RewardAccount` and use the provided one instead.
     -- This is a workaround for https://github.com/IntersectMBO/cardano-db-sync/issues/546
     adjustNetworkTag :: Ledger.AccountAddress -> Ledger.AccountAddress
-    adjustNetworkTag (Shelley.AccountAddress _ cred) = Shelley.AccountAddress network cred
+    adjustNetworkTag (Ledger.AccountAddress _ aid) = Ledger.AccountAddress network aid
 
 insertPoolRetire ::
   SyncEnv ->
   DB.TxId ->
   EpochNo ->
   Word16 ->
-  Ledger.KeyHash 'Ledger.StakePool ->
+  Ledger.KeyHash Ledger.StakePool ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolRetire syncEnv txId epochNum idx keyHash = do
   poolId <- queryPoolKeyOrInsert syncEnv "insertPoolRetire" UpdateCache True keyHash
@@ -130,7 +133,7 @@ insertPoolMetaDataRef poolId txId md =
       DB.PoolMetadataRef
         { DB.poolMetadataRefPoolId = poolId
         , DB.poolMetadataRefUrl = PoolUrl $ Ledger.urlToText (PoolP.pmUrl md)
-        , DB.poolMetadataRefHash = PoolP.pmHash md
+        , DB.poolMetadataRefHash = SBS.fromShort $ byteArrayToSBS $ PoolP.pmHash md
         , DB.poolMetadataRefRegisteredTxId = txId
         }
 
@@ -138,7 +141,7 @@ insertPoolOwner ::
   SyncEnv ->
   Ledger.Network ->
   DB.PoolUpdateId ->
-  Ledger.KeyHash 'Ledger.Staking ->
+  Ledger.KeyHash Ledger.Staking ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolOwner syncEnv network poolUpdateId skh = do
   saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network (Ledger.KeyHashObj skh)
@@ -201,3 +204,6 @@ insertPoolCert syncEnv isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of
     RegPool pParams -> insertPoolRegister syncEnv isMember mdeposits network epoch blkId txId idx pParams
     RetirePool keyHash epochNum -> insertPoolRetire syncEnv txId epochNum idx keyHash
+
+byteArrayToSBS :: ByteArray -> ShortByteString
+byteArrayToSBS (ByteArray ba) = SBS ba

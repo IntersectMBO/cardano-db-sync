@@ -169,7 +169,7 @@ queryStakeAddrWithCacheRetBs ::
   CacheAction ->
   Ledger.AccountAddress ->
   ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId, ByteString)
-queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.AccountAddress _ cred) = do
+queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.AccountAddress _ (Ledger.AccountId cred)) = do
   let bs = Ledger.serialiseAccountAddress ra
   case envCache syncEnv of
     NoCache -> (,bs) <$> resolveStakeAddress bs

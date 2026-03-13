@@ -71,7 +71,7 @@ import Ouroboros.Network.Block (
 import Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx)
 import qualified Ouroboros.Network.Mux as Mux
-import Ouroboros.Network.NodeToClient (
+import Cardano.Network.NodeToClient (
   ConnectionId,
   Handshake,
   IOManager,
@@ -83,7 +83,7 @@ import Ouroboros.Network.NodeToClient (
   localTxMonitorPeerNull,
   localTxSubmissionPeerNull,
  )
-import qualified Ouroboros.Network.NodeToClient.Version as Network
+import qualified Cardano.Network.NodeToClient.Version as Network
 import Ouroboros.Network.Protocol.ChainSync.ClientPipelined (
   ChainSyncClientPipelined (..),
   ClientPipelinedStIdle (..),

@@ -39,6 +39,7 @@ import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.Address as Ledger
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
@@ -47,7 +48,6 @@ import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.AdaPots as Shelley
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.State
 import Cardano.Prelude
@@ -329,7 +329,7 @@ insertStakeRegistration ::
   Maybe Generic.Deposits ->
   DB.TxId ->
   Word16 ->
-  Shelley.AccountAddress ->
+  Ledger.AccountAddress ->
   ExceptT SyncNodeError DB.DbM ()
 insertStakeRegistration syncEnv epochNo mDeposits txId idx rewardAccount = do
   saId <- queryOrInsertRewardAccount syncEnv UpdateCache rewardAccount
@@ -390,7 +390,7 @@ insertDelegation ::
   Word16 ->
   Maybe DB.RedeemerId ->
   StakeCred ->
-  Ledger.KeyHash 'Ledger.StakePool ->
+  Ledger.KeyHash Ledger.StakePool ->
   ExceptT SyncNodeError DB.DbM ()
 insertDelegation syncEnv network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
   addrId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network cred

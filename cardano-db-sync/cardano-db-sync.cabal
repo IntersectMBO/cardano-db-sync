@@ -170,6 +170,8 @@ library
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-conway >= 1.17.3
+                      , cardano-diffusion
+                      , cardano-diffusion:api
                       , cardano-ledger-binary
                       , cardano-ledger-dijkstra
                       , cardano-ledger-mary

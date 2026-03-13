@@ -12,12 +12,13 @@ module Cardano.DbSync.Era.Shelley.Generic.ParamProposal (
 
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.DbSync.Era.Shelley.Generic.Witness (Witness (..))
-import Cardano.Ledger.Alonzo.Core
+import Cardano.Ledger.Alonzo.Core hiding (Witness)
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin, unCoin)
-import Cardano.Ledger.Conway.Core
+import Cardano.Ledger.Compactible (fromCompact)
+import Cardano.Ledger.Conway.Core hiding (Witness)
 import Cardano.Ledger.Conway.PParams (ppuMinFeeRefScriptCostPerByteL)
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
@@ -102,8 +103,8 @@ convertConwayParamProposal pmap =
   ParamProposal
     { pppEpochNo = Nothing
     , pppKey = Nothing
-    , pppMinFeeA = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeAL)
-    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeBL)
+    , pppMinFeeA = fromIntegral . unCoin . fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuTxFeePerByteL)
+    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuTxFeeFixedL)
     , pppMaxBlockSize = strictMaybeToMaybe (pmap ^. ppuMaxBBSizeL)
     , pppMaxTxSize = strictMaybeToMaybe (pmap ^. ppuMaxTxSizeL)
     , pppMaxBhSize = strictMaybeToMaybe (pmap ^. ppuMaxBHSizeL)
@@ -119,7 +120,7 @@ convertConwayParamProposal pmap =
     , pppProtocolVersion = Nothing -- Removed in Conway
     , pppMinUtxoValue = Nothing -- Removed in Alonzo
     , pppMinPoolCost = strictMaybeToMaybe (pmap ^. ppuMinPoolCostL)
-    , pppCoinsPerUtxo = unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuCoinsPerUTxOByteL)
+    , pppCoinsPerUtxo = fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuCoinsPerUTxOByteL)
     , pppCostmdls = strictMaybeToMaybe (Alonzo.costModelsValid <$> pmap ^. ppuCostModelsL)
     , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (pmap ^. ppuPricesL)
     , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (pmap ^. ppuPricesL)
@@ -127,13 +128,13 @@ convertConwayParamProposal pmap =
     , pppMaxTxExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (pmap ^. ppuMaxTxExUnitsL)
     , pppMaxBlockExMem = fromIntegral . Alonzo.exUnitsMem <$> strictMaybeToMaybe (pmap ^. ppuMaxBlockExUnitsL)
     , pppMaxBlockExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (pmap ^. ppuMaxBlockExUnitsL)
-    , pppMaxValSize = strictMaybeToMaybe (pmap ^. ppuMaxValSizeL)
-    , pppCollateralPercentage = strictMaybeToMaybe (pmap ^. ppuCollateralPercentageL)
-    , pppMaxCollateralInputs = strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
+    , pppMaxValSize = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuMaxValSizeL)
+    , pppCollateralPercentage = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuCollateralPercentageL)
+    , pppMaxCollateralInputs = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
     , -- New for Conway.
       pppPoolVotingThresholds = strictMaybeToMaybe (pmap ^. ppuPoolVotingThresholdsL)
     , pppDRepVotingThresholds = strictMaybeToMaybe (pmap ^. ppuDRepVotingThresholdsL)
-    , pppCommitteeMinSize = strictMaybeToMaybe (pmap ^. ppuCommitteeMinSizeL)
+    , pppCommitteeMinSize = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuCommitteeMinSizeL)
     , pppCommitteeMaxTermLength = strictMaybeToMaybe (pmap ^. ppuCommitteeMaxTermLengthL)
     , pppGovActionLifetime = strictMaybeToMaybe (pmap ^. ppuGovActionLifetimeL)
     , pppGovActionDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuGovActionDepositL)
@@ -147,8 +148,8 @@ convertBabbageParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
     , pppKey = Just $ unKeyHashRaw key
-    , pppMinFeeA = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeAL)
-    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeBL)
+    , pppMinFeeA = fromIntegral . unCoin . fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuTxFeePerByteL)
+    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuTxFeeFixedL)
     , pppMaxBlockSize = strictMaybeToMaybe (pmap ^. ppuMaxBBSizeL)
     , pppMaxTxSize = strictMaybeToMaybe (pmap ^. ppuMaxTxSizeL)
     , pppMaxBhSize = strictMaybeToMaybe (pmap ^. ppuMaxBHSizeL)
@@ -164,7 +165,7 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppProtocolVersion = strictMaybeToMaybe (pmap ^. ppuProtocolVersionL)
     , pppMinUtxoValue = Nothing -- Removed in Alonzo
     , pppMinPoolCost = strictMaybeToMaybe (pmap ^. ppuMinPoolCostL)
-    , pppCoinsPerUtxo = unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuCoinsPerUTxOByteL)
+    , pppCoinsPerUtxo = fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuCoinsPerUTxOByteL)
     , pppCostmdls = strictMaybeToMaybe (Alonzo.costModelsValid <$> pmap ^. ppuCostModelsL)
     , pppPriceMem = Ledger.unboundRational . Alonzo.prMem <$> strictMaybeToMaybe (pmap ^. ppuPricesL)
     , pppPriceStep = Ledger.unboundRational . Alonzo.prSteps <$> strictMaybeToMaybe (pmap ^. ppuPricesL)
@@ -172,9 +173,9 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppMaxTxExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (pmap ^. ppuMaxTxExUnitsL)
     , pppMaxBlockExMem = fromIntegral . Alonzo.exUnitsMem <$> strictMaybeToMaybe (pmap ^. ppuMaxBlockExUnitsL)
     , pppMaxBlockExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (pmap ^. ppuMaxBlockExUnitsL)
-    , pppMaxValSize = strictMaybeToMaybe (pmap ^. ppuMaxValSizeL)
-    , pppCollateralPercentage = strictMaybeToMaybe (pmap ^. ppuCollateralPercentageL)
-    , pppMaxCollateralInputs = strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
+    , pppMaxValSize = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuMaxValSizeL)
+    , pppCollateralPercentage = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuCollateralPercentageL)
+    , pppMaxCollateralInputs = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
     , pppPoolVotingThresholds = Nothing
     , pppDRepVotingThresholds = Nothing
     , pppCommitteeMinSize = Nothing
@@ -191,8 +192,8 @@ convertAlonzoParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
     , pppKey = Just $ unKeyHashRaw key
-    , pppMinFeeA = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeAL)
-    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeBL)
+    , pppMinFeeA = fromIntegral . unCoin . fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuTxFeePerByteL)
+    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuTxFeeFixedL)
     , pppMaxBlockSize = strictMaybeToMaybe (pmap ^. ppuMaxBBSizeL)
     , pppMaxTxSize = strictMaybeToMaybe (pmap ^. ppuMaxTxSizeL)
     , pppMaxBhSize = strictMaybeToMaybe (pmap ^. ppuMaxBHSizeL)
@@ -217,9 +218,9 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppMaxTxExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (pmap ^. ppuMaxTxExUnitsL)
     , pppMaxBlockExMem = fromIntegral . Alonzo.exUnitsMem <$> strictMaybeToMaybe (pmap ^. ppuMaxBlockExUnitsL)
     , pppMaxBlockExSteps = fromIntegral . Alonzo.exUnitsSteps <$> strictMaybeToMaybe (pmap ^. ppuMaxBlockExUnitsL)
-    , pppMaxValSize = strictMaybeToMaybe (pmap ^. ppuMaxValSizeL)
-    , pppCollateralPercentage = strictMaybeToMaybe (pmap ^. ppuCollateralPercentageL)
-    , pppMaxCollateralInputs = strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
+    , pppMaxValSize = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuMaxValSizeL)
+    , pppCollateralPercentage = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuCollateralPercentageL)
+    , pppMaxCollateralInputs = fromIntegral <$> strictMaybeToMaybe (pmap ^. ppuMaxCollateralInputsL)
     , pppPoolVotingThresholds = Nothing
     , pppDRepVotingThresholds = Nothing
     , pppCommitteeMinSize = Nothing
@@ -237,8 +238,8 @@ convertShelleyParamProposal epochNo (key, pmap) =
   ParamProposal
     { pppEpochNo = Just epochNo
     , pppKey = Just $ unKeyHashRaw key
-    , pppMinFeeA = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeAL)
-    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuMinFeeBL)
+    , pppMinFeeA = fromIntegral . unCoin . fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuTxFeePerByteL)
+    , pppMinFeeB = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuTxFeeFixedL)
     , pppMaxBlockSize = strictMaybeToMaybe (pmap ^. ppuMaxBBSizeL)
     , pppMaxTxSize = strictMaybeToMaybe (pmap ^. ppuMaxTxSizeL)
     , pppMaxBhSize = strictMaybeToMaybe (pmap ^. ppuMaxBHSizeL)
