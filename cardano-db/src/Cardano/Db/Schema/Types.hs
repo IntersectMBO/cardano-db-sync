@@ -44,7 +44,7 @@ poolUrlDecoder :: HsqlD.Value PoolUrl
 poolUrlDecoder = PoolUrl <$> HsqlD.text
 
 textDecoder :: HsqlD.Value Text
-textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))
+textDecoder = HsqlD.custom Nothing "text" (Just (25, 1009)) [] (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))
 
 -- Custom decoders/encoders that mimic Persistent's UTCTime sqltype=timestamp behavior
 -- Persistent stores UTCTime as timestamp (without timezone) by treating it as LocalTime in UTC
