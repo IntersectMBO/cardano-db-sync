@@ -282,7 +282,7 @@ mkDCertTx ::
 mkDCertTx certs wdrl = Right $ mkSimpleTx True $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential -> ShelleyTxCert AlonzoEra)] ->
+  [(StakeIndex, Credential Staking -> ShelleyTxCert AlonzoEra)] ->
   AlonzoLedgerState mk ->
   Either ForgingError (Core.Tx AlonzoEra)
 mkSimpleDCertTx consDert st = do
@@ -294,7 +294,7 @@ mkSimpleDCertTx consDert st = do
 mkDCertPoolTx ::
   [ ( [StakeIndex]
     , PoolIndex
-    , [StakeCredential] -> KeyHash 'StakePool -> ShelleyTxCert AlonzoEra
+    , [Credential Staking] -> KeyHash StakePool -> ShelleyTxCert AlonzoEra
     )
   ] ->
   AlonzoLedgerState mk ->
@@ -307,7 +307,7 @@ mkDCertPoolTx consDert st = do
   mkDCertTx dcerts (Withdrawals mempty)
 
 mkScriptDCertTx ::
-  [(StakeIndex, Bool, StakeCredential -> ShelleyTxCert AlonzoEra)] ->
+  [(StakeIndex, Bool, Credential Staking -> ShelleyTxCert AlonzoEra)] ->
   Bool ->
   AlonzoLedgerState mk ->
   Either ForgingError (Core.Tx AlonzoEra)
@@ -359,8 +359,8 @@ mkSimpleTx valid txBody =
       }
 
 consPoolParamsTwoOwners ::
-  [StakeCredential] ->
-  KeyHash 'StakePool ->
+  [Credential Staking] ->
+  KeyHash StakePool ->
   ShelleyTxCert AlonzoEra
 consPoolParamsTwoOwners [rwCred, KeyHashObj owner0, KeyHashObj owner1] poolId =
   ShelleyTxCertPool $ RegPool $ consPoolParams poolId rwCred [owner0, owner1]

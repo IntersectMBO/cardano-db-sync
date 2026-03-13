@@ -26,7 +26,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
 import Cardano.BM.Trace (Trace, logInfo)
-import Cardano.Ledger.Address (RewardAccount (..))
+import Cardano.Ledger.Address (AccountAddress (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Binary.Version (getVersion)
@@ -332,7 +332,7 @@ insertProposalRefunds syncEnv nw earnedEpoch spendableEpoch refunds = do
       GovActionRefunded ->
       ExceptT SyncNodeError DB.DbM DB.RewardRest
     mkReward refund = do
-      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw (raCredential $ garReturnAddr refund)
+      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw (Ledger.unAccountId . Ledger.aaId $ garReturnAddr refund)
       pure $
         DB.RewardRest
           { DB.rewardRestAddrId = saId

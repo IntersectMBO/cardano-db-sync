@@ -86,7 +86,7 @@ data UTxOIndex era
 
 data StakeIndex
   = StakeIndex !Int
-  | StakeAddress !StakeCredential
+  | StakeAddress !(Credential Staking)
   | StakeIndexNew !Int
   | StakeIndexScript !Bool
   | StakeIndexPoolLeader !PoolIndex
@@ -94,5 +94,5 @@ data StakeIndex
 
 data PoolIndex
   = PoolIndex !Int
-  | PoolIndexId !(KeyHash 'StakePool)
+  | PoolIndexId !(KeyHash StakePool)
   | PoolIndexNew !Int

@@ -196,7 +196,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
     txBody :: Core.TxBody era
     txBody = tx ^. Core.bodyTxL
 
-    withdrawalsNoRedeemers :: Map Shelley.RewardAccount TxWithdrawal
+    withdrawalsNoRedeemers :: Map Shelley.AccountAddress TxWithdrawal
     withdrawalsNoRedeemers =
       Map.mapWithKey (curry mkTxWithdrawal) $
         Shelley.unWithdrawals $
@@ -271,7 +271,7 @@ handleTxInPtr rdmrIx txIn mps = case Map.lookup txIn (rmInps mps) of
     let gtxIn' = gtxIn {txInRedeemerIndex = Just rdmrIx}
      in (mps {rmInps = Map.insert txIn gtxIn' (rmInps mps)}, Just (Left gtxIn'))
 
-handleRewardPtr :: Word64 -> Shelley.RewardAccount -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
+handleRewardPtr :: Word64 -> Shelley.AccountAddress -> RedeemerMaps -> (RedeemerMaps, Maybe (Either TxIn ByteString))
 handleRewardPtr rdmrIx rwdAcnt mps = case Map.lookup rwdAcnt (rmWdrl mps) of
   Nothing -> (mps, Nothing)
   Just wdrl ->
@@ -286,7 +286,7 @@ handleCertPtr rdmrIx dcert mps =
     f x = x
 
 data RedeemerMaps = RedeemerMaps
-  { rmWdrl :: Map Shelley.RewardAccount TxWithdrawal
+  { rmWdrl :: Map Shelley.AccountAddress TxWithdrawal
   , rmCerts :: [(Cert, TxCertificate)]
   , rmInps :: Map Ledger.TxIn TxIn
   }
@@ -370,8 +370,8 @@ extraKeyWits txBody =
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
       txBody ^. Alonzo.reqSignerHashesTxBodyL
 
-scriptHashAcnt :: Shelley.RewardAccount -> Maybe ByteString
-scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.raCredential rewardAddr
+scriptHashAcnt :: Shelley.AccountAddress -> Maybe ByteString
+scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.unAccountId (Ledger.aaId rewardAddr)
 
 scriptHashCert :: Cert -> Maybe ByteString
 scriptHashCert cert = case cert of

@@ -34,7 +34,7 @@ import Cardano.Ledger.Alonzo.Scripts (AlonzoEraScript (..), mkBinaryPlutusScript
 import Cardano.Ledger.BaseTypes (Network (..))
 import Cardano.Ledger.Core (Era, Script)
 import qualified Cardano.Ledger.Core as Core
-import Cardano.Ledger.Credential (Credential (..), StakeCredential, StakeReference (..))
+import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
 import Cardano.Ledger.Hashes (ScriptHash (..))
 import Cardano.Ledger.Mary.Value (AssetName (..))
 import Cardano.Ledger.Plutus.Data (Data (..))
@@ -60,7 +60,7 @@ alwaysSucceedsScriptHash = scriptHash @AlonzoEra alwaysSucceedsScript
 alwaysSucceedsScriptAddr :: Addr
 alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
 
-alwaysSucceedsScriptStake :: StakeCredential
+alwaysSucceedsScriptStake :: Credential Staking
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 alwaysFailsPlutusBinary :: PlutusBinary
@@ -76,7 +76,7 @@ alwaysFailsScriptHash = scriptHash @AlonzoEra alwaysFailsScript
 alwaysFailsScriptAddr :: Addr
 alwaysFailsScriptAddr = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) StakeRefNull
 
-alwaysFailsScriptStake :: StakeCredential
+alwaysFailsScriptStake :: Credential Staking
 alwaysFailsScriptStake = ScriptHashObj alwaysFailsScriptHash
 
 plutusDataList :: forall era. Era era => Data era
@@ -94,7 +94,7 @@ alwaysMintScriptHash = scriptHash @AlonzoEra alwaysMintScript
 alwaysMintScriptAddr :: Addr
 alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRefNull
 
-alwaysMintScriptStake :: StakeCredential
+alwaysMintScriptStake :: Credential Staking
 alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 
 mkPlutusV1ScriptEra :: AlonzoEraScript era => PlutusBinary -> Script era

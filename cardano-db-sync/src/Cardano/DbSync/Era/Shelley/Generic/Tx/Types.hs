@@ -97,7 +97,7 @@ data TxCertificate = TxCertificate
 
 data TxWithdrawal = TxWithdrawal
   { txwRedeemerIndex :: !(Maybe Word64)
-  , txwRewardAccount :: !Shelley.RewardAccount
+  , txwRewardAccount :: !Shelley.AccountAddress
   , txwAmount :: !Coin
   }
 

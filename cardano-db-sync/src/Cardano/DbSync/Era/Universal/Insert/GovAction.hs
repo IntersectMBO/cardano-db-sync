@@ -57,7 +57,7 @@ import Cardano.Ledger.DRep (DRepState (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
-import Cardano.Ledger.Shelley.API (Coin (..), RewardAccount)
+import Cardano.Ledger.Shelley.API (Coin (..), AccountAddress)
 import Cardano.Ledger.State (DRep (..))
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
@@ -122,7 +122,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
     -- Bulk insert treasury withdrawals
     insertTreasuryWithdrawalsBulk ::
       DB.GovActionProposalId ->
-      [(RewardAccount, Coin)] ->
+      [(AccountAddress, Coin)] ->
       ExceptT SyncNodeError DB.DbM ()
     insertTreasuryWithdrawalsBulk _ [] = pure ()
     insertTreasuryWithdrawalsBulk gaId withdrawals = do
@@ -363,7 +363,7 @@ insertDrep = \case
   DRepAlwaysAbstain -> lift DB.insertDrepHashAlwaysAbstain
   DRepAlwaysNoConfidence -> lift DB.insertDrepHashAlwaysNoConfidence
 
-insertCredDrepHash :: Ledger.Credential 'DRepRole -> ExceptT SyncNodeError DB.DbM DB.DrepHashId
+insertCredDrepHash :: Ledger.Credential DRepRole -> ExceptT SyncNodeError DB.DbM DB.DrepHashId
 insertCredDrepHash cred = do
   lift $
     DB.insertDrepHash
