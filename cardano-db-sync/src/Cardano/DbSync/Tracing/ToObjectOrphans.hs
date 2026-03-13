@@ -14,7 +14,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Ouroboros.Consensus.Byron.Ledger.Block (ByronBlock)
 import Ouroboros.Network.Block (Point (..), Tip (..))
-import Ouroboros.Network.NodeToNode (TraceSendRecv (..))
+import Ouroboros.Network.Driver (TraceSendRecv (..))
 import Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
 instance HasTextFormatter (TraceSendRecv (ChainSync blk (Point blk) (Tip blk))) where
