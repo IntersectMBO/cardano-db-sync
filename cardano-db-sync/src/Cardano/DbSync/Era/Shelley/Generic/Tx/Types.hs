@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
@@ -182,7 +183,7 @@ toTxHash = unTxHash . txInTxId
 
 class AlonzoEraTxBody era => DBScriptPurpose era where
   getPurpose :: PlutusPurpose AsIx era -> (DB.ScriptPurpose, Word32)
-  toAlonzoPurpose :: TxBody era mk -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIx era)) (ConwayPlutusPurpose AsItem era))
+  toAlonzoPurpose :: TxBody l era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIx era)) (ConwayPlutusPurpose AsItem era))
 
 instance DBScriptPurpose AlonzoEra where
   getPurpose = \case
