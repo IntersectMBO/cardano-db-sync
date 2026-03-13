@@ -11,7 +11,6 @@ import Data.Functor.Contravariant ((>$<))
 import qualified Data.List.NonEmpty as NE
 import Data.Scientific (toBoundedInteger)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -36,12 +35,12 @@ import Cardano.Db.Types (Ada, DbM, RewardSource, rewardSourceDecoder, word64ToAd
 
 queryEpochParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryEpochParamWithEpochNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     epochParamTableN = tableName (Proxy @SCE.EpochParam)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> epochParamTableN
@@ -61,12 +60,12 @@ queryEpochParamWithEpochNo epochNo =
 
 queryParamProposalWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SGV.ParamProposal))
 queryParamProposalWithEpochNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     paramProposalTableN = tableName (Proxy @SGV.ParamProposal)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> paramProposalTableN
@@ -86,12 +85,12 @@ queryParamProposalWithEpochNo epochNo =
 
 queryParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryParamWithEpochNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     epochParamTableN = tableName (Proxy @SCE.EpochParam)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> epochParamTableN
@@ -110,12 +109,12 @@ queryParamWithEpochNo epochNo =
 
 queryNullTxDepositExistsStmt :: HsqlStmt.Statement () Bool
 queryNullTxDepositExistsStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT EXISTS ("
           , "  SELECT 1 FROM " <> txTableN
@@ -135,12 +134,12 @@ queryNullTxDepositExists =
 
 queryMultiAssetCountStmt :: HsqlStmt.Statement () Word
 queryMultiAssetCountStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     multiAssetTableN = tableName (Proxy @MultiAsset.MultiAsset)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> multiAssetTableN
@@ -157,12 +156,12 @@ queryMultiAssetCount =
 
 queryTxMetadataCountStmt :: HsqlStmt.Statement () Word
 queryTxMetadataCountStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     txMetadataTableN = tableName (Proxy @SCB.TxMetadata)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> txMetadataTableN
@@ -179,13 +178,13 @@ queryTxMetadataCount =
 
 queryDRepDistrAmountStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe Word64)
 queryDRepDistrAmountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     drepDistrTableN = tableName (Proxy @SCG.DrepDistr)
     drepHashTableN = tableName (Proxy @SCG.DrepHash)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT distr.amount"
           , " FROM " <> drepDistrTableN <> " distr"
@@ -213,11 +212,11 @@ queryDRepDistrAmount drepHash epochNo = do
 
 queryGovActionCountsStmt :: HsqlStmt.Statement () (Word, Word, Word, Word)
 queryGovActionCountsStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     govActionTableN = tableName (Proxy @SGV.GovActionProposal)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT "
           , "  COUNT(CASE WHEN ratified_epoch IS NOT NULL THEN 1 END)::bigint,"
@@ -242,14 +241,14 @@ queryGovActionCounts =
 
 queryConstitutionAnchorStmt :: HsqlStmt.Statement Word64 (Maybe (Text, ByteString))
 queryConstitutionAnchorStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     constitutionTableN = tableName (Proxy @SCG.Constitution)
     votingAnchorTableN = tableName (Proxy @SCG.VotingAnchor)
     epochStateTableN = tableName (Proxy @SCE.EpochState)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT anchor.url, anchor.data_hash"
           , " FROM " <> constitutionTableN <> " constit"
@@ -275,12 +274,12 @@ queryConstitutionAnchor epochNo =
 
 queryRewardRestsStmt :: HsqlStmt.Statement () [(RewardSource, Word64)]
 queryRewardRestsStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     rewardRestTableN = tableName (Proxy @SCSD.RewardRest)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT type, amount"
           , " FROM " <> rewardRestTableN
@@ -300,12 +299,12 @@ queryRewardRests =
 
 queryTreasuryDonationsStmt :: HsqlStmt.Statement () Word64
 queryTreasuryDonationsStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(treasury_donation), 0)"
           , " FROM " <> txTableN
@@ -322,13 +321,13 @@ queryTreasuryDonations =
 
 queryVoteCountsStmt :: HsqlStmt.Statement (ByteString, Word16) (Word64, Word64, Word64)
 queryVoteCountsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     votingProcedureTableN = tableName (Proxy @SCG.VotingProcedure)
     txTableN = tableName (Proxy @SCB.Tx)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT "
           , "  COUNT(CASE WHEN vote.vote = 'Yes' THEN 1 END)::bigint," -- Changed from 'VoteYes'
@@ -360,11 +359,11 @@ queryVoteCounts txHash idx =
 
 queryEpochStateCountStmt :: HsqlStmt.Statement Word64 Word64
 queryEpochStateCountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     epochStateTableN = tableName (Proxy @SCE.EpochState)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> epochStateTableN
@@ -382,13 +381,13 @@ queryEpochStateCount epochNo =
 
 queryCommitteeByTxHashStmt :: HsqlStmt.Statement ByteString (Maybe SCG.Committee)
 queryCommitteeByTxHashStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     committeeTableN = tableName (Proxy @SCG.Committee)
     govActionProposalTableN = tableName (Proxy @SCG.GovActionProposal)
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT committee.*"
           , " FROM " <> committeeTableN <> " committee"
@@ -409,14 +408,14 @@ queryCommitteeByTxHash txHash =
 
 queryCommitteeMemberCountByTxHashStmt :: HsqlStmt.Statement (Maybe ByteString) Word64
 queryCommitteeMemberCountByTxHashStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     committeeMemberTableN = tableName (Proxy @SCG.CommitteeMember)
     committeeTableN = tableName (Proxy @SCG.Committee)
     govActionProposalTableN = tableName (Proxy @SCG.GovActionProposal)
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> committeeMemberTableN <> " member"
@@ -437,11 +436,11 @@ queryCommitteeMemberCountByTxHash txHash =
 
 queryTestTxIdsStmt :: HsqlStmt.Statement () (Word64, Word64)
 queryTestTxIdsStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT "
           , "  COALESCE(MIN(id), 0) as lower_bound,"
@@ -464,11 +463,11 @@ queryTestTxIds =
 
 queryTxFeeDepositStmt :: HsqlStmt.Statement Word64 (Maybe (Ada, Int64))
 queryTxFeeDepositStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT fee, deposit"
           , " FROM " <> txTableN
@@ -490,14 +489,14 @@ queryTxFeeDeposit txId = do
 
 queryTxInputsCoreStmt :: HsqlStmt.Statement Word64 [SVC.TxOutCore]
 queryTxInputsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     txInTableN = tableName (Proxy @SCB.TxIn)
     txOutTableN = tableName (Proxy @SVC.TxOutCore)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txout.*"
           , " FROM " <> txTableN <> " tx"
@@ -512,14 +511,14 @@ queryTxInputsCoreStmt =
 
 queryTxInputsAddressStmt :: HsqlStmt.Statement Word64 [SVA.TxOutAddress]
 queryTxInputsAddressStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     txInTableN = tableName (Proxy @SCB.TxIn)
     txOutTableN = tableName (Proxy @SVA.TxOutAddress)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txout.*"
           , " FROM " <> txTableN <> " tx"
@@ -550,13 +549,13 @@ queryTxInputs txOutTableType txId = do
 
 queryTxOutputsCoreStmt :: HsqlStmt.Statement Word64 [SVC.TxOutCore]
 queryTxOutputsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     txOutTableN = tableName (Proxy @SVC.TxOutCore)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txout.*"
           , " FROM " <> txTableN <> " tx"
@@ -569,13 +568,13 @@ queryTxOutputsCoreStmt =
 
 queryTxOutputsAddressStmt :: HsqlStmt.Statement Word64 [SVA.TxOutAddress]
 queryTxOutputsAddressStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     txOutTableN = tableName (Proxy @SVA.TxOutAddress)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txout.*"
           , " FROM " <> txTableN <> " tx"
@@ -604,12 +603,12 @@ queryTxOutputs txOutTableType txId = do
 
 queryTxWithdrawalStmt :: HsqlStmt.Statement Word64 Ada
 queryTxWithdrawalStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     withdrawalTableN = tableName (Proxy @SCB.Withdrawal)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(amount), 0)"
           , " FROM " <> withdrawalTableN
@@ -631,13 +630,13 @@ queryTxWithdrawal txId =
 
 queryRewardsWithStakeAddrStmt :: HsqlStmt.Statement (Maybe Word64) [(RewardSource, ByteString)]
 queryRewardsWithStakeAddrStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     rewardTableN = tableName (Proxy @SCSD.Reward)
     stakeAddressTableN = tableName (Proxy @SCSD.StakeAddress)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT reward.type, stake_addr.hash_raw"
           , " FROM " <> rewardTableN <> " reward"
@@ -653,13 +652,13 @@ queryRewardsWithStakeAddrStmt =
 
 queryRewardRestsWithStakeAddrStmt :: HsqlStmt.Statement (Maybe Word64) [(RewardSource, ByteString)]
 queryRewardRestsWithStakeAddrStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     rewardRestTableN = tableName (Proxy @SCSD.RewardRest)
     stakeAddressTableN = tableName (Proxy @SCSD.StakeAddress)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT ireward.type, stake_addr.hash_raw"
           , " FROM " <> rewardRestTableN <> " ireward"
@@ -859,10 +858,10 @@ data ColumnComparisonResult = ColumnComparisonResult
 -- | Get the actual column order from the database
 getTableColumnOrderStmt :: Text -> HsqlStmt.Statement () [ColumnInfo]
 getTableColumnOrderStmt tableN =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT column_name, ordinal_position "
           , "FROM information_schema.columns "

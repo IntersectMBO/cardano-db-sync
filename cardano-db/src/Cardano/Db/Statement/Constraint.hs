@@ -10,7 +10,6 @@ import Cardano.BM.Trace (logInfo)
 import Cardano.Db.Schema.Core.StakeDelegation (EpochStake, Reward)
 import Cardano.Prelude (HasCallStack, Proxy (..), liftIO)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSess
@@ -43,10 +42,10 @@ constraintNameReward = ConstraintNameDB "unique_reward"
 -- | Statement for checking if a constraint exists
 queryHasConstraintStmt :: HsqlStmt.Statement Text.Text Bool
 queryHasConstraintStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = $1)"
           ]
@@ -56,11 +55,11 @@ queryHasConstraintStmt =
 -- | Statement for adding a unique constraint (no parameters - SQL built dynamically)
 addUniqueConstraintStmt :: Text.Text -> Text.Text -> [Text.Text] -> HsqlStmt.Statement () ()
 addUniqueConstraintStmt tbName constraintName fields =
-  HsqlStmt.Statement sql HsqlE.noParams HsqlD.noResult True
+  HsqlStmt.preparable sql HsqlE.noParams HsqlD.noResult
   where
     fieldList = Text.intercalate ", " fields
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "ALTER TABLE "
           , tbName

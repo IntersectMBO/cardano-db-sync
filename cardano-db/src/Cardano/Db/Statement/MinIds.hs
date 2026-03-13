@@ -14,7 +14,6 @@ module Cardano.Db.Statement.MinIds where
 
 import Cardano.Prelude
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Pipeline as HsqlP
@@ -49,11 +48,11 @@ queryMinRefIdStmt ::
   HsqlD.Row Int64 ->
   HsqlStmt.Statement b (Maybe Int64)
 queryMinRefIdStmt fieldName encoder idDecoder =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     validCol = validateColumn @a fieldName
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> tableName (Proxy @a)
@@ -93,12 +92,12 @@ queryMinRefIdNullableStmt ::
   HsqlD.Row Int64 ->
   HsqlStmt.Statement b (Maybe Int64)
 queryMinRefIdNullableStmt fieldName encoder idDecoder =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     validCol = validateColumn @a fieldName
     decoder = HsqlD.rowMaybe idDecoder
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> tableName (Proxy @a)
@@ -139,11 +138,11 @@ queryMinRefIdKeyStmt ::
   HsqlD.Row (Maybe (Key a)) ->
   HsqlStmt.Statement b (Maybe (Key a))
 queryMinRefIdKeyStmt fieldName encoder keyDecoder =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     validCol = validateColumn @a fieldName
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT MIN(id)"
           , " FROM " <> tableName (Proxy @a)

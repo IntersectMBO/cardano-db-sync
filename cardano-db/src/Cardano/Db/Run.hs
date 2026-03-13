@@ -28,7 +28,6 @@ import Control.Monad.Trans.Resource (MonadUnliftIO)
 import Control.Tracer (traceWith)
 import Data.Pool (Pool, defaultPoolConfig, destroyAllResources, newPool, withResource)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import qualified Hasql.Connection as HsqlCon
 import qualified Hasql.Connection.Settings as HsqlConS
 import qualified Hasql.Decoders as HsqlD
@@ -320,9 +319,9 @@ isolationLevelToSql Serializable = "SERIALIZABLE"
 -- | Create a BEGIN statement with specified isolation level
 beginTransactionStmt :: IsolationLevel -> HsqlStmt.Statement () ()
 beginTransactionStmt isolationLevel =
-  HsqlStmt.Statement sql HsqlE.noParams HsqlD.noResult True
+  HsqlStmt.preparable sql HsqlE.noParams HsqlD.noResult
   where
-    sql = encodeUtf8 $ "BEGIN ISOLATION LEVEL " <> isolationLevelToSql isolationLevel
+    sql = "BEGIN ISOLATION LEVEL " <> isolationLevelToSql isolationLevel
 
 -- beginTransaction :: IsolationLevel -> DbM ()
 -- beginTransaction isolationLevel = do
@@ -332,7 +331,7 @@ beginTransactionStmt isolationLevel =
 -- | Create a COMMIT statement
 commitTransactionStmt :: HsqlStmt.Statement () ()
 commitTransactionStmt =
-  HsqlStmt.Statement "COMMIT" HsqlE.noParams HsqlD.noResult True
+  HsqlStmt.preparable "COMMIT" HsqlE.noParams HsqlD.noResult
 
 commitTransaction :: HasCallStack => DbM ()
 commitTransaction = do
@@ -341,7 +340,7 @@ commitTransaction = do
 -- | Create a ROLLBACK statement
 rollbackTransactionStmt :: HsqlStmt.Statement () ()
 rollbackTransactionStmt =
-  HsqlStmt.Statement "ROLLBACK" HsqlE.noParams HsqlD.noResult True
+  HsqlStmt.preparable "ROLLBACK" HsqlE.noParams HsqlD.noResult
 
 transactionSaveWithIsolation :: HasCallStack => IsolationLevel -> DbM ()
 transactionSaveWithIsolation isolationLevel = do
@@ -358,19 +357,19 @@ setDefaultIsolationLevel conn = do
     Right _ -> pure ()
   where
     setIsolationStmt =
-      HsqlStmt.Statement
+      HsqlStmt.preparable
         "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ"
         HsqlE.noParams
         HsqlD.noResult
-        True
+        
 
 checkTransactionStmt :: HsqlStmt.Statement () Bool
 checkTransactionStmt =
-  HsqlStmt.Statement
+  HsqlStmt.preparable
     "SELECT pg_current_xact_id_if_assigned() IS NOT NULL"
     HsqlE.noParams
     (HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable HsqlD.bool)))
-    True
+    
 
 -----------------------------------------------------------------------------------------
 -- Connection Management

@@ -6,7 +6,6 @@ module Cardano.Db.Statement.MultiAsset where
 import Cardano.Prelude (ByteString, HasCallStack, for)
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -39,10 +38,10 @@ insertMultiAsset multiAsset =
 -- | QUERY -------------------------------------------------------------------
 queryMultiAssetIdStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Id.MultiAssetId)
 queryMultiAssetIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM multi_asset"

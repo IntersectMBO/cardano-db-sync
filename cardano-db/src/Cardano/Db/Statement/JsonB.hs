@@ -6,8 +6,8 @@
 module Cardano.Db.Statement.JsonB where
 
 import Cardano.Prelude (ExceptT, HasCallStack, forM_, liftIO, throwError)
-import Data.ByteString (ByteString)
 import Data.Int (Int64)
+import Data.Text (Text)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -18,7 +18,6 @@ import Cardano.Db.Error (DbSessionError (..), formatSessionError, mkDbCallStack)
 import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Types (DbM)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 
 --------------------------------------------------------------------------------
 -- Enable JSONB for specific fields in the schema
@@ -27,10 +26,10 @@ enableJsonbInSchema :: HasCallStack => DbM ()
 enableJsonbInSchema =
   runSession mkDbCallStack $ do
     forM_ jsonbColumns $ \(table, column) ->
-      HsqlSes.sql $
+      HsqlSes.script $
         "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE jsonb USING " <> column <> "::jsonb"
   where
-    jsonbColumns :: [(ByteString, ByteString)]
+    jsonbColumns :: [(Text, Text)]
     jsonbColumns =
       [ ("tx_metadata", "json")
       , ("script", "json")
@@ -49,11 +48,11 @@ disableJsonbInSchema :: HasCallStack => DbM ()
 disableJsonbInSchema =
   runSession mkDbCallStack $ do
     forM_ jsonColumnsToRevert $ \(table, column) ->
-      HsqlSes.sql $
+      HsqlSes.script $
         "ALTER TABLE " <> table <> " ALTER COLUMN " <> column <> " TYPE VARCHAR"
   where
     -- List of table and column pairs to convert back from JSONB
-    jsonColumnsToRevert :: [(ByteString, ByteString)]
+    jsonColumnsToRevert :: [(Text, Text)]
     jsonColumnsToRevert =
       [ ("tx_metadata", "json")
       , ("script", "json")
@@ -68,14 +67,14 @@ disableJsonbInSchema =
 -- | Check if the JSONB column exists in the schema
 jsonbSchemaStatement :: HsqlStmt.Statement () Int64
 jsonbSchemaStatement =
-  HsqlStmt.Statement
+  HsqlStmt.preparable
     query
     HsqlE.noParams
     decoder
-    True
+    
   where
     query =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)"
           , " FROM information_schema.columns"

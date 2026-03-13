@@ -11,7 +11,6 @@ module Cardano.Db.Statement.StakeDelegation where
 import Cardano.Prelude (ByteString, Proxy (..), traverse_)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Word (Word64)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -51,11 +50,11 @@ insertDelegation delegation =
 -- Statement for querying delegations with non-null redeemer_id
 queryDelegationScriptStmt :: HsqlStmt.Statement () [SS.Delegation]
 queryDelegationScriptStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @SS.Delegation)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> tableN
@@ -103,10 +102,10 @@ insertBulkEpochStakePiped dbConstraintEpochStake epochStakeChunks =
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
 queryEpochStakeCountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM epoch_stake"
@@ -128,12 +127,12 @@ queryEpochStakeCount epoch =
 
 updateStakeProgressCompletedStmt :: HsqlStmt.Statement Word64 ()
 updateStakeProgressCompletedStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     tableN = tableName (Proxy @SS.EpochStakeProgress)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "INSERT INTO " <> tableN <> " (epoch_no, completed)"
           , " VALUES ($1, TRUE)"
@@ -193,10 +192,10 @@ insertBulkRewardsPiped dbConstraintRewards rewardChunks =
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64
 queryNormalEpochRewardCountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM reward"
@@ -217,10 +216,10 @@ queryNormalEpochRewardCount epochNum =
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
 queryNormalEpochStakeCountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM epoch_stake"
@@ -246,13 +245,13 @@ queryRewardCount =
 --------------------------------------------------------------------------------
 queryRewardMapDataStmt :: HsqlStmt.Statement Word64 [(ByteString, RewardSource, DbLovelace)]
 queryRewardMapDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     rewardTableN = tableName (Proxy @SS.Reward)
     stakeAddressTableN = tableName (Proxy @SS.StakeAddress)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT sa.hash_raw, r.type, r.amount"
           , " FROM " <> rewardTableN <> " r"
@@ -279,12 +278,12 @@ queryRewardMapData epochNo =
 -- Bulk delete statement
 deleteRewardsBulkStmt :: HsqlStmt.Statement ([Id.StakeAddressId], [RewardSource], [Word64], [Id.PoolHashId]) ()
 deleteRewardsBulkStmt =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     rewardTableN = tableName (Proxy @SS.Reward)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "DELETE FROM " <> rewardTableN
           , " WHERE (addr_id, type, spendable_epoch, pool_id) IN ("
@@ -311,11 +310,11 @@ deleteRewardsBulk params =
 --------------------------------------------------------------------------------
 deleteOrphanedRewardsBulkStmt :: HsqlStmt.Statement (Word64, [Id.StakeAddressId]) ()
 deleteOrphanedRewardsBulkStmt =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     rewardTableN = tableName (Proxy @SS.Reward)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "DELETE FROM " <> rewardTableN
           , " WHERE spendable_epoch = $1"
@@ -412,12 +411,12 @@ insertStakeRegistration stakeRegistration =
 --------------------------------------------------------------------------------
 queryStakeAddressStmt :: HsqlStmt.Statement ByteString (Maybe Id.StakeAddressId)
 queryStakeAddressStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.StakeAddressId)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM stake_address"
@@ -431,14 +430,14 @@ queryStakeAddress addr = do
 -----------------------------------------------------------------------------------
 queryStakeRefPtrStmt :: HsqlStmt.Statement Ptr (Maybe Id.StakeAddressId)
 queryStakeRefPtrStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTable = tableName (Proxy @SCB.Block)
     txTable = tableName (Proxy @SCB.Tx)
     srTable = tableName (Proxy @SS.StakeRegistration)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT sr.addr_id FROM "
           , blockTable
@@ -476,11 +475,11 @@ queryStakeRefPtr ptr =
 -- Statement for querying stake addresses with non-null script_hash
 queryStakeAddressScriptStmt :: HsqlStmt.Statement () [SS.StakeAddress]
 queryStakeAddressScriptStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @SS.StakeAddress)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> tableN
@@ -496,11 +495,11 @@ queryStakeAddressScript =
 -----------------------------------------------------------------------------------
 queryAddressInfoRewardsStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
 queryAddressInfoRewardsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     rewardTableN = tableName (Proxy @SS.Reward)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(amount), 0)"
           , " FROM " <> rewardTableN
@@ -511,11 +510,11 @@ queryAddressInfoRewardsStmt =
 
 queryAddressInfoWithdrawalsStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
 queryAddressInfoWithdrawalsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     withdrawalTableN = tableName (Proxy @SCB.Withdrawal)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(amount), 0)"
           , " FROM " <> withdrawalTableN
@@ -527,11 +526,11 @@ queryAddressInfoWithdrawalsStmt =
 ---------------------------------------------------------------------------
 queryAddressInfoViewStmt :: HsqlStmt.Statement Id.StakeAddressId (Maybe Text.Text)
 queryAddressInfoViewStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     stakeAddrTableN = tableName (Proxy @SS.StakeAddress)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT view"
           , " FROM " <> stakeAddrTableN
@@ -555,7 +554,7 @@ queryAddressInfoData addrId =
 -- | Query reward for specific stake address and epoch
 queryRewardForEpochStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe DbLovelace)
 queryRewardForEpochStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder =
       mconcat
@@ -567,7 +566,7 @@ queryRewardForEpochStmt =
     rewardTable = tableName (Proxy @SS.Reward)
     epochTable = tableName (Proxy @SEP.Epoch)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT rwd.amount"
           , " FROM " <> stakeAddressTable <> " saddr"
@@ -588,12 +587,12 @@ queryRewardForEpoch epochNo saId =
 
 queryDeregistrationScriptStmt :: HsqlStmt.Statement () [SS.StakeDeregistration]
 queryDeregistrationScriptStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @SS.StakeDeregistration)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT addr_id, cert_index, epoch_no, tx_id, redeemer_id"
           , " FROM " <> tableN

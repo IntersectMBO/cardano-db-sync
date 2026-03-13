@@ -7,7 +7,6 @@ module Cardano.Db.Statement.EpochAndProtocol where
 import Cardano.Prelude (Int64, Proxy (..), Word64)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
 import Data.WideWord (Word128 (..))
 import qualified Hasql.Decoders as HsqlD
@@ -126,12 +125,12 @@ insertEpochSyncTime epochSyncTime =
 -- | QUERY ----------------------------------------------------------------------------------
 queryEpochEntryStmt :: HsqlStmt.Statement Word64 (Maybe SEnP.Epoch)
 queryEpochEntryStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
     decoder = HsqlD.rowMaybe SEnP.epochDecoder
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM epoch"
@@ -150,10 +149,10 @@ queryEpochEntry epochNum = do
 --------------------------------------------------------------------------------
 queryCalcEpochEntryStmt :: HsqlStmt.Statement Word64 SEnP.Epoch
 queryCalcEpochEntryStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH block_stats AS ("
           , "  SELECT COUNT(*) as block_count, MIN(time) as min_time, MAX(time) as max_time"
@@ -239,12 +238,12 @@ queryCalcEpochEntry epochNum =
 --------------------------------------------------------------------------------
 queryForEpochIdStmt :: HsqlStmt.Statement Word64 (Maybe Id.EpochId)
 queryForEpochIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.EpochId)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM epoch"
@@ -259,10 +258,10 @@ queryForEpochId epochNum =
 --------------------------------------------------------------------------------
 queryLatestEpochStmt :: HsqlStmt.Statement () (Maybe SEnP.Epoch)
 queryLatestEpochStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM epoch"
@@ -285,10 +284,10 @@ queryEpochCount =
 --------------------------------------------------------------------------------
 queryLatestCachedEpochNoStmt :: HsqlStmt.Statement () (Maybe Word64)
 queryLatestCachedEpochNoStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT no"
           , " FROM epoch"
@@ -346,12 +345,12 @@ insertPotTransfer potTransfer =
 --------------------------------------------------------------------------------
 queryAdaPotsAllStmt :: HsqlStmt.Statement () [(Int64, Int64)]
 queryAdaPotsAllStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     adaPotsTable = tableName (Proxy @SEnP.AdaPots)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT "
           , "  epoch_no, "

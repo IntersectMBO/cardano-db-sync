@@ -15,7 +15,6 @@ import Cardano.Prelude (HasCallStack, Proxy (..), Word64, listToMaybe)
 import Data.Functor.Contravariant (Contravariant (..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -33,7 +32,7 @@ replace ::
   HsqlE.Params a -> -- Record encoder
   HsqlStmt.Statement (Key a, a) ()
 replace keyEncoder recordEncoder =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     table = tableName (Proxy @a)
     colNames = NE.toList $ columnNames (Proxy @a)
@@ -48,7 +47,7 @@ replace keyEncoder recordEncoder =
     encoder = contramap fst keyEncoder <> contramap snd recordEncoder
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "UPDATE " <> table
           , " SET " <> setClause
@@ -63,8 +62,8 @@ selectByFieldFirst ::
   HsqlD.Row (Entity a) -> -- Entity decoder
   HsqlStmt.Statement b (Maybe (Entity a))
 selectByFieldFirst fieldName paramEncoder entityDecoder =
-  HsqlStmt.Statement
-    ( TextEnc.encodeUtf8 $
+  HsqlStmt.preparable
+    ( 
         Text.concat
           [ "SELECT * FROM " <> tableName (Proxy @a)
           , " WHERE " <> fieldName <> " = $1"
@@ -72,7 +71,7 @@ selectByFieldFirst fieldName paramEncoder entityDecoder =
     )
     paramEncoder
     (listToMaybe <$> HsqlD.rowList entityDecoder)
-    True
+    
 
 -- | Checks if a record with a specific ID exists in a table.
 --
@@ -92,7 +91,7 @@ existsById ::
   ResultType Bool r -> -- Whether to return Entity and decoder
   HsqlStmt.Statement (Key a) r
 existsById encoder resultType =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     decoder = case resultType of
       NoResult -> HsqlD.noResult
@@ -101,7 +100,7 @@ existsById encoder resultType =
     table = tableName (Proxy @a)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT EXISTS (SELECT 1 FROM " <> table
           , " WHERE id = $1)"
@@ -125,7 +124,7 @@ existsWhereByColumn ::
   ResultType Bool r ->
   HsqlStmt.Statement b r
 existsWhereByColumn colName encoder resultType =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     decoder = case resultType of
       NoResult -> HsqlD.noResult
@@ -135,7 +134,7 @@ existsWhereByColumn colName encoder resultType =
     validCol = validateColumn @a colName
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT EXISTS ("
           , "  SELECT 1"
@@ -170,7 +169,7 @@ countWhere ::
   -- | Returns a statement that counts matching rows
   HsqlStmt.Statement () Word64
 countWhere colName condition =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
     -- Validate the column name
@@ -178,7 +177,7 @@ countWhere colName condition =
 
     -- SQL statement to count rows matching the condition
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> tableName (Proxy @a)
@@ -197,7 +196,7 @@ parameterisedCountWhere ::
   HsqlE.Params p ->
   HsqlStmt.Statement p Word64
 parameterisedCountWhere colName condition encoder =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
     -- Validate the column name
@@ -205,7 +204,7 @@ parameterisedCountWhere colName condition encoder =
 
     -- SQL statement to count rows matching the condition
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> tableName (Proxy @a)
@@ -227,12 +226,12 @@ countAll ::
   -- | Returns a statement that counts all rows
   HsqlStmt.Statement () Word64
 countAll =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     table = tableName (Proxy @a)
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> table
@@ -244,7 +243,7 @@ countAll =
 
 queryStatementCacheStmt :: HsqlStmt.Statement () Int
 queryStatementCacheStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql = "SELECT count(*) FROM pg_prepared_statements"
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)

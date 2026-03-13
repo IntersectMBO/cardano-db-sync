@@ -7,7 +7,6 @@ module Cardano.Db.Statement.Pool where
 import Cardano.Prelude (ByteString, Int64, Proxy (..), Word64)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -41,12 +40,12 @@ insertDelistedPool delistedPool =
 --------------------------------------------------------------------------------
 queryDelistedPoolsStmt :: HsqlStmt.Statement () [ByteString]
 queryDelistedPoolsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     delistedPoolTable = tableName (Proxy @SCP.DelistedPool)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT hash_raw FROM "
           , delistedPoolTable
@@ -77,10 +76,10 @@ existsDelistedPool ph =
 --------------------------------------------------------------------------------
 deleteDelistedPoolStmt :: HsqlStmt.Statement ByteString Int64
 deleteDelistedPoolStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH deleted AS ("
           , "  DELETE FROM delisted_pool"
@@ -115,11 +114,11 @@ insertPoolHash poolHash =
 --------------------------------------------------------------------------------
 queryPoolHashIdStmt :: HsqlStmt.Statement ByteString (Maybe Id.PoolHashId)
 queryPoolHashIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     table = tableName (Proxy @SCP.PoolHash)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id FROM " <> table
           , " WHERE hash_raw = $1"
@@ -211,12 +210,12 @@ insertBulkPoolStat poolStats =
 --------------------------------------------------------------------------------
 queryPoolStatCountStmt :: HsqlStmt.Statement () Int64
 queryPoolStatCountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     poolStatTable = tableName (Proxy @SCP.PoolStat)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint FROM "
           , poolStatTable
@@ -232,12 +231,12 @@ queryPoolStatCount =
 --------------------------------------------------------------------------------
 queryPoolStatDuplicatesStmt :: HsqlStmt.Statement () Int64
 queryPoolStatDuplicatesStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     poolStatTable = tableName (Proxy @SCP.PoolStat)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint FROM ("
           , "  SELECT pool_hash_id, epoch_no"
@@ -286,7 +285,7 @@ insertPoolRetire poolRetire =
 --------------------------------------------------------------------------------
 queryRetiredPoolsStmt :: HsqlStmt.Statement (Maybe ByteString) [PoolCert]
 queryRetiredPoolsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     poolRetireN = tableName (Proxy @SCP.PoolRetire)
     poolHashN = tableName (Proxy @SCP.PoolHash)
@@ -294,7 +293,7 @@ queryRetiredPoolsStmt =
     blockN = tableName (Proxy @SCB.Block)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT ph.hash_raw, pr.retiring_epoch, blk.block_no, tx.block_index, pr.cert_index"
           , " FROM " <> poolRetireN <> " pr"
@@ -342,14 +341,14 @@ insertPoolUpdate poolUpdate =
 -- Check if there are other PoolUpdates in the same blocks for the same pool
 queryPoolUpdateByBlockStmt :: HsqlStmt.Statement (Id.BlockId, Id.PoolHashId) Bool
 queryPoolUpdateByBlockStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTable = tableName (Proxy @SCB.Block)
     txTable = tableName (Proxy @SCB.Tx)
     poolUpdateTable = tableName (Proxy @SCP.PoolUpdate)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT EXISTS (SELECT 1 FROM "
           , blockTable
@@ -379,7 +378,7 @@ queryPoolUpdateByBlock blkId poolHashId =
 --------------------------------------------------------------------------------
 queryPoolRegisterStmt :: HsqlStmt.Statement (Maybe ByteString) [PoolCert]
 queryPoolRegisterStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     poolUpdateTable = tableName (Proxy @SCP.PoolUpdate)
     poolHashTable = tableName (Proxy @SCP.PoolHash)
@@ -388,7 +387,7 @@ queryPoolRegisterStmt =
     blockTable = tableName (Proxy @SCB.Block)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT ph.hash_raw, pmr.hash, blk.block_no, tx.block_index, pu.cert_index"
           , " FROM "
@@ -446,12 +445,12 @@ insertReservedPoolTicker reservedPool =
 --------------------------------------------------------------------------------
 queryReservedTickerStmt :: HsqlStmt.Statement Text.Text (Maybe ByteString)
 queryReservedTickerStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     reservedPoolTickerTable = tableName (Proxy @SCP.ReservedPoolTicker)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT ticker.pool_hash FROM "
           , reservedPoolTickerTable
@@ -472,11 +471,11 @@ queryReservedTicker tickerName =
 --------------------------------------------------------------------------------
 queryReservedTickersStmt :: HsqlStmt.Statement () [SCP.ReservedPoolTicker]
 queryReservedTickersStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     reservedPoolTickerTable = tableName (Proxy @SCP.ReservedPoolTicker)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT * FROM "
           , reservedPoolTickerTable

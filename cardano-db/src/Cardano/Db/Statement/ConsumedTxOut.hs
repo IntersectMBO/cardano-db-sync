@@ -21,7 +21,6 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import Data.Proxy (Proxy (..))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Word (Word64)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -126,10 +125,10 @@ runConsumedTxOutMigrations trce bulkSize txOutVariantType blockNoDiff pcm = do
 -- | Statement to check if tx_out is null for specified table type
 queryTxOutIsNullStmt :: Text.Text -> HsqlStmt.Statement () Bool
 queryTxOutIsNullStmt tName =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT NOT EXISTS (SELECT 1 FROM "
           , tName
@@ -170,8 +169,7 @@ updateTxOutAndCreateAddress trce = do
     -- Helper to run a step with proper logging and error handling
     runStep :: Text.Text -> Text.Text -> DbM ()
     runStep stepDesc sql = do
-      let sqlBS = TextEnc.encodeUtf8 sql
-      runSession mkDbCallStack $ HsqlSes.sql sqlBS
+      runSession mkDbCallStack $ HsqlSes.script sql
       liftIO $ logInfo trce $ "updateTxOutAndCreateAddress: " <> stepDesc
 
     dropViewsQuery =
@@ -261,12 +259,12 @@ updateTxOutConsumedStmt ::
   DbInfo a =>
   HsqlStmt.Statement ConsumedTriplet ()
 updateTxOutConsumedStmt =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     table = tableName (Proxy @a)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "UPDATE "
           , table
@@ -311,11 +309,10 @@ updatePageEntries txOutVariantType triplets = do
 -- | Statement for creating the consumed_by_tx_id index
 createConsumedIndexTxOutStmt :: HsqlStmt.Statement () ()
 createConsumedIndexTxOutStmt =
-  HsqlStmt.Statement sql HsqlE.noParams HsqlD.noResult True
+  HsqlStmt.preparable sql HsqlE.noParams HsqlD.noResult
   where
     sql =
-      TextEnc.encodeUtf8
-        "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_id ON tx_out (consumed_by_tx_id)"
+      "CREATE INDEX IF NOT EXISTS idx_tx_out_consumed_by_tx_id ON tx_out (consumed_by_tx_id)"
 
 -- | Create index on consumed_by_tx_id in tx_out table
 createConsumedIndexTxOut :: DbM ()
@@ -326,10 +323,10 @@ createConsumedIndexTxOut = runSession mkDbCallStack $ HsqlSes.statement () creat
 -- | Statement for creating the pruning constraint
 createPruneConstraintTxOutStmt :: HsqlStmt.Statement () ()
 createPruneConstraintTxOutStmt =
-  HsqlStmt.Statement sql HsqlE.noParams HsqlD.noResult True
+  HsqlStmt.preparable sql HsqlE.noParams HsqlD.noResult
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.unlines
           [ "do $$"
           , "begin"
@@ -353,10 +350,10 @@ createPruneConstraintTxOut = runSession mkDbCallStack $ HsqlSes.statement () cre
 -- | Statement to get a page of inputs from tx_in table
 getInputPageStmt :: Int -> HsqlStmt.Statement Word64 [ConsumedTriplet]
 getInputPageStmt bulkSize =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_out_id, tx_out_index, tx_in_id"
           , " FROM tx_in"
@@ -394,10 +391,10 @@ getInputPage bulkSize offset =
 -- Statement function for finding max TxInId by block difference
 findMaxTxInIdStmt :: HsqlStmt.Statement Word64 (Either Text.Text Id.TxId)
 findMaxTxInIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH target_block_no AS ("
           , "  SELECT MAX(block_no) - $1 AS target_block_no FROM block"
@@ -429,11 +426,11 @@ deleteConsumedBeforeTxStmt ::
   DbInfo a =>
   HsqlStmt.Statement (Maybe Id.TxId) Int64
 deleteConsumedBeforeTxStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH deleted AS ("
           , "  DELETE FROM " <> tableN
@@ -480,11 +477,11 @@ deletePageEntriesStmt ::
   DbInfo a =>
   HsqlStmt.Statement [ConsumedTriplet] ()
 deletePageEntriesStmt =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH entries AS ("
           , "  SELECT unnest($1::bigint[]) as tx_out_tx_id,"
@@ -554,11 +551,11 @@ updateConsumedByTxHashBulkStmt ::
   DbInfo a =>
   HsqlStmt.Statement [BulkConsumedByHash] ()
 updateConsumedByTxHashBulkStmt =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH consumption_data AS ("
           , "  SELECT unnest($1::bytea[]) as tx_hash,"
@@ -703,10 +700,10 @@ updateBulkConsumedByTxId ::
   HsqlE.Params b ->
   HsqlStmt.Statement b ()
 updateBulkConsumedByTxId proxy encoder =
-  HsqlStmt.Statement sql encoder HsqlD.noResult True
+  HsqlStmt.preparable sql encoder HsqlD.noResult
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH update_data AS ("
           , "  SELECT unnest($1::bigint[]) as row_id,"
@@ -744,11 +741,11 @@ queryTxOutConsumedNullCountStmt ::
   DbInfo a =>
   HsqlStmt.Statement () Word64
 queryTxOutConsumedNullCountStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> tableN
@@ -775,11 +772,11 @@ queryTxOutConsumedCountStmt ::
   DbInfo a =>
   HsqlStmt.Statement () Word64
 queryTxOutConsumedCountStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> tableN
@@ -805,11 +802,11 @@ queryWrongConsumedByStmt ::
   DbInfo a =>
   HsqlStmt.Statement () Word64
 queryWrongConsumedByStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> tableN

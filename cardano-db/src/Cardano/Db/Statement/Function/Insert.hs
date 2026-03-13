@@ -18,7 +18,6 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Statement as HsqlS
 
 import qualified Data.List.NonEmpty as NE
-import qualified Data.Text.Encoding as TextEnc
 
 import Cardano.Db.Statement.Function.Core (ResultType (..))
 import Cardano.Db.Statement.Types (DbInfo (..))
@@ -47,7 +46,7 @@ mkInsert ::
   ResultType r r -> -- Whether to return result and decoder
   HsqlS.Statement a r -- Returns the prepared statement
 mkInsert removeJsonb encoder resultType =
-  HsqlS.Statement sql encoder decoder True
+  HsqlS.preparable sql encoder decoder
   where
     (decoder, returnClause) = case resultType of
       NoResult -> (HsqlD.noResult, "")
@@ -59,7 +58,7 @@ mkInsert removeJsonb encoder resultType =
     castParams = buildCastParameters removeJsonb (Proxy @a)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "INSERT INTO " <> table
           , " (" <> columns <> ")"
@@ -86,7 +85,7 @@ insertReplace encoder resultType =
   case validateUniqueConstraints (Proxy @a) of
     Left err -> error err
     Right [] -> error $ "insertReplace: No unique constraints defined for " <> show (typeRep (Proxy @a))
-    Right uniqueCols -> HsqlS.Statement sql encoder decoder True
+    Right uniqueCols -> HsqlS.preparable sql encoder decoder
       where
         (decoder, returnClause) = case resultType of
           NoResult -> (HsqlD.noResult, "")
@@ -105,7 +104,7 @@ insertReplace encoder resultType =
             map (\col -> col <> " = EXCLUDED." <> col) colNames
 
         sql =
-          TextEnc.encodeUtf8 $
+          
             Text.concat
               [ "INSERT INTO " <> table
               , " (" <> columns <> ")"
@@ -145,7 +144,7 @@ mkInsertCheckUnique removeJsonb encoder resultType =
   case validateUniqueConstraints (Proxy @a) of
     Left err -> error err
     Right [] -> error $ "insertCheckUnique: No unique constraints defined for " <> show (typeRep (Proxy @a))
-    Right uniqueCols@(dummyUpdateField : _) -> HsqlS.Statement sql encoder decoder True
+    Right uniqueCols@(dummyUpdateField : _) -> HsqlS.preparable sql encoder decoder
       where
         (decoder, returnClause) = case resultType of
           NoResult -> (HsqlD.noResult, "")
@@ -156,7 +155,7 @@ mkInsertCheckUnique removeJsonb encoder resultType =
         castParams = buildCastParameters removeJsonb (Proxy @a)
 
         sql =
-          TextEnc.encodeUtf8 $
+          
             Text.concat
               [ "INSERT INTO " <> table
               , " (" <> Text.intercalate ", " (NE.toList colNames) <> ")"
@@ -193,7 +192,7 @@ mkInsertIfUnique ::
 mkInsertIfUnique removeJsonb encoder decoder =
   case validateUniqueConstraints (Proxy @a) of
     Left err -> error err
-    Right _ -> HsqlS.Statement sql encoder (HsqlD.rowMaybe decoder) True
+    Right _ -> HsqlS.preparable sql encoder (HsqlD.rowMaybe decoder)
   where
     table = tableName (Proxy @a)
     allColNames = NE.toList $ columnNames (Proxy @a)
@@ -204,7 +203,7 @@ mkInsertIfUnique removeJsonb encoder decoder =
 
     -- This SQL will try to insert, but on conflict will do nothing
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH ins AS ("
           , "  INSERT INTO " <> table

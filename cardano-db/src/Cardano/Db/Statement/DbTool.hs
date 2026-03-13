@@ -13,7 +13,6 @@ import Cardano.Prelude (ByteString, Proxy (..), Word64)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -42,7 +41,7 @@ import Cardano.Db.Types (Ada (..), DbLovelace, DbM, dbLovelaceDecoder, lovelaceT
 -- | Query delegation for specific address and epoch
 queryDelegationForEpochStmt :: HsqlStmt.Statement (Text.Text, Word64) (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
 queryDelegationForEpochStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder =
       mconcat
@@ -59,7 +58,7 @@ queryDelegationForEpochStmt =
     epochStakeTable = tableName (Proxy @SC.EpochState)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT es.addr_id, ep.end_time, es.amount, es.pool_id"
           , " FROM " <> epochTable <> " ep"
@@ -82,11 +81,11 @@ queryDelegationForEpoch address epochNum =
 
 queryBlockNoListStmt :: HsqlStmt.Statement (Word64, Word64) [Word64]
 queryBlockNoListStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTableN = tableName (Proxy @SCB.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT block_no"
           , " FROM " <> blockTableN
@@ -109,11 +108,11 @@ queryBlockNoList start count =
 ------------------------------------------------------------------------------------------------------------
 queryBlockTimestampsStmt :: HsqlStmt.Statement (Word64, Word64) [UTCTime]
 queryBlockTimestampsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTableN = tableName (Proxy @SCB.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT time"
           , " FROM " <> blockTableN
@@ -136,11 +135,11 @@ queryBlockTimestamps start count =
 ------------------------------------------------------------------------------------------------------------
 queryBlocksTimeAftersStmt :: HsqlStmt.Statement UTCTime [(Maybe Word64, Maybe Word64, UTCTime)]
 queryBlocksTimeAftersStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTableN = tableName (Proxy @SCB.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT epoch_no, block_no, time"
           , " FROM " <> blockTableN
@@ -161,12 +160,12 @@ queryBlocksTimeAfters now =
 ------------------------------------------------------------------------------------------------------------
 queryLatestMemberRewardEpochNoStmt :: HsqlStmt.Statement () (Maybe Word64)
 queryLatestMemberRewardEpochNoStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nullable $ fromIntegral <$> HsqlD.int8)
     blockTable = tableName (Proxy @SCB.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT MAX(" <> blockTable <> ".epoch_no)"
           , " FROM " <> blockTable
@@ -183,7 +182,7 @@ queryLatestMemberRewardEpochNo = do
 -- | Query reward amount for epoch and stake address
 queryRewardAmountStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe DbLovelace)
 queryRewardAmountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder =
       mconcat
@@ -195,7 +194,7 @@ queryRewardAmountStmt =
     rewardTable = tableName (Proxy @SC.Reward)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT reward.amount"
           , " FROM " <> epochTable <> " ep"
@@ -215,7 +214,7 @@ queryRewardAmount epochNo saId =
 -- | Query delegation history for stake address
 queryDelegationHistoryStmt :: HsqlStmt.Statement (Text.Text, Word64) [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
 queryDelegationHistoryStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder =
       mconcat
@@ -233,7 +232,7 @@ queryDelegationHistoryStmt =
     epochStakeTable = tableName (Proxy @SC.EpochStake)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT es.addr_id, es.epoch_no, ep.end_time, es.amount, es.pool_id"
           , " FROM " <> epochTable <> " ep"
@@ -259,12 +258,12 @@ data AdaPotsSum = AdaPotsSum
 
 queryAdaPotsSumStmt :: HsqlStmt.Statement () [AdaPotsSum]
 queryAdaPotsSumStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     adaPotsTableN = tableName (Proxy @SC.AdaPots)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT epoch_no, "
           , "(treasury + reserves + rewards + utxo + deposits_stake + deposits_drep + deposits_proposal + fees) as total_sum"
@@ -287,13 +286,13 @@ queryAdaPotsSum =
 
 queryPoolsWithoutOwnersStmt :: HsqlStmt.Statement () Int
 queryPoolsWithoutOwnersStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     poolUpdateTableN = tableName (Proxy @SCP.PoolUpdate)
     poolOwnerTableN = tableName (Proxy @SCP.PoolOwner)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::int"
           , " FROM " <> poolUpdateTableN <> " pupd"
@@ -315,10 +314,10 @@ queryPoolsWithoutOwners =
 
 queryUtxoAtSlotNoStmt :: HsqlStmt.Statement Word64 (Maybe Id.BlockId)
 queryUtxoAtSlotNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id FROM block WHERE slot_no = $1 LIMIT 1"
           ]
@@ -347,10 +346,10 @@ utxoAtBlockIdWhereClause =
 
 queryUtxoAtBlockIdCoreStmt :: HsqlStmt.Statement Id.BlockId [UtxoQueryResult]
 queryUtxoAtBlockIdCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txout.*, txout.address, tx2.hash"
           , " FROM tx_out txout"
@@ -376,10 +375,10 @@ queryUtxoAtBlockIdCoreStmt =
 
 queryUtxoAtBlockIdVariantStmt :: HsqlStmt.Statement Id.BlockId [UtxoQueryResult]
 queryUtxoAtBlockIdVariantStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txout.*, addr.*, tx2.hash"
           , " FROM tx_out txout"
@@ -417,10 +416,10 @@ queryUtxoAtBlockId txOutTableType blockId =
 -- Query to get block ID at a specific slot
 queryBlockIdAtSlotStmt :: HsqlStmt.Statement Word64 (Maybe Id.BlockId)
 queryBlockIdAtSlotStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id FROM block"
           , " WHERE slot_no = $1"
@@ -446,10 +445,10 @@ addressBalanceWhereClause =
 -- Query to get address balance for Core variant
 queryAddressBalanceAtBlockIdCoreStmt :: HsqlStmt.Statement (Id.BlockId, Text.Text) Ada
 queryAddressBalanceAtBlockIdCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(txout.value), 0)::bigint"
           , " FROM tx_out txout"
@@ -472,10 +471,10 @@ queryAddressBalanceAtBlockIdCoreStmt =
 -- Query to get address balance for Variant variant
 queryAddressBalanceAtBlockIdVariantStmt :: HsqlStmt.Statement (Id.BlockId, Text.Text) Ada
 queryAddressBalanceAtBlockIdVariantStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(txout.value), 0)::bigint"
           , " FROM tx_out txout"
@@ -521,13 +520,13 @@ queryAddressBalanceAtSlot txOutVariantType addr slotNo = do
 -- | Query stake address ID by view/address text
 queryStakeAddressIdStmt :: HsqlStmt.Statement Text.Text (Maybe Id.StakeAddressId)
 queryStakeAddressIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.text)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.StakeAddressId)
     stakeAddressTable = tableName (Proxy @SVC.StakeAddress)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> stakeAddressTable
@@ -543,7 +542,7 @@ queryStakeAddressId address =
 -- | Query input transactions for Core variant
 queryInputTransactionsCoreStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
@@ -555,7 +554,7 @@ queryInputTransactionsCoreStmt =
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
     blockTable = tableName (Proxy @SVC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> txOutCoreTable <> ".value"
           , " FROM " <> txTable
@@ -573,7 +572,7 @@ queryInputTransactionsCore saId =
 -- | Query input transactions for Address variant
 queryInputTransactionsAddressStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryInputTransactionsAddressStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
@@ -586,7 +585,7 @@ queryInputTransactionsAddressStmt =
     addressTable = tableName (Proxy @SVA.Address)
     blockTable = tableName (Proxy @SVC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> txOutAddressTable <> ".value"
           , " FROM " <> txTable
@@ -605,7 +604,7 @@ queryInputTransactionsAddress saId =
 -- | Query withdrawal transactions
 queryWithdrawalTransactionsStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryWithdrawalTransactionsStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
@@ -617,7 +616,7 @@ queryWithdrawalTransactionsStmt =
     blockTable = tableName (Proxy @SVC.Block)
     withdrawalTable = tableName (Proxy @SVC.Withdrawal)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT " <> txTable <> ".hash, " <> blockTable <> ".time, " <> withdrawalTable <> ".amount"
           , " FROM " <> txTable
@@ -635,7 +634,7 @@ queryWithdrawalTransactions saId =
 -- | Query output transactions for Core variant
 queryOutputTransactionsCoreStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
@@ -648,7 +647,7 @@ queryOutputTransactionsCoreStmt =
     txInTable = tableName (Proxy @SVC.TxIn)
     blockTable = tableName (Proxy @SVC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txOutTx.hash, " <> blockTable <> ".time, " <> txOutCoreTable <> ".value"
           , " FROM " <> txOutCoreTable
@@ -668,7 +667,7 @@ queryOutputTransactionsCore saId =
 -- | Query output transactions for Address variant
 queryOutputTransactionsAddressStmt :: HsqlStmt.Statement Id.StakeAddressId [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsAddressStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.rowList $ do
@@ -682,7 +681,7 @@ queryOutputTransactionsAddressStmt =
     txInTable = tableName (Proxy @SVC.TxIn)
     blockTable = tableName (Proxy @SVC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT txOutTx.hash, " <> blockTable <> ".time, " <> txOutAddressTable <> ".value"
           , " FROM " <> txOutAddressTable
@@ -705,12 +704,12 @@ queryOutputTransactionsAddress saId =
 -- | Query input sum for Core variant
 queryInputsSumCoreStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
 queryInputsSumCoreStmt =
-  HsqlStmt.Statement sql encoder (HsqlD.singleRow adaDecoder) True
+  HsqlStmt.preparable sql encoder (HsqlD.singleRow adaDecoder)
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     txOutCoreTable = tableName (Proxy @SVC.TxOutCore)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(" <> txOutCoreTable <> ".value), 0)::bigint"
           , " FROM " <> txOutCoreTable
@@ -726,13 +725,13 @@ queryInputsSumCore saId =
 -- | Query input sum for Address variant
 queryInputsSumAddressStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
 queryInputsSumAddressStmt =
-  HsqlStmt.Statement sql encoder (HsqlD.singleRow adaDecoder) True
+  HsqlStmt.preparable sql encoder (HsqlD.singleRow adaDecoder)
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     txOutAddressTable = tableName (Proxy @SVA.TxOutAddress)
     addressTable = tableName (Proxy @SVA.Address)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(" <> txOutAddressTable <> ".value), 0)::bigint"
           , " FROM " <> txOutAddressTable
@@ -749,7 +748,7 @@ queryInputsSumAddress saId =
 -- | Query rewards sum
 queryRewardsSumStmt :: HsqlStmt.Statement (Id.StakeAddressId, Word64) Ada
 queryRewardsSumStmt =
-  HsqlStmt.Statement sql encoder (HsqlD.singleRow adaDecoder) True
+  HsqlStmt.preparable sql encoder (HsqlD.singleRow adaDecoder)
   where
     encoder =
       mconcat
@@ -758,7 +757,7 @@ queryRewardsSumStmt =
         ]
     rewardTable = tableName (Proxy @SVC.Reward)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(" <> rewardTable <> ".amount), 0)::bigint"
           , " FROM " <> rewardTable
@@ -775,12 +774,12 @@ queryRewardsSum saId currentEpoch =
 -- | Query withdrawals sum
 queryWithdrawalsSumStmt :: HsqlStmt.Statement Id.StakeAddressId Ada
 queryWithdrawalsSumStmt =
-  HsqlStmt.Statement sql encoder (HsqlD.singleRow adaDecoder) True
+  HsqlStmt.preparable sql encoder (HsqlD.singleRow adaDecoder)
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     withdrawalTable = tableName (Proxy @SVC.Withdrawal)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(" <> withdrawalTable <> ".amount), 0)::bigint"
           , " FROM " <> withdrawalTable
@@ -796,7 +795,7 @@ queryWithdrawalsSum saId =
 -- | Query outputs, fees, and deposit for Core variant
 queryOutputsCoreStmt :: HsqlStmt.Statement Id.StakeAddressId (Ada, Ada, Ada)
 queryOutputsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.singleRow $ do
@@ -812,7 +811,7 @@ queryOutputsCoreStmt =
     txTable = tableName (Proxy @SVC.Tx)
     txInTable = tableName (Proxy @SVC.TxIn)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT"
           , "  COALESCE(SUM(" <> txOutCoreTable <> ".value), 0)::bigint,"
@@ -834,7 +833,7 @@ queryOutputsCore saId =
 -- | Query outputs, fees, and deposit for Address variant
 queryOutputsAddressStmt :: HsqlStmt.Statement Id.StakeAddressId (Ada, Ada, Ada)
 queryOutputsAddressStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getStakeAddressId
     decoder = HsqlD.singleRow $ do
@@ -851,7 +850,7 @@ queryOutputsAddressStmt =
     txTable = tableName (Proxy @SVC.Tx)
     txInTable = tableName (Proxy @SVC.TxIn)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT"
           , "  COALESCE(SUM(" <> txOutAddressTable <> ".value), 0)::bigint,"
@@ -873,12 +872,12 @@ queryOutputsAddress saId =
 
 queryEpochBlockNumbersStmt :: HsqlStmt.Statement Word64 [(Word64, Word64)]
 queryEpochBlockNumbersStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTableN = tableName (Proxy @SCB.Block)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(block_no, 0), tx_count"
           , " FROM " <> blockTableN

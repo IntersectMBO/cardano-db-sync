@@ -10,7 +10,6 @@ module Cardano.Db.Statement.Function.Delete where
 
 import Cardano.Prelude (Int64, Proxy (..))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Statement as HsqlS
@@ -45,11 +44,11 @@ parameterisedDeleteWhere ::
   HsqlE.Params p ->
   HsqlS.Statement p ()
 parameterisedDeleteWhere colName condition encoder =
-  HsqlS.Statement sql encoder HsqlD.noResult True
+  HsqlS.preparable sql encoder HsqlD.noResult
   where
     validCol = validateColumn @a colName
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "DELETE FROM " <> tableName (Proxy @a)
           , " WHERE " <> validCol <> " " <> condition <> " $1"
@@ -76,7 +75,7 @@ deleteWhereCount ::
   -- | Returns a statement that deletes matching rows and returns count
   HsqlS.Statement b Int64
 deleteWhereCount colName condition encoder =
-  HsqlS.Statement sql encoder decoder True
+  HsqlS.preparable sql encoder decoder
   where
     -- Validate the column name
     validCol = validateColumn @a colName
@@ -90,7 +89,7 @@ deleteWhereCount colName condition encoder =
 
     -- SQL statement with RETURNING count
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH deleted AS ("
           , "  DELETE FROM " <> tableName (Proxy @a)
@@ -114,12 +113,12 @@ deleteAllCount ::
   DbInfo a =>
   HsqlS.Statement () Int64
 deleteAllCount =
-  HsqlS.Statement sql HsqlE.noParams decoder True
+  HsqlS.preparable sql HsqlE.noParams decoder
   where
     table = tableName (Proxy @a)
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH deleted AS ("
           , "  DELETE FROM " <> table
@@ -140,7 +139,7 @@ deleteWhereCountWithNotNull ::
   -- | Returns statement that deletes where id >= param AND fk IS NOT NULL
   HsqlS.Statement Int64 Int64
 deleteWhereCountWithNotNull primaryCol nullableCol encoder =
-  HsqlS.Statement sql encoder decoder True
+  HsqlS.preparable sql encoder decoder
   where
     -- Validate both column names
     validPrimaryCol = validateColumn @a primaryCol
@@ -148,7 +147,7 @@ deleteWhereCountWithNotNull primaryCol nullableCol encoder =
     decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable HsqlD.int8)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH deleted AS ("
           , "  DELETE FROM " <> tableName (Proxy @a)

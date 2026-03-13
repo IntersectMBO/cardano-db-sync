@@ -11,7 +11,6 @@ module Cardano.Db.Statement.GovernanceAndVoting where
 import Cardano.Prelude (HasCallStack, Int64, Proxy (..), Word64, traverse_)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -42,11 +41,11 @@ insertCommittee committee = do
 
 queryProposalCommitteeStmt :: HsqlStmt.Statement (Maybe Id.GovActionProposalId) [Id.CommitteeId]
 queryProposalCommitteeStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     table = tableName (Proxy @SGV.Committee)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id FROM " <> table
           , " WHERE ($1::bigint IS NULL AND gov_action_proposal_id IS NULL)"
@@ -136,11 +135,11 @@ insertConstitution constitution = do
 
 queryProposalConstitutionStmt :: HsqlStmt.Statement (Maybe Id.GovActionProposalId) [Id.ConstitutionId]
 queryProposalConstitutionStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     table = tableName (Proxy @SGV.Constitution)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id FROM " <> table
           , " WHERE ($1::bigint IS NULL AND gov_action_proposal_id IS NULL)"
@@ -268,14 +267,14 @@ queryDrepHashSpecialStmt ::
   Text.Text -> -- targetValue
   HsqlStmt.Statement () (Maybe Id.DrepHashId)
 queryDrepHashSpecialStmt targetValue =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     table = tableName (Proxy @a)
     rawCol = validateColumn @a "raw"
     viewCol = validateColumn @a "view"
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM "
@@ -333,13 +332,13 @@ updateGovActionStateStmt ::
   ResultType Int64 r ->
   HsqlStmt.Statement (Id.GovActionProposalId, Int64) r
 updateGovActionStateStmt columnName resultType =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     decoder = case resultType of
       NoResult -> HsqlD.noResult
       WithResult _ -> HsqlD.rowsAffected
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "UPDATE gov_action_proposal"
           , " SET "
@@ -361,10 +360,10 @@ setGovActionStateNullStmt ::
   Text.Text ->
   HsqlStmt.Statement Int64 Int64
 setGovActionStateNullStmt columnName =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "UPDATE gov_action_proposal"
           , " SET "
@@ -429,10 +428,10 @@ updateGovActionExpired gaid eNo =
 
 queryGovActionProposalIdStmt :: HsqlStmt.Statement (Id.TxId, Word64) (Maybe Id.GovActionProposalId)
 queryGovActionProposalIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM gov_action_proposal"

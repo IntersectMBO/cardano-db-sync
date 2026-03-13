@@ -37,7 +37,6 @@ import Data.List ((\\))
 import qualified Data.List as List
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format.ISO8601
 import GHC.Word (Word64)
@@ -226,41 +225,41 @@ recreateDB pgpass = do
   runDbStandaloneTransSilent pgpass $ do
     DB.runSession mkDbCallStack $
       HsqlS.statement () $
-        HsqlStm.Statement
+        HsqlStm.preparable
           "DROP SCHEMA IF EXISTS public CASCADE"
           HsqlE.noParams
           HsqlD.noResult
-          True
+          
 
     DB.runSession mkDbCallStack $
       HsqlS.statement () $
-        HsqlStm.Statement
+        HsqlStm.preparable
           "CREATE SCHEMA public"
           HsqlE.noParams
           HsqlD.noResult
-          True
+          
 
 getAllTableNames :: PGPassSource -> IO [Text.Text]
 getAllTableNames pgpass = do
   runDbStandaloneTransSilent pgpass $ do
     DB.runSession mkDbCallStack $
       HsqlS.statement () $
-        HsqlStm.Statement
+        HsqlStm.preparable
           "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema()"
           HsqlE.noParams
           (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
-          True
+          
 
 truncateTables :: PGPassSource -> [Text.Text] -> IO ()
 truncateTables pgpass tables =
   runDbStandaloneTransSilent pgpass $ do
     DB.runSession mkDbCallStack $
       HsqlS.statement () $
-        HsqlStm.Statement
-          (TextEnc.encodeUtf8 ("TRUNCATE " <> Text.intercalate ", " tables <> " CASCADE"))
+        HsqlStm.preparable
+          ("TRUNCATE " <> Text.intercalate ", " tables <> " CASCADE")
           HsqlE.noParams
           HsqlD.noResult
-          True
+          
 
 getMaintenancePsqlConf :: PGConfig -> IO Text.Text
 getMaintenancePsqlConf pgconfig = runDbStandaloneTransSilent (PGPassCached pgconfig) $ do
@@ -279,21 +278,21 @@ showMaintenanceWorkMem :: DB.DbM [Text.Text]
 showMaintenanceWorkMem =
   DB.runSession mkDbCallStack $
     HsqlS.statement () $
-      HsqlStm.Statement
+      HsqlStm.preparable
         "SHOW maintenance_work_mem"
         HsqlE.noParams
         (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
-        True
+        
 
 showMaxParallelMaintenanceWorkers :: DB.DbM [Text.Text]
 showMaxParallelMaintenanceWorkers =
   DB.runSession mkDbCallStack $
     HsqlS.statement () $
-      HsqlStm.Statement
+      HsqlStm.preparable
         "SHOW max_parallel_maintenance_workers"
         HsqlE.noParams
         (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
-        True
+        
 
 -- This doesn't clean the DOMAIN, so droppping the schema is a better alternative
 -- for a proper cleanup
@@ -303,7 +302,7 @@ dropTables pgpass = do
     mstr <-
       DB.runSession mkDbCallStack $
         HsqlS.statement () $
-          HsqlStm.Statement
+          HsqlStm.preparable
             ( mconcat
                 [ "SELECT string_agg('drop table \"' || tablename || '\" cascade', '; ')"
                 , "FROM pg_tables WHERE schemaname = 'public'"
@@ -311,16 +310,16 @@ dropTables pgpass = do
             )
             HsqlE.noParams
             (HsqlD.rowMaybe $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
-            True
+            
 
     whenJust mstr $ \dropsCommand ->
       DB.runSession mkDbCallStack $
         HsqlS.statement dropsCommand $
-          HsqlStm.Statement
+          HsqlStm.preparable
             "$1"
             (HsqlE.param $ HsqlE.nonNullable HsqlE.text)
             HsqlD.noResult
-            True
+            
 
 --------------------------------------------------------------------------------
 
@@ -381,43 +380,43 @@ noLedgerMigrations dbEnv trce = do
       action = do
         DB.runSession mkDbCallStack $
           HsqlS.statement () $
-            HsqlStm.Statement
+            HsqlStm.preparable
               "UPDATE redeemer SET fee = NULL"
               HsqlE.noParams
               HsqlD.noResult
-              True
+              
 
         DB.runSession mkDbCallStack $
           HsqlS.statement () $
-            HsqlStm.Statement
+            HsqlStm.preparable
               "DELETE FROM reward"
               HsqlE.noParams
               HsqlD.noResult
-              True
+              
 
         DB.runSession mkDbCallStack $
           HsqlS.statement () $
-            HsqlStm.Statement
+            HsqlStm.preparable
               "DELETE FROM epoch_stake"
               HsqlE.noParams
               HsqlD.noResult
-              True
+              
 
         DB.runSession mkDbCallStack $
           HsqlS.statement () $
-            HsqlStm.Statement
+            HsqlStm.preparable
               "DELETE FROM ada_pots"
               HsqlE.noParams
               HsqlD.noResult
-              True
+              
 
         DB.runSession mkDbCallStack $
           HsqlS.statement () $
-            HsqlStm.Statement
+            HsqlStm.preparable
               "DELETE FROM epoch_param"
               HsqlE.noParams
               HsqlD.noResult
-              True
+              
 
   void $ runDbDirectLogged trce dbEnv action
 
@@ -426,9 +425,9 @@ queryPgIndexesCount = do
   indexesExists <-
     DB.runSession mkDbCallStack $
       HsqlS.statement () $
-        HsqlStm.Statement
+        HsqlStm.preparable
           "SELECT indexname FROM pg_indexes WHERE schemaname = 'public'"
           HsqlE.noParams
           (HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text))
-          True
+          
   pure $ fromIntegral (length indexesExists)

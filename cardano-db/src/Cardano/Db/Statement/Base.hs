@@ -20,7 +20,6 @@ import Data.Functor.Contravariant ((>$<))
 import Data.List (partition)
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -76,13 +75,13 @@ insertCheckUniqueBlock block =
 -- | QUERIES -------------------------------------------------------------------
 queryBlockHashBlockNoStmt :: HsqlStmt.Statement ByteString [Word64]
 queryBlockHashBlockNoStmt =
-  HsqlStmt.Statement sql hashEncoder blockNoDecoder True
+  HsqlStmt.preparable sql hashEncoder blockNoDecoder
   where
     table = tableName (Proxy @SCB.Block)
     hashEncoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     blockNoDecoder = HsqlD.rowList (HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8))
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           ["SELECT block_no FROM " <> table <> " WHERE hash = $1"]
 
@@ -109,12 +108,12 @@ queryBlockHashBlockNo hash = do
 --------------------------------------------------------------------------------
 queryBlockCountStmt :: HsqlStmt.Statement () Word64
 queryBlockCountStmt =
-  HsqlStmt.Statement sql mempty blockCountDecoder True
+  HsqlStmt.preparable sql mempty blockCountDecoder
   where
     table = tableName (Proxy @SCB.Block)
     blockCountDecoder = HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8))
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           ["SELECT COUNT(*) FROM " <> table]
 
@@ -124,13 +123,13 @@ queryBlockCount = runSession mkDbCallStack $ HsqlSes.statement () queryBlockCoun
 --------------------------------------------------------------------------------
 querySlotUtcTimeStmt :: HsqlStmt.Statement Word64 (Maybe UTCTime)
 querySlotUtcTimeStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
     decoder = HsqlD.rowMaybe (HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder))
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT time"
           , " FROM " <> blockTable
@@ -179,7 +178,7 @@ queryBlockNoAndEpochStmt ::
   DbInfo a =>
   HsqlStmt.Statement Word64 (Maybe (Id.BlockId, Word64))
 queryBlockNoAndEpochStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
     decoder = HsqlD.rowMaybe $ do
@@ -194,7 +193,7 @@ queryBlockNoAndEpochStmt =
     -- when replaying through the epoch boundary.
     -- For genesis (block 0), there's no previous block, so use the current epoch.
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT curr.id, COALESCE(prev.epoch_no, curr.epoch_no)"
           , " FROM " <> tableName (Proxy @a) <> " curr"
@@ -212,10 +211,10 @@ queryNearestBlockSlotNoStmt ::
   DbInfo a =>
   HsqlStmt.Statement Word64 (Maybe (Id.BlockId, Word64))
 queryNearestBlockSlotNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id, block_no"
           , " FROM " <> tableName (Proxy @a)
@@ -239,10 +238,10 @@ queryBlockHashStmt ::
   DbInfo a =>
   HsqlStmt.Statement ByteString (Maybe (Id.BlockId, Word64))
 queryBlockHashStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id, epoch_no"
           , " FROM " <> tableName (Proxy @a)
@@ -264,10 +263,10 @@ queryMinBlockStmt ::
   DbInfo a =>
   HsqlStmt.Statement () (Maybe (Id.BlockId, Word64))
 queryMinBlockStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id, block_no"
           , " FROM " <> tableName (Proxy @a)
@@ -288,12 +287,12 @@ queryReverseIndexBlockIdStmt ::
   DbInfo a =>
   HsqlStmt.Statement Id.BlockId [Maybe Text.Text]
 queryReverseIndexBlockIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getBlockId
     decoder = HsqlD.rowList $ HsqlD.column (HsqlD.nullable HsqlD.text)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT ridx.min_ids"
           , " FROM " <> tableName (Proxy @a) <> " blk"
@@ -320,13 +319,13 @@ queryBlockTxCount blkId =
 --------------------------------------------------------------------------------
 queryBlockIdStmt :: HsqlStmt.Statement ByteString (Maybe Id.BlockId)
 queryBlockIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.BlockId)
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> blockTable
@@ -353,11 +352,11 @@ queryBlockIdEither hash = do
 --------------------------------------------------------------------------------
 queryBlocksForCurrentEpochNoStmt :: HsqlStmt.Statement () (Maybe Word64)
 queryBlocksForCurrentEpochNoStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT MAX(epoch_no)"
           , " FROM " <> blockTable
@@ -374,11 +373,11 @@ queryBlocksForCurrentEpochNo =
 --------------------------------------------------------------------------------
 queryLatestBlockStmt :: HsqlStmt.Statement () (Maybe (Entity SCB.Block))
 queryLatestBlockStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> blockTable
@@ -395,11 +394,11 @@ queryLatestBlock =
 --------------------------------------------------------------------------------
 queryLatestEpochNoFromBlockStmt :: HsqlStmt.Statement () Word64
 queryLatestEpochNoFromBlockStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(MAX(epoch_no), 0)::bigint"
           , " FROM " <> blockTable
@@ -417,12 +416,12 @@ queryLatestEpochNoFromBlock =
 --------------------------------------------------------------------------------
 queryLatestBlockIdStmt :: HsqlStmt.Statement () (Maybe Id.BlockId)
 queryLatestBlockIdStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.BlockId)
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> blockTable
@@ -438,13 +437,13 @@ queryLatestBlockId =
 --------------------------------------------------------------------------------
 queryDepositUpToBlockNoStmt :: HsqlStmt.Statement Word64 Ada
 queryDepositUpToBlockNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTable = tableName (Proxy @SC.Tx)
     blockTable = tableName (Proxy @SC.Block)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(tx.deposit), 0) "
           , "FROM "
@@ -465,11 +464,11 @@ queryDepositUpToBlockNo blkNo =
 --------------------------------------------------------------------------------
 queryLatestSlotNoStmt :: HsqlStmt.Statement () Word64
 queryLatestSlotNoStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(MAX(slot_no), 0)::bigint"
           , " FROM " <> blockTable
@@ -487,11 +486,11 @@ queryLatestSlotNo =
 --------------------------------------------------------------------------------
 queryLatestPointsStmt :: HsqlStmt.Statement () [(Maybe Word64, ByteString)]
 queryLatestPointsStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT slot_no, hash"
           , " FROM " <> blockTable
@@ -511,11 +510,11 @@ queryLatestPoints = runSession mkDbCallStack $ HsqlSes.statement () queryLatestP
 -----------------------------------------------------------------------------------
 querySlotHashStmt :: HsqlStmt.Statement Word64 [ByteString]
 querySlotHashStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT hash"
           , " FROM " <> blockTable
@@ -534,11 +533,11 @@ querySlotHash slotNo = do
 -----------------------------------------------------------------------------------
 queryCountSlotNosGreaterThanStmt :: HsqlStmt.Statement Word64 Word64
 queryCountSlotNosGreaterThanStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> blockTable
@@ -557,11 +556,11 @@ queryCountSlotNosGreaterThan slotNo =
 -----------------------------------------------------------------------------------
 queryCountSlotNoStmt :: HsqlStmt.Statement () Word64
 queryCountSlotNoStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM " <> blockTable
@@ -580,13 +579,13 @@ queryCountSlotNo =
 -----------------------------------------------------------------------------------
 queryBlockHeightStmt :: forall a. DbInfo a => Text.Text -> HsqlStmt.Statement () (Maybe Word64)
 queryBlockHeightStmt colName =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     table = tableName (Proxy @a)
     validCol = validateColumn @a colName
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT "
           , validCol
@@ -614,12 +613,12 @@ queryBlockHeight =
 -----------------------------------------------------------------------------------
 queryGenesisStmt :: HsqlStmt.Statement () [Id.BlockId]
 queryGenesisStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     decoder = HsqlD.rowList (Id.idDecoder Id.BlockId)
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> blockTable
@@ -636,11 +635,11 @@ queryGenesis errMsg = do
 -----------------------------------------------------------------------------------
 queryLatestBlockNoStmt :: HsqlStmt.Statement () (Maybe Word64)
 queryLatestBlockNoStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     blockTable = tableName (Proxy @SC.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT MAX(block_no)"
           , " FROM " <> blockTable
@@ -658,11 +657,11 @@ queryLatestBlockNo =
 -----------------------------------------------------------------------------------
 queryPreviousSlotNoStmt :: HsqlStmt.Statement Word64 (Maybe Word64)
 queryPreviousSlotNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     blockTableN = tableName (Proxy @SCB.Block)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT prev_block.slot_no"
           , " FROM " <> blockTableN <> " block"
@@ -912,10 +911,10 @@ insertDatum datum =
 -- | QUERY ---------------------------------------------------------------------
 queryDatumStmt :: HsqlStmt.Statement ByteString (Maybe Id.DatumId)
 queryDatumStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM datum"
@@ -933,13 +932,13 @@ queryDatum hash =
 --------------------------------------------------------------------------------
 queryAllExtraMigrationsStmt :: forall a. DbInfo a => Text.Text -> HsqlStmt.Statement () [ExtraMigration]
 queryAllExtraMigrationsStmt colName =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     table = tableName (Proxy @a)
     validCol = validateColumn @a colName
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           ["SELECT ", validCol, " FROM ", table]
 
@@ -998,11 +997,11 @@ insertCollateralTxIn cTxIn = runSession mkDbCallStack $ HsqlSes.statement cTxIn 
 --------------------------------------------------------------------------------
 queryMetaStmt :: HsqlStmt.Statement () [Entity SCB.Meta]
 queryMetaStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     decoder = HsqlD.rowList SCB.entityMetaDecoder
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM meta"
@@ -1093,10 +1092,10 @@ insertRedeemerData redeemerData = runSession mkDbCallStack $ HsqlSes.statement r
 --------------------------------------------------------------------------------
 queryRedeemerDataStmt :: HsqlStmt.Statement ByteString (Maybe Id.RedeemerDataId)
 queryRedeemerDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM redeemer_data"
@@ -1130,11 +1129,11 @@ insertReverseIndex reverseIndex = runSession mkDbCallStack $ HsqlSes.statement r
 --------------------------------------------------------------------------------
 querySchemaVersionStmt :: HsqlStmt.Statement () (Maybe SCB.SchemaVersion)
 querySchemaVersionStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @SCB.SchemaVersion)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT stage_one, stage_two, stage_three"
           , " FROM " <> tableN
@@ -1166,10 +1165,10 @@ insertScript script = runSession mkDbCallStack $ HsqlSes.statement script insert
 --------------------------------------------------------------------------------
 queryScriptWithIdStmt :: HsqlStmt.Statement ByteString (Maybe Id.ScriptId)
 queryScriptWithIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM script"
@@ -1233,11 +1232,11 @@ queryTxCount =
 --------------------------------------------------------------------------------
 queryWithdrawalsUpToBlockNoStmt :: HsqlStmt.Statement Word64 Ada
 queryWithdrawalsUpToBlockNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT SUM(withdrawal.amount)"
           , " FROM " <> txTableN
@@ -1254,13 +1253,13 @@ queryWithdrawalsUpToBlockNo blkNo =
 
 --------------------------------------------------------------------------------
 queryTxIdStmt :: HsqlStmt.Statement ByteString (Maybe Id.TxId)
-queryTxIdStmt = HsqlStmt.Statement sql encoder decoder True
+queryTxIdStmt = HsqlStmt.preparable sql encoder decoder
   where
     table = tableName (Proxy @SCB.Tx)
     encoder = HsqlE.param (HsqlE.nonNullable HsqlE.bytea)
     decoder = HsqlD.rowMaybe (Id.idDecoder Id.TxId)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id"
           , " FROM " <> table
@@ -1275,11 +1274,11 @@ queryTxId txHash =
 --------------------------------------------------------------------------------
 queryFeesUpToBlockNoStmt :: HsqlStmt.Statement Word64 Ada
 queryFeesUpToBlockNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT SUM(tx.fee)"
           , " FROM " <> txTableN
@@ -1296,11 +1295,11 @@ queryFeesUpToBlockNo blkNo =
 --------------------------------------------------------------------------------
 queryFeesUpToSlotNoStmt :: HsqlStmt.Statement Word64 Ada
 queryFeesUpToSlotNoStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT SUM(tx.fee)"
           , " FROM " <> txTableN
@@ -1318,11 +1317,11 @@ queryFeesUpToSlotNo slotNo =
 --------------------------------------------------------------------------------
 queryInvalidTxStmt :: HsqlStmt.Statement () [Entity SCB.Tx]
 queryInvalidTxStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> txTableN
@@ -1380,11 +1379,11 @@ queryTxInCount =
 --------------------------------------------------------------------------------
 queryTxInRedeemerStmt :: HsqlStmt.Statement () [SCB.TxIn]
 queryTxInRedeemerStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @SCB.TxIn)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> tableN
@@ -1401,12 +1400,12 @@ queryTxInRedeemer =
 -- | Gets all the 'TxIn' of invalid txs
 queryTxInFailedTxStmt :: HsqlStmt.Statement () [SCB.TxIn]
 queryTxInFailedTxStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     txInTableN = tableName (Proxy @SCB.TxIn)
     txTableN = tableName (Proxy @SCB.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_in.*"
           , " FROM " <> txInTableN <> " tx_in"
@@ -1435,11 +1434,11 @@ insertWithdrawal withdrawal = runSession mkDbCallStack $ HsqlSes.statement withd
 -- Statement for querying withdrawals with non-null redeemer_id
 queryWithdrawalScriptStmt :: HsqlStmt.Statement () [SCB.Withdrawal]
 queryWithdrawalScriptStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     tableN = tableName (Proxy @SCB.Withdrawal)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM " <> tableN
@@ -1455,11 +1454,11 @@ queryWithdrawalScript = runSession mkDbCallStack $ HsqlSes.statement () queryWit
 -- Get all stake addresses with have seen a withdrawal, and return them in shuffled order.
 queryWithdrawalAddressesStmt :: HsqlStmt.Statement () [Id.StakeAddressId]
 queryWithdrawalAddressesStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     withdrawalTableN = tableName (Proxy @SCB.Withdrawal)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT DISTINCT addr_id"
           , " FROM " <> withdrawalTableN

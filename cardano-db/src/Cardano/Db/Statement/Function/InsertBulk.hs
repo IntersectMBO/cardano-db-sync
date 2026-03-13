@@ -23,7 +23,6 @@ import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Statement as HsqlS
 
 import qualified Data.List.NonEmpty as NE
-import qualified Data.Text.Encoding as TextEnc
 
 import Cardano.Db.Statement.Function.Core (ResultTypeBulk (..))
 import Cardano.Db.Statement.Types (DbInfo (..))
@@ -63,7 +62,7 @@ insertBulkWith ::
 insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
   case validateGeneratedFields (Proxy @a) of
     Left err -> error err
-    Right () -> HsqlS.Statement sql (contramap extract enc) decoder True
+    Right () -> HsqlS.preparable sql (contramap extract enc) decoder
       where
         table = tableName (Proxy @a)
         allColNames = NE.toList $ columnNames (Proxy @a)
@@ -113,7 +112,7 @@ insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
           WithResultBulk dec -> (dec, " RETURNING id")
 
         sql =
-          TextEnc.encodeUtf8 $
+          
             Text.concat
               [ "INSERT INTO " <> table
               , " (" <> Text.intercalate ", " colNames <> ") "

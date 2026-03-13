@@ -8,7 +8,6 @@ module Cardano.Db.Statement.OffChain where
 import Cardano.Prelude (ByteString, Proxy (..), Text, Word64, when)
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -62,13 +61,13 @@ insertCheckOffChainPoolData offChainPoolData = do
 --------------------------------------------------------------------------------
 queryOffChainPoolDataStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe (Text, ByteString))
 queryOffChainPoolDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
     poolHashTable = tableName (Proxy @SP.PoolHash)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT pod.ticker_name, pod.bytes FROM "
           , offChainPoolDataTable
@@ -101,13 +100,13 @@ queryOffChainPoolData poolHash poolMetadataHash =
 --------------------------------------------------------------------------------
 queryUsedTickerStmt :: HsqlStmt.Statement (ByteString, ByteString) (Maybe Text)
 queryUsedTickerStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
     poolHashTable = tableName (Proxy @SP.PoolHash)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT pod.ticker_name FROM "
           , offChainPoolDataTable
@@ -136,14 +135,14 @@ queryUsedTicker poolHash metaHash =
 --------------------------------------------------------------------------------
 queryTestOffChainDataStmt :: HsqlStmt.Statement () [(Text, PoolUrl, ByteString, Id.PoolHashId)]
 queryTestOffChainDataStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
     poolMetadataRefTable = tableName (Proxy @SP.PoolMetadataRef)
     poolRetireTable = tableName (Proxy @SP.PoolRetire)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT pod.ticker_name, pmr.url, pmr.hash, pod.pool_id"
           , " FROM " <> offChainPoolDataTable <> " pod"
@@ -172,13 +171,13 @@ queryTestOffChainData =
 -- | Query pool ticker name for pool
 queryPoolTickerStmt :: HsqlStmt.Statement Id.PoolHashId (Maybe Text)
 queryPoolTickerStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     encoder = Id.idEncoder Id.getPoolHashId
     decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.text)
     offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT " <> offChainPoolDataTable <> ".ticker_name"
           , " FROM " <> offChainPoolDataTable
@@ -223,14 +222,14 @@ insertCheckOffChainPoolFetchError offChainPoolFetchError = do
 
 queryOffChainPoolFetchErrorStmt :: HsqlStmt.Statement (ByteString, Maybe UTCTime) [(SO.OffChainPoolFetchError, ByteString)]
 queryOffChainPoolFetchErrorStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     offChainPoolFetchErrorTable = tableName (Proxy @SO.OffChainPoolFetchError)
     poolHashTable = tableName (Proxy @SP.PoolHash)
     poolMetadataRefTable = tableName (Proxy @SP.PoolMetadataRef)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT ocpfe.pool_id, ocpfe.fetch_time, ocpfe.pmr_id, "
           , "       ocpfe.fetch_error, ocpfe.retry_count, pmr.hash "
@@ -296,14 +295,14 @@ deleteOffChainPoolFetchErrorByPmrId pmrId =
 --------------------------------------------------------------------------------
 queryOffChainVoteWorkQueueDataStmt :: HsqlStmt.Statement Int [(UTCTime, Id.VotingAnchorId, ByteString, VoteUrl, AnchorType, Word)]
 queryOffChainVoteWorkQueueDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     votingAnchorTableN = tableName (Proxy @SV.VotingAnchor)
     offChainVoteFetchErrorTableN = tableName (Proxy @SO.OffChainVoteFetchError)
     offChainVoteDataTableN = tableName (Proxy @SO.OffChainVoteData)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH latest_errors AS ("
           , "  SELECT MAX(id) as max_id"
@@ -342,7 +341,7 @@ queryOffChainVoteWorkQueueData maxCount =
 --------------------------------------------------------------------------------
 queryNewPoolWorkQueueDataStmt :: HsqlStmt.Statement Int [(Id.PoolHashId, Id.PoolMetadataRefId, PoolUrl, ByteString)]
 queryNewPoolWorkQueueDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     poolHashTableN = tableName (Proxy @SP.PoolHash)
     poolMetadataRefTableN = tableName (Proxy @SP.PoolMetadataRef)
@@ -350,7 +349,7 @@ queryNewPoolWorkQueueDataStmt =
     offChainPoolFetchErrorTableN = tableName (Proxy @SO.OffChainPoolFetchError)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH latest_refs AS ("
           , "  SELECT MAX(id) as max_id"
@@ -389,7 +388,7 @@ queryNewPoolWorkQueueData maxCount =
 --------------------------------------------------------------------------------
 queryOffChainPoolWorkQueueDataStmt :: HsqlStmt.Statement Int [(UTCTime, Id.PoolMetadataRefId, PoolUrl, ByteString, Id.PoolHashId, Word)]
 queryOffChainPoolWorkQueueDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     poolHashTableN = tableName (Proxy @SP.PoolHash)
     poolMetadataRefTableN = tableName (Proxy @SP.PoolMetadataRef)
@@ -397,7 +396,7 @@ queryOffChainPoolWorkQueueDataStmt =
     offChainPoolDataTableN = tableName (Proxy @SO.OffChainPoolData)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH latest_errors AS ("
           , "  SELECT MAX(id) as max_id"
@@ -527,14 +526,14 @@ insertBulkOffChainVoteDrepDataStmt =
 --------------------------------------------------------------------------------
 queryNewVoteWorkQueueDataStmt :: HsqlStmt.Statement Int [(Id.VotingAnchorId, ByteString, VoteUrl, AnchorType)]
 queryNewVoteWorkQueueDataStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     votingAnchorTableN = tableName (Proxy @SV.VotingAnchor)
     offChainVoteDataTableN = tableName (Proxy @SO.OffChainVoteData)
     offChainVoteFetchErrorTableN = tableName (Proxy @SO.OffChainVoteFetchError)
 
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT id, data_hash, url, type"
           , " FROM " <> votingAnchorTableN <> " va"

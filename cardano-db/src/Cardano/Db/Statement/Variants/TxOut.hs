@@ -12,7 +12,6 @@ module Cardano.Db.Statement.Variants.TxOut where
 import Cardano.Prelude (ByteString, Int64, Proxy (..), Text, Word64, fromMaybe, textShow)
 import Data.Functor.Contravariant (Contravariant (..), (>$<))
 import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TextEnc
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -221,10 +220,10 @@ queryTxOutCount txOutVariantType =
 --------------------------------------------------------------------------------
 queryTxOutIdStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Id.TxId, Int64))
 queryTxOutIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_out.tx_id, tx_out.id"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
@@ -278,10 +277,10 @@ queryTxOutId txOutVariantType hashIndex@(hash, _) = do
 
 queryTxOutIdByTxIdStmt :: HsqlStmt.Statement (Id.TxId, Word64) (Maybe Int64)
 queryTxOutIdByTxIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_out.id"
           , " FROM tx_out"
@@ -317,10 +316,10 @@ resolveInputTxOutIdFromTxId txOutVariantType txId index = do
 --------------------------------------------------------------------------------
 queryTxOutIdValueStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Id.TxId, Int64, DbLovelace))
 queryTxOutIdValueStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_out.tx_id, tx_out.id, tx_out.value"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
@@ -360,10 +359,10 @@ queryTxOutIdValueEither txOutVariantType hashIndex@(hash, _) = do
 --------------------------------------------------------------------------------
 queryTxOutCredentialsCoreStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))
 queryTxOutCredentialsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_out.payment_cred"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
@@ -379,10 +378,10 @@ queryTxOutCredentialsCoreStmt =
 
 queryTxOutCredentialsVariantStmt :: HsqlStmt.Statement (ByteString, Word64) (Maybe (Maybe ByteString))
 queryTxOutCredentialsVariantStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT addr.payment_cred"
           , " FROM tx"
@@ -419,10 +418,10 @@ queryTxOutCredentials txOutVariantType hashIndex = do
 --------------------------------------------------------------------------------
 queryTotalSupplyStmt :: HsqlStmt.Statement () Ada
 queryTotalSupplyStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(value), 0)::bigint"
           , " FROM tx_out"
@@ -447,11 +446,11 @@ queryTotalSupply _ =
 
 queryGenesisSupplyStmt :: Text -> HsqlStmt.Statement () Ada
 queryGenesisSupplyStmt txOutTableName =
-  HsqlStmt.Statement sql HsqlE.noParams (HsqlD.singleRow adaDecoder) True
+  HsqlStmt.preparable sql HsqlE.noParams (HsqlD.singleRow adaDecoder)
   where
     txTable = tableName (Proxy @SVC.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(" <> txOutTableName <> ".value), 0)::bigint"
           , " FROM " <> txTable
@@ -473,11 +472,11 @@ queryGenesisSupply txOutVariantType = do
 --------------------------------------------------------------------------------
 queryShelleyGenesisSupplyStmt :: Text -> HsqlStmt.Statement () Ada
 queryShelleyGenesisSupplyStmt txOutTableName =
-  HsqlStmt.Statement sql HsqlE.noParams (HsqlD.singleRow adaDecoder) True
+  HsqlStmt.preparable sql HsqlE.noParams (HsqlD.singleRow adaDecoder)
   where
     txTable = tableName (Proxy @SVC.Tx)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(" <> txOutTableName <> ".value), 0)::bigint"
           , " FROM " <> txOutTableName
@@ -534,10 +533,10 @@ insertAddress address =
 
 queryAddressIdStmt :: HsqlStmt.Statement ByteString (Maybe Id.AddressId)
 queryAddressIdStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT address.id"
           , " FROM address"
@@ -664,10 +663,10 @@ insertCollateralTxOut collateralTxOutW = do
 --------------------------------------------------------------------------------
 queryTxOutUnspentCountStmt :: HsqlStmt.Statement () Word64
 queryTxOutUnspentCountStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*)::bigint"
           , " FROM tx_out"
@@ -689,10 +688,10 @@ queryTxOutUnspentCount _ =
 --------------------------------------------------------------------------------
 queryAddressOutputsCoreStmt :: HsqlStmt.Statement Text DbLovelace
 queryAddressOutputsCoreStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(value), 0)"
           , " FROM tx_out"
@@ -703,10 +702,10 @@ queryAddressOutputsCoreStmt =
 
 queryAddressOutputsVariantStmt :: HsqlStmt.Statement Text DbLovelace
 queryAddressOutputsVariantStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COALESCE(SUM(tx_out.value), 0)"
           , " FROM address"
@@ -729,10 +728,10 @@ queryAddressOutputs txOutVariantType addr =
 --------------------------------------------------------------------------------
 queryScriptOutputsCoreStmt :: HsqlStmt.Statement () [Entity SVC.TxOutCore]
 queryScriptOutputsCoreStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT *"
           , " FROM tx_out"
@@ -742,10 +741,10 @@ queryScriptOutputsCoreStmt =
 
 queryScriptOutputsVariantStmt :: HsqlStmt.Statement () [(SVA.TxOutAddress, SVA.Address)]
 queryScriptOutputsVariantStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT tx_out.*, address.*"
           , " FROM address"
@@ -778,11 +777,11 @@ setNullTxOutConsumedBatchStmt ::
   DbInfo a =>
   HsqlStmt.Statement Id.TxId Int64
 setNullTxOutConsumedBatchStmt =
-  HsqlStmt.Statement sql encoder decoder True
+  HsqlStmt.preparable sql encoder decoder
   where
     tableN = tableName (Proxy @a)
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "WITH updated AS ("
           , "  UPDATE " <> tableN
@@ -801,10 +800,10 @@ setNullTxOutConsumedBatchStmt =
 --------------------------------------------------------------------------------
 queryPtrTxOutNullStakeCoreStmt :: HsqlStmt.Statement () Word64
 queryPtrTxOutNullStakeCoreStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*) FROM tx_out"
           , " WHERE stake_address_id IS NULL"
@@ -816,10 +815,10 @@ queryPtrTxOutNullStakeCoreStmt =
 
 queryPtrTxOutNullStakeAddressStmt :: HsqlStmt.Statement () Word64
 queryPtrTxOutNullStakeAddressStmt =
-  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  HsqlStmt.preparable sql HsqlE.noParams decoder
   where
     sql =
-      TextEnc.encodeUtf8 $
+      
         Text.concat
           [ "SELECT COUNT(*) FROM tx_out"
           , " INNER JOIN address ON tx_out.address_id = address.id"
