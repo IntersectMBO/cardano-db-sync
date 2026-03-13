@@ -33,7 +33,7 @@ import Data.Version (showVersion)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Connection.Setting as HsqlSet
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
-import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
+import Cardano.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)

@@ -227,7 +227,7 @@ unregisteredWitnessKey =
   , KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredAddresses :: [PaymentCredential]
+unregisteredAddresses :: [Credential Payment]
 unregisteredAddresses =
   [ KeyHashObj $ KeyHash "11121865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
@@ -297,7 +297,7 @@ createStakeCredentials :: Int -> [Credential Staking]
 createStakeCredentials n =
   fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH)) [1 .. n]
 
-createPaymentCredentials :: Int -> [PaymentCredential]
+createPaymentCredentials :: Int -> [Credential Payment]
 createPaymentCredentials n =
   fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH)) [1 .. n]
 

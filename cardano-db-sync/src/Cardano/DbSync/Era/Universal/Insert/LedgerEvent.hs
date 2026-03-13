@@ -143,7 +143,7 @@ insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
               gaId <- resolveGovActionProposal syncEnv (garGovActionId gar)
               void $ lift $ DB.updateGovActionEnacted gaId (unEpochNo currentEpochNo)
               whenJust (garMTreasury gar) $ \treasuryMap -> do
-                let rewards = Map.mapKeys Ledger.unAccountId . Ledger.aaId $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
+                let rewards = Map.mapKeys (Ledger.unAccountId . Ledger.aaId) $ Map.map (Set.singleton . mkTreasuryReward) treasuryMap
                 insertRewardRests syncEnv ntw (subFromCurrentEpoch 1) currentEpochNo (Map.toList rewards)
         LedgerMirDist rwd -> do
           unless (Map.null rwd) $ do

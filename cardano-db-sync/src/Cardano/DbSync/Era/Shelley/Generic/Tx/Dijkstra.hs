@@ -6,6 +6,7 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Tx.Dijkstra (
   fromDijkstraTx,
+  fromDijkstraTxOut,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Metadata

@@ -12,11 +12,12 @@ import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Babbage.Core
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import Cardano.Ledger.BaseTypes
+import qualified Cardano.Ledger.Core as Ledger (TxOut)
 import Cardano.Ledger.Core (Value)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn
-import Cardano.Prelude (ExceptT, lift, textShow)
+import Cardano.Prelude (ExceptT, Word64, lift, textShow)
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Monad.Extra
 import Control.Monad.IO.Class (liftIO)
@@ -36,7 +37,9 @@ import Cardano.DbSync.Api.Types
 import Cardano.DbSync.Cache (queryTxIdWithCache)
 import Cardano.DbSync.DbEvent (liftDbLookupEither)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Babbage (fromTxOut)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Dijkstra (fromDijkstraTxOut)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DBPlutusScript)
+import qualified Cardano.DbSync.Era.Shelley.Generic.Tx.Types as Generic (TxOut)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTxOut)
@@ -80,7 +83,7 @@ storeUTxOFromLedger ::
 storeUTxOFromLedger env st = case ledgerState st of
   LedgerStateBabbage bts -> storeUTxO env Babbage (getUTxO bts)
   LedgerStateConway stc -> storeUTxO env Conway (getUTxO stc)
-  LedgerStateDijkstra stc -> storeUTxO env Dijkstra (getUTxO stc)
+  LedgerStateDijkstra stc -> storeUTxO' env Dijkstra fromDijkstraTxOut (getUTxO stc)
   _otherwise -> liftIO $ logError trce "storeUTxOFromLedger is only supported after Babbage"
   where
     trce = getTrace env
@@ -90,7 +93,7 @@ storeUTxOFromLedger env st = case ledgerState st of
 storeUTxO ::
   ( Cardano.Ledger.Core.Value era ~ MaryValue
   , Script era ~ AlonzoScript era
-  , TxOut era ~ BabbageTxOut era
+  , Ledger.TxOut era ~ BabbageTxOut era
   , BabbageEraTxOut era
   , DBPlutusScript era
   , NativeScript era ~ Timelock era
@@ -99,7 +102,15 @@ storeUTxO ::
   BlockEra ->
   Map TxIn (BabbageTxOut era) ->
   ExceptT SyncNodeError DB.DbM ()
-storeUTxO env blkEra mp = do
+storeUTxO env blkEra = storeUTxO' env blkEra fromTxOut
+
+storeUTxO' ::
+  SyncEnv ->
+  BlockEra ->
+  (Word64 -> BabbageTxOut era -> Generic.TxOut) ->
+  Map TxIn (BabbageTxOut era) ->
+  ExceptT SyncNodeError DB.DbM ()
+storeUTxO' env blkEra conv mp = do
   liftIO $
     logInfo trce $
       mconcat
@@ -108,7 +119,7 @@ storeUTxO env blkEra mp = do
         , " tx_out as pages of "
         , textShow bulkSize
         ]
-  mapM_ (storePage env blkEra pagePerc) . zip [0 ..] . chunksOf bulkSize . Map.toList $ mp
+  mapM_ (storePage' env blkEra conv pagePerc) . zip [0 ..] . chunksOf bulkSize . Map.toList $ mp
   where
     trce = getTrace env
     bulkSize = DB.getTxOutBulkSize (getTxOutVariantType env)
@@ -116,22 +127,16 @@ storeUTxO env blkEra mp = do
     pagePerc :: Float = if npages == 0 then 100.0 else 100.0 / fromIntegral npages
     size = Map.size mp
 
-storePage ::
-  ( Cardano.Ledger.Core.Value era ~ MaryValue
-  , Script era ~ AlonzoScript era
-  , TxOut era ~ BabbageTxOut era
-  , DBPlutusScript era
-  , BabbageEraTxOut era
-  , NativeScript era ~ Timelock era
-  ) =>
+storePage' ::
   SyncEnv ->
   BlockEra ->
+  (Word64 -> BabbageTxOut era -> Generic.TxOut) ->
   Float ->
   (Int, [(TxIn, BabbageTxOut era)]) ->
   ExceptT SyncNodeError DB.DbM ()
-storePage syncEnv blkEra percQuantum (n, ls) = do
+storePage' syncEnv blkEra conv percQuantum (n, ls) = do
   when (n `mod` 10 == 0) $ liftIO $ logInfo trce $ "Bootstrap in progress " <> prc <> "%"
-  txOuts <- mapM (prepareTxOut syncEnv blkEra) ls
+  txOuts <- mapM (prepareTxOut' syncEnv blkEra conv) ls
   txOutIds <- lift $ DB.insertBulkTxOut False $ etoTxOut . fst <$> txOuts
   let maTxOuts = concatMap (mkmaTxOuts txOutVariantType) $ zip txOutIds (snd <$> txOuts)
   void . lift $ DB.insertBulkMaTxOutPiped [maTxOuts]
@@ -140,21 +145,15 @@ storePage syncEnv blkEra percQuantum (n, ls) = do
     trce = getTrace syncEnv
     prc = Text.pack $ showGFloat (Just 1) (max 0 $ min 100.0 (fromIntegral n * percQuantum)) ""
 
-prepareTxOut ::
-  ( Cardano.Ledger.Core.Value era ~ MaryValue
-  , Script era ~ AlonzoScript era
-  , TxOut era ~ BabbageTxOut era
-  , BabbageEraTxOut era
-  , DBPlutusScript era
-  , NativeScript era ~ Timelock era
-  ) =>
+prepareTxOut' ::
   SyncEnv ->
   BlockEra ->
+  (Word64 -> BabbageTxOut era -> Generic.TxOut) ->
   (TxIn, BabbageTxOut era) ->
   ExceptT SyncNodeError DB.DbM (ExtendedTxOut, [MissingMaTxOut])
-prepareTxOut syncEnv blkEra (TxIn txIntxId (TxIx index), txOut) = do
+prepareTxOut' syncEnv blkEra conv (TxIn txIntxId (TxIx index), txOut) = do
   let txHashByteString = Generic.safeHashToByteString $ unTxId txIntxId
-  let genTxOut = fromTxOut (fromIntegral index) txOut
+  let genTxOut = conv (fromIntegral index) txOut
   txId <- liftDbLookupEither mkSyncNodeCallStack $ queryTxIdWithCache syncEnv txIntxId
   insertTxOut syncEnv iopts (txId, txHashByteString) genTxOut blkEra
   where

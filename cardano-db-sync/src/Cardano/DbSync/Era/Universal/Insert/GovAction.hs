@@ -57,9 +57,10 @@ import Cardano.Ledger.DRep (DRepState (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
-import Cardano.Ledger.Shelley.API (Coin (..), AccountAddress)
+import Cardano.Ledger.Address (AccountAddress)
 import Cardano.Ledger.State (DRep (..))
 import Cardano.Prelude
+import Lens.Micro ((^.))
 import Control.Monad.Extra (whenJust)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
@@ -283,7 +284,7 @@ insertConstitution blockId mgapId constitution = do
     $ DB.Constitution
       { DB.constitutionGovActionProposalId = mgapId
       , DB.constitutionVotingAnchorId = votingAnchorId
-      , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
+      , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitution ^. constitutionGuardrailsScriptHashL)
       }
 
 --------------------------------------------------------------------------------------
@@ -392,7 +393,7 @@ insertDrepDistr e pSnapshot = do
       pure $
         DB.DrepDistr
           { DB.drepDistrHashId = drepId
-          , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
+          , DB.drepDistrAmount = fromIntegral $ Ledger.unCoin $ fromCompact coin
           , DB.drepDistrEpochNo = unEpochNo e
           , DB.drepDistrActiveUntil = unEpochNo <$> isActiveEpochNo drep
           }
