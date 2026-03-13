@@ -20,7 +20,7 @@ import Cardano.Prelude (HasCallStack, MonadIO, SrcLoc (..), callStack, getCallSt
 import Control.Exception (Exception)
 import Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Hasql.Session as HsqlSes
+import qualified Hasql.Errors as HsqlErr
 
 -- | Validation errors for expected business logic failures (e.g., "record not found")
 data DbLookupError = DbLookupError
@@ -113,10 +113,16 @@ mkDbSessionError :: HasCallStack => Text -> DbSessionError
 mkDbSessionError = DbSessionError mkDbCallStack
 
 -- | Format SessionError with ResultError first, then query details
-formatSessionError :: HsqlSes.SessionError -> Text
+formatSessionError :: HsqlErr.SessionError -> Text
 formatSessionError sessionErr =
   case sessionErr of
-    HsqlSes.QueryError sql params commandErr ->
-      Text.pack (show commandErr) <> "\n QueryError " <> Text.pack (show sql) <> " " <> Text.pack (show params)
-    HsqlSes.PipelineError commandErr ->
-      Text.pack (show commandErr) <> "\n PipelineError"
+    HsqlErr.StatementSessionError _total _idx sql params _prepared stmtErr ->
+      Text.pack (show stmtErr) <> "\n StatementError " <> sql <> " " <> Text.pack (show params)
+    HsqlErr.ScriptSessionError sql execErr ->
+      Text.pack (show execErr) <> "\n ScriptError " <> sql
+    HsqlErr.ConnectionSessionError reason ->
+      "ConnectionError: " <> reason
+    HsqlErr.DriverSessionError reason ->
+      "DriverError: " <> reason
+    HsqlErr.MissingTypesSessionError missingTypes ->
+      "MissingTypesError: " <> Text.pack (show missingTypes)
