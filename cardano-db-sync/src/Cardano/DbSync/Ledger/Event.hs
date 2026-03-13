@@ -32,6 +32,7 @@ import Cardano.Ledger.Coin (Coin (..), CompactForm (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
+import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Hashes (SafeHash)
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
@@ -383,7 +384,6 @@ pattern LEDepositsAlonzo ::
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ Shelley.ShelleyLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
-  , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Alonzo.AlonzoUtxosEvent ledgerera
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
@@ -396,9 +396,7 @@ pattern LEDepositsAlonzo hsh coin <-
                 ( Shelley.UtxowEvent
                     ( WrappedShelleyEraEvent
                         ( UtxoEvent
-                            ( UtxosEvent
-                                (Alonzo.TotalDeposits hsh coin)
-                              )
+                            (TotalDeposits hsh coin)
                           )
                       )
                   )
@@ -412,7 +410,6 @@ pattern LEDepositsConway ::
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ ConwayLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
-  , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Conway.ConwayUtxosEvent ledgerera
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
@@ -425,9 +422,7 @@ pattern LEDepositsConway hsh coin <-
                 ( Conway.UtxowEvent
                     ( WrappedShelleyEraEvent
                         ( UtxoEvent
-                            ( UtxosEvent
-                                (Conway.TotalDeposits hsh coin)
-                              )
+                            (TotalDeposits hsh coin)
                           )
                       )
                   )
