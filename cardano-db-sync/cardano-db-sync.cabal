@@ -202,7 +202,6 @@ library
                       , ouroboros-consensus:cardano
                       , ouroboros-consensus:diffusion
                       , ouroboros-consensus:protocol
-                      , ouroboros-network
                       , ouroboros-network:api
                       , ouroboros-network:framework
                       , ouroboros-network:protocols
