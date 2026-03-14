@@ -504,7 +504,7 @@ emptyTx =
       , atAuxData = maybeToStrictMaybe Nothing
       }
 
-mkDummyTxWithSlot :: SlotNo -> Core.Tx BabbageEra
+mkDummyTxWithSlot :: SlotNo -> Core.Tx Core.TopTx BabbageEra
 mkDummyTxWithSlot slot =
   MkBabbageTx $
     AlonzoTx
@@ -533,9 +533,9 @@ mkDummyTxWithSlot slot =
 
 mkAuxDataTx ::
   Bool ->
-  TxBody BabbageEra ->
+  TxBody Core.TopTx BabbageEra ->
   Map Word64 Metadatum ->
-  Core.Tx BabbageEra
+  Core.Tx Core.TopTx BabbageEra
 mkAuxDataTx isValid' txBody auxData =
   MkBabbageTx $
     AlonzoTx
@@ -545,7 +545,7 @@ mkAuxDataTx isValid' txBody auxData =
       , atAuxData = Strict.SJust (Alonzo.mkAlonzoTxAuxData auxData [])
       }
 
-mkParamUpdateTx :: Either ForgingError (Core.Tx BabbageEra)
+mkParamUpdateTx :: Either ForgingError (Core.Tx Core.TopTx BabbageEra)
 mkParamUpdateTx = Right (mkSimpleTx True txBody)
   where
     txBody =

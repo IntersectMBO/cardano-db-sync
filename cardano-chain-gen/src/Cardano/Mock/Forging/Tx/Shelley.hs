@@ -114,7 +114,7 @@ consTxBody ins outs fees certs wdrl =
 
 -- | Create a dummy tx with a unique TTL based on the slot.
 -- This ensures a unique tx body hash for each slot.
-mkDummyTxWithSlot :: SlotNo -> Core.Tx ShelleyEra
+mkDummyTxWithSlot :: SlotNo -> Core.Tx Core.TopTx ShelleyEra
 mkDummyTxWithSlot slot =
   ShelleyTx.MkShelleyTx $
     ShelleyTx.ShelleyTx
@@ -122,7 +122,7 @@ mkDummyTxWithSlot slot =
           mempty
           mempty
           mempty
-          (Withdrawals mempty)
+          (Core.Withdrawals mempty)
           (Coin 0)
           slot
           Strict.SNothing
