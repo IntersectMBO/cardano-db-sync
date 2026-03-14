@@ -20,7 +20,7 @@ import qualified Data.Text as Text
 import Ouroboros.Consensus.Cardano.Node ()
 import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block
-import Ouroboros.Network.NodeToClient (withIOManager)
+import Cardano.Network.NodeToClient (withIOManager)
 import Prelude
 
 data LedgerValidationParams = LedgerValidationParams

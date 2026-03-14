@@ -19,7 +19,7 @@ import Cardano.Ledger.Address (Addr (..), Withdrawals (..))
 import Cardano.Ledger.BaseTypes (Network (..))
 import Cardano.Ledger.Coin
 import Cardano.Ledger.Conway.TxCert (Delegatee (..))
-import Cardano.Ledger.Core (Tx ())
+import Cardano.Ledger.Core (TopTx, Tx ())
 import Cardano.Ledger.Credential (Credential (..), StakeReference (..))
 import Cardano.Ledger.DRep (DRep (..))
 import Cardano.Ledger.Keys (KeyRole (..))
@@ -88,7 +88,7 @@ mkPaymentBlocks utxoIx addresses interpreter =
 forgeBlocksChunked ::
   Interpreter ->
   [a] ->
-  ([a] -> ShelleyLedgerState ConwayEra EmptyMK -> Either ForgingError (Tx ConwayEra)) ->
+  ([a] -> ShelleyLedgerState ConwayEra EmptyMK -> Either ForgingError (Tx TopTx ConwayEra)) ->
   IO [CardanoBlock]
 forgeBlocksChunked interpreter vs f = forM (chunksOf 500 vs) $ \blockCreds -> do
   blockTxs <- withConwayLedgerState interpreter $ \state' ->
@@ -110,7 +110,7 @@ registerDRepAndDelegateVotes' ::
   Credential DRepRole ->
   StakeIndex ->
   Conway.ConwayLedgerState mk ->
-  Either ForgingError [Tx ConwayEra]
+  Either ForgingError [Tx TopTx ConwayEra]
 registerDRepAndDelegateVotes' drepId stakeIx ledger = do
   stakeCreds <- resolveStakeCreds stakeIx ledger
 

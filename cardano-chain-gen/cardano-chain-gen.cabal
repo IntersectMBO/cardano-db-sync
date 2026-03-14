@@ -67,6 +67,7 @@ library
                       , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
+                      , cardano-diffusion
                       , cardano-ledger-conway
                       , cardano-ledger-binary
                       , cardano-ledger-core
@@ -84,12 +85,12 @@ library
                       , mtl
                       , microlens
                       , network
+                      , network-mux
                       , nothunks
                       , ouroboros-consensus
                       , ouroboros-consensus:cardano
                       , ouroboros-consensus:diffusion
                       , ouroboros-consensus:protocol
-                      , ouroboros-network
                       , ouroboros-network:api
                       , ouroboros-network:framework
                       , ouroboros-network:protocols

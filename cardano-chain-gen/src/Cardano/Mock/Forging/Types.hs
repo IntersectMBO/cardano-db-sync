@@ -49,10 +49,10 @@ data MockBlock = MockBlock
   }
 
 data TxEra
-  = TxAlonzo !(Core.Tx AlonzoEra)
-  | TxBabbage !(Core.Tx BabbageEra)
-  | TxConway !(Core.Tx ConwayEra)
-  | TxShelley !(Core.Tx ShelleyEra)
+  = TxAlonzo !(Core.Tx Core.TopTx AlonzoEra)
+  | TxBabbage !(Core.Tx Core.TopTx BabbageEra)
+  | TxConway !(Core.Tx Core.TopTx ConwayEra)
+  | TxShelley !(Core.Tx Core.TopTx ShelleyEra)
 
 newtype NodeId = NodeId {unNodeId :: Int}
   deriving (Show)

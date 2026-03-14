@@ -83,11 +83,12 @@ import Ouroboros.Network.Block (
   genesisPoint,
   mkSerialised,
  )
+import qualified Network.Mux as Mx
 import Ouroboros.Network.Channel (Channel)
 import Ouroboros.Network.Driver.Simple (runPeer)
 import qualified Ouroboros.Network.Driver.Stateful as Stateful
 import Ouroboros.Network.Magic (NetworkMagic)
-import Ouroboros.Network.NodeToClient
+import Cardano.Network.NodeToClient
 import Ouroboros.Network.Protocol.ChainSync.Server (
   ChainSyncServer (..),
   ServerStIdle (..),
@@ -229,6 +230,8 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
   _ <-
     Server.with
       (Snocket.socketSnocket iom)
+      nullTracer
+      Mx.nullTracers
       makeSocketBearer
       (\_ _ -> pure ())
       (Socket.SockAddrUnix localDomainSock)
