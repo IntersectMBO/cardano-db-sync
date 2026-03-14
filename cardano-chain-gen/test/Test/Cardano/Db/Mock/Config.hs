@@ -57,6 +57,7 @@ module Test.Cardano.Db.Mock.Config (
   withFullConfig,
   withFullConfigDropDB,
   withFullConfigDropDBLog,
+  withFullConfigDropDBNoFingerprint,
   withFullConfigLog,
   withCustomConfigDropDBLog,
   withCustomConfig,
@@ -81,8 +82,10 @@ import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
 import Control.Monad.Trans.Except.Extra (runExceptT)
 import Control.Tracer (nullTracer)
+import Data.Maybe (isJust)
 import Data.Text (Text)
 import System.Directory (createDirectoryIfMissing, removePathForcibly)
+import System.Environment (lookupEnv)
 import System.FilePath.Posix (takeDirectory, (</>))
 import System.IO.Silently (hSilence)
 
@@ -470,6 +473,27 @@ withFullConfigDropDBLog =
     initCommandLineArgs
     Nothing
 
+-- For tests that rollback and restart, fingerprints create divergent chains
+withFullConfigDropDBNoFingerprint ::
+  -- | config filepath
+  FilePath ->
+  -- | test label
+  FilePath ->
+  (Interpreter -> ServerHandle IO CardanoBlock -> DBSyncEnv -> IO a) ->
+  IOManager ->
+  [(Text, Text)] ->
+  IO a
+withFullConfigDropDBNoFingerprint =
+  withFullConfig'
+    ( WithConfigArgs
+        { hasFingerprint = False
+        , shouldLog = False
+        , shouldDropDB = True
+        }
+    )
+    initCommandLineArgs
+    Nothing
+
 withFullConfigLog ::
   -- | config filepath
   FilePath ->
@@ -601,8 +625,9 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
   withConfig configFilePath mutableDir cmdLineArgs syncNodeConfig $ \cfg -> do
     fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
     let dbsyncParams = syncNodeParams cfg
+    envLog <- lookupEnv "DBSYNC_TEST_LOG"
     trce <-
-      if shouldLog
+      if shouldLog || isJust envLog
         then configureLogging syncNodeConfig "db-sync-node"
         else pure nullTracer
     -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests

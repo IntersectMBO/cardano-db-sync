@@ -48,6 +48,8 @@ module Cardano.Mock.Forging.Tx.Babbage (
   mkUTxOCollBabbage,
   mkParamUpdateTx,
   mkFullTx,
+  mkAuxDataTx,
+  mkDummyTxWithSlot,
   emptyTxBody,
   emptyTx,
 ) where
@@ -499,6 +501,47 @@ emptyTx =
       , atWits = mempty
       , atIsValid = IsValid True
       , atAuxData = maybeToStrictMaybe Nothing
+      }
+
+mkDummyTxWithSlot :: SlotNo -> Core.Tx BabbageEra
+mkDummyTxWithSlot slot =
+  MkBabbageTx $
+    AlonzoTx
+      { atBody =
+          BabbageTxBody
+            mempty
+            mempty
+            mempty
+            mempty
+            Strict.SNothing
+            Strict.SNothing
+            mempty
+            (Withdrawals mempty)
+            (Coin 0)
+            (ValidityInterval Strict.SNothing (Strict.SJust slot))
+            Strict.SNothing
+            mempty
+            mempty
+            Strict.SNothing
+            Strict.SNothing
+            (Strict.SJust Testnet)
+      , atWits = mempty
+      , atIsValid = IsValid True
+      , atAuxData = Strict.SNothing
+      }
+
+mkAuxDataTx ::
+  Bool ->
+  TxBody BabbageEra ->
+  Map Word64 Metadatum ->
+  Core.Tx BabbageEra
+mkAuxDataTx isValid' txBody auxData =
+  MkBabbageTx $
+    AlonzoTx
+      { atBody = txBody
+      , atWits = mempty
+      , atIsValid = IsValid isValid'
+      , atAuxData = Strict.SJust (Alonzo.mkAlonzoTxAuxData auxData [])
       }
 
 mkParamUpdateTx :: Either ForgingError (Core.Tx BabbageEra)
