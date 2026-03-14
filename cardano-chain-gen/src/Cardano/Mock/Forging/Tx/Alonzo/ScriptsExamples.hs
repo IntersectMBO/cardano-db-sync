@@ -60,7 +60,7 @@ alwaysSucceedsScriptHash = scriptHash @AlonzoEra alwaysSucceedsScript
 alwaysSucceedsScriptAddr :: Addr
 alwaysSucceedsScriptAddr = Addr Testnet (ScriptHashObj alwaysSucceedsScriptHash) StakeRefNull
 
-alwaysSucceedsScriptStake :: Credential Staking
+alwaysSucceedsScriptStake :: Credential Core.Staking
 alwaysSucceedsScriptStake = ScriptHashObj alwaysSucceedsScriptHash
 
 alwaysFailsPlutusBinary :: PlutusBinary
@@ -76,7 +76,7 @@ alwaysFailsScriptHash = scriptHash @AlonzoEra alwaysFailsScript
 alwaysFailsScriptAddr :: Addr
 alwaysFailsScriptAddr = Addr Testnet (ScriptHashObj alwaysFailsScriptHash) StakeRefNull
 
-alwaysFailsScriptStake :: Credential Staking
+alwaysFailsScriptStake :: Credential Core.Staking
 alwaysFailsScriptStake = ScriptHashObj alwaysFailsScriptHash
 
 plutusDataList :: forall era. Era era => Data era
@@ -94,7 +94,7 @@ alwaysMintScriptHash = scriptHash @AlonzoEra alwaysMintScript
 alwaysMintScriptAddr :: Addr
 alwaysMintScriptAddr = Addr Testnet (ScriptHashObj alwaysMintScriptHash) StakeRefNull
 
-alwaysMintScriptStake :: Credential Staking
+alwaysMintScriptStake :: Credential Core.Staking
 alwaysMintScriptStake = ScriptHashObj alwaysMintScriptHash
 
 mkPlutusV1ScriptEra :: AlonzoEraScript era => PlutusBinary -> Script era

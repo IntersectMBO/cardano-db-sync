@@ -24,7 +24,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (unCredentialHash, unTxHash)
-import Cardano.Ledger.Address (AccountAddress (..))
+import Cardano.Ledger.Address (AccountAddress (..), AccountId (..))
 import Cardano.Ledger.BaseTypes (AnchorData (..), Network (..), textToUrl)
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Conway.Governance (GovActionId (..), GovActionIx (..))
@@ -259,7 +259,7 @@ enactNewCommittee interpreter server = do
   epochs <- Api.fillEpochs interpreter server 2
   pure (blk : epochs)
 
-proposeNewCommittee :: Core.Tx Consensus.ConwayEra
+proposeNewCommittee :: Core.Tx Core.TopTx Consensus.ConwayEra
 proposeNewCommittee =
   Conway.mkAddCommitteeTx Nothing committeeCred
   where

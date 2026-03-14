@@ -125,11 +125,11 @@ genKey = do
 
   pure $ decodeUtf8 $ encode $ serialize' vkey
 
-genBlake224 :: MonadGen m => m (Maybe (KeyHash 'StakePool))
+genBlake224 :: MonadGen m => m (Maybe (KeyHash StakePool))
 genBlake224 = do
   serialiseHash <$> Gen.bytes (Range.linear 0 100)
   where
-    serialiseHash :: ByteString -> Maybe (KeyHash 'StakePool)
+    serialiseHash :: ByteString -> Maybe (KeyHash StakePool)
     serialiseHash = (KeyHash <$>) . hashFromBytes . digest (Proxy @Blake2b_224)
 
 -- * Utilities
