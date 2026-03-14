@@ -295,7 +295,7 @@ mkShelleyCredentials bulkFile = do
       ProtocolFilepaths
         { byronCertFile = Nothing
         , byronKeyFile = Nothing
-        , shelleyKESFile = Nothing
+        , shelleyKESSource = Nothing
         , shelleyVRFFile = Nothing
         , shelleyCertFile = Nothing
         , shelleyBulkCredsFile = Just bulkFile

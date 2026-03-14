@@ -69,7 +69,7 @@ withAlonzoFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
   ( LedgerState (ShelleyBlock TPraosStandard AlonzoEra) EmptyMK ->
-    Either ForgingError [Core.Tx AlonzoEra]
+    Either ForgingError [Core.Tx Core.TopTx AlonzoEra]
   ) ->
   IO CardanoBlock
 withAlonzoFindLeaderAndSubmit interpreter mockServer mkTxs = do
@@ -79,7 +79,7 @@ withAlonzoFindLeaderAndSubmit interpreter mockServer mkTxs = do
 withBabbageFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  (LedgerState (ShelleyBlock PraosStandard BabbageEra) EmptyMK -> Either ForgingError [Core.Tx BabbageEra]) ->
+  (LedgerState (ShelleyBlock PraosStandard BabbageEra) EmptyMK -> Either ForgingError [Core.Tx Core.TopTx BabbageEra]) ->
   IO CardanoBlock
 withBabbageFindLeaderAndSubmit interpreter mockServer mkTxs = do
   alTxs <- withBabbageLedgerState interpreter mkTxs
@@ -88,7 +88,7 @@ withBabbageFindLeaderAndSubmit interpreter mockServer mkTxs = do
 withConwayFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
-  (LedgerState (ShelleyBlock PraosStandard ConwayEra) EmptyMK -> Either ForgingError [Core.Tx ConwayEra]) ->
+  (LedgerState (ShelleyBlock PraosStandard ConwayEra) EmptyMK -> Either ForgingError [Core.Tx Core.TopTx ConwayEra]) ->
   IO CardanoBlock
 withConwayFindLeaderAndSubmit interpreter mockServer mkTxs = do
   txs' <- withConwayLedgerState interpreter mkTxs
@@ -98,7 +98,7 @@ withAlonzoFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
   ( LedgerState (ShelleyBlock TPraosStandard AlonzoEra) EmptyMK ->
-    Either ForgingError (Core.Tx AlonzoEra)
+    Either ForgingError (Core.Tx Core.TopTx AlonzoEra)
   ) ->
   IO CardanoBlock
 withAlonzoFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
@@ -110,7 +110,7 @@ withBabbageFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
   ( LedgerState (ShelleyBlock PraosStandard BabbageEra) EmptyMK ->
-    Either ForgingError (Core.Tx BabbageEra)
+    Either ForgingError (Core.Tx Core.TopTx BabbageEra)
   ) ->
   IO CardanoBlock
 withBabbageFindLeaderAndSubmitTx interpreter mockServer mkTxs = do
@@ -122,7 +122,7 @@ withConwayFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
   ( LedgerState (ShelleyBlock PraosStandard ConwayEra) EmptyMK ->
-    Either ForgingError (Core.Tx ConwayEra)
+    Either ForgingError (Core.Tx Core.TopTx ConwayEra)
   ) ->
   IO CardanoBlock
 withConwayFindLeaderAndSubmitTx interpreter mockServer mkTx =
@@ -134,7 +134,7 @@ withShelleyFindLeaderAndSubmit ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
   ( LedgerState (ShelleyBlock TPraosStandard ShelleyEra) EmptyMK ->
-    Either ForgingError [Core.Tx ShelleyEra]
+    Either ForgingError [Core.Tx Core.TopTx ShelleyEra]
   ) ->
   IO CardanoBlock
 withShelleyFindLeaderAndSubmit interpreter mockServer mkTxs = do
@@ -145,7 +145,7 @@ withShelleyFindLeaderAndSubmitTx ::
   Interpreter ->
   ServerHandle IO CardanoBlock ->
   ( LedgerState (ShelleyBlock TPraosStandard ShelleyEra) EmptyMK ->
-    Either ForgingError (Core.Tx ShelleyEra)
+    Either ForgingError (Core.Tx Core.TopTx ShelleyEra)
   ) ->
   IO CardanoBlock
 withShelleyFindLeaderAndSubmitTx interpreter mockServer mkTxs =

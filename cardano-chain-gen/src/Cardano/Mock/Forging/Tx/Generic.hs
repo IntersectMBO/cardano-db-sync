@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -56,6 +57,8 @@ import Cardano.Protocol.Crypto (hashVerKeyVRF)
 import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
+import Data.Array.Byte (ByteArray (..))
+import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
 import qualified Data.Sequence.Strict as StrictSeq
@@ -131,20 +134,20 @@ resolveStakeCreds indx st = case indx of
   StakeAddress addr -> Right addr
   StakeIndexNew n -> toEither $ unregisteredStakeCredentials !? n
   StakeIndexScript bl -> Right $ if bl then alwaysSucceedsScriptStake else alwaysFailsScriptStake
-  StakeIndexPoolLeader poolIndex -> Right $ unAccountId . aaId $ ppRewardAccount $ findPoolParams poolIndex
+  StakeIndexPoolLeader poolIndex -> Right $ unAccountId . aaId $ sppAccountAddress $ findPoolParams poolIndex
   StakeIndexPoolMember n poolIndex -> Right $ resolvePoolMember n poolIndex
   where
     rewardAccs :: Map (Credential Staking) (AccountState era)
     rewardAccs = dsAccounts dstate ^. accountsMapL
 
-    poolParams :: Map (KeyHash StakePool) PoolParams
+    poolParams :: Map (KeyHash StakePool) StakePoolParams
     poolParams =
       let certState =
             lsCertState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
-       in Map.mapWithKey stakePoolStateToPoolParams $ psStakePools (certState ^. certPStateL)
+       in Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
     delegs :: Map (Credential Staking) (KeyHash StakePool)
     delegs = Map.mapMaybe (^. stakePoolDelegationAccountStateL) rewardAccs
 
@@ -157,11 +160,11 @@ resolveStakeCreds indx st = case indx of
        in certState ^. certDStateL
 
     resolvePoolMember n poolIndex =
-      let poolId = ppId (findPoolParams poolIndex)
+      let poolId = sppId (findPoolParams poolIndex)
           poolMembers = Map.keys $ Map.filter (== poolId) delegs
        in poolMembers !! n
 
-    findPoolParams :: PoolIndex -> PoolParams
+    findPoolParams :: PoolIndex -> StakePoolParams
     findPoolParams (PoolIndex n) = Map.elems poolParams !! n
     findPoolParams (PoolIndexId pid) = poolParams Map.! pid
     findPoolParams pix@(PoolIndexNew _) = poolParams Map.! resolvePool pix st
@@ -177,7 +180,7 @@ resolvePool ::
   KeyHash StakePool
 resolvePool pix st = case pix of
   PoolIndexId key -> key
-  PoolIndex n -> ppId $ poolParams !! n
+  PoolIndex n -> sppId $ poolParams !! n
   PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams =
@@ -186,7 +189,7 @@ resolvePool pix st = case pix of
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
-       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
+       in Map.elems $ Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
 
 allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) mk -> [ShelleyTxCert era]
 allPoolStakeCert st =
@@ -198,13 +201,13 @@ allPoolStakeCert st =
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
-       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
+       in Map.elems $ Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
     creds = concatMap getPoolStakeCreds poolParms
 
-getPoolStakeCreds :: PoolParams -> [Credential Staking]
+getPoolStakeCreds :: StakePoolParams -> [Credential Staking]
 getPoolStakeCreds pparams =
-  unAccountId (aaId (ppRewardAccount pparams))
-    : (KeyHashObj <$> Set.toList (ppOwners pparams))
+  unAccountId (aaId (sppAccountAddress pparams))
+    : (KeyHashObj <$> Set.toList (sppOwners pparams))
 
 unregisteredStakeCredentials :: [Credential Staking]
 unregisteredStakeCredentials =
@@ -241,19 +244,19 @@ unregisteredPools =
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
-unregisteredGenesisKeys :: [KeyHash 'Genesis]
+unregisteredGenesisKeys :: [KeyHash GenesisRole]
 unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
-registeredByronGenesisKeys :: [KeyHash 'Genesis]
+registeredByronGenesisKeys :: [KeyHash GenesisRole]
 registeredByronGenesisKeys =
   [ KeyHash "1a3e49767796fd99b057ad54db3310fd640806fcb0927399bbca7b43"
   ]
 
-registeredShelleyGenesisKeys :: [KeyHash 'Genesis]
+registeredShelleyGenesisKeys :: [KeyHash GenesisRole]
 registeredShelleyGenesisKeys =
   [ KeyHash "30c3083efd794227fde2351a04500349d1b467556c30e35d6794a501"
   , KeyHash "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6"
@@ -313,18 +316,18 @@ consPoolParams ::
   KeyHash StakePool ->
   Credential Staking ->
   [KeyHash Staking] ->
-  PoolParams
+  StakePoolParams
 consPoolParams poolId rwCred owners =
-  PoolParams
-    { ppId = poolId
-    , ppVrf = hashVerKeyVRF @StandardCrypto . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
-    , ppPledge = Coin 1000
-    , ppCost = Coin 10000
-    , ppMargin = minBound
-    , ppRewardAccount = AccountAddress Testnet (AccountId rwCred)
-    , ppOwners = Set.fromList owners
-    , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
-    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") "89237365492387654983275634298756"
+  StakePoolParams
+    { sppId = poolId
+    , sppVrf = hashVerKeyVRF @StandardCrypto . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , sppPledge = Coin 1000
+    , sppCost = Coin 10000
+    , sppMargin = minBound
+    , sppAccountAddress = AccountAddress Testnet (AccountId rwCred)
+    , sppOwners = Set.fromList owners
+    , sppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
+    , sppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") (let !(SBS.SBS ba) = SBS.toShort "89237365492387654983275634298756" in ByteArray ba)
     }
 
 resolveStakePoolVoters ::

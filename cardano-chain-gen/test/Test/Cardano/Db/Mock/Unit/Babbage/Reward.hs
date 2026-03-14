@@ -13,9 +13,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Reward (
 
 import Cardano.Ledger.Coin (Coin (Coin), DeltaCoin (DeltaCoin))
 import Cardano.Ledger.Keys (KeyHash (KeyHash))
-import Cardano.Ledger.Shelley.TxBody (
-  Withdrawals (..),
- )
+import Cardano.Ledger.Address (Withdrawals (..))
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock)
 import Cardano.Mock.Forging.Interpreter (withShelleyLedgerState)
