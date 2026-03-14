@@ -18,6 +18,8 @@ module Cardano.DbSync.Cache (
   queryPrevBlockWithCache,
   queryOrInsertStakeAddress,
   queryOrInsertRewardAccount,
+  queryOrInsertStakeAddressBatch,
+  queryPoolKeyOrInsertBatch,
   insertAddressUsingCache,
   insertStakeAddress,
   queryStakeAddrWithCache,
@@ -56,6 +58,8 @@ import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic
 import Cardano.DbSync.Era.Shelley.Query
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Types
+import qualified Hasql.Pipeline as HsqlP
+import qualified Hasql.Session as HsqlSes
 
 -- Rollbacks make everything harder and the same applies to caching.
 -- After a rollback db entries are deleted, so we need to clean the same
@@ -137,6 +141,65 @@ queryOrInsertStakeAddress ::
   ExceptT SyncNodeError DB.DbM DB.StakeAddressId
 queryOrInsertStakeAddress syncEnv cacheUA nw cred =
   queryOrInsertRewardAccount syncEnv cacheUA $ Ledger.RewardAccount nw cred
+
+-- | Batch version of 'queryOrInsertStakeAddress'. Returns results in the same
+-- order as the input list. Checks cache, pipelines all cache-miss queries,
+-- then inserts any not found. Caller should control chunk size.
+queryOrInsertStakeAddressBatch ::
+  SyncEnv ->
+  CacheAction ->
+  Network ->
+  [StakeCred] ->
+  ExceptT SyncNodeError DB.DbM [DB.StakeAddressId]
+queryOrInsertStakeAddressBatch _syncEnv _cacheUA _nw [] = pure []
+queryOrInsertStakeAddressBatch syncEnv cacheUA nw creds = do
+  -- Check cache for each cred
+  cached <- case envCache syncEnv of
+    NoCache -> pure $ map (const Nothing) creds
+    ActiveCache ci ->
+      withCacheCleanedCheck ci (pure $ map (const Nothing) creds) $ do
+        stakeCache <- liftIO $ readTVarIO (cStake ci)
+        let results = map (\c -> fst <$> queryStakeCache c stakeCache) creds
+        liftIO $ hitCredsN syncEnv (length [() | Just _ <- results])
+        pure results
+  -- Collect cache misses with their cred + serialised bytes
+  let misses = [(c, Ledger.serialiseRewardAccount (mkRA c)) | (Nothing, c) <- zip cached creds]
+  -- Pipeline all cache-miss queries
+  missIds <- pipelineQueryList misses
+  -- Update cache with newly resolved entries
+  case envCache syncEnv of
+    NoCache -> pure ()
+    ActiveCache ci ->
+      liftIO $ atomically $ modifyTVar (cStake ci) $ \sc ->
+        let updateFn = case cacheUA of
+              UpdateCacheStrong -> \acc (c, addrId) -> acc {scStableCache = Map.insert c addrId (scStableCache acc)}
+              UpdateCache -> \acc (c, addrId) -> acc {scLruCache = LRU.insert c addrId (scLruCache acc)}
+              _otherwise -> const
+         in foldl' updateFn sc (zip (map fst misses) missIds)
+  -- Fill in results: cache hits stay, Nothings get filled from missIds in order
+  pure $ fillNothings cached missIds
+  where
+    mkRA = Ledger.RewardAccount nw
+
+    pipelineQueryList :: [(StakeCred, ByteString)] -> ExceptT SyncNodeError DB.DbM [DB.StakeAddressId]
+    pipelineQueryList [] = pure []
+    pipelineQueryList items = do
+      queryResults <- lift $
+        DB.runSession DB.mkDbCallStack $
+          HsqlSes.pipeline $
+            for items $
+              \(_c, bs) -> HsqlP.statement bs DB.queryStakeAddressStmt
+      liftIO $ missCredsN syncEnv (length items)
+      -- For any not found, insert (rare / should not happen for epoch stake)
+      forM (zip items queryResults) $ \((c, bs), mId) -> case mId of
+        Just addrId -> pure addrId
+        Nothing -> insertStakeAddress (mkRA c) (Just bs)
+
+    -- Single-pass merge: replace Nothings with values from the second list
+    fillNothings :: [Maybe a] -> [a] -> [a]
+    fillNothings (Just x : rest) misses = x : fillNothings rest misses
+    fillNothings (Nothing : rest) (x : misses) = x : fillNothings rest misses
+    fillNothings _ _ = []
 
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
@@ -370,6 +433,56 @@ queryPoolKeyOrInsert syncEnv txt cacheUA logsWarning hsh = do
               ]
       insertPoolKeyWithCache syncEnv cacheUA hsh
 
+-- | Batch version of 'queryPoolKeyOrInsert'. Returns results in the same
+-- order as the input list. Checks cache, pipelines all cache-miss queries,
+-- then inserts any not found. Caller should control chunk size.
+queryPoolKeyOrInsertBatch ::
+  SyncEnv ->
+  CacheAction ->
+  [PoolKeyHash] ->
+  ExceptT SyncNodeError DB.DbM [DB.PoolHashId]
+queryPoolKeyOrInsertBatch _syncEnv _cacheUA [] = pure []
+queryPoolKeyOrInsertBatch syncEnv cacheUA pools = do
+  -- Check cache for each pool
+  cached <- case envCache syncEnv of
+    NoCache -> pure $ map (const Nothing) pools
+    ActiveCache ci -> do
+      mp <- liftIO $ readTVarIO (cPools ci)
+      let results = map (`Map.lookup` mp) pools
+      liftIO $ hitPoolsN syncEnv (length [() | Just _ <- results])
+      pure results
+  -- Collect cache misses
+  let misses = [p | (Nothing, p) <- zip cached pools]
+  -- Pipeline all cache-miss queries
+  missIds <- pipelineQueryList misses
+  -- Update cache with newly resolved entries
+  when (shouldCache cacheUA) $
+    case envCache syncEnv of
+      NoCache -> pure ()
+      ActiveCache ci ->
+        liftIO $ atomically $ modifyTVar (cPools ci) $ \m ->
+          foldl' (\acc (p, phId) -> Map.insert p phId acc) m (zip misses missIds)
+  -- Fill in results
+  pure $ fillNothings cached missIds
+  where
+    pipelineQueryList :: [PoolKeyHash] -> ExceptT SyncNodeError DB.DbM [DB.PoolHashId]
+    pipelineQueryList [] = pure []
+    pipelineQueryList toQuery = do
+      queryResults <- lift $
+        DB.runSession DB.mkDbCallStack $
+          HsqlSes.pipeline $
+            for toQuery $
+              \p -> HsqlP.statement (Generic.unKeyHashRaw p) DB.queryPoolHashIdStmt
+      liftIO $ missPoolsN syncEnv (length toQuery)
+      forM (zip toQuery queryResults) $ \(p, mId) -> case mId of
+        Just phId -> pure phId
+        Nothing -> insertPoolKeyWithCache syncEnv cacheUA p
+
+    fillNothings :: [Maybe a] -> [a] -> [a]
+    fillNothings (Just x : rest) misses = x : fillNothings rest misses
+    fillNothings (Nothing : rest) (x : misses) = x : fillNothings rest misses
+    fillNothings _ _ = []
+
 queryMAWithCache ::
   SyncEnv ->
   PolicyID ->
@@ -548,25 +661,37 @@ withCacheCleanedCheck ci actionIfCleaned actionIfNotCleaned = do
 
 -- Creds
 hitCreds :: SyncEnv -> IO ()
-hitCreds syncEnv =
+hitCreds syncEnv = hitCredsN syncEnv 1
+
+hitCredsN :: SyncEnv -> Int -> IO ()
+hitCredsN syncEnv n =
   atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
-    epochStats {elsCaches = (elsCaches epochStats) {credsHits = 1 + credsHits (elsCaches epochStats), credsQueries = 1 + credsQueries (elsCaches epochStats)}}
+    epochStats {elsCaches = (elsCaches epochStats) {credsHits = fromIntegral n + credsHits (elsCaches epochStats), credsQueries = fromIntegral n + credsQueries (elsCaches epochStats)}}
 
 missCreds :: SyncEnv -> IO ()
-missCreds syncEnv =
+missCreds syncEnv = missCredsN syncEnv 1
+
+missCredsN :: SyncEnv -> Int -> IO ()
+missCredsN syncEnv n =
   atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
-    epochStats {elsCaches = (elsCaches epochStats) {credsQueries = 1 + credsQueries (elsCaches epochStats)}}
+    epochStats {elsCaches = (elsCaches epochStats) {credsQueries = fromIntegral n + credsQueries (elsCaches epochStats)}}
 
 -- Pools
 hitPools :: SyncEnv -> IO ()
-hitPools syncEnv =
+hitPools syncEnv = hitPoolsN syncEnv 1
+
+hitPoolsN :: SyncEnv -> Int -> IO ()
+hitPoolsN syncEnv n =
   atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
-    epochStats {elsCaches = (elsCaches epochStats) {poolsHits = 1 + poolsHits (elsCaches epochStats), poolsQueries = 1 + poolsQueries (elsCaches epochStats)}}
+    epochStats {elsCaches = (elsCaches epochStats) {poolsHits = fromIntegral n + poolsHits (elsCaches epochStats), poolsQueries = fromIntegral n + poolsQueries (elsCaches epochStats)}}
 
 missPools :: SyncEnv -> IO ()
-missPools syncEnv =
+missPools syncEnv = missPoolsN syncEnv 1
+
+missPoolsN :: SyncEnv -> Int -> IO ()
+missPoolsN syncEnv n =
   atomically $ modifyTVar (envEpochStatistics syncEnv) $ \epochStats ->
-    epochStats {elsCaches = (elsCaches epochStats) {poolsQueries = 1 + poolsQueries (elsCaches epochStats)}}
+    epochStats {elsCaches = (elsCaches epochStats) {poolsQueries = fromIntegral n + poolsQueries (elsCaches epochStats)}}
 
 -- Datum
 hitDatum :: SyncEnv -> IO ()
