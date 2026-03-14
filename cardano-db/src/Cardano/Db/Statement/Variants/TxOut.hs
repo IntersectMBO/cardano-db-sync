@@ -136,48 +136,6 @@ insertBulkAddressTxOutStmt =
       , map SVA.txOutAddressAddressId xs
       )
 
-insertBulkTxOutPiped :: Bool -> [[TxOutW]] -> DbM [TxOutIdW]
-insertBulkTxOutPiped _ [] = pure []
-insertBulkTxOutPiped disInOut chunks =
-  if disInOut
-    then pure []
-    else case getFirstNonEmpty chunks of
-      Nothing -> pure []
-      Just (VCTxOutW _) -> do
-        coreIds <-
-          concat
-            <$> runSession
-              mkDbCallStack
-              ( traverse
-                  ( \chunk ->
-                      let coreTxOuts = map extractCoreTxOut chunk
-                       in HsqlSes.statement coreTxOuts insertBulkCoreTxOutStmt
-                  )
-                  chunks
-              )
-        pure $ map VCTxOutIdW coreIds
-      Just (VATxOutW _ _) -> do
-        addressIds <-
-          concat
-            <$> runSession
-              mkDbCallStack
-              ( traverse
-                  ( \chunk ->
-                      let variantTxOuts = map extractVariantTxOut chunk
-                       in HsqlSes.statement variantTxOuts insertBulkAddressTxOutStmt
-                  )
-                  chunks
-              )
-        pure $ map VATxOutIdW addressIds
-  where
-    extractCoreTxOut :: TxOutW -> SVC.TxOutCore
-    extractCoreTxOut (VCTxOutW txOut) = txOut
-    extractCoreTxOut (VATxOutW _ _) = error "Unexpected VATxOutW in CoreTxOut list"
-
-    extractVariantTxOut :: TxOutW -> SVA.TxOutAddress
-    extractVariantTxOut (VATxOutW txOut _) = txOut
-    extractVariantTxOut (VCTxOutW _) = error "Unexpected VCTxOutW in VariantTxOut list"
-
 insertBulkTxOut :: Bool -> [TxOutW] -> DbM [TxOutIdW]
 insertBulkTxOut disInOut txOutWs =
   if disInOut
@@ -592,9 +550,9 @@ insertBulkAddressMaTxOutStmt =
       , map SVA.maTxOutAddressIdent xs
       )
 
-insertBulkMaTxOutPiped :: [[MaTxOutW]] -> DbM [MaTxOutIdW]
-insertBulkMaTxOutPiped [] = pure []
-insertBulkMaTxOutPiped chunks =
+insertBulkMaTxOutChunked :: [[MaTxOutW]] -> DbM [MaTxOutIdW]
+insertBulkMaTxOutChunked [] = pure []
+insertBulkMaTxOutChunked chunks =
   case getFirstNonEmpty chunks of
     Nothing -> pure []
     Just (CMaTxOutW _) -> do
