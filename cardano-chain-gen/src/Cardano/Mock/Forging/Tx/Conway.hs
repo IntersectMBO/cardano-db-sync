@@ -653,7 +653,7 @@ mkDummyTxBody =
 
 -- | Create a dummy tx with a unique validity interval based on the slot.
 -- This ensures a unique tx body hash for each slot.
-mkDummyTxWithSlot :: SlotNo -> Core.Tx ConwayEra
+mkDummyTxWithSlot :: SlotNo -> Core.Tx Core.TopTx ConwayEra
 mkDummyTxWithSlot slot =
   MkConwayTx $
     AlonzoTx
