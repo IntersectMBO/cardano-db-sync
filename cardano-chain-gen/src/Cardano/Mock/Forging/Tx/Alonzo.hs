@@ -449,7 +449,7 @@ emptyTx =
       , atAuxData = maybeToStrictMaybe Nothing
       }
 
-mkDummyTxWithSlot :: SlotNo -> Core.Tx AlonzoEra
+mkDummyTxWithSlot :: SlotNo -> Core.Tx Core.TopTx AlonzoEra
 mkDummyTxWithSlot slot =
   MkAlonzoTx $
     AlonzoTx
@@ -475,9 +475,9 @@ mkDummyTxWithSlot slot =
 
 mkAuxDataTx ::
   Bool ->
-  TxBody AlonzoEra ->
+  TxBody Core.TopTx AlonzoEra ->
   Map Word64 Metadatum ->
-  Core.Tx AlonzoEra
+  Core.Tx Core.TopTx AlonzoEra
 mkAuxDataTx isValid' txBody auxData =
   MkAlonzoTx $
     AlonzoTx
