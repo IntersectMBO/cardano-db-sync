@@ -25,6 +25,7 @@ module Cardano.DbSync (
   extractSyncOptions,
 ) where
 
+import qualified Debug.Trace
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
 import qualified Data.Strict.Maybe as Strict
@@ -198,15 +199,18 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
   -- The main thread
+  Debug.Trace.traceIO "DBSync: acquiring DB connection"
   bracket
     (DB.acquireConnection dbConnSetting)
     HsqlC.release
     ( \dbConn -> do
+        Debug.Trace.traceIO "DBSync: DB connection acquired, starting setup"
         runOrThrowIO $ runExceptT $ do
           -- Create connection pool for parallel operations
           pool <- liftIO $ DB.createHasqlConnectionPool dbConnSetting 4 -- 4 connections for reasonable parallelism
           let dbEnv = DB.createDbEnv dbConn (Just pool) (Just trce)
           genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
+          liftIO $ Debug.Trace.traceIO "DBSync: genesis config read"
           isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
@@ -215,6 +219,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
                 (True, True) -> False -- Will be removed
                 (False, False) -> True -- Will be added
                 (s, _) -> s -- No change
+          liftIO $ Debug.Trace.traceIO "DBSync: creating sync env"
           syncEnv <-
             ExceptT $
               mkSyncEnvFromConfig
@@ -227,6 +232,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
                 syncNodeParams
                 runNearTipMigrationFnc
                 finalJsonbInSchema
+          liftIO $ Debug.Trace.traceIO "DBSync: sync env created"
 
           -- Warn the user that jsonb datatypes are being removed from the database schema.
           when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do
@@ -241,13 +247,16 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             DB.noLedgerMigrations dbEnv trce
+          liftIO $ Debug.Trace.traceIO "DBSync: inserting genesis dist"
           insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
+          liftIO $ Debug.Trace.traceIO "DBSync: genesis dist inserted"
 
           -- Handle ledger snapshots after rollback to ensure consistency
           liftIO $ handlePostRollbackSnapshots syncEnv (enpMaybeRollback syncNodeParams)
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
+          liftIO $ Debug.Trace.traceIO "DBSync: starting concurrent threads (subscribe, db, offchain...)"
           liftIO $
             mapConcurrently_
               id

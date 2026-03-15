@@ -77,7 +77,7 @@ import Control.Concurrent.STM.TMVar (
   tryPutTMVar,
   tryReadTMVar,
  )
-import Control.Exception (SomeException, bracket)
+import Control.Exception (SomeException, bracket, catch)
 import Control.Monad (void)
 import Control.Monad.Extra (eitherM)
 import Control.Monad.Trans.Except.Extra (runExceptT)
@@ -222,7 +222,10 @@ startDBSync env = do
   case thr of
     Just _a -> error "db-sync already running"
     Nothing -> do
-      let appliedRunDbSync = partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
+      let appliedRunDbSync = do
+            putStrLn "DBSync: starting runDbSync"
+            partialRunDbSync env (dbSyncParams env) (dbSyncConfig env)
+              `catch` (\(e :: SomeException) -> putStrLn ("DBSync: crashed with: " ++ show e) >> throwIO e)
       -- we async the fully applied runDbSync here and put it into the thread
       asyncApplied <- async appliedRunDbSync
       void . atomically $ tryPutTMVar (dbSyncThreadVar env) asyncApplied
@@ -613,6 +616,7 @@ withFullConfig' ::
   [(Text, Text)] ->
   IO a
 withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath testLabelFilePath action iom migr = do
+  putStrLn $ "withFullConfig': recreateDir " ++ testLabelFilePath
   recreateDir mutableDir
   -- check if custom syncNodeConfigs have been passed or not
   syncNodeConfig <-
@@ -621,6 +625,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
         initConfigFile <- mkSyncNodeConfig configFilePath cmdLineArgs
         pure $ updateFn initConfigFile
       Nothing -> mkSyncNodeConfig configFilePath cmdLineArgs
+  putStrLn "withFullConfig': syncNodeConfig created"
 
   withConfig configFilePath mutableDir cmdLineArgs syncNodeConfig $ \cfg -> do
     fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
@@ -633,8 +638,10 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
     -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
     let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
         initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
+    putStrLn "withFullConfig': starting withInterpreter"
 
     withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do
+      putStrLn "withFullConfig': interpreter created, starting mock server"
       -- TODO: get 42 from config
       withServerHandle @CardanoBlock
         iom
@@ -642,16 +649,20 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
         (forgetLedgerTables initSt, projectLedgerTables initSt)
         (NetworkMagic 42)
         (unSocketPath (enpSocketPath $ syncNodeParams cfg))
-        $ \mockServer ->
+        $ \mockServer -> do
+          putStrLn "withFullConfig': mock server started, creating DBSyncEnv"
           -- we dont fork dbsync here. Just prepare it as an action
           withDBSyncEnv (mkDBSyncEnv dbsyncParams syncNodeConfig partialDbSyncRun) $ \dbSyncEnv -> do
             let pgPass = getDBSyncPGPass dbSyncEnv
+            putStrLn "withFullConfig': getting table names"
             tableNames <- DB.getAllTableNames pgPass
+            putStrLn $ "withFullConfig': got " ++ show (length tableNames) ++ " table names"
             -- We only want to create the table schema once for the tests so here we check
             -- if there are any table names.
             if null tableNames || shouldDropDB
               then void . hSilence [stderr] $ DB.recreateDB pgPass
               else void . hSilence [stderr] $ DB.truncateTables pgPass tableNames
+            putStrLn "withFullConfig': running migrations"
 
             -- Run migrations synchronously first
             runMigrationsOnly
@@ -659,6 +670,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
               trce
               (syncNodeParams cfg)
               syncNodeConfig
+            putStrLn "withFullConfig': migrations done, calling test action"
 
             action interpreter mockServer dbSyncEnv
   where

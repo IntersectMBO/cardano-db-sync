@@ -23,6 +23,7 @@ module Cardano.DbSync.Sync (
   runSyncNodeClient,
 ) where
 
+import qualified Debug.Trace
 import Cardano.BM.Data.Tracer (ToLogObject (..))
 import Cardano.BM.Trace (Trace, appendName, logInfo)
 import qualified Cardano.BM.Trace as Logging
@@ -139,7 +140,7 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
             Left e ->
               case fromException e of
                 Just AsyncCancelled -> Abort
-                _other -> Reconnect
+                _other -> Debug.Trace.trace ("subscribe completeCb: error, will reconnect: " ++ show e) Reconnect
             Right _ -> Reconnect
         }
 

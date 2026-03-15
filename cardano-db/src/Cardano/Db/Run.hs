@@ -16,6 +16,7 @@ import Cardano.BM.Data.LogItem (
  )
 import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Trace (Trace, logWarning)
+import qualified Debug.Trace
 import Cardano.Prelude
 import Control.Monad.Logger (
   LogLevel (..),
@@ -103,14 +104,18 @@ runDbTransSilent dbEnv mIsolationLevel action = do
   where
     isolationLevel = fromMaybe RepeatableRead mIsolationLevel
     transactionSession = do
+      liftIO $ Debug.Trace.traceIO "transactionSession: about to BEGIN"
       HsqlS.statement () (beginTransactionStmt isolationLevel)
+      liftIO $ Debug.Trace.traceIO "transactionSession: BEGIN done, running action"
 
       result <- liftIO $ try @SomeException $ runReaderT (runDbM action) dbEnv
       case result of
         Left err -> do
+          liftIO $ Debug.Trace.traceIO "transactionSession: ROLLBACK"
           HsqlS.statement () rollbackTransactionStmt
           throwIO err
         Right value -> do
+          liftIO $ Debug.Trace.traceIO "transactionSession: COMMIT"
           HsqlS.statement () commitTransactionStmt
           pure value
 
@@ -320,7 +325,7 @@ isolationLevelToSql Serializable = "SERIALIZABLE"
 -- | Create a BEGIN statement with specified isolation level
 beginTransactionStmt :: IsolationLevel -> HsqlStmt.Statement () ()
 beginTransactionStmt isolationLevel =
-  HsqlStmt.preparable sql HsqlE.noParams HsqlD.noResult
+  HsqlStmt.unpreparable sql HsqlE.noParams HsqlD.noResult
   where
     sql = "BEGIN ISOLATION LEVEL " <> isolationLevelToSql isolationLevel
 
@@ -332,7 +337,7 @@ beginTransactionStmt isolationLevel =
 -- | Create a COMMIT statement
 commitTransactionStmt :: HsqlStmt.Statement () ()
 commitTransactionStmt =
-  HsqlStmt.preparable "COMMIT" HsqlE.noParams HsqlD.noResult
+  HsqlStmt.unpreparable "COMMIT" HsqlE.noParams HsqlD.noResult
 
 commitTransaction :: HasCallStack => DbM ()
 commitTransaction = do
@@ -341,7 +346,7 @@ commitTransaction = do
 -- | Create a ROLLBACK statement
 rollbackTransactionStmt :: HsqlStmt.Statement () ()
 rollbackTransactionStmt =
-  HsqlStmt.preparable "ROLLBACK" HsqlE.noParams HsqlD.noResult
+  HsqlStmt.unpreparable "ROLLBACK" HsqlE.noParams HsqlD.noResult
 
 transactionSaveWithIsolation :: HasCallStack => IsolationLevel -> DbM ()
 transactionSaveWithIsolation isolationLevel = do
@@ -358,7 +363,7 @@ setDefaultIsolationLevel conn = do
     Right _ -> pure ()
   where
     setIsolationStmt =
-      HsqlStmt.preparable
+      HsqlStmt.unpreparable
         "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ"
         HsqlE.noParams
         HsqlD.noResult
@@ -379,12 +384,15 @@ checkTransactionStmt =
 -- | Acquire a single database connection with error handling
 acquireConnection :: HsqlConS.Settings -> IO HsqlCon.Connection
 acquireConnection settings = do
+  Debug.Trace.traceIO $ "acquireConnection: calling HsqlCon.acquire with settings=" ++ show settings
   result <- HsqlCon.acquire settings
+  Debug.Trace.traceIO $ "acquireConnection: acquire returned " ++ either (\e -> "Left " ++ show e) (const "Right conn") result
   case result of
     Left err -> throwIO $ userError $ "Connection error: " <> show err
     Right conn -> do
-      -- Set default isolation level for the connection to Repeatable Read
+      Debug.Trace.traceIO "acquireConnection: setting isolation level"
       setDefaultIsolationLevel conn
+      Debug.Trace.traceIO "acquireConnection: done"
       pure conn
 
 -- | Acquire a database connection without transaction management

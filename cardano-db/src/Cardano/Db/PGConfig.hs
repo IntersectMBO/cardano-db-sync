@@ -25,6 +25,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Read as Text (decimal)
 import Data.Word (Word16)
+import qualified Debug.Trace
 import qualified Hasql.Connection.Settings as HsqlSet
 import System.Environment (lookupEnv, setEnv)
 import System.Posix.User (getEffectiveUserName)
@@ -49,16 +50,22 @@ newtype PGPassFile
   = PGPassFile FilePath
 
 -- | Convert PGConfig to Hasql connection settings, or return an error message.
+-- Uses libpq key=value connection string format to correctly handle both
+-- TCP hosts and Unix socket paths (e.g. /var/run/postgresql).
 toConnectionSetting :: PGConfig -> Either String HsqlSet.Settings
 toConnectionSetting pgc = do
-  -- Convert the port from Text to Word16
-  portWord16 <- textToWord16 (pgcPort pgc)
-  -- Build the connection settings using the monoid-based API
-  pure $
-    HsqlSet.hostAndPort (pgcHost pgc) portWord16
-      <> HsqlSet.user (pgcUser pgc)
-      <> HsqlSet.dbname (pgcDbname pgc)
-      <> HsqlSet.password (pgcPassword pgc)
+  -- Validate the port
+  _ <- textToWord16 (pgcPort pgc)
+  -- Build a libpq key=value connection string which handles Unix socket paths
+  let connStr = Text.unwords
+        [ "host=" <> pgcHost pgc
+        , "port=" <> pgcPort pgc
+        , "user=" <> pgcUser pgc
+        , "dbname=" <> pgcDbname pgc
+        , "password=" <> pgcPassword pgc
+        ]
+  Debug.Trace.trace ("toConnectionSetting: connStr=" ++ Text.unpack connStr ++ " settings=" ++ show (HsqlSet.connectionString connStr)) $
+    pure $ HsqlSet.connectionString connStr
 
 -- | Convert a Text port to Word16, or return an error message.
 textToWord16 :: Text.Text -> Either String Word16
