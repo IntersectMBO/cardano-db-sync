@@ -12,8 +12,8 @@ import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Babbage.Core
 import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import Cardano.Ledger.BaseTypes
-import qualified Cardano.Ledger.Core as Ledger (TxOut)
 import Cardano.Ledger.Core (Value)
+import qualified Cardano.Ledger.Core as Ledger (TxOut)
 import Cardano.Ledger.Mary.Value
 import Cardano.Ledger.Shelley.LedgerState
 import Cardano.Ledger.TxIn

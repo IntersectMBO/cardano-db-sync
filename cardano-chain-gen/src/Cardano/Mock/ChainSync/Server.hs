@@ -30,6 +30,7 @@ module Cardano.Mock.ChainSync.Server (
 import Cardano.Mock.Chain hiding (rollback)
 import Cardano.Mock.ChainDB
 import Cardano.Mock.ChainSync.State
+import Cardano.Network.NodeToClient
 import Codec.Serialise.Class (Serialise)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
@@ -49,6 +50,7 @@ import Control.Tracer
 import Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
+import qualified Network.Mux as Mx
 import qualified Network.Socket as Socket
 import Network.TypedProtocol.Peer (Peer (..))
 import qualified Network.TypedProtocol.Stateful.Peer as St
@@ -83,12 +85,10 @@ import Ouroboros.Network.Block (
   genesisPoint,
   mkSerialised,
  )
-import qualified Network.Mux as Mx
 import Ouroboros.Network.Channel (Channel)
 import Ouroboros.Network.Driver.Simple (runPeer)
 import qualified Ouroboros.Network.Driver.Stateful as Stateful
 import Ouroboros.Network.Magic (NetworkMagic)
-import Cardano.Network.NodeToClient
 import Ouroboros.Network.Protocol.ChainSync.Server (
   ChainSyncServer (..),
   ServerStIdle (..),
