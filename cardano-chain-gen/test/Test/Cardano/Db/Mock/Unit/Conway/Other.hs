@@ -28,7 +28,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
 import Cardano.Ledger.BaseTypes (EpochNo (..))
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
 import Cardano.Ledger.Core (PoolCert (..))
-import Cardano.Ledger.Credential (StakeCredential)
+import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext, getCurrentEpoch)
@@ -379,8 +379,8 @@ poolDelist =
 
 mkPoolDereg ::
   EpochNo ->
-  [StakeCredential] ->
-  KeyHash 'StakePool ->
+  [Credential Staking] ->
+  KeyHash StakePool ->
   ConwayTxCert ConwayEra
 mkPoolDereg epochNo _ keyHash = ConwayTxCertPool (RetirePool keyHash epochNo)
 

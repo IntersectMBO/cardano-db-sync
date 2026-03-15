@@ -121,7 +121,7 @@ optimiseCaches cache =
 queryOrInsertRewardAccount ::
   SyncEnv ->
   CacheAction ->
-  Ledger.RewardAccount ->
+  Ledger.AccountAddress ->
   ExceptT SyncNodeError DB.DbM DB.StakeAddressId
 queryOrInsertRewardAccount syncEnv cacheUA rewardAddr = do
   (eiAddrId, bs) <- queryStakeAddrWithCacheRetBs syncEnv cacheUA rewardAddr
@@ -136,12 +136,12 @@ queryOrInsertStakeAddress ::
   StakeCred ->
   ExceptT SyncNodeError DB.DbM DB.StakeAddressId
 queryOrInsertStakeAddress syncEnv cacheUA nw cred =
-  queryOrInsertRewardAccount syncEnv cacheUA $ Ledger.RewardAccount nw cred
+  queryOrInsertRewardAccount syncEnv cacheUA $ Ledger.AccountAddress nw (Ledger.AccountId cred)
 
 -- If the address already exists in the table, it will not be inserted again (due to
 -- the uniqueness constraint) but the function will return the 'StakeAddressId'.
 insertStakeAddress ::
-  Ledger.RewardAccount ->
+  Ledger.AccountAddress ->
   Maybe ByteString ->
   ExceptT SyncNodeError DB.DbM DB.StakeAddressId
 insertStakeAddress rewardAddr stakeCredBs = do
@@ -150,10 +150,10 @@ insertStakeAddress rewardAddr stakeCredBs = do
       DB.StakeAddress
         { DB.stakeAddressHashRaw = addrBs
         , DB.stakeAddressView = Generic.renderRewardAccount rewardAddr
-        , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.raCredential rewardAddr
+        , DB.stakeAddressScriptHash = Generic.getCredentialScriptHash $ Ledger.unAccountId (Ledger.aaId rewardAddr)
         }
   where
-    addrBs = fromMaybe (Ledger.serialiseRewardAccount rewardAddr) stakeCredBs
+    addrBs = fromMaybe (Ledger.serialiseAccountAddress rewardAddr) stakeCredBs
 
 queryStakeAddrWithCache ::
   SyncEnv ->
@@ -162,15 +162,15 @@ queryStakeAddrWithCache ::
   StakeCred ->
   ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId)
 queryStakeAddrWithCache syncEnv cacheUA nw cred =
-  fst <$> queryStakeAddrWithCacheRetBs syncEnv cacheUA (Ledger.RewardAccount nw cred)
+  fst <$> queryStakeAddrWithCacheRetBs syncEnv cacheUA (Ledger.AccountAddress nw (Ledger.AccountId cred))
 
 queryStakeAddrWithCacheRetBs ::
   SyncEnv ->
   CacheAction ->
-  Ledger.RewardAccount ->
+  Ledger.AccountAddress ->
   ExceptT SyncNodeError DB.DbM (Maybe DB.StakeAddressId, ByteString)
-queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.RewardAccount _ cred) = do
-  let bs = Ledger.serialiseRewardAccount ra
+queryStakeAddrWithCacheRetBs syncEnv cacheUA ra@(Ledger.AccountAddress _ (Ledger.AccountId cred)) = do
+  let bs = Ledger.serialiseAccountAddress ra
   case envCache syncEnv of
     NoCache -> (,bs) <$> resolveStakeAddress bs
     ActiveCache ci -> do

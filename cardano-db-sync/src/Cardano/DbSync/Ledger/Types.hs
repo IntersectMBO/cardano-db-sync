@@ -179,8 +179,8 @@ getGovExpiresAt applyResult e = case apGovExpiresAfter applyResult of
 
 -- TODO reuse this function rom ledger after it's exported.
 updatedCommittee ::
-  Set.Set (Credential 'ColdCommitteeRole) ->
-  Map.Map (Credential 'ColdCommitteeRole) EpochNo ->
+  Set.Set (Credential ColdCommitteeRole) ->
+  Map.Map (Credential ColdCommitteeRole) EpochNo ->
   Ledger.UnitInterval ->
   Ledger.StrictMaybe (Committee ConwayEra) ->
   Committee ConwayEra

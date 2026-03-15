@@ -15,6 +15,7 @@ import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
+import qualified Cardano.Ledger.Compactible as Ledger
 import Cardano.Ledger.Conway.Core
 import Cardano.Ledger.Conway.PParams (ppMinFeeRefScriptCostPerByteL)
 import Cardano.Ledger.Plutus.Language (Language)
@@ -116,8 +117,8 @@ getDeposits lstate =
 fromDijkstraParams :: PParams DijkstraEra -> ProtoParams
 fromDijkstraParams params =
   ProtoParams
-    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
-    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    { ppMinfeeA = fromIntegral . unCoin . Ledger.fromCompact . unCoinPerByte $ params ^. ppTxFeePerByteL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppTxFeeFixedL
     , ppMaxBBSize = params ^. ppMaxBBSizeL
     , ppMaxTxSize = params ^. ppMaxTxSizeL
     , ppMaxBHSize = params ^. ppMaxBHSizeL
@@ -133,7 +134,7 @@ fromDijkstraParams params =
     , ppProtocolVersion = params ^. ppProtocolVersionL
     , ppMinUTxOValue = Coin 0
     , ppMinPoolCost = params ^. ppMinPoolCostL
-    , ppCoinsPerUtxo = Just $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
+    , ppCoinsPerUtxo = Just $ Ledger.fromCompact $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
     , ppCostmdls = Just $ Alonzo.costModelsValid $ params ^. ppCostModelsL
     , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (params ^. ppPricesL)
     , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (params ^. ppPricesL)
@@ -141,12 +142,12 @@ fromDijkstraParams params =
     , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxTxExUnitsL)
     , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxBlockExUnitsL)
     , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxBlockExUnitsL)
-    , ppMaxValSize = Just $ params ^. ppMaxValSizeL
-    , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
-    , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppMaxValSize = Just $ fromIntegral $ params ^. ppMaxValSizeL
+    , ppCollateralPercentage = Just $ fromIntegral $ params ^. ppCollateralPercentageL
+    , ppMaxCollateralInputs = Just $ fromIntegral $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
     , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
-    , ppCommitteeMinSize = Just $ params ^. ppCommitteeMinSizeL
+    , ppCommitteeMinSize = Just $ fromIntegral $ params ^. ppCommitteeMinSizeL
     , ppCommitteeMaxTermLength = Just $ params ^. ppCommitteeMaxTermLengthL
     , ppGovActionLifetime = Just $ params ^. ppGovActionLifetimeL
     , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
@@ -158,8 +159,8 @@ fromDijkstraParams params =
 fromConwayParams :: PParams ConwayEra -> ProtoParams
 fromConwayParams params =
   ProtoParams
-    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
-    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    { ppMinfeeA = fromIntegral . unCoin . Ledger.fromCompact . unCoinPerByte $ params ^. ppTxFeePerByteL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppTxFeeFixedL
     , ppMaxBBSize = params ^. ppMaxBBSizeL
     , ppMaxTxSize = params ^. ppMaxTxSizeL
     , ppMaxBHSize = params ^. ppMaxBHSizeL
@@ -175,7 +176,7 @@ fromConwayParams params =
     , ppProtocolVersion = params ^. ppProtocolVersionL
     , ppMinUTxOValue = Coin 0
     , ppMinPoolCost = params ^. ppMinPoolCostL
-    , ppCoinsPerUtxo = Just $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
+    , ppCoinsPerUtxo = Just $ Ledger.fromCompact $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
     , ppCostmdls = Just $ Alonzo.costModelsValid $ params ^. ppCostModelsL
     , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (params ^. ppPricesL)
     , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (params ^. ppPricesL)
@@ -183,12 +184,12 @@ fromConwayParams params =
     , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxTxExUnitsL)
     , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxBlockExUnitsL)
     , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxBlockExUnitsL)
-    , ppMaxValSize = Just $ params ^. ppMaxValSizeL
-    , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
-    , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppMaxValSize = Just $ fromIntegral $ params ^. ppMaxValSizeL
+    , ppCollateralPercentage = Just $ fromIntegral $ params ^. ppCollateralPercentageL
+    , ppMaxCollateralInputs = Just $ fromIntegral $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Just $ params ^. ppPoolVotingThresholdsL
     , ppDRepVotingThresholds = Just $ params ^. ppDRepVotingThresholdsL
-    , ppCommitteeMinSize = Just $ params ^. ppCommitteeMinSizeL
+    , ppCommitteeMinSize = Just $ fromIntegral $ params ^. ppCommitteeMinSizeL
     , ppCommitteeMaxTermLength = Just $ params ^. ppCommitteeMaxTermLengthL
     , ppGovActionLifetime = Just $ params ^. ppGovActionLifetimeL
     , ppGovActionDeposit = Just . fromIntegral . unCoin $ params ^. ppGovActionDepositL
@@ -200,8 +201,8 @@ fromConwayParams params =
 fromBabbageParams :: PParams BabbageEra -> ProtoParams
 fromBabbageParams params =
   ProtoParams
-    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
-    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    { ppMinfeeA = fromIntegral . unCoin . Ledger.fromCompact . unCoinPerByte $ params ^. ppTxFeePerByteL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppTxFeeFixedL
     , ppMaxBBSize = params ^. ppMaxBBSizeL
     , ppMaxTxSize = params ^. ppMaxTxSizeL
     , ppMaxBHSize = params ^. ppMaxBHSizeL
@@ -217,7 +218,7 @@ fromBabbageParams params =
     , ppProtocolVersion = params ^. ppProtocolVersionL
     , ppMinUTxOValue = Coin 0
     , ppMinPoolCost = params ^. ppMinPoolCostL
-    , ppCoinsPerUtxo = Just $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
+    , ppCoinsPerUtxo = Just $ Ledger.fromCompact $ unCoinPerByte (params ^. ppCoinsPerUTxOByteL)
     , ppCostmdls = Just $ Alonzo.costModelsValid $ params ^. ppCostModelsL
     , ppPriceMem = Just . Ledger.unboundRational $ Alonzo.prMem (params ^. ppPricesL)
     , ppPriceStep = Just . Ledger.unboundRational $ Alonzo.prSteps (params ^. ppPricesL)
@@ -225,9 +226,9 @@ fromBabbageParams params =
     , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxTxExUnitsL)
     , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxBlockExUnitsL)
     , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxBlockExUnitsL)
-    , ppMaxValSize = Just $ params ^. ppMaxValSizeL
-    , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
-    , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppMaxValSize = Just $ fromIntegral $ params ^. ppMaxValSizeL
+    , ppCollateralPercentage = Just $ fromIntegral $ params ^. ppCollateralPercentageL
+    , ppMaxCollateralInputs = Just $ fromIntegral $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Nothing
     , ppDRepVotingThresholds = Nothing
     , ppCommitteeMinSize = Nothing
@@ -242,8 +243,8 @@ fromBabbageParams params =
 fromAlonzoParams :: PParams AlonzoEra -> ProtoParams
 fromAlonzoParams params =
   ProtoParams
-    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
-    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    { ppMinfeeA = fromIntegral . unCoin . Ledger.fromCompact . unCoinPerByte $ params ^. ppTxFeePerByteL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppTxFeeFixedL
     , ppMaxBBSize = params ^. ppMaxBBSizeL
     , ppMaxTxSize = params ^. ppMaxTxSizeL
     , ppMaxBHSize = params ^. ppMaxBHSizeL
@@ -267,9 +268,9 @@ fromAlonzoParams params =
     , ppMaxTxExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxTxExUnitsL)
     , ppMaxBlockExMem = Just . fromIntegral $ Alonzo.exUnitsMem (params ^. ppMaxBlockExUnitsL)
     , ppMaxBlockExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (params ^. ppMaxBlockExUnitsL)
-    , ppMaxValSize = Just $ params ^. ppMaxValSizeL
-    , ppCollateralPercentage = Just $ params ^. ppCollateralPercentageL
-    , ppMaxCollateralInputs = Just $ params ^. ppMaxCollateralInputsL
+    , ppMaxValSize = Just $ fromIntegral $ params ^. ppMaxValSizeL
+    , ppCollateralPercentage = Just $ fromIntegral $ params ^. ppCollateralPercentageL
+    , ppMaxCollateralInputs = Just $ fromIntegral $ params ^. ppMaxCollateralInputsL
     , ppPoolVotingThresholds = Nothing
     , ppDRepVotingThresholds = Nothing
     , ppCommitteeMinSize = Nothing
@@ -284,8 +285,8 @@ fromAlonzoParams params =
 fromShelleyParams :: (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) => PParams era -> ProtoParams
 fromShelleyParams params =
   ProtoParams
-    { ppMinfeeA = fromIntegral . unCoin $ params ^. ppMinFeeAL
-    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppMinFeeBL
+    { ppMinfeeA = fromIntegral . unCoin . Ledger.fromCompact . unCoinPerByte $ params ^. ppTxFeePerByteL
+    , ppMinfeeB = fromIntegral . unCoin $ params ^. ppTxFeeFixedL
     , ppMaxBBSize = params ^. ppMaxBBSizeL
     , ppMaxTxSize = params ^. ppMaxTxSizeL
     , ppMaxBHSize = params ^. ppMaxBHSizeL

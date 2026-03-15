@@ -46,7 +46,6 @@ import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Hashes (SafeHash, ScriptHash (..), extractHash)
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..))
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import qualified Data.Binary.Put as Binary
@@ -56,13 +55,13 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Text.Encoding as Text
 
-annotateStakingCred :: Ledger.Network -> Ledger.StakeCredential -> Ledger.RewardAccount
-annotateStakingCred = Shelley.RewardAccount
+annotateStakingCred :: Ledger.Network -> Ledger.Credential Ledger.Staking -> Ledger.AccountAddress
+annotateStakingCred nw cred = Ledger.AccountAddress nw (Ledger.AccountId cred)
 
 coinToDbLovelace :: Coin -> DbLovelace
 coinToDbLovelace = DbLovelace . fromIntegral . unCoin
 
-getPaymentCred :: Ledger.Addr -> Maybe Ledger.PaymentCredential
+getPaymentCred :: Ledger.Addr -> Maybe (Ledger.Credential Ledger.Payment)
 getPaymentCred addr =
   case addr of
     Ledger.Addr _nw pcred _sref -> Just pcred
@@ -106,11 +105,11 @@ nonceToBytes nonce =
 renderAddress :: Ledger.Addr -> Text
 renderAddress = serialiseAddress
 
-renderRewardAccount :: Ledger.RewardAccount -> Text
+renderRewardAccount :: Ledger.AccountAddress -> Text
 renderRewardAccount = serialiseRewardAccount
 
-stakingCredHash :: Ledger.Network -> Ledger.StakeCredential -> ByteString
-stakingCredHash network = Ledger.serialiseRewardAccount . annotateStakingCred network
+stakingCredHash :: Ledger.Network -> Ledger.Credential Ledger.Staking -> ByteString
+stakingCredHash network = Ledger.serialiseAccountAddress . annotateStakingCred network
 
 unitIntervalToDouble :: Ledger.UnitInterval -> Double
 unitIntervalToDouble = fromRational . Ledger.unboundRational
@@ -123,7 +122,7 @@ unCredentialHash = \case
 unKeyHashRaw :: Ledger.KeyHash d -> ByteString
 unKeyHashRaw (Ledger.KeyHash kh) = Crypto.hashToBytes kh
 
-unKeyHashView :: Ledger.KeyHash 'Ledger.StakePool -> Text
+unKeyHashView :: Ledger.KeyHash Ledger.StakePool -> Text
 unKeyHashView = serialiseStakePoolKeyHashToBech32
 
 unScriptHash :: ScriptHash -> ByteString

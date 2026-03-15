@@ -95,6 +95,4 @@ decodeCbor =
     . encodeUtf8
   where
     decode' :: LByteString.ByteString -> Either DecoderError (Ledger.Data ShelleyEra)
-    decode' bytes = do
-      Annotator ann <- decodeFull shelleyProtVer bytes
-      pure $ ann (Full bytes)
+    decode' bytes = decodeFullAnnotator shelleyProtVer "Data" decCBOR bytes

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
@@ -44,7 +45,6 @@ import Cardano.Ledger.Conway.TxCert (ConwayTxCert)
 import Cardano.Ledger.Dijkstra.Scripts
 import Cardano.Ledger.Dijkstra.TxCert
 import Cardano.Ledger.Mary.Value (AssetName, MultiAsset, PolicyID)
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
@@ -97,7 +97,7 @@ data TxCertificate = TxCertificate
 
 data TxWithdrawal = TxWithdrawal
   { txwRedeemerIndex :: !(Maybe Word64)
-  , txwRewardAccount :: !Shelley.RewardAccount
+  , txwRewardAccount :: !Ledger.AccountAddress
   , txwAmount :: !Coin
   }
 
@@ -183,7 +183,7 @@ toTxHash = unTxHash . txInTxId
 
 class AlonzoEraTxBody era => DBScriptPurpose era where
   getPurpose :: PlutusPurpose AsIx era -> (DB.ScriptPurpose, Word32)
-  toAlonzoPurpose :: TxBody era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIx era)) (ConwayPlutusPurpose AsItem era))
+  toAlonzoPurpose :: TxBody l era -> PlutusPurpose AsItem era -> Maybe (Either (AlonzoPlutusPurpose AsItem era, Maybe (PlutusPurpose AsIx era)) (ConwayPlutusPurpose AsItem era))
 
 instance DBScriptPurpose AlonzoEra where
   getPurpose = \case

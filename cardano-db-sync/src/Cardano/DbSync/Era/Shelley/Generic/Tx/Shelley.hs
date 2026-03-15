@@ -50,7 +50,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (ShelleyEra)
 
-fromShelleyTx :: (Word64, Core.Tx ShelleyEra) -> Tx
+fromShelleyTx :: (Word64, Core.Tx Core.TopTx ShelleyEra) -> Tx
 fromShelleyTx (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -84,7 +84,7 @@ fromShelleyTx (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Shelley does not support treasury donations
     }
   where
-    txBody :: Core.TxBody ShelleyEra
+    txBody :: Core.TxBody Core.TopTx ShelleyEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]
@@ -105,9 +105,9 @@ fromShelleyTx (blkIndex, tx) =
         }
 
 mkTxOut ::
-  forall era.
+  forall l era.
   (Core.EraTxBody era, Core.Value era ~ Coin) =>
-  Core.TxBody era ->
+  Core.TxBody l era ->
   [TxOut]
 mkTxOut txBody = zipWith fromTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
   where
@@ -129,48 +129,48 @@ fromTxIn (Ledger.TxIn (Ledger.TxId txid) (TxIx w64)) =
     , txInTxId = Ledger.TxId txid
     }
 
-txHashId :: Core.EraTx era => Core.Tx era -> ByteString
+txHashId :: Core.EraTx era => Core.Tx l era -> ByteString
 txHashId = safeHashToByteString . txSafeHash
 
-txSafeHash :: Core.EraTx era => Core.Tx era -> SafeHash Shelley.EraIndependentTxBody
+txSafeHash :: Core.EraTx era => Core.Tx l era -> SafeHash Shelley.EraIndependentTxBody
 txSafeHash tx = Core.hashAnnotated (tx ^. Core.bodyTxL)
 
-mkTxId :: Core.EraTx era => Core.Tx era -> Ledger.TxId
+mkTxId :: Core.EraTx era => Core.Tx l era -> Ledger.TxId
 mkTxId = Ledger.TxId . txSafeHash
 
 txHashFromSafe :: SafeHash Core.EraIndependentTxBody -> ByteString
 txHashFromSafe = Crypto.hashToBytes . Core.extractHash
 
-getTxSize :: Core.EraTx era => Core.Tx era -> Word64
+getTxSize :: Core.EraTx era => Core.Tx l era -> Word64
 getTxSize tx = fromIntegral $ tx ^. Core.sizeTxF
 
-getTxCBOR :: Core.EraTx era => Core.Tx era -> ByteString
+getTxCBOR :: (Core.EraTx era, Typeable l) => Core.Tx l era -> ByteString
 getTxCBOR = serialize'
 
 mkTxIn ::
   Core.EraTxBody era =>
-  Core.TxBody era ->
+  Core.TxBody l era ->
   [TxIn]
 mkTxIn txBody = map fromTxIn $ toList $ txBody ^. Core.inputsTxBodyL
 
 calcWithdrawalSum ::
   Core.EraTxBody era =>
-  Core.TxBody era ->
+  Core.TxBody l era ->
   Coin
 calcWithdrawalSum bd =
-  Coin $ sum $ map unCoin $ Map.elems $ Shelley.unWithdrawals $ bd ^. Core.withdrawalsTxBodyL
+  Coin $ sum $ map unCoin $ Map.elems $ Core.unWithdrawals $ bd ^. Core.withdrawalsTxBodyL
 
-getTxMetadata :: Core.EraTx era => Core.Tx era -> Maybe (Core.TxAuxData era)
+getTxMetadata :: Core.EraTx era => Core.Tx l era -> Maybe (Core.TxAuxData era)
 getTxMetadata tx = strictMaybeToMaybe (tx ^. Core.auxDataTxL)
 
 mkTxWithdrawals ::
   Shelley.ShelleyEraTxBody era =>
-  Core.TxBody era ->
+  Core.TxBody l era ->
   [TxWithdrawal]
 mkTxWithdrawals bd =
-  map mkTxWithdrawal $ Map.toList $ Shelley.unWithdrawals $ bd ^. Core.withdrawalsTxBodyL
+  map mkTxWithdrawal $ Map.toList $ Core.unWithdrawals $ bd ^. Core.withdrawalsTxBodyL
 
-mkTxWithdrawal :: (Shelley.RewardAccount, Coin) -> TxWithdrawal
+mkTxWithdrawal :: (Core.AccountAddress, Coin) -> TxWithdrawal
 mkTxWithdrawal (ra, c) =
   TxWithdrawal
     { txwRedeemerIndex = Nothing
@@ -181,17 +181,17 @@ mkTxWithdrawal (ra, c) =
 mkTxParamProposal ::
   Shelley.ShelleyEraTxBody era =>
   Witness era ->
-  Core.TxBody era ->
+  Core.TxBody Core.TopTx era ->
   [ParamProposal]
 mkTxParamProposal witness txBody =
   maybe [] (convertParamProposal witness) $ strictMaybeToMaybe (txBody ^. Shelley.updateTxBodyL)
 
 mkTxCertificates ::
-  forall era.
+  forall l era.
   ( Shelley.ShelleyEraTxBody era
   , TxCert era ~ ShelleyTxCert era
   ) =>
-  Core.TxBody era ->
+  Core.TxBody l era ->
   [TxCertificate]
 mkTxCertificates bd =
   zipWith mkTxCertificate [0 ..] $ toShelleyCert <$> toList (bd ^. Core.certsTxBodyL)
