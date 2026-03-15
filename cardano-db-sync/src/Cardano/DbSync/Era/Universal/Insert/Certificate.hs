@@ -38,8 +38,8 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.Address as Ledger
+import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger

@@ -54,11 +54,11 @@ import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, map, (.))
 import Cardano.Protocol.Crypto (hashVerKeyVRF)
+import Data.Array.Byte (ByteArray (..))
+import qualified Data.ByteString.Short as SBS
 import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
-import Data.Array.Byte (ByteArray (..))
-import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust)
 import qualified Data.Sequence.Strict as StrictSeq

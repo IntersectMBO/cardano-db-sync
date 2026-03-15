@@ -66,7 +66,7 @@ module Cardano.Mock.Forging.Tx.Conway (
   addValidityInterval,
 ) where
 
-import Cardano.Ledger.Address (Addr (..), AccountAddress (..), AccountId (..), Withdrawals (..))
+import Cardano.Ledger.Address (AccountAddress (..), AccountId (..), Addr (..), Withdrawals (..))
 import Cardano.Ledger.Allegra.Scripts
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Alonzo.Tx (IsValid (..))

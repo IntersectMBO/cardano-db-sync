@@ -41,8 +41,8 @@ import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.State as PoolP
 import Cardano.Prelude
 import Data.Array.Byte (ByteArray (..))
-import qualified Data.ByteString.Short as SBS
 import Data.ByteString.Short (ShortByteString (SBS))
+import qualified Data.ByteString.Short as SBS
 
 type IsPoolMember = PoolKeyHash -> Bool
 

@@ -24,8 +24,8 @@ import qualified Cardano.Ledger.Compactible as Ledger
 import Cardano.Ledger.Credential (Credential)
 import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
-import qualified Cardano.Ledger.State as Ledger
 import Cardano.Ledger.State (StakeWithDelegation (..))
+import qualified Cardano.Ledger.State as Ledger
 import Cardano.Ledger.Val ((<+>))
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map

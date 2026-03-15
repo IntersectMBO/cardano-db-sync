@@ -32,8 +32,8 @@ import Cardano.Ledger.Coin (Coin (..), CompactForm (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
-import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Hashes (SafeHash)
+import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),

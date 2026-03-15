@@ -48,6 +48,19 @@ import qualified Data.Text as Text
 import qualified Network.Mux as Mux
 import Network.TypedProtocol.Peer (N (..), Nat (..))
 
+import Cardano.Network.NodeToClient (
+  ConnectionId,
+  Handshake,
+  IOManager,
+  LocalAddress,
+  NodeToClientProtocols (..),
+  TraceSendRecv,
+  localSnocket,
+  localStateQueryPeerNull,
+  localTxMonitorPeerNull,
+  localTxSubmissionPeerNull,
+ )
+import qualified Cardano.Network.NodeToClient.Version as Network
 import Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import Ouroboros.Consensus.Byron.Node ()
 import Ouroboros.Consensus.Cardano.Node ()
@@ -71,19 +84,6 @@ import Ouroboros.Network.Block (
 import Ouroboros.Network.Driver.Simple (runPipelinedPeer)
 import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx)
 import qualified Ouroboros.Network.Mux as Mux
-import Cardano.Network.NodeToClient (
-  ConnectionId,
-  Handshake,
-  IOManager,
-  LocalAddress,
-  NodeToClientProtocols (..),
-  TraceSendRecv,
-  localSnocket,
-  localStateQueryPeerNull,
-  localTxMonitorPeerNull,
-  localTxSubmissionPeerNull,
- )
-import qualified Cardano.Network.NodeToClient.Version as Network
 import Ouroboros.Network.Protocol.ChainSync.ClientPipelined (
   ChainSyncClientPipelined (..),
   ClientPipelinedStIdle (..),
