@@ -30,6 +30,7 @@ module Cardano.DbSync.Config.Types (
   TxOutConfig (..),
   UseTxOutAddress (..),
   ForceTxIn (..),
+  LedgerBackend (..),
   LedgerInsertConfig (..),
   ShelleyInsertConfig (..),
   RewardsConfig (..),
@@ -149,6 +150,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncInsertOptions :: !SyncInsertOptions
   , dncIpfsGateway :: [Text]
   , dncSnapshotInterval :: !SnapshotIntervalConfig
+  , dncLedgerBackend :: !LedgerBackend
   }
 
 data SyncPreConfig = SyncPreConfig
@@ -162,6 +164,7 @@ data SyncPreConfig = SyncPreConfig
   , pcInsertConfig :: !SyncInsertConfig
   , pcIpfsGateway :: ![Text]
   , pcSnapshotInterval :: !SnapshotIntervalConfig
+  , pcLedgerBackend :: !LedgerBackend
   }
   deriving (Show)
 
@@ -221,6 +224,20 @@ newtype ForceTxIn = ForceTxIn {unForceTxIn :: Bool}
 newtype UseTxOutAddress = UseTxOutAddress {unUseTxOutAddress :: Bool}
   deriving (Eq, Show)
   deriving newtype (ToJSON, FromJSON)
+
+-- | Choose the backend for storing ledger tables (UTxO set).
+-- 'LedgerBackendInMemory' keeps everything in RAM (current default).
+-- 'LedgerBackendLSM' uses LSM trees on disk for lower memory usage.
+data LedgerBackend
+  = LedgerBackendInMemory
+  | LedgerBackendLSM (Maybe FilePath)
+  deriving (Eq, Show)
+
+instance FromJSON LedgerBackend where
+  parseJSON = Aeson.withText "LedgerBackend" $ \case
+    "inmemory" -> pure LedgerBackendInMemory
+    "lsm" -> pure (LedgerBackendLSM Nothing)
+    other -> fail $ "unexpected ledger_backend: " <> show other <> ". Expected \"inmemory\" or \"lsm\"."
 
 data LedgerInsertConfig
   = LedgerEnable
@@ -416,6 +433,7 @@ parseGenSyncNodeConfig o =
     <*> o .:? "insert_options" .!= def
     <*> o .:? "ipfs_gateway" .!= ["https://ipfs.io/ipfs"]
     <*> o .:? "snapshot_interval" .!= def
+    <*> o .:? "ledger_backend" .!= LedgerBackendInMemory
 
 instance FromJSON SyncProtocol where
   parseJSON o =

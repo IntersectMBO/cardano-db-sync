@@ -190,6 +190,8 @@ library
                       , either
                       , extra
                       , filepath
+                      , fs-api
+                      , lsm-tree
                       , groups
                       , hasql
                       , http-client
@@ -203,6 +205,8 @@ library
                       , ouroboros-consensus
                       , ouroboros-consensus:cardano
                       , ouroboros-consensus:diffusion
+                      , ouroboros-consensus:lsm
+                      , resource-registry
                       , ouroboros-consensus:protocol
                       , ouroboros-network:api
                       , ouroboros-network:framework
@@ -210,6 +214,7 @@ library
                       , plutus-ledger-api
                       , prometheus
                       , psqueues
+                      , random
                       , random-shuffle
                       , scientific
                       , serialise

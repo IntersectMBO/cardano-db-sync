@@ -12,7 +12,7 @@ module Cardano.DbSync.Ledger.Types where
 
 import Cardano.BM.Trace (Trace)
 import Cardano.Binary (Decoder, Encoding, FromCBOR (..), ToCBOR (..))
-import Cardano.DbSync.Config.Types (LedgerStateDir)
+import Cardano.DbSync.Config.Types (LedgerBackend (..), LedgerStateDir)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event (LedgerEvent)
 import Cardano.DbSync.Types (
@@ -38,6 +38,7 @@ import Cardano.Slotting.Slot (
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
  )
+import Control.ResourceRegistry (ResourceRegistry)
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Data.Map.Strict as Map
 import Data.SOP.Functors (Flip (..))
@@ -52,10 +53,11 @@ import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
 import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerTables, ValuesMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import Ouroboros.Consensus.Ledger.Tables (valuesMKDecoder, valuesMKEncoder)
+import Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq (LedgerTablesHandle (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
-import Prelude (fail, id)
+import Prelude (String, fail, id)
 
 --------------------------------------------------------------------------
 -- Ledger Types
@@ -75,12 +77,21 @@ data HasLedgerEnv = HasLedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leRegistry :: !(IO (ResourceRegistry IO))
+  , leLedgerBackend :: !LedgerBackend
+  , leMkLedgerHandle ::
+      ExtLedgerState CardanoBlock EmptyMK ->
+      LedgerTables (ExtLedgerState CardanoBlock) ValuesMK ->
+      IO (LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
+  , leMkLedgerHandleFromSnapshot ::
+      Maybe (String -> IO (LedgerTablesHandle IO (ExtLedgerState CardanoBlock)))
   }
 
 data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(ExtLedgerState CardanoBlock EmptyMK)
-  , clsTables :: !(LedgerTables (ExtLedgerState CardanoBlock) ValuesMK)
+  , clsTables :: !(LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
   , clsEpochBlockNo :: !EpochBlockNo
+  , clsCanClose :: !(StrictTVar IO Bool)
   }
 
 -- The height of the block in the current Epoch. We maintain this
@@ -105,25 +116,47 @@ instance FromCBOR EpochBlockNo where
       2 -> EpochBlockNo <$> fromCBOR
       n -> fail $ "unexpected EpochBlockNo value " <> show n
 
-encodeCardanoLedgerState ::
+-- | Encode for InMemory backend: state + epoch + tables inline (single file).
+encodeCardanoLedgerStateInMemory ::
   (ExtLedgerState CardanoBlock EmptyMK -> Encoding) ->
-  CardanoLedgerState ->
+  ExtLedgerState CardanoBlock EmptyMK ->
+  EpochBlockNo ->
+  LedgerTables (ExtLedgerState CardanoBlock) ValuesMK ->
   Encoding
-encodeCardanoLedgerState encodeExt cls =
+encodeCardanoLedgerStateInMemory encodeExt st ebn tables =
   mconcat
-    [ encodeExt (clsState cls)
-    , toCBOR (clsEpochBlockNo cls)
-    , valuesMKEncoder (clsState cls) (clsTables cls)
+    [ encodeExt st
+    , toCBOR ebn
+    , valuesMKEncoder st tables
     ]
 
-decodeCardanoLedgerState ::
+-- | Decode for InMemory backend: state + epoch + tables from single file.
+decodeCardanoLedgerStateInMemory ::
   (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK)) ->
-  (forall s. Decoder s CardanoLedgerState)
-decodeCardanoLedgerState decodeExt = do
+  (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK, EpochBlockNo, LedgerTables (ExtLedgerState CardanoBlock) ValuesMK))
+decodeCardanoLedgerStateInMemory decodeExt = do
   lState <- decodeExt
   eBlockNo <- fromCBOR
   lTables <- valuesMKDecoder lState
-  pure $ CardanoLedgerState lState lTables eBlockNo
+  pure (lState, eBlockNo, lTables)
+
+-- | Encode for LSM backend: state + epoch only (tables are on disk via LSM).
+encodeCardanoLedgerStateLSM ::
+  (ExtLedgerState CardanoBlock EmptyMK -> Encoding) ->
+  ExtLedgerState CardanoBlock EmptyMK ->
+  EpochBlockNo ->
+  Encoding
+encodeCardanoLedgerStateLSM encodeExt st ebn =
+  encodeExt st <> toCBOR ebn
+
+-- | Decode for LSM backend: state + epoch only (tables restored from LSM).
+decodeCardanoLedgerStateLSM ::
+  (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK)) ->
+  (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK, EpochBlockNo))
+decodeCardanoLedgerStateLSM decodeExt = do
+  lState <- decodeExt
+  eBlockNo <- fromCBOR
+  pure (lState, eBlockNo)
 
 data LedgerStateFile = LedgerStateFile
   { lsfSlotNo :: !SlotNo

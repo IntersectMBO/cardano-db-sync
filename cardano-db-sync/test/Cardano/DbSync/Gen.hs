@@ -59,6 +59,7 @@ syncPreConfig =
     <*> syncInsertConfig
     <*> Gen.list (Range.linear 0 10) (Gen.text (Range.linear 0 100) Gen.unicode)
     <*> snapshotIntervalConfig
+    <*> pure LedgerBackendInMemory
 
 snapshotIntervalConfig :: Gen SnapshotIntervalConfig
 snapshotIntervalConfig =
@@ -109,6 +110,7 @@ syncNodeConfig loggingCfg =
     <*> syncInsertOptions
     <*> pure []
     <*> snapshotIntervalConfig
+    <*> pure LedgerBackendInMemory
 
 syncInsertConfig :: Gen SyncInsertConfig
 syncInsertConfig =
