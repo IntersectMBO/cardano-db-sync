@@ -1,7 +1,6 @@
 # Haskell
 .ghc.environment.*
 .stack-work/
-cabal.project.local
 dist-newstyle/
 dist
 
