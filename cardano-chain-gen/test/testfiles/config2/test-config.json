@@ -3,6 +3,8 @@
   "AlonzoGenesisHash": "7e94a15f55d1e82d10f09203fa1d40f8eede58fd8066542cf6566008068ed874",
   "ByronGenesisFile": "genesis.byron.json",
   "ByronGenesisHash": "d004b9e1a42b7329e52a112c8c006e6261e887013309afeca611f049f96cecd4",
+  "ConwayGenesisFile": "genesis.conway.json",
+  "ConwayGenesisHash": "f87ddecbbe549699b066eef38d36aee555f09be3fd766b40e0117a77435fb693",
   "LastKnownBlockVersion-Alt": 0,
   "LastKnownBlockVersion-Major": 5,
   "LastKnownBlockVersion-Minor": 1,
