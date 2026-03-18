@@ -90,10 +90,10 @@ runDbTransLogged tracer dbEnv mIsolationLevel action = do
 runDbTransSilent ::
   MonadUnliftIO m =>
   DbEnv ->
-  Maybe IsolationLevel -> -- Optional isolation level
+  IsolationLevel ->
   DbM a ->
   m a
-runDbTransSilent dbEnv mIsolationLevel action = do
+runDbTransSilent dbEnv isolationLevel action = do
   runNoLoggingT $ do
     result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
     case result of
@@ -101,10 +101,8 @@ runDbTransSilent dbEnv mIsolationLevel action = do
         throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
       Right dbResult -> pure dbResult
   where
-    isolationLevel = fromMaybe RepeatableRead mIsolationLevel
     transactionSession = do
       HsqlS.statement () (beginTransactionStmt isolationLevel)
-
       result <- liftIO $ try @SomeException $ runReaderT (runDbM action) dbEnv
       case result of
         Left err -> do
@@ -272,7 +270,7 @@ runDbStandaloneTransSilent source action = do
     HsqlCon.release
     ( \connection -> do
         let dbEnv = createDbEnv connection Nothing Nothing
-        runDbTransSilent dbEnv Nothing action
+        runDbTransSilent dbEnv RepeatableRead action
     )
 
 -- | Standalone runner without transaction management
