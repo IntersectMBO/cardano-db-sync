@@ -324,6 +324,7 @@ data EpochSyncTime = EpochSyncTime
   { epochSyncTimeNo :: !Word64 -- sqltype=word31type
   , epochSyncTimeSeconds :: !Word64 -- sqltype=word63type
   , epochSyncTimeState :: !SyncState -- sqltype=syncstatetype
+  , epochSyncTimeSyncedAt :: !(Maybe UTCTime)
   }
   deriving (Show, Eq, Generic)
 
@@ -338,6 +339,7 @@ epochSyncTimeEncoder =
     [ epochSyncTimeNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochSyncTimeSeconds >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochSyncTimeState >$< E.param (E.nonNullable syncStateEncoder)
+    , epochSyncTimeSyncedAt >$< E.param (E.nullable E.timestamptz)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

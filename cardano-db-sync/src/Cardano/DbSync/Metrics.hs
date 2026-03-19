@@ -9,6 +9,9 @@ module Cardano.DbSync.Metrics (
   setDbSlotHeight,
   setDbEpochSyncDuration,
   setDbEpochSyncNumber,
+  setDbBlocksPerSecond,
+  setInsertDuration,
+  setCacheHitRate,
   makeMetrics,
   withMetricSetters,
   withMetricsServer,
@@ -41,6 +44,24 @@ data Metrics = Metrics
   -- ^ The duration of the last epoch sync in seconds.
   , mDbEpochSyncNumber :: !Gauge
   -- ^ The number of the last epoch that was synced.
+  , mDbBlocksPerSecond :: !Gauge
+  -- ^ The number of blocks being processes per second.
+  , mInsertDuration :: !Gauge
+  -- ^ The duration of the last insert operation in seconds.
+  , mCacheStakeHitRate :: !Gauge
+  -- ^ Cache hit rate for stake cache.
+  , mCachePoolsHitRate :: !Gauge
+  -- ^ Cache hit rate for pools cache.
+  , mCacheDatumHitRate :: !Gauge
+  -- ^ Cache hit rate for datum cache.
+  , mCacheMultiAssetsHitRate :: !Gauge
+  -- ^ Cache hit rate for multi_assets cache.
+  , mCachePrevBlockHitRate :: !Gauge
+  -- ^ Cache hit rate for prev_block cache.
+  , mCacheAddressHitRate :: !Gauge
+  -- ^ Cache hit rate for address cache.
+  , mCacheTxIdsHitRate :: !Gauge
+  -- ^ Cache hit rate for tx_ids cache.
   }
 
 -- This enables us to be much more flexibile with what we actually measure.
@@ -61,6 +82,20 @@ withMetricSetters prometheusPort action =
             Gauge.set duration $ mDbEpochSyncDuration metrics
         , metricsSetDbEpochSyncNumber = \epochNo ->
             Gauge.set (fromIntegral epochNo) $ mDbEpochSyncNumber metrics
+        , metricsSetDbBlocksPerSecond = \bps ->
+            Gauge.set bps $ mDbBlocksPerSecond metrics
+        , metricsSetInsertDuration = \duration ->
+            Gauge.set duration $ mInsertDuration metrics
+        , metricsSetCacheHitRate = \cacheName hitRate ->
+            case cacheName of
+              "stake" -> Gauge.set hitRate $ mCacheStakeHitRate metrics
+              "pools" -> Gauge.set hitRate $ mCachePoolsHitRate metrics
+              "datum" -> Gauge.set hitRate $ mCacheDatumHitRate metrics
+              "multi_assets" -> Gauge.set hitRate $ mCacheMultiAssetsHitRate metrics
+              "prev_block" -> Gauge.set hitRate $ mCachePrevBlockHitRate metrics
+              "address" -> Gauge.set hitRate $ mCacheAddressHitRate metrics
+              "tx_ids" -> Gauge.set hitRate $ mCacheTxIdsHitRate metrics
+              _ -> pure ()
         }
 
 withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
@@ -83,6 +118,15 @@ makeMetrics =
     <*> registerGauge "cardano_db_sync_db_slot_height" mempty
     <*> registerGauge "cardano_db_sync_db_epoch_sync_duration_seconds" mempty
     <*> registerGauge "cardano_db_sync_db_epoch_sync_number" mempty
+    <*> registerGauge "cardano_db_sync_blocks_per_second" mempty
+    <*> registerGauge "cardano_db_sync_insert_duration_seconds" mempty
+    <*> registerGauge "cardano_db_sync_cache_stake_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_pools_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_datum_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_multi_assets_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_prev_block_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_address_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_tx_ids_hit_rate" mempty
 
 setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> IO ()
 setNodeBlockHeight setters woBlkNo =
@@ -102,3 +146,12 @@ setDbEpochSyncDuration = metricsSetDbEpochSyncDuration
 
 setDbEpochSyncNumber :: MetricSetters -> Word64 -> IO ()
 setDbEpochSyncNumber = metricsSetDbEpochSyncNumber
+
+setDbBlocksPerSecond :: MetricSetters -> Double -> IO ()
+setDbBlocksPerSecond = metricsSetDbBlocksPerSecond
+
+setInsertDuration :: MetricSetters -> Double -> IO ()
+setInsertDuration = metricsSetInsertDuration
+
+setCacheHitRate :: MetricSetters -> Text -> Double -> IO ()
+setCacheHitRate = metricsSetCacheHitRate

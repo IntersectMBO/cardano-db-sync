@@ -410,6 +410,9 @@ emptyMetricsSetters =
     , metricsSetDbSlotHeight = \_ -> pure ()
     , metricsSetDbEpochSyncDuration = \_ -> pure ()
     , metricsSetDbEpochSyncNumber = \_ -> pure ()
+    , metricsSetDbBlocksPerSecond = \_ -> pure ()
+    , metricsSetInsertDuration = \_ -> pure ()
+    , metricsSetCacheHitRate = \_ _ -> pure ()
     }
 
 withFullConfig ::
