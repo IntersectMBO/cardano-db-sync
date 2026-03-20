@@ -55,7 +55,7 @@ import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure, Target (..))
 
 data NoLedgerEnv = NoLedgerEnv
-  { nleTracer :: Trace IO Text
+  { nleTracer :: !(Trace IO Text)
   , nleSystemStart :: !SystemStart
   , nleQueryVar :: StateQueryTMVar CardanoBlock CardanoInterpreter
   , nleHistoryInterpreterVar :: StrictTVar IO (Strict.Maybe CardanoInterpreter)
