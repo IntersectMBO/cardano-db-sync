@@ -21,6 +21,7 @@ import qualified Data.ByteString.Short as SBS
 import Data.List (span)
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
+import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator as Consensus
 import Ouroboros.Network.Block (blockHash, blockNo, getHeaderFields, headerFieldBlockNo, unBlockNo)
@@ -42,6 +43,7 @@ import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
 import Cardano.DbSync.Ledger.Types (ApplyResult (..))
 import Cardano.DbSync.LocalStateQuery
+import Cardano.DbSync.Metrics (setInsertDuration)
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -151,6 +153,9 @@ insertBlock ::
   Bool ->
   ExceptT SyncNodeError DB.DbM ()
 insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
+  -- Start timing for insert duration metric
+  startTime <- liftIO getCurrentTime
+
   !epochEvents <- liftIO $ atomically $ generateNewEpochEvents syncEnv (apSlotDetails applyRes)
   let !applyResult = applyRes {apEvents = sort $ epochEvents <> apEvents applyRes}
   let !details = apSlotDetails applyResult
@@ -206,6 +211,11 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
       do
         lift $ DB.deleteConsumedTxOut tracer txOutVariantType (getSafeBlockNoDiff syncEnv)
   commitOrIndexes withinTwoMin withinHalfHour
+
+  -- Record insert duration metric
+  endTime <- liftIO getCurrentTime
+  let duration = realToFrac $ diffUTCTime endTime startTime
+  liftIO $ setInsertDuration (envMetricSetters syncEnv) duration
   where
     tracer = getTrace syncEnv
     txOutVariantType = getTxOutVariantType syncEnv

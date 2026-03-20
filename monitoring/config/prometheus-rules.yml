@@ -1,0 +1,23 @@
+groups:
+  - name: cardano_epoch_tracking
+    interval: 30s
+    rules:
+      # Record epoch duration whenever epoch number changes
+      # This creates a counter that increments with each epoch's duration
+      - record: cardano_db_sync_epoch_duration_history
+        expr: |
+          cardano_db_sync_db_epoch_sync_duration_seconds
+          * on() group_right()
+          (cardano_db_sync_db_epoch_sync_number != bool 0)
+        labels:
+          epoch: "{{cardano_db_sync_db_epoch_sync_number}}"
+      
+      # Track epoch completion rate (epochs per hour)
+      - record: cardano_db_sync_epochs_per_hour
+        expr: |
+          rate(cardano_db_sync_db_epoch_sync_number[1h]) * 3600
+      
+      # Average epoch duration over last hour
+      - record: cardano_db_sync_avg_epoch_duration_1h
+        expr: |
+          avg_over_time(cardano_db_sync_db_epoch_sync_duration_seconds[1h])
