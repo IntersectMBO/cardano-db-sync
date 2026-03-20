@@ -40,7 +40,7 @@ data NodeConfig = NodeConfig
   , ncShelleyGenesisHash :: !GenesisHashShelley
   , ncAlonzoGenesisFile :: !GenesisFile
   , ncAlonzoGenesisHash :: !GenesisHashAlonzo
-  , ncConwayGenesisFile :: !(Maybe GenesisFile)
+  , ncConwayGenesisFile :: !GenesisFile
   , ncConwayGenesisHash :: !(Maybe GenesisHashConway)
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
@@ -92,7 +92,7 @@ instance FromJSON NodeConfig where
           <*> (o .: "ShelleyGenesisHash")
           <*> (o .: "AlonzoGenesisFile")
           <*> (o .: "AlonzoGenesisHash")
-          <*> (o .:? "ConwayGenesisFile")
+          <*> (o .: "ConwayGenesisFile")
           <*> (o .:? "ConwayGenesisHash")
           <*> (o .: "RequiresNetworkMagic")
           <*> parseByronProtocolVersion o

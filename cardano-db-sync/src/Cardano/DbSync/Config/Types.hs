@@ -137,7 +137,7 @@ data SyncNodeConfig = SyncNodeConfig
   , dncShelleyGenesisHash :: !GenesisHashShelley
   , dncAlonzoGenesisFile :: !GenesisFile
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
-  , dncConwayGenesisFile :: !(Maybe GenesisFile)
+  , dncConwayGenesisFile :: !GenesisFile
   , dncConwayGenesisHash :: !(Maybe GenesisHashConway)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
   , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))

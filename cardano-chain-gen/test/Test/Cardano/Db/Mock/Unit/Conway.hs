@@ -30,7 +30,6 @@ unitTests iom knownMigrations =
         "config"
         [ testCase "conway genesis and hash" Config.conwayGenesis
         , testCase "missing conway genesis file" Config.missingConwayGenesis
-        , testCase "no conway genesis file" Config.noConwayGenesis
         , testCase "no conway genesis hash" Config.noConwayGenesisHash
         , testCase "mismatched conway genesis hash" Config.wrongConwayGenesisHash
         , testCase "default insert config" Config.defaultInsertConfig

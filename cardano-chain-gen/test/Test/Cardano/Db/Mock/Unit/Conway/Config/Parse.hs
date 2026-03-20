@@ -3,7 +3,6 @@
 module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
   conwayGenesis,
   missingConwayGenesis,
-  noConwayGenesis,
   noConwayGenesisHash,
   wrongConwayGenesisHash,
   insertConfig,
@@ -38,16 +37,6 @@ missingConwayGenesis = do
   where
     configDir = "config-conway-missing-genesis"
     mutableDir = mkMutableDir "conwayConfigMissingGenesis"
-    cmdLineArgs = initCommandLineArgs
-
-noConwayGenesis :: Assertion
-noConwayGenesis = do
-  cfg <- mkSyncNodeConfig configDir initCommandLineArgs
-  let cfg' = cfg {dncConwayGenesisFile = Nothing}
-  withConfig configDir mutableDir cmdLineArgs cfg' (\_ -> pure ())
-  where
-    configDir = "config-conway"
-    mutableDir = mkMutableDir "conwayConfigNoGenesis"
     cmdLineArgs = initCommandLineArgs
 
 noConwayGenesisHash :: Assertion
