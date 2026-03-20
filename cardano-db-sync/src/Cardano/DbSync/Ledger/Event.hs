@@ -24,7 +24,7 @@ import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
-import Cardano.Ledger.Address (RewardAccount)
+import Cardano.Ledger.Address (AccountAddress)
 import qualified Cardano.Ledger.Allegra.Rules as Allegra
 import Cardano.Ledger.Alonzo.Rules (AlonzoBbodyEvent (..), AlonzoUtxoEvent (..), AlonzoUtxowEvent (..))
 import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
@@ -33,6 +33,7 @@ import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Hashes (SafeHash)
+import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
 import Cardano.Ledger.Shelley.Rules (
   RupdEvent (RupdEvent),
@@ -81,8 +82,8 @@ data LedgerEvent
 data GovActionRefunded = GovActionRefunded
   { garGovActionId :: GovActionId
   , garDeposit :: Coin
-  , garReturnAddr :: RewardAccount
-  , garMTreasury :: Maybe (Map RewardAccount Coin)
+  , garReturnAddr :: AccountAddress
+  , garMTreasury :: Maybe (Map AccountAddress Coin)
   }
   deriving (Eq)
 
@@ -383,7 +384,6 @@ pattern LEDepositsAlonzo ::
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ Shelley.ShelleyLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
-  , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Alonzo.AlonzoUtxosEvent ledgerera
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
@@ -396,9 +396,7 @@ pattern LEDepositsAlonzo hsh coin <-
                 ( Shelley.UtxowEvent
                     ( WrappedShelleyEraEvent
                         ( UtxoEvent
-                            ( UtxosEvent
-                                (Alonzo.TotalDeposits hsh coin)
-                              )
+                            (TotalDeposits hsh coin)
                           )
                       )
                   )
@@ -412,7 +410,6 @@ pattern LEDepositsConway ::
   , Event (Ledger.EraRule "LEDGER" ledgerera) ~ ConwayLedgerEvent ledgerera
   , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
   , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
-  , Event (Ledger.EraRule "UTXOS" ledgerera) ~ Conway.ConwayUtxosEvent ledgerera
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
@@ -425,9 +422,7 @@ pattern LEDepositsConway hsh coin <-
                 ( Conway.UtxowEvent
                     ( WrappedShelleyEraEvent
                         ( UtxoEvent
-                            ( UtxosEvent
-                                (Conway.TotalDeposits hsh coin)
-                              )
+                            (TotalDeposits hsh coin)
                           )
                       )
                   )

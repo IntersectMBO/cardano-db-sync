@@ -211,6 +211,11 @@
             };
 
             modules = [
+              ({
+                # Disable haddock globally to avoid GHC 9.6.7 panic in cardano-diffusion
+                doHaddock = false;
+              })
+
               ({ lib, pkgs, ... }: {
                 package-keys = [ "ekg" ];
                 # Ignore version bounds

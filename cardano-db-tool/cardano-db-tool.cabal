@@ -68,12 +68,12 @@ library
                       , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-prelude
                       , containers
+                      , cardano-diffusion
                       , contra-tracer
                       , extra
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-network
-                      , ouroboros-network-api
+                      , ouroboros-consensus:cardano
+                      , ouroboros-network:api
                       , random
                       , random-shuffle
                       , text

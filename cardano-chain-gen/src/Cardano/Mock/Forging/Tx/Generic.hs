@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
@@ -53,6 +54,8 @@ import Cardano.Mock.Forging.Tx.Alonzo.ScriptsExamples
 import Cardano.Mock.Forging.Types
 import Cardano.Prelude hiding (length, map, (.))
 import Cardano.Protocol.Crypto (hashVerKeyVRF)
+import Data.Array.Byte (ByteArray (..))
+import qualified Data.ByteString.Short as SBS
 import Data.Coerce (coerce)
 import Data.List (nub)
 import Data.List.Extra ((!?))
@@ -125,27 +128,27 @@ resolveStakeCreds ::
   EraCertState era =>
   StakeIndex ->
   LedgerState (ShelleyBlock p era) mk ->
-  Either ForgingError StakeCredential
+  Either ForgingError (Credential Staking)
 resolveStakeCreds indx st = case indx of
   StakeIndex n -> toEither $ fst <$> (Map.toList rewardAccs !? n)
   StakeAddress addr -> Right addr
   StakeIndexNew n -> toEither $ unregisteredStakeCredentials !? n
   StakeIndexScript bl -> Right $ if bl then alwaysSucceedsScriptStake else alwaysFailsScriptStake
-  StakeIndexPoolLeader poolIndex -> Right $ raCredential $ ppRewardAccount $ findPoolParams poolIndex
+  StakeIndexPoolLeader poolIndex -> Right $ unAccountId . aaId $ sppAccountAddress $ findPoolParams poolIndex
   StakeIndexPoolMember n poolIndex -> Right $ resolvePoolMember n poolIndex
   where
-    rewardAccs :: Map StakeCredential (AccountState era)
+    rewardAccs :: Map (Credential Staking) (AccountState era)
     rewardAccs = dsAccounts dstate ^. accountsMapL
 
-    poolParams :: Map (KeyHash 'StakePool) PoolParams
+    poolParams :: Map (KeyHash StakePool) StakePoolParams
     poolParams =
       let certState =
             lsCertState $
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
-       in Map.mapWithKey stakePoolStateToPoolParams $ psStakePools (certState ^. certPStateL)
-    delegs :: Map StakeCredential (KeyHash 'StakePool)
+       in Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
+    delegs :: Map (Credential Staking) (KeyHash StakePool)
     delegs = Map.mapMaybe (^. stakePoolDelegationAccountStateL) rewardAccs
 
     dstate =
@@ -157,11 +160,11 @@ resolveStakeCreds indx st = case indx of
        in certState ^. certDStateL
 
     resolvePoolMember n poolIndex =
-      let poolId = ppId (findPoolParams poolIndex)
+      let poolId = sppId (findPoolParams poolIndex)
           poolMembers = Map.keys $ Map.filter (== poolId) delegs
        in poolMembers !! n
 
-    findPoolParams :: PoolIndex -> PoolParams
+    findPoolParams :: PoolIndex -> StakePoolParams
     findPoolParams (PoolIndex n) = Map.elems poolParams !! n
     findPoolParams (PoolIndexId pid) = poolParams Map.! pid
     findPoolParams pix@(PoolIndexNew _) = poolParams Map.! resolvePool pix st
@@ -174,10 +177,10 @@ resolvePool ::
   EraCertState era =>
   PoolIndex ->
   LedgerState (ShelleyBlock p era) mk ->
-  KeyHash 'StakePool
+  KeyHash StakePool
 resolvePool pix st = case pix of
   PoolIndexId key -> key
-  PoolIndex n -> ppId $ poolParams !! n
+  PoolIndex n -> sppId $ poolParams !! n
   PoolIndexNew n -> unregisteredPools !! n
   where
     poolParams =
@@ -186,7 +189,7 @@ resolvePool pix st = case pix of
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
-       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
+       in Map.elems $ Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
 
 allPoolStakeCert :: EraCertState era => LedgerState (ShelleyBlock p era) mk -> [ShelleyTxCert era]
 allPoolStakeCert st =
@@ -198,70 +201,70 @@ allPoolStakeCert st =
               esLState $
                 nesEs $
                   Consensus.shelleyLedgerState st
-       in Map.elems $ Map.mapWithKey stakePoolStateToPoolParams (certState ^. certPStateL . psStakePoolsL)
+       in Map.elems $ Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
     creds = concatMap getPoolStakeCreds poolParms
 
-getPoolStakeCreds :: PoolParams -> [StakeCredential]
+getPoolStakeCreds :: StakePoolParams -> [Credential Staking]
 getPoolStakeCreds pparams =
-  raCredential (ppRewardAccount pparams)
-    : (KeyHashObj <$> Set.toList (ppOwners pparams))
+  unAccountId (aaId (sppAccountAddress pparams))
+    : (KeyHashObj <$> Set.toList (sppOwners pparams))
 
-unregisteredStakeCredentials :: [StakeCredential]
+unregisteredStakeCredentials :: [Credential Staking]
 unregisteredStakeCredentials =
   [ KeyHashObj $ KeyHash "000131350ac206583290486460934394208654903261221230945870"
   , KeyHashObj $ KeyHash "11130293748658946834096854968435096854309685490386453861"
   , KeyHashObj $ KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredKeyHash :: [KeyHash 'Staking]
+unregisteredKeyHash :: [KeyHash Staking]
 unregisteredKeyHash =
   [ KeyHash "000131350ac206583290486460934394208654903261221230945870"
   , KeyHash "11130293748658946834096854968435096854309685490386453861"
   , KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredWitnessKey :: [KeyHash 'Witness]
+unregisteredWitnessKey :: [KeyHash Witness]
 unregisteredWitnessKey =
   [ KeyHash "000131350ac206583290486460934394208654903261221230945870"
   , KeyHash "11130293748658946834096854968435096854309685490386453861"
   , KeyHash "22236827154873624578632414768234573268457923654973246472"
   ]
 
-unregisteredAddresses :: [PaymentCredential]
+unregisteredAddresses :: [Credential Payment]
 unregisteredAddresses =
   [ KeyHashObj $ KeyHash "11121865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
   , KeyHashObj $ KeyHash "22221865734872361547862358673245672834567832456783245312"
   ]
 
-unregisteredPools :: [KeyHash 'StakePool]
+unregisteredPools :: [KeyHash StakePool]
 unregisteredPools =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
-unregisteredGenesisKeys :: [KeyHash 'Genesis]
+unregisteredGenesisKeys :: [KeyHash GenesisRole]
 unregisteredGenesisKeys =
   [ KeyHash "11138475621387465239786593240875634298756324987562352435"
   , KeyHash "22246254326479503298745680239746523897456238974563298348"
   , KeyHash "33323876542397465497834256329487563428975634827956348975"
   ]
 
-registeredByronGenesisKeys :: [KeyHash 'Genesis]
+registeredByronGenesisKeys :: [KeyHash GenesisRole]
 registeredByronGenesisKeys =
   [ KeyHash "1a3e49767796fd99b057ad54db3310fd640806fcb0927399bbca7b43"
   ]
 
-registeredShelleyGenesisKeys :: [KeyHash 'Genesis]
+registeredShelleyGenesisKeys :: [KeyHash GenesisRole]
 registeredShelleyGenesisKeys =
   [ KeyHash "30c3083efd794227fde2351a04500349d1b467556c30e35d6794a501"
   , KeyHash "471cc34983f6a2fd7b4018e3147532185d69a448d6570d46019e58e6"
   ]
 
 bootstrapCommitteeCreds ::
-  [ ( Credential 'ColdCommitteeRole
-    , Credential 'HotCommitteeRole
+  [ ( Credential ColdCommitteeRole
+    , Credential HotCommitteeRole
     )
   ]
 bootstrapCommitteeCreds =
@@ -283,21 +286,21 @@ bootstrapCommitteeCreds =
     )
   ]
 
-unregisteredCommitteeCreds :: [Credential 'ColdCommitteeRole]
+unregisteredCommitteeCreds :: [Credential ColdCommitteeRole]
 unregisteredCommitteeCreds =
   [ KeyHashObj $ KeyHash "e0a714319812c3f773ba04ec5d6b3ffcd5aad85006805b047b082541"
   , KeyHashObj $ KeyHash "f15d3cfda3ac52c86d2d98925419795588e74f4e270a3c17beabeaff"
   ]
 
-unregisteredDRepIds :: [Credential 'DRepRole]
+unregisteredDRepIds :: [Credential DRepRole]
 unregisteredDRepIds =
   [KeyHashObj $ KeyHash "0d94e174732ef9aae73f395ab44507bfa983d65023c11a951f0c32e4"]
 
-createStakeCredentials :: Int -> [StakeCredential]
+createStakeCredentials :: Int -> [Credential Staking]
 createStakeCredentials n =
   fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH)) [1 .. n]
 
-createPaymentCredentials :: Int -> [PaymentCredential]
+createPaymentCredentials :: Int -> [Credential Payment]
 createPaymentCredentials n =
   fmap (KeyHashObj . KeyHash . mkDummyHash (Proxy @ADDRHASH)) [1 .. n]
 
@@ -310,21 +313,21 @@ mkDummyHash :: forall h a. HashAlgorithm h => Proxy h -> Int -> Hash.Hash h a
 mkDummyHash _ = coerce . hashWithSerialiser @h toCBOR
 
 consPoolParams ::
-  KeyHash 'StakePool ->
-  StakeCredential ->
-  [KeyHash 'Staking] ->
-  PoolParams
+  KeyHash StakePool ->
+  Credential Staking ->
+  [KeyHash Staking] ->
+  StakePoolParams
 consPoolParams poolId rwCred owners =
-  PoolParams
-    { ppId = poolId
-    , ppVrf = hashVerKeyVRF @StandardCrypto . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
-    , ppPledge = Coin 1000
-    , ppCost = Coin 10000
-    , ppMargin = minBound
-    , ppRewardAccount = RewardAccount Testnet rwCred
-    , ppOwners = Set.fromList owners
-    , ppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
-    , ppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") "89237365492387654983275634298756"
+  StakePoolParams
+    { sppId = poolId
+    , sppVrf = hashVerKeyVRF @StandardCrypto . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , sppPledge = Coin 1000
+    , sppCost = Coin 10000
+    , sppMargin = minBound
+    , sppAccountAddress = AccountAddress Testnet (AccountId rwCred)
+    , sppOwners = Set.fromList owners
+    , sppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
+    , sppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") (let !(SBS.SBS ba) = SBS.toShort "89237365492387654983275634298756" in ByteArray ba)
     }
 
 resolveStakePoolVoters ::

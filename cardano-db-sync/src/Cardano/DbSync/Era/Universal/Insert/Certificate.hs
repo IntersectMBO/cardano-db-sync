@@ -38,6 +38,7 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember, insertPoolCert)
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
@@ -47,7 +48,6 @@ import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
 import qualified Cardano.Ledger.Shelley.AdaPots as Shelley
-import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import Cardano.Ledger.State
 import Cardano.Prelude
@@ -226,7 +226,7 @@ insertDrepRegistration ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'DRepRole ->
+  Ledger.Credential DRepRole ->
   Maybe Coin ->
   Maybe Anchor ->
   ExceptT SyncNodeError DB.DbM ()
@@ -247,7 +247,7 @@ insertDrepRegistration blkId txId idx cred mcoin mAnchor = do
 insertDrepDeRegistration ::
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'DRepRole ->
+  Ledger.Credential DRepRole ->
   Coin ->
   ExceptT SyncNodeError DB.DbM ()
 insertDrepDeRegistration txId idx cred coin = do
@@ -266,8 +266,8 @@ insertDrepDeRegistration txId idx cred coin = do
 insertCommitteeRegistration ::
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'ColdCommitteeRole ->
-  Ledger.Credential 'HotCommitteeRole ->
+  Ledger.Credential ColdCommitteeRole ->
+  Ledger.Credential HotCommitteeRole ->
   ExceptT SyncNodeError DB.DbM ()
 insertCommitteeRegistration txId idx khCold cred = do
   khHotId <- insertCommitteeHash cred
@@ -286,7 +286,7 @@ insertCommitteeDeRegistration ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  Ledger.Credential 'ColdCommitteeRole ->
+  Ledger.Credential ColdCommitteeRole ->
   Maybe Anchor ->
   ExceptT SyncNodeError DB.DbM ()
 insertCommitteeDeRegistration blockId txId idx khCold mAnchor = do
@@ -329,7 +329,7 @@ insertStakeRegistration ::
   Maybe Generic.Deposits ->
   DB.TxId ->
   Word16 ->
-  Shelley.RewardAccount ->
+  Ledger.AccountAddress ->
   ExceptT SyncNodeError DB.DbM ()
 insertStakeRegistration syncEnv epochNo mDeposits txId idx rewardAccount = do
   saId <- queryOrInsertRewardAccount syncEnv UpdateCache rewardAccount
@@ -390,7 +390,7 @@ insertDelegation ::
   Word16 ->
   Maybe DB.RedeemerId ->
   StakeCred ->
-  Ledger.KeyHash 'Ledger.StakePool ->
+  Ledger.KeyHash Ledger.StakePool ->
   ExceptT SyncNodeError DB.DbM ()
 insertDelegation syncEnv network (EpochNo epoch) slotNo txId idx mRedeemerId cred poolkh = do
   addrId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong network cred

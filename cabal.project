@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2025-09-29T13:55:56Z
-  , cardano-haskell-packages 2026-02-09T17:36:58Z
+  , hackage.haskell.org 2026-02-17T10:15:41Z
+  , cardano-haskell-packages 2026-03-17T16:28:00Z
 
 packages:
   cardano-db
@@ -74,11 +74,16 @@ constraints:
   -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
+  , hasql ==1.9.3
 
 if impl (ghc >= 9.12)
   allow-newer:
     -- https://github.com/kapralVV/Unique/issues/11
     , Unique:hashable
+
+    -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
+    , pipes-safe:base
+
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
 -- when using the "cabal" wrapper script provided by nix-shell.
@@ -88,10 +93,36 @@ if impl (ghc >= 9.12)
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: 0d697f14ee10a775f08c60e3839becc9131dca75
-  --sha256: sha256-zyrBw3yn69y3n0c6U0MDvezYC3GHbjJ3yJmhM4vMtUk=
+  tag: 44e38b86d0a929d07c466a5f35b905e3470dca34
+  --sha256: sha256-J5XImZphrKFmhh3Q40I+idNsUu3bx0phcBg9YVDn82U=
   subdir:
     cardano-node
     trace-dispatcher
     trace-forward
     trace-resources
+
+source-repository-package
+   type: git
+   location: https://github.com/IntersectMBO/cardano-api
+   tag: 3846b0344b127a137e894ffe20dc54ea6716251c
+   --sha256: sha256-C1sfGh9YXnwe6JUpPpzLv1lZjzAa3X9abeSZJGLBFFg=
+   subdir:
+     cardano-api
+
+source-repository-package
+   type: git
+   location: https://github.com/IntersectMBO/cardano-cli
+   tag: b4886c72f4b99d89bd9de7d6830016235f6c3bcd
+   --sha256: sha256-ZoJyq+b9Bhc8PunlQvPS85nWTP96bFj0oDou8j95kIU=
+   subdir:
+     cardano-cli
+
+-- source-repository-package
+--    type: git
+--    location: https://github.com/IntersectMBO/ouroboros-network
+--    tag: b6b388aa2497bd689cf7f2cc7a826df1e4b22f2a
+--    --sha256: 1hpl3akcjvvcxz3qhjfgfw97mkibqw1j0l2ccs1yd47f29dqd6l9
+--    subdir:
+--      cardano-diffusion
+--      network-mux
+--      ouroboros-network
