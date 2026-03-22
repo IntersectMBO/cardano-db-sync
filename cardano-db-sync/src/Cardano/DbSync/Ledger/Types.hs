@@ -33,7 +33,6 @@ import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
   EpochNo (..),
   SlotNo (..),
-  WithOrigin (..),
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
@@ -49,14 +48,14 @@ import Lens.Micro (Traversal')
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerState)
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
-import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
+import Ouroboros.Consensus.Ledger.Abstract ()
 import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerTables, ValuesMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
 import Ouroboros.Consensus.Ledger.Tables (valuesMKDecoder, valuesMKEncoder)
 import Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq (LedgerTablesHandle (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
-import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
+import Data.List.NonEmpty ()
 import Prelude (String, fail, id)
 
 --------------------------------------------------------------------------
@@ -229,13 +228,10 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
             newCommitteeMembers
             newQuorum
 
+-- | In-memory ledger DB. Checkpoints are stored newest-first.
 newtype LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
+  { ledgerDbCheckpoints :: NonEmpty CardanoLedgerState
   }
-
-instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where
-  asAnchor = id
-  getAnchorMeasure _ = getTipSlot . clsState
 
 data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
 

@@ -125,8 +125,8 @@ import Ouroboros.Consensus.Storage.LedgerDB.V2.LSM (Args (LSMArgs), newLSMLedger
 import Data.String (fromString)
 import qualified Database.LSMTree as LSMTree
 import Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
-import Ouroboros.Network.AnchoredSeq (AnchoredSeq (..))
-import qualified Ouroboros.Network.AnchoredSeq as AS
+import Data.List.NonEmpty ()
+import qualified Data.List.NonEmpty as NE
 import Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeDirectoryRecursive, removeFile)
@@ -137,7 +137,7 @@ import System.FS.IO (ioHasFS)
 import System.Mem (performMajorGC)
 import System.Random (genWord64, newStdGen)
 import Control.Tracer (nullTracer)
-import Prelude (String, id)
+import Prelude (String)
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -186,24 +186,20 @@ pushLedgerDB db st =
   pruneLedgerDb
     100
     db
-      { ledgerDbCheckpoints = ledgerDbCheckpoints db :> st
+      { ledgerDbCheckpoints = NE.cons st (ledgerDbCheckpoints db)
       }
 
--- | Prune snapshots until at we have at most @k@ snapshots in the LedgerDB,
--- excluding the snapshots stored at the anchor. Returns the pruned DB and
--- the dropped states.
+-- | Prune snapshots until we have at most @k@ snapshots in the LedgerDB.
+-- Returns the pruned DB and the dropped states whose handles should be closed.
 pruneLedgerDb :: Word64 -> LedgerDB -> (LedgerDB, [CardanoLedgerState])
 pruneLedgerDb k db =
-  let old = ledgerDbCheckpoints db
-      new = AS.anchorNewest k old
-      nDrop = AS.length old - AS.length new
-      dropped = take nDrop (AS.toOldestFirst old)
-  in (db {ledgerDbCheckpoints = new}, dropped)
+  let (kept, dropped) = splitAt (fromIntegral k) (NE.toList $ ledgerDbCheckpoints db)
+  in (db {ledgerDbCheckpoints = NE.fromList kept}, dropped)
 {-# INLINE pruneLedgerDb #-}
 
 -- | The ledger state at the tip of the chain
 ledgerDbCurrent :: LedgerDB -> CardanoLedgerState
-ledgerDbCurrent = either id id . AS.head . ledgerDbCheckpoints
+ledgerDbCurrent = NE.head . ledgerDbCheckpoints
 
 mkHasLedgerEnv ::
   Trace IO Text ->
@@ -634,8 +630,8 @@ loadLedgerAtPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [LedgerStateFile
 loadLedgerAtPoint hasLedgerEnv point = do
   mLedgerDB <- atomically $ readTVar $ leStateVar hasLedgerEnv
   -- First try to find the ledger in memory
-  let mAnchoredSeq = rollbackLedger mLedgerDB
-  case mAnchoredSeq of
+  let mStates = rollbackLedger mLedgerDB
+  case mStates of
     Nothing -> do
       -- Ledger states are growing to become very big in memory.
       -- Before parsing the new ledger state we need to make sure the old states
@@ -643,26 +639,26 @@ loadLedgerAtPoint hasLedgerEnv point = do
       -- TODO: re-enable once we duplicate handles before queuing snapshots
       -- case mLedgerDB of
       --   Strict.Nothing -> pure ()
-      --   Strict.Just db -> mapM_ (close . clsTables) (AS.toOldestFirst $ ledgerDbCheckpoints db)
+      --   Strict.Just db -> mapM_ (close . clsTables) (reverse . NE.toList $ ledgerDbCheckpoints db)
       writeLedgerState hasLedgerEnv Strict.Nothing
       performMajorGC
       mst <- findStateFromPoint hasLedgerEnv point
       case mst of
         Right st -> do
-          writeLedgerState hasLedgerEnv (Strict.Just . LedgerDB $ AS.Empty st)
+          writeLedgerState hasLedgerEnv (Strict.Just . LedgerDB $ st :| [])
           logInfo (leTrace hasLedgerEnv) $ mconcat ["Found snapshot file for ", renderPoint point]
           pure $ Right st
         Left lsfs -> pure $ Left lsfs
-    Just anchoredSeq' -> do
+    Just states' -> do
       logInfo (leTrace hasLedgerEnv) $ mconcat ["Found in memory ledger snapshot at ", renderPoint point]
       -- TODO: re-enable once we duplicate handles before queuing snapshots
-      -- let nKept = AS.length anchoredSeq'
+      -- let nKept = NE.length states'
       -- case mLedgerDB of
       --   Strict.Just db ->
-      --     let dropped = drop nKept (AS.toOldestFirst $ ledgerDbCheckpoints db)
+      --     let dropped = drop nKept (reverse . NE.toList $ ledgerDbCheckpoints db)
       --     in mapM_ (close . clsTables) dropped
       --   Strict.Nothing -> pure ()
-      let ledgerDB' = LedgerDB anchoredSeq'
+      let ledgerDB' = LedgerDB states'
       let st = ledgerDbCurrent ledgerDB'
       deleteNewerFiles hasLedgerEnv point
       writeLedgerState hasLedgerEnv $ Strict.Just ledgerDB'
@@ -670,11 +666,15 @@ loadLedgerAtPoint hasLedgerEnv point = do
   where
     rollbackLedger ::
       Strict.Maybe LedgerDB ->
-      Maybe (AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState)
+      Maybe (NonEmpty CardanoLedgerState)
     rollbackLedger mLedgerDB = case mLedgerDB of
       Strict.Nothing -> Nothing
       Strict.Just ledgerDB ->
-        AS.rollback (pointSlot point) (const True) (ledgerDbCheckpoints ledgerDB)
+        -- Drop states newer than the rollback point (list is newest-first)
+        NE.nonEmpty $
+          dropWhile
+            (\st -> Consensus.getTipSlot (clsState st) > pointSlot point)
+            (NE.toList $ ledgerDbCheckpoints ledgerDB)
 
 deleteNewerFiles :: HasLedgerEnv -> CardanoPoint -> IO ()
 deleteNewerFiles env point = do
@@ -898,7 +898,7 @@ listMemorySnapshots env = do
           (castPoint . Consensus.getTip . clsState <$> getEdgePoints ledgerDB)
   where
     getEdgePoints ldb =
-      case AS.toNewestFirst $ ledgerDbCheckpoints ldb of
+      case NE.toList $ ledgerDbCheckpoints ldb of
         [] -> []
         [a] -> [a]
         (h : ls) -> catMaybes [Just h, lastMay ls]
