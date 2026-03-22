@@ -196,36 +196,6 @@ runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
           HsqlS.statement () commitTransactionStmt
           pure value
 
-runDbPoolLogged ::
-  MonadUnliftIO m =>
-  Trace IO Text ->
-  DbEnv ->
-  DbM a ->
-  m a
-runDbPoolLogged tracer dbEnv action = do
-  case dbPoolConnection dbEnv of
-    Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
-    Just pool -> do
-      runIohkLogging tracer $ do
-        liftIO $ withResource pool $ \conn -> do
-          result <- HsqlS.run (transactionSession conn) conn
-          case result of
-            Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
-            Right dbResult -> pure dbResult
-  where
-    transactionSession conn = do
-      HsqlS.statement () (beginTransactionStmt RepeatableRead)
-      result <- liftIO $ try @SomeException $ do
-        let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
-        runReaderT (runDbM action) tempDbEnv
-      case result of
-        Left err -> do
-          HsqlS.statement () rollbackTransactionStmt
-          liftIO $ throwIO err
-        Right value -> do
-          HsqlS.statement () commitTransactionStmt
-          pure value
-
 -- | External service database runner with error handling
 --
 -- Designed for external services (like SMASH server) that manage their own connection pools.
