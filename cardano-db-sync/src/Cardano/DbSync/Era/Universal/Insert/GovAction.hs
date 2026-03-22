@@ -129,7 +129,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
       let withdrawalChunks = DB.chunkForBulkQuery (Proxy @DB.TreasuryWithdrawal) Nothing withdrawals
       -- Process all chunks to create treasury withdrawals with resolved IDs
       allTreasuryWithdrawals <- mapM processChunk withdrawalChunks
-      -- Insert all chunks in a single pipeline operation
+      -- Insert all chunks
       lift $ DB.insertBulkTreasuryWithdrawal allTreasuryWithdrawals
       where
         processChunk chunk = do
@@ -381,8 +381,8 @@ insertDrepDistr e pSnapshot = do
       drepChunks = DB.chunkForBulkQuery (Proxy @DB.DrepDistr) Nothing drepEntries
   -- Process all chunks to create DRep distribution entries
   allDrepDistrs <- mapM processChunk drepChunks
-  -- Insert all chunks in a single pipeline operation
-  lift $ DB.insertBulkDrepDistrPiped allDrepDistrs
+  -- Insert all chunks
+  lift $ DB.insertBulkDrepDistrChunked allDrepDistrs
   where
     processChunk = mapM mkEntry
 

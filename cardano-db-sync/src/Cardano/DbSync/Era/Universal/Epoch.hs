@@ -43,7 +43,7 @@ import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
-import Cardano.DbSync.Cache (queryOrInsertStakeAddress, queryPoolKeyOrInsert)
+import Cardano.DbSync.Cache (queryOrInsertStakeAddressBatch, queryPoolKeyOrInsert, queryPoolKeyOrInsertBatch)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertPots)
@@ -217,27 +217,23 @@ insertEpochStake ::
   ExceptT SyncNodeError DB.DbM ()
 insertEpochStake syncEnv nw epochNo stakeChunk = do
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  dbStakes <- mapM mkStake stakeChunk
-  let chunckDbStakes = DB.chunkForBulkQuery (Proxy @DB.EpochStake) Nothing dbStakes
-
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
-  lift $ DB.insertBulkEpochStakePiped dbConstraintEpochStake chunckDbStakes
+  let chunks = DB.chunkForBulkQuery (Proxy @DB.EpochStake) Nothing stakeChunk
+  forM_ chunks $ \chunk -> do
+    -- Pipeline stake address and pool hash lookups for this chunk
+    saIds <- queryOrInsertStakeAddressBatch syncEnv UpdateCacheStrong nw (map fst chunk)
+    poolIds <- queryPoolKeyOrInsertBatch syncEnv UpdateCache (map (snd . snd) chunk)
+    let coins = map (fst . snd) chunk
+        dbStakes = zipWith mkStake (zip saIds poolIds) coins
+    lift $ DB.insertBulkEpochStake dbConstraintEpochStake dbStakes
   where
-    mkStake ::
-      (StakeCred, (Shelley.Coin, PoolKeyHash)) ->
-      ExceptT SyncNodeError DB.DbM DB.EpochStake
-    mkStake (saddr, (coin, pool)) = do
-      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
-      poolId <- queryPoolKeyOrInsert syncEnv "insertEpochStake" UpdateCache (ioShelley iopts) pool
-      pure $
-        DB.EpochStake
-          { DB.epochStakeAddrId = saId
-          , DB.epochStakePoolId = poolId
-          , DB.epochStakeAmount = Generic.coinToDbLovelace coin
-          , DB.epochStakeEpochNo = unEpochNo epochNo -- The epoch where this delegation becomes valid.
-          }
-
-    iopts = getInsertOptions syncEnv
+    mkStake :: (DB.StakeAddressId, DB.PoolHashId) -> Shelley.Coin -> DB.EpochStake
+    mkStake (saId, poolId) coin =
+      DB.EpochStake
+        { DB.epochStakeAddrId = saId
+        , DB.epochStakePoolId = poolId
+        , DB.epochStakeAmount = Generic.coinToDbLovelace coin
+        , DB.epochStakeEpochNo = unEpochNo epochNo
+        }
 
 insertRewards ::
   SyncEnv ->
@@ -247,42 +243,26 @@ insertRewards ::
   [(StakeCred, Set Generic.Reward)] ->
   ExceptT SyncNodeError DB.DbM ()
 insertRewards syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
-  dbRewards <- concatMapM mkRewards rewardsChunk
   DB.ManualDbConstraints {..} <- liftIO $ readTVarIO $ envDbConstraints syncEnv
-  let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing dbRewards
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
-  lift $ DB.insertBulkRewardsPiped dbConstraintRewards chunckDbRewards
+  let chunks = DB.chunkForBulkQuery (Proxy @DB.Reward) Nothing rewardsChunk
+  forM_ chunks $ \chunk -> do
+    saIds <- queryOrInsertStakeAddressBatch syncEnv UpdateCacheStrong nw (map fst chunk)
+    -- Flatten: expand each (saId, Set Reward) into individual (saId, Reward) pairs
+    let flat = [(saId, rwd) | (saId, (_, rset)) <- zip saIds chunk, rwd <- Set.toList rset]
+    poolIds <- queryPoolKeyOrInsertBatch syncEnv UpdateCache (map (Generic.rewardPool . snd) flat)
+    let dbRewards = zipWith mkReward (zip (map fst flat) poolIds) (map snd flat)
+    lift $ DB.insertBulkRewards dbConstraintRewards dbRewards
   where
-    mkRewards ::
-      (StakeCred, Set Generic.Reward) ->
-      ExceptT SyncNodeError DB.DbM [DB.Reward]
-    mkRewards (saddr, rset) = do
-      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
-      mapM (prepareReward saId) (Set.toList rset)
-
-    prepareReward ::
-      DB.StakeAddressId ->
-      Generic.Reward ->
-      ExceptT SyncNodeError DB.DbM DB.Reward
-    prepareReward saId rwd = do
-      poolId <- queryPool (Generic.rewardPool rwd)
-      pure $
-        DB.Reward
-          { DB.rewardAddrId = saId
-          , DB.rewardType = Generic.rewardSource rwd
-          , DB.rewardAmount = DB.DbLovelace (Generic.rewardAmount rwd)
-          , DB.rewardEarnedEpoch = unEpochNo earnedEpoch
-          , DB.rewardSpendableEpoch = unEpochNo spendableEpoch
-          , DB.rewardPoolId = poolId
-          }
-
-    queryPool ::
-      PoolKeyHash ->
-      ExceptT SyncNodeError DB.DbM DB.PoolHashId
-    queryPool =
-      queryPoolKeyOrInsert syncEnv "insertRewards" UpdateCache (ioShelley iopts)
-
-    iopts = getInsertOptions syncEnv
+    mkReward :: (DB.StakeAddressId, DB.PoolHashId) -> Generic.Reward -> DB.Reward
+    mkReward (saId, poolId) rwd =
+      DB.Reward
+        { DB.rewardAddrId = saId
+        , DB.rewardType = Generic.rewardSource rwd
+        , DB.rewardAmount = DB.DbLovelace (Generic.rewardAmount rwd)
+        , DB.rewardEarnedEpoch = unEpochNo earnedEpoch
+        , DB.rewardSpendableEpoch = unEpochNo spendableEpoch
+        , DB.rewardPoolId = poolId
+        }
 
 insertRewardRests ::
   SyncEnv ->
@@ -292,23 +272,14 @@ insertRewardRests ::
   [(StakeCred, Set Generic.RewardRest)] ->
   ExceptT SyncNodeError DB.DbM ()
 insertRewardRests syncEnv nw earnedEpoch spendableEpoch rewardsChunk = do
-  dbRewards <- concatMapM mkRewards rewardsChunk
-  let chunckDbRewards = DB.chunkForBulkQuery (Proxy @DB.RewardRest) Nothing dbRewards
-  -- minimising the bulk inserts into hundred thousand chunks to improve performance with pipeline
-  lift $ DB.insertBulkRewardRestsPiped chunckDbRewards
+  let chunks = DB.chunkForBulkQuery (Proxy @DB.RewardRest) Nothing rewardsChunk
+  forM_ chunks $ \chunk -> do
+    saIds <- queryOrInsertStakeAddressBatch syncEnv UpdateCacheStrong nw (map fst chunk)
+    let dbRewards = [mkReward saId rwd | (saId, (_, rset)) <- zip saIds chunk, rwd <- Set.toList rset]
+    lift $ DB.insertBulkRewardRests dbRewards
   where
-    mkRewards ::
-      (StakeCred, Set Generic.RewardRest) ->
-      ExceptT SyncNodeError DB.DbM [DB.RewardRest]
-    mkRewards (saddr, rset) = do
-      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw saddr
-      pure $ map (prepareReward saId) (Set.toList rset)
-
-    prepareReward ::
-      DB.StakeAddressId ->
-      Generic.RewardRest ->
-      DB.RewardRest
-    prepareReward saId rwd =
+    mkReward :: DB.StakeAddressId -> Generic.RewardRest -> DB.RewardRest
+    mkReward saId rwd =
       DB.RewardRest
         { DB.rewardRestAddrId = saId
         , DB.rewardRestType = Generic.irSource rwd
@@ -325,22 +296,21 @@ insertProposalRefunds ::
   [GovActionRefunded] ->
   ExceptT SyncNodeError DB.DbM ()
 insertProposalRefunds syncEnv nw earnedEpoch spendableEpoch refunds = do
-  dbRewards <- mapM mkReward refunds
-  lift $ DB.insertBulkRewardRests dbRewards
+  let chunks = DB.chunkForBulkQuery (Proxy @DB.RewardRest) Nothing refunds
+  forM_ chunks $ \chunk -> do
+    saIds <- queryOrInsertStakeAddressBatch syncEnv UpdateCacheStrong nw (map (raCredential . garReturnAddr) chunk)
+    let dbRewards = zipWith mkReward saIds chunk
+    lift $ DB.insertBulkRewardRests dbRewards
   where
-    mkReward ::
-      GovActionRefunded ->
-      ExceptT SyncNodeError DB.DbM DB.RewardRest
-    mkReward refund = do
-      saId <- queryOrInsertStakeAddress syncEnv UpdateCacheStrong nw (raCredential $ garReturnAddr refund)
-      pure $
-        DB.RewardRest
-          { DB.rewardRestAddrId = saId
-          , DB.rewardRestType = DB.RwdProposalRefund
-          , DB.rewardRestAmount = Generic.coinToDbLovelace (garDeposit refund)
-          , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
-          , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
-          }
+    mkReward :: DB.StakeAddressId -> GovActionRefunded -> DB.RewardRest
+    mkReward saId refund =
+      DB.RewardRest
+        { DB.rewardRestAddrId = saId
+        , DB.rewardRestType = DB.RwdProposalRefund
+        , DB.rewardRestAmount = Generic.coinToDbLovelace (garDeposit refund)
+        , DB.rewardRestEarnedEpoch = unEpochNo earnedEpoch
+        , DB.rewardRestSpendableEpoch = unEpochNo spendableEpoch
+        }
 
 insertPoolDepositRefunds ::
   SyncEnv ->
