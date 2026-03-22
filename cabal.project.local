@@ -1,0 +1,12 @@
+packages:
+  ../ouroboros-consensus
+
+
+package cardano-db-sync
+  ghc-options: -finfo-table-map -fdistinct-constructor-tables
+
+package ouroboros-consensus-lsm
+  ghc-options: -finfo-table-map -fdistinct-constructor-tables
+
+package lsm-tree
+  ghc-options: -finfo-table-map -fdistinct-constructor-tables

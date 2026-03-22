@@ -184,7 +184,7 @@ mkHandleFromValues tables = do
 pushLedgerDB :: LedgerDB -> CardanoLedgerState -> (LedgerDB, [CardanoLedgerState])
 pushLedgerDB db st =
   pruneLedgerDb
-    100
+    1
     db
       { ledgerDbCheckpoints = NE.cons st (ledgerDbCheckpoints db)
       }
@@ -444,18 +444,19 @@ storeSnapshotAndCleanupMaybe ::
   Bool ->
   SyncState ->
   IO Bool
-storeSnapshotAndCleanupMaybe env oldState appResult isCons syncState =
-  case maybeFromStrict (apNewEpoch appResult) of
-    Just newEpoch
-      | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
-      , newEpochNo > 0
-      , -- Snapshot every epoch when near tip, every 10 epochs when lagging, or always for epoch >= threshold
-        (isCons && syncState == SyncFollowing) || (newEpochNo `mod` 10 == 0) || newEpochNo >= leSnapshotNearTipEpoch env ->
-          do
-            -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
-            liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
-            pure True
-    _ -> pure False
+storeSnapshotAndCleanupMaybe _ _ _ _ _ = pure False
+-- storeSnapshotAndCleanupMaybe env oldState appResult isCons syncState =
+--   case maybeFromStrict (apNewEpoch appResult) of
+--     Just newEpoch
+--       | newEpochNo <- unEpochNo (Generic.neEpoch newEpoch)
+--       , newEpochNo > 0
+--       , -- Snapshot every epoch when near tip, every 10 epochs when lagging, or always for epoch >= threshold
+--         (isCons && syncState == SyncFollowing) || (newEpochNo `mod` 10 == 0) || newEpochNo >= leSnapshotNearTipEpoch env ->
+--           do
+--             -- TODO: Instead of newEpochNo - 1, is there any way to get the epochNo from 'lssOldState'?
+--             liftIO $ saveCleanupState env oldState (Just $ EpochNo $ newEpochNo - 1)
+--             pure True
+--     _ -> pure False
 
 saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env lState mEpochNo = do
@@ -984,15 +985,15 @@ tickThenReapplyCheckHash ::
 tickThenReapplyCheckHash registry cfg block state'@CardanoLedgerState {..} =
   if blockPrevHash block == Consensus.ledgerTipHash (ledgerState clsState)
     then do
-      -- Read the keys this block needs from the handle
+      -- Create a new handle first, then read from it
+      (_rk, newHandle) <- duplicate clsTables registry
       let keys = Consensus.getBlockKeySets block
-      restrictedTables <- read clsTables clsState keys
+      restrictedTables <- read newHandle clsState keys
       -- Attach the tables to the ledger state and apply the block
       let ledgerState' = Consensus.withLedgerTables clsState restrictedTables
           newLedgerState =
             Consensus.tickThenReapplyLedgerResult Consensus.ComputeLedgerEvents cfg block ledgerState'
-      -- Create a new handle via duplicate + pushDiffs
-      (_rk, newHandle) <- duplicate clsTables registry
+      -- Push diffs to the new handle
       pushDiffs newHandle clsState (Consensus.lrResult newLedgerState)
       pure . Right $
         fmap
