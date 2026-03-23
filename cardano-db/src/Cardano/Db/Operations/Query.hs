@@ -584,10 +584,14 @@ queryMinRefId txIdField txId = do
   res <- select $ do
     rec <- from $ table @record
     where_ (rec ^. txIdField >=. val txId)
-    orderBy [asc (rec ^. persistIdField)]
-    limit 1
+    limit 10000
     pure $ rec ^. persistIdField
-  pure $ unValue <$> listToMaybe res
+  if length res >= 10000
+    then queryMinRefIdFallback txIdField txId
+    else pure $ minimumMay $ map unValue res
+  where
+    minimumMay [] = Nothing
+    minimumMay xs = Just (minimum xs)
 
 queryMinRefIdNullable ::
   forall m field record.
@@ -596,6 +600,41 @@ queryMinRefIdNullable ::
   field ->
   ReaderT SqlBackend m (Maybe (Key record))
 queryMinRefIdNullable txIdField txId = do
+  res <- select $ do
+    rec <- from $ table @record
+    where_ (isJust (rec ^. txIdField))
+    where_ (rec ^. txIdField >=. just (val txId))
+    limit 10000
+    pure $ rec ^. persistIdField
+  if length res >= 10000
+    then queryMinRefIdNullableFallback txIdField txId
+    else pure $ minimumMay $ map unValue res
+  where
+    minimumMay [] = Nothing
+    minimumMay xs = Just (minimum xs)
+
+queryMinRefIdFallback ::
+  forall m field record.
+  (MonadIO m, PersistEntity record, PersistField field) =>
+  EntityField record field ->
+  field ->
+  ReaderT SqlBackend m (Maybe (Key record))
+queryMinRefIdFallback txIdField txId = do
+  res <- select $ do
+    rec <- from $ table @record
+    where_ (rec ^. txIdField >=. val txId)
+    orderBy [asc (rec ^. persistIdField)]
+    limit 1
+    pure $ rec ^. persistIdField
+  pure $ unValue <$> listToMaybe res
+
+queryMinRefIdNullableFallback ::
+  forall m field record.
+  (MonadIO m, PersistEntity record, PersistField field) =>
+  EntityField record (Maybe field) ->
+  field ->
+  ReaderT SqlBackend m (Maybe (Key record))
+queryMinRefIdNullableFallback txIdField txId = do
   res <- select $ do
     rec <- from $ table @record
     where_ (isJust (rec ^. txIdField))
