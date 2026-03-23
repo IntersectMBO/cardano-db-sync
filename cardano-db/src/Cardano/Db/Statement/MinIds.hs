@@ -37,7 +37,9 @@ import Cardano.Db.Types (DbM)
 -- RAW INT64 QUERIES (for rollback operations)
 ---------------------------------------------------------------------------
 
--- | Find the minimum ID in a table - returns raw Int64
+-- | Find the minimum ID in a table. Fetches all matching IDs (up to 10000)
+-- and finds the minimum in Haskell to avoid bad query plans with ORDER BY/MIN.
+-- Falls back to the original ORDER BY query if there are too many results.
 queryMinRefIdStmt ::
   forall a b.
   DbInfo a =>
@@ -47,8 +49,29 @@ queryMinRefIdStmt ::
   HsqlE.Params b ->
   -- | Raw ID decoder (Int64)
   HsqlD.Row Int64 ->
+  HsqlStmt.Statement b [Int64]
+queryMinRefIdStmt fieldName encoder _idDecoder =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    validCol = validateColumn @a fieldName
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id"
+          , " FROM " <> tableName (Proxy @a)
+          , " WHERE " <> validCol <> " >= $1"
+          , " LIMIT 10000"
+          ]
+    decoder = HsqlD.rowList (HsqlD.column (HsqlD.nonNullable HsqlD.int8))
+
+queryMinRefIdFallbackStmt ::
+  forall a b.
+  DbInfo a =>
+  Text.Text ->
+  HsqlE.Params b ->
+  HsqlD.Row Int64 ->
   HsqlStmt.Statement b (Maybe Int64)
-queryMinRefIdStmt fieldName encoder idDecoder =
+queryMinRefIdFallbackStmt fieldName encoder idDecoder =
   HsqlStmt.Statement sql encoder decoder True
   where
     validCol = validateColumn @a fieldName
@@ -73,8 +96,11 @@ queryMinRefId ::
   -- | Parameter encoder
   HsqlE.Params b ->
   DbM (Maybe Int64)
-queryMinRefId fieldName value encoder =
-  runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
+queryMinRefId fieldName value encoder = do
+  ids <- runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdStmt @a fieldName encoder rawInt64Decoder)
+  if length ids >= 10000
+    then runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdFallbackStmt @a fieldName encoder rawInt64Decoder)
+    else pure $ if null ids then Nothing else Just (minimum ids)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
@@ -91,12 +117,33 @@ queryMinRefIdNullableStmt ::
   HsqlE.Params b ->
   -- | Raw ID decoder (Int64)
   HsqlD.Row Int64 ->
-  HsqlStmt.Statement b (Maybe Int64)
-queryMinRefIdNullableStmt fieldName encoder idDecoder =
+  HsqlStmt.Statement b [Int64]
+queryMinRefIdNullableStmt fieldName encoder _idDecoder =
   HsqlStmt.Statement sql encoder decoder True
   where
     validCol = validateColumn @a fieldName
-    decoder = HsqlD.rowMaybe idDecoder
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT id"
+          , " FROM " <> tableName (Proxy @a)
+          , " WHERE " <> validCol <> " IS NOT NULL"
+          , " AND " <> validCol <> " >= $1"
+          , " LIMIT 10000"
+          ]
+    decoder = HsqlD.rowList (HsqlD.column (HsqlD.nonNullable HsqlD.int8))
+
+queryMinRefIdNullableFallbackStmt ::
+  forall a b.
+  DbInfo a =>
+  Text.Text ->
+  HsqlE.Params b ->
+  HsqlD.Row Int64 ->
+  HsqlStmt.Statement b (Maybe Int64)
+queryMinRefIdNullableFallbackStmt fieldName encoder idDecoder =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    validCol = validateColumn @a fieldName
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
@@ -107,6 +154,7 @@ queryMinRefIdNullableStmt fieldName encoder idDecoder =
           , " ORDER BY id ASC"
           , " LIMIT 1"
           ]
+    decoder = HsqlD.rowMaybe idDecoder
 
 queryMinRefIdNullable ::
   forall a b.
@@ -118,8 +166,11 @@ queryMinRefIdNullable ::
   -- | Parameter encoder
   HsqlE.Params b ->
   DbM (Maybe Int64)
-queryMinRefIdNullable fieldName value encoder =
-  runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
+queryMinRefIdNullable fieldName value encoder = do
+  ids <- runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdNullableStmt @a fieldName encoder rawInt64Decoder)
+  if length ids >= 10000
+    then runSession mkDbCallStack $ HsqlSes.statement value (queryMinRefIdNullableFallbackStmt @a fieldName encoder rawInt64Decoder)
+    else pure $ if null ids then Nothing else Just (minimum ids)
   where
     rawInt64Decoder = HsqlD.column (HsqlD.nonNullable HsqlD.int8)
 
