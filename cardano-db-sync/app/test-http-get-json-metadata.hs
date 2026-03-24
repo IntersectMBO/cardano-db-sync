@@ -7,6 +7,7 @@
 #endif
 
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Config.Types (OffChainUserAgent (..))
 import Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
   parseOffChainUrl,
@@ -40,8 +41,9 @@ main = do
     testOne manager !accum testPoolOffChain = do
       let poolUrl = toUrl testPoolOffChain
           mHash = Just $ toHash testPoolOffChain
+          defaultUserAgent = OffChainUserAgent Nothing
       eres <- runExceptT $ do
-        request <- parseOffChainUrl (OffChainPoolUrl poolUrl)
+        request <- parseOffChainUrl (OffChainPoolUrl poolUrl) defaultUserAgent
         httpGetOffChainPoolData manager request poolUrl mHash
       case eres of
         Left err -> do

@@ -3,6 +3,7 @@
 
 import Cardano.Db (PoolMetaHash (..), PoolUrl (..), VoteMetaHash (..), VoteUrl (..))
 import qualified Cardano.Db as DB
+import Cardano.DbSync.Config.Types (OffChainUserAgent (..))
 import Cardano.DbSync.Error (bsBase16Encode, runOrThrowIO)
 import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.Types
@@ -107,9 +108,11 @@ runHttpGetPool poolUrl mHash =
   where
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainPoolData
     httpGet = do
-      request <- parseOffChainUrl $ OffChainPoolUrl poolUrl
+      request <- parseOffChainUrl (OffChainPoolUrl poolUrl) defaultUserAgent
       manager <- liftIO $ Http.newManager tlsManagerSettings
       httpGetOffChainPoolData manager request poolUrl mHash
+
+    defaultUserAgent = OffChainUserAgent Nothing
 
     reportSuccess :: SimplifiedOffChainPoolData -> IO ()
     reportSuccess spod = do
@@ -126,7 +129,9 @@ runHttpGetVote voteUrl mHash vtype =
   reportSuccess =<< runOrThrowIO (runExceptT httpGet)
   where
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
-    httpGet = httpGetOffChainVoteData [] voteUrl mHash vtype
+    httpGet = httpGetOffChainVoteData [] voteUrl defaultUserAgent mHash vtype
+
+    defaultUserAgent = OffChainUserAgent Nothing
 
     reportSuccess :: SimplifiedOffChainVoteData -> IO ()
     reportSuccess spod = do
