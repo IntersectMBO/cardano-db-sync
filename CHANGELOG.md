@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.6.0.7
+- Fix slow rollbacks caused by suboptimal query plans on large tables [#2083]
+
 ## 13.6.0.5
 - Fix offchain data so it supports files up to 3MB [#1928]
 - Upgrade to PostgreSQL 17
