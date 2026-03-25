@@ -94,6 +94,7 @@
                   libpq =
                     final.lib.pipe prev.libpq [
                       (p: p.override {
+                        curlSupport = false;
                         gssSupport = false;
                       })
 
@@ -108,6 +109,26 @@
                           postInstall = "";
                         }))
                     ];
+
+                  liburing = prev.liburing.overrideAttrs (old: 
+                    final.lib.optionalAttrs final.stdenv.hostPlatform.isMusl {
+                      dontDisableStatic = true;
+                      # The nixpkgs postInstall script will remove static libs, but we
+                      # need it for musl builds, while keeping the rest intact.
+                      postInstall = ''
+                        # Copy the examples into $bin. Most reverse dependency of
+                        # this package should reference only the $out output
+                        for file in $(find ./examples -executable -type f); do
+                          install -Dm555 -t "$bin/bin" "$file"
+                        done
+                      '';
+                  });
+
+                  snappy = 
+                    prev.snappy.override 
+                      (final.lib.optionalAttrs final.stdenv.hostPlatform.isMusl {
+                        static = true; 
+                      });
                 })
               ];
           };
