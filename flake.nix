@@ -203,6 +203,7 @@
               # for the target.
               buildInputs = with nixpkgs.pkgsBuildBuild; [
                 git
+                protobuf
               ];
 
               withHoogle = true;
@@ -211,6 +212,11 @@
             };
 
             modules = [
+              ({
+                # Disable haddock globally to avoid GHC 9.6.7 panic in cardano-diffusion
+                doHaddock = false;
+              })
+
               ({ lib, pkgs, ... }: {
                 package-keys = [ "ekg" ];
                 # Ignore version bounds
@@ -286,6 +292,11 @@
                   "-optcxx-std=gnu++98"
                   "-optcxx-fno-threadsafe-statics"
                 ];
+              })
+
+              ({pkgs, ...}: {
+                packages.proto-lens-protobuf-types.components.library.build-tools = [ pkgs.buildPackages.protobuf ];
+                packages.cardano-rpc.components.library.build-tools = [ pkgs.buildPackages.protobuf ];
               })
 
               (lib.mkIf pkgs.haskell-nix.haskellLib.isCrossHost {

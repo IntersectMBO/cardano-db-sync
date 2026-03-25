@@ -11,7 +11,7 @@ repository cardano-haskell-packages
 
 index-state:
   , hackage.haskell.org 2026-02-17T10:15:41Z
-  , cardano-haskell-packages 2026-03-09T20:37:06Z
+  , cardano-haskell-packages 2026-03-23T18:21:55Z
 
 packages:
   cardano-db
@@ -76,6 +76,10 @@ constraints:
   , text < 2.1.2
   , hasql ==1.9.3
 
+allow-newer:
+    , cardano-api:plutus-core
+    , resource-registry:nothunks
+
 if impl (ghc >= 9.12)
   allow-newer:
     -- https://github.com/kapralVV/Unique/issues/11
@@ -83,6 +87,12 @@ if impl (ghc >= 9.12)
 
     -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
     , pipes-safe:base
+
+    , io-classes:time
+    , ouroboros-network:time
+    , nothunks:time
+    , network-mux:time
+    , cardano-ping:time
 
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
@@ -93,84 +103,29 @@ if impl (ghc >= 9.12)
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: a0f91909f6bbd85fa649e5ca6fb2c3675a000db6
-  --sha256: sha256-FQxDbEYuKAGV0FMG2g+6FNRZsdN7IZyKE5z7QkCF3O4=
+  tag: 1e6d8228693ab2aa4e1d7305e7bdcc57cdd278e4
+  --sha256: sha256-6b9fX1RNmHdBRpmE4WYFCf13vwZZGg1LHRhHP7GRJHE=
   subdir:
     cardano-node
-    trace-dispatcher
     trace-forward
     trace-resources
 
--- Points to https://github.com/IntersectMBO/cardano-ledger/pull/5573
-source-repository-package
-  type: git
-  location: https://github.com/IntersectMBO/cardano-ledger
-  tag: 30a3e666b84f9d056f464b3a00c56ab0c5bccacd
-  --sha256: sha256-DsBE94iDxHkFnRdREZUOZYkydIMnp7U09N4SnaRc6+s=
-  subdir:
-    eras/allegra/impl
-    eras/alonzo/impl
-    eras/alonzo/test-suite
-    eras/babbage/impl
-    eras/conway/impl
-    eras/dijkstra/impl
-    eras/mary/impl
-    eras/shelley/impl
-    eras/shelley/test-suite
-    eras/shelley-ma/test-suite
-    libs/cardano-ledger-api
-    libs/cardano-ledger-core
-    libs/cardano-ledger-binary
-    libs/cardano-protocol-tpraos
-    libs/non-integral
-    libs/small-steps
-    libs/cardano-data
-    libs/vector-map
-    eras/byron/chain/executable-spec
-    eras/byron/ledger/executable-spec
-    eras/byron/ledger/impl
-    eras/byron/crypto
-
--- geo2a/bump-ntc
-source-repository-package
-  type: git
-  location: https://github.com/IntersectMBO/ouroboros-consensus
-  tag: d871fcf0ae5acf017f19282cda911ed5727239be
-  --sha256: sha256-//U4RJG1f1BQNT14rV0tte1YpawSWZCO38x5zBEVIYg=
-  subdir:
-    .
-
-source-repository-package
-  type: git
-  location: https://github.com/input-output-hk/kes-agent
-  tag: 7aedefc0077ffaf93bf46508c1fe0d7efdead227
-  --sha256: sha256-ZcB0pPex349uH1W7ha5ez7Kx/XadK00j5wRm7+vyX0s=
-  subdir:
-    kes-agent
-    kes-agent-crypto
-
-source-repository-package
-   type: git
-   location: https://github.com/IntersectMBO/cardano-api
-   tag: c409f34bb2681d3224da88dbadfb4a415824261b
-   --sha256: sha256-rzW9XWN5qSSLOT3zVUf2hvT7BqiyfNzvTyBopP5KbSE=
-   subdir:
-     cardano-api
-
-source-repository-package
-   type: git
-   location: https://github.com/IntersectMBO/cardano-cli
-   tag: c867304a1342d2df08040549b3f8a0e0a8eef045
-   --sha256: sha256-2YQ40E4QLJj0Zt4xlLqtEBypf3SfmxOPgjtksQFbhlc=
-   subdir:
-     cardano-cli
-
-source-repository-package
-  type: git
-  location: https://github.com/IntersectMBO/ouroboros-network
-  tag: b6b388aa2497bd689cf7f2cc7a826df1e4b22f2a
-  --sha256: sha256-iZqGWxLukOaDZkxQIAPHK856EnfPSYjH72xvyaYa9MI=
-  subdir:
-    ouroboros-network
-    network-mux
-    cardano-diffusion
+if impl(ghc >= 9.12)
+  source-repository-package
+    type: git
+    location: https://github.com/google/proto-lens
+    tag: 20de5227947b0c37dd6852dcc6f2db1cd5889cee
+    --sha256: sha256-VUYU2swjU7L8Zdu6Zfz6jo2ulW5uPhAamt2GjH5hZRY=
+    subdir:
+      discrimination-ieee754
+      proto-lens-arbitrary
+      proto-lens-benchmarks
+      proto-lens-discrimination
+      proto-lens-optparse
+      proto-lens-protobuf-types
+      proto-lens-protoc
+      proto-lens-runtime
+      proto-lens-setup
+      proto-lens-tests-dep
+      proto-lens-tests
+      proto-lens
