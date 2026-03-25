@@ -52,6 +52,7 @@ library
                         Cardano.DbTool.Validate.TxAccounting
                         Cardano.DbTool.Validate.Util
                         Cardano.DbTool.Validate.Withdrawal
+                        Cardano.DbTool.LsmDebug
                         Paths_cardano_db_tool
 
   build-depends:        base                            >= 4.14         && < 5
@@ -73,8 +74,14 @@ library
                       , extra
                       , ouroboros-consensus
                       , ouroboros-consensus:cardano
+                      , ouroboros-consensus:lsm
                       , ouroboros-network:api
+                      , lsm-tree
+                      , primitive
                       , random
+                      , filepath
+                      , fs-api
+                      , vector
                       , random-shuffle
                       , text
                       , text-icu

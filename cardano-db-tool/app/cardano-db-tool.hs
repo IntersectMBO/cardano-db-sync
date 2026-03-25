@@ -3,6 +3,7 @@
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
 import Cardano.DbTool
+import Cardano.DbTool.LsmDebug
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Applicative (optional)
 import Control.Monad (unless, void, when)
@@ -43,6 +44,7 @@ data Command
   | CmdPrepareSnapshot !PrepareSnapshotArgs
   | CmdValidateDb !TxOutVariantType
   | CmdValidateAddressBalance !LedgerValidationParams !TxOutVariantType
+  | CmdLsmDebug !LsmDebugParams
   | CmdVersion
 
 runCommand :: Command -> IO ()
@@ -67,6 +69,7 @@ runCommand cmd =
     CmdPrepareSnapshot pargs -> runPrepareSnapshot pargs
     CmdValidateDb txOutAddressType -> runDbValidation txOutAddressType
     CmdValidateAddressBalance params txOutAddressType -> runLedgerValidation params txOutAddressType
+    CmdLsmDebug params -> runLsmDebug params
     CmdVersion -> runVersionCommand
 
 runCreateMigration :: MigrationDir -> TxOutVariantType -> IO ()
@@ -153,6 +156,10 @@ pCommand =
           Opt.info
             (CmdValidateAddressBalance <$> pValidateLedgerParams <*> pTxOutVariantType)
             (Opt.progDesc "Run validation checks against the database and the ledger Utxo set.")
+      , Opt.command "lsm-debug" $
+          Opt.info
+            pLsmDebug
+            (Opt.progDesc "Look up a TxIn in an LSM snapshot and attempt to decode the TxOut.")
       , Opt.command "version" $
           Opt.info
             (pure CmdVersion)
@@ -263,6 +270,32 @@ pLedgerStateDir =
           <> Opt.completer (Opt.bashCompleter "directory")
           <> Opt.metavar "FILEPATH"
       )
+
+pLsmDebug :: Parser Command
+pLsmDebug =
+  CmdLsmDebug <$>
+    ( LsmDebugParams
+        <$> pConfigFile
+        <*> pLedgerStateDir
+        <*> Opt.strOption
+              ( Opt.long "tx-hash"
+                  <> Opt.help "Hex-encoded transaction hash"
+                  <> Opt.metavar "TXHASH"
+              )
+        <*> Opt.option Opt.auto
+              ( Opt.long "tx-index"
+                  <> Opt.help "Transaction output index"
+                  <> Opt.metavar "INDEX"
+                  <> Opt.value 0
+              )
+        <*> optional
+              ( Opt.strOption
+                  ( Opt.long "snapshot"
+                      <> Opt.help "LSM snapshot name to query (default: derived from most recent .lstate file)"
+                      <> Opt.metavar "SNAPSHOT"
+                  )
+              )
+    )
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
