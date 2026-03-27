@@ -242,7 +242,7 @@ assertRewardCounts env st filterAddr mEpoch expected = do
     mkDBStakeAddress :: StakeIndex -> ByteString
     mkDBStakeAddress stIx = case resolveStakeCreds stIx st of
       Left _ -> error "could not resolve StakeIndex"
-      Right cred -> Ledger.serialiseRewardAccount $ Ledger.RewardAccount Testnet cred
+      Right cred -> Ledger.serialiseAccountAddress $ Ledger.AccountAddress Testnet (Ledger.AccountId cred)
 
     updateAddrCounters ::
       DB.RewardSource ->

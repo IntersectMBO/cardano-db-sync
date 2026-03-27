@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-chain-gen
-version:                13.7.0.1
+version:                13.7.0.2
 synopsis:               A fake chain generator for testing cardano DB sync.
 description:            A fake chain generator for testing cardano DB sync.
 homepage:               https://github.com/IntersectMBO/cardano-db-sync
@@ -67,6 +67,7 @@ library
                       , cardano-ledger-allegra
                       , cardano-ledger-alonzo
                       , cardano-ledger-babbage
+                      , cardano-diffusion
                       , cardano-ledger-conway
                       , cardano-ledger-binary
                       , cardano-ledger-core
@@ -84,15 +85,15 @@ library
                       , mtl
                       , microlens
                       , network
+                      , network-mux
                       , nothunks
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-consensus-diffusion
-                      , ouroboros-consensus-protocol
-                      , ouroboros-network
-                      , ouroboros-network-api
-                      , ouroboros-network-framework
-                      , ouroboros-network-protocols
+                      , ouroboros-consensus:cardano
+                      , ouroboros-consensus:diffusion
+                      , ouroboros-consensus:protocol
+                      , ouroboros-network:api
+                      , ouroboros-network:framework
+                      , ouroboros-network:protocols
                       , plutus-core
                       , plutus-ledger-api:{plutus-ledger-api-testlib}
                       , serialise
@@ -193,7 +194,7 @@ test-suite cardano-chain-gen
                       , tree-diff
                       , tasty-hunit
                       , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-network-api
+                      , ouroboros-consensus:cardano
+                      , ouroboros-network:api
                       , QuickCheck
                       , quickcheck-state-machine:no-vendored-treediff

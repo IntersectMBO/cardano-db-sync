@@ -5,7 +5,7 @@ module Cardano.DbSync.Util.AddressTest (tests) where
 
 import Cardano.Binary (FromCBOR (..), unsafeDeserialize')
 import Cardano.DbSync.Util.Address
-import Cardano.Ledger.Address (Addr (..), BootstrapAddress (..), RewardAccount (..))
+import Cardano.Ledger.Address (AccountAddress (..), Addr (..), BootstrapAddress (..))
 import Cardano.Ledger.BaseTypes (Network (..))
 import qualified Cardano.Ledger.Binary.Decoding as Decoding
 import Cardano.Prelude
@@ -66,8 +66,8 @@ prop_serialiseRewardAccount = property $ do
 prop_serialiseRewardAccount_roundtrip :: Property
 prop_serialiseRewardAccount_roundtrip = property $ do
   acnt <- forAll genRewardAccount
-  cover 10 "mainnet" $ raNetwork acnt == Mainnet
-  cover 10 "testnet" $ raNetwork acnt == Testnet
+  cover 10 "mainnet" $ aaNetworkId acnt == Mainnet
+  cover 10 "testnet" $ aaNetworkId acnt == Testnet
 
   tripping acnt serialiseRewardAccount deserialiseRewardAccount
 
@@ -217,7 +217,7 @@ genByronAddress = arbitrary
 genShelleyAddress :: Gen Addr
 genShelleyAddress = Addr <$> arbitrary <*> arbitrary <*> arbitrary
 
-genRewardAccount :: Gen RewardAccount
+genRewardAccount :: Gen AccountAddress
 genRewardAccount = arbitrary
 
 deserialiseBase16 :: FromCBOR a => Text -> a

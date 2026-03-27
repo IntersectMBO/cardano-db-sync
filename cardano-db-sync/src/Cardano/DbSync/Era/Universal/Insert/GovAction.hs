@@ -45,6 +45,7 @@ import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Bech32 (serialiseDrepToBech32)
+import Cardano.Ledger.Address (AccountAddress)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
@@ -57,7 +58,6 @@ import Cardano.Ledger.DRep (DRepState (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import qualified Cardano.Ledger.Plutus.CostModels as Ledger
 import Cardano.Ledger.Plutus.Language (Language)
-import Cardano.Ledger.Shelley.API (Coin (..), RewardAccount)
 import Cardano.Ledger.State (DRep (..))
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
@@ -65,6 +65,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
+import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (ConwayEra)
 
 insertGovActionProposal ::
@@ -122,7 +123,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
     -- Bulk insert treasury withdrawals
     insertTreasuryWithdrawalsBulk ::
       DB.GovActionProposalId ->
-      [(RewardAccount, Coin)] ->
+      [(AccountAddress, Coin)] ->
       ExceptT SyncNodeError DB.DbM ()
     insertTreasuryWithdrawalsBulk _ [] = pure ()
     insertTreasuryWithdrawalsBulk gaId withdrawals = do
@@ -283,7 +284,7 @@ insertConstitution blockId mgapId constitution = do
     $ DB.Constitution
       { DB.constitutionGovActionProposalId = mgapId
       , DB.constitutionVotingAnchorId = votingAnchorId
-      , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitutionScript constitution)
+      , DB.constitutionScriptHash = Generic.unScriptHash <$> strictMaybeToMaybe (constitution ^. constitutionGuardrailsScriptHashL)
       }
 
 --------------------------------------------------------------------------------------
@@ -363,7 +364,7 @@ insertDrep = \case
   DRepAlwaysAbstain -> lift DB.insertDrepHashAlwaysAbstain
   DRepAlwaysNoConfidence -> lift DB.insertDrepHashAlwaysNoConfidence
 
-insertCredDrepHash :: Ledger.Credential 'DRepRole -> ExceptT SyncNodeError DB.DbM DB.DrepHashId
+insertCredDrepHash :: Ledger.Credential DRepRole -> ExceptT SyncNodeError DB.DbM DB.DrepHashId
 insertCredDrepHash cred = do
   lift $
     DB.insertDrepHash
@@ -392,7 +393,7 @@ insertDrepDistr e pSnapshot = do
       pure $
         DB.DrepDistr
           { DB.drepDistrHashId = drepId
-          , DB.drepDistrAmount = fromIntegral $ unCoin $ fromCompact coin
+          , DB.drepDistrAmount = fromIntegral $ Ledger.unCoin $ fromCompact coin
           , DB.drepDistrEpochNo = unEpochNo e
           , DB.drepDistrActiveUntil = unEpochNo <$> isActiveEpochNo drep
           }

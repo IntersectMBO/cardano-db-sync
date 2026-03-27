@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2025-09-29T13:55:56Z
-  , cardano-haskell-packages 2026-02-09T17:36:58Z
+  , hackage.haskell.org 2026-02-17T10:15:41Z
+  , cardano-haskell-packages 2026-03-23T18:21:55Z
 
 packages:
   cardano-db
@@ -74,11 +74,26 @@ constraints:
   -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
+  , hasql ==1.9.3
+
+allow-newer:
+    , cardano-api:plutus-core
+    , resource-registry:nothunks
 
 if impl (ghc >= 9.12)
   allow-newer:
     -- https://github.com/kapralVV/Unique/issues/11
     , Unique:hashable
+
+    -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
+    , pipes-safe:base
+
+    , io-classes:time
+    , ouroboros-network:time
+    , nothunks:time
+    , network-mux:time
+    , cardano-ping:time
+
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
 -- when using the "cabal" wrapper script provided by nix-shell.
@@ -88,10 +103,29 @@ if impl (ghc >= 9.12)
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: 0d697f14ee10a775f08c60e3839becc9131dca75
-  --sha256: sha256-zyrBw3yn69y3n0c6U0MDvezYC3GHbjJ3yJmhM4vMtUk=
+  tag: 1e6d8228693ab2aa4e1d7305e7bdcc57cdd278e4
+  --sha256: sha256-6b9fX1RNmHdBRpmE4WYFCf13vwZZGg1LHRhHP7GRJHE=
   subdir:
     cardano-node
-    trace-dispatcher
     trace-forward
     trace-resources
+
+if impl(ghc >= 9.12)
+  source-repository-package
+    type: git
+    location: https://github.com/google/proto-lens
+    tag: 20de5227947b0c37dd6852dcc6f2db1cd5889cee
+    --sha256: sha256-VUYU2swjU7L8Zdu6Zfz6jo2ulW5uPhAamt2GjH5hZRY=
+    subdir:
+      discrimination-ieee754
+      proto-lens-arbitrary
+      proto-lens-benchmarks
+      proto-lens-discrimination
+      proto-lens-optparse
+      proto-lens-protobuf-types
+      proto-lens-protoc
+      proto-lens-runtime
+      proto-lens-setup
+      proto-lens-tests-dep
+      proto-lens-tests
+      proto-lens

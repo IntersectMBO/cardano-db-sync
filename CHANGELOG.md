@@ -1,5 +1,9 @@
 # Revision history for cardano-db-sync
 
+## 13.7.0.2
+- Fix slow rollbacks caused by suboptimal query plans on large tables [#2083]
+- Update to cardano-node 10.7.0
+
 ## 13.7.0.1
 - Complete migration from Persistent ORM to Hasql for direct PostgreSQL access.
 - Improved syncing speed performance and cache efficiency

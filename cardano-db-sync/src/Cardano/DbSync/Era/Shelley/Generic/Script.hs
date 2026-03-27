@@ -163,7 +163,7 @@ parseTimelock v =
 
 parseScriptSig ::
   Aeson.Value ->
-  Parser (KeyHash 'Payment)
+  Parser (KeyHash Payment)
 parseScriptSig = Aeson.withObject "sig" $ \obj -> do
   v <- obj .: "type"
   case (v :: Text) of
@@ -174,7 +174,7 @@ parseScriptSig = Aeson.withObject "sig" $ \obj -> do
 
 parseKeyHash ::
   Text ->
-  Parser (KeyHash 'Payment)
+  Parser (KeyHash Payment)
 parseKeyHash v = do
   let maybeHash = hashFromBytesAsHex $ encodeUtf8 v
       maybeKeyHash = KeyHash <$> maybeHash

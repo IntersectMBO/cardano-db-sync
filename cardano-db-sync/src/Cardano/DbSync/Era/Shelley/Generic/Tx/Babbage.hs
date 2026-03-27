@@ -33,7 +33,7 @@ import qualified Data.Map.Strict as Map
 import Lens.Micro
 import Ouroboros.Consensus.Shelley.Eras (BabbageEra)
 
-fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx BabbageEra) -> Tx
+fromBabbageTx :: Bool -> Maybe Alonzo.Prices -> (Word64, Core.Tx Core.TopTx BabbageEra) -> Tx
 fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
   Tx
     { txHash = txHashId tx
@@ -80,7 +80,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = mempty -- Babbage does not support treasury donations
     }
   where
-    txBody :: Core.TxBody BabbageEra
+    txBody :: Core.TxBody Core.TopTx BabbageEra
     txBody = tx ^. Core.bodyTxL
 
     outputs :: [TxOut]

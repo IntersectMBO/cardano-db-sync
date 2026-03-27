@@ -60,7 +60,7 @@ data Block = Block
   { blkEra :: !BlockEra
   , blkHash :: !ByteString
   , blkPreviousHash :: !(Maybe ByteString) -- Nothing is used for first block after Genesis.
-  , blkSlotLeader :: !(KeyHash 'BlockIssuer)
+  , blkSlotLeader :: !(KeyHash BlockIssuer)
   , blkSlotNo :: !SlotNo
   , blkBlockNo :: !BlockNo
   , blkSize :: !Word64
@@ -192,11 +192,11 @@ fromDijkstraBlock iope mprices blk =
 
 -- -------------------------------------------------------------------------------------------------
 
-getTxs :: forall p era. Ledger.EraBlockBody era => ShelleyBlock p era -> [(Word64, Ledger.Tx era)]
-getTxs blk = zip [0 ..] $ toList (Ledger.bbody (Consensus.shelleyBlockRaw blk) ^. Ledger.txSeqBlockBodyL)
+getTxs :: forall p era. Ledger.EraBlockBody era => ShelleyBlock p era -> [(Word64, Ledger.Tx Ledger.TopTx era)]
+getTxs blk = zip [0 ..] $ toList (Ledger.blockBody (Consensus.shelleyBlockRaw blk) ^. Ledger.txSeqBlockBodyL)
 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
-blockHeader = Ledger.bheader . Consensus.shelleyBlockRaw
+blockHeader = Ledger.blockHeader . Consensus.shelleyBlockRaw
 
 blockHash :: ShelleyBlock p era -> ByteString
 blockHash =
@@ -209,7 +209,7 @@ blockNumber = pHeaderBlock . blockHeader
 
 blockPrevHash :: ProtocolHeaderSupportsEnvelope p => ShelleyBlock p era -> Maybe ByteString
 blockPrevHash blk =
-  case pHeaderPrevHash $ Ledger.bheader (Consensus.shelleyBlockRaw blk) of
+  case pHeaderPrevHash $ Ledger.blockHeader (Consensus.shelleyBlockRaw blk) of
     TPraos.GenesisHash -> Nothing
     TPraos.BlockHash (TPraos.HashHeader h) -> Just $ Crypto.hashToBytes h
 
@@ -255,7 +255,7 @@ getHeaderBodyPraos (Praos.Header headerBody _) = headerBody
 blockIssuer ::
   ShelleyProtocol p =>
   ShelleyBlock p era ->
-  KeyHash 'BlockIssuer
+  KeyHash BlockIssuer
 blockIssuer = hashKey . pHeaderIssuer . blockHeader
 
 slotNumber :: ShelleyProtocol p => ShelleyBlock p era -> SlotNo
