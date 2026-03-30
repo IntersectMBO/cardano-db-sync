@@ -33,6 +33,7 @@ module Cardano.DbSync.Ledger.State (
   findProposedCommittee,
   writeLedgerState,
   saveCleanupState,
+  ledgerDbCurrent,
 ) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
@@ -71,6 +72,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   atomically,
   newTVarIO,
   readTVar,
+  readTVarIO,
   writeTVar,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue, newTBQueueIO, readTBQueue, writeTBQueue)
@@ -125,8 +127,8 @@ import Ouroboros.Consensus.Storage.LedgerDB.V2.LSM (Args (LSMArgs), newLSMLedger
 import Data.String (fromString)
 import qualified Database.LSMTree as LSMTree
 import Ouroboros.Consensus.Storage.Serialisation (DecodeDisk (..), EncodeDisk (..))
-import Data.List.NonEmpty ()
-import qualified Data.List.NonEmpty as NE
+import Data.Sequence.Strict (StrictSeq (..))
+import qualified Data.Sequence.Strict as SSeq
 import Ouroboros.Network.Block (HeaderHash, Point (..))
 import qualified Ouroboros.Network.Point as Point
 import System.Directory (doesFileExist, listDirectory, removeDirectoryRecursive, removeFile)
@@ -136,7 +138,7 @@ import System.FS.API.Types (MountPoint (..))
 import System.FS.IO (ioHasFS)
 import System.Mem (performMajorGC)
 import System.Random (genWord64, newStdGen)
-import Control.Tracer (nullTracer)
+import qualified Control.Tracer as Tracer
 import Prelude (String)
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
@@ -179,27 +181,29 @@ mkHandleFromValues tables = do
       , tablesSize = pure 0
       }
 
--- | Push a new ledger state and prune old ones. Returns the new DB and
--- any pruned states whose handles should be closed.
-pushLedgerDB :: LedgerDB -> CardanoLedgerState -> (LedgerDB, [CardanoLedgerState])
+-- | Push a new StateRef and prune old ones. Returns the new DB and
+-- any pruned StateRefs whose handles should be closed.
+pushLedgerDB :: LedgerDB -> StateRef -> (LedgerDB, [StateRef])
 pushLedgerDB db st =
   pruneLedgerDb
-    1
+    5
     db
-      { ledgerDbCheckpoints = NE.cons st (ledgerDbCheckpoints db)
+      { ledgerDbCheckpoints = st SSeq.<| ledgerDbCheckpoints db
       }
 
 -- | Prune snapshots until we have at most @k@ snapshots in the LedgerDB.
--- Returns the pruned DB and the dropped states whose handles should be closed.
-pruneLedgerDb :: Word64 -> LedgerDB -> (LedgerDB, [CardanoLedgerState])
+-- Returns the pruned DB and the dropped StateRefs whose handles should be closed.
+pruneLedgerDb :: Word64 -> LedgerDB -> (LedgerDB, [StateRef])
 pruneLedgerDb k db =
-  let (kept, dropped) = splitAt (fromIntegral k) (NE.toList $ ledgerDbCheckpoints db)
-  in (db {ledgerDbCheckpoints = NE.fromList kept}, dropped)
+  let (!kept, !dropped) = SSeq.splitAt (fromIntegral k) (ledgerDbCheckpoints db)
+  in (db {ledgerDbCheckpoints = kept}, toList dropped)
 {-# INLINE pruneLedgerDb #-}
 
--- | The ledger state at the tip of the chain
-ledgerDbCurrent :: LedgerDB -> CardanoLedgerState
-ledgerDbCurrent = NE.head . ledgerDbCheckpoints
+-- | The current StateRef at the tip of the chain
+ledgerDbCurrent :: LedgerDB -> StateRef
+ledgerDbCurrent db = case ledgerDbCheckpoints db of
+  sr SSeq.:<| _ -> sr
+  SSeq.Empty -> panic "ledgerDbCurrent: empty LedgerDB"
 
 mkHasLedgerEnv ::
   Trace IO Text ->
@@ -215,43 +219,44 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
   svar <- newTVarIO Strict.Nothing
   intervar <- newTVarIO Strict.Nothing
   swQueue <- newTBQueueIO 5 -- Should be relatively shallow.
-  -- Lazily create the ResourceRegistry on first use from the calling thread.
-  -- ResourceRegistry enforces thread tracking, so we must not create it here
-  -- (mkHasLedgerEnv runs on the main thread) but on the chain sync thread.
-  registryRef <- newIORef Nothing
-  let getRegistry = readIORef registryRef >>= \case
-        Just reg -> pure reg
-        Nothing -> do
+  -- Registry must be created lazily from the chain sync thread, as
+  -- ResourceRegistry enforces thread tracking.
+  registryVar <- newTVarIO Strict.Nothing
+  let getRegistry = readTVarIO registryVar >>= \case
+        Strict.Just reg -> pure reg
+        Strict.Nothing -> do
           reg <- unsafeNewRegistry
-          writeIORef registryRef (Just reg)
+          atomically $ writeTVar registryVar (Strict.Just reg)
           pure reg
   (mkHandle, mkHandleFromSnap) <- case backend of
     LedgerBackendInMemory ->
       pure (\_st tables -> mkHandleFromValues tables, Nothing)
     LedgerBackendLSM mPath -> do
       let lsmPath = fromMaybe (unLedgerStateDir dir </> "lsm") mPath
+          -- lsmTracer = Tracer.Tracer $ \msg -> logInfo trce (Text.pack $ show msg)
+          lsmTracer = Tracer.Tracer $ \_ -> pure ()
       gen <- newStdGen
       let (salt, _) = genWord64 gen
           args = LSMArgs (mkFsPath $ splitDirectories lsmPath) salt (stdMkBlockIOFS lsmPath)
-      resourcesRef <- newIORef Nothing
+      resourcesVar <- newTVarIO Strict.Nothing
       let getResources = do
             reg <- getRegistry
-            readIORef resourcesRef >>= \case
-              Just res -> pure (reg, res)
-              Nothing -> do
-                res <- mkResources (Proxy :: Proxy CardanoBlock) nullTracer args reg (SomeHasFS $ ioHasFS $ MountPoint lsmPath)
-                writeIORef resourcesRef (Just res)
+            readTVarIO resourcesVar >>= \case
+              Strict.Just res -> pure (reg, res)
+              Strict.Nothing -> do
+                res <- mkResources (Proxy :: Proxy CardanoBlock) lsmTracer args reg (SomeHasFS $ ioHasFS $ MountPoint lsmPath)
+                atomically $ writeTVar resourcesVar (Strict.Just res)
                 pure (reg, res)
       let mkH = \st tables -> do
             (reg, resources) <- getResources
-            newHandleFromValues nullTracer reg resources (Consensus.withLedgerTables st tables)
+            newHandleFromValues lsmTracer reg resources (Consensus.withLedgerTables st tables)
       let handleFromSnap = \snapshotName -> do
             (reg, resources) <- getResources
             let session = sessionResource resources
             (rk, table) <- allocate reg
               (\_ -> LSMTree.openTableFromSnapshot session (fromString snapshotName) (LSMTree.SnapshotLabel "UTxO table"))
               LSMTree.closeTable
-            newLSMLedgerTablesHandle nullTracer 0 (rk, table)
+            newLSMLedgerTablesHandle lsmTracer 0 (rk, table)
       pure (mkH, Just handleFromSnap)
   pure
     HasLedgerEnv
@@ -274,17 +279,19 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
       , leMkLedgerHandleFromSnapshot = mkHandleFromSnap
       }
 
-initCardanoLedgerState :: HasLedgerEnv -> IO CardanoLedgerState
+initCardanoLedgerState :: HasLedgerEnv -> IO StateRef
 initCardanoLedgerState env = do
   let initState = Consensus.pInfoInitLedger (leProtocolInfo env)
   tablesHandle <- leMkLedgerHandle env (forgetLedgerTables initState) (Consensus.projectLedgerTables initState)
   canClose <- newTVarIO True
   pure
-    CardanoLedgerState
-      { clsState = forgetLedgerTables initState
-      , clsTables = tablesHandle
-      , clsEpochBlockNo = GenesisEpochBlockNo
-      , clsCanClose = canClose
+    StateRef
+      { srState = CardanoLedgerState
+          { clsState = forgetLedgerTables initState
+          , clsEpochBlockNo = GenesisEpochBlockNo
+          }
+      , srTables = tablesHandle
+      , srCanClose = canClose
       }
 
 getTopLevelconfigHasLedger :: HasLedgerEnv -> TopLevelConfig CardanoBlock
@@ -293,7 +300,7 @@ getTopLevelconfigHasLedger = Consensus.pInfoConfig . leProtocolInfo
 readCurrentStateUnsafe :: HasLedgerEnv -> IO (ExtLedgerState CardanoBlock EmptyMK)
 readCurrentStateUnsafe hle =
   atomically
-    (clsState . ledgerDbCurrent <$> readStateUnsafe hle)
+    (clsState . srState . ledgerDbCurrent <$> readStateUnsafe hle)
 
 -- TODO make this type safe. We make the assumption here that the first message of
 -- the chainsync protocol is 'RollbackTo'.
@@ -306,70 +313,59 @@ readStateUnsafe env = do
 
 applyBlockAndSnapshot :: HasLedgerEnv -> CardanoBlock -> Bool -> IO (ApplyResult, Bool)
 applyBlockAndSnapshot ledgerEnv blk isCons = do
-  (oldState, appResult, pruned) <- applyBlock ledgerEnv blk
+  (oldRef, appResult, pruned) <- applyBlock ledgerEnv blk
   -- 864000 seconds = 10 days; consider synced "near tip" if within 10 days of current time
-  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldState appResult isCons (isSyncedWithinSeconds (apSlotDetails appResult) 864000)
+  tookSnapshot <- storeSnapshotAndCleanupMaybe ledgerEnv oldRef appResult isCons (isSyncedWithinSeconds (apSlotDetails appResult) 864000)
   -- Close pruned states. If a snapshot was taken, wait for the snapshot thread
   -- to finish writing before closing, since it may still need the table handles.
-  forM_ pruned $ \st -> do
-    atomically $ readTVar (clsCanClose st) >>= check
-    close (clsTables st)
+  forM_ pruned $ \sr -> do
+    -- atomically $ readTVar (srCanClose sr) >>= check
+    close (srTables sr)
   pure (appResult, tookSnapshot)
 
--- The function 'tickThenReapply' does zero validation, so add minimal validation ('blockPrevHash'
--- matches the tip hash of the 'LedgerState'). This was originally for debugging but the check is
--- cheap enough to keep.
-applyBlock :: HasLedgerEnv -> CardanoBlock -> IO (CardanoLedgerState, ApplyResult, [CardanoLedgerState])
+-- | Apply a block: delegates to tickThenReapplyCheckHash which handles
+-- LedgerDB reads, handle duplication, block application, and LedgerDB update.
+-- Returns the old StateRef (for snapshotting), ApplyResult, and pruned StateRefs (to close).
+applyBlock :: HasLedgerEnv -> CardanoBlock -> IO (StateRef, ApplyResult, [StateRef])
 applyBlock env blk = do
   time <- getCurrentTime
-  -- Read the current ledger state (STM)
-  (ledgerDB, oldState) <- atomically $ do
-    !db <- readStateUnsafe env
-    pure (db, ledgerDbCurrent db)
-  -- Apply block (IO — handle reads/writes)
   reg <- leRegistry env
   !result <-
     either throwIO pure =<<
       tickThenReapplyCheckHash
+        env
         reg
         (ExtLedgerCfg (getTopLevelconfigHasLedger env))
         blk
-        oldState
-  -- Update state (STM)
-  (appResult, pruned) <- atomically $ do
-    -- Extract the ledger events
-    let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (Consensus.lrEvents result)
-    -- Find the deposits
-    let (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
-    -- Calculate DRep distribution
-    let !newLedgerState = finaliseDrepDistr $ clsState (Consensus.lrResult result)
-    -- Construct the new ledger state
+  let (oldRef, newResult, pruned) = result
+      !oldCls = srState oldRef
+  -- Build ApplyResult (STM for slot details and epoch detection)
+  appResult <- atomically $ do
+    let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (Consensus.lrEvents newResult)
+        (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
+        !newLedgerState = finaliseDrepDistr $ clsState (Consensus.lrResult newResult)
     !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldState) newLedgerState (findAdaPots ledgerEvents)
-    let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldState)
-    let !newState = (Consensus.lrResult result) { clsState = newLedgerState, clsEpochBlockNo = newEpochBlockNo }
-    -- Add the new ledger state to the in-memory db
-    let (!ledgerDB', !pruned) = pushLedgerDB ledgerDB newState
-    writeTVar (leStateVar env) (Strict.Just ledgerDB')
-    let !appResult =
-          if leUseLedger env
-            then
-              ApplyResult
-                { apPrices = getPrices newState
-                , apGovExpiresAfter = getGovExpiration newState
-                , apPoolsRegistered = getRegisteredPools oldState
-                , apNewEpoch = maybeToStrict newEpoch
-                , apOldLedger = Strict.Just oldState
-                , apDeposits = maybeToStrict $ Generic.getDeposits newLedgerState
-                , apSlotDetails = details
-                , apStakeSlice = getStakeSlice env newState False
-                , apEvents = ledgerEvents
-                , apGovActionState = getGovState newLedgerState
-                , apDepositsMap = DepositsMap deposits
-                }
-            else defaultApplyResult details
-    pure (appResult, pruned)
-  pure (oldState, appResult, pruned)
+    !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldCls) newLedgerState (findAdaPots ledgerEvents)
+    let !newEpochBlockNo = applyToEpochBlockNo (isJust $ blockIsEBB blk) (isJust newEpoch) (clsEpochBlockNo oldCls)
+        !newState = (Consensus.lrResult newResult) { clsState = newLedgerState, clsEpochBlockNo = newEpochBlockNo }
+    pure $
+      if leUseLedger env
+        then
+          ApplyResult
+            { apPrices = getPrices newState
+            , apGovExpiresAfter = getGovExpiration newState
+            , apPoolsRegistered = getRegisteredPools oldCls
+            , apNewEpoch = maybeToStrict newEpoch
+            , apOldLedger = Strict.Just oldCls
+            , apDeposits = maybeToStrict $ Generic.getDeposits newLedgerState
+            , apSlotDetails = details
+            , apStakeSlice = getStakeSlice env newState False
+            , apEvents = ledgerEvents
+            , apGovActionState = getGovState newLedgerState
+            , apDepositsMap = DepositsMap deposits
+            }
+        else defaultApplyResult details
+  pure (oldRef, appResult, pruned)
   where
     mkOnNewEpoch :: ExtLedgerState CardanoBlock mk -> ExtLedgerState CardanoBlock mk -> Maybe AdaPots -> Either SyncNodeError (Maybe Generic.NewEpoch)
     mkOnNewEpoch oldState newState mPots = do
@@ -439,7 +435,7 @@ getStakeSlice env cls isMigration =
 
 storeSnapshotAndCleanupMaybe ::
   HasLedgerEnv ->
-  CardanoLedgerState ->
+  StateRef ->
   ApplyResult ->
   Bool ->
   SyncState ->
@@ -458,9 +454,9 @@ storeSnapshotAndCleanupMaybe _ _ _ _ _ = pure False
 --             pure True
 --     _ -> pure False
 
-saveCurrentLedgerState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
+saveCurrentLedgerState :: HasLedgerEnv -> StateRef -> Maybe EpochNo -> IO ()
 saveCurrentLedgerState env lState mEpochNo = do
-  case mkLedgerStateFilename (leDir env) (clsState lState) mEpochNo of
+  case mkLedgerStateFilename (leDir env) (clsState (srState lState)) mEpochNo of
     Origin -> pure () -- we don't store genesis
     At file -> do
       exists <- doesFileExist file
@@ -470,7 +466,7 @@ saveCurrentLedgerState env lState mEpochNo = do
             mconcat
               ["File ", Text.pack file, " exists"]
         else do
-          atomically $ writeTVar (clsCanClose lState) False
+          atomically $ writeTVar (srCanClose lState) False
           atomically $ writeTBQueue (leStateWriteQueue env) (file, lState)
 
 runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
@@ -479,7 +475,7 @@ runLedgerStateWriteThread tracer lenv =
     HasLedger le -> ledgerStateWriteLoop tracer (leStateWriteQueue le) (configCodec $ getTopLevelconfigHasLedger le) (leLedgerBackend le)
     NoLedger _ -> forever $ threadDelay 600000000 -- 10 minutes
 
-ledgerStateWriteLoop :: Trace IO Text -> TBQueue (FilePath, CardanoLedgerState) -> CodecConfig CardanoBlock -> LedgerBackend -> IO ()
+ledgerStateWriteLoop :: Trace IO Text -> TBQueue (FilePath, StateRef) -> CodecConfig CardanoBlock -> LedgerBackend -> IO ()
 ledgerStateWriteLoop tracer swQueue codecConfig backend =
   loop
   where
@@ -487,7 +483,7 @@ ledgerStateWriteLoop tracer swQueue codecConfig backend =
     loop = do
       (file, ledger) <- atomically $ readTBQueue swQueue -- Blocks until the queue has elements.
       writeLedgerStateFile file ledger
-      atomically $ writeTVar (clsCanClose ledger) True
+      atomically $ writeTVar (srCanClose ledger) True
       loop
 
     encodeExt :: ExtLedgerState CardanoBlock EmptyMK -> Encoding
@@ -498,19 +494,20 @@ ledgerStateWriteLoop tracer swQueue codecConfig backend =
         (encodeDisk codecConfig)
         . forgetLedgerTables
 
-    writeLedgerStateFile :: FilePath -> CardanoLedgerState -> IO ()
+    writeLedgerStateFile :: FilePath -> StateRef -> IO ()
     writeLedgerStateFile file ledger = do
+      let cls = srState ledger
       startTime <- getCurrentTime
       case backend of
         LedgerBackendInMemory -> do
           -- Read all tables from the handle for serialization (single file).
-          tables <- readAll (clsTables ledger) (clsState ledger)
+          tables <- readAll (srTables ledger) (clsState cls)
           LBS.writeFile file $
             Serialize.serialize $
               encodeCardanoLedgerStateInMemory
                 encodeExt
-                (clsState ledger)
-                (clsEpochBlockNo ledger)
+                (clsState cls)
+                (clsEpochBlockNo cls)
                 tables
         LedgerBackendLSM _mPath -> do
           -- LSM: tables are on disk, only encode state + epoch.
@@ -518,11 +515,11 @@ ledgerStateWriteLoop tracer swQueue codecConfig backend =
             Serialize.serialize $
               encodeCardanoLedgerStateLSM
                 encodeExt
-                (clsState ledger)
-                (clsEpochBlockNo ledger)
+                (clsState cls)
+                (clsEpochBlockNo cls)
           -- Save LSM tables snapshot alongside the state file.
           let snapshotName = dropExtension $ takeFileName file
-          void $ takeHandleSnapshot (clsTables ledger) (clsState ledger) snapshotName
+          void $ takeHandleSnapshot (srTables ledger) (clsState cls) snapshotName
       endTime <- getCurrentTime
       logInfo tracer $
         mconcat
@@ -539,9 +536,9 @@ mkLedgerStateFilename dir ledger mEpochNo =
     . dbPointToFileName dir mEpochNo
     <$> getPoint (Consensus.ledgerTipPoint @CardanoBlock (ledgerState ledger))
 
-saveCleanupState :: HasLedgerEnv -> CardanoLedgerState -> Maybe EpochNo -> IO ()
+saveCleanupState :: HasLedgerEnv -> StateRef -> Maybe EpochNo -> IO ()
 saveCleanupState env ledger mEpochNo = do
-  let st = clsState ledger
+  let st = clsState (srState ledger)
   saveCurrentLedgerState env ledger mEpochNo
   cleanupLedgerStateFiles env $
     fromWithOrigin (SlotNo 0) (Consensus.ledgerTipSlot $ ledgerState st)
@@ -645,37 +642,30 @@ loadLedgerAtPoint hasLedgerEnv point = do
       performMajorGC
       mst <- findStateFromPoint hasLedgerEnv point
       case mst of
-        Right st -> do
-          writeLedgerState hasLedgerEnv (Strict.Just . LedgerDB $ st :| [])
+        Right sr -> do
+          writeLedgerState hasLedgerEnv (Strict.Just . LedgerDB $ SSeq.singleton sr)
           logInfo (leTrace hasLedgerEnv) $ mconcat ["Found snapshot file for ", renderPoint point]
-          pure $ Right st
+          pure $ Right (srState sr)
         Left lsfs -> pure $ Left lsfs
     Just states' -> do
       logInfo (leTrace hasLedgerEnv) $ mconcat ["Found in memory ledger snapshot at ", renderPoint point]
-      -- TODO: re-enable once we duplicate handles before queuing snapshots
-      -- let nKept = NE.length states'
-      -- case mLedgerDB of
-      --   Strict.Just db ->
-      --     let dropped = drop nKept (reverse . NE.toList $ ledgerDbCheckpoints db)
-      --     in mapM_ (close . clsTables) dropped
-      --   Strict.Nothing -> pure ()
       let ledgerDB' = LedgerDB states'
-      let st = ledgerDbCurrent ledgerDB'
+      let sr = ledgerDbCurrent ledgerDB'
       deleteNewerFiles hasLedgerEnv point
       writeLedgerState hasLedgerEnv $ Strict.Just ledgerDB'
-      pure $ Right st
+      pure $ Right (srState sr)
   where
     rollbackLedger ::
       Strict.Maybe LedgerDB ->
-      Maybe (NonEmpty CardanoLedgerState)
+      Maybe (StrictSeq StateRef)
     rollbackLedger mLedgerDB = case mLedgerDB of
       Strict.Nothing -> Nothing
       Strict.Just ledgerDB ->
         -- Drop states newer than the rollback point (list is newest-first)
-        NE.nonEmpty $
-          dropWhile
-            (\st -> Consensus.getTipSlot (clsState st) > pointSlot point)
-            (NE.toList $ ledgerDbCheckpoints ledgerDB)
+        let kept = SSeq.fromList $ dropWhile
+              (\sr -> Consensus.getTipSlot (clsState (srState sr)) > pointSlot point)
+              (toList $ ledgerDbCheckpoints ledgerDB)
+        in if SSeq.null kept then Nothing else Just kept
 
 deleteNewerFiles :: HasLedgerEnv -> CardanoPoint -> IO ()
 deleteNewerFiles env point = do
@@ -715,7 +705,7 @@ removeStateFileAndLSMSnapshot env fp = do
 deleteAndLogStateFile :: HasLedgerEnv -> Text -> [LedgerStateFile] -> IO ()
 deleteAndLogStateFile env descr lsfs = deleteAndLogFiles env descr (lsfFilePath <$> lsfs)
 
-findStateFromPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [LedgerStateFile] CardanoLedgerState)
+findStateFromPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [LedgerStateFile] StateRef)
 findStateFromPoint env point = do
   files <- listLedgerStateFilesOrdered (leDir env)
   -- Genesis can be reproduced from configuration.
@@ -723,7 +713,7 @@ findStateFromPoint env point = do
   case getPoint point of
     Origin -> do
       deleteAndLogStateFile env "newer" files
-      Right <$> initCardanoLedgerState env
+      Right <$> initCardanoLedgerState env  -- returns StateRef
     At blk -> do
       let (newerFiles, found, olderFiles) =
             findLedgerStateFile files (Point.blockPointSlot blk, mkRawHash $ Point.blockPointHash blk)
@@ -795,14 +785,14 @@ comparePointToFile lsf (blSlotNo, blHash) =
 loadLedgerStateFromFile ::
   (ExtLedgerState CardanoBlock EmptyMK -> LedgerTables (ExtLedgerState CardanoBlock) ValuesMK -> IO (LedgerTablesHandle IO (ExtLedgerState CardanoBlock))) ->
   Maybe (String -> IO (LedgerTablesHandle IO (ExtLedgerState CardanoBlock))) ->
-  LedgerBackend -> Trace IO Text -> TopLevelConfig CardanoBlock -> Bool -> CardanoPoint -> LedgerStateFile -> IO (Either Text CardanoLedgerState)
+  LedgerBackend -> Trace IO Text -> TopLevelConfig CardanoBlock -> Bool -> CardanoPoint -> LedgerStateFile -> IO (Either Text StateRef)
 loadLedgerStateFromFile mkHandle mkHandleFromSnap backend tracer config delete point lsf = do
   mst <- safeReadFile (lsfFilePath lsf)
   case mst of
     Left err -> when delete (safeRemoveFile $ lsfFilePath lsf) >> pure (Left err)
     Right st -> pure $ Right st
   where
-    safeReadFile :: FilePath -> IO (Either Text CardanoLedgerState)
+    safeReadFile :: FilePath -> IO (Either Text StateRef)
     safeReadFile fp = do
       startTime <- getCurrentTime
       mbs <- Exception.try $ BS.readFile fp
@@ -817,11 +807,13 @@ loadLedgerStateFromFile mkHandle mkHandleFromSnap backend tracer config delete p
                 Right (lState, eBlockNo, lTables) -> do
                   tablesHandle <- mkHandle lState lTables
                   canClose <- newTVarIO True
-                  pure $ Right CardanoLedgerState
-                    { clsState = lState
-                    , clsTables = tablesHandle
-                    , clsEpochBlockNo = eBlockNo
-                    , clsCanClose = canClose
+                  pure $ Right StateRef
+                    { srState = CardanoLedgerState
+                        { clsState = lState
+                        , clsEpochBlockNo = eBlockNo
+                        }
+                    , srTables = tablesHandle
+                    , srCanClose = canClose
                     }
             LedgerBackendLSM _mPath ->
               case decodeLSM bs of
@@ -837,12 +829,14 @@ loadLedgerStateFromFile mkHandle mkHandleFromSnap backend tracer config delete p
                           pure $ Left $ "Failed to restore LSM snapshot '" <> Text.pack snapshotName <> "': " <> Text.pack (Exception.displayException err)
                         Right tablesHandle -> do
                           canClose <- newTVarIO True
-                          pure $ Right CardanoLedgerState
-                            { clsState = lState
-                            , clsTables = tablesHandle
-                    , clsEpochBlockNo = eBlockNo
-                    , clsCanClose = canClose
-                    }
+                          pure $ Right StateRef
+                            { srState = CardanoLedgerState
+                                { clsState = lState
+                                , clsEpochBlockNo = eBlockNo
+                                }
+                            , srTables = tablesHandle
+                            , srCanClose = canClose
+                            }
           case cls of
             Left err -> pure $ Left err
             Right ls -> do
@@ -896,10 +890,10 @@ listMemorySnapshots env = do
       pure $
         filter
           notGenesis
-          (castPoint . Consensus.getTip . clsState <$> getEdgePoints ledgerDB)
+          (castPoint . Consensus.getTip . clsState . srState <$> getEdgePoints ledgerDB)
   where
     getEdgePoints ldb =
-      case NE.toList $ ledgerDbCheckpoints ldb of
+      case toList $ ledgerDbCheckpoints ldb of
         [] -> []
         [a] -> [a]
         (h : ls) -> catMaybes [Just h, lastMay ls]
@@ -967,43 +961,59 @@ ledgerEpochNo env cls =
     epochInfo :: EpochInfo (Except Consensus.PastHorizonException)
     epochInfo = epochInfoLedger (configLedger $ getTopLevelconfigHasLedger env) (hardForkLedgerStatePerEra $ ledgerState cls)
 
--- Like 'Consensus.tickThenReapply' but also checks that the previous hash from the block matches
--- the head hash of the ledger state.
+-- | Apply a block to the current LedgerDB state. Reads the current StateRef,
+-- duplicates its handle, applies the block, pushes diffs, creates a new StateRef,
+-- and updates the LedgerDB. Returns the old StateRef (for snapshotting),
+-- the new CardanoLedgerState (for ApplyResult), and pruned StateRefs (to close).
 tickThenReapplyCheckHash ::
+  HasLedgerEnv ->
   ResourceRegistry IO ->
   ExtLedgerCfg CardanoBlock ->
   CardanoBlock ->
-  CardanoLedgerState ->
   IO
     ( Either
         SyncNodeError
-        ( LedgerResult
-            (ExtLedgerState CardanoBlock)
-            CardanoLedgerState
+        ( StateRef -- old state ref (for snapshotting)
+        , LedgerResult (ExtLedgerState CardanoBlock) CardanoLedgerState -- new state
+        , [StateRef] -- pruned refs to close
         )
     )
-tickThenReapplyCheckHash registry cfg block state'@CardanoLedgerState {..} =
-  if blockPrevHash block == Consensus.ledgerTipHash (ledgerState clsState)
+tickThenReapplyCheckHash env registry cfg block = do
+  -- Read the current state from LedgerDB
+  (ledgerDB, oldRef) <- atomically $ do
+    !db <- readStateUnsafe env
+    pure (db, ledgerDbCurrent db)
+  let !oldCls = srState oldRef
+  if blockPrevHash block == Consensus.ledgerTipHash (ledgerState (clsState oldCls))
     then do
       -- Create a new handle first, then read from it
-      (_rk, newHandle) <- duplicate clsTables registry
+      (_rk, newHandle) <- duplicate (srTables oldRef) registry
       let keys = Consensus.getBlockKeySets block
-      restrictedTables <- read newHandle clsState keys
+      restrictedTables <- read newHandle (clsState oldCls) keys
       -- Attach the tables to the ledger state and apply the block
-      let ledgerState' = Consensus.withLedgerTables clsState restrictedTables
-          newLedgerState =
+      let ledgerState' = Consensus.withLedgerTables (clsState oldCls) restrictedTables
+          newLedgerResult =
             Consensus.tickThenReapplyLedgerResult Consensus.ComputeLedgerEvents cfg block ledgerState'
-      -- Push diffs to the new handle
-      pushDiffs newHandle clsState (Consensus.lrResult newLedgerState)
-      pure . Right $
-        fmap
-          ( \stt ->
-              state'
+          -- Build pure CardanoLedgerState from result
+          newCls = fmap
+            ( \stt -> CardanoLedgerState
                 { clsState = forgetLedgerTables stt
-                , clsTables = newHandle
+                , clsEpochBlockNo = clsEpochBlockNo oldCls
                 }
-          )
-          newLedgerState
+            )
+            newLedgerResult
+      -- Push diffs to the new handle
+      pushDiffs newHandle (clsState oldCls) (Consensus.lrResult newLedgerResult)
+      -- Create new StateRef and push to LedgerDB
+      canClose <- newTVarIO True
+      let !newRef = StateRef
+            { srState = Consensus.lrResult newCls
+            , srTables = newHandle
+            , srCanClose = canClose
+            }
+      let (!ledgerDB', !prunedRefs) = pushLedgerDB ledgerDB newRef
+      atomically $ writeTVar (leStateVar env) (Strict.Just ledgerDB')
+      pure $ Right (oldRef, newCls, prunedRefs)
     else
       pure . Left $
         SNErrLedgerState $
@@ -1013,11 +1023,11 @@ tickThenReapplyCheckHash registry cfg block state'@CardanoLedgerState {..} =
                 ( unSlotNo $
                     fromWithOrigin
                       (SlotNo 0)
-                      (Consensus.ledgerTipSlot $ ledgerState clsState)
+                      (Consensus.ledgerTipSlot $ ledgerState (clsState oldCls))
                 )
             , " hash "
             , Text.unpack $
-                renderByteArray (Cardano.unChainHash (Consensus.ledgerTipHash $ ledgerState clsState))
+                renderByteArray (Cardano.unChainHash (Consensus.ledgerTipHash $ ledgerState (clsState oldCls)))
             , " but block previous hash is "
             , Text.unpack $
                 renderByteArray (Cardano.unChainHash $ blockPrevHash block)

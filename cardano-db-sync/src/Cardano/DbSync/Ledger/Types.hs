@@ -43,6 +43,7 @@ import qualified Data.Map.Strict as Map
 import Data.SOP.Functors (Flip (..))
 import Data.SOP.Strict
 import qualified Data.Set as Set
+import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Strict.Maybe as Strict
 import Lens.Micro (Traversal')
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -63,7 +64,7 @@ import Prelude (String, fail, id)
 --------------------------------------------------------------------------
 
 data HasLedgerEnv = HasLedgerEnv
-  { leTrace :: Trace IO Text
+  { leTrace :: !(Trace IO Text)
   , leUseLedger :: !Bool
   , leHasRewards :: !Bool
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
@@ -75,7 +76,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leSnapshotNearTipEpoch :: !Word64
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
-  , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leStateWriteQueue :: !(TBQueue (FilePath, StateRef))
   , leRegistry :: !(IO (ResourceRegistry IO))
   , leLedgerBackend :: !LedgerBackend
   , leMkLedgerHandle ::
@@ -86,11 +87,18 @@ data HasLedgerEnv = HasLedgerEnv
       Maybe (String -> IO (LedgerTablesHandle IO (ExtLedgerState CardanoBlock)))
   }
 
+-- | Pure ledger state, stored in LedgerDB checkpoints.
+-- Does not hold handle or close-related resources.
 data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(ExtLedgerState CardanoBlock EmptyMK)
-  , clsTables :: !(LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
   , clsEpochBlockNo :: !EpochBlockNo
-  , clsCanClose :: !(StrictTVar IO Bool)
+  }
+
+-- | Full state with handle, used during block application and snapshotting.
+data StateRef = StateRef
+  { srState :: !CardanoLedgerState
+  , srTables :: !(LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
+  , srCanClose :: !(StrictTVar IO Bool)
   }
 
 -- The height of the block in the current Epoch. We maintain this
@@ -229,8 +237,9 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
             newQuorum
 
 -- | In-memory ledger DB. Checkpoints are stored newest-first.
-newtype LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: NonEmpty CardanoLedgerState
+-- Uses StrictSeq for strict spine and elements.
+data LedgerDB = LedgerDB
+  { ledgerDbCheckpoints :: !(StrictSeq StateRef)
   }
 
 data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint

@@ -254,7 +254,11 @@ executable cardano-db-sync
                         -Wno-unsafe
                         -threaded
                         -rtsopts
-                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+
+  if arch(arm)
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -N1 --disable-delayed-os-memory-return"
+  else
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -qg1 -qb1 -N2 --disable-delayed-os-memory-return"
 
   autogen-modules:      Paths_cardano_db_sync
                         MigrationValidations
@@ -293,7 +297,11 @@ executable http-get-json-metadata
                         -Wno-unsafe
                         -threaded
                         -rtsopts
-                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+
+  if arch(arm)
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -N1 --disable-delayed-os-memory-return"
+  else
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -qg1 -qb1 -N2 --disable-delayed-os-memory-return"
 
   build-depends:        base
                       , ansi-terminal
@@ -324,7 +332,11 @@ executable test-http-get-json-metadata
                         -Wno-unsafe
                         -threaded
                         -rtsopts
-                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+                        
+  if arch(arm)
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -N1 --disable-delayed-os-memory-return"
+  else
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -qg1 -qb1 -N2 --disable-delayed-os-memory-return"
 
   build-depends:        base
                       , bytestring
