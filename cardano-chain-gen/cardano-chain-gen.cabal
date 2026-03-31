@@ -85,16 +85,16 @@ library
                       , microlens
                       , network
                       , nothunks
-                      , ouroboros-consensus
-                      , ouroboros-consensus-cardano
-                      , ouroboros-consensus-diffusion
-                      , ouroboros-consensus-protocol
-                      , ouroboros-network
-                      , ouroboros-network-api
-                      , ouroboros-network-framework
-                      , ouroboros-network-protocols
-                      , plutus-core
-                      , plutus-ledger-api:{plutus-ledger-api-testlib}
+                      , ouroboros-consensus ^>= 0.30.0.1
+                      , ouroboros-consensus-cardano ^>= 0.26.0.3
+                      , ouroboros-consensus-diffusion ^>= 0.26.0.0
+                      , ouroboros-consensus-protocol ^>= 0.13.0.0
+                      , ouroboros-network ^>= 0.22.6.0
+                      , ouroboros-network-api ^>= 0.16.0.0
+                      , ouroboros-network-framework ^>= 0.19.3.0
+                      , ouroboros-network-protocols ^>= 0.15.2.0
+                      , plutus-core ^>= 1.57.0.0
+                      , plutus-ledger-api:{plutus-ledger-api-testlib} ^>= 1.57.0.0
                       , serialise
                       , strict-sop-core
                       , io-classes:strict-stm
