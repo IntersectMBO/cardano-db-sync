@@ -99,13 +99,13 @@ insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
           -- Calculate and set cache hit rates
           let cacheStats = elsCaches epochStats
               hitRate hits queries = if queries == 0 then 0.0 else fromIntegral hits / fromIntegral queries
-          liftIO $ setCacheHitRate metricSetters "stake" (hitRate (credsHits cacheStats) (credsQueries cacheStats))
-          liftIO $ setCacheHitRate metricSetters "pools" (hitRate (poolsHits cacheStats) (poolsQueries cacheStats))
-          liftIO $ setCacheHitRate metricSetters "datum" (hitRate (datumHits cacheStats) (datumQueries cacheStats))
-          liftIO $ setCacheHitRate metricSetters "multi_assets" (hitRate (multiAssetsHits cacheStats) (multiAssetsQueries cacheStats))
-          liftIO $ setCacheHitRate metricSetters "prev_block" (hitRate (prevBlockHits cacheStats) (prevBlockQueries cacheStats))
-          liftIO $ setCacheHitRate metricSetters "address" (hitRate (addressHits cacheStats) (addressQueries cacheStats))
-          liftIO $ setCacheHitRate metricSetters "tx_ids" (hitRate (txIdsHits cacheStats) (txIdsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheStake (hitRate (credsHits cacheStats) (credsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CachePools (hitRate (poolsHits cacheStats) (poolsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheDatum (hitRate (datumHits cacheStats) (datumQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheMultiAssets (hitRate (multiAssetsHits cacheStats) (multiAssetsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CachePrevBlock (hitRate (prevBlockHits cacheStats) (prevBlockQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheAddress (hitRate (addressHits cacheStats) (addressQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheTxIds (hitRate (txIdsHits cacheStats) (txIdsQueries cacheStats))
 
           -- Log comprehensive epoch statistics
           liftIO . logInfo tracer $

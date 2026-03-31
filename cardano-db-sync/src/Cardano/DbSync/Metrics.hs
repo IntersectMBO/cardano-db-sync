@@ -17,7 +17,7 @@ module Cardano.DbSync.Metrics (
   withMetricsServer,
 ) where
 
-import Cardano.DbSync.Types (MetricSetters (..))
+import Cardano.DbSync.Types (MetricSetters (..), CacheType(..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
 import Ouroboros.Network.Block (BlockNo (..))
@@ -88,16 +88,15 @@ withMetricSetters prometheusPort action =
             Gauge.set duration $ mInsertDuration metrics
         , metricsSetCacheHitRate = \cacheName hitRate ->
             case cacheName of
-              "stake" -> Gauge.set hitRate $ mCacheStakeHitRate metrics
-              "pools" -> Gauge.set hitRate $ mCachePoolsHitRate metrics
-              "datum" -> Gauge.set hitRate $ mCacheDatumHitRate metrics
-              "multi_assets" -> Gauge.set hitRate $ mCacheMultiAssetsHitRate metrics
-              "prev_block" -> Gauge.set hitRate $ mCachePrevBlockHitRate metrics
-              "address" -> Gauge.set hitRate $ mCacheAddressHitRate metrics
-              "tx_ids" -> Gauge.set hitRate $ mCacheTxIdsHitRate metrics
-              _ -> pure ()
+              CacheStake -> Gauge.set hitRate $ mCacheStakeHitRate metrics
+              CachePools -> Gauge.set hitRate $ mCachePoolsHitRate metrics
+              CacheDatum -> Gauge.set hitRate $ mCacheDatumHitRate metrics
+              CacheMultiAssets -> Gauge.set hitRate $ mCacheMultiAssetsHitRate metrics
+              CachePrevBlock -> Gauge.set hitRate $ mCachePrevBlockHitRate metrics
+              CacheAddress -> Gauge.set hitRate $ mCacheAddressHitRate metrics
+              CacheTxIds -> Gauge.set hitRate $ mCacheTxIdsHitRate metrics
         }
-
+  
 withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
 withMetricsServer port action = do
   -- Using both `RegistryT` and `bracket` here is overkill. Unfortunately the
@@ -153,5 +152,5 @@ setDbBlocksPerSecond = metricsSetDbBlocksPerSecond
 setInsertDuration :: MetricSetters -> Double -> IO ()
 setInsertDuration = metricsSetInsertDuration
 
-setCacheHitRate :: MetricSetters -> Text -> Double -> IO ()
+setCacheHitRate :: MetricSetters -> CacheType -> Double -> IO ()
 setCacheHitRate = metricsSetCacheHitRate
