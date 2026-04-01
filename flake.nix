@@ -34,8 +34,6 @@
     let
       supportedSystems = [
         "x86_64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
       ];
     in
       inputs.utils.lib.eachSystem supportedSystems (system:
@@ -162,11 +160,12 @@
                 else lib.mkDefault "ghc96";
             flake.variants =
               let
-                compilers =
-                  if (system == "x86_64-linux") then
-                    ["ghc96" "ghc98" "ghc910"]
-                  else
-                    ["ghc98"];
+                compilers = [];
+                # compilers =
+                #   if (system == "x86_64-linux") then
+                #     ["ghc96" "ghc98" "ghc910"]
+                #   else
+                #     ["ghc98"];
               in
                 lib.genAttrs compilers (c: { compiler-nix-name = c; });
 
