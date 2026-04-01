@@ -85,3 +85,12 @@ all the blocks that needs deletion, we found only the oldest one and delete with
 every transaction after it. We use the property that fields like `tx.block_id` are non-decreasing,
 meaning newer entries will have bigger values. So if we simply find the oldest transaction that
 needs to be deleted, it's easy to delete everything with a single query.
+
+### Manual Rollbacks
+
+In addition to automatic rollbacks that occur during normal chain-sync operations, you can perform
+manual rollbacks using either `cardano-db-sync --rollback-to-slot` or `cardano-db-tool rollback`.
+These are useful for testing, fixing incorrect data after bug fixes, or recovering from corrupted
+database states.
+
+For detailed information on performing manual rollbacks, see [Manual Rollbacks](manual-rollbacks.md).

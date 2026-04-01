@@ -11,7 +11,7 @@
   - `--force-indexes`: Forces the Index creation at the start of db-sync. Normally they're created later.
   - `--fix-only`: Runs only the db-sync fix procedure for the wrong datum, redeemer_data, and plutus script bytes and exits.
   - `--disable-cache`: Disables the db-sync caches. Reduces memory usage but it takes longer to sync.
-  - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot.
+  - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot. See [Manual Rollbacks](manual-rollbacks.md) for details.
   - `--disable-in-out`: Disables the `tx_in` and `tx_out` table.
 
 - **Deprecated Options (for historical reference only):**

@@ -32,18 +32,20 @@ This directory contains various documentation files for setting up, configuring,
 
 14. [Syncing and Rollbacks](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md) - Details on the syncing procedure and handling rollbacks, explaining how the node syncs with the blockchain and manages rollbacks in case of errors or inconsistencies.
 
-15. [Community Tools](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/community-tools.md) - Information on various community tools like Koios and Blockfrost, providing an overview of these tools, their features, and how they can be used to interact with Cardano DB Sync.
+15. [Manual Rollbacks](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/manual-rollbacks.md) - Guide to performing manual rollbacks using cardano-db-sync or cardano-db-tool, including use cases, step-by-step instructions, and best practices for rolling back the database to fix incorrect data or recover from issues.
 
-16. [Interesting Queries](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/interesting-queries.md) - A collection of useful SQL queries for interacting with the database, including examples of queries for retrieving data, analyzing transactions, and generating reports.
+16. [Community Tools](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/community-tools.md) - Information on various community tools like Koios and Blockfrost, providing an overview of these tools, their features, and how they can be used to interact with Cardano DB Sync.
 
-17. [Troubleshooting](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/troubleshooting.md) - Common issues and troubleshooting steps for Cardano DB Sync, providing solutions for various problems that users may encounter while running the node.
+17. [Interesting Queries](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/interesting-queries.md) - A collection of useful SQL queries for interacting with the database, including examples of queries for retrieving data, analyzing transactions, and generating reports.
 
-18. [Release Process](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/release-process.md) - Detailed process for releasing new versions of Cardano DB Sync, covering the steps required to prepare, test, and publish a new release.
+18. [Troubleshooting](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/troubleshooting.md) - Common issues and troubleshooting steps for Cardano DB Sync, providing solutions for various problems that users may encounter while running the node.
 
-19. [State Snapshot](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/state-snapshot.md) - Guide to creating and restoring state snapshots, explaining how to take snapshots of the database state and restore them when needed.
+19. [Release Process](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/release-process.md) - Detailed process for releasing new versions of Cardano DB Sync, covering the steps required to prepare, test, and publish a new release.
 
-20. [Pool OffChain Data](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/pool-offchain-data.md) - Handling off-chain data for staking pools, providing details on managing off-chain data and integrating it with the Cardano DB Sync Node.
+20. [State Snapshot](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/state-snapshot.md) - Guide to creating and restoring state snapshots, explaining how to take snapshots of the database state and restore them when needed.
 
-21. [SMASH](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/smash.md) - Information on the Stakepool Metadata Aggregation Server (SMASH), explaining the purpose of SMASH, how it works, and how to set it up.
+21. [Pool OffChain Data](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/pool-offchain-data.md) - Handling off-chain data for staking pools, providing details on managing off-chain data and integrating it with the Cardano DB Sync Node.
 
-22. [HLint and Stylish Haskell](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/hlint-stylish-haskell.md) - Setting up `hlint` and `stylish-haskell` for code linting and formatting, providing instructions on configuring these tools to maintain code quality and consistency.
+22. [SMASH](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/smash.md) - Information on the Stakepool Metadata Aggregation Server (SMASH), explaining the purpose of SMASH, how it works, and how to set it up.
+
+23. [HLint and Stylish Haskell](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/hlint-stylish-haskell.md) - Setting up `hlint` and `stylish-haskell` for code linting and formatting, providing instructions on configuring these tools to maintain code quality and consistency.
