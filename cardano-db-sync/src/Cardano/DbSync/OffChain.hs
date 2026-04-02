@@ -268,7 +268,7 @@ runFetchOffChainPoolThread syncEnv = do
 runFetchOffChainVoteThread :: SyncEnv -> IO ()
 runFetchOffChainVoteThread syncEnv = do
   -- if disable gov is active then don't run voting anchor thread
-  when (ioOffChainVoteData iopts) $ do
+  when (ioOffChainVoteData iopts && ioGov iopts) $ do
     logInfo trce "Running Offchain Vote Anchor fetch thread"
     pgconfig <- DB.runOrThrowIO (DB.readPGPass DB.PGPassDefaultEnv)
     connSetting <- case DB.toConnectionSetting pgconfig of
