@@ -194,6 +194,8 @@ library
                       , http-client-tls
                       , http-types
                       , iohk-monitoring
+                      , ip
+                      , network
                       , lifted-base
                       , memory
                       , microlens

@@ -234,10 +234,11 @@ fetchPolicies' (ServerEnv trce dataLayer) smashURL =
     logInfo trce $ "Fetch policies from " <> textShow smashURL
     -- Fetch from the remote SMASH server.
     policyResult <- httpClientFetchPolicies smashURL
-    let delistedPools =
-          case policyResult of
-            Left httpClientErr -> panic $ renderHttpClientError httpClientErr
-            Right policyResult' -> prDelistedPools policyResult'
+    delistedPools <- case policyResult of
+      Left httpClientErr -> do
+        liftIO $ putStrLn $ "Error fetching policies: " ++ Text.unpack (renderHttpClientError httpClientErr)
+        pure []
+      Right policyResult' -> pure $ prDelistedPools policyResult'
 
     -- Clear the database
     let getDelistedPools' = dlGetDelistedPools dataLayer

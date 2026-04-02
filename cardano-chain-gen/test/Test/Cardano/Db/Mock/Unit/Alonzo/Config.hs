@@ -31,6 +31,7 @@ insertConfig = do
           , sioPlutus = PlutusDisable
           , sioGovernance = GovernanceConfig False
           , sioOffchainPoolData = OffchainPoolDataConfig False
+          , sioOffchainVoteData = OffchainVoteDataConfig False
           , sioPoolStats = PoolStatsConfig False
           , sioJsonType = JsonTypeDisable
           , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False

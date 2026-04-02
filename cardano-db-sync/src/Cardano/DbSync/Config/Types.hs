@@ -38,6 +38,7 @@ module Cardano.DbSync.Config.Types (
   PlutusConfig (..),
   GovernanceConfig (..),
   OffchainPoolDataConfig (..),
+  OffchainVoteDataConfig (..),
   JsonTypeConfig (..),
   SnapshotIntervalConfig (..),
   LedgerStateDir (..),
@@ -189,6 +190,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPlutus :: PlutusConfig
   , sioGovernance :: GovernanceConfig
   , sioOffchainPoolData :: OffchainPoolDataConfig
+  , sioOffchainVoteData :: OffchainVoteDataConfig
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
@@ -263,6 +265,11 @@ newtype GovernanceConfig = GovernanceConfig
 
 newtype OffchainPoolDataConfig = OffchainPoolDataConfig
   { isOffchainPoolDataEnabled :: Bool
+  }
+  deriving (Eq, Show)
+
+newtype OffchainVoteDataConfig = OffchainVoteDataConfig
+  { isOffchainVoteDataEnabled :: Bool
   }
   deriving (Eq, Show)
 
@@ -462,6 +469,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "plutus" .!= sioPlutus baseOptions
     <*> obj .:? "governance" .!= sioGovernance baseOptions
     <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData baseOptions
+    <*> obj .:? "offchain_vote_data" .!= sioOffchainVoteData baseOptions
     <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
@@ -484,6 +492,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "plutus" sioPlutus
     , toJsonIfSet "governance" sioGovernance
     , toJsonIfSet "offchain_pool_data" sioOffchainPoolData
+    , toJsonIfSet "offchain_vote_data" sioOffchainVoteData
     , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
@@ -506,6 +515,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "plutus" .!= sioPlutus def
       <*> obj .:? "governance" .!= sioGovernance def
       <*> obj .:? "offchain_pool_data" .!= sioOffchainPoolData def
+      <*> obj .:? "offchain_vote_data" .!= sioOffchainVoteData def
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
@@ -523,6 +533,7 @@ instance ToJSON SyncInsertOptions where
       , "plutus" .= sioPlutus
       , "governance" .= sioGovernance
       , "offchain_pool_data" .= sioOffchainPoolData
+      , "offchain_vote_data" .= sioOffchainVoteData
       , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
@@ -725,6 +736,15 @@ instance FromJSON OffchainPoolDataConfig where
       Just g -> pure (OffchainPoolDataConfig g)
       Nothing -> fail $ "unexpected offchain_pool_data: " <> show v
 
+instance ToJSON OffchainVoteDataConfig where
+  toJSON = boolToEnableDisable . isOffchainVoteDataEnabled
+
+instance FromJSON OffchainVoteDataConfig where
+  parseJSON = Aeson.withText "offchain_vote_data" $ \v ->
+    case enableDisableToBool v of
+      Just g -> pure (OffchainVoteDataConfig g)
+      Nothing -> fail $ "unexpected offchain_vote_data: " <> show v
+
 instance ToJSON JsonTypeConfig where
   toJSON JsonTypeText = "text"
   toJSON JsonTypeJsonb = "jsonb"
@@ -768,8 +788,9 @@ instance Default SyncInsertOptions where
       , sioMultiAsset = MultiAssetEnable
       , sioMetadata = MetadataEnable
       , sioPlutus = PlutusEnable
-      , sioGovernance = GovernanceConfig True
-      , sioOffchainPoolData = OffchainPoolDataConfig True
+      , sioGovernance = GovernanceConfig False
+      , sioOffchainPoolData = OffchainPoolDataConfig False
+      , sioOffchainVoteData = OffchainVoteDataConfig False
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
@@ -787,8 +808,9 @@ fullInsertOptions =
     , sioMultiAsset = MultiAssetEnable
     , sioMetadata = MetadataEnable
     , sioPlutus = PlutusEnable
-    , sioGovernance = GovernanceConfig True
-    , sioOffchainPoolData = OffchainPoolDataConfig True
+    , sioGovernance = GovernanceConfig False
+    , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioOffchainVoteData = OffchainVoteDataConfig False
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
@@ -808,6 +830,7 @@ onlyUTxOInsertOptions =
     , sioPlutus = PlutusDisable
     , sioGovernance = GovernanceConfig False
     , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioOffchainVoteData = OffchainVoteDataConfig False
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
@@ -834,6 +857,7 @@ disableAllInsertOptions =
     , sioMetadata = MetadataDisable
     , sioPlutus = PlutusDisable
     , sioOffchainPoolData = OffchainPoolDataConfig False
+    , sioOffchainVoteData = OffchainVoteDataConfig False
     , sioPoolStats = PoolStatsConfig False
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText

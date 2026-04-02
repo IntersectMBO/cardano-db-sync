@@ -16,7 +16,6 @@ import Cardano.SMASH.Server.Types
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map.Strict as Map
 import Data.Pool (Pool)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
@@ -220,7 +219,7 @@ isRegistered pid (mEpochNo, certs) = case Map.lookup pid certs of
 fromDbPoolId :: PoolId -> ByteString
 fromDbPoolId pid =
   case Base16.decode $ Text.encodeUtf8 $ getPoolId pid of
-    Left err -> panic $ Text.pack err
+    Left _ -> mempty
     Right bs -> bs
 
 toDbPoolId :: ByteString -> PoolId
@@ -229,14 +228,14 @@ toDbPoolId bs = PoolId $ Text.decodeUtf8 $ Base16.encode bs
 fromDbPoolMetaHash :: PoolMetadataHash -> ByteString
 fromDbPoolMetaHash pmh =
   case Base16.decode $ Text.encodeUtf8 $ getPoolMetadataHash pmh of
-    Left err -> panic $ Text.pack err
+    Left _ -> mempty
     Right bs -> bs
 
 toDbServantMetaHash :: ByteString -> PoolMetadataHash
 toDbServantMetaHash bs = PoolMetadataHash $ Text.decodeUtf8 $ Base16.encode bs
 
 createCachedPoolDataLayer :: Maybe () -> IO PoolDataLayer
-createCachedPoolDataLayer _ = panic "createCachedPoolDataLayer not defined yet"
+createCachedPoolDataLayer _ = error "createCachedPoolDataLayer not implemented"
 
 _getUsedTickers :: Trace IO Text -> Pool HsqlCon.Connection -> IO (Either Db.DbSessionError [(TickerName, PoolMetadataHash)])
 _getUsedTickers tracer conn = do

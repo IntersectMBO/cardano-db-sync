@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -36,10 +37,13 @@ import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import GHC.Show (show)
+import qualified Net.IPv4 as IPv4
+import qualified Net.IPv6 as IPv6
 import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import qualified Network.HTTP.Types as Http
+import qualified Network.Socket as Socket
 
 -------------------------------------------------------------------------------------
 -- Get OffChain data
@@ -213,11 +217,67 @@ isPossiblyJsonObject bs =
     _otherwise -> False
 
 -------------------------------------------------------------------------------------
+-- Url Validation
+-------------------------------------------------------------------------------------
+isLocalhostHost :: ByteString -> Bool
+isLocalhostHost host =
+  host == "localhost" || host == "127.0.0.1" || host == "::1"
+
+validateUrlScheme :: OffChainUrlType -> ExceptT OffChainFetchError IO ()
+validateUrlScheme url = do
+  let urlText = Text.pack $ showUrl url
+  unless (Text.isPrefixOf "https://" urlText || (Text.isPrefixOf "http://" urlText && isLocalhostUrl urlText)) $
+    left $
+      OCFErrUrlParseFail url "Only HTTPS URLs are allowed"
+  where
+    isLocalhostUrl :: Text -> Bool
+    isLocalhostUrl u =
+      "http://localhost" `Text.isPrefixOf` u
+        || "http://127.0.0.1" `Text.isPrefixOf` u
+        || "http://[::1]" `Text.isPrefixOf` u
+
+isRestrictedIPv6 :: IPv6.IPv6 -> Bool
+isRestrictedIPv6 ipv6 =
+  let (h1, _, _, _, _, _, _, _) = IPv6.toWord16s ipv6
+   in (ipv6 == IPv6.loopback)
+        || ((h1 .&. 0xfe00) == 0xfc00)
+        || (h1 == 0xfe80)
+
+validateResolvedHost :: Http.Request -> ExceptT OffChainFetchError IO ()
+validateResolvedHost request = do
+  let hostBS = Http.host request
+  eAddrInfos <- liftIO $ try $ Socket.getAddrInfo Nothing (Just $ BS.unpack hostBS) Nothing
+  addrInfos <- case eAddrInfos of
+    Left (_ :: SomeException) -> pure []
+    Right addrs -> pure addrs
+  when (null addrInfos) $
+    left $
+      OCFErrConnectionFailure (OffChainPoolUrl $ PoolUrl $ Text.decodeUtf8 hostBS)
+  forM_ addrInfos $ \addrInfo -> do
+    let sockAddr = Socket.addrAddress addrInfo
+    case sockAddr of
+      Socket.SockAddrInet _ hostAddr -> do
+        let ipv4 = IPv4.fromTupleOctets (Socket.hostAddressToTuple hostAddr)
+        when (IPv4.reserved ipv4) $
+          left $
+            OCFErrUrlParseFail (OffChainPoolUrl $ PoolUrl $ Text.decodeUtf8 hostBS) "Access to private, loopback, or link-local IP addresses is not allowed"
+      Socket.SockAddrInet6 _ _ hostAddr6 _ -> do
+        let ipv6 = IPv6.fromTupleWord32s hostAddr6
+        when (isRestrictedIPv6 ipv6) $
+          left $
+            OCFErrUrlParseFail (OffChainPoolUrl $ PoolUrl $ Text.decodeUtf8 hostBS) "Access to private, loopback, or link-local IP addresses is not allowed"
+      _ -> pure ()
+
+-------------------------------------------------------------------------------------
 -- Url
 -------------------------------------------------------------------------------------
 parseOffChainUrl :: OffChainUrlType -> ExceptT OffChainFetchError IO Http.Request
-parseOffChainUrl url =
-  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (showUrl url)
+parseOffChainUrl url = do
+  validateUrlScheme url
+  request <- handleExceptT wrapHttpException $ Http.parseRequest (showUrl url)
+  unless (isLocalhostHost $ Http.host request) $
+    validateResolvedHost request
+  pure $ applyContentType request
   where
     wrapHttpException :: HttpException -> OffChainFetchError
     wrapHttpException err = OCFErrHttpException url (textShow err)

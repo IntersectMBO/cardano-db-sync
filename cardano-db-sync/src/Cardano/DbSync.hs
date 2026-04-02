@@ -317,6 +317,7 @@ extractSyncOptions snp aop snc =
         , ioKeepMetadataNames = maybeKeepMNames
         , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
         , ioOffChainPoolData = useOffchainPoolData
+        , ioOffChainVoteData = useOffchainVoteData
         , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance
         , ioRemoveJsonbFromSchema = isRemoveJsonbFromSchemaEnabled (sioRemoveJsonbFromSchema (dncInsertOptions snc))
@@ -326,6 +327,8 @@ extractSyncOptions snp aop snc =
     useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable
     useOffchainPoolData =
       isOffchainPoolDataEnabled (sioOffchainPoolData (dncInsertOptions snc))
+    useOffchainVoteData =
+      isOffchainVoteDataEnabled (sioOffchainVoteData (dncInsertOptions snc))
     useGovernance =
       isGovernanceEnabled (sioGovernance (dncInsertOptions snc))
 
