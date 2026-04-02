@@ -80,6 +80,9 @@ allow-newer:
   -- https://hackage.haskell.org/package/persistent-postgresql-2.13.6.2/persistent-postgresql.cabal
   -- Since we're using srp now, we don't have access to the revision
   , persistent-postgresql:postgresql-libpq
+  -- CHaPs vector-algorithms-0.9.0.1.0.0.0.0.1 has primitive <0.9 but
+  -- primitive-0.9.0.0 is installed. Hackage 0.9.0.2 already relaxed this.
+  , vector-algorithms:primitive
 
 constraints:
   -- STM 2.5.2 is broken: https://github.com/haskell/stm/issues/76
@@ -206,14 +209,6 @@ source-repository-package
     servant
     servant-server
 
--- CHaPs has vector-algorithms-0.9.0.1.0.0.0.0.1 which constrains primitive <0.9,
--- conflicting with primitive-0.9.0.0. Using 0.9.1.0 which supports primitive <0.10.
-source-repository-package
-  type: git
-  location: https://github.com/erikd/vector-algorithms
-  tag: 57e00a866815d0b8317f4cac6f2936408cf569ff
-  --sha256: sha256-058WWelwaoiKgnOaI64iWOS1XhOqOYdbCK5v5cjjMFk=
-
 -- Pinning hackage versions that CHaPs overrides with older/incompatible ones.
 source-repository-package
   type: git
@@ -254,6 +249,14 @@ source-repository-package
 --   subdir:
 --     unliftio-core
 
+-- Pinning ekg-json 0.1.1.0 from hackage repo.
+-- CHaPs has ekg-json-0.1.0.7.0.0.0.0.2 (IOG fork with aeson ^>=2.2 only).
+source-repository-package
+  type: git
+  location: https://github.com/L0neGamer/ekg-json
+  tag: 1b87145257959624ef538cd8f0f485394ca2bb75
+  --sha256: sha256-OYXMEVfw0CG1tUsjJWF2BSkItR8Z/lHH4IdB44/mduE=
+
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
@@ -261,6 +264,7 @@ source-repository-package
   --sha256: sha256-v0q8qHdI6LKc8mP43QZt3UGdTNDQXE0aF6QapvZsTvU=
   subdir:
     cardano-node
+    cardano-submit-api
     trace-dispatcher
     trace-forward
     trace-resources
