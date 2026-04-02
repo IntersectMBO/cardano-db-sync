@@ -245,6 +245,8 @@
               buildInputs = with nixpkgs.pkgsBuildBuild; [
                 git
                 protobuf
+                liburing
+                snappy
               ];
 
               withHoogle = true;
@@ -280,6 +282,30 @@
                   [ "../config/pgpass-mainnet" ];
                 packages.cardano-chain-gen.package.extraSrcFiles =
                   [ "../schema/*.sql" ];
+              })
+
+              # TODO remove this module when removing proto-lens SRP
+              # Override proto-lens source to use fixed symlinks (inputMap provides the fixed
+              # source for plan computation; this module provides it for the build phase)
+              ({lib, config, ...}: let
+                protoLensPackages = [
+                  "proto-lens"
+                  "proto-lens-arbitrary"
+                  "proto-lens-discrimination"
+                  "proto-lens-optparse"
+                  "proto-lens-protobuf-types"
+                  "proto-lens-protoc"
+                  "proto-lens-runtime"
+                  "proto-lens-setup"
+                  "proto-lens-tests-dep"
+                  "proto-lens-tests"
+                  "discrimination-ieee754"
+                  "proto-lens-benchmarks"
+                ];
+              in {
+                packages = lib.genAttrs
+                  (builtins.filter (p: config.packages ? ${p}) protoLensPackages)
+                  (p: { src = lib.mkForce (protoLensSrcFixed + "/${p}"); });
               })
 
               ({ lib, pkgs, config, ... }: {

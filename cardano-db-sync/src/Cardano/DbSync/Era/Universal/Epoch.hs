@@ -195,7 +195,7 @@ insertStakeSlice ::
   ExceptT SyncNodeError DB.DbM ()
 insertStakeSlice _ Generic.NoSlices = pure ()
 insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
-  insertEpochStake syncEnv network (Generic.sliceEpochNo slice) (Map.toList $ Generic.sliceDistr slice)
+  insertEpochStake syncEnv network (Generic.sliceEpochNo slice) (Generic.sliceDistr slice)
   when finalSlice $ do
     lift $ DB.updateStakeProgressCompleted $ unEpochNo $ Generic.sliceEpochNo slice
     size <- lift $ DB.queryEpochStakeCount (unEpochNo $ Generic.sliceEpochNo slice)

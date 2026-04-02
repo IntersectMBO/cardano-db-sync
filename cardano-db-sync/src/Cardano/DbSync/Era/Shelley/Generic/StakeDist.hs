@@ -28,7 +28,7 @@ import qualified Cardano.Ledger.State as Ledger
 import Cardano.Ledger.Val ((<+>))
 import Cardano.Prelude
 import qualified Data.Map.Strict as Map
-import Data.VMap (VB, VMap (..))
+import Data.VMap (VB, VMap (..), VS)
 import qualified Data.VMap as VMap
 import qualified Data.Vector.Generic as VG
 import Lens.Micro
@@ -49,12 +49,12 @@ data StakeSliceRes
 
 data StakeSlice = StakeSlice
   { sliceEpochNo :: !EpochNo
-  , sliceDistr :: !(Map StakeCred (Coin, PoolKeyHash))
+  , sliceDistr :: ![(StakeCred, (Coin, PoolKeyHash))]
   }
   deriving (Eq)
 
 emptySlice :: EpochNo -> StakeSlice
-emptySlice epoch = StakeSlice epoch Map.empty
+emptySlice epoch = StakeSlice epoch []
 
 getSecurityParameter ::
   ConsensusProtocol (BlockProtocol blk) =>
@@ -120,7 +120,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
       Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
-    activeStakeEntries :: VMap.KVVector VB VB (Credential Staking, StakeWithDelegation)
+    activeStakeEntries :: VMap.KVVector VB VS (Credential Staking, StakeWithDelegation)
     activeStakeEntries = VMap.unVMap $ Ledger.unActiveStake $ Ledger.ssActiveStake stakeSnapshot
 
     delegationsLen :: Word64
@@ -162,13 +162,12 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
         , sliceDistr = distribution
         }
       where
-        activeStakeSliced :: VMap VB VB (Credential Staking) StakeWithDelegation
+        activeStakeSliced :: VMap VB VS (Credential Staking) StakeWithDelegation
         activeStakeSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral actualSize) activeStakeEntries
 
-        distribution :: Map StakeCred (Coin, PoolKeyHash)
+        distribution :: [(StakeCred, (Coin, PoolKeyHash))]
         distribution =
-          VMap.toMap $
-            VMap.map (\swd -> (Ledger.fromCompact (unNonZero (swdStake swd)), swdDelegation swd)) activeStakeSliced
+          VMap.foldlWithKey (\acc cred swd -> (cred, (Ledger.fromCompact (unNonZero (swdStake swd)), swdDelegation swd)) : acc) [] activeStakeSliced
 
 countEpochStake ::
   ExtLedgerState CardanoBlock mk ->
@@ -198,7 +197,7 @@ genericCountEpochStake lstate =
       Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
-    activeStake :: VMap VB VB (Credential Staking) StakeWithDelegation
+    activeStake :: VMap VB VS (Credential Staking) StakeWithDelegation
     activeStake = Ledger.unActiveStake $ Ledger.ssActiveStake stakeSnapshot
 
     -- ActiveStake only contains entries with non-zero stake, so no filtering needed
@@ -237,7 +236,7 @@ genericFullStakeSlice lstate =
       Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
-    activeStakeEntries :: VMap.KVVector VB VB (Credential Staking, StakeWithDelegation)
+    activeStakeEntries :: VMap.KVVector VB VS (Credential Staking, StakeWithDelegation)
     activeStakeEntries = VMap.unVMap $ Ledger.unActiveStake $ Ledger.ssActiveStake stakeSnapshot
 
     delegationsLen :: Word64
@@ -254,13 +253,12 @@ genericFullStakeSlice lstate =
         , sliceDistr = distribution
         }
       where
-        activeStakeSliced :: VMap VB VB (Credential Staking) StakeWithDelegation
+        activeStakeSliced :: VMap VB VS (Credential Staking) StakeWithDelegation
         activeStakeSliced = VMap $ VG.slice (fromIntegral index) (fromIntegral delegationsLen) activeStakeEntries
 
-        distribution :: Map StakeCred (Coin, PoolKeyHash)
+        distribution :: [(StakeCred, (Coin, PoolKeyHash))]
         distribution =
-          VMap.toMap $
-            VMap.map (\swd -> (Ledger.fromCompact (unNonZero (swdStake swd)), swdDelegation swd)) activeStakeSliced
+          VMap.foldlWithKey (\acc cred swd -> (cred, (Ledger.fromCompact (unNonZero (swdStake swd)), swdDelegation swd)) : acc) [] activeStakeSliced
 
 getPoolDistr ::
   ExtLedgerState CardanoBlock mk ->
