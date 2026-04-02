@@ -857,17 +857,41 @@ deleteBlocksSlotNo ::
   Bool ->
   DbM Bool
 deleteBlocksSlotNo trce txOutVariantType (SlotNo slotNo) isConsumedTxOut = do
-  blockEpochE <- queryNearestBlockSlotNo slotNo
-  case blockEpochE of
-    Nothing -> pure False
-    (Just (blockId, epochN)) -> do
-      -- Delete the block and return whether it was successful
-      deleteCount <- deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut
-      if deleteCount > 0
-        then pure True
-        else do
-          liftIO $ logWarning trce $ "deleteBlocksSlotNo: No blocks found for slot: " <> Text.pack (show slotNo)
+  mBlock <- queryNearestBlockSlotNo slotNo
+  case mBlock of
+    Nothing -> do
+      liftIO $ logWarning trce $ "deleteBlocksSlotNo: No block found at or after slot: " <> textShow slotNo
+      pure False
+    Just (blockId, blockNo) -> do
+      -- Get the correct epoch number (same approach as rollbackFromBlockNo)
+      mBlockAndEpoch <- queryBlockNoAndEpoch blockNo
+      case mBlockAndEpoch of
+        Nothing -> do
+          liftIO $ logWarning trce $ "deleteBlocksSlotNo: Block not found for block_no: " <> textShow blockNo
           pure False
+        Just (_, epochNo) -> do
+          nBlocks <- queryBlockCountAfterBlockNo blockNo True
+          liftIO $
+            logInfo trce $
+              "Rollback: Deleting "
+                <> textShow nBlocks
+                <> " blocks with block_no >= "
+                <> textShow blockNo
+                <> " (slot >= "
+                <> textShow slotNo
+                <> ", epoch "
+                <> textShow epochNo
+                <> ")"
+
+          deleteCount <- deleteBlocksBlockId trce txOutVariantType blockId epochNo isConsumedTxOut
+
+          if deleteCount > 0
+            then do
+              liftIO $ logInfo trce $ "Rollback: Successfully deleted " <> textShow deleteCount <> " blocks"
+              pure True
+            else do
+              liftIO $ logWarning trce $ "deleteBlocksSlotNo: No blocks were deleted for slot: " <> textShow slotNo
+              pure False
 
 --------------------------------------------------------------------------------
 deleteBlocksSlotNoNoTrace :: TxOutVariantType -> SlotNo -> DbM Bool
