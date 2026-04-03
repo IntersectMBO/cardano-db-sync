@@ -100,6 +100,8 @@ constraints:
   , unix == 2.7.2.2
   , unliftio-core == 0.2.1.0
   , async-timer == 0.1.4.1
+  -- Cabal 3.14 reworked FilePath references, which we use in custom-setups
+  , Cabal < 3.14
 
 -- ---------------------------------------------------------
 
