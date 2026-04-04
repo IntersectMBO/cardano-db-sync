@@ -12,6 +12,9 @@ repository cardano-haskell-packages
 index-state:
   , hackage.haskell.org 2024-10-10T00:52:24Z
   , cardano-haskell-packages 2024-11-26T16:00:26Z
+active-repositories:
+  , :rest
+  , cardano-haskell-packages:override
 
 packages:
   cardano-db
@@ -73,12 +76,32 @@ allow-newer:
   -- quickcheck-state-machine that does not compile with ghc-9.10 so we allow a never version
   -- that builds with ghc-9.10 (and earlier).
   , ouroboros-consensus:quickcheck-state-machine
+  -- This is a workaround for a revision change on Hackage that increases the upper bound on
+  -- https://hackage.haskell.org/package/persistent-postgresql-2.13.6.2/persistent-postgresql.cabal
+  -- Since we're using srp now, we don't have access to the revision
+  , persistent-postgresql:postgresql-libpq
+  -- CHaPs vector-algorithms-0.9.0.1.0.0.0.0.1 has primitive <0.9 but
+  -- primitive-0.9.0.0 is installed. Hackage 0.9.0.2 already relaxed this.
+  , vector-algorithms:primitive
 
 constraints:
   -- STM 2.5.2 is broken: https://github.com/haskell/stm/issues/76
   , stm >= 2.5.3.1
   -- Earlier versions do not compile with ghc-9.10.
   , quickcheck-state-machine ^>= 0.10
+  , typed-protocols == 0.1.1.0
+  , hashable == 1.4.7.0
+  , megaparsec == 9.2.1
+  , postgresql-libpq == 0.11.0.0
+  , bytestring == 0.10.12.0
+  , directory == 1.3.6.0
+  , process == 1.6.13.2
+  , time == 1.9.3
+  , unix == 2.7.2.2
+  , unliftio-core == 0.2.1.0
+  , async-timer == 0.1.4.1
+  -- Cabal 3.14 reworked FilePath references, which we use in custom-setups
+  , Cabal < 3.14
 
 -- ---------------------------------------------------------
 
@@ -86,6 +109,155 @@ constraints:
 -- when using the "cabal" wrapper script provided by nix-shell.
 -- --------------------------- 8< --------------------------
 -- Please do not put any `source-repository-package` clause above this line.
+
+-- Pinning 0.6 given by cabal freeze of 13.6.0.7:
+-- any.flat ==0.6
+-- Without it building fails with:
+-- > rejecting: flat-0.4.4.0.0.0.0.2 (conflict: plutus-tx => flat^>=0.6)
+source-repository-package
+  type: git
+  location: https://github.com/Quid2/flat
+  tag: 3014e2dde892635c4f46037ba929ec514e0f130f
+  --sha256: sha256-o6xW+CfrGfbZPBT4Bt1osZ+8vscPGd/mkqrA2esV/BY=
+
+-- Pinning 1.5 given by cabal freeze of 13.6.0.7:
+-- any.io-classes ==1.5.0.0,
+-- Without it building fails with:
+-- > rejecting: io-classes-0.6.0.0 (conflict: typed-protocols =>
+-- > io-classes>=1.0 && <1.6)
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/io-sim
+  tag: a22dced7d012d10227ab0fe370889665c064caf9
+  --sha256: sha256-U8DERJj4t1h8kVwv9NovfKuxfTgb1E15q2EAhAT6Zes=
+  subdir:
+    io-classes
+    io-classes-mtl
+    io-sim
+    si-timers
+    strict-mvar
+    strict-stm
+
+-- Pinning 1.5 given by cabal freeze of 13.6.0.7:
+-- any.hedgehog ==1.5,
+-- Without it building fails with:
+-- > rejecting: hedgehog-1.2.0.0.0.0.1 (conflict: tasty-hedgehog =>
+-- > hedgehog>=1.4 && <1.6)
+source-repository-package
+  type: git
+  location: https://github.com/hedgehogqa/haskell-hedgehog
+  tag: 4c5424db30eee67423ddd80745d03e487a223ade
+  --sha256: sha256-l8pr/peym3VvlQQaYRpSSTD+i5xvEHwqf40atyk40rc=
+  subdir:
+    hedgehog
+
+-- Pinning 0.18.1.0 given by cabal freeze of 13.6.0.7:
+-- any.optparse-applicative ==0.18.1.0,
+-- Without it building fails with:
+-- > rejecting: optparse-applicative-0.16.2.1 (conflict: criterion =>
+-- > optparse-applicative>=0.18 && <0.19)
+source-repository-package
+  type: git
+  location: https://github.com/pcapriotti/optparse-applicative
+  tag: 270a626f7a7225cdce9b025b427eb0c4378c39c7
+  --sha256: sha256-64KLKHpIyEg+jLfpj2PI0iFIS/e67IRZKAwHSZSwVYI=
+
+-- Pinning fs-sim 0.3.0.0 given by cabal freeze of 13.6.0.7.
+-- CHaPs only has fs-sim-0.2.x but ouroboros-consensus-diffusion => fs-sim ^>=0.3
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/fs-sim
+  tag: 82feefcc58101dbe183b9776da1b3bf992bcc2df
+  --sha256: sha256-5d+IrpPcCh4poWZAxzdTccG04faqVJ3X7/gh72ur0E0=
+  subdir:
+    fs-sim
+    fs-api
+
+-- Pinning persistent 2.14.6.2 (equivalent to hackage 2.14.6.3 minus a
+-- template-haskell bound bump we don't need).
+-- CHaPs has persistent-2.14.5.0.0.0.0.0.1 which doesn't compile with aeson >=2.2
+-- (missing attoparsec-aeson dependency).
+source-repository-package
+  type: git
+  location: https://github.com/yesodweb/persistent
+  tag: 2f1adc0cc396425a7e6b3565b97709f531016981
+  --sha256: sha256-iLUudtPQf4/PVSwNNn3nxsm7nD4//BdKfo2SONmLzyk=
+  subdir:
+    persistent
+    persistent-postgresql
+
+-- Pinning persistent-postgresql 2.13.6.2 given by cabal freeze of 13.6.0.7.
+-- CHaPs has persistent-postgresql-2.13.5.2.0.0.0.0.1 which constrains
+-- postgresql-libpq <0.10, conflicting with postgresql-libpq-0.11.0.0.
+-- Commented out: two srps from same repo cause shallow clone reference error in CI.
+-- Both persistent and persistent-postgresql exist at the persistent-2.14.6.2 tag.
+-- source-repository-package
+--   type: git
+--   location: https://github.com/yesodweb/persistent
+--   tag: 0bdc0d2dda11abb29f213fb785e8d33d0036bbc3
+--   --sha256: sha256-5b4rdVS401H9DLbny65c8gJpzHfq28XSftGIt5xoshQ=
+--   subdir:
+--     persistent-postgresql
+
+-- Pinning servant-server 0.20.2 given by cabal freeze of 13.6.0.7.
+-- CHaPs has servant-server-0.19.2.0.0.0.0.1 which constrains constraints <0.14,
+-- conflicting with sop-extras => constraints-0.14.2.
+source-repository-package
+  type: git
+  location: https://github.com/haskell-servant/servant
+  tag: 6014370a99b4a8bb85b7a91895b6186a727b086a
+  --sha256: sha256-OW5R6RYRZ3i+xSKUILPDPNjt+yB8YJKlrIQ5TW3N3ho=
+  subdir:
+    servant
+    servant-server
+
+-- Pinning hackage versions that CHaPs overrides with older/incompatible ones.
+source-repository-package
+  type: git
+  location: https://github.com/haskell-foundation/foundation
+  tag: 6d2b86c1a0393543a1812115c9b5c92086f7c855
+  --sha256: sha256-263OLjFdYA5bYGCcLjAql5au/gEf7sEazug9Dx2oYe4=
+  subdir:
+    foundation
+    basement
+
+source-repository-package
+  type: git
+  location: https://github.com/haskell-streaming/streaming
+  tag: 804f2ec54fea144faefa691ea3a622cd0d714d98
+  --sha256: sha256-4IYTasNUgN/W4nbS5eNUo9jllkGuG72t/FttQeVdYCs=
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/bech32
+  tag: 5a42857dfe454bb27a899f891cac8415d66d0292
+  --sha256: sha256-U9h6L1OIl8KQCOZKbLaH7ykElhijmb5LKBMCHXGPscU=
+  subdir:
+    bech32
+
+source-repository-package
+  type: git
+  location: https://github.com/input-output-hk/hedgehog-extras
+  tag: 2a7d307f52da34ca55e2b20cc6957dd175741574
+  --sha256: sha256-2PlXYM/MgGov+ln/vghtbqWmJpxQG3mUh6HiDhBExMk=
+--
+-- unliftio-core srp doesn't work (package.yaml only, no .cabal file).
+-- Not in CHaPs so :override doesn't affect it — version change is a ripple effect.
+-- source-repository-package
+--   type: git
+--   location: https://github.com/fpco/unliftio
+--   tag: b7ca684dc7e18d8a561f801cd4294b375897dd77
+--   --sha256: sha256-1p1TkpJ3dJb998Y5io8wZ07IZ4EGsFnT6BO5H+sEGcI=
+--   subdir:
+--     unliftio-core
+
+-- Pinning ekg-json 0.1.1.0 from hackage repo.
+-- CHaPs has ekg-json-0.1.0.7.0.0.0.0.2 (IOG fork with aeson ^>=2.2 only).
+source-repository-package
+  type: git
+  location: https://github.com/L0neGamer/ekg-json
+  tag: 1b87145257959624ef538cd8f0f485394ca2bb75
+  --sha256: sha256-OYXMEVfw0CG1tUsjJWF2BSkItR8Z/lHH4IdB44/mduE=
 
 source-repository-package
   type: git

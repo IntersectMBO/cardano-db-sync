@@ -19,12 +19,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # TODO: Add ghc910 when input-output-hk/devx is fixed
-        compiler-nix-name: [ghc810, ghc96, ghc98]
-        include:
-          # We want a single job, because macOS runners are scarce.
-          - os: macos-latest
-            compiler-nix-name: ghc96
+        # TODO: Only ghc-8.10 works with the SRPs
+        compiler-nix-name: [ghc810]
+        # TODO: Only macOS aarch64 does not support ghc-8.10
+        # include: 
+        #   # We want a single job, because macOS runners are scarce.
+        #   - os: macos-latest
+        #     compiler-nix-name: ghc96
 
     env:
       # Increment this value to "invalidate" the cabal cache. Be sure to do this
