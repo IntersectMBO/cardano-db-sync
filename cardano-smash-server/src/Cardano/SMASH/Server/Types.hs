@@ -44,6 +44,7 @@ import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Swagger (NamedSchema (..), ToParamSchema (..), ToSchema (..))
+import qualified Data.Text.Encoding as Text
 import Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock.POSIX as Time
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
@@ -133,9 +134,11 @@ instance ToSchema PoolMetadataHash
 
 instance ToParamSchema PoolMetadataHash
 
--- TODO: Add sanity checks
 instance FromHttpApiData PoolMetadataHash where
-  parseUrlPiece poolMetadataHash = Right $ PoolMetadataHash poolMetadataHash
+  parseUrlPiece h =
+    case B16.decode (Text.encodeUtf8 h) of
+      Left _ -> Left "Invalid hash: must be a hex-encoded 32-byte value"
+      Right _ -> Right $ PoolMetadataHash h
 
 -- Result wrapper.
 newtype ApiResult err a = ApiResult (Either err a)

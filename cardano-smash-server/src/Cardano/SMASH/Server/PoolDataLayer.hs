@@ -229,7 +229,7 @@ toDbPoolId bs = PoolId $ Text.decodeUtf8 $ Base16.encode bs
 fromDbPoolMetaHash :: PoolMetadataHash -> ByteString
 fromDbPoolMetaHash pmh =
   case Base16.decode $ Text.encodeUtf8 $ getPoolMetadataHash pmh of
-    Left err -> panic $ Text.pack err
+    Left _ -> mempty
     Right bs -> bs
 
 toDbServantMetaHash :: ByteString -> PoolMetadataHash
