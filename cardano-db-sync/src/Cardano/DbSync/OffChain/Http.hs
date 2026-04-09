@@ -7,6 +7,7 @@ module Cardano.DbSync.OffChain.Http (
   httpGetOffChainVoteData,
   parseAndValidateVoteData,
   parseOffChainUrl,
+  newRestrictedManager,
 ) where
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto
@@ -38,8 +39,9 @@ import qualified Data.Text.Encoding as Text
 import GHC.Show (show)
 import Network.HTTP.Client (HttpException (..))
 import qualified Network.HTTP.Client as Http
-import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.HTTP.Client.Restricted (Restriction, addressRestriction, connectionRestricted, mkRestrictedManagerSettings)
 import qualified Network.HTTP.Types as Http
+import qualified Network.Socket as Socket
 
 -------------------------------------------------------------------------------------
 -- Get OffChain data
@@ -103,7 +105,7 @@ httpGetOffChainVoteDataSingle ::
   DB.AnchorType ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
 httpGetOffChainVoteDataSingle vurl metaHash anchorType = do
-  manager <- liftIO $ Http.newManager tlsManagerSettings
+  manager <- liftIO newRestrictedManager
   request <- parseOffChainUrl url
   let req = httpGetBytes manager request 3000000 3000000 url
   httpRes <- handleExceptT (convertHttpException url) req
@@ -216,8 +218,20 @@ isPossiblyJsonObject bs =
 -- Url
 -------------------------------------------------------------------------------------
 parseOffChainUrl :: OffChainUrlType -> ExceptT OffChainFetchError IO Http.Request
-parseOffChainUrl url =
-  handleExceptT wrapHttpException $ applyContentType <$> Http.parseRequest (showUrl url)
+parseOffChainUrl url = do
+  let urlText = Text.pack $ showUrl url
+  unless (Text.isPrefixOf "https://" urlText || Text.isPrefixOf "http://" urlText) $
+    left $
+      OCFErrUrlParseFail url "Only HTTP/HTTPS URLs are allowed"
+  request <- handleExceptT wrapHttpException $ Http.parseRequest (showUrl url)
+  unless (Http.method request == "GET") $
+    left $
+      OCFErrUrlParseFail url "Only GET requests are allowed"
+  let hostBS = Http.host request
+  when (isLocalhostHost hostBS) $
+    left $
+      OCFErrUrlParseFail url "Access to localhost is not allowed"
+  pure $ applyContentType request
   where
     wrapHttpException :: HttpException -> OffChainFetchError
     wrapHttpException err = OCFErrHttpException url (textShow err)
@@ -250,8 +264,56 @@ convertHttpException url he =
         OffChainPoolUrl _ -> OCFErrUrlParseFail (OffChainPoolUrl $ PoolUrl $ Text.pack urlx) (Text.pack err)
         OffChainVoteUrl _ -> OCFErrUrlParseFail (OffChainVoteUrl $ VoteUrl $ Text.pack urlx) (Text.pack err)
 
+isLocalhostHost :: ByteString -> Bool
+isLocalhostHost host =
+  host == "localhost"
+    || host == "127.0.0.1"
+    || host == "::1"
+    || host == "[::1]"
+    || BS.isPrefixOf "10." host
+    || BS.isPrefixOf "192.168." host
+
 useIpfsGatewayMaybe :: VoteUrl -> [Text] -> Maybe [VoteUrl]
 useIpfsGatewayMaybe vu gateways =
   case Text.stripPrefix "ipfs://" (unVoteUrl vu) of
     Just sf -> Just $ VoteUrl . (<> sf) <$> gateways
     Nothing -> Nothing
+
+-------------------------------------------------------------------------------------
+-- Restricted Manager
+-------------------------------------------------------------------------------------
+
+-- | Create a restricted 'Http.ManagerSettings' that blocks connections to
+-- private, loopback, and link-local IP addresses. The restriction is
+-- checked at connect time on the resolved IP, so it applies to redirects
+-- and prevents DNS rebinding attacks.
+newRestrictedManager :: IO Http.Manager
+newRestrictedManager = do
+  (settings, _mProxyRestricted) <- mkRestrictedManagerSettings offchainRestriction Nothing Nothing
+  Http.newManager settings
+
+offchainRestriction :: Restriction
+offchainRestriction = addressRestriction $ \addr ->
+  if isPrivateAddr (Socket.addrAddress addr)
+    then Just $ connectionRestricted ("Access to private, loopback, or link-local IP address is not allowed: " ++) addr
+    else Nothing
+
+isPrivateAddr :: Socket.SockAddr -> Bool
+isPrivateAddr (Socket.SockAddrInet _ hostAddr) =
+  let (a, b, _, _) = Socket.hostAddressToTuple hostAddr
+   in a == 0 -- 0.0.0.0/8 (current network)
+        || a == 10 -- 10.0.0.0/8 (private)
+        || (a == 100 && b >= 64 && b <= 127) -- 100.64.0.0/10 (CGNAT)
+        || a == 127 -- 127.0.0.0/8 (loopback)
+        || (a == 169 && b == 254) -- 169.254.0.0/16 (link-local)
+        || (a == 172 && b >= 16 && b <= 31) -- 172.16.0.0/12 (private)
+        || (a == 192 && b == 168) -- 192.168.0.0/16 (private)
+        || (a == 198 && b >= 18 && b <= 19) -- 198.18.0.0/15 (benchmarking)
+        || a >= 224 -- 224.0.0.0+ (multicast + reserved + broadcast)
+isPrivateAddr (Socket.SockAddrInet6 _ _ hostAddr6 _) =
+  let addr@(w1, _, _, _, _, _, _, _) = Socket.hostAddress6ToTuple hostAddr6
+   in addr == (0, 0, 0, 0, 0, 0, 0, 0) -- ::
+        || addr == (0, 0, 0, 0, 0, 0, 0, 1) -- ::1
+        || (w1 .&. 0xFE00) == 0xFC00 -- fc00::/7 (ULA)
+        || (w1 .&. 0xFFC0) == 0xFE80 -- fe80::/10 (link-local)
+isPrivateAddr _ = False

@@ -193,9 +193,10 @@ library
                       , groups
                       , hasql
                       , http-client
-                      , http-client-tls
+                      , http-client-restricted
                       , http-types
                       , iohk-monitoring
+                      , network
                       , lifted-base
                       , memory
                       , microlens
@@ -296,8 +297,6 @@ executable http-get-json-metadata
                       , bytestring
                       , cardano-db
                       , cardano-db-sync
-                      , http-client
-                      , http-client-tls
                       , text
                       , transformers
 
