@@ -1,5 +1,29 @@
-packages:
-  ../ouroboros-consensus
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-api.git
+  tag: 6795cad948bd6dfbd44e59ce8e6d51feaf0df3d8
+  --sha256: sha256-zkGU4kh3bBYqN39aL3CXVzh4w6G6ZnlxoK7I1TBDbV8=
+  subdir: cardano-api
 
-package *
-  ghc-options: -finfo-table-map -fdistinct-constructor-tables
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-cli
+  tag: bfe6f48cfb9a4a913c5c15f78af7eb11d975b99e
+  --sha256: sha256-i5Bc6c2yI7JTSJsmumXc3Z2ECvrOnYug8Hlp65Kcpfk=
+  subdir:
+    cardano-cli
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-node
+  tag: 40c00812a0f59711d563d98bd45e1a8d1939f79d
+  --sha256: sha256-6b9fX1RNmHdBRpmE4WYFCf13vwZZGg1LHRhHP7GRJHE=
+  subdir:
+    cardano-node
+    trace-forward
+    trace-resources
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/ouroboros-consensus
+  tag: 10a77cfbe1de247b8d67671f186f7b28d8dad42f

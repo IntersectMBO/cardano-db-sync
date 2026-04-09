@@ -37,7 +37,6 @@ import Cardano.Slotting.Slot (
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTVar,
  )
-import Control.ResourceRegistry (ResourceRegistry)
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Data.Map.Strict as Map
 import Data.SOP.Functors (Flip (..))
@@ -77,7 +76,6 @@ data HasLedgerEnv = HasLedgerEnv
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
   , leStateWriteQueue :: !(TBQueue (FilePath, StateRef))
-  , leRegistry :: !(IO (ResourceRegistry IO))
   , leLedgerBackend :: !LedgerBackend
   , leMkLedgerHandle ::
       ExtLedgerState CardanoBlock EmptyMK ->
