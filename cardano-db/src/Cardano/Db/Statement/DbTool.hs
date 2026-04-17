@@ -56,7 +56,7 @@ queryDelegationForEpochStmt =
       poolId <- Id.idDecoder Id.PoolHashId
       pure (addrId, endTime, amount, poolId)
     epochTable = tableName (Proxy @SC.Epoch)
-    epochStakeTable = tableName (Proxy @SC.EpochState)
+    epochStakeTable = tableName (Proxy @SC.EpochStake)
     stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
       TextEnc.encodeUtf8 $
