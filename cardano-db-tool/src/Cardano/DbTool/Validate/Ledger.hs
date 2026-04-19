@@ -5,22 +5,22 @@ module Cardano.DbTool.Validate.Ledger (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Config
-import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Error
-import Cardano.DbSync.Ledger.State
-import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), LedgerStateFile (..))
+import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..))
 import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
 import Cardano.DbTool.Validate.Util
 import Cardano.Network.NodeToClient (withIOManager)
-import Control.Monad (when)
 import Control.Monad.Trans.Except (runExceptT)
-import Control.Tracer (nullTracer)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Ouroboros.Consensus.Cardano.Node ()
 import Ouroboros.Consensus.Ledger.Extended
+import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (defaultListSnapshots)
 import Ouroboros.Network.Block
+import System.FS.API (SomeHasFS (..))
+import System.FS.API.Types (MountPoint (..))
+import System.FS.IO (ioHasFS)
 import Prelude
 
 data LedgerValidationParams = LedgerValidationParams
@@ -30,33 +30,35 @@ data LedgerValidationParams = LedgerValidationParams
   }
 
 validateLedger :: LedgerValidationParams -> DB.TxOutVariantType -> IO ()
-validateLedger params txOutVariantType =
+validateLedger params _txOutVariantType =
   withIOManager $ \_ -> do
-    enc <- readSyncNodeConfig (vpConfigFile params)
-    genCfg <- runOrThrowIO $ runExceptT $ readCardanoGenesisConfig enc
-    ledgerFiles <- listLedgerStateFilesOrdered (vpLedgerStateDir params)
-    slotNo <- SlotNo <$> DB.runDbStandaloneSilent DB.queryLatestSlotNo
-    validate params txOutVariantType genCfg slotNo ledgerFiles
+    -- TODO: Reimplement using consensus snapshot loading APIs (openStateRefFromSnapshot).
+    _enc <- readSyncNodeConfig (vpConfigFile params)
+    _genCfg <- runOrThrowIO (runExceptT (readCardanoGenesisConfig _enc))
+    let someHasFS = SomeHasFS (ioHasFS (MountPoint (unLedgerStateDir (vpLedgerStateDir params))))
+    snapshots <- defaultListSnapshots someHasFS
+    _slotNo <- SlotNo <$> DB.runDbStandaloneSilent DB.queryLatestSlotNo
+    putStrLn ("Found " <> show (length snapshots) <> " snapshots. Ledger validation not yet reimplemented for consensus snapshot format.")
 
-validate :: LedgerValidationParams -> DB.TxOutVariantType -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
-validate params txOutVariantType genCfg slotNo ledgerFiles =
-  go ledgerFiles True
-  where
-    go :: [LedgerStateFile] -> Bool -> IO ()
-    go [] _ = putStrLn $ redText "No ledger found"
-    go (ledgerFile : rest) logFailure = do
-      let ledgerSlot = lsfSlotNo ledgerFile
-      if ledgerSlot <= slotNo
-        then do
-          -- TODO fix GenesisPoint. This is only used for logging
-          Right state <- loadLedgerStateFromFile nullTracer (mkTopLevelConfig genCfg) False GenesisPoint ledgerFile
-          validateBalance txOutVariantType ledgerSlot (vpAddressUtxo params) state
-        else do
-          when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."
-          go rest False
+-- TODO: Reimplement using DiskSnapshot and consensus APIs
+-- _validate :: LedgerValidationParams -> DB.TxOutVariantType -> GenesisConfig -> SlotNo -> [LedgerStateFile] -> IO ()
+-- _validate params txOutVariantType genCfg slotNo ledgerFiles =
+--    go ledgerFiles True
+--    where
+--      go :: [LedgerStateFile] -> Bool -> IO ()
+--      go [] _ = putStrLn $ redText "No ledger found"
+--      go (ledgerFile : rest) logFailure = do
+--        let ledgerSlot = lsfSlotNo ledgerFile
+--        if ledgerSlot <= slotNo
+--          then do
+--            Right state <- loadLedgerStateFromFile nullTracer (mkTopLevelConfig genCfg) False GenesisPoint ledgerFile
+--            validateBalance txOutVariantType ledgerSlot (vpAddressUtxo params) state
+--          else do
+--            when logFailure . putStrLn $ redText "Ledger is newer than DB. Trying an older ledger."
+--            go rest False
 
-validateBalance :: DB.TxOutVariantType -> SlotNo -> Text -> CardanoLedgerState -> IO ()
-validateBalance txOutVariantType slotNo addr st = do
+_validateBalance :: DB.TxOutVariantType -> SlotNo -> Text -> CardanoLedgerState -> IO ()
+_validateBalance txOutVariantType slotNo addr st = do
   balanceDB <- DB.runDbStandaloneSilent $ DB.queryAddressBalanceAtSlot txOutVariantType addr (unSlotNo slotNo)
   let eiBalanceLedger = DB.word64ToAda <$> ledgerAddrBalance addr (ledgerState $ clsState st)
   case eiBalanceLedger of

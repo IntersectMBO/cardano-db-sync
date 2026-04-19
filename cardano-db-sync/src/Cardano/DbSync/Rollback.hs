@@ -29,8 +29,9 @@ import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.DbEvent (liftDbLookup)
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
-import Cardano.DbSync.Ledger.State (listKnownSnapshots, loadLedgerAtPoint, saveCleanupState, writeLedgerState)
-import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), SnapshotPoint (..))
+import Cardano.DbSync.Ledger.State (ledgerDbCurrent, listKnownSnapshots, loadLedgerAtPoint, saveCleanupState, writeLedgerState)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
+import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), HasLedgerEnv (..), SnapshotPoint (..))
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
@@ -197,10 +198,14 @@ handlePostRollbackSnapshots syncEnv mRollbackSlot = do
               -- Try to load ledger state at the database tip
               eitherLedgerState <- loadLedgerAtPoint hle dbTipPoint
               case eitherLedgerState of
-                Right loadedState -> do
+                Right _loadedState -> do
                   logInfo trce $ "Successfully loaded ledger state at " <> renderPoint dbTipPoint
                   logInfo trce "Creating new snapshot at database tip after rollback"
-                  saveCleanupState hle loadedState Nothing
+                  -- Read the current StateRef from LedgerDB for snapshotting
+                  mDb <- readTVarIO (leStateVar hle)
+                  case mDb of
+                    Strict.Just db -> saveCleanupState hle (ledgerDbCurrent db) Nothing
+                    Strict.Nothing -> logWarning trce "No LedgerDB available for snapshot"
                   logInfo trce "Snapshot created successfully"
                 Left lsFiles -> do
                   logWarning trce $ "Failed to load ledger state at database tip. Missing snapshot files: " <> textShow (length lsFiles)
