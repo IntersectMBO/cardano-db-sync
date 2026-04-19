@@ -696,3 +696,35 @@ Epoch threshold used to determine snapshot behavior. When syncing reaches this e
 - **Higher `near_tip_epoch` value**: Delay frequent snapshots until later in the chain, improving sync speed for longer. During initial sync (before reaching `near_tip_epoch`), snapshots are taken every 10 epochs
 - **Near tip detection**: Automatically switches to epoch-based snapshots when within 10 days of current time, regardless of epoch number
 
+## Ledger Backend
+
+The `ledger_backend` top-level config option selects how the UTxO set is stored.
+
+| Value        | Description                                          |
+| :----------- | :--------------------------------------------------- |
+| `"inmemory"` | UTxO set kept in RAM (default)                       |
+| `"lsm"`      | UTxO set stored on disk using LSM trees              |
+
+### Example
+
+```json
+{
+  "ledger_backend": "lsm"
+}
+```
+
+### InMemory (default)
+
+Keeps the full UTxO set in memory. Faster but uses significantly more RAM
+(~16GB on mainnet at tip).
+
+### LSM
+
+Stores the UTxO set on disk using LSM trees, reducing RAM usage to ~2-3GB.
+The LSM database is stored in `<state-dir>/lsm/`. Requires more disk I/O
+but is suitable for memory-constrained environments.
+
+Snapshots are compatible between backends and can be converted using the
+`snapshot-converter` tool shipped with `cardano-node`. See
+[State Snapshot](state-snapshot.md#converting-between-backends) for details.
+

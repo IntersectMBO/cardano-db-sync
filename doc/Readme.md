@@ -30,7 +30,7 @@ This directory contains various documentation files for setting up, configuring,
 
 13. [Schema Management](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/schema-management.md) - Instructions on managing the database schema and creating migrations, covering tools and techniques for making schema changes and ensuring they are applied correctly.
 
-14. [Syncing and Rollbacks](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/syncing-and-rollbacks.md) - Details on the syncing procedure and handling rollbacks, explaining how the node syncs with the blockchain and manages rollbacks in case of errors or inconsistencies.
+14. [State Snapshot](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/state-snapshot.md) - Creating, restoring and converting ledger state snapshots, including LSM and InMemory backends.
 
 15. [Community Tools](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/community-tools.md) - Information on various community tools like Koios and Blockfrost, providing an overview of these tools, their features, and how they can be used to interact with Cardano DB Sync.
 

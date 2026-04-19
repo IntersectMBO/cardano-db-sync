@@ -108,6 +108,7 @@ library
                         Cardano.DbSync.Era.Util
 
                         Cardano.DbSync.Ledger.Event
+                        Cardano.DbSync.Ledger.Snapshot
                         Cardano.DbSync.Ledger.State
                         Cardano.DbSync.Ledger.Types
 
@@ -190,6 +191,8 @@ library
                       , either
                       , extra
                       , filepath
+                      , fs-api
+                      , lsm-tree
                       , groups
                       , hasql
                       , http-client
@@ -204,6 +207,8 @@ library
                       , ouroboros-consensus
                       , ouroboros-consensus:cardano
                       , ouroboros-consensus:diffusion
+                      , ouroboros-consensus:lsm
+                      , resource-registry
                       , ouroboros-consensus:protocol
                       , ouroboros-network:api
                       , ouroboros-network:framework
@@ -211,6 +216,7 @@ library
                       , plutus-ledger-api
                       , prometheus
                       , psqueues
+                      , random
                       , random-shuffle
                       , scientific
                       , serialise
@@ -250,7 +256,11 @@ executable cardano-db-sync
                         -Wno-unsafe
                         -threaded
                         -rtsopts
-                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+
+  if arch(arm)
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -N1 --disable-delayed-os-memory-return"
+  else
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -qg1 -qb1 -N2 --disable-delayed-os-memory-return"
 
   autogen-modules:      Paths_cardano_db_sync
                         MigrationValidations
@@ -289,7 +299,11 @@ executable http-get-json-metadata
                         -Wno-unsafe
                         -threaded
                         -rtsopts
-                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+
+  if arch(arm)
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -N1 --disable-delayed-os-memory-return"
+  else
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -qg1 -qb1 -N2 --disable-delayed-os-memory-return"
 
   build-depends:        base
                       , ansi-terminal
@@ -318,7 +332,11 @@ executable test-http-get-json-metadata
                         -Wno-unsafe
                         -threaded
                         -rtsopts
-                        "-with-rtsopts=-A16m -N3 --disable-delayed-os-memory-return"
+                        
+  if arch(arm)
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -N1 --disable-delayed-os-memory-return"
+  else
+    ghc-options:        "-with-rtsopts=-T -I0 -A16m -qg1 -qb1 -N2 --disable-delayed-os-memory-return"
 
   build-depends:        base
                       , bytestring

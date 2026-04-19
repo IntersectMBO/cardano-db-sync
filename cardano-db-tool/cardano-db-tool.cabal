@@ -69,8 +69,9 @@ library
                       , cardano-prelude
                       , containers
                       , cardano-diffusion
-                      , contra-tracer
                       , extra
+                      , filepath
+                      , fs-api
                       , ouroboros-consensus
                       , ouroboros-consensus:cardano
                       , ouroboros-network:api

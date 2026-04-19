@@ -160,17 +160,42 @@ function dump_schema {
 
 function create_snapshot {
 	tgz_file=$1.tgz
-	ledger_file=$2
+	ledger_path=$2
 	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
 	echo $"Working directory: ${tmp_dir}"
-	pg_dump --no-owner --schema=public --jobs="${numcores}" "${PGDATABASE}" --format=directory --file="${tmp_dir}/db/"
-	if [ -n "${ledger_file}" ]; then
-	  lstate_gz_file=$(basename "${ledger_file}").gz
-	  gzip --to-stdout "${ledger_file}" > "${tmp_dir}/${lstate_gz_file}"
+	# Process ledger state first to fail fast on missing/corrupt snapshots
+	if [ -n "${ledger_path}" ]; then
+	  if [ -d "${ledger_path}" ]; then
+	    # New consensus directory format: tar+gzip the snapshot directory
+	    ledger_dir_name=$(basename "${ledger_path}")
+	    state_dir=$(dirname "${ledger_path}")
+	    lsm_snap_dir="${state_dir}/lsm/snapshots/${ledger_dir_name}"
+	    if [ -d "${lsm_snap_dir}" ]; then
+	      echo "Detected LSM backend snapshot at slot ${ledger_dir_name}"
+	      # LSM backend: bundle ledger snapshot, LSM table snapshot, and LSM session metadata (salt).
+	      # The active/ directory is not needed — it gets cleared on session restore.
+	      tar czf "${tmp_dir}/${ledger_dir_name}.tar.gz" \
+	        -C "${state_dir}" "${ledger_dir_name}" "lsm/snapshots/${ledger_dir_name}" "lsm/metadata"
+	    else
+	      echo "Detected InMemory backend snapshot at slot ${ledger_dir_name}"
+	      # InMemory backend: just the ledger snapshot directory
+	      tar czf "${tmp_dir}/${ledger_dir_name}.tar.gz" -C "${state_dir}" "${ledger_dir_name}"
+	    fi
+	  elif [ -f "${ledger_path}" ]; then
+	    echo "Detected legacy .lstate snapshot: $(basename "${ledger_path}")"
+	    # Legacy .lstate file format
+	    lstate_gz_file=$(basename "${ledger_path}").gz
+	    gzip --to-stdout "${ledger_path}" > "${tmp_dir}/${lstate_gz_file}"
+	  else
+	    echo "Ledger state path '${ledger_path}' does not exist."
+	    rm "${recursive}" "${force}" "${tmp_dir}"
+	    exit 1
+	  fi
 	fi
+	pg_dump --no-owner --schema=public --jobs="${numcores}" "${PGDATABASE}" --format=directory --file="${tmp_dir}/db/"
 	# Use plain tar here because the database dump files and the ledger state file are already gzipped. Disable Shellcheck SC2046 to avoid empty '' getting added while quoting
 	# shellcheck disable=SC2046
-	tar cvf - --directory "${tmp_dir}" "db" $( [ -n "${lstate_gz_file:-}" ] && [ -f "/${tmp_dir}/${lstate_gz_file}" ] && echo "${lstate_gz_file}" ) | tee "${tgz_file}.tmp" | \
+	tar cvf - --directory "${tmp_dir}" $(ls "${tmp_dir}") | tee "${tgz_file}.tmp" | \
 	  sha256sum | head -c 64 | sed -e "s/$/  ${tgz_file}\n/" > "${tgz_file}.sha256sum"
 	mv "${tgz_file}.tmp" "${tgz_file}"
 	rm "${recursive}" "${force}" "${tmp_dir}"
@@ -183,7 +208,13 @@ function create_snapshot {
 }
 
 function restore_snapshot {
-	file_count=$(find "$2" -type f -name '*.lstate' | wc -l)
+	# Create ledger state dir if it doesn't exist
+	if ! test -d "$2" ; then
+	  echo "Creating ledger state directory: $2"
+	  mkdir -p "$2"
+	fi
+	# Check ledger state dir is empty (both old .lstate files and new snapshot dirs)
+	file_count=$(find "$2" -maxdepth 1 -type f -name '*.lstate' -o -type d -name '[0-9]*' 2>/dev/null | wc -l)
 	if test "${file_count}" -gt 0 ; then
 	  echo "Ledger state directory ($2) is not empty. Please empty it and then retry."
 	  exit 1
@@ -191,11 +222,26 @@ function restore_snapshot {
 	tmp_dir=$(mktemp "${directory}" -t db-sync-snapshot-XXXXXXXXXX)
 	tar xvf "$1" --directory "$tmp_dir"
 	if test -d "${tmp_dir}/db/" ; then
-	  # New pg_dump format
-	  lstate_gz_file=$(find "${tmp_dir}/" -iname "*.lstate.gz")
-	  if [ -n "${lstate_gz_file:-}" ] ; then
-	    lstate_file=$(basename "${lstate_gz_file}" | sed 's/.gz$//')
-	    gunzip --to-stdout "${lstate_gz_file}" > "$2/${lstate_file}"
+	  # Check for new consensus snapshot directory format (tar.gz named after slot number)
+	  snapshot_tgz=$(find "${tmp_dir}/" -maxdepth 1 -name '[0-9]*.tar.gz' | head -1)
+	  if [ -n "${snapshot_tgz:-}" ] ; then
+	    # New consensus directory format: extract snapshot tar.gz to ledger state dir
+	    tar xzf "${snapshot_tgz}" -C "$2/"
+	    # For LSM: create the active/ directory if lsm/ was restored (required by LSM session)
+	    if [ -d "$2/lsm" ] && [ ! -d "$2/lsm/active" ]; then
+	      echo "Restored LSM backend snapshot: $(basename "${snapshot_tgz}" .tar.gz)"
+	      mkdir -p "$2/lsm/active"
+	    else
+	      echo "Restored InMemory backend snapshot: $(basename "${snapshot_tgz}" .tar.gz)"
+	    fi
+	  else
+	    # Legacy .lstate file format
+	    lstate_gz_file=$(find "${tmp_dir}/" -iname "*.lstate.gz")
+	    if [ -n "${lstate_gz_file:-}" ] ; then
+	      lstate_file=$(basename "${lstate_gz_file}" | sed 's/.gz$//')
+	      echo "Restored legacy .lstate snapshot: ${lstate_file}"
+	      gunzip --to-stdout "${lstate_gz_file}" > "$2/${lstate_file}"
+	    fi
 	  fi
 
 	  # Important: specify --schema=public below to skip over `create schema public`
@@ -313,10 +359,7 @@ case "${1:-""}" in
 		  echo "Second argument should be the snapshot file name (without extension)."
 		  exit 1
 		fi
-		if test -n "${3:-}" && test -d "${3}" ; then
-		  echo "Third argument provided is a directory but expecting a file."
-		  exit 1
-		fi
+		# Third argument can be a file (.lstate) or directory (consensus snapshot format)
 		create_snapshot "$2" "${3:-}"
 		;;
 	--restore-snapshot)

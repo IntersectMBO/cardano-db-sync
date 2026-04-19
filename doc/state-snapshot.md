@@ -1,63 +1,78 @@
 # State Snapshot
 
-As the size of the blockchain itself and the number of transactions and other data on the chain
-increases, the time required to sync the full chain increases. At epoch 266 it was about 18 hours.
-The other issue is that most major upgrades also update the database schema meaning the database
-needs to be synced from scatch.
+State snapshots bundle the PostgreSQL database and the ledger state, allowing
+`db-sync` to resume syncing without starting from genesis.
 
-To overcome these issues, we are providing a `cardano-db-sync` state snapshot, which should
-drastically reduce the time required to get `db-sync` back up and running after the database is
-dropped and recreated. This snapshot is compatible with both `cardano-db-sync` and
-`cardano-db-sync` with --no-epoch-table (which doesn't maintain the extra `epoch` table).
+## Prerequisites
 
-**Note:** It is **not** possible to create a snapshot from one version of the database schema and
-restore it so it can be used with a `db-sync` that uses another version of the schema.
+- `cardano-db-tool` and `scripts/postgresql-setup.sh` available
+- Sufficient disk space for the dump + ledger state
+- Node tip should be ahead of the snapshot point, otherwise db-sync may need to roll back
 
-All of the following assumes that the executable `cardano-db-tool` and the script
-`postgresql-setup.sh` is available on the machine where the snapshot is being created or restored.
+## Constraints
 
-Currently (at epoch 269), creating a snapshot takes about 15 minutes and restoring one takes about
-45 minutes.
+- Not portable across schema versions or possibly CPU architectures
+- The ledger snapshot format matches `cardano-node` (consensus format)
 
-## Things to note:
-* Snapshots (because they depend on the database schema) are not portable across `db-sync` versions.
-* Snapshots (because they include a snapshot of the ledger state) are not portable across CPU
-  architectures (ie it is not possible to create a snapshot on `x86_64` and expect it to work
-  correctly on say `arm64`).
-* Creating and restoring snapshots requires significant amounts of free disk space (at epoch 269
-  it required about 10G). If there is insufficient disk space, `gzip` can give some odd error
-  messages.
-* node tip should be ahead of the snapshot point during restoration otherwise `cardano-db-sync` will
-  roll back to genesis
+## Backends
 
-# Creating a Snapshot
+- **InMemory** -- UTxO in memory, serialized to `<slot>/tables`
+- **LSM** -- UTxO on disk via LSM trees, stored in `<state-dir>/lsm/`
 
-To create a snapshot, the `cardano-db-sync` executable should be stopped. Taking a snapshot is
-then a two step process:
+Both backends produce snapshots in consensus directory format: `<slot>/state`, `meta`, `utxoSize`.
+
+## Creating
+
+Stop `db-sync`, then:
 
 ```
-PGPASSFILE=config/pgpass-mainnet cardano-db-tool prepare-snapshot --state-dir ledger-state/mainnet/
-```
-which will then print out the command (combining the database schema version with the block number
-in the database with the slot number used by the ledger state and the ) required to generated the snapshot:
-```
-PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --create-snapshot \
-    db-sync-snapshot-schema-9-block-5796064-x86_64 ledger-state/mainnet/31021676-f3873e4bec.lstate
+PGPASSFILE=config/pgpass-mainnet cardano-db-tool prepare-snapshot --state-dir <state-dir>
 ```
 
-# Restoring from a Snapshot
+This prints the create command, e.g.:
 
-Restoring the state from a snapsot will drop the current database, recreate the tables and then
-populate them. It can be done as simply as:
 ```
-PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh --restore-snapshot \
-	db-sync-snapshot-schema-9-block-5796064-x86_64 ledger-state/mainnet
+PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh \
+  --create-snapshot db-sync-snapshot-schema-13.7-block-5796064-x86_64 <state-dir>/<slot>
 ```
 
-Once the script has completed successfully, `db-sync` can be restarted and it should continue
-syncing from the block number listed in the state snapshot file name.
+For LSM, the script auto-detects and bundles `lsm/snapshots/<slot>/` and `lsm/metadata`.
 
-# Mainnet Snapshots Location
+## Restoring
 
-`Mainnet` snapshots can be found [here](https://update-cardano-mainnet.iohk.io/cardano-db-sync/index.html#).
-They are also linked from the `cardano-db-sync` [releases page](https://github.com/IntersectMBO/cardano-db-sync/releases)
+```
+PGPASSFILE=config/pgpass-mainnet scripts/postgresql-setup.sh \
+  --restore-snapshot db-sync-snapshot.tgz <state-dir>
+```
+
+Creates `<state-dir>` if needed. For LSM, restores both ledger state and LSM database.
+
+## Converting between backends
+
+The `snapshot-converter` tool (shipped with `cardano-node`) converts between InMemory and LSM.
+Use the same node version db-sync was built against.
+
+```
+# InMemory -> LSM
+snapshot-converter \
+  --input-mem <state-dir>/<slot> \
+  --output-lsm-snapshot <output-dir>/<slot> \
+  --output-lsm-database <output-dir>/lsm \
+  --config <node-config.json>
+
+# LSM -> InMemory
+snapshot-converter \
+  --input-lsm-snapshot <state-dir>/<slot> \
+  --input-lsm-database <state-dir>/lsm \
+  --output-mem <output-dir>/<slot> \
+  --config <node-config.json>
+```
+
+The `<slot>` directory name must match the slot number in the ledger state.
+The `--config` flag takes the **node** config, not db-sync config.
+Converting does not modify the source.
+
+## Mainnet Snapshots
+
+Available at the [downloads page](https://update-cardano-mainnet.iohk.io/cardano-db-sync/index.html#)
+and linked from [releases](https://github.com/IntersectMBO/cardano-db-sync/releases).

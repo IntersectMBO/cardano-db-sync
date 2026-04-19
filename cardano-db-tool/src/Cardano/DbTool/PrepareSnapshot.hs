@@ -5,14 +5,16 @@ module Cardano.DbTool.PrepareSnapshot (
 
 import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (LogFileDir)
-import Cardano.DbSync.Ledger.State
-import Cardano.DbSync.Ledger.Types (LedgerStateFile (..))
 import Cardano.Prelude (Word64, fromMaybe)
 import Control.Monad
-import qualified Data.ByteString.Base16 as Base16
 import Data.Version (makeVersion, showVersion, versionBranch)
+import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot (..), defaultListSnapshots, snapshotToDirName)
 import Ouroboros.Network.Block hiding (blockHash)
 import Paths_cardano_db_tool (version)
+import System.FS.API (SomeHasFS (..))
+import System.FS.API.Types (MountPoint (..))
+import System.FS.IO (ioHasFS)
+import System.FilePath ((</>))
 import System.Info (arch, os)
 
 newtype PrepareSnapshotArgs = PrepareSnapshotArgs
@@ -21,55 +23,51 @@ newtype PrepareSnapshotArgs = PrepareSnapshotArgs
 
 runPrepareSnapshot :: PrepareSnapshotArgs -> IO ()
 runPrepareSnapshot args = do
-  ledgerFiles <- listLedgerStateFilesOrdered (unPrepareSnapshotArgs args)
+  let someHasFS = SomeHasFS $ ioHasFS (MountPoint $ unLedgerStateDir (unPrepareSnapshotArgs args))
+  snapshots <- defaultListSnapshots someHasFS
   mblock <- runDbStandaloneSilent queryLatestBlock
   case mblock of
     Just block | Just bSlotNo <- SlotNo <$> blockSlotNo block -> do
-      let bHash = blockHash block
-      let (newerFiles, mfile, olderFiles) = findLedgerStateFile ledgerFiles (bSlotNo, bHash)
-      printNewerSnapshots newerFiles
-      case (mfile, olderFiles) of
-        (Just file, _) -> do
+      let targetSlot = unSlotNo bSlotNo
+      -- Find the snapshot matching the DB tip slot, or the closest older one
+      let (newer, rest) = span (\ds -> dsNumber ds > targetSlot) snapshots
+          (matching, older) = case rest of
+            (ds : os') | dsNumber ds == targetSlot -> ([ds], os')
+            _ -> ([], rest)
+      printNewerSnapshots newer
+      case (matching, older) of
+        (file : _, _) -> do
           let bblockNo = fromMaybe 0 $ blockBlockNo block
-          printCreateSnapshot bblockNo (lsfFilePath file)
+          printCreateSnapshot bblockNo (unLedgerStateDir (unPrepareSnapshotArgs args) </> snapshotToDirName file)
         (_, file : _) -> do
-          -- We couldn't find the tip of the db, so we return a list of
-          -- the available ledger files, before this tip.
           putStrLn $
             concat
-              [ "Ledger and db don't match. DB tip is at "
+              [ "Ledger and db don't match. DB tip is at slot "
               , show bSlotNo
-              , " "
-              , show (hashToAnnotation bHash)
-              , " (full "
-              , show (Base16.encode bHash)
-              , ")"
-              , " and the closest ledger state file is at "
-              , show (lsfSlotNo file)
-              , " "
-              , show (lsfHash file)
+              , " and the closest snapshot is at slot "
+              , show (dsNumber file)
               , ". DBSync no longer requires them to match and "
               , "no rollback will be performed."
               ]
           let bblockNo = fromMaybe 0 $ blockBlockNo block
-          printCreateSnapshot bblockNo (lsfFilePath file)
+          printCreateSnapshot bblockNo (unLedgerStateDir (unPrepareSnapshotArgs args) </> snapshotToDirName file)
         (_, []) ->
-          putStrLn "No ledger state file before the tip found. Snapshots without ledger are not supported yet."
+          putStrLn "No snapshot before the tip found. Snapshots without ledger are not supported yet."
     _ -> do
       putStrLn "The db is empty. You need to sync from genesis and then create a snapshot."
   where
-    printNewerSnapshots :: [LedgerStateFile] -> IO ()
+    printNewerSnapshots :: [DiskSnapshot] -> IO ()
     printNewerSnapshots newerFiles = do
       unless (null newerFiles) $
         putStrLn $
           concat
-            [ "There are newer ledger state files, which are ignored: "
-            , show newerFiles
+            [ "There are newer snapshots, which are ignored: "
+            , show (map snapshotToDirName newerFiles)
             , "\n"
             ]
 
-    printCreateSnapshot :: Word64 -> FilePath -> IO ()
-    printCreateSnapshot bblockNo fp = do
+    printCreateSnapshot :: Word64 -> String -> IO ()
+    printCreateSnapshot bblockNo snapshotName = do
       let schemaVersion = makeVersion $ take 2 $ versionBranch version
           cmdStr =
             "Create a snapshot with:\n"
@@ -85,5 +83,5 @@ runPrepareSnapshot args = do
           , "-block-"
           , show bblockNo
           , "-" ++ arch ++ " "
-          , fp
+          , snapshotName
           ]

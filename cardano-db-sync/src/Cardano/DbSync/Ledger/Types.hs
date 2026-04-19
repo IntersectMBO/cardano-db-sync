@@ -11,8 +11,7 @@
 module Cardano.DbSync.Ledger.Types where
 
 import Cardano.BM.Trace (Trace)
-import Cardano.Binary (Decoder, Encoding, FromCBOR (..), ToCBOR (..))
-import Cardano.DbSync.Config.Types (LedgerStateDir)
+import Cardano.DbSync.Config.Types (LedgerBackend (..), LedgerStateDir)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event (LedgerEvent)
 import Cardano.DbSync.Types (
@@ -28,41 +27,46 @@ import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyRole (..))
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState ())
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
   EpochNo (..),
-  SlotNo (..),
-  WithOrigin (..),
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar,
+  StrictTVar, newTVarIO,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
 import qualified Data.Map.Strict as Map
 import Data.SOP.Functors (Flip (..))
 import Data.SOP.Strict
 import qualified Data.Set as Set
+import Data.Sequence.Strict (StrictSeq)
 import qualified Data.Strict.Maybe as Strict
-import Lens.Micro (Traversal')
+import Lens.Micro (Traversal', (^.))
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerState)
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
-import Ouroboros.Consensus.Ledger.Abstract (getTipSlot)
-import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerTables, ValuesMK)
+import Ouroboros.Consensus.Ledger.Abstract ()
+import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
-import Ouroboros.Consensus.Ledger.Tables (valuesMKDecoder, valuesMKEncoder)
+import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot, SnapshotManager)
+import Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq (LedgerTablesHandle (..))
+import qualified Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq as Consensus (StateRef (..))
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
-import Ouroboros.Network.AnchoredSeq (Anchorable (..), AnchoredSeq (..))
-import Prelude (fail, id)
+import Data.List.NonEmpty ()
+import Prelude (id)
 
 --------------------------------------------------------------------------
 -- Ledger Types
 --------------------------------------------------------------------------
 
+-- | Consensus StateRef type used for snapshot operations.
+type ConsensusStateRef = Consensus.StateRef IO (ExtLedgerState CardanoBlock)
+
 data HasLedgerEnv = HasLedgerEnv
-  { leTrace :: Trace IO Text
+  { leTrace :: !(Trace IO Text)
   , leUseLedger :: !Bool
   , leHasRewards :: !Bool
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
@@ -74,64 +78,81 @@ data HasLedgerEnv = HasLedgerEnv
   , leSnapshotNearTipEpoch :: !Word64
   , leInterpreter :: !(StrictTVar IO (Strict.Maybe CardanoInterpreter))
   , leStateVar :: !(StrictTVar IO (Strict.Maybe LedgerDB))
-  , leStateWriteQueue :: !(TBQueue (FilePath, CardanoLedgerState))
+  , leSnapshotQueue :: !(TBQueue DbSyncStateRef)
+  -- ^ Queue for async snapshot writing
+  , leLedgerBackend :: !LedgerBackend
+  , leSnapshotManager :: !(SnapshotManager IO IO CardanoBlock ConsensusStateRef)
+  -- ^ Consensus snapshot manager for save/load/list/cleanup
+  , leInitGenesis :: !(IO ConsensusStateRef)
+  -- ^ Create the initial consensus StateRef from genesis
+  , leLoadSnapshot :: !(DiskSnapshot -> IO (Either Text ConsensusStateRef))
+  -- ^ Load a snapshot from disk using the appropriate backend
   }
+
+-- | Pure ledger state, stored in LedgerDB checkpoints.
+-- Does not hold handle or close-related resources.
+-- | Block number within the current epoch. Used by getStakeSlice
+-- to insert epoch stake incrementally.
+data EpochBlockNo
+  = EpochBlockNo !Word64  -- ^ Shelley+: block number within epoch
+  | ByronEpochBlockNo     -- ^ Byron: no stake slicing needed
 
 data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(ExtLedgerState CardanoBlock EmptyMK)
-  , clsTables :: !(LedgerTables (ExtLedgerState CardanoBlock) ValuesMK)
   , clsEpochBlockNo :: !EpochBlockNo
   }
 
--- The height of the block in the current Epoch. We maintain this
--- data next to the ledger state and store it in the same blob file.
-data EpochBlockNo
-  = GenesisEpochBlockNo
-  | EBBEpochBlockNo
-  | EpochBlockNo !Word64
-
-instance ToCBOR EpochBlockNo where
-  toCBOR GenesisEpochBlockNo = toCBOR (0 :: Word8)
-  toCBOR EBBEpochBlockNo = toCBOR (1 :: Word8)
-  toCBOR (EpochBlockNo n) =
-    toCBOR (2 :: Word8) <> toCBOR n
-
-instance FromCBOR EpochBlockNo where
-  fromCBOR = do
-    tag :: Word8 <- fromCBOR
-    case tag of
-      0 -> pure GenesisEpochBlockNo
-      1 -> pure EBBEpochBlockNo
-      2 -> EpochBlockNo <$> fromCBOR
-      n -> fail $ "unexpected EpochBlockNo value " <> show n
-
-encodeCardanoLedgerState ::
-  (ExtLedgerState CardanoBlock EmptyMK -> Encoding) ->
-  CardanoLedgerState ->
-  Encoding
-encodeCardanoLedgerState encodeExt cls =
-  mconcat
-    [ encodeExt (clsState cls)
-    , toCBOR (clsEpochBlockNo cls)
-    , valuesMKEncoder (clsState cls) (clsTables cls)
-    ]
-
-decodeCardanoLedgerState ::
-  (forall s. Decoder s (ExtLedgerState CardanoBlock EmptyMK)) ->
-  (forall s. Decoder s CardanoLedgerState)
-decodeCardanoLedgerState decodeExt = do
-  lState <- decodeExt
-  eBlockNo <- fromCBOR
-  lTables <- valuesMKDecoder lState
-  pure $ CardanoLedgerState lState lTables eBlockNo
-
-data LedgerStateFile = LedgerStateFile
-  { lsfSlotNo :: !SlotNo
-  , lsfHash :: !ByteString
-  , lsNewEpoch :: !(Strict.Maybe EpochNo)
-  , lsfFilePath :: !FilePath
+-- | Full state with handle, used during block application and snapshotting.
+data DbSyncStateRef = DbSyncStateRef
+  { srState :: !CardanoLedgerState
+  , srTables :: !(LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
+  , srCanClose :: !(StrictTVar IO Bool)
   }
-  deriving (Show)
+
+-- | Derive EpochBlockNo from the ledger state.
+-- For Shelley+, sums BlocksMade (nesBcur) to get the block count in the current epoch.
+-- For Byron, returns ByronEpochBlockNo.
+deriveEpochBlockNo :: ExtLedgerState CardanoBlock mk -> EpochBlockNo
+deriveEpochBlockNo st =
+  case ledgerState st of
+    LedgerStateByron _ -> ByronEpochBlockNo
+    LedgerStateShelley sls -> countBlocks sls
+    LedgerStateAllegra als -> countBlocks als
+    LedgerStateMary mls -> countBlocks mls
+    LedgerStateAlonzo als -> countBlocks als
+    LedgerStateBabbage bls -> countBlocks bls
+    LedgerStateConway cls -> countBlocks cls
+    LedgerStateDijkstra dls -> countBlocks dls
+  where
+    countBlocks :: LedgerState (ShelleyBlock p era) mk -> EpochBlockNo
+    countBlocks lstate =
+      let nes = shelleyLedgerState lstate
+          bm = nes ^. Shelley.nesBcurL
+      in EpochBlockNo $ fromIntegral $ sum bm
+
+-- | Convert a db-sync StateRef to a consensus StateRef for snapshot operations.
+toConsensusStateRef :: DbSyncStateRef -> ConsensusStateRef
+toConsensusStateRef sr = Consensus.StateRef (clsState $ srState sr) (srTables sr)
+
+-- | Convert a consensus StateRef to a db-sync DbSyncStateRef.
+fromConsensusStateRef :: EpochBlockNo -> ConsensusStateRef -> IO DbSyncStateRef
+fromConsensusStateRef ebn (Consensus.StateRef st tbl) = do
+  canClose <- newTVarIO True
+  pure
+    DbSyncStateRef
+      { srState = CardanoLedgerState
+          { clsState = st
+          , clsEpochBlockNo = ebn
+          }
+      , srTables = tbl
+      , srCanClose = canClose
+      }
+
+-- | Create initial db-sync state from genesis using the consensus API.
+initCardanoLedgerState :: HasLedgerEnv -> IO DbSyncStateRef
+initCardanoLedgerState env = do
+  consensusRef <- leInitGenesis env
+  fromConsensusStateRef ByronEpochBlockNo consensusRef
 
 newtype DepositsMap = DepositsMap {unDepositsMap :: Map ByteString Coin}
 
@@ -196,15 +217,13 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
             newCommitteeMembers
             newQuorum
 
-newtype LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: AnchoredSeq (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState
+-- | In-memory ledger DB. Checkpoints are stored newest-first.
+-- Uses StrictSeq for strict spine and elements.
+data LedgerDB = LedgerDB
+  { ledgerDbCheckpoints :: !(StrictSeq DbSyncStateRef)
   }
 
-instance Anchorable (WithOrigin SlotNo) CardanoLedgerState CardanoLedgerState where
-  asAnchor = id
-  getAnchorMeasure _ = getTipSlot . clsState
-
-data SnapshotPoint = OnDisk LedgerStateFile | InMemory CardanoPoint
+data SnapshotPoint = OnDisk DiskSnapshot | InMemory CardanoPoint
 
 -- | Per-era pure getters and setters on @NewEpochState@. Note this is a bit of an abuse
 -- of the cardano-ledger/ouroboros-consensus public APIs, because ledger state is not
