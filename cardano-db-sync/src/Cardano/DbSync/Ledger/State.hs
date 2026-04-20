@@ -73,6 +73,7 @@ import Control.Concurrent.STM.TBQueue (newTBQueueIO)
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Short as SBS
+import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
@@ -421,11 +422,11 @@ hashToAnnotation = Base16.encode . BS.take 5
 loadLedgerAtPoint :: HasLedgerEnv -> CardanoPoint -> IO (Either [DiskSnapshot] CardanoLedgerState)
 loadLedgerAtPoint hasLedgerEnv point = do
   mLedgerDB <- atomically $ readTVar $ leStateVar hasLedgerEnv
-  -- First try to find the ledger in memory
-  let mStates = rollbackLedger mLedgerDB
+  let (mStates, dropped) = rollbackLedger mLedgerDB
   case mStates of
     Nothing -> do
       writeLedgerState hasLedgerEnv Strict.Nothing
+      closeDroppedHandles dropped
       performMajorGC
       mst <- findStateFromSnapshot hasLedgerEnv point
       case mst of
@@ -440,18 +441,31 @@ loadLedgerAtPoint hasLedgerEnv point = do
       let sr = ledgerDbCurrent ledgerDB'
       deleteNewerSnapshots hasLedgerEnv point
       writeLedgerState hasLedgerEnv $ Strict.Just ledgerDB'
+      closeDroppedHandles dropped
       pure $ Right (srState sr)
   where
+    -- | Returns (kept states or Nothing, dropped states to close)
     rollbackLedger ::
       Strict.Maybe LedgerDB ->
-      Maybe (StrictSeq DbSyncStateRef)
+      (Maybe (StrictSeq DbSyncStateRef), [DbSyncStateRef])
     rollbackLedger mLedgerDB = case mLedgerDB of
-      Strict.Nothing -> Nothing
+      Strict.Nothing -> (Nothing, [])
       Strict.Just ledgerDB ->
-        let kept = SSeq.fromList $ dropWhile
+        let allEntries = toList $ ledgerDbCheckpoints ledgerDB
+            (newer, older) = List.span
               (\sr -> Consensus.getTipSlot (clsState (srState sr)) > pointSlot point)
-              (toList $ ledgerDbCheckpoints ledgerDB)
-        in if SSeq.null kept then Nothing else Just kept
+              allEntries
+            kept = SSeq.fromList older
+        in if SSeq.null kept
+           then (Nothing, allEntries)
+           else (Just kept, newer)
+
+    -- | Close handles from dropped states.
+    -- Waits for the snapshot writer to finish if any handle is still being used.
+    closeDroppedHandles :: [DbSyncStateRef] -> IO ()
+    closeDroppedHandles refs = forM_ refs $ \sr -> do
+      atomically $ readTVar (srCanClose sr) >>= check
+      close (srTables sr)
 
 
 writeLedgerState :: HasLedgerEnv -> Strict.Maybe LedgerDB -> IO ()
