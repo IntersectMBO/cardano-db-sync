@@ -413,7 +413,6 @@
                     # Copy exes to intermediate dir
                     cp \
                       --no-clobber \
-                      --no-preserve=mode \
                       --remove-destination \
                       --verbose \
                       ${lib.concatMapStringsSep " " (exe: "${exe}/bin/*") exes} \
