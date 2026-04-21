@@ -217,19 +217,23 @@ isRegistered pid (mEpochNo, certs) = case Map.lookup pid certs of
   Just (Db.Retirement retEpochNo) -> Right $ Just retEpochNo > mEpochNo
   Just (Db.Register _) -> Right True
 
+-- PoolId is validated at construction via parsePoolId in FromHttpApiData/FromJSON,
+-- and toDbPoolId always produces valid hex, so this decode cannot fail in practice.
 fromDbPoolId :: PoolId -> ByteString
 fromDbPoolId pid =
   case Base16.decode $ Text.encodeUtf8 $ getPoolId pid of
-    Left err -> panic $ Text.pack err
+    Left err -> error $ "fromDbPoolId: invariant violated, PoolId contains invalid hex: " <> err
     Right bs -> bs
 
 toDbPoolId :: ByteString -> PoolId
 toDbPoolId bs = PoolId $ Text.decodeUtf8 $ Base16.encode bs
 
+-- PoolMetadataHash is validated at construction via parsePoolMetaHash in FromHttpApiData/FromJSON,
+-- and toDbServantMetaHash always produces valid hex, so this decode cannot fail in practice.
 fromDbPoolMetaHash :: PoolMetadataHash -> ByteString
 fromDbPoolMetaHash pmh =
   case Base16.decode $ Text.encodeUtf8 $ getPoolMetadataHash pmh of
-    Left err -> panic $ Text.pack err
+    Left err -> error $ "fromDbPoolMetaHash: invariant violated, PoolMetadataHash contains invalid hex: " <> err
     Right bs -> bs
 
 toDbServantMetaHash :: ByteString -> PoolMetadataHash
