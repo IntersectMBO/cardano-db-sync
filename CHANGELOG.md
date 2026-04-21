@@ -1,5 +1,11 @@
 # Revision history for cardano-db-sync
 
+## 13.7.0.3
+- Migration deletes legacy zero-amount `epoch_stake` rows
+- SMASH: validate `PoolMetadataHash` inputs, return 400 instead of 500
+- Ledger snapshots now use the consensus directory format (`<slot>/state`, `meta`, `utxoSize`). Old snapshots are not compatible.
+- Experimental: LSM-backed on-disk UTxO (opt-in via `ledger_backend` config, see [doc/configuration.md](doc/configuration.md#ledger-backend))
+
 ## 13.7.0.2
 - Fix slow rollbacks caused by suboptimal query plans on large tables [#2083]
 - Update to cardano-node 10.7.0
