@@ -127,7 +127,7 @@ insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
         LedgerRestrainedRewards e rwd creds ->
           adjustEpochRewards syncEnv ntw e rwd creds
         LedgerTotalRewards _e rwd ->
-          validateEpochRewards tracer ntw (subFromCurrentEpoch 2) currentEpochNo rwd
+          validateEpochRewards syncEnv ntw (subFromCurrentEpoch 2) currentEpochNo rwd
         LedgerAdaPots _ ->
           pure () -- These are handled separately by insertBlock
         LedgerGovInfo enacted dropped expired uncl -> do

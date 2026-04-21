@@ -70,13 +70,13 @@ validateEpochStake syncEnv applyRes firstCall = case apOldLedger applyRes of
     tracer = getTrace syncEnv
 
 validateEpochRewards ::
-  Trace IO Text ->
+  SyncEnv ->
   Network ->
   EpochNo ->
   EpochNo ->
   Map StakeCred (Set Ledger.Reward) ->
   ExceptT SyncNodeError DB.DbM ()
-validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
+validateEpochRewards syncEnv network earnedEpochNo spendableEpochNo rmap = do
   actualCount <- lift $ DB.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
   if actualCount /= expectedCount
     then do
@@ -90,7 +90,19 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
           , " but got "
           , textShow actualCount
           ]
-      logFullRewardMap tracer spendableEpochNo network (convertPoolRewards rmap)
+      let rewards = convertPoolRewards rmap
+      logFullRewardMap tracer spendableEpochNo network rewards
+      addRewardConstraintsIfNotExist syncEnv tracer
+      insertRewards syncEnv network earnedEpochNo spendableEpochNo (Map.toList $ Generic.unRewards rewards)
+      newCount <- lift $ DB.queryNormalEpochRewardCount (unEpochNo spendableEpochNo)
+      liftIO . logInfo tracer $
+        mconcat
+          [ "validateEpochRewards: inserted missing rewards. Count now "
+          , textShow newCount
+          , " (expected "
+          , textShow expectedCount
+          , ")"
+          ]
     else do
       liftIO
         . logInfo tracer
@@ -101,6 +113,8 @@ validateEpochRewards tracer network _earnedEpochNo spendableEpochNo rmap = do
           , textShow actualCount
           ]
   where
+    tracer = getTrace syncEnv
+
     expectedCount :: Word64
     expectedCount = fromIntegral . sum $ map Set.size (Map.elems rmap)
 
