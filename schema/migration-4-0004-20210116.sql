@@ -3,5 +3,3 @@
 CREATE INDEX IF NOT EXISTS idx_delegation_active_epoch_no ON delegation(active_epoch_no) ;
 CREATE INDEX IF NOT EXISTS idx_pool_update_reward_addr ON pool_update(reward_addr_id) ;
 CREATE INDEX IF NOT EXISTS idx_pool_update_active_epoch_no ON pool_update(active_epoch_no) ;
-
-UPDATE schema_version SET stage_three = 6 ;
