@@ -16,7 +16,6 @@ import Cardano.SMASH.Server.Types
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map.Strict as Map
 import Data.Pool (Pool)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
