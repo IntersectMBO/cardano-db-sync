@@ -341,7 +341,15 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) dbEnv
+  let bootstrapFlag = isTxOutConsumedBootstrap' syncNodeConfigFromFile
+  case (bootstrapFlag, dncLedgerBackend syncNodeConfigFromFile) of
+    (True, LedgerBackendLSM _) ->
+      DB.logAndThrowIO trce $
+        "bootstrap-tx-out is not supported with ledger_backend=lsm. "
+          <> "The bootstrap path reads the full UTxO from the in-memory ledger state, "
+          <> "which is empty under LSM. Use ledger_backend=inmemory or disable bootstrap."
+    _ -> pure ()
+  bts <- getBootstrapInProgress trce bootstrapFlag dbEnv
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
