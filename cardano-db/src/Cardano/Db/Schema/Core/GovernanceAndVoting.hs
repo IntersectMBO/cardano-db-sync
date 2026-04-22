@@ -547,7 +547,7 @@ paramProposalEncoder =
     , paramProposalProtocolMajor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , paramProposalProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , paramProposalMinUtxoValue >$< maybeDbLovelaceEncoder
-    , paramProposalCoinsPerUtxoSize >$< maybeDbLovelaceEncoder
+    , paramProposalMinPoolCost >$< maybeDbLovelaceEncoder
     , paramProposalCostModelId >$< Id.maybeIdEncoder Id.getCostModelId
     , paramProposalPriceMem >$< E.param (E.nullable E.float8)
     , paramProposalPriceStep >$< E.param (E.nullable E.float8)
@@ -559,7 +559,7 @@ paramProposalEncoder =
     , paramProposalCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , paramProposalMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
     , paramProposalRegisteredTxId >$< Id.idEncoder Id.getTxId
-    , paramProposalMinPoolCost >$< maybeDbLovelaceEncoder
+    , paramProposalCoinsPerUtxoSize >$< maybeDbLovelaceEncoder
     , paramProposalPvtMotionNoConfidence >$< E.param (E.nullable E.float8)
     , paramProposalPvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , paramProposalPvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
