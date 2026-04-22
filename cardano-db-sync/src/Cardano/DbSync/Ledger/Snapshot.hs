@@ -169,6 +169,7 @@ findStateFromSnapshot env point = do
             Right sr -> pure $ Right sr
             Left err -> do
               logWarning (leTrace env) $ "Failed to load snapshot: " <> err <> ". Trying older."
+              logInfo (leTrace env) $ "Deleting failed snapshot: " <> textShow (snapshotToDirName ds)
               safeDeleteSnapshot (leSnapshotManager env) ds
               let older = List.filter (\d -> SlotNo (dsNumber d) < targetSlot) rest
               pure $ Left older
@@ -197,11 +198,15 @@ deleteNewerSnapshots env point = do
   snapshots <- listDiskSnapshots env
   case getPoint point of
     Origin ->
-      forM_ snapshots $ safeDeleteSnapshot (leSnapshotManager env)
+      forM_ snapshots $ \ds -> do
+        logInfo (leTrace env) $ "Deleting snapshot (replaying from genesis): " <> textShow (snapshotToDirName ds)
+        safeDeleteSnapshot (leSnapshotManager env) ds
     At blk -> do
       let targetSlot = Point.blockPointSlot blk
           newer = filter (\ds -> SlotNo (dsNumber ds) > targetSlot) snapshots
-      forM_ newer $ safeDeleteSnapshot (leSnapshotManager env)
+      forM_ newer $ \ds -> do
+        logInfo (leTrace env) $ "Deleting newer snapshot: " <> textShow (snapshotToDirName ds)
+        safeDeleteSnapshot (leSnapshotManager env) ds
 
 -- | List known snapshot points (both in-memory and on-disk).
 listKnownSnapshots :: HasLedgerEnv -> IO [SnapshotPoint]
