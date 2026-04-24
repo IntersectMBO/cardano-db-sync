@@ -90,6 +90,7 @@ insertConfig = do
           , sioPoolStats = PoolStatsConfig False
           , sioJsonType = JsonTypeDisable
           , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+          , sioOffchainUserAgent = OffChainUserAgent Nothing
           , sioStopAtBlock = Nothing
           }
 
