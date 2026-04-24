@@ -66,6 +66,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Ouroboros.Consensus.Cardano.Block (ConwayEra)
+import System.Mem (performMinorGC)
 
 insertGovActionProposal ::
   SyncEnv ->
@@ -383,6 +384,7 @@ insertDrepDistr e pSnapshot = do
   allDrepDistrs <- mapM processChunk drepChunks
   -- Insert all chunks in a single pipeline operation
   lift $ DB.insertBulkDrepDistrPiped allDrepDistrs
+  liftIO performMinorGC
   where
     processChunk = mapM mkEntry
 
