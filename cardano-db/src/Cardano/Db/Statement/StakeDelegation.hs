@@ -8,7 +8,7 @@
 
 module Cardano.Db.Statement.StakeDelegation where
 
-import Cardano.Prelude (ByteString, Proxy (..), traverse_)
+import Cardano.Prelude (ByteString, Proxy (..))
 import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -24,9 +24,10 @@ import qualified Cardano.Db.Schema.Core.Base as SCB
 import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.StakeDelegation as SS
 import qualified Cardano.Db.Schema.Ids as Id
+import Cardano.Db.Statement.Constraint (constraintNameEpochStake, constraintNameReward, unConstraintNameDB)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, runSession)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
-import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
+import Cardano.Db.Statement.Function.InsertBulk (ConflictStrategy (..), insertBulk, insertBulkWith)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..))
 import Cardano.Db.Types (Ada, DbLovelace, DbM, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
@@ -75,11 +76,19 @@ queryDelegationScript =
 -- | INSERT --------------------------------------------------------------------
 insertBulkEpochStakeStmt :: Bool -> HsqlStmt.Statement [SS.EpochStake] ()
 insertBulkEpochStakeStmt dbConstraintEpochStake =
-  insertBulkMaybeIgnore
-    dbConstraintEpochStake
-    extractEpochStake
-    SS.epochStakeBulkEncoder
-    NoResultBulk
+  if dbConstraintEpochStake
+    then
+      insertBulkWith
+        (IgnoreWithConstraint $ unConstraintNameDB constraintNameEpochStake)
+        False
+        extractEpochStake
+        SS.epochStakeBulkEncoder
+        NoResultBulk
+    else
+      insertBulk
+        extractEpochStake
+        SS.epochStakeBulkEncoder
+        NoResultBulk
   where
     extractEpochStake :: [SS.EpochStake] -> ([Id.StakeAddressId], [Id.PoolHashId], [DbLovelace], [Word64])
     extractEpochStake xs =
@@ -92,13 +101,7 @@ insertBulkEpochStakeStmt dbConstraintEpochStake =
 insertBulkEpochStake :: Bool -> [SS.EpochStake] -> DbM ()
 insertBulkEpochStake dbConstraintEpochStake epochStakes =
   runSession mkDbCallStack $
-    HsqlSes.statement epochStakes $
-      insertBulkEpochStakeStmt dbConstraintEpochStake
-
-insertBulkEpochStakePiped :: Bool -> [[SS.EpochStake]] -> DbM ()
-insertBulkEpochStakePiped dbConstraintEpochStake epochStakeChunks =
-  runSession mkDbCallStack $
-    traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkEpochStakeStmt dbConstraintEpochStake)) epochStakeChunks
+    HsqlSes.statement epochStakes (insertBulkEpochStakeStmt dbConstraintEpochStake)
 
 -- | QUERIES -------------------------------------------------------------------
 queryEpochStakeCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -158,9 +161,9 @@ insertBulkRewardsStmt :: Bool -> HsqlStmt.Statement [SS.Reward] ()
 insertBulkRewardsStmt dbConstraintRewards =
   if dbConstraintRewards
     then
-      insertBulkMaybeIgnoreWithConstraint
-        True
-        "unique_reward"
+      insertBulkWith
+        (IgnoreWithConstraint $ unConstraintNameDB constraintNameReward)
+        False
         extractReward
         SS.rewardBulkEncoder
         NoResultBulk
@@ -182,13 +185,7 @@ insertBulkRewardsStmt dbConstraintRewards =
 insertBulkRewards :: Bool -> [SS.Reward] -> DbM ()
 insertBulkRewards dbConstraintRewards rewards =
   runSession mkDbCallStack $
-    HsqlSes.statement rewards $
-      insertBulkRewardsStmt dbConstraintRewards
-
-insertBulkRewardsPiped :: Bool -> [[SS.Reward]] -> DbM ()
-insertBulkRewardsPiped dbConstraintRewards rewardChunks =
-  runSession mkDbCallStack $
-    traverse_ (\chunk -> HsqlSes.statement chunk (insertBulkRewardsStmt dbConstraintRewards)) rewardChunks
+    HsqlSes.statement rewards (insertBulkRewardsStmt dbConstraintRewards)
 
 -- | QUERY ---------------------------------------------------------------------
 queryNormalEpochRewardCountStmt :: HsqlStmt.Statement Word64 Word64
@@ -357,11 +354,6 @@ insertBulkRewardRests :: [SS.RewardRest] -> DbM ()
 insertBulkRewardRests rewardRests =
   runSession mkDbCallStack $
     HsqlSes.statement rewardRests insertBulkRewardRestsStmt
-
-insertBulkRewardRestsPiped :: [[SS.RewardRest]] -> DbM ()
-insertBulkRewardRestsPiped rewardRestChunks =
-  runSession mkDbCallStack $
-    traverse_ (`HsqlSes.statement` insertBulkRewardRestsStmt) rewardRestChunks
 
 --------------------------------------------------------------------------------
 queryRewardRestCount :: DbM Word64
