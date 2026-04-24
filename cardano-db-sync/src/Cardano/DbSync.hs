@@ -25,6 +25,7 @@ module Cardano.DbSync (
   extractSyncOptions,
 ) where
 
+import Cardano.Network.NodeToClient (IOManager, withIOManager)
 import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
 import qualified Data.Strict.Maybe as Strict
@@ -33,7 +34,6 @@ import Data.Version (showVersion)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Connection.Setting as HsqlSet
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
-import Ouroboros.Network.NodeToClient (IOManager, withIOManager)
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
@@ -317,6 +317,7 @@ extractSyncOptions snp aop snc =
         , ioKeepMetadataNames = maybeKeepMNames
         , ioPlutusExtra = isPlutusEnabled (sioPlutus (dncInsertOptions snc))
         , ioOffChainPoolData = useOffchainPoolData
+        , ioOffChainVoteData = useOffchainVoteData
         , ioPoolStats = isPoolStatsEnabled (sioPoolStats (dncInsertOptions snc))
         , ioGov = useGovernance
         , ioRemoveJsonbFromSchema = isRemoveJsonbFromSchemaEnabled (sioRemoveJsonbFromSchema (dncInsertOptions snc))
@@ -326,6 +327,8 @@ extractSyncOptions snp aop snc =
     useLedger = sioLedger (dncInsertOptions snc) == LedgerEnable
     useOffchainPoolData =
       isOffchainPoolDataEnabled (sioOffchainPoolData (dncInsertOptions snc))
+    useOffchainVoteData =
+      isOffchainVoteDataEnabled (sioOffchainVoteData (dncInsertOptions snc))
     useGovernance =
       isGovernanceEnabled (sioGovernance (dncInsertOptions snc))
 

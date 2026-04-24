@@ -91,6 +91,7 @@
                   libpq =
                     final.lib.pipe prev.libpq [
                       (p: p.override {
+                        curlSupport = false;
                         gssSupport = false;
                       })
 
@@ -105,6 +106,26 @@
                           postInstall = "";
                         }))
                     ];
+
+                  liburing = prev.liburing.overrideAttrs (old: 
+                    final.lib.optionalAttrs final.stdenv.hostPlatform.isMusl {
+                      dontDisableStatic = true;
+                      # The nixpkgs postInstall script will remove static libs, but we
+                      # need it for musl builds, while keeping the rest intact.
+                      postInstall = ''
+                        # Copy the examples into $bin. Most reverse dependency of
+                        # this package should reference only the $out output
+                        for file in $(find ./examples -executable -type f); do
+                          install -Dm555 -t "$bin/bin" "$file"
+                        done
+                      '';
+                  });
+
+                  snappy = 
+                    prev.snappy.override 
+                      (final.lib.optionalAttrs final.stdenv.hostPlatform.isMusl {
+                        static = true; 
+                      });
                 })
               ];
           };
@@ -156,6 +177,27 @@
           isCross = pkgs: 
             with pkgs.haskell-nix.haskellLib; isNativeMusl || isCrossHost;
 
+          # Fetch proto-lens with submodules and fix symlinks for plan and build phases
+          protoLensSrc = nixpkgs.fetchgit {
+            url = "https://github.com/google/proto-lens";
+            rev = "20de5227947b0c37dd6852dcc6f2db1cd5889cee";
+            sha256 = "sha256-VUYU2swjU7L8Zdu6Zfz6jo2ulW5uPhAamt2GjH5hZRY=";
+            fetchSubmodules = true;
+          };
+
+          protoLensSrcFixed = nixpkgs.runCommand "proto-lens-fixed" {} ''
+            mkdir -p $out
+            cp -a ${protoLensSrc}/. $out/
+            chmod -R +w $out
+            # Fix proto-lens-imports symlink in proto-lens
+            rm -rf $out/proto-lens/proto-lens-imports/google
+            cp -r ${protoLensSrc}/google/protobuf/src/google $out/proto-lens/proto-lens-imports/
+            # Fix proto-src symlink in proto-lens-protobuf-types
+            rm -rf $out/proto-lens-protobuf-types/proto-src
+            cp -r ${protoLensSrc}/google/protobuf/src $out/proto-lens-protobuf-types/proto-src
+            chmod -R -w $out
+          '';
+
           project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
@@ -179,15 +221,14 @@
 
             inputMap = {
               "https://chap.intersectmbo.org/" = inputs.CHaP;
+              "https://github.com/google/proto-lens/20de5227947b0c37dd6852dcc6f2db1cd5889cee" = protoLensSrcFixed;
             };
 
             shell = {
               tools = {
                 cabal = "3.14.2.0";
 
-                haskell-language-server = {
-                  src = nixpkgs.haskell-nix.sources."hls-2.11";
-                };
+                haskell-language-server = "2.13.0.0";
               } // lib.optionalAttrs (config.compiler-nix-name == "ghc967") {
                 # These versions work with GHC 9.6, but not with 9.10 and 9.12
                 fourmolu = "0.17.0.0";
@@ -201,6 +242,9 @@
               # for the target.
               buildInputs = with nixpkgs.pkgsBuildBuild; [
                 git
+                protobuf
+                liburing
+                snappy
               ];
 
               withHoogle = true;
@@ -209,6 +253,11 @@
             };
 
             modules = [
+              ({
+                # Disable haddock globally to avoid GHC 9.6.7 panic in cardano-diffusion
+                doHaddock = false;
+              })
+
               ({ lib, pkgs, ... }: {
                 package-keys = [ "ekg" ];
                 # Ignore version bounds
@@ -231,6 +280,30 @@
                   [ "../config/pgpass-mainnet" ];
                 packages.cardano-chain-gen.package.extraSrcFiles =
                   [ "../schema/*.sql" ];
+              })
+
+              # TODO remove this module when removing proto-lens SRP
+              # Override proto-lens source to use fixed symlinks (inputMap provides the fixed
+              # source for plan computation; this module provides it for the build phase)
+              ({lib, config, ...}: let
+                protoLensPackages = [
+                  "proto-lens"
+                  "proto-lens-arbitrary"
+                  "proto-lens-discrimination"
+                  "proto-lens-optparse"
+                  "proto-lens-protobuf-types"
+                  "proto-lens-protoc"
+                  "proto-lens-runtime"
+                  "proto-lens-setup"
+                  "proto-lens-tests-dep"
+                  "proto-lens-tests"
+                  "discrimination-ieee754"
+                  "proto-lens-benchmarks"
+                ];
+              in {
+                packages = lib.genAttrs
+                  (builtins.filter (p: config.packages ? ${p}) protoLensPackages)
+                  (p: { src = lib.mkForce (protoLensSrcFixed + "/${p}"); });
               })
 
               ({ lib, pkgs, config, ... }: {
@@ -284,6 +357,11 @@
                   "-optcxx-std=gnu++98"
                   "-optcxx-fno-threadsafe-statics"
                 ];
+              })
+
+              ({pkgs, ...}: {
+                packages.proto-lens-protobuf-types.components.library.build-tools = [ pkgs.buildPackages.protobuf ];
+                packages.cardano-rpc.components.library.build-tools = [ pkgs.buildPackages.protobuf ];
               })
 
               (lib.mkIf pkgs.haskell-nix.haskellLib.isCrossHost {

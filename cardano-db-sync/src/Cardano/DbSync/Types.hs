@@ -80,9 +80,9 @@ type CardanoInterpreter =
 
 type CardanoPoint = Point CardanoBlock
 
-type StakeCred = Ledger.StakeCredential
+type StakeCred = Ledger.Credential Staking
 
-type PoolKeyHash = KeyHash 'StakePool
+type PoolKeyHash = KeyHash StakePool
 
 type DataHash = Ledger.DataHash
 

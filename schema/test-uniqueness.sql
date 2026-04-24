@@ -65,11 +65,9 @@ BEGIN
   _total := _total + 1; _passed := _passed + check_unique('withdrawal', 'addr_id', 'tx_id');
 
   -- =====================================================
-  -- TREASURY / RESERVE / POT_TRANSFER (dropped in migration-2-0021)
+  -- POT_TRANSFER
   -- =====================================================
 
-  _total := _total + 1; _passed := _passed + check_unique('treasury', 'tx_id', 'cert_index');
-  _total := _total + 1; _passed := _passed + check_unique('reserve', 'tx_id', 'cert_index');
   _total := _total + 1; _passed := _passed + check_unique('pot_transfer', 'tx_id', 'cert_index');
 
   -- =====================================================

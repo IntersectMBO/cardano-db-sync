@@ -139,7 +139,7 @@ genDefaultJson =
             "script_hashes": null
           },
           "governance": "enable",
-          "offchain_pool_data": "enable",
+          "offchain_pool_data": "disable",
           "json_type": "text"
         }
       |]
@@ -166,7 +166,7 @@ genDefaultJson =
             "enable": true
           },
           "governance": "enable",
-          "offchain_pool_data": "enable",
+          "offchain_pool_data": "disable",
           "json_type": "text"
         }
       |]

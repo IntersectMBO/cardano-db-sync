@@ -12,6 +12,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Babbage as Babbage
 import qualified Test.Cardano.Db.Mock.Unit.Conway as Conway
 import Test.Tasty
 import Test.Tasty.QuickCheck (testProperty)
+import Test.Tasty.Runners (NumThreads (..))
 import Prelude
 
 main :: IO ()
@@ -27,14 +28,17 @@ main = do
 
 tests :: IOManager -> IO TestTree
 tests iom = do
+  -- Tests share a single Postgres instance and DB, so they must run serially.
+  -- tasty 1.5+ defaults to parallel execution; override that here.
   pure $
-    testGroup
-      "cardano-chain-gen"
-      [ Conway.unitTests iom knownMigrationsPlain
-      , Babbage.unitTests iom knownMigrationsPlain
-      , Alonzo.unitTests iom knownMigrationsPlain
-      , testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
-      ]
+    localOption (NumThreads 1) $
+      testGroup
+        "cardano-chain-gen"
+        [ Conway.unitTests iom knownMigrationsPlain
+        , Babbage.unitTests iom knownMigrationsPlain
+        , Alonzo.unitTests iom knownMigrationsPlain
+        , testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
+        ]
   where
     knownMigrationsPlain :: [(Text, Text)]
     knownMigrationsPlain = (\x -> (hash x, filepath x)) <$> knownMigrations

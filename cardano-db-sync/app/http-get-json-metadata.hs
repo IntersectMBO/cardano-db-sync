@@ -15,8 +15,6 @@ import Data.ByteString.Lazy (fromStrict)
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Network.HTTP.Client as Http
-import Network.HTTP.Client.TLS (tlsManagerSettings)
 import System.Console.ANSI (setSGRCode)
 import System.Console.ANSI.Types (
   Color (..),
@@ -108,7 +106,7 @@ runHttpGetPool poolUrl mHash =
     httpGet :: ExceptT OffChainFetchError IO SimplifiedOffChainPoolData
     httpGet = do
       request <- parseOffChainUrl $ OffChainPoolUrl poolUrl
-      manager <- liftIO $ Http.newManager tlsManagerSettings
+      manager <- liftIO newRestrictedManager
       httpGetOffChainPoolData manager request poolUrl mHash
 
     reportSuccess :: SimplifiedOffChainPoolData -> IO ()

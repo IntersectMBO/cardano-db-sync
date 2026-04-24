@@ -16,7 +16,7 @@ file (`db-sync-config.json` or `db-sync-config.yaml`).
 
 ## Simple Example
 
-Below is a sample `insert_options` section that shows all the defaults:
+Below is a sample `insert_options` section that shows the recommended defaults:
 
 ```
 {
@@ -41,11 +41,14 @@ Below is a sample `insert_options` section that shows all the defaults:
       "enable": true
     },
     "governance": "enable",
-    "offchain_pool_data": "enable",
+    "offchain_pool_data": "disable",
+    "offchain_vote_data": "disable",
     "json_type": "text"
   }
 }
 ```
+
+**Note**: Starting from version 13.7.0.1, `offchain_pool_data` and `offchain_vote_data` default to `"disable"`. Enable them if you need offchain metadata fetching.
 
 # Properties
 
@@ -63,6 +66,7 @@ Below is a sample `insert_options` section that shows all the defaults:
 | [plutus](#plutus)                            | `object`   | Optional |
 | [governance](#governance)                    | `enum`     | Optional |
 | [offchain\_pool\_data](#offchain-pool-data)  | `enum`     | Optional |
+| [offchain\_vote\_data](#offchain-vote-data)  | `enum`     | Optional |
 | [pool\_stat](#pool-stat)                     | `enum`     | Optional |
 | [remove\_jsonb_from_schema](#remove-jsonb-from-schema) | `enum`     | Optional |
 | [stop\_at\_block](#stop-at-block)            | `integer`  | Optional |
@@ -113,7 +117,8 @@ This is equivalent to setting:
   "enable": false
 },
 "governance": "disable",
-"offchain_pool_data": "disable"
+"offchain_pool_data": "disable",
+"offchain_vote_data": "disable",
 "pool_stat": "disable"
 ```
 
@@ -142,7 +147,8 @@ This is equivalent to setting:
   "enable": false
 },
 "governance": "enable",
-"offchain_pool_data": "disable"
+"offchain_pool_data": "disable",
+"offchain_vote_data": "disable",
 "pool_stat": "enable"
 
 ```
@@ -170,7 +176,8 @@ This is equivalent to setting:
   "enable": false
 },
 "governance": "disable",
-"offchain_pool_data": "disable"
+"offchain_pool_data": "disable",
+"offchain_vote_data": "disable",
 "pool_stat": "disable"
 ```
 
@@ -532,8 +539,54 @@ This will effect all governance related data/functionality.
 
 | Value      | Explanation                               |
 | :--------- | :---------------------------------------- |
-| `"enable"` | Enables fetching offchain metadata.       |
+| `"enable"` | Enables fetching offchain pool metadata.  |
 | `"disable"`| Disables fetching pool offchain metadata. |
+
+Controls whether db-sync fetches offchain metadata for stake pools. This metadata includes pool descriptions, ticker symbols, homepages, and other information referenced in pool registrations.
+
+**Important**: Starting from version 13.7.0.1, this defaults to `"disable"`. Explicitly enable it if you need pool metadata.
+
+When enabled, db-sync fetches metadata from URLs stored on-chain with the following restrictions:
+- HTTPS URLs required (HTTP allowed only for localhost testing)
+- Private/internal IP addresses blocked (RFC1918, loopback, link-local, IPv6 ULA)
+- DNS resolution performed immediately before requests
+
+## Offchain Vote Data
+
+`offchain_vote_data`
+
+ * Type: `string`
+
+**enum**: The value of this property must be equal to one of the following values:
+
+| Value      | Explanation                                      |
+| :--------- | :----------------------------------------------- |
+| `"enable"` | Enables fetching offchain governance vote metadata. |
+| `"disable"`| Disables fetching governance vote metadata.      |
+
+Controls whether db-sync fetches offchain metadata for governance voting anchors, including:
+- DRep registrations (CIP-119)
+- Governance action proposals (CIP-108)
+- Vote anchors and references (CIP-100)
+
+This setting is independent of the `governance` flag, allowing granular control over general governance data versus offchain metadata fetching.
+
+**Important**: Starting from version 13.7.0.1, this defaults to `"disable"`. Explicitly enable it if you need governance vote metadata.
+
+When enabled, the same URL restrictions apply as `offchain_pool_data` (HTTPS required, private IPs blocked, immediate DNS resolution).
+
+### Example
+
+```json
+{
+  "insert_options": {
+    "governance": "enable",
+    "offchain_vote_data": "enable"
+  }
+}
+```
+
+**Migration Note**: Prior to version 13.7.0.1, governance vote metadata fetching was controlled by the `governance` flag.
 
 ## Pool Stat
 

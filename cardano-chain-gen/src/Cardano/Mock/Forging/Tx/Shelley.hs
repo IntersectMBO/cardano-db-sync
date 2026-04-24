@@ -39,7 +39,7 @@ type ShelleyUTxOIndex = UTxOIndex ShelleyEra
 
 type ShelleyLedgerState = LedgerState (ShelleyBlock TPraosStandard ShelleyEra)
 
-type ShelleyTx = Core.Tx ShelleyEra
+type ShelleyTx = Core.Tx Core.TopTx ShelleyEra
 
 mkPaymentTx ::
   ShelleyUTxOIndex ->
@@ -61,9 +61,9 @@ mkPaymentTx inputIndex outputIndex amount fees st = do
   Right $ mkSimpleTx $ consPaymentTxBody input (StrictSeq.fromList [output, change]) (Coin fees)
 
 mkDCertTxPools :: ShelleyLedgerState mk -> Either ForgingError ShelleyTx
-mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Withdrawals mempty)
+mkDCertTxPools sta = Right $ mkSimpleTx $ consCertTxBody (allPoolStakeCert sta) (Core.Withdrawals mempty)
 
-mkSimpleTx :: TxBody ShelleyEra -> ShelleyTx
+mkSimpleTx :: TxBody Core.TopTx ShelleyEra -> ShelleyTx
 mkSimpleTx txBody =
   ShelleyTx.MkShelleyTx $
     ShelleyTx.ShelleyTx
@@ -71,27 +71,27 @@ mkSimpleTx txBody =
       mempty
       (maybeToStrictMaybe Nothing)
 
-mkDCertTx :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> Either ForgingError ShelleyTx
+mkDCertTx :: [ShelleyTxCert ShelleyEra] -> Core.Withdrawals -> Either ForgingError ShelleyTx
 mkDCertTx certs wdrl = Right $ mkSimpleTx $ consCertTxBody certs wdrl
 
 mkSimpleDCertTx ::
-  [(StakeIndex, StakeCredential -> ShelleyTxCert ShelleyEra)] ->
+  [(StakeIndex, Credential Core.Staking -> ShelleyTxCert ShelleyEra)] ->
   ShelleyLedgerState mk ->
   Either ForgingError ShelleyTx
 mkSimpleDCertTx consDert st = do
   dcerts <- forM consDert $ \(stakeIndex, mkDCert) -> do
     cred <- resolveStakeCreds stakeIndex st
     pure $ mkDCert cred
-  mkDCertTx dcerts (Withdrawals mempty)
+  mkDCertTx dcerts (Core.Withdrawals mempty)
 
 consPaymentTxBody ::
   Set TxIn ->
   StrictSeq (ShelleyTxOut ShelleyEra) ->
   Coin ->
-  TxBody ShelleyEra
-consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Withdrawals mempty)
+  TxBody Core.TopTx ShelleyEra
+consPaymentTxBody ins outs fees = consTxBody ins outs fees mempty (Core.Withdrawals mempty)
 
-consCertTxBody :: [ShelleyTxCert ShelleyEra] -> Withdrawals -> TxBody ShelleyEra
+consCertTxBody :: [ShelleyTxCert ShelleyEra] -> Core.Withdrawals -> TxBody Core.TopTx ShelleyEra
 consCertTxBody = consTxBody mempty mempty (Coin 0)
 
 consTxBody ::
@@ -99,8 +99,8 @@ consTxBody ::
   StrictSeq (ShelleyTxOut ShelleyEra) ->
   Coin ->
   [ShelleyTxCert ShelleyEra] ->
-  Withdrawals ->
-  TxBody ShelleyEra
+  Core.Withdrawals ->
+  TxBody Core.TopTx ShelleyEra
 consTxBody ins outs fees certs wdrl =
   ShelleyTxBody
     ins
@@ -114,7 +114,7 @@ consTxBody ins outs fees certs wdrl =
 
 -- | Create a dummy tx with a unique TTL based on the slot.
 -- This ensures a unique tx body hash for each slot.
-mkDummyTxWithSlot :: SlotNo -> Core.Tx ShelleyEra
+mkDummyTxWithSlot :: SlotNo -> Core.Tx Core.TopTx ShelleyEra
 mkDummyTxWithSlot slot =
   ShelleyTx.MkShelleyTx $
     ShelleyTx.ShelleyTx
@@ -122,7 +122,7 @@ mkDummyTxWithSlot slot =
           mempty
           mempty
           mempty
-          (Withdrawals mempty)
+          (Core.Withdrawals mempty)
           (Coin 0)
           slot
           Strict.SNothing

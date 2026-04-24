@@ -49,8 +49,7 @@ prop_multisigToJSON = property $ do
     decodeCbor :: Text -> Either DecoderError (Ledger.MultiSig ShelleyEra)
     decodeCbor cbor = do
       let bytes = LByteString.fromStrict $ deserialiseCborFromBase16 cbor
-      Annotator ann <- decodeFull shelleyProtVer bytes
-      pure $ ann (Full bytes)
+      decodeFullAnnotator shelleyProtVer "MultiSig" decCBOR bytes
 
 prop_multisigToJSON_bad :: Property
 prop_multisigToJSON_bad = property $ do
@@ -76,8 +75,7 @@ prop_timelockToJSON = property $ do
     decodeCbor :: Text -> Either DecoderError (Allegra.Timelock AllegraEra)
     decodeCbor cbor = do
       let bytes = LByteString.fromStrict $ deserialiseCborFromBase16 cbor
-      Annotator ann <- decodeFull shelleyProtVer bytes
-      pure $ ann (Full bytes)
+      decodeFullAnnotator shelleyProtVer "Timelock" decCBOR bytes
 
 prop_timelockToJSON_bad :: Property
 prop_timelockToJSON_bad = property $ do

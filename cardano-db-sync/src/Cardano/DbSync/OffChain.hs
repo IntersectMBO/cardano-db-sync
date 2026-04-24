@@ -45,7 +45,6 @@ import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Pipeline as HsqlP
 import qualified Hasql.Session as HsqlSes
 import qualified Network.HTTP.Client as Http
-import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Load OffChain Work Queue
@@ -254,7 +253,7 @@ runFetchOffChainPoolThread syncEnv = do
               DB.runDbTransLogged trce dbEnv mIsolationLevel $
                 loadOffChainPoolWorkQueue trce (envOffChainPoolWorkQueue threadSyncEnv)
             poolq <- atomically $ flushTBQueue (envOffChainPoolWorkQueue threadSyncEnv)
-            manager <- Http.newManager tlsManagerSettings
+            manager <- newRestrictedManager
             now <- liftIO Time.getPOSIXTime
             mapM_ (queuePoolInsert <=< fetchOffChainPoolData trce manager now) poolq
       )
@@ -268,7 +267,7 @@ runFetchOffChainPoolThread syncEnv = do
 runFetchOffChainVoteThread :: SyncEnv -> IO ()
 runFetchOffChainVoteThread syncEnv = do
   -- if disable gov is active then don't run voting anchor thread
-  when (ioGov iopts) $ do
+  when (ioOffChainVoteData iopts && ioGov iopts) $ do
     logInfo trce "Running Offchain Vote Anchor fetch thread"
     pgconfig <- DB.runOrThrowIO (DB.readPGPass DB.PGPassDefaultEnv)
     connSetting <- case DB.toConnectionSetting pgconfig of

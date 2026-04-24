@@ -65,23 +65,23 @@ deserialiseVerKeyVrfFromBech32 text =
       maybeToRight DecodeFromRawBytesError . rawDeserialiseVerKeyVRF
 
 -- | Serialise stake pool key hash to a bech32 address
-serialiseStakePoolKeyHashToBech32 :: KeyHash 'StakePool -> Text
+serialiseStakePoolKeyHashToBech32 :: KeyHash StakePool -> Text
 serialiseStakePoolKeyHashToBech32 (KeyHash hash) =
   serialiseToBech32 "pool" $ hashToBytes hash
 
 -- | Deserialise a bech32 address to a stake pool key hash
 deserialiseStakePoolKeyHashFromBech32 ::
   Text ->
-  Either DecodeError (KeyHash 'StakePool)
+  Either DecodeError (KeyHash StakePool)
 deserialiseStakePoolKeyHashFromBech32 text =
   deserialiseFromBech32 text >>= deserialiseFromRawBytes'
   where
     deserialiseFromRawBytes' ::
       ByteString ->
-      Either DecodeError (KeyHash 'StakePool)
+      Either DecodeError (KeyHash StakePool)
     deserialiseFromRawBytes' bytes = maybeToRight DecodeFromRawBytesError $ hashFromBytes' bytes
 
-    hashFromBytes' :: ByteString -> Maybe (KeyHash 'StakePool)
+    hashFromBytes' :: ByteString -> Maybe (KeyHash StakePool)
     hashFromBytes' bytes = KeyHash <$> hashFromBytes bytes
 
 -- | Serialise drep bech32 address

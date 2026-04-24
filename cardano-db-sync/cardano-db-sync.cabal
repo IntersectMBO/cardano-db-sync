@@ -1,7 +1,7 @@
 cabal-version:          3.6
 
 name:                   cardano-db-sync
-version:                13.7.0.1
+version:                13.7.0.2
 synopsis:               The Cardano DB Sync node
 description:            A Cardano node that follows the Cardano chain and inserts data from the
                         chain into a PostgresQL database.
@@ -155,7 +155,7 @@ library
                       , base58-bytestring
                       , case-insensitive
                       , cardano-binary
-                      , cardano-client
+                      , cardano-diffusion:subscription
                       , cardano-crypto
                       , cardano-crypto-class
                       , cardano-crypto-praos
@@ -170,6 +170,8 @@ library
                       , cardano-ledger-byron
                       , cardano-ledger-core
                       , cardano-ledger-conway >= 1.17.3
+                      , cardano-diffusion
+                      , cardano-diffusion:api
                       , cardano-ledger-binary
                       , cardano-ledger-dijkstra
                       , cardano-ledger-mary
@@ -191,23 +193,22 @@ library
                       , groups
                       , hasql
                       , http-client
-                      , http-client-tls
+                      , http-client-restricted
                       , http-types
                       , iohk-monitoring
+                      , network
                       , lifted-base
                       , memory
                       , microlens
                       , network-mux
-                      , ouroboros-consensus ^>= 0.30.0.1
-                      , ouroboros-consensus-cardano ^>= 0.26.0.3
-                      , ouroboros-consensus-diffusion ^>= 0.26.0.0
-                      , ouroboros-consensus-protocol ^>= 0.13.0.0
-                      , ouroboros-network ^>= 0.22.6.0
-                      , ouroboros-network-api ^>= 0.16.0.0
-                      -- Note this has moved to ouroboros-network:framework on HEAD
-                      , ouroboros-network-framework ^>= 0.19.3.0
-                      , ouroboros-network-protocols ^>= 0.15.2.0
-                      , plutus-ledger-api ^>= 1.57.0.0
+                      , ouroboros-consensus
+                      , ouroboros-consensus:cardano
+                      , ouroboros-consensus:diffusion
+                      , ouroboros-consensus:protocol
+                      , ouroboros-network:api
+                      , ouroboros-network:framework
+                      , ouroboros-network:protocols
+                      , plutus-ledger-api
                       , prometheus
                       , psqueues
                       , random-shuffle
@@ -296,8 +297,6 @@ executable http-get-json-metadata
                       , bytestring
                       , cardano-db
                       , cardano-db-sync
-                      , http-client
-                      , http-client-tls
                       , text
                       , transformers
 
@@ -386,5 +385,5 @@ test-suite test
                       , iohk-monitoring
                       , hedgehog
                       , hedgehog-quickcheck
-                      , ouroboros-consensus-cardano
+                      , ouroboros-consensus:cardano
                       , text
