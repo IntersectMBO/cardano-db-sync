@@ -87,6 +87,8 @@ data HasLedgerEnv = HasLedgerEnv
   -- ^ Create the initial consensus StateRef from genesis
   , leLoadSnapshot :: !(DiskSnapshot -> IO (Either Text ConsensusStateRef))
   -- ^ Load a snapshot from disk using the appropriate backend
+  , leClose :: !(IO ())
+  -- ^ Release backend resources (LSM session, registry, etc.). Call on shutdown.
   }
 
 -- | Pure ledger state, stored in LedgerDB checkpoints.

@@ -206,7 +206,7 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
   let codecConfig = configCodec $ Consensus.pInfoConfig protoInfo
       someHasFS = SomeHasFS $ ioHasFS (MountPoint $ unLedgerStateDir dir)
       snapTracer = Tracer.nullTracer -- TODO: wire up snapshot tracing
-  (snapMgr, initGen, loadSnap) <- case backend of
+  (snapMgr, initGen, loadSnap, closeBackend) <- case backend of
     LedgerBackendInMemory -> do
       res <-
         runWithTempRegistry $
@@ -223,7 +223,7 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
             case eResult of
               Left err -> pure $ Left $ textShow err
               Right (cRef, _pt) -> pure $ Right cRef
-      pure (sm, ig, ld)
+      pure (sm, ig, ld, pure ())
     LedgerBackendLSM mPath -> do
       let lsmPath = fromMaybe (unLedgerStateDir dir </> "lsm") mPath
       salt <- fst . genWord64 <$> newStdGen
@@ -243,7 +243,13 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
             case eResult of
               Left err -> pure $ Left $ textShow err
               Right (cRef, _pt) -> pure $ Right cRef
-      pure (sm, ig, ld)
+      -- Close the LSM session on shutdown to release the file lock.
+      -- mkResources allocates the session via 'allocateTemp ... impossibleToNotTransfer',
+      -- which means it is intentionally NOT closed when runWithTempRegistry exits
+      -- (similar to bracketOnError). We release it explicitly here so the lock
+      -- is freed even when the same process restarts db-sync (test scenario).
+      let releaseLsm = releaseResources (Proxy @CardanoBlock) res
+      pure (sm, ig, ld, releaseLsm)
 
   pure
     HasLedgerEnv
@@ -264,6 +270,7 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
       , leSnapshotManager = snapMgr
       , leInitGenesis = initGen
       , leLoadSnapshot = loadSnap
+      , leClose = closeBackend
       }
 
 getTopLevelconfigHasLedger :: HasLedgerEnv -> TopLevelConfig CardanoBlock
