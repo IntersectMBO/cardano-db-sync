@@ -3,7 +3,7 @@
 -- The constraint is immediately dropped after a successful check.
 -- If it fails, a WARNING is raised with the violation details.
 --
--- Usage: psql -d <dbname> -f schema/test-uniqueness.sql
+-- Usage: psql -d <dbname> -f scripts/test-uniqueness.sql
 -- Or run all tests: ./scripts/run-schema-checks.sh <dbname>
 --
 -- The entire script runs inside a transaction that is always rolled back,

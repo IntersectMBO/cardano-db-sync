@@ -122,20 +122,28 @@ instance ToJSON PoolMetadataHash where
       [ "poolHash" .= poolHash
       ]
 
--- The validation of @PoolMetadataHash@ is a bit more involved and would require
--- an analysis with some bounds on the size.
 instance FromJSON PoolMetadataHash where
   parseJSON = withObject "PoolMetadataHash" $ \o -> do
     poolHash <- o .: "poolHash"
-    pure $ PoolMetadataHash poolHash
+    case parsePoolMetaHash poolHash of
+      Left err -> fail $ toS err
+      Right pmh -> pure pmh
 
 instance ToSchema PoolMetadataHash
 
 instance ToParamSchema PoolMetadataHash
 
--- TODO: Add sanity checks
 instance FromHttpApiData PoolMetadataHash where
-  parseUrlPiece poolMetadataHash = Right $ PoolMetadataHash poolMetadataHash
+  parseUrlPiece = parsePoolMetaHash
+
+-- | Pool metadata hash is a SHA-256 hash (32 bytes), hex-encoded as 64 characters.
+parsePoolMetaHash :: Text -> Either Text PoolMetadataHash
+parsePoolMetaHash poolHash =
+  case B16.decode (encodeUtf8 poolHash) of
+    Left _ -> Left "Unable to parse pool metadata hash. Expected hex encoding."
+    Right bs
+      | BS.length bs == 32 -> Right $ PoolMetadataHash poolHash
+      | otherwise -> Left "Unable to parse pool metadata hash. Expected 32 bytes (64 hex characters)."
 
 -- Result wrapper.
 newtype ApiResult err a = ApiResult (Either err a)

@@ -7,11 +7,11 @@
 set -euo pipefail
 
 DB="${1:?Usage: $0 <dbname>}"
-SCHEMA_DIR="$(cd "$(dirname "$0")/../schema" && pwd)"
+SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Running referential integrity tests on ${DB}..."
-psql -d "$DB" -f "$SCHEMA_DIR/test-referential-integrity.sql"
+psql -d "$DB" -f "$SCRIPTS_DIR/test-referential-integrity.sql"
 
 echo ""
 echo "Running uniqueness tests on ${DB}..."
-psql -d "$DB" -f "$SCHEMA_DIR/test-uniqueness.sql"
+psql -d "$DB" -f "$SCRIPTS_DIR/test-uniqueness.sql"
