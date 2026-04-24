@@ -30,11 +30,11 @@ import Cardano.DbSync.Cache
 import Cardano.DbSync.DbEvent (liftDbLookup)
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State (ledgerDbCurrent, listKnownSnapshots, loadLedgerAtPoint, saveCleanupState, writeLedgerState)
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), HasLedgerEnv (..), SnapshotPoint (..))
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 
 rollbackFromBlockNo ::
   SyncEnv ->

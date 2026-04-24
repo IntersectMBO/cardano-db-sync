@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -27,21 +26,23 @@ import Cardano.Ledger.Coin (Coin)
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyRole (..))
-import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState ())
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
   EpochNo (..),
  )
 import Control.Concurrent.Class.MonadSTM.Strict (
-  StrictTVar, newTVarIO,
+  StrictTVar,
+  newTVarIO,
  )
 import Control.Concurrent.STM.TBQueue (TBQueue)
+import Data.List.NonEmpty ()
 import qualified Data.Map.Strict as Map
 import Data.SOP.Functors (Flip (..))
 import Data.SOP.Strict
-import qualified Data.Set as Set
 import Data.Sequence.Strict (StrictSeq)
+import qualified Data.Set as Set
 import qualified Data.Strict.Maybe as Strict
 import Lens.Micro (Traversal', (^.))
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
@@ -50,12 +51,11 @@ import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Abstract ()
 import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
+import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot, SnapshotManager)
 import Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq (LedgerTablesHandle (..))
 import qualified Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq as Consensus (StateRef (..))
-import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
-import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
-import Data.List.NonEmpty ()
 import Prelude (id)
 
 --------------------------------------------------------------------------
@@ -94,8 +94,10 @@ data HasLedgerEnv = HasLedgerEnv
 -- | Block number within the current epoch. Used by getStakeSlice
 -- to insert epoch stake incrementally.
 data EpochBlockNo
-  = EpochBlockNo !Word64  -- ^ Shelley+: block number within epoch
-  | ByronEpochBlockNo     -- ^ Byron: no stake slicing needed
+  = -- | Shelley+: block number within epoch
+    EpochBlockNo !Word64
+  | -- | Byron: no stake slicing needed
+    ByronEpochBlockNo
 
 data CardanoLedgerState = CardanoLedgerState
   { clsState :: !(ExtLedgerState CardanoBlock EmptyMK)
@@ -128,7 +130,7 @@ deriveEpochBlockNo st =
     countBlocks lstate =
       let nes = shelleyLedgerState lstate
           bm = nes ^. Shelley.nesBcurL
-      in EpochBlockNo $ fromIntegral $ sum bm
+       in EpochBlockNo $ fromIntegral $ sum bm
 
 -- | Convert a db-sync StateRef to a consensus StateRef for snapshot operations.
 toConsensusStateRef :: DbSyncStateRef -> ConsensusStateRef
@@ -140,10 +142,11 @@ fromConsensusStateRef ebn (Consensus.StateRef st tbl) = do
   canClose <- newTVarIO True
   pure
     DbSyncStateRef
-      { srState = CardanoLedgerState
-          { clsState = st
-          , clsEpochBlockNo = ebn
-          }
+      { srState =
+          CardanoLedgerState
+            { clsState = st
+            , clsEpochBlockNo = ebn
+            }
       , srTables = tbl
       , srCanClose = canClose
       }
@@ -219,8 +222,8 @@ updatedCommittee membersToRemove membersToAdd newQuorum committee =
 
 -- | In-memory ledger DB. Checkpoints are stored newest-first.
 -- Uses StrictSeq for strict spine and elements.
-data LedgerDB = LedgerDB
-  { ledgerDbCheckpoints :: !(StrictSeq DbSyncStateRef)
+newtype LedgerDB = LedgerDB
+  { ledgerDbCheckpoints :: StrictSeq DbSyncStateRef
   }
 
 data SnapshotPoint = OnDisk DiskSnapshot | InMemory CardanoPoint

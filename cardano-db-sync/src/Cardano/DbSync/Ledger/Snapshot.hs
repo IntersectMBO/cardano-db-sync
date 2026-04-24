@@ -1,31 +1,34 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 -- | Snapshot operations for db-sync, using consensus snapshot format.
 --
 -- This module replaces the old custom .lstate snapshot format with
 -- consensus's directory-based format (<slot>[_suffix]/ containing
 -- state, meta, utxoSize files).
-module Cardano.DbSync.Ledger.Snapshot
-  ( -- * Migration
-    migrateOldSnapshots
-    -- * Save
-  , saveCurrentLedgerState
-  , saveCleanupState
-  , snapshotWriteLoop
-  , runLedgerStateWriteThread
-    -- * Load
-  , loadSnapshotFromDisk
-  , findStateFromSnapshot
-    -- * List / Cleanup
-  , listDiskSnapshots
-  , deleteNewerSnapshots
-    -- * Snapshot points
-  , listKnownSnapshots
-  , getSlotNoSnapshot
-  ) where
+module Cardano.DbSync.Ledger.Snapshot (
+  -- * Migration
+  migrateOldSnapshots,
+
+  -- * Save
+  saveCurrentLedgerState,
+  saveCleanupState,
+  snapshotWriteLoop,
+  runLedgerStateWriteThread,
+
+  -- * Load
+  loadSnapshotFromDisk,
+  findStateFromSnapshot,
+
+  -- * List / Cleanup
+  listDiskSnapshots,
+  deleteNewerSnapshots,
+
+  -- * Snapshot points
+  listKnownSnapshots,
+  getSlotNoSnapshot,
+) where
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import Cardano.DbSync.Api.Types (LedgerEnv (..))
@@ -34,19 +37,19 @@ import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Types (CardanoPoint)
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
-import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVar, writeTVar)
+import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Concurrent.STM.TBQueue (readTBQueue, writeTBQueue)
-import Data.Time.Clock (getCurrentTime, diffUTCTime)
 import qualified Data.List as List
 import qualified Data.Strict.Maybe as Strict
+import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import qualified Database.LSMTree as LSMTree
 import qualified Ouroboros.Consensus.Ledger.Abstract as Consensus
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
-import qualified Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq as Consensus (StateRef (..))
 import Ouroboros.Consensus.Storage.LedgerDB.Snapshots
+import qualified Ouroboros.Consensus.Storage.LedgerDB.V2.LedgerSeq as Consensus (StateRef (..))
 import Ouroboros.Network.Block
 import qualified Ouroboros.Network.Point as Point
-import System.Directory (listDirectory, removeFile, doesDirectoryExist)
+import System.Directory (doesDirectoryExist, listDirectory, removeFile)
 import System.FilePath (takeExtension, (</>))
 
 -- | Remove old .lstate files from a previous db-sync version.
@@ -74,8 +77,7 @@ saveCurrentLedgerState env lState _mEpochNo = do
 
 -- | Save a snapshot and clean up old ones.
 saveCleanupState :: HasLedgerEnv -> DbSyncStateRef -> Maybe EpochNo -> IO ()
-saveCleanupState env ledger mEpochNo =
-  saveCurrentLedgerState env ledger mEpochNo
+saveCleanupState = saveCurrentLedgerState
 
 -- | The write thread that takes snapshots from the queue.
 runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
@@ -107,13 +109,15 @@ snapshotWriteLoop tracer env = loop
               , textShow (diffUTCTime endTime startTime)
               ]
           -- Trim old snapshots after writing the new one
-          let policy = SnapshotPolicy
-                { onDiskNumSnapshots = 3
-                , onDiskShouldTakeSnapshot = \_ _ -> True
-                }
+          let policy =
+                SnapshotPolicy
+                  { onDiskNumSnapshots = 3
+                  , onDiskShouldTakeSnapshot = \_ _ -> True
+                  }
           deleted <- trimSnapshots (leSnapshotManager env) policy
           unless (null deleted) $
-            logInfo tracer $ "Trimmed " <> textShow (length deleted) <> " old snapshots"
+            logInfo tracer $
+              "Trimmed " <> textShow (length deleted) <> " old snapshots"
       loop
 
 -- | Load a snapshot from disk using consensus APIs.
@@ -125,12 +129,18 @@ loadSnapshotFromDisk ::
   IO (Either Text DbSyncStateRef)
 loadSnapshotFromDisk env ds = do
   startTime <- getCurrentTime
-  eResult <- handle (\(err :: LSMTree.SnapshotDoesNotExistError) -> pure $ Left $ textShow err) $
-    leLoadSnapshot env ds
+  eResult <-
+    handle (\(err :: LSMTree.SnapshotDoesNotExistError) -> pure $ Left $ textShow err) $
+      leLoadSnapshot env ds
   endTime <- getCurrentTime
   case eResult of
-    Left err -> pure $ Left $ "Failed to load snapshot " <> textShow (snapshotToDirName ds)
-      <> ": " <> err
+    Left err ->
+      pure $
+        Left $
+          "Failed to load snapshot "
+            <> textShow (snapshotToDirName ds)
+            <> ": "
+            <> err
     Right cRef -> do
       logInfo (leTrace env) $
         mconcat
@@ -216,7 +226,7 @@ getSlotNoSnapshot (InMemory cp) = pointSlot cp
 
 listMemorySnapshots :: HasLedgerEnv -> IO [CardanoPoint]
 listMemorySnapshots env = do
-  mState <- atomically $ readTVar $ leStateVar env
+  mState <- readTVarIO (leStateVar env)
   case mState of
     Strict.Nothing -> pure []
     Strict.Just ledgerDB ->

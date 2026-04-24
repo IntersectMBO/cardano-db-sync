@@ -89,10 +89,10 @@ import Cardano.DbSync.Ledger.State (
   mkHasLedgerEnv,
  )
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), SnapshotPoint (..))
-import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot (..))
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot (..))
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
