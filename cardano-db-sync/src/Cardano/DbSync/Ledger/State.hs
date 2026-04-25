@@ -320,11 +320,13 @@ applyBlock env blk = do
   appResult <- atomically $ do
     let ledgerEventsFull = mapMaybe (convertAuxLedgerEvent (leHasRewards env)) (Consensus.lrEvents newResult)
         (ledgerEvents, deposits) = splitDeposits ledgerEventsFull
-        !newLedgerState = finaliseDrepDistr $ clsState (Consensus.lrResult newResult)
-    !details <- getSlotDetails env (ledgerState newLedgerState) time (cardanoBlockSlotNo blk)
-    !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldCls) newLedgerState (findAdaPots ledgerEvents)
-    let !newEpochBlockNo = applyToEpochBlockNo (isByronLedger newLedgerState) (isJust newEpoch) (clsEpochBlockNo oldCls)
-        !newState = (Consensus.lrResult newResult) {clsState = newLedgerState, clsEpochBlockNo = newEpochBlockNo}
+        !rawLedgerState = clsState (Consensus.lrResult newResult)
+    !details <- getSlotDetails env (ledgerState rawLedgerState) time (cardanoBlockSlotNo blk)
+    !newEpoch <- fromEitherSTM $ mkOnNewEpoch (clsState oldCls) rawLedgerState (findAdaPots ledgerEvents)
+    let !newLedgerState = case newEpoch of
+          Just _ -> finaliseDrepDistr rawLedgerState
+          Nothing -> rawLedgerState
+        !newState = (Consensus.lrResult newResult) {clsState = newLedgerState}
     pure $
       if leUseLedger env
         then
