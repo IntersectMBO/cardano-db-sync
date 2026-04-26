@@ -39,11 +39,6 @@ package cardano-db-tool
 package cardano-smash-server
   ghc-options: -Wall -Werror -Wredundant-constraints -Wincomplete-uni-patterns -Wincomplete-record-updates -Wpartial-fields -Wunused-imports -Wunused-packages
 
-package blockio
-  -- Use serial block IO to avoid requiring liburing (not available in devx CI).
-  -- TODO: revert when CI provides liburing or switch to io_uring for better LSM perf.
-  flags: +serialblockio
-
 package cardano-node
    -- We are using cardano-node as a library and we never use the systemd scribe, so there
    -- is no benefit to linking against it
