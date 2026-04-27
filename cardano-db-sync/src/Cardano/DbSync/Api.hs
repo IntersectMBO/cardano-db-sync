@@ -85,14 +85,14 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Ledger.State (
   getHeaderHash,
-  hashToAnnotation,
   listKnownSnapshots,
   mkHasLedgerEnv,
  )
-import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), LedgerStateFile (..), SnapshotPoint (..))
+import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), SnapshotPoint (..))
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot (..))
 
 setConsistentLevel :: SyncEnv -> ConsistentLevel -> IO ()
 setConsistentLevel env cst = do
@@ -341,7 +341,15 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
       else pure useNoCache
   consistentLevelVar <- newTVarIO Unchecked
   indexesVar <- newTVarIO $ enpForceIndexes syncNP
-  bts <- getBootstrapInProgress trce (isTxOutConsumedBootstrap' syncNodeConfigFromFile) dbEnv
+  let bootstrapFlag = isTxOutConsumedBootstrap' syncNodeConfigFromFile
+  case (bootstrapFlag, dncLedgerBackend syncNodeConfigFromFile) of
+    (True, LedgerBackendLSM _) ->
+      DB.logAndThrowIO trce $
+        "bootstrap-tx-out is not supported with ledger_backend=lsm. "
+          <> "The bootstrap path reads the full UTxO from the in-memory ledger state, "
+          <> "which is empty under LSM. Use ledger_backend=inmemory or disable bootstrap."
+    _ -> pure ()
+  bts <- getBootstrapInProgress trce bootstrapFlag dbEnv
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -363,6 +371,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
             maxLovelaceSupply
             systemStart
             syncOptions
+            (dncLedgerBackend syncNodeConfigFromFile)
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       (Just _, False) -> do
         logWarning trce $
@@ -472,11 +481,11 @@ verifySnapshotPoint env snapPoints =
   catMaybes <$> mapM validLedgerFileToPoint snapPoints
   where
     validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
-    validLedgerFileToPoint (OnDisk lsf) = do
-      hashes <- getSlotHash (envDbEnv env) (lsfSlotNo lsf)
-      let valid = find (\(_, h) -> lsfHash lsf == hashToAnnotation h) hashes
-      case valid of
-        Just (slot, hash) | slot == lsfSlotNo lsf -> pure $ convertToDiskPoint slot hash
+    validLedgerFileToPoint (OnDisk ds) = do
+      let slot = SlotNo (dsNumber ds)
+      hashes <- getSlotHash (envDbEnv env) slot
+      case hashes of
+        [(s, _h)] | s == slot -> pure $ convertToDiskPoint slot _h
         _ -> pure Nothing
     validLedgerFileToPoint (InMemory pnt) = do
       case pnt of

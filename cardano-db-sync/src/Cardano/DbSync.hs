@@ -45,7 +45,7 @@ import Cardano.Slotting.Slot (EpochNo (..))
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
+import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
 import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
@@ -54,6 +54,7 @@ import Cardano.DbSync.DbEvent
 import Cardano.DbSync.Era
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.State
+import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (handlePostRollbackSnapshots, unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
@@ -248,6 +249,10 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
 
           -- communication channel between datalayer thread and chainsync-client thread
           threadChannels <- liftIO newThreadChannels
+          -- 'finally' on the worker pool ensures the LSM session (and any other
+          -- backend resources) are closed even when db-sync is cancelled or
+          -- crashes — important for tests that restart db-sync in the same
+          -- process and need the OS file lock to be released.
           liftIO $
             mapConcurrently_
               id
@@ -257,6 +262,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
               , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
               ]
+              `finally` closeLedgerEnv syncEnv
     )
   where
     useShelleyInit :: SyncNodeConfig -> Bool
@@ -353,3 +359,14 @@ txOutConfigToTableType config = case config of
   TxOutConsumed _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
   TxOutConsumedPrune _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
   TxOutConsumedBootstrap _ (UseTxOutAddress flag) -> if flag then DB.TxOutVariantAddress else DB.TxOutVariantCore
+
+-- | Release backend resources held by the ledger environment.
+-- Currently this closes the LSM session (no-op for InMemory and NoLedger).
+closeLedgerEnv :: SyncEnv -> IO ()
+closeLedgerEnv syncEnv = case envLedgerEnv syncEnv of
+  HasLedger le -> do
+    let trce = leTrace le
+    logInfo trce "closeLedgerEnv: closing LSM session..."
+    leClose le
+    logInfo trce "closeLedgerEnv: closed."
+  NoLedger _ -> pure ()

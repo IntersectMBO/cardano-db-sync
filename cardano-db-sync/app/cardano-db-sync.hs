@@ -67,9 +67,10 @@ dbSyncMain = do
 
     stateDirErrorMsg :: [Char]
     stateDirErrorMsg =
-      "Error: If not using --state-dir then make sure to have ledger disabled. "
-        <> "For more details view https://github.com/IntersectMBO/cardano-db-sync/blob"
-        <> "/master/doc/syncing-and-rollbacks.md#ledger-state"
+      "Error: --state-dir is required when ledger is enabled. "
+        <> "Either provide --state-dir or set \"ledger\": \"disable\" in the config. "
+        <> "See https://github.com/IntersectMBO/cardano-db-sync/blob"
+        <> "/master/doc/configuration.md#ledger"
 
 ---------------------------------------------------------------------------------------------------
 -- Command Line Configurations

@@ -281,8 +281,15 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
 {-# ANN withConfig ("HLint: ignore Redundant pure" :: String) #-}
 
 mkSyncNodeConfig :: FilePath -> CommandLineArgs -> IO SyncNodeConfig
-mkSyncNodeConfig configFilePath cmdLineArgs =
-  readSyncNodeConfig $ mkConfigFile configDir configFilename
+mkSyncNodeConfig configFilePath cmdLineArgs = do
+  cfg <- readSyncNodeConfig $ mkConfigFile configDir configFilename
+  -- Allow env-var override of the ledger backend so CI can run the
+  -- full suite against both "inmemory" and "lsm" without per-test config changes.
+  mBackend <- lookupEnv "DB_SYNC_TEST_LEDGER_BACKEND"
+  pure $ case mBackend of
+    Just "lsm" -> cfg {dncLedgerBackend = LedgerBackendLSM Nothing}
+    Just "inmemory" -> cfg {dncLedgerBackend = LedgerBackendInMemory}
+    _ -> cfg
   where
     configFilename = claConfigFilename cmdLineArgs
     configDir = mkConfigDir configFilePath
