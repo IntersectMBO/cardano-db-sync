@@ -35,6 +35,7 @@ insertEpochSyncTime ::
   UTCTime ->
   ExceptT SyncNodeError DB.DbM ()
 insertEpochSyncTime epochNo syncState epochStats endTime = do
+  currentTime <- liftIO Time.getCurrentTime
   void
     . lift
     $ DB.insertEpochSyncTime
@@ -42,6 +43,7 @@ insertEpochSyncTime epochNo syncState epochStats endTime = do
       { DB.epochSyncTimeNo = unEpochNo epochNo - 1
       , DB.epochSyncTimeSeconds = ceiling (realToFrac (Time.diffUTCTime endTime (elsStartTime epochStats)) :: Double)
       , DB.epochSyncTimeState = syncState
+      , DB.epochSyncTimeSyncedAt = Just currentTime
       }
 
 initEpochStatistics :: MonadIO m => m (StrictTVar IO EpochStatistics)
