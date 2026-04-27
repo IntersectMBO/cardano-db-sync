@@ -22,6 +22,7 @@ module Cardano.SMASH.Server.Types (
   UniqueTicker (..),
   User (..),
   UserValidity (..),
+  isLocalhostHost,
 ) where
 
 import Cardano.Api (
@@ -44,13 +45,16 @@ import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Swagger (NamedSchema (..), ToParamSchema (..), ToSchema (..))
+import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime)
 import qualified Data.Time.Clock.POSIX as Time
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
-import Network.URI (URI, parseURI)
+import qualified Net.IPv4 as IPv4
+import qualified Net.IPv6 as IPv6
+import Network.URI (URI (..), parseURI, uriAuthority, uriRegName, uriScheme)
 import Quiet (Quiet (..))
 import Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
-import qualified Text.Show as Text
+import qualified Text.Show as TShow
 
 -- | The stake pool identifier. It is the hash of the stake pool operator's
 -- vkey.
@@ -224,6 +228,52 @@ instance ToSchema PoolFetchError
 formatTimeToNormal :: Time.POSIXTime -> Text
 formatTimeToNormal = toS . formatTime defaultTimeLocale "%d.%m.%Y. %T" . Time.posixSecondsToUTCTime
 
+isLocalhostHost :: Text -> Bool
+isLocalhostHost host =
+  host == "localhost" || host == "127.0.0.1" || host == "::1"
+
+isRestrictedIPv6 :: IPv6.IPv6 -> Bool
+isRestrictedIPv6 ipv6 =
+  let (h1, _, _, _, _, _, _, _) = IPv6.toWord16s ipv6
+   in (ipv6 == IPv6.loopback)
+        || ((h1 .&. 0xfe00) == 0xfc00)
+        || (h1 == 0xfe80)
+
+validateSmashURL :: Text -> Maybe SmashURL
+validateSmashURL urlText =
+  case parseURI (Text.unpack urlText) of
+    Nothing -> Nothing
+    Just uri' -> do
+      let scheme = uriScheme uri'
+      guard (Text.isPrefixOf "https://" urlText || (Text.isPrefixOf "http://" urlText && isLocalhostUrl urlText))
+      guard (scheme == "http:" || scheme == "https:")
+      authority <- uriAuthority uri'
+      let host = Text.pack (uriRegName authority)
+      guard (not (isBlockedHost host))
+      Just (SmashURL uri')
+  where
+    isLocalhostUrl :: Text -> Bool
+    isLocalhostUrl u =
+      "http://localhost" `Text.isPrefixOf` u
+        || "http://127.0.0.1" `Text.isPrefixOf` u
+        || "http://[::1]" `Text.isPrefixOf` u
+
+isBlockedHost :: Text -> Bool
+isBlockedHost host
+  | isLocalhostHost host = False
+  | otherwise =
+      case readMaybe (Text.unpack host) :: Maybe IPv4.IPv4 of
+        Just ipv4 | IPv4.reserved ipv4 -> True
+        _ ->
+          let hostStr = Text.unpack host
+              hostStrClean =
+                if Text.isPrefixOf "[" host && Text.isSuffixOf "]" host
+                  then Text.unpack (Text.init (Text.tail host))
+                  else hostStr
+           in case readMaybe hostStrClean :: Maybe IPv6.IPv6 of
+                Just ipv6 | isRestrictedIPv6 ipv6 -> True
+                _ -> False
+
 -- | The Smash @URI@ containing remote filtering data.
 newtype SmashURL = SmashURL {getSmashURL :: URI}
   deriving (Eq, Show, Generic)
@@ -237,12 +287,9 @@ instance ToJSON SmashURL where
 instance FromJSON SmashURL where
   parseJSON = withObject "SmashURL" $ \o -> do
     uri <- o .: "smashURL"
-
-    let parsedURI = parseURI uri
-
-    case parsedURI of
-      Nothing -> fail "Not a valid URI for SMASH server."
-      Just uri' -> pure (SmashURL uri')
+    case validateSmashURL uri of
+      Nothing -> fail "Invalid or disallowed SMASH URL. Must use HTTPS (or HTTP for localhost)."
+      Just smashUrl -> pure smashUrl
 
 instance ToSchema SmashURL where
   declareNamedSchema _ =
@@ -391,16 +438,16 @@ instance Exception DBFail
 instance Show DBFail where
   show =
     \case
-      UnknownError err -> "Unknown error. Context: " <> Text.show err
+      UnknownError err -> "Unknown error. Context: " <> TShow.show err
       DbInsertError err ->
-        "The database got an error while trying to insert a record. Error: " <> Text.show err
+        "The database got an error while trying to insert a record. Error: " <> TShow.show err
       DbLookupPoolMetadataHash poolId poolMDHash ->
-        "The metadata with hash " <> Text.show poolMDHash <> " for pool " <> Text.show poolId <> " is missing from the DB."
-      TickerAlreadyReserved ticker -> "Ticker name " <> Text.show (getTickerName ticker) <> " is already reserved"
+        "The metadata with hash " <> TShow.show poolMDHash <> " for pool " <> TShow.show poolId <> " is missing from the DB."
+      TickerAlreadyReserved ticker -> "Ticker name " <> TShow.show (getTickerName ticker) <> " is already reserved"
       RecordDoesNotExist -> "The requested record does not exist."
-      DBFail lookupFail -> Text.show lookupFail
-      PoolDataLayerError err -> Text.show err
-      ConfigError err -> "Config Error: " <> Text.show err
+      DBFail lookupFail -> TShow.show lookupFail
+      PoolDataLayerError err -> TShow.show err
+      ConfigError err -> "Config Error: " <> TShow.show err
 
 {-
 

@@ -66,8 +66,11 @@ library
                       , cardano-prelude
                       , containers
                       , hasql
+                      , http-client
                       , http-conduit
                       , iohk-monitoring
+                      , ip
+                      , network
                       , network-uri
                       , quiet
                       , resource-pool
