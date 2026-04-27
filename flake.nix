@@ -243,8 +243,9 @@
               buildInputs = with nixpkgs.pkgsBuildBuild; [
                 git
                 protobuf
-                liburing
                 snappy
+              ] ++ lib.optionals (system == "x86_64-linux") [
+                liburing # io_uring is linux-only
               ];
 
               withHoogle = true;
