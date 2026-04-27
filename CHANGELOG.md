@@ -5,6 +5,10 @@
 - SMASH: validate `PoolMetadataHash` inputs, return 400 instead of 500
 - Ledger snapshots now use the consensus directory format (`<slot>/state`, `meta`, `utxoSize`). Old snapshots are not compatible.
 - Experimental: LSM-backed on-disk UTxO (opt-in via `ledger_backend` config, see [doc/configuration.md](doc/configuration.md#ledger-backend))
+- Snapshots can be converted between InMemory and LSM formats (see [doc/state-snapshot.md](doc/state-snapshot.md))
+- Off-chain metadata fetching (`offchain_pool_data`, `offchain_vote_data`) is now disabled by default; enable explicitly in `insert_options` if you need it
+- New helper scripts under `scripts/`: `validate-epoch-table.sql`, `fix-epoch-table.sql`, and `check-and-fix-epoch-table.sh` to diagnose and repair stale rows in the `epoch` table
+- Schema integrity scripts `test-uniqueness.sql` and `test-referential-integrity.sql` moved from `schema/` to `scripts/`; run all checks via `scripts/run-schema-checks.sh <dbname>`
 
 ## 13.7.0.2
 - Fix slow rollbacks caused by suboptimal query plans on large tables [#2083]
