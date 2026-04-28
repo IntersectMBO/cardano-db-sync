@@ -1,5 +1,10 @@
 # Revision history for cardano-db-sync
 
+## 13.7.0.4
+- Restore static (musl) Linux binary; 13.7.0.3 shipped a dynamically linked binary that broke on non-NixOS systems
+- Fix macOS builds
+- Fix LSM path doubling when the state-dir is a relative path
+
 ## 13.7.0.3
 - Migration deletes legacy zero-amount `epoch_stake` rows
 - SMASH: validate `PoolMetadataHash` inputs, return 400 instead of 500
