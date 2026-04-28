@@ -118,7 +118,7 @@ import Ouroboros.Network.Block (HeaderHash, pointSlot)
 import System.FS.API (SomeHasFS (..), mkFsPath)
 import System.FS.API.Types (MountPoint (..))
 import System.FS.IO (ioHasFS)
-import System.FilePath (splitDirectories, (</>))
+import System.FilePath ((</>))
 import System.Mem (performMajorGC)
 import System.Random (genWord64, newStdGen)
 
@@ -227,7 +227,13 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
     LedgerBackendLSM mPath -> do
       let lsmPath = fromMaybe (unLedgerStateDir dir </> "lsm") mPath
       salt <- fst . genWord64 <$> newStdGen
-      let args = LSM.LSMArgs (mkFsPath $ splitDirectories lsmPath) salt (LSM.stdMkBlockIOFS lsmPath)
+      -- The HasBlockIO is rooted at lsmPath, so the session's FsPath inside it
+      -- must be the empty path. Passing the full lsmPath here causes the LSM
+      -- session to be created at <lsmPath>/<lsmPath>, which breaks snapshot
+      -- bundling in scripts/postgresql-setup.sh (it falls back to the InMemory
+      -- branch and ships an incomplete tarball; on restore db-sync then can't
+      -- find the snapshot and replays from genesis).
+      let args = LSM.LSMArgs (mkFsPath []) salt (LSM.stdMkBlockIOFS lsmPath)
       res <-
         runWithTempRegistry $
           (,())
