@@ -176,6 +176,15 @@ function create_snapshot {
 	      # The active/ directory is not needed — it gets cleared on session restore.
 	      tar czf "${tmp_dir}/${ledger_dir_name}.tar.gz" \
 	        -C "${state_dir}" "${ledger_dir_name}" "lsm/snapshots/${ledger_dir_name}" "lsm/metadata"
+	    elif [ -d "${state_dir}/lsm" ]; then
+	      # State directory contains an lsm/ subtree but the expected snapshot path is missing.
+	      # Refuse to silently fall back to the InMemory branch — the resulting tarball would
+	      # exclude the LSM tree files and restoration would replay from genesis.
+	      echo "ERROR: ${state_dir}/lsm exists but no LSM snapshot found at ${lsm_snap_dir}." >&2
+	      echo "       The LSM session may be using a non-standard layout. Aborting to avoid" >&2
+	      echo "       producing an incomplete snapshot." >&2
+	      rm "${recursive}" "${force}" "${tmp_dir}"
+	      exit 1
 	    else
 	      echo "Detected InMemory backend snapshot at slot ${ledger_dir_name}"
 	      # InMemory backend: just the ledger snapshot directory
