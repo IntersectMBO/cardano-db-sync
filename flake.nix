@@ -483,7 +483,7 @@
           let
             mkDist = platform: project:
               let
-                exeVals = builtins.attrValues exes;
+                exeVals = builtins.attrValues (setGitRevs project.exes);
                 name = "cardano-db-sync-${version}-${platform}";
                 version = project.exes.cardano-db-sync.identifier.version;
                 env = {
