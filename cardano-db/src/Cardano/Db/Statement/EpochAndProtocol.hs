@@ -9,7 +9,6 @@ import Data.Functor.Contravariant ((>$<))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import Data.Time (UTCTime)
-import Data.WideWord (Word128 (..))
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlSes
@@ -23,7 +22,7 @@ import Cardano.Db.Statement.Function.Core (ResultType (..), runSession, runSessi
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique, insertReplace)
 import Cardano.Db.Statement.Function.Query (countAll, replace, selectByFieldFirst)
 import Cardano.Db.Statement.Types (Entity (..), tableName)
-import Cardano.Db.Types (DbLovelace (..), DbM)
+import Cardano.Db.Types (DbLovelace (..), DbM, scientificToWord128, scientificToWord64)
 
 --------------------------------------------------------------------------------
 -- CostModel
@@ -129,7 +128,7 @@ queryEpochEntryStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-    decoder = HsqlD.rowMaybe SEnP.epochDecoder
+    decoder = HsqlD.rowMaybe (entityVal <$> SEnP.entityEpochDecoder)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
@@ -185,8 +184,8 @@ queryCalcEpochEntryStmt =
       blockCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       minTime <- HsqlD.column (HsqlD.nullable utcTimeAsTimestampDecoder)
       maxTime <- HsqlD.column (HsqlD.nullable utcTimeAsTimestampDecoder)
-      outSum <- HsqlD.column (HsqlD.nonNullable HsqlD.int8) -- Decode as single int8
-      feeSum <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+      outSum <- HsqlD.column (HsqlD.nonNullable (scientificToWord128 <$> HsqlD.numeric))
+      feeSum <- HsqlD.column (HsqlD.nonNullable (scientificToWord64 <$> HsqlD.numeric))
       txCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
 
       pure $ case (blockCount, minTime, maxTime) of
@@ -196,8 +195,8 @@ queryCalcEpochEntryStmt =
             then convertBlk epochNo (blockCount, Just start, Just end)
             else
               SEnP.Epoch
-                { SEnP.epochOutSum = Word128 0 (fromIntegral outSum) -- Construct Word128 from single value
-                , SEnP.epochFees = DbLovelace $ fromIntegral feeSum
+                { SEnP.epochOutSum = outSum
+                , SEnP.epochFees = DbLovelace feeSum
                 , SEnP.epochTxCount = txCount
                 , SEnP.epochBlkCount = blockCount
                 , SEnP.epochNo = epochNo
@@ -269,7 +268,7 @@ queryLatestEpochStmt =
           , " WHERE no = (SELECT MAX(no) FROM epoch)"
           ]
 
-    decoder = HsqlD.rowMaybe SEnP.epochDecoder
+    decoder = HsqlD.rowMaybe (entityVal <$> SEnP.entityEpochDecoder)
 
 -- | Get the most recent epoch in the Epoch DB table.
 queryLatestEpoch :: DbM (Maybe SEnP.Epoch)

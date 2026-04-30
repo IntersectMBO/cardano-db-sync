@@ -28,7 +28,7 @@ import Data.Fixed (Micro, showFixed)
 import Data.Functor.Contravariant ((>$<))
 import Data.Int (Int64)
 import Data.Pool (Pool)
-import Data.Scientific (Scientific (..), coefficient, scientific, toBoundedInteger)
+import Data.Scientific (Scientific (..), scientific, toBoundedInteger)
 import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.WideWord (Word128 (..))
@@ -176,12 +176,10 @@ newtype DbWord64 = DbWord64 {unDbWord64 :: Word64}
   deriving (Eq, Generic, Num)
   deriving (Read, Show) via (Quiet DbWord64)
 
--- Helper to replicate the original Persistent fromPersistValue behavior for DbWord64
--- This matches the PersistRational case: fromIntegral $ numerator r
 scientificToWord64 :: Scientific -> Word64
 scientificToWord64 s = case toBoundedInteger @Word64 s of
   Just w64 -> w64
-  Nothing -> fromIntegral $ coefficient s -- Fallback to coefficient for out-of-bounds values
+  Nothing -> fromInteger (floor s)
 
 -- Value encoder for DbWord64 using numeric (matches word64type domain)
 dbWord64ValueEncoder :: HsqlE.Value DbWord64
@@ -530,10 +528,28 @@ integerToDbInt65 i
   | otherwise = toDbInt65 (fromIntegral i)
 
 word128Encoder :: HsqlE.Value Word128
-word128Encoder = fromInteger . toInteger >$< HsqlE.numeric
+word128Encoder = word128ToScientific >$< HsqlE.numeric
 
 word128Decoder :: HsqlD.Value Word128
-word128Decoder = fromInteger . fromIntegral . coefficient <$> HsqlD.numeric
+word128Decoder = scientificToWord128 <$> HsqlD.numeric
+
+-- | Convert a 'Word128' to a 'Scientific' for storage in a PostgreSQL @numeric@ column.
+-- This is exposed for testing the encoder/decoder pair without a database connection.
+word128ToScientific :: Word128 -> Scientific
+word128ToScientific = fromInteger . toInteger
+
+-- | Convert a 'Scientific' read from a PostgreSQL @numeric@ column back to a 'Word128'.
+--
+-- PostgreSQL strips trailing zeros in its binary @numeric@ representation, so a
+-- value like @380_000_000_000_000_000@ may come back as @Scientific 38 16@
+-- (coefficient @38@, @base10Exponent = 16@). 'coefficient' alone would drop
+-- the exponent, so we use 'floor' on the full 'Scientific' which is exact for
+-- non-negative integral values - the only shape we ever encode here, since
+-- 'Word128' is non-negative and stored in @numeric(39,0)@.
+--
+-- This is exposed for testing the encoder/decoder pair without a database connection.
+scientificToWord128 :: Scientific -> Word128
+scientificToWord128 = fromInteger . floor
 
 lovelaceToAda :: Integer -> Ada
 lovelaceToAda ll =

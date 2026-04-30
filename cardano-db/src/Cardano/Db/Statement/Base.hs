@@ -1414,7 +1414,7 @@ queryTxInRedeemerStmt =
           , " FROM " <> tableN
           , " WHERE redeemer_id IS NOT NULL"
           ]
-    decoder = HsqlD.rowList SCB.txInDecoder
+    decoder = HsqlD.rowList (entityVal <$> SCB.entityTxInDecoder)
 
 queryTxInRedeemer :: HasCallStack => DbM [SCB.TxIn]
 queryTxInRedeemer =
@@ -1438,7 +1438,7 @@ queryTxInFailedTxStmt =
           , " ON tx_in.tx_in_id = tx.id"
           , " WHERE tx.valid_contract = FALSE"
           ]
-    decoder = HsqlD.rowList SCB.txInDecoder
+    decoder = HsqlD.rowList (entityVal <$> SCB.entityTxInDecoder)
 
 queryTxInFailedTx :: HasCallStack => DbM [SCB.TxIn]
 queryTxInFailedTx = runSession mkDbCallStack $ HsqlSes.statement () queryTxInFailedTxStmt
@@ -1469,7 +1469,7 @@ queryWithdrawalScriptStmt =
           , " FROM " <> tableN
           , " WHERE redeemer_id IS NOT NULL"
           ]
-    decoder = HsqlD.rowList SCB.withdrawalDecoder
+    decoder = HsqlD.rowList (entityVal <$> SCB.entityWithdrawalDecoder)
 
 queryWithdrawalScript :: HasCallStack => DbM [SCB.Withdrawal]
 queryWithdrawalScript = runSession mkDbCallStack $ HsqlSes.statement () queryWithdrawalScriptStmt

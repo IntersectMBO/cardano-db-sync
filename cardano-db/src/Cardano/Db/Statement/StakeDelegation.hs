@@ -28,7 +28,7 @@ import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..),
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
-import Cardano.Db.Statement.Types (DbInfo (..))
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
 import Cardano.Db.Types (Ada, DbLovelace, DbM, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
@@ -61,7 +61,7 @@ queryDelegationScriptStmt =
           , " FROM " <> tableN
           , " WHERE redeemer_id IS NOT NULL"
           ]
-    decoder = HsqlD.rowList SS.delegationDecoder
+    decoder = HsqlD.rowList (entityVal <$> SS.entityDelegationDecoder)
 
 queryDelegationScript :: DbM [SS.Delegation]
 queryDelegationScript =
@@ -486,7 +486,7 @@ queryStakeAddressScriptStmt =
           , " FROM " <> tableN
           , " WHERE script_hash IS NOT NULL"
           ]
-    decoder = HsqlD.rowList SS.stakeAddressDecoder
+    decoder = HsqlD.rowList (entityVal <$> SS.entityStakeAddressDecoder)
 
 queryStakeAddressScript :: DbM [SS.StakeAddress]
 queryStakeAddressScript =

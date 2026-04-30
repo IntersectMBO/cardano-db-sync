@@ -143,6 +143,7 @@ test-suite test
                       , cardano-ledger-core
                       , cardano-ledger-mary
                       , hedgehog
+                      , scientific
                       , wide-word
 
 test-suite test-db
@@ -151,7 +152,8 @@ test-suite test-db
   main-is:              test-db.hs
   hs-source-dirs:       test
 
-  other-modules:        Test.IO.Cardano.Db.Insert
+  other-modules:        Test.IO.Cardano.Db.EpochCalc
+                        Test.IO.Cardano.Db.Insert
                         Test.IO.Cardano.Db.Migration
                         Test.IO.Cardano.Db.Rollback
                         Test.IO.Cardano.Db.TotalSupply
@@ -179,6 +181,7 @@ test-suite test-db
                       , tasty-hunit
                       , text
                       , time
+                      , wide-word
 
 -- test-suite schema-rollback
 --   default-language:     Haskell2010

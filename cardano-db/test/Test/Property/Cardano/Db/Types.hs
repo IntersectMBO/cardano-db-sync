@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -19,6 +20,7 @@ import qualified Data.ByteString.Short as SBS
 import Data.Either (fromRight)
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
+import Data.Scientific (normalize, scientific)
 import Data.WideWord.Word128 (Word128 (..))
 import Data.Word (Word64)
 import Hedgehog (Gen, Property, discover, (===))
@@ -145,18 +147,59 @@ prop_roundtrip_DbWord64 =
   where
     genWord64Range = Gen.word64 (Range.linear 0 (fromIntegral (maxBound :: Int64)))
 
--- Test Word128 roundtrip through components
-prop_roundtrip_Word128 :: Property
-prop_roundtrip_Word128 =
-  H.withTests 5000 . H.property $ do
-    w128 <- H.forAll genWord128Limited
+-- | Targeted regression test for the Word128 decoder.
+--
+-- PostgreSQL strips trailing zeros in its binary @numeric@ representation, so a
+-- value like @380_000_000_000_000_000@ may come back from Hasql as
+-- @Scientific 38 16@ (coefficient @38@, @base10Exponent = 16@). The decoder
+-- must honour the exponent.
+prop_word128_decoder_handles_normalised_scientific :: Property
+prop_word128_decoder_handles_normalised_scientific = H.withTests 1 . H.property $ do
+  -- 38 * 10^16 = 380_000_000_000_000_000
+  let sci = scientific 38 16
+      expected = 380_000_000_000_000_000 :: Word128
+  scientificToWord128 sci === expected
 
-    runWord128Roundtrip w128 === w128
+-- | Round-trip property: encode a 'Word128' to 'Scientific' (via the same logic
+-- as 'word128Encoder'), simulate PostgreSQL normalising it (which strips
+-- trailing zeros from the coefficient), then decode (via the same logic as
+-- 'word128Decoder'). The result must equal the original.
+prop_word128_roundtrip_via_normalised_scientific :: Property
+prop_word128_roundtrip_via_normalised_scientific =
+  H.withTests 5000 . H.property $ do
+    w <- H.forAll genWord128
+    let encoded = word128ToScientific w
+        -- Simulate what PostgreSQL does on the wire: drop trailing zeros from
+        -- the coefficient and bump the exponent. Hasql's numeric decoder
+        -- returns this normalised form for us.
+        normalised = normalize encoded
+        decoded = scientificToWord128 normalised
+    decoded === w
+
+-- | Round-trip property over a curated set of values that are particularly
+-- likely to expose exponent-handling bugs: powers of ten, and values composed
+-- mostly of trailing zeros (typical of round lovelace amounts in production).
+prop_word128_roundtrip_trailing_zeros :: Property
+prop_word128_roundtrip_trailing_zeros =
+  H.withTests 1 . H.property $
+    mapM_
+      ( \w ->
+          scientificToWord128 (normalize (word128ToScientific w)) === w
+      )
+      problemValues
   where
-    genWord128Limited = do
-      hi <- Gen.word64 (Range.linear 0 (fromIntegral (maxBound :: Int64)))
-      lo <- Gen.word64 (Range.linear 0 (fromIntegral (maxBound :: Int64)))
-      pure $ Word128 hi lo
+    problemValues :: [Word128]
+    problemValues =
+      [ 0
+      , 1
+      , 10
+      , 100
+      , 1_000_000 -- 1 ADA in lovelace
+      , 36_000_000_000 -- ~36k ADA, typical epoch fees
+      , 380_000_000_000_000_000 -- ~38B ADA, typical epoch out_sum
+      , 45_000_000_000_000_000 -- total ADA supply in lovelace
+      , maxBound -- Word128 max
+      ]
 
 -- DbInt65 specific roundtrip test function
 runDbInt65Roundtrip :: DbInt65 -> DbInt65
@@ -185,18 +228,6 @@ runDbWord64Roundtrip (DbWord64 w) =
 runMaybeDbWord64Roundtrip :: Maybe DbWord64 -> Maybe DbWord64
 runMaybeDbWord64Roundtrip Nothing = Nothing
 runMaybeDbWord64Roundtrip (Just value) = Just (runDbWord64Roundtrip value)
-
--- Word128 specific roundtrip test function
-runWord128Roundtrip :: Word128 -> Word128
-runWord128Roundtrip (Word128 hi lo) =
-  -- Extract components and convert to Int64 (simulating DB storage)
-  let hiInt64 = fromIntegral hi :: Int64
-      loInt64 = fromIntegral lo :: Int64
-
-      -- Convert back to Word64 and reconstruct (simulating DB retrieval)
-      hiBack = fromIntegral hiInt64 :: Word64
-      loBack = fromIntegral loInt64 :: Word64
-   in Word128 hiBack loBack
 
 -- Generators from original code
 genAda :: Gen Ada
