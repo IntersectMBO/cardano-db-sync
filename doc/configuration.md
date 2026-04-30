@@ -75,7 +75,8 @@ Below is a sample `insert_options` section that shows the recommended defaults:
 ## Preset
 
 Preset is an aggregate setting that overrides all other properties. For example, setting
-preset to `"full"` will enable all insert options except `"tx_cbor"`.
+preset to `"full"` will enable all insert options except `"tx_cbor"`, `"offchain_pool_data"`,
+and `"offchain_vote_data"` (the last two default to `"disable"` since 13.7.0.1).
 
 `preset`
 
@@ -85,14 +86,43 @@ preset to `"full"` will enable all insert options except `"tx_cbor"`.
 
 | Value           | Explanation                                                  |
 | :-----------    | :----------------------------------------------------------- |
-| ["full"](#Full)             | Enable all options                                           |
+| ["full"](#Full)             | Enable all options except `tx_cbor`, `offchain_pool_data`, and `offchain_vote_data` |
 | ["only_utxo"](#only-utxo)   | Only load `block`, `tx`, `tx_out` and `ma_tx_out`.            |
 | ["only_governance"](#only-governance)     | Disable most data except governance data.                    |
 | ["disable_all"](#disable-all) | Only load `block`, `tx` and data related to the ledger state |
 
 ### Full
 
-This is equivalent to enabling all other settings.
+This is equivalent to setting:
+
+```
+"tx_cbor": "disable",
+"tx_out": {
+  "value": "enable",
+  "use_address_table": false
+},
+"ledger": "enable",
+"shelley": {
+  "enable": true
+},
+"multi_asset": {
+  "enable": true
+},
+"metadata": {
+  "enable": true
+},
+"plutus": {
+  "enable": true
+},
+"governance": "enable",
+"offchain_pool_data": "disable",
+"offchain_vote_data": "disable",
+"pool_stat": "enable",
+"json_type": "text"
+```
+
+`offchain_pool_data` and `offchain_vote_data` default to `"disable"` since 13.7.0.1 - set
+them to `"enable"` explicitly if you need offchain metadata fetching.
 
 ### Only UTxO
 
