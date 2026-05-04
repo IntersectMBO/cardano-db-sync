@@ -253,16 +253,14 @@ queryStatementCacheSize :: HasCallStack => DbM Int
 queryStatementCacheSize =
   runSession mkDbCallStack $ HsqlSes.statement () queryStatementCacheStmt
 
--- Decoder for Ada amounts from database int8 values
 adaDecoder :: HsqlD.Row Ada
 adaDecoder = do
   amount <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
   pure $ lovelaceToAda (fromIntegral amount)
 
--- Decoder for summed Ada amounts with null handling
 adaSumDecoder :: HsqlD.Row Ada
 adaSumDecoder = do
-  amount <- HsqlD.column (HsqlD.nullable HsqlD.int8)
+  amount <- HsqlD.column (HsqlD.nullable HsqlD.numeric)
   case amount of
-    Just value -> pure $ lovelaceToAda (fromIntegral value)
+    Just value -> pure $ lovelaceToAda (floor value)
     Nothing -> pure $ Ada 0

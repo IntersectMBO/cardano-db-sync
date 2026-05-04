@@ -70,6 +70,12 @@ type instance Key Epoch = EpochId
 instance DbInfo Epoch where
   uniqueFields _ = ["no"]
 
+entityEpochDecoder :: D.Row (Entity Epoch)
+entityEpochDecoder =
+  Entity
+    <$> idDecoder EpochId
+    <*> epochDecoder
+
 epochDecoder :: D.Row Epoch
 epochDecoder =
   Epoch

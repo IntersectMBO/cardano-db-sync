@@ -32,7 +32,7 @@ import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (runSession, runSessionEntity)
 import Cardano.Db.Statement.Function.Query (countAll, countWhere, parameterisedCountWhere)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), tableName)
-import Cardano.Db.Types (Ada, DbM, RewardSource, rewardSourceDecoder, word64ToAda)
+import Cardano.Db.Types (Ada, DbM, RewardSource, rewardSourceDecoder, scientificToWord64, word64ToAda)
 
 queryEpochParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryEpochParamWithEpochNoStmt =
@@ -311,7 +311,7 @@ queryTreasuryDonationsStmt =
           , " FROM " <> txTableN
           ]
 
-    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ scientificToWord64 <$> HsqlD.numeric)
 
 queryTreasuryDonations :: DbM Word64
 queryTreasuryDonations =
@@ -477,7 +477,7 @@ queryTxFeeDepositStmt =
           ]
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
     decoder = HsqlD.rowMaybe $ do
-      fee <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      fee <- HsqlD.column (HsqlD.nonNullable $ scientificToWord64 <$> HsqlD.numeric)
       deposit <- HsqlD.column (HsqlD.nullable HsqlD.int8)
       pure (word64ToAda fee, fromMaybe 0 deposit)
 
@@ -618,7 +618,7 @@ queryTxWithdrawalStmt =
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
     decoder = HsqlD.singleRow $ do
-      amount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+      amount <- HsqlD.column (HsqlD.nonNullable $ scientificToWord64 <$> HsqlD.numeric)
       pure $ word64ToAda amount
 
 -- | It is probably not possible to have two withdrawals in a single Tx.

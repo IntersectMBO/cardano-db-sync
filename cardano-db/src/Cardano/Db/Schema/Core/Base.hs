@@ -247,6 +247,12 @@ instance DbInfo TxIn where
     , ("redeemer_id", "bigint[]")
     ]
 
+entityTxInDecoder :: D.Row (Entity TxIn)
+entityTxInDecoder =
+  Entity
+    <$> idDecoder TxInId
+    <*> txInDecoder
+
 txInDecoder :: D.Row TxIn
 txInDecoder =
   TxIn
@@ -620,6 +626,12 @@ data Withdrawal = Withdrawal
 
 type instance Key Withdrawal = WithdrawalId
 instance DbInfo Withdrawal
+
+entityWithdrawalDecoder :: D.Row (Entity Withdrawal)
+entityWithdrawalDecoder =
+  Entity
+    <$> idDecoder WithdrawalId
+    <*> withdrawalDecoder
 
 withdrawalDecoder :: D.Row Withdrawal
 withdrawalDecoder =

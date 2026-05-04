@@ -41,6 +41,7 @@ library
                       , cardano-slotting
                       , extra
                       , hedgehog
+                      , scientific
                       , text
                       , time
                       , transformers

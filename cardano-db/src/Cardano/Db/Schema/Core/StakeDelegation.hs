@@ -16,7 +16,7 @@ import Hasql.Encoders as E
 import Cardano.Db.Schema.Ids
 import Cardano.Db.Schema.Types (textDecoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
-import Cardano.Db.Statement.Types (DbInfo (..), Key)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (
   DbLovelace (..),
   RewardSource,
@@ -44,6 +44,12 @@ data StakeAddress = StakeAddress -- Can be an address of a script hash
 type instance Key StakeAddress = StakeAddressId
 instance DbInfo StakeAddress where
   uniqueFields _ = ["hash_raw"]
+
+entityStakeAddressDecoder :: D.Row (Entity StakeAddress)
+entityStakeAddressDecoder =
+  Entity
+    <$> idDecoder StakeAddressId
+    <*> stakeAddressDecoder
 
 stakeAddressDecoder :: D.Row StakeAddress
 stakeAddressDecoder =
@@ -141,6 +147,12 @@ data Delegation = Delegation
 
 type instance Key Delegation = DelegationId
 instance DbInfo Delegation
+
+entityDelegationDecoder :: D.Row (Entity Delegation)
+entityDelegationDecoder =
+  Entity
+    <$> idDecoder DelegationId
+    <*> delegationDecoder
 
 delegationDecoder :: D.Row Delegation
 delegationDecoder =
