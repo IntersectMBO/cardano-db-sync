@@ -1,6 +1,10 @@
 {
   description = "cardano-db-sync";
 
+  nixConfig = {
+    abort-on-warn = true;
+  };
+
   inputs = {
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     utils.url = "github:numtide/flake-utils";
@@ -314,7 +318,7 @@
                 reinstallableLibGhc = false;
               })
 
-              (pkgs.lib.mkIf pkgs.hostPlatform.isMusl
+              (pkgs.lib.mkIf pkgs.stdenv.hostPlatform.isMusl
                 (let
                   ghcOptions = [
                     # libpq static is pretty broken in nixpkgs. We can't rely on the
@@ -423,7 +427,7 @@
                   packages.cardano-db.components.tests.test-db.doCheck = false;
                 })
 
-              ({ lib, pkgs, config, ... }: lib.mkIf pkgs.hostPlatform.isMacOS {
+              ({ lib, pkgs, config, ... }: lib.mkIf pkgs.stdenv.hostPlatform.isMacOS {
                 # PostgreSQL tests fail in Hydra on MacOS with:
                 #
                 #     FATAL:  could not create shared memory segment: No space left on device
