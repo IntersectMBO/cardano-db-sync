@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.7.0.5
+- Update to cardano-node 11.0.1
+
 ## 13.7.0.4
 - Restore static (musl) Linux binary; 13.7.0.3 shipped a dynamically linked binary that broke on non-NixOS systems
 - Fix macOS builds
