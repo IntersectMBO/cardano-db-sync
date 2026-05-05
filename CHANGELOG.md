@@ -2,6 +2,7 @@
 
 ## 13.7.0.5
 - Update to cardano-node 11.0.1
+- Fix `epoch.out_sum` / `epoch.fees` corruption caused by numeric decoders truncating values [#2118]
 
 ## 13.7.0.4
 - Restore static (musl) Linux binary; 13.7.0.3 shipped a dynamically linked binary that broke on non-NixOS systems
