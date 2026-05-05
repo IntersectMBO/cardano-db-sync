@@ -11,7 +11,7 @@ repository cardano-haskell-packages
 
 index-state:
   , hackage.haskell.org 2026-03-26T20:21:33Z
-  , cardano-haskell-packages 2026-04-14T21:25:56Z
+  , cardano-haskell-packages 2026-05-02T16:21:41Z
 active-repositories:
   , :rest
   , cardano-haskell-packages:override
@@ -73,11 +73,11 @@ package snap-server
 -- ---------------------------------------------------------
 
 constraints:
-  -- New version of `text` exposes a `show` function and in the `node`
-  -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
-  -- then clashes with the `show` in `Prelude`.
-  , text < 2.1.2
   , hasql ==1.9.3
+  -- haskell.nix tries to use 0.7.1.5; the patched 0.7.1.6 fork is in source-repository-package.
+  , any.proto-lens >= 0.7.1.6
+  -- haskell.nix patch does not work for 1.6.8
+  , any.crypton-x509-system < 1.6.8
 
 allow-newer:
     , cardano-api:plutus-core
@@ -106,8 +106,8 @@ if impl (ghc >= 9.12)
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: 045bc187a36ef0cbd236db902b85dd8f202fb059
-  --sha256: sha256-D2HMIr65q0RM9+ZAjbtA9xNKyoKYfr3Kc4Vv4+s64uY=
+  tag: 1f5588d9afae9f2a622ad98e3612f4d761a090f1
+  --sha256: sha256-MNRwBMayRucud6li+HVATFgeolqr1/qlvxem3KAx2Ds=
   subdir:
     cardano-node
     trace-forward
