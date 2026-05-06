@@ -51,7 +51,7 @@ word128RoundTripWithTrailingZerosTest =
             { epochOutSum = 380_000_000_000_000_000 -- ~38B ADA in lovelace
             , epochFees = DbLovelace 36_000_000_000 -- ~36k ADA in lovelace
             , epochTxCount = 100
-            , epochBlkCount = 21600
+            , epochBlkCount = 21_600
             , epochNo = 999_999 -- Use a high epoch number unlikely to clash
             , epochStartTime = dummyUTCTime
             , epochEndTime = dummyUTCTime
@@ -112,7 +112,7 @@ queryCalcEpochEntryLargeSumsTest =
             , txScriptSize = 0
             , txTreasuryDonation = DbLovelace 0
             }
-    mapM_ (\i -> void . insertTx $ bigTx i) [0 .. nTxs - 1]
+    mapM_ (insertTx . bigTx) [0 .. nTxs - 1]
 
     -- mkBlock hard-codes epoch_no = 0
     calcEpoch <- queryCalcEpochEntry 0
