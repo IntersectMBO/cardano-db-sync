@@ -9,12 +9,15 @@ module Cardano.DbSync.Metrics (
   setDbSlotHeight,
   setDbEpochSyncDuration,
   setDbEpochSyncNumber,
+  setDbBlocksPerSecond,
+  setInsertDuration,
+  setCacheHitRate,
   makeMetrics,
   withMetricSetters,
   withMetricsServer,
 ) where
 
-import Cardano.DbSync.Types (MetricSetters (..))
+import Cardano.DbSync.Types (MetricSetters (..), CacheType(..))
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..), fromWithOrigin)
 import Ouroboros.Network.Block (BlockNo (..))
@@ -41,6 +44,24 @@ data Metrics = Metrics
   -- ^ The duration of the last epoch sync in seconds.
   , mDbEpochSyncNumber :: !Gauge
   -- ^ The number of the last epoch that was synced.
+  , mDbBlocksPerSecond :: !Gauge
+  -- ^ The number of blocks being processes per second.
+  , mInsertDuration :: !Gauge
+  -- ^ The duration of the last insert operation in seconds.
+  , mCacheStakeHitRate :: !Gauge
+  -- ^ Cache hit rate for stake cache.
+  , mCachePoolsHitRate :: !Gauge
+  -- ^ Cache hit rate for pools cache.
+  , mCacheDatumHitRate :: !Gauge
+  -- ^ Cache hit rate for datum cache.
+  , mCacheMultiAssetsHitRate :: !Gauge
+  -- ^ Cache hit rate for multi_assets cache.
+  , mCachePrevBlockHitRate :: !Gauge
+  -- ^ Cache hit rate for prev_block cache.
+  , mCacheAddressHitRate :: !Gauge
+  -- ^ Cache hit rate for address cache.
+  , mCacheTxIdsHitRate :: !Gauge
+  -- ^ Cache hit rate for tx_ids cache.
   }
 
 -- This enables us to be much more flexibile with what we actually measure.
@@ -61,8 +82,21 @@ withMetricSetters prometheusPort action =
             Gauge.set duration $ mDbEpochSyncDuration metrics
         , metricsSetDbEpochSyncNumber = \epochNo ->
             Gauge.set (fromIntegral epochNo) $ mDbEpochSyncNumber metrics
+        , metricsSetDbBlocksPerSecond = \bps ->
+            Gauge.set bps $ mDbBlocksPerSecond metrics
+        , metricsSetInsertDuration = \duration ->
+            Gauge.set duration $ mInsertDuration metrics
+        , metricsSetCacheHitRate = \cacheName hitRate ->
+            case cacheName of
+              CacheStake -> Gauge.set hitRate $ mCacheStakeHitRate metrics
+              CachePools -> Gauge.set hitRate $ mCachePoolsHitRate metrics
+              CacheDatum -> Gauge.set hitRate $ mCacheDatumHitRate metrics
+              CacheMultiAssets -> Gauge.set hitRate $ mCacheMultiAssetsHitRate metrics
+              CachePrevBlock -> Gauge.set hitRate $ mCachePrevBlockHitRate metrics
+              CacheAddress -> Gauge.set hitRate $ mCacheAddressHitRate metrics
+              CacheTxIds -> Gauge.set hitRate $ mCacheTxIdsHitRate metrics
         }
-
+  
 withMetricsServer :: Int -> (Metrics -> IO a) -> IO a
 withMetricsServer port action = do
   -- Using both `RegistryT` and `bracket` here is overkill. Unfortunately the
@@ -83,6 +117,15 @@ makeMetrics =
     <*> registerGauge "cardano_db_sync_db_slot_height" mempty
     <*> registerGauge "cardano_db_sync_db_epoch_sync_duration_seconds" mempty
     <*> registerGauge "cardano_db_sync_db_epoch_sync_number" mempty
+    <*> registerGauge "cardano_db_sync_blocks_per_second" mempty
+    <*> registerGauge "cardano_db_sync_insert_duration_seconds" mempty
+    <*> registerGauge "cardano_db_sync_cache_stake_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_pools_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_datum_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_multi_assets_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_prev_block_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_address_hit_rate" mempty
+    <*> registerGauge "cardano_db_sync_cache_tx_ids_hit_rate" mempty
 
 setNodeBlockHeight :: MetricSetters -> WithOrigin BlockNo -> IO ()
 setNodeBlockHeight setters woBlkNo =
@@ -102,3 +145,12 @@ setDbEpochSyncDuration = metricsSetDbEpochSyncDuration
 
 setDbEpochSyncNumber :: MetricSetters -> Word64 -> IO ()
 setDbEpochSyncNumber = metricsSetDbEpochSyncNumber
+
+setDbBlocksPerSecond :: MetricSetters -> Double -> IO ()
+setDbBlocksPerSecond = metricsSetDbBlocksPerSecond
+
+setInsertDuration :: MetricSetters -> Double -> IO ()
+setInsertDuration = metricsSetInsertDuration
+
+setCacheHitRate :: MetricSetters -> CacheType -> Double -> IO ()
+setCacheHitRate = metricsSetCacheHitRate
