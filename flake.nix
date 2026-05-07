@@ -235,6 +235,9 @@
                 hlint = "3.8";
 
                 weeder = "latest";
+                hoogle.cabalProjectLocal = ''
+                  constraints: alfred-margaret <2.1.1.0 || >2.1.1.0
+                '';                
               };
 
               # Now we use pkgsBuildBuild, to make sure that even in the cross
