@@ -46,6 +46,17 @@ import Network.HTTP.Client.Restricted (Restriction, addressRestriction, connecti
 import qualified Network.HTTP.Types as Http
 import qualified Network.Socket as Socket
 
+
+-- https://github.com/multiformats/multibase
+-- https://cid.ipfs.tech/
+-- the `f` prefix signifies that this is base16 encoded
+-- the `01` says its a CIDv1
+-- the `55` says that its pointing to a raw leaf (ipfs add --raw-leaves)
+-- the `a0e402` is varint encoding for 0xb220, which says this is a blake2b hash
+-- the `20` is then the length of the hash
+blakeHashToCid :: ByteString -> Text
+blakeHashToCid bs = "f0155a0e40220" <> (renderByteArray bs)
+
 -------------------------------------------------------------------------------------
 -- Get OffChain data
 -------------------------------------------------------------------------------------
@@ -90,21 +101,32 @@ httpGetOffChainVoteData ::
   Bool ->
   [Text] ->
   VoteUrl ->
-  Maybe VoteMetaHash ->
+  VoteMetaHash ->
   DB.AnchorType ->
   ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
 httpGetOffChainVoteData allowPrivate gateways vurl metaHash anchorType = do
-  case useIpfsGatewayMaybe vurl gateways of
-    Nothing -> httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType
-    Just [] -> left $ OCFErrNoIpfsGateway (OffChainVoteUrl vurl)
-    Just urls -> tryAllGatewaysRec urls []
-  where
+  let
+    -- if the vurl begins with ipfs://, prefix it with each of the gateways
+    -- if not, just use it directly
+    -- if it was ipfs:// and no gateways are configured, it becomes [] which turns to OCFErrNoIpfsGateway below
+    primaryURLs :: [VoteUrl]
+    primaryURLs = case useIpfsGatewayMaybe vurl gateways of
+      Just urls -> urls
+      Nothing -> [vurl]
+    alternativeCid = blakeHashToCid $ unVoteMetaHash metaHash
+    alternativeURLs :: [VoteUrl]
+    alternativeURLs = VoteUrl . (<> alternativeCid) <$> gateways
+
+    tryAllGatewaysRec :: [VoteUrl] -> [OffChainFetchError] -> ExceptT OffChainFetchError IO SimplifiedOffChainVoteData
     tryAllGatewaysRec [] acc = left $ OCFErrIpfsGatewayFailures (OffChainVoteUrl vurl) (reverse acc)
     tryAllGatewaysRec (url : rest) acc = do
-      msocd <- liftIO $ runExceptT $ httpGetOffChainVoteDataSingle allowPrivate url metaHash anchorType
+      msocd <- liftIO $ runExceptT $ httpGetOffChainVoteDataSingle allowPrivate url (Just metaHash) anchorType
       case msocd of
         Right socd -> pure socd
         Left err -> tryAllGatewaysRec rest (err : acc)
+  case (primaryURLs <> alternativeURLs) of
+    [] -> left $ OCFErrNoIpfsGateway (OffChainVoteUrl vurl)
+    urls -> tryAllGatewaysRec urls []
 
 httpGetOffChainVoteDataSingle ::
   Bool ->

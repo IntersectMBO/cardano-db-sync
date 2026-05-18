@@ -343,7 +343,7 @@ fetchOffChainVoteData allowPrivate gateways time oVoteWorkQ =
   convert <<$>> runExceptT $ do
     let url = oVoteWqUrl oVoteWorkQ
         metaHash = oVoteWqMetaHash oVoteWorkQ
-    httpGetOffChainVoteData allowPrivate gateways url (Just metaHash) (oVoteWqType oVoteWorkQ)
+    httpGetOffChainVoteData allowPrivate gateways url metaHash (oVoteWqType oVoteWorkQ)
   where
     convert :: Either OffChainFetchError SimplifiedOffChainVoteData -> OffChainVoteResult
     convert eres =
