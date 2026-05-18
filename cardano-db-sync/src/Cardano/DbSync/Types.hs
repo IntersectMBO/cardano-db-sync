@@ -225,7 +225,7 @@ showUrl =
 -------------------------------------------------------------------------------------
 data OffChainFetchError
   = OCFErrHashMismatch !(Maybe OffChainUrlType) !Text !Text
-  | OCFErrDataTooLong !OffChainUrlType
+  | OCFErrDataTooLong Int !OffChainUrlType
   | OCFErrUrlParseFail !OffChainUrlType !Text
   | OCFErrJsonDecodeFail (Maybe OffChainUrlType) !Text
   | OCFErrHttpException !OffChainUrlType !Text
@@ -254,9 +254,9 @@ instance Show OffChainFetchError where
           , show act
           , "."
           ]
-      OCFErrDataTooLong url ->
+      OCFErrDataTooLong maxSize url ->
         mconcat
-          [fetchUrlToString url, "Size error, fetching metadata from ", show url, " exceeded 512 bytes."]
+          [fetchUrlToString url, "Size error, fetching metadata from ", show url, " exceeded ", show maxSize, " bytes."]
       OCFErrUrlParseFail url err ->
         mconcat
           [fetchUrlToString url, "URL parse error for ", show url, " resulted in : ", show err]

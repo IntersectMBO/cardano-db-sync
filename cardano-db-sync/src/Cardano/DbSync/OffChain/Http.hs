@@ -235,7 +235,7 @@ httpGetBytes manager request bytesToRead maxBytes url =
 
       unless (BS.length respBS <= maxBytes)
         . left
-        $ OCFErrDataTooLong url
+        $ OCFErrDataTooLong maxBytes url
       pure (respBS, respLBS, mContentType)
 
 -- | Is the provided ByteSring possibly JSON object?
