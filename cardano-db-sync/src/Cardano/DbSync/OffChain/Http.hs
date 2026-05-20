@@ -45,6 +45,7 @@ import qualified Network.HTTP.Client as Http
 import Network.HTTP.Client.Restricted (Restriction, addressRestriction, connectionRestricted, mkRestrictedManagerSettings)
 import qualified Network.HTTP.Types as Http
 import qualified Network.Socket as Socket
+import System.Directory (createDirectoryIfMissing)
 
 
 -- https://github.com/multiformats/multibase
@@ -164,7 +165,10 @@ parseAndValidateVoteData bs lbs metaHash anchorType murl = do
   -- First check if hash matches - this is critical and must fail if mismatch
   case unVoteMetaHash <$> metaHash of
     Just expectedMetaHashBs
-      | metadataHash /= expectedMetaHashBs ->
+      | metadataHash /= expectedMetaHashBs -> do
+          liftIO $ do
+            createDirectoryIfMissing False "corrupt_fetches"
+            BS.writeFile ( Text.unpack ("corrupt_fetches/" <> (renderByteArray expectedMetaHashBs) <> "_" <> (renderByteArray metadataHash)) ) bs
           left $ OCFErrHashMismatch murl (renderByteArray expectedMetaHashBs) (renderByteArray metadataHash)
     _ -> pure ()
   -- Hash matches, now try to decode as generic JSON
