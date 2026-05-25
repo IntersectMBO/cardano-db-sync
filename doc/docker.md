@@ -48,16 +48,20 @@ NETWORK=preprod docker compose up -d && docker compose logs -f
 
 ## Running `cardano-db-sync`
 
-Start `cardano-db-sync`:
+Given the Postgres configuration defined in [docker-compose.yml](https://github.com/IntersectMBO/cardano-db-sync/blob/master/docker-compose.example.yml) start `cardano-db-sync`:
 
 ```bash
 docker run \
   --env NETWORK=mainnet \
   --env POSTGRES_HOST=postgres \
   --env POSTGRES_PORT=5432 \
+  --env POSTGRES_USER=postgres \
+  --env POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj \
+  --env POSTGRES_DB=cexplorer \
+  --network cardano-db-sync_postgres \
   --volume db-sync-data:/var/lib/cexplorer \
   --volume node-ipc \
-  ghcr.io/IntersectMBO/cardano-db-sync:13.3.0.0
+  ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5
 ```
 
 ### Environment Variables
@@ -113,7 +117,7 @@ docker run \
   --env EXTRA_DB_SYNC_ARGS="--skip-fix"
   --volume db-sync-data:/var/lib/cexplorer \
   --volume node-ipc \
-  ghcr.io/IntersectMBO/cardano-db-sync:13.3.0.0
+  ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5
 ```
 
 ### Overriding Network Configuration
@@ -126,11 +130,14 @@ docker run \
   --env NETWORK=mainnet \
   --env POSTGRES_HOST=postgres \
   --env POSTGRES_PORT=5432 \
+  --env POSTGRES_USER=postgres \
+  --env POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj \
+  --env POSTGRES_DB=cexplorer \
   --env DB_SYNC_CONFIG=/config/db-sync-config.json \
   --volume db-sync-data:/var/lib/cexplorer \
   --volume node-ipc:/node-ipc \
   --volume $PWD/environments/mainnet:/config \
-  ghcr.io/IntersectMBO/cardano-db-sync:13.3.0.0
+  ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5
 ```
 
 ### Restoring From Snapshots
@@ -143,7 +150,7 @@ Although, you can specify a URL directly, we recommend downloading the image sep
 having to download it multiple times in case of failure. First, download the latest snapshot:
 
 ```bash
-curl -O https://update-cardano-mainnet.iohk.io/cardano-db-sync/13.3/db-sync-snapshot-schema-13.3-block-10611621-x86_64.tgz
+curl -O https://update-cardano-mainnet.iohk.io/cardano-db-sync/13.6/db-sync-snapshot-schema-13.6-block-12738930-x86_64.tgz
 ```
 
 Restore the snapshot with `RESTORE_SNAPSHOT`:
@@ -153,11 +160,16 @@ docker run \
   --env NETWORK=mainnet \
   --env POSTGRES_HOST=postgres \
   --env POSTGRES_PORT=5432 \
-  --env RESTORE_SNAPSHOT=/data/db-sync-snapshot-schema-13.3-block-10611621-x86_64.tgz \
+  --env POSTGRES_USER=postgres \
+  --env POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj \
+  --env POSTGRES_DB=cexplorer \
+  --env RESTORE_SNAPSHOT=/data/db-sync-snapshot-schema-13.6-block-12738930-x86_64.tgz \
+  --env RESTORE_RECREATE_DB=N \
+  --network cardano-db-sync_postgres \
   --volume db-sync-data:/var/lib/cexplorer \
   --volume node-ipc:/node-ipc \
   --volume $PWD:/data
-  ghcr.io/IntersectMBO/cardano-db-sync:13.3.0.0
+  ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5
 ```
 
 ### Advanced Usage
@@ -171,7 +183,7 @@ docker run \
   --volume db-sync-data:/var/lib/cexplorer \
   --volume node-ipc:/node-ipc \
   --volume $PWD/environments/mainnet:/config \
-  ghcr.io/IntersectMBO/cardano-db-sync:13.3.0.0 \
+  ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5 \
   run --config /config/db-sync-config.json --socket-path /node-ipc/node.socket
 ```
 
@@ -188,7 +200,7 @@ docker run \
   --env SMASH_PASSWORD=smash-password \
   --publish 3100:3100 \
   --volume node-ipc:/node-ipc \
-  ghcr.io/IntersectMBO/cardano-smash-server:13.3.0.0
+  ghcr.io/intersectmbo/cardano-db-sync:13.6.0.5
 ```
 
 ### Environment Variables
