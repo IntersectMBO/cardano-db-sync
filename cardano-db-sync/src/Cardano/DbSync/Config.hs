@@ -84,6 +84,7 @@ coalesceConfig pcfg ncfg adjustGenesisPath = do
       , dncAlonzoHardFork = ncAlonzoHardFork ncfg
       , dncBabbageHardFork = ncBabbageHardFork ncfg
       , dncConwayHardFork = ncConwayHardFork ncfg
+      , dncDijkstraHardFork = ncDijkstraHardFork ncfg
       , dncInsertOptions = extractInsertOptions pcfg
       , dncIpfsGateway = endsInSlash <$> pcIpfsGateway pcfg
       , dncSnapshotInterval = pcSnapshotInterval pcfg

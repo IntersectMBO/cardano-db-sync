@@ -118,7 +118,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
               , triggerHardForkAlonzo = dncAlonzoHardFork dnc
               , triggerHardForkBabbage = dncBabbageHardFork dnc
               , triggerHardForkConway = dncConwayHardFork dnc
-              , triggerHardForkDijkstra = Consensus.CardanoTriggerHardForkAtDefaultVersion -- TODO(Dijkstra)
+              , triggerHardForkDijkstra = dncDijkstraHardFork dnc
               }
         , cardanoCheckpoints = emptyCheckpointsMap
         }

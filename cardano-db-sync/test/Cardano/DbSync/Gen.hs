@@ -107,6 +107,7 @@ syncNodeConfig loggingCfg =
     <*> triggerHardFork
     <*> triggerHardFork
     <*> triggerHardFork
+    <*> triggerHardFork
     <*> syncInsertOptions
     <*> pure []
     <*> snapshotIntervalConfig
