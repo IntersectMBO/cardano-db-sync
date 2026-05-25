@@ -69,8 +69,8 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getScripts tx
     , txExtraKeyWitnesses = extraKeyWits txBody
-    , txVotingProcedure = Map.toList $ fmap Map.toList (unVotingProcedures $ ctbVotingProcedures txBody)
-    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ toList $ ctbProposalProcedures txBody
+    , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingC) (unVotingProcedures $ ctbVotingProcedures txBody)
+    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalC $ toList $ ctbProposalProcedures txBody
     , txTreasuryDonation = ctbTreasuryDonation txBody
     }
   where
