@@ -86,7 +86,7 @@ runDbThread syncEnv queue = do
     updateBlockMetrics = do
       let metricsSetters = envMetricSetters syncEnv
       void $ async $ do
-        mBlock <- DB.runDbPoolLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) DB.queryLatestBlock
+        mBlock <- DB.runDbPoolTransLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) Nothing DB.queryLatestBlock
         liftIO $ whenJust mBlock $ \block -> do
           let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block
               slotNo = SlotNo $ fromMaybe 0 $ DB.blockSlotNo block

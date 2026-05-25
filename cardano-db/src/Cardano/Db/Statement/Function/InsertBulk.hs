@@ -12,8 +12,6 @@ module Cardano.Db.Statement.Function.InsertBulk (
   -- * Convenience Functions
   insertBulk,
   insertBulkJsonb,
-  insertBulkMaybeIgnore,
-  insertBulkMaybeIgnoreWithConstraint,
 )
 where
 
@@ -168,79 +166,3 @@ insertBulkJsonb ::
   ResultTypeBulk r ->
   HsqlS.Statement [a] r
 insertBulkJsonb = insertBulkWith NoConflict
-
------------------------------------------------------------------------------------------------------------------------------------
--- PERFORMANCE-OPTIMIZED FUNCTIONS FOR ManualDbConstraints PATTERN
------------------------------------------------------------------------------------------------------------------------------------
-
--- | High-performance bulk insert with conditional conflict handling.
---
--- Optimized for the ManualDbConstraints pattern where constraint existence
--- is determined at runtime. Uses fastest simple insert when constraints don't
--- exist, switches to conflict handling only when needed.
---
--- ==== Parameters
--- * @constraintExists@: Runtime flag indicating if constraints are present.
--- * @extract@: Function to extract fields from a list of records.
--- * @encoder@: Encoder for the extracted fields.
--- * @returnIds@: Result type indicating whether to return generated IDs.
--- * @statement@: The prepared statement that can be executed.
-insertBulkMaybeIgnore ::
-  forall a b r.
-  DbInfo a =>
-  Bool -> -- Whether constraint exists (from ManualDbConstraints)
-  ([a] -> b) ->
-  HsqlE.Params b ->
-  ResultTypeBulk r ->
-  HsqlS.Statement [a] r
-insertBulkMaybeIgnore constraintExists extract enc returnIds =
-  if constraintExists
-    then insertBulkWith conflictStrategy False extract enc returnIds
-    else insertBulk extract enc returnIds -- Fastest when no constraint exists
-  where
-    conflictStrategy = case uniqueFields (Proxy @a) of
-      [] -> IgnoreWithConstraint (autoConstraintName (Proxy @a)) -- For generated columns
-      cols -> IgnoreWithColumns cols -- For normal columns
-
--- | Conditional bulk insert with custom constraint name specification.
---
--- Similar to `insertBulkMaybeIgnore` but allows specifying a custom constraint
--- name for special cases where the auto-derived constraint name doesn't match
--- the actual database constraint.
---
--- ==== Parameters
--- * @constraintExists@: Runtime flag indicating if constraints are present.
--- * @constraintName@: Custom name of the constraint to handle conflicts on.
--- * @extract@: Function to extract fields from a list of records.
--- * @encoder@: Encoder for the extracted fields.
--- * @returnIds@: Result type indicating whether to return generated IDs.
--- * @statement@: The prepared statement that can be executed.
-insertBulkMaybeIgnoreWithConstraint ::
-  forall a b r.
-  DbInfo a =>
-  Bool -> -- Whether constraint exists
-  Text.Text -> -- Custom constraint name
-  ([a] -> b) ->
-  HsqlE.Params b ->
-  ResultTypeBulk r ->
-  HsqlS.Statement [a] r
-insertBulkMaybeIgnoreWithConstraint constraintExists constraintName extract enc returnIds =
-  if constraintExists
-    then insertBulkWith (IgnoreWithConstraint constraintName) False extract enc returnIds
-    else insertBulk extract enc returnIds
-
------------------------------------------------------------------------------------------------------------------------------------
--- HELPER FUNCTIONS
------------------------------------------------------------------------------------------------------------------------------------
-
--- | Auto-derives PostgreSQL constraint names following standard conventions.
---
--- Generates constraint names in the format "unique_{table_name}" which matches
--- PostgreSQL's default naming convention for unique constraints. Used internally
--- by bulk insert functions when constraint names need to be inferred.
---
--- ==== Parameters
--- * @proxy@: Type proxy for the table type.
--- * @constraintName@: Generated constraint name following PostgreSQL conventions.
-autoConstraintName :: DbInfo a => Proxy a -> Text.Text
-autoConstraintName p = "unique_" <> tableName p

@@ -531,11 +531,11 @@ data BulkConsumedByHash = BulkConsumedByHash
   , bchConsumingTxId :: !Id.TxId
   }
 
-updateConsumedByTxHashPiped ::
+updateConsumedByTxHashChunked ::
   TxOutVariantType ->
   [[BulkConsumedByHash]] ->
   DbM ()
-updateConsumedByTxHashPiped txOutVariantType consumedData = do
+updateConsumedByTxHashChunked txOutVariantType consumedData = do
   unless (null consumedData) $ do
     case txOutVariantType of
       TxOutVariantCore -> do
@@ -673,8 +673,8 @@ migrateTxOutDbTool bulkSize txOutVariantType = do
 --------------------------------------------------------------------------------
 
 -- | Update a list of TxOut consumed by TxId mappings using bulked statements
-updateListTxOutConsumedByTxIdBP :: [[(TxOutIdW, Id.TxId)]] -> DbM ()
-updateListTxOutConsumedByTxIdBP chunks = do
+updateListTxOutConsumedByTxIdChunked :: [[(TxOutIdW, Id.TxId)]] -> DbM ()
+updateListTxOutConsumedByTxIdChunked chunks = do
   unless (null chunks) $ do
     !_results <-
       runSession mkDbCallStack $
