@@ -11,7 +11,7 @@ repository cardano-haskell-packages
 
 index-state:
   , hackage.haskell.org 2026-03-26T20:21:33Z
-  , cardano-haskell-packages 2026-04-14T21:25:56Z
+  , cardano-haskell-packages 2026-05-02T16:21:41Z
 active-repositories:
   , :rest
   , cardano-haskell-packages:override
@@ -105,13 +105,32 @@ if impl (ghc >= 9.12)
 
 source-repository-package
   type: git
-  location: https://github.com/IntersectMBO/cardano-node
-  tag: 045bc187a36ef0cbd236db902b85dd8f202fb059
-  --sha256: sha256-D2HMIr65q0RM9+ZAjbtA9xNKyoKYfr3Kc4Vv4+s64uY=
+  location: https://github.com/input-output-hk/cardano-node
+  tag: 5ee1ab7c95758425338380f8ebf2b8cfcefb5fa2
+  --sha256: 0xyp48d7w708qzmsd5lqr8h7d48aslcbn14miqwpb0c9ksjz4blf
   subdir:
     cardano-node
     trace-forward
     trace-resources
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-ledger
+  tag: c47305fcf47bd77437b837d0dfb9cb4181bfbc77
+  --sha256: 1db2xc2gs44g5035srqzgqkbv3a2yacmvnwchd1jnjrfkibnxnak
+  subdir:
+    libs/cardano-ledger-core
+    eras/dijkstra/impl
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/ouroboros-network
+  tag: c66e9a27961da4b2550e0c91974e31aebd76fc9d
+  --sha256: 1ybawvmwvxh23i92dikaa7qsvid3zaybv1cwnirw0gqx6k15gcnw
+  subdir:
+    ouroboros-network
+    cardano-diffusion
+    network-mux
 
 if impl(ghc >= 9.12)
   -- GHC 9.12 support - master branch
