@@ -55,7 +55,9 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Control.Monad (forM, void, when)
 import Control.Monad.Except (runExcept)
-import Control.Tracer (Tracer)
+import Control.Tracer (Tracer, nullTracer)
+import qualified LeiosDemoDb as LeiosDb
+import LeiosDemoDb (LeiosDbHandle (open))
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encodeFile)
 import qualified Data.List as List
 import Data.Map.Strict (Map)
@@ -401,15 +403,22 @@ forgeNextLeaders interpreter txes possibleLeaders = do
                   currentSlot
                   (forgetLedgerTables ledgerState')
 
+          leiosConn <- LeiosDb.newLeiosDBInMemory >>= open
           !blk <-
             Block.forgeBlock
               blockForging
-              cfg
-              (istNextBlockNo interState)
-              currentSlot
-              (forgetLedgerTables tickedLedgerSt)
-              (mkValidated <$> txes)
-              proof
+              Block.ForgeBlockArgs
+                { Block.fbConfig = cfg
+                , Block.fbCurrentBlockNo = istNextBlockNo interState
+                , Block.fbCurrentSlotNo = currentSlot
+                , Block.fbCurrentTickedLedgerState = forgetLedgerTables tickedLedgerSt
+                , Block.fbRbTxs = mkValidated <$> txes
+                , Block.fbEbTxs = []
+                , Block.fbIsLeader = proof
+                , Block.fbChainDepState = Nothing
+                , Block.fbLeiosDb = leiosConn
+                , Block.fbLeiosTracer = nullTracer
+                }
 
           (blk,) <$> throwLeftIO (addOrValidateSlot interpreter (istFingerprint interState) blk)
 

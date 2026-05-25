@@ -281,7 +281,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
         chainSyncServer' ::
           localPeer ->
           Channel IO ByteString ->
-          IO ((), Maybe ByteString)
+          IO ((), Maybe (Mx.Reception ByteString))
         chainSyncServer' _them channel =
           runPeer
             nullTracer
@@ -292,7 +292,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
         txSubmitServer ::
           localPeer ->
           Channel IO ByteString ->
-          IO ((), Maybe ByteString)
+          IO ((), Maybe (Mx.Reception ByteString))
         txSubmitServer _them channel =
           runPeer
             nullTracer
@@ -311,7 +311,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
         txMonitorServer ::
           localPeer ->
           Channel IO ByteString ->
-          IO ((), Maybe ByteString)
+          IO ((), Maybe (Mx.Reception ByteString))
         txMonitorServer _them channel =
           runPeer
             nullTracer
