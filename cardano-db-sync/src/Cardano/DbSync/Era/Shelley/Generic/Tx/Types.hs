@@ -244,13 +244,16 @@ instance DBScriptPurpose DijkstraEra where
     DijkstraRewarding idx -> (DB.Rewrd, unAsIx idx)
     DijkstraVoting idx -> (DB.Vote, unAsIx idx)
     DijkstraProposing idx -> (DB.Propose, unAsIx idx)
-    DijkstraGuarding idx -> (DB.Propose, unAsIx idx) -- TODO(Dijkstra)
+    DijkstraGuarding idx -> (DB.Propose, unAsIx idx)
 
   toAlonzoPurpose _ = \case
     DijkstraVoting _ -> Nothing
     DijkstraProposing _ -> Nothing
     DijkstraGuarding _ -> Nothing
-    _ -> Nothing -- TODO(Dijkstra)
+    DijkstraSpending idx -> Just $ Right $ ConwaySpending idx
+    DijkstraMinting idx -> Just $ Right $ ConwayMinting idx
+    DijkstraCertifying idx -> Just $ Right $ ConwayCertifying idx
+    DijkstraRewarding idx -> Just $ Right $ ConwayRewarding idx
 
 class AlonzoEraScript era => DBPlutusScript era where
   getPlutusScriptType :: PlutusScript era -> DB.ScriptType
