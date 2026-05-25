@@ -32,7 +32,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
 import qualified Data.Yaml as Yaml
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
-import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, MaryEra, ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, DijkstraEra, MaryEra, ShelleyEra, StandardCrypto)
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -62,6 +62,8 @@ data NodeConfig = NodeConfig
     ncBabbageHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
   , -- Conway hardfok parameters
     ncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
+  , -- Dijkstra hardfok parameters
+    ncDijkstraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
   }
 
 parseNodeConfig :: ByteString -> IO NodeConfig
@@ -174,6 +176,7 @@ instance FromJSON NodeConfig where
           <*> parseAlonzoHardForkEpoch o
           <*> parseBabbageHardForkEpoch o
           <*> parseConwayHardForkEpoch o
+          <*> parseDijkstraHardForkEpoch o
 
       -- The v2 format dropped these three keys. Nothing in db-sync depends on the
       -- value: it is forwarded to Consensus.byronProtocolVersion, two lines above a
@@ -225,5 +228,12 @@ instance FromJSON NodeConfig where
       parseConwayHardForkEpoch o =
         asum
           [ CardanoTriggerHardForkAtEpoch <$> o .: "TestConwayHardForkAtEpoch"
+          , pure CardanoTriggerHardForkAtDefaultVersion
+          ]
+
+      parseDijkstraHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
+      parseDijkstraHardForkEpoch o =
+        asum
+          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestDijkstraHardForkAtEpoch"
           , pure CardanoTriggerHardForkAtDefaultVersion
           ]
