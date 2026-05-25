@@ -361,13 +361,13 @@ mkTxData (dataHash, dt) = PlutusData dataHash (jsonData dt) (Core.originalBytes 
         . ScriptData
 
 extraKeyWits ::
-  (AlonzoEraTxBody era, Core.AtMostEra "Conway" era) =>
+  AlonzoEraTxBody era =>
   Core.TxBody l era ->
   [ByteString]
 extraKeyWits txBody =
   Set.toList $
     Set.map (\(Ledger.KeyHash h) -> Crypto.hashToBytes h) $
-      txBody ^. Alonzo.reqSignerHashesTxBodyL
+      txBody ^. Alonzo.reqSignerHashesTxBodyG
 
 scriptHashAcnt :: Ledger.AccountAddress -> Maybe ByteString
 scriptHashAcnt rewardAddr = getCredentialScriptHash $ Ledger.unAccountId (Ledger.aaId rewardAddr)
@@ -376,10 +376,13 @@ scriptHashCert :: Cert -> Maybe ByteString
 scriptHashCert cert = case cert of
   SCert scert -> scriptHashCertShelley scert
   CCert ccert -> scriptHashCertConway ccert
-  DCert _ -> Nothing -- TODO(Dijkstra)
+  DCert dcert -> scriptHashCertDijkstra dcert
 
 scriptHashCertConway :: ConwayCert -> Maybe ByteString
 scriptHashCertConway cert = unScriptHash <$> getScriptWitnessTxCert cert
+
+scriptHashCertDijkstra :: DijkstraCert -> Maybe ByteString
+scriptHashCertDijkstra cert = unScriptHash <$> getScriptWitnessTxCert cert
 
 scriptHashCertShelley :: ShelleyCert -> Maybe ByteString
 scriptHashCertShelley cert = unScriptHash <$> getScriptWitnessTxCert cert

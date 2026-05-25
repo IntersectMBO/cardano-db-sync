@@ -9,7 +9,10 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Tx (..),
   ShelleyCert,
   ConwayCert,
+  DijkstraCert,
   Cert (..),
+  Voting (..),
+  Proposal (..),
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
@@ -78,8 +81,8 @@ data Tx = Tx
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txExtraKeyWitnesses :: ![ByteString]
-  , txVotingProcedure :: ![(Voter, [(GovActionId, VotingProcedure ConwayEra)])]
-  , txProposalProcedure :: ![(GovActionId, ProposalProcedure ConwayEra)]
+  , txVotingProcedure :: ![(Voter, [(GovActionId, Voting)])]
+  , txProposalProcedure :: ![(GovActionId, Proposal)]
   , txTreasuryDonation :: !Coin
   }
 
@@ -88,6 +91,14 @@ type ConwayCert = ConwayTxCert ConwayEra
 type DijkstraCert = DijkstraTxCert DijkstraEra
 data Cert = SCert ShelleyCert | CCert ConwayCert | DCert DijkstraCert
   deriving (Eq)
+
+data Voting
+  = VotingC !(VotingProcedure ConwayEra)
+  | VotingD !(VotingProcedure DijkstraEra)
+
+data Proposal
+  = ProposalC !(ProposalProcedure ConwayEra)
+  | ProposalD !(ProposalProcedure DijkstraEra)
 
 data TxCertificate = TxCertificate
   { txcRedeemerIndex :: !(Maybe Word64)
