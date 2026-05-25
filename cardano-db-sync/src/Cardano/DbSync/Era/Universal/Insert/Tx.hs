@@ -38,8 +38,8 @@ import Cardano.DbSync.Era.Shelley.Generic.Metadata (TxMetadataValue (..), metada
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (TxIn (..))
 import Cardano.DbSync.Era.Universal.Insert.Certificate (insertCertificate)
 import Cardano.DbSync.Era.Universal.Insert.GovAction (
-  insertGovActionProposal,
   insertParamProposal,
+  insertProposal,
   insertVotingProcedures,
  )
 import Cardano.DbSync.Era.Universal.Insert.Grouped
@@ -196,7 +196,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           Generic.txExtraKeyWitnesses tx
 
       when (ioGov iopts) $ do
-        mapM_ (insertGovActionProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
+        mapM_ (insertProposal syncEnv blkId txId (getGovExpiresAt applyResult epochNo) (apGovActionState applyResult)) $ zip [0 ..] (Generic.txProposalProcedure tx)
         mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs

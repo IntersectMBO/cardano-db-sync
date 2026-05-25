@@ -686,7 +686,7 @@ findAdaPots = go
 
 -- | Given an committee action id and the current GovState, return the proposed committee.
 -- If it's not a Committee action or is not included in the proposals, return Nothing.
-findProposedCommittee :: GovActionId -> ConwayGovState ConwayEra -> Either Text (Maybe (Committee ConwayEra))
+findProposedCommittee :: forall era. GovActionId -> ConwayGovState era -> Either Text (Maybe (Committee era))
 findProposedCommittee gaId cgs = do
   (rootCommittee, updateList) <- findRoot gaId
   computeCommittee rootCommittee updateList
@@ -694,7 +694,7 @@ findProposedCommittee gaId cgs = do
     ps = cgsProposals cgs
     findRoot = findRootRecursively []
 
-    findRootRecursively :: [GovAction ConwayEra] -> GovActionId -> Either Text (StrictMaybe (Committee ConwayEra), [GovAction ConwayEra])
+    findRootRecursively :: [GovAction era] -> GovActionId -> Either Text (StrictMaybe (Committee era), [GovAction era])
     findRootRecursively acc gid = do
       gas <- fromNothing ("Didn't find proposal " <> textShow gid) $ proposalsLookupId gid ps
       let ga = pProcGovAction (gasProposalProcedure gas)
@@ -707,10 +707,11 @@ findProposedCommittee gaId cgs = do
         UpdateCommittee (Ledger.SJust gpid) _ _ _ -> findRootRecursively (ga : acc) (unGovPurposeId gpid)
         _ -> Left "Found invalid gov action referenced by committee"
 
-    computeCommittee :: StrictMaybe (Committee ConwayEra) -> [GovAction ConwayEra] -> Either Text (Maybe (Committee ConwayEra))
+    computeCommittee :: StrictMaybe (Committee era) -> [GovAction era] -> Either Text (Maybe (Committee era))
     computeCommittee sCommittee actions =
       Ledger.strictMaybeToMaybe <$> foldM applyCommitteeUpdate sCommittee actions
 
+    applyCommitteeUpdate :: StrictMaybe (Committee era) -> GovAction era -> Either Text (StrictMaybe (Committee era))
     applyCommitteeUpdate scommittee = \case
       UpdateCommittee _ toRemove toAdd q -> Right $ Ledger.SJust $ updatedCommittee toRemove toAdd q scommittee
       _ -> Left "Unexpected gov action." -- Should never happen since the accumulator only includes UpdateCommittee

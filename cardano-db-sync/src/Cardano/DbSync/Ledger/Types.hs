@@ -208,8 +208,8 @@ updatedCommittee ::
   Set.Set (Credential ColdCommitteeRole) ->
   Map.Map (Credential ColdCommitteeRole) EpochNo ->
   Ledger.UnitInterval ->
-  Ledger.StrictMaybe (Committee ConwayEra) ->
-  Committee ConwayEra
+  Ledger.StrictMaybe (Committee era) ->
+  Committee era
 updatedCommittee membersToRemove membersToAdd newQuorum committee =
   case committee of
     Ledger.SNothing -> Committee membersToAdd newQuorum
