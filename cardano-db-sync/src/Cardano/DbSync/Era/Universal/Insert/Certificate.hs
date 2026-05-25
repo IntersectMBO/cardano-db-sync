@@ -44,6 +44,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Ledger.Conway.TxCert
+import Cardano.Ledger.Dijkstra.TxCert (DijkstraTxCert (..), dijkstraToConwayDelegCert)
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Keys as Ledger
@@ -93,7 +94,22 @@ insertCertificate syncEnv isMember mDeposits blkId txId epochNo slotNo redeemers
           insertCommitteeDeRegistration blkId txId idx khCold (strictMaybeToMaybe anchor)
         ConwayUpdateDRep cred anchor ->
           insertDrepRegistration blkId txId idx cred Nothing (strictMaybeToMaybe anchor)
-    Generic.DCert _ -> pure () -- TODO(Dijkstra)
+    Generic.DCert (DijkstraTxCertDeleg deleg) ->
+      insertConwayDelegCert syncEnv mDeposits txId idx mRedeemerId epochNo slotNo (dijkstraToConwayDelegCert deleg)
+    Generic.DCert (DijkstraTxCertPool pool) ->
+      when (ioShelley iopts) $ insertPoolCert syncEnv isMember mDeposits network epochNo blkId txId idx pool
+    Generic.DCert (DijkstraTxCertGov c) ->
+      when (ioGov iopts) $ case c of
+        ConwayRegDRep cred coin anchor ->
+          insertDrepRegistration blkId txId idx cred (Just coin) (strictMaybeToMaybe anchor)
+        ConwayUnRegDRep cred coin ->
+          insertDrepDeRegistration txId idx cred coin
+        ConwayAuthCommitteeHotKey khCold khHot ->
+          insertCommitteeRegistration txId idx khCold khHot
+        ConwayResignCommitteeColdKey khCold anchor ->
+          insertCommitteeDeRegistration blkId txId idx khCold (strictMaybeToMaybe anchor)
+        ConwayUpdateDRep cred anchor ->
+          insertDrepRegistration blkId txId idx cred Nothing (strictMaybeToMaybe anchor)
   where
     tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
