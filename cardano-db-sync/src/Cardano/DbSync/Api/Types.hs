@@ -65,7 +65,7 @@ data SyncEnv = SyncEnv
   }
 
 data SyncOptions = SyncOptions
-  { soptEpochAndCacheEnabled :: !Bool
+  { soptEpochViewEnabled :: !Bool
   , soptAbortOnInvalid :: !Bool
   , soptCache :: !Bool
   , soptPruneConsumeMigration :: !DB.PruneConsumeMigration

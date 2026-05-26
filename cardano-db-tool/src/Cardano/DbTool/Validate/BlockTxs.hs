@@ -13,9 +13,9 @@ import qualified System.Random as Random
 
 validateEpochBlockTxs :: IO ()
 validateEpochBlockTxs = do
-  mLatestEpoch <- DB.runDbStandaloneSilent DB.queryLatestCachedEpochNo
-  case mLatestEpoch of
-    Nothing -> putStrLn "Epoch table is empty"
+  mLatestEpoch <- DB.runDbStandaloneSilent DB.queryLatestEpoch
+  case fmap DB.epochNo mLatestEpoch of
+    Nothing -> putStrLn "Epoch view is empty"
     Just latest -> validateLatestBlockTxs latest
 
 -- -----------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled (
   checkEpochDisabledArg,
   checkEpochEnabled,
+  checkEpochCurrentLiveUpdates,
 ) where
 
 import Cardano.Db as DB
@@ -18,7 +19,7 @@ import Prelude ()
 
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochDisabledArg =
-  withCustomConfigDropDB cliArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfigDropDB initCommandLineArgs (Just configEpochDisable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -33,16 +34,15 @@ checkEpochDisabledArg =
     -- Add some more empty blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 60
 
-    -- Verify epoch didn't update
+    -- Verify the epoch view stays empty when disabled
     assertBlockNoBackoff dbSync 112
     assertEqQuery dbSync DB.queryEpochCount 0 "epoch updated"
   where
-    cliArgs = mkCommandLineArgs True
     testLabel = "conwayCLACheckEpochDisabledArg"
 
 checkEpochEnabled :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochEnabled =
-  withCustomConfig cliArgs Nothing conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+  withCustomConfig initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -57,12 +57,30 @@ checkEpochEnabled =
     -- Add some more empty blocks
     void $ forgeAndSubmitBlocks interpreter mockServer 60
 
-    -- Verify epoch updated
+    -- 112 blocks crosses one epoch boundary: epoch 0 in epoch_finalized + epoch 1 in epoch_current.
     assertBlockNoBackoff dbSync 112
-    assertEqQuery dbSync DB.queryEpochCount 1 "epoch not updated"
+    assertEqQuery dbSync DB.queryEpochCount 2 "epoch not updated"
   where
-    cliArgs = mkCommandLineArgs False
-    testLabel = "conwayCLACheckEpochDisabledArg"
+    testLabel = "conwayCLACheckEpochEnabledConfig"
 
-mkCommandLineArgs :: Bool -> CommandLineArgs
-mkCommandLineArgs epochDisabled = initCommandLineArgs {claEpochDisabled = epochDisabled}
+checkEpochCurrentLiveUpdates :: IOManager -> [(Text, Text)] -> Assertion
+checkEpochCurrentLiveUpdates =
+  withCustomConfig initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    void $ forgeAndSubmitBlocks interpreter mockServer 10
+    assertBlockNoBackoff dbSync 10
+    assertEqQuery dbSync (blkCountFor 0) 10 "epoch_current did not reflect first batch"
+
+    void $ forgeAndSubmitBlocks interpreter mockServer 25
+    assertBlockNoBackoff dbSync 35
+    assertEqQuery dbSync (blkCountFor 0) 35 "epoch_current did not update after more blocks"
+  where
+    testLabel = "conwayCLACheckEpochCurrentLiveUpdates"
+
+    blkCountFor :: Word64 -> DB.DbM Word64
+    blkCountFor n = do
+      res <- DB.queryEpochEntry n
+      pure $ case res of
+        Right ep -> DB.epochBlkCount ep
+        Left _ -> 0

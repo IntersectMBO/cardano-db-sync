@@ -27,6 +27,7 @@ module Cardano.DbSync.Config.Types (
   SyncInsertOptions (..),
   TxCBORConfig (..),
   PoolStatsConfig (..),
+  EpochConfig (..),
   TxOutConfig (..),
   UseTxOutAddress (..),
   ForceTxIn (..),
@@ -57,6 +58,7 @@ module Cardano.DbSync.Config.Types (
   isMultiAssetEnabled,
   isMetadataEnabled,
   isPlutusEnabled,
+  isEpochEnabled,
   isTxOutConsumedBootstrap,
   isTxOutConsumed,
   isTxOutConsumedPrune,
@@ -110,7 +112,6 @@ data SyncNodeParams = SyncNodeParams
   , enpMaybeLedgerStateDir :: !(Maybe LedgerStateDir)
   , enpMigrationDir :: !MigrationDir
   , enpPGPassSource :: !PGPassSource
-  , enpEpochDisabled :: !Bool
   , enpHasCache :: !Bool
   , enpForceIndexes :: !Bool
   , enpHasInOut :: !Bool
@@ -197,6 +198,7 @@ data SyncInsertOptions = SyncInsertOptions
   , sioPoolStats :: PoolStatsConfig
   , sioJsonType :: JsonTypeConfig
   , sioRemoveJsonbFromSchema :: RemoveJsonbFromSchemaConfig
+  , sioEpoch :: EpochConfig
   , sioStopAtBlock :: Maybe Word64
   }
   deriving (Eq, Show)
@@ -210,6 +212,12 @@ newtype PoolStatsConfig = PoolStatsConfig
   { isPoolStatsEnabled :: Bool
   }
   deriving (Eq, Show)
+
+newtype EpochConfig = EpochConfig
+  { isEpochDisabled :: Bool
+  }
+  deriving (Eq, Show)
+  deriving newtype (ToJSON, FromJSON)
 
 data TxOutConfig
   = TxOutEnable UseTxOutAddress
@@ -421,6 +429,9 @@ isPlutusEnabled PlutusDisable = False
 isPlutusEnabled PlutusEnable = True
 isPlutusEnabled (PlutusScripts _) = True
 
+isEpochEnabled :: EpochConfig -> Bool
+isEpochEnabled = not . isEpochDisabled
+
 ---------------------------------------------------------------------------------------------------
 
 instance FromJSON SyncPreConfig where
@@ -491,6 +502,7 @@ parseOverrides obj baseOptions = do
     <*> obj .:? "pool_stat" .!= sioPoolStats baseOptions
     <*> obj .:? "json_type" .!= sioJsonType baseOptions
     <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema baseOptions
+    <*> obj .:? "disable_epoch" .!= sioEpoch baseOptions
     <*> obj .:? "stop_at_block" .!= sioStopAtBlock baseOptions
 
 instance ToJSON SyncInsertConfig where
@@ -514,6 +526,7 @@ optionsToList SyncInsertOptions {..} =
     , toJsonIfSet "pool_stat" sioPoolStats
     , toJsonIfSet "json_type" sioJsonType
     , toJsonIfSet "remove_jsonb_from_schema" sioRemoveJsonbFromSchema
+    , toJsonIfSet "disable_epoch" sioEpoch
     , toJsonIfSet "stop_at_block" sioStopAtBlock
     ]
 
@@ -537,6 +550,7 @@ instance FromJSON SyncInsertOptions where
       <*> obj .:? "pool_stat" .!= sioPoolStats def
       <*> obj .:? "json_type" .!= sioJsonType def
       <*> obj .:? "remove_jsonb_from_schema" .!= sioRemoveJsonbFromSchema def
+      <*> obj .:? "disable_epoch" .!= sioEpoch def
       <*> obj .:? "stop_at_block" .!= sioStopAtBlock def
 
 instance ToJSON SyncInsertOptions where
@@ -555,6 +569,7 @@ instance ToJSON SyncInsertOptions where
       , "pool_stat" .= sioPoolStats
       , "json_type" .= sioJsonType
       , "remove_jsonb_from_schema" .= sioRemoveJsonbFromSchema
+      , "disable_epoch" .= sioEpoch
       , "stop_at_block" .= sioStopAtBlock
       ]
 
@@ -812,6 +827,7 @@ instance Default SyncInsertOptions where
       , sioPoolStats = PoolStatsConfig False
       , sioJsonType = JsonTypeText
       , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+      , sioEpoch = EpochConfig False
       , sioStopAtBlock = Nothing
       }
 
@@ -832,6 +848,7 @@ fullInsertOptions =
     , sioPoolStats = PoolStatsConfig True
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioEpoch = EpochConfig False
     , sioStopAtBlock = Nothing
     }
 
@@ -852,6 +869,7 @@ onlyUTxOInsertOptions =
     , sioPoolStats = PoolStatsConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioEpoch = EpochConfig True
     , sioStopAtBlock = Nothing
     }
 
@@ -880,6 +898,7 @@ disableAllInsertOptions =
     , sioGovernance = GovernanceConfig False
     , sioJsonType = JsonTypeText
     , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+    , sioEpoch = EpochConfig True
     , sioStopAtBlock = Nothing
     }
 

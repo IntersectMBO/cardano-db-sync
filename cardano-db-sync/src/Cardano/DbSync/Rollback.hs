@@ -25,7 +25,7 @@ import Control.Monad.Extra (whenJust)
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getLatestPoints, getPruneConsume, getTrace, getTxOutVariantType, verifySnapshotPoint)
-import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.DbEvent (liftDbLookup)
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
@@ -60,7 +60,11 @@ rollbackFromBlockNo syncEnv blkNo = do
       -- we always need the constraints.
       addConstraintsIfNotExist syncEnv trce
 
-    rollbackCache cache blockId
+    rollbackCache cache
+    when (soptEpochViewEnabled (envOptions syncEnv)) $
+      void $
+        lift $
+          DB.deleteEpochFinalizedAfter epochNo
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace syncEnv

@@ -35,6 +35,7 @@ insertConfig = do
           , sioPoolStats = PoolStatsConfig False
           , sioJsonType = JsonTypeDisable
           , sioRemoveJsonbFromSchema = RemoveJsonbFromSchemaConfig False
+          , sioEpoch = EpochConfig False
           , sioStopAtBlock = Nothing
           }
 

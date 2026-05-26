@@ -8,7 +8,6 @@ import Cardano.Db (TxOutVariantType)
 import Cardano.DbTool.Validate.AdaPots (validateSumAdaPots)
 import Cardano.DbTool.Validate.BlockProperties (validateBlockProperties)
 import Cardano.DbTool.Validate.BlockTxs (validateEpochBlockTxs)
-import Cardano.DbTool.Validate.EpochTable (validateEpochTable)
 import Cardano.DbTool.Validate.Ledger (LedgerValidationParams (..), validateLedger)
 import Cardano.DbTool.Validate.PoolOwner (validateAllPoolsHaveOwners)
 import Cardano.DbTool.Validate.TotalSupply (validateTotalSupplyDecreasing)
@@ -36,6 +35,5 @@ slowValidations :: TxOutVariantType -> IO ()
 slowValidations txOutVariantType = do
   validateTxAccounting txOutVariantType
   validateWithdrawals
-  validateEpochTable
   validateEpochBlockTxs
   validateTotalSupplyDecreasing txOutVariantType
