@@ -239,6 +239,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
             liftIO $ logWarning trce "Adding jsonb datatypes back to the database. This can take time."
             liftIO $ runAddJsonbToSchema syncEnv
           liftIO $ runConsumedTxOutMigrationsMaybe syncEnv
+          liftIO $ syncEpochViewConfig syncEnv
           unless useLedger $ liftIO $ do
             logInfo trce "Migrating to a no ledger schema"
             DB.noLedgerMigrations dbEnv trce
@@ -288,10 +289,10 @@ logProtocolMagicId tracer pm =
 extractSyncOptions :: SyncNodeParams -> Bool -> SyncNodeConfig -> SyncOptions
 extractSyncOptions snp aop snc =
   SyncOptions
-    { soptEpochAndCacheEnabled =
+    { soptEpochViewEnabled =
         not isTxOutConsumedBootstrap'
           && ioInOut iopts
-          && not (enpEpochDisabled snp || not (enpHasCache snp))
+          && isEpochEnabled (sioEpoch (dncInsertOptions snc))
     , soptAbortOnInvalid = aop
     , soptCache = enpHasCache snp
     , soptPruneConsumeMigration =

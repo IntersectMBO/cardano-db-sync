@@ -109,9 +109,10 @@ unitTests iom knownMigrations =
                 $ ConfigFile.checkConfigFileArg iom knownMigrations
             ]
         , testGroup
-            "disable-epoch"
-            [ test "Epoch doesn't update when disabled" EpochDisabled.checkEpochDisabledArg
-            , test "Epoch updates when enabled" EpochDisabled.checkEpochEnabled
+            "epoch"
+            [ test "Epoch view is empty when disabled" EpochDisabled.checkEpochDisabledArg
+            , test "Epoch view is populated when enabled" EpochDisabled.checkEpochEnabled
+            , test "Epoch current view updates live within an epoch" EpochDisabled.checkEpochCurrentLiveUpdates
             ]
         ]
     , testGroup

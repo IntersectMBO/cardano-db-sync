@@ -6,7 +6,6 @@
   - `--state-dir FILEPATH`: The directory for persisting ledger state.
   - `--schema-dir FILEPATH`: The directory containing the migrations.
   - `--pg-pass-env ENV`: Alternative env variable to use, defaults to `PGPASSFILE` env variable.
-  - `--disable-epoch`: Makes epoch table remain empty.
   - `--skip-fix`: Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes.
   - `--force-indexes`: Forces the Index creation at the start of db-sync. Normally they're created later.
   - `--fix-only`: Runs only the db-sync fix procedure for the wrong datum, redeemer_data, and plutus script bytes and exits.
@@ -20,6 +19,7 @@
   - `--disable-ledger`
   - `--dont-use-ledger`
   - `--keep-tx-metadata`
+  - `--disable-epoch` (replaced by `disable_epoch` in `insert_options`)
   - `--disable-shelley`
   - `--disable-multiassets`
   - `--disable-metadata`

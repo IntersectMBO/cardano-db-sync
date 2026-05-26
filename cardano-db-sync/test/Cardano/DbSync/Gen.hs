@@ -77,7 +77,6 @@ syncNodeParams =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
-    <*> Gen.bool
     <*> pure Nothing
 
 syncNodeConfig :: Logging.Configuration -> Gen SyncNodeConfig
@@ -138,6 +137,7 @@ syncInsertOptions =
     <*> (PoolStatsConfig <$> Gen.bool)
     <*> Gen.element [JsonTypeText, JsonTypeJsonb, JsonTypeDisable]
     <*> (RemoveJsonbFromSchemaConfig <$> Gen.bool)
+    <*> (EpochConfig <$> Gen.bool)
     <*> pure Nothing
 
 txOutConfig :: Gen TxOutConfig

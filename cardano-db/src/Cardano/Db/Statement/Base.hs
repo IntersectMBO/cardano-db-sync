@@ -791,44 +791,38 @@ deleteUsingEpochNo trce epochN = do
   let epochEncoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
       epochInt64 = fromIntegral epochN
 
-  -- Log which epoch is being used for deletion (this comes from previous block's epoch for boundary rollbacks)
   liftIO $ logInfo trce $ "Rollback - Using epoch " <> textShow epochN <> " for deletion (DrepDistr: epoch_no > " <> textShow epochN <> ")"
 
-  -- First, count what we're about to delete for progress tracking
   totalCounts <- withProgress (Just trce) 5 "Counting epoch records..." $ \progressRef -> do
-    liftIO $ updateProgress (Just trce) progressRef 0 "Counting Epoch, DrepDistr, RewardRest, and PoolStat records..."
+    liftIO $ updateProgress (Just trce) progressRef 0 "Counting DrepDistr, RewardRest, and PoolStat records..."
 
-    (ec, dc, rrc, psc) <- runSession mkDbCallStack $
+    (dc, rrc, psc) <- runSession mkDbCallStack $
       HsqlSes.pipeline $ do
-        ec <- HsqlP.statement epochN (parameterisedCountWhere @SC.Epoch "no" ">= $1" epochEncoder)
         dc <- HsqlP.statement epochN (parameterisedCountWhere @SC.DrepDistr "epoch_no" "> $1" epochEncoder)
         rrc <- HsqlP.statement epochN (parameterisedCountWhere @SC.RewardRest "spendable_epoch" "> $1" epochEncoder)
         psc <- HsqlP.statement epochN (parameterisedCountWhere @SC.PoolStat "epoch_no" "> $1" epochEncoder)
-        pure (ec, dc, rrc, psc)
+        pure (dc, rrc, psc)
 
     liftIO $ logInfo trce $ "Rollback - Found " <> textShow dc <> " DrepDistr records to delete for epochs > " <> textShow epochN
     liftIO $ updateProgress (Just trce) progressRef 4 "Count completed"
-    pure (ec, dc, rrc, psc)
+    pure (dc, rrc, psc)
 
-  let (epochCount, drepCount, rewardRestCount, poolStatCount) = totalCounts
-      totalRecords = epochCount + drepCount + rewardRestCount + poolStatCount
-  liftIO $ logInfo trce $ "Deleting " <> textShow totalRecords <> " records across 5 tables..."
+  let (drepCount, rewardRestCount, poolStatCount) = totalCounts
+      totalRecords = drepCount + rewardRestCount + poolStatCount
+  liftIO $ logInfo trce $ "Deleting " <> textShow totalRecords <> " records across 4 tables..."
 
-  -- Execute deletes with progress logging
-  (epochDeletedCount, drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount) <-
+  (drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount) <-
     withProgress (Just trce) 5 "Deleting epoch records..." $ \progressRef -> do
-      liftIO $ updateProgress (Just trce) progressRef 1 $ "Deleting " <> textShow totalRecords <> " records from Epoch, DrepDistr, RewardRest, and PoolStat..."
+      liftIO $ updateProgress (Just trce) progressRef 1 $ "Deleting " <> textShow totalRecords <> " records from DrepDistr, RewardRest, and PoolStat..."
 
       runSession mkDbCallStack $
         HsqlSes.pipeline $ do
-          epochDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.Epoch "no" "=" epochEncoder)
           drepDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.DrepDistr "epoch_no" ">" epochEncoder)
           rewardRestDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.RewardRest "spendable_epoch" ">" epochEncoder)
           poolStatDeletedCount <- HsqlP.statement epochN (deleteWhereCount @SC.PoolStat "epoch_no" ">" epochEncoder)
-          pure (epochDeletedCount, drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount)
+          pure (drepDeletedCount, rewardRestDeletedCount, poolStatDeletedCount)
 
   liftIO $ logInfo trce "Setting null values for governance actions..."
-  -- Null operations
   (n1, n2, n3, n4) <- runSession mkDbCallStack $
     HsqlSes.pipeline $ do
       n1 <- HsqlP.statement epochInt64 setNullEnactedStmt
@@ -839,14 +833,13 @@ deleteUsingEpochNo trce epochN = do
 
   let nullTotal = n1 + n2 + n3 + n4
       countLogs =
-        [ ("Epoch", epochDeletedCount)
-        , ("DrepDistr", drepDeletedCount)
+        [ ("DrepDistr", drepDeletedCount)
         , ("RewardRest", rewardRestDeletedCount)
         , ("PoolStat", poolStatDeletedCount)
         ]
       nullLogs = [("GovActionProposal Nulled", nullTotal)]
 
-  liftIO $ logInfo trce $ "Rollback epoch deletion completed - actual deleted: " <> textShow (epochDeletedCount + drepDeletedCount + rewardRestDeletedCount + poolStatDeletedCount)
+  liftIO $ logInfo trce $ "Rollback epoch deletion completed - actual deleted: " <> textShow (drepDeletedCount + rewardRestDeletedCount + poolStatDeletedCount)
   pure $ countLogs <> nullLogs
 
 --------------------------------------------------------------------------------

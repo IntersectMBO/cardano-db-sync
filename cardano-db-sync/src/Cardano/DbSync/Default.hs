@@ -31,7 +31,6 @@ import Cardano.DbSync.Api.Ledger
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), InsertOptions (..), LedgerEnv (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Config.Types (SyncInsertOptions (..), dncInsertOptions)
 import Cardano.DbSync.DbEvent (runDbSyncTransaction)
-import Cardano.DbSync.Epoch (epochHandler)
 import Cardano.DbSync.Era.Byron.Insert (insertByronBlock)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Block (insertBlockUniversal)
@@ -199,8 +198,7 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     BlockDijkstra blk ->
       insertBlockUniversal' $
         Generic.fromDijkstraBlock (ioPlutusExtra iopts) (getPrices applyResult) blk
-  -- update the epoch
-  updateEpoch details isNewEpochEvent
+  appendFinalizedEpochOnBoundary isNewEpochEvent
   whenPruneTxOut syncEnv $
     when (unBlockNo blkNo `mod` getPruneInterval syncEnv == 0) $
       do
@@ -211,15 +209,12 @@ insertBlock syncEnv cblk applyRes firstAfterRollback tookSnapshot = do
     txOutVariantType = getTxOutVariantType syncEnv
     iopts = getInsertOptions syncEnv
 
-    updateEpoch details isNewEpochEvent =
-      -- if have --dissable-epoch && --dissable-cache then no need to run this function
-      when (soptEpochAndCacheEnabled $ envOptions syncEnv) $
-        epochHandler
-          syncEnv
-          tracer
-          (envCache syncEnv)
-          isNewEpochEvent
-          (BlockDetails cblk details)
+    appendFinalizedEpochOnBoundary isNewEpochEvent =
+      when (soptEpochViewEnabled (envOptions syncEnv) && isNewEpochEvent) $ do
+        let curEpoch = unEpochNo (sdEpochNo (apSlotDetails applyRes))
+        when (curEpoch > 0) $
+          lift $
+            DB.appendEpochFinalized (curEpoch - 1)
 
     getPrices :: ApplyResult -> Maybe Ledger.Prices
     getPrices applyResult = case apPrices applyResult of
