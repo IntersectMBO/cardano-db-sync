@@ -102,7 +102,7 @@ addTxTreasuryDonation =
 
     assertTxCount dbSync 12
   where
-    testLabel = "conwayAddSimpleTx"
+    testLabel = "conwayAddTxTreasuryDonation"
 
 consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
 consumeSameBlock =
