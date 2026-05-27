@@ -4,6 +4,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled (
   checkEpochDisabledArg,
   checkEpochEnabled,
   checkEpochCurrentLiveUpdates,
+  checkEpochRollbackStaleFinalized,
 ) where
 
 import Cardano.Db as DB
@@ -11,11 +12,12 @@ import Cardano.Mock.ChainSync.Server (IOManager ())
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Cardano.Prelude
+import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
-import Test.Cardano.Db.Mock.UnifiedApi (forgeAndSubmitBlocks, withConwayFindLeaderAndSubmitTx)
+import Test.Cardano.Db.Mock.UnifiedApi (fillUntilNextEpoch, forgeAndSubmitBlocks, rollbackTo, withConwayFindLeaderAndSubmitTx)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery)
 import Test.Tasty.HUnit (Assertion ())
-import Prelude ()
+import Prelude (last)
 
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochDisabledArg =
@@ -77,6 +79,42 @@ checkEpochCurrentLiveUpdates =
     assertEqQuery dbSync (blkCountFor 0) 35 "epoch_current did not update after more blocks"
   where
     testLabel = "conwayCLACheckEpochCurrentLiveUpdates"
+
+    blkCountFor :: Word64 -> DB.DbM Word64
+    blkCountFor n = do
+      res <- DB.queryEpochEntry n
+      pure $ case res of
+        Right ep -> DB.epochBlkCount ep
+        Left _ -> 0
+
+-- | Rollback across an epoch boundary: after rolling back into epoch 0,
+--   the epoch view should report only the surviving blocks of epoch 0.
+checkEpochRollbackStaleFinalized :: IOManager -> [(Text, Text)] -> Assertion
+checkEpochRollbackStaleFinalized =
+  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    let preRollbackBlocks = 90
+    targetBlks <- forgeAndSubmitBlocks interpreter mockServer preRollbackBlocks
+    let rollbackPoint = blockPoint (last targetBlks)
+    boundaryBlks <- fillUntilNextEpoch interpreter mockServer
+    -- Wait for db-sync to process the boundary block so epoch 0 is
+    -- finalized into epoch_finalized before we trigger the rollback.
+    assertBlockNoBackoff dbSync (preRollbackBlocks + length boundaryBlks)
+    void $ rollbackTo interpreter mockServer rollbackPoint
+    -- Wait for db-sync to finish processing the rollback + dummy block.
+    let postRollbackBlockNo = preRollbackBlocks + 1
+    assertBlockNoBackoff dbSync postRollbackBlockNo
+
+    -- preRollbackBlocks + 1 dummy block forged by rollbackTo.
+    let expectedBlkCount = fromIntegral postRollbackBlockNo :: Word64
+    assertEqQuery
+      dbSync
+      (blkCountFor 0)
+      expectedBlkCount
+      "epoch view block count after rollback across epoch boundary"
+  where
+    testLabel = "conwayCLACheckEpochRollbackStaleFinalized"
 
     blkCountFor :: Word64 -> DB.DbM Word64
     blkCountFor n = do

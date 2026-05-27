@@ -113,6 +113,7 @@ unitTests iom knownMigrations =
             [ test "Epoch view is empty when disabled" EpochDisabled.checkEpochDisabledArg
             , test "Epoch view is populated when enabled" EpochDisabled.checkEpochEnabled
             , test "Epoch current view updates live within an epoch" EpochDisabled.checkEpochCurrentLiveUpdates
+            , test "Epoch rollback refreshes epoch_finalized" EpochDisabled.checkEpochRollbackStaleFinalized
             ]
         ]
     , testGroup
