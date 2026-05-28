@@ -45,7 +45,6 @@ library
                         Cardano.DbTool.Validate.Balance
                         Cardano.DbTool.Validate.BlockProperties
                         Cardano.DbTool.Validate.BlockTxs
-                        Cardano.DbTool.Validate.EpochTable
                         Cardano.DbTool.Validate.Ledger
                         Cardano.DbTool.Validate.PoolOwner
                         Cardano.DbTool.Validate.TotalSupply

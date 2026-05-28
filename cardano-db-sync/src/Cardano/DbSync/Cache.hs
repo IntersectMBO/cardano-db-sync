@@ -26,6 +26,7 @@ module Cardano.DbSync.Cache (
   cleanCachesForTip,
   optimiseCaches,
   tryUpdateCacheTx,
+  withNoCache,
 ) where
 
 import Cardano.BM.Trace
@@ -47,7 +48,6 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (EpochStatistics (..), SyncEnv (..))
-import Cardano.DbSync.Cache.Epoch (rollbackMapEpochInCache)
 import qualified Cardano.DbSync.Cache.FIFO as FIFO
 import qualified Cardano.DbSync.Cache.LRU as LRU
 import Cardano.DbSync.Cache.Types (CacheAction (..), CacheInternal (..), CacheStatistics (..), CacheStatus (..), StakeCache (..), shouldCache)
@@ -72,18 +72,21 @@ import Cardano.DbSync.Types
 -- NOTE: BlockId is cleaned up on rollbacks, since it may get reinserted on
 -- a different id.
 -- NOTE: Other tables are not cleaned up since they are not rollbacked.
-rollbackCache :: CacheStatus -> DB.BlockId -> ExceptT SyncNodeError DB.DbM ()
-rollbackCache NoCache _ = pure ()
-rollbackCache (ActiveCache cache) blockId = do
+rollbackCache :: CacheStatus -> ExceptT SyncNodeError DB.DbM ()
+rollbackCache NoCache = pure ()
+rollbackCache (ActiveCache cache) =
   liftIO $ do
     atomically $ writeTVar (cPrevBlock cache) Nothing
     atomically $ modifyTVar (cDatum cache) LRU.cleanup
     atomically $ modifyTVar (cTxIds cache) FIFO.cleanupCache
-    void $ rollbackMapEpochInCache cache blockId
+
+-- | Run an action with caching disabled.
+withNoCache :: SyncEnv -> SyncEnv
+withNoCache syncEnv = syncEnv {envCache = NoCache}
 
 -- | When syncing and we get within 2 minutes of the tip, we clean certain caches
 -- and set the flag to True on ActiveCache. We disable the following caches:
--- cStake, cDatum, cAddress. We keep: cPools, cPrevBlock, cMultiAssets, cEpoch, cTxIds
+-- cStake, cDatum, cAddress. We keep: cPools, cPrevBlock, cMultiAssets, cTxIds
 cleanCachesForTip :: CacheStatus -> ExceptT SyncNodeError DB.DbM ()
 cleanCachesForTip cache =
   case cache of

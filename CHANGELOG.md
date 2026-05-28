@@ -1,6 +1,8 @@
 # Revision history for cardano-db-sync
 
 ## 13.7.0.5
+- Replace the `epoch` table with a view that unions an `epoch_finalized` table (one row appended per completed epoch, rolled back via `DELETE WHERE no > $rollback_epoch`) with a live `epoch_current` view. Removes the in-memory epoch cache layer that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) and similar bugs. `id` is now derived as `no + 1`. The first start after upgrading runs a one-time backfill of `epoch_finalized` from `block`/`tx`, which can take several minutes on mainnet; subsequent boundary updates take ~1–3s. `INSERT`/`UPDATE`/`DELETE` against `epoch` is no longer possible; clients must read from the view.
+- Replace the `--disable-epoch` CLI flag with the `disable_epoch` boolean in `insert_options`. Defaults to `false` (epoch view enabled), preserving the historical default.
 - Update to cardano-node 11.0.1
 
 ## 13.7.0.4

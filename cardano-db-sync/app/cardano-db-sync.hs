@@ -99,7 +99,6 @@ pRunDbSyncNode = do
     <*> optional pLedgerStateDir
     <*> pMigrationDir
     <*> pPGPassSource
-    <*> pEpochDisabled
     <*> pHasCache
     <*> pForceIndexes
     <*> pHasInOut
@@ -143,15 +142,6 @@ pPGPassSource =
         <> Opt.help "Alternative env variable to use, defaults to PGPASSFILE env variable."
         <> Opt.value PGPassDefaultEnv
         <> Opt.metavar "ENV"
-    )
-
-pEpochDisabled :: Parser Bool
-pEpochDisabled =
-  Opt.flag
-    False
-    True
-    ( Opt.long "disable-epoch"
-        <> Opt.help "Makes epoch table remain empty"
     )
 
 pForceIndexes :: Parser Bool

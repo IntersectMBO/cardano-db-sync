@@ -115,12 +115,10 @@ library
                         Cardano.DbSync.Metrics
 
                         Cardano.DbSync.Cache
-                        Cardano.DbSync.Cache.Epoch
                         Cardano.DbSync.Cache.FIFO
                         Cardano.DbSync.Cache.LRU
                         Cardano.DbSync.Cache.Types
                         Cardano.DbSync.Default
-                        Cardano.DbSync.Epoch
 
                         Cardano.DbSync.Rollback
 
@@ -235,7 +233,6 @@ library
                       , typed-protocols
                       , unliftio-core
                       , vector
-                      , wide-word
                       , yaml
 
 executable cardano-db-sync
