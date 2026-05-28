@@ -177,8 +177,8 @@ backfillEpochFinalized :: DbM ()
 backfillEpochFinalized =
   runSession mkDbCallStack $ HsqlSes.statement () backfillEpochFinalizedStmt
 
-deleteEpochFinalizedAfterStmt :: HsqlStmt.Statement Word64 Int64
-deleteEpochFinalizedAfterStmt =
+deleteEpochFinalizedFromEpochStmt :: HsqlStmt.Statement Word64 Int64
+deleteEpochFinalizedFromEpochStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
@@ -187,12 +187,12 @@ deleteEpochFinalizedAfterStmt =
       TextEnc.encodeUtf8 $
         Text.concat
           [ "DELETE FROM epoch_finalized"
-          , " WHERE no > $1"
+          , " WHERE no >= $1"
           ]
 
-deleteEpochFinalizedAfter :: Word64 -> DbM Int64
-deleteEpochFinalizedAfter epochNum =
-  runSession mkDbCallStack $ HsqlSes.statement epochNum deleteEpochFinalizedAfterStmt
+deleteEpochFinalizedFromEpoch :: Word64 -> DbM Int64
+deleteEpochFinalizedFromEpoch epochNum =
+  runSession mkDbCallStack $ HsqlSes.statement epochNum deleteEpochFinalizedFromEpochStmt
 
 --------------------------------------------------------------------------------
 insertEpochParamStmt :: HsqlStmt.Statement SEnP.EpochParam Id.EpochParamId
