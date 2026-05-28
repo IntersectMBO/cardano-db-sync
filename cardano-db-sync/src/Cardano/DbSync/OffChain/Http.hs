@@ -8,6 +8,8 @@ module Cardano.DbSync.OffChain.Http (
   parseAndValidateVoteData,
   parseOffChainUrl,
   newRestrictedManager,
+  -- Exported for testing.
+  isPrivateAddr,
 ) where
 
 import qualified Cardano.Crypto.Hash.Blake2b as Crypto

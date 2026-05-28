@@ -404,5 +404,6 @@ test-suite test
                       , iohk-monitoring
                       , hedgehog
                       , hedgehog-quickcheck
+                      , network
                       , ouroboros-consensus:cardano
                       , text
