@@ -61,10 +61,11 @@ rollbackFromBlockNo syncEnv blkNo = do
       addConstraintsIfNotExist syncEnv trce
 
     rollbackCache cache
+    -- The surviving block's epoch is no longer finalised; drop its (now stale) row so epoch_current takes over.
     when (soptEpochViewEnabled (envOptions syncEnv)) $
       void $
         lift $
-          DB.deleteEpochFinalizedAfter epochNo
+          DB.deleteEpochFinalizedFromEpoch epochNo
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace syncEnv
