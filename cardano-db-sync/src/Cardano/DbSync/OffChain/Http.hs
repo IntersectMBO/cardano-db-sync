@@ -311,9 +311,19 @@ isPrivateAddr (Socket.SockAddrInet _ hostAddr) =
         || (a == 198 && b >= 18 && b <= 19) -- 198.18.0.0/15 (benchmarking)
         || a >= 224 -- 224.0.0.0+ (multicast + reserved + broadcast)
 isPrivateAddr (Socket.SockAddrInet6 _ _ hostAddr6 _) =
-  let addr@(w1, _, _, _, _, _, _, _) = Socket.hostAddress6ToTuple hostAddr6
+  let addr@(w1, w2, w3, w4, w5, w6, w7, w8) = Socket.hostAddress6ToTuple hostAddr6
+      ipv4Mapped = (w1, w2, w3, w4, w5, w6) == (0, 0, 0, 0, 0, 0xFFFF)
+      mappedIPv4Addr =
+        Socket.SockAddrInet 0 $
+          Socket.tupleToHostAddress
+            ( fromIntegral (w7 `shiftR` 8)
+            , fromIntegral (w7 .&. 0xFF)
+            , fromIntegral (w8 `shiftR` 8)
+            , fromIntegral (w8 .&. 0xFF)
+            )
    in addr == (0, 0, 0, 0, 0, 0, 0, 0) -- ::
         || addr == (0, 0, 0, 0, 0, 0, 0, 1) -- ::1
         || (w1 .&. 0xFE00) == 0xFC00 -- fc00::/7 (ULA)
         || (w1 .&. 0xFFC0) == 0xFE80 -- fe80::/10 (link-local)
+        || (ipv4Mapped && isPrivateAddr mappedIPv4Addr) -- ::ffff:0:0/96 (IPv4-mapped)
 isPrivateAddr _ = False

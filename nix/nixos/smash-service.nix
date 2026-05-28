@@ -29,7 +29,7 @@ in {
       package = lib.mkOption {
         type = types.package;
         default = (cfg.dbSyncPkgs.cardanoDbSyncProject.appendModule {
-          modules = [{packages.cardano-smash-server.flags.disable-basic-auth = cfg.admins == null;}];
+          modules = [{packages.cardano-smash-server.flags.disable-basic-auth = false;}];
         }).hsPkgs.cardano-smash-server.components.exes.cardano-smash-server;
       };
       port = lib.mkOption {
