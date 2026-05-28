@@ -1,7 +1,11 @@
 # Revision history for cardano-db-sync
 
+## 13.7.1.0
+- Auto-repair `epoch.out_sum` / `epoch.fees` / `epoch.tx_count` / `epoch.blk_count` corruption introduced by issue [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) in 13.7.0.0 - 13.7.0.4. A startup migration recomputes every epoch row from the underlying `tx` / `block` tables and rewrites only the rows whose stored values disagree. Adds a one-time 5-15 minute delay on the first startup after upgrade on a mainnet-sized database; subsequent restarts and fresh syncs are unaffected. Operators on older release lines who do not upgrade can apply the same fix manually via [`scripts/fix-epoch-table.sql`](scripts/fix-epoch-table.sql).
+
 ## 13.7.0.5
 - Update to cardano-node 11.0.1
+- Fix `epoch.out_sum` / `epoch.fees` corruption caused by numeric decoders truncating values [#2118]
 
 ## 13.7.0.4
 - Restore static (musl) Linux binary; 13.7.0.3 shipped a dynamically linked binary that broke on non-NixOS systems
