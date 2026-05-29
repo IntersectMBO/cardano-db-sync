@@ -302,6 +302,7 @@ extractSyncOptions snp aop snc =
           forceTxIn'
     , soptInsertOptions = iopts
     , soptSnapshotInterval = dncSnapshotInterval snc
+    , soptAllowPrivateOffChainUrls = enpAllowPrivateOffChainUrls snp
     }
   where
     maybeKeepMNames =
