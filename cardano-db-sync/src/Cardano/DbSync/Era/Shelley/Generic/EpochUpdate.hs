@@ -7,18 +7,18 @@ module Cardano.DbSync.Era.Shelley.Generic.EpochUpdate (
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.ProtoParams
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Types (DrepSnapW, GovStateW)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
-import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Shelley.API.Wallet as Shelley
 import Cardano.Prelude hiding (Maybe (..), fromMaybe)
 import qualified Cardano.Protocol.TPraos.API as Shelley
 import qualified Cardano.Protocol.TPraos.Rules.Tickn as Shelley
 import Cardano.Slotting.Slot (EpochNo (..))
 import Data.Strict.Maybe (Maybe (..))
-import Ouroboros.Consensus.Cardano.Block (ConwayEra, HardForkState (..))
+import Ouroboros.Consensus.Cardano.Block (HardForkState (..))
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import qualified Ouroboros.Consensus.HeaderValidation as Consensus
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
@@ -30,8 +30,8 @@ data NewEpoch = NewEpoch
   , neIsEBB :: !Bool
   , neAdaPots :: !(Maybe Shelley.AdaPots)
   , neEpochUpdate :: !EpochUpdate
-  , neDRepState :: !(Maybe (DRepPulsingState ConwayEra))
-  , neEnacted :: !(Maybe (ConwayGovState ConwayEra))
+  , neDRepState :: !(Maybe DrepSnapW)
+  , neEnacted :: !(Maybe GovStateW)
   , nePoolDistr :: !(Maybe (Map PoolKeyHash (Coin, Word64), Map PoolKeyHash Natural))
   }
 
