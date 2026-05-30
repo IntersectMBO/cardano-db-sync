@@ -18,7 +18,7 @@ import Data.Functor.Contravariant
 import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Data.Word (Word16, Word64)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
@@ -75,6 +75,10 @@ data Block = Block
   , blockVrfKey :: !(Maybe Text)
   , blockOpCert :: !(Maybe ByteString) -- sqltype=hash32type
   , blockOpCertCounter :: !(Maybe Word64) -- sqltype=hash63type
+  -- Leios (Dijkstra-only; default false / Nothing for earlier eras)
+  , blockHasLeiosCert :: !Bool
+  , blockEbAnnouncementHash :: !(Maybe ByteString) -- sqltype=hash32type
+  , blockEbAnnouncementSize :: !(Maybe Word32) -- sqltype=word31type
   }
   deriving (Eq, Show, Generic)
 
@@ -106,6 +110,9 @@ blockDecoder =
     <*> D.column (D.nullable D.text) -- blockVrfKey
     <*> D.column (D.nullable D.bytea) -- blockOpCert
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockOpCertCounter
+    <*> D.column (D.nonNullable D.bool) -- blockHasLeiosCert
+    <*> D.column (D.nullable D.bytea) -- blockEbAnnouncementHash
+    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- blockEbAnnouncementSize
 
 blockEncoder :: E.Params Block
 blockEncoder =
@@ -125,6 +132,9 @@ blockEncoder =
     , blockVrfKey >$< E.param (E.nullable E.text)
     , blockOpCert >$< E.param (E.nullable E.bytea)
     , blockOpCertCounter >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , blockHasLeiosCert >$< E.param (E.nonNullable E.bool)
+    , blockEbAnnouncementHash >$< E.param (E.nullable E.bytea)
+    , blockEbAnnouncementSize >$< E.param (E.nullable $ fromIntegral >$< E.int4)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

@@ -97,6 +97,9 @@ insertABOBBoundary syncEnv blk details = do
           DB.blockVrfKey = Nothing
         , DB.blockOpCert = Nothing
         , DB.blockOpCertCounter = Nothing
+        , DB.blockHasLeiosCert = False
+        , DB.blockEbAnnouncementHash = Nothing
+        , DB.blockEbAnnouncementSize = Nothing
         }
 
   liftIO
@@ -137,6 +140,9 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
           DB.blockVrfKey = Nothing
         , DB.blockOpCert = Nothing
         , DB.blockOpCertCounter = Nothing
+        , DB.blockHasLeiosCert = False
+        , DB.blockEbAnnouncementHash = Nothing
+        , DB.blockEbAnnouncementSize = Nothing
         }
 
   zipWithM_ (insertByronTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]
