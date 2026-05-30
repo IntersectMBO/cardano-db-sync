@@ -85,7 +85,7 @@ import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import GHC.IO.Exception (userError)
-import Lens.Micro ((%~), (^.), (^?))
+import Lens.Micro ((%~), (^.))
 import Ouroboros.Consensus.Block (
   WithOrigin (..),
   blockHash,
@@ -93,7 +93,7 @@ import Ouroboros.Consensus.Block (
   blockPrevHash,
  )
 import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
-import Ouroboros.Consensus.Cardano.Block (ConwayEra, LedgerState (..))
+import Ouroboros.Consensus.Cardano.Block (ConwayEra, DijkstraEra, LedgerState (..))
 import Ouroboros.Consensus.Cardano.CanHardFork ()
 import Ouroboros.Consensus.Config (TopLevelConfig (..), configCodec, configLedger)
 import Ouroboros.Consensus.HardFork.Abstract
@@ -387,17 +387,26 @@ applyBlock env blk = do
                   fromIntegral (leMaxSupply env) - unCoin (sumAdaPots adaPots)
             }
 
-    getDrepState :: ExtLedgerState CardanoBlock mk -> Maybe (DRepPulsingState ConwayEra)
-    getDrepState ls = ls ^? newEpochStateT . Shelley.newEpochStateDRepPulsingStateL
+    getDrepState :: ExtLedgerState CardanoBlock mk -> Maybe Generic.DrepSnapW
+    getDrepState ls = case ledgerState ls of
+      LedgerStateConway cls ->
+        Just $ Generic.DrepSnapC $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateDRepPulsingStateL
+      LedgerStateDijkstra dls ->
+        Just $ Generic.DrepSnapD $ Consensus.shelleyLedgerState dls ^. Shelley.newEpochStateDRepPulsingStateL
+      _ -> Nothing
 
     finaliseDrepDistr :: ExtLedgerState CardanoBlock mk -> ExtLedgerState CardanoBlock mk
     finaliseDrepDistr ledger =
-      ledger & newEpochStateT %~ forceDRepPulsingState @ConwayEra
+      ledger
+        & newEpochStateT @ConwayEra %~ forceDRepPulsingState
+        & newEpochStateT @DijkstraEra %~ forceDRepPulsingState
 
-getGovState :: ExtLedgerState CardanoBlock mk -> Maybe (ConwayGovState ConwayEra)
+getGovState :: ExtLedgerState CardanoBlock mk -> Maybe Generic.GovStateW
 getGovState ls = case ledgerState ls of
   LedgerStateConway cls ->
-    Just $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
+    Just $ Generic.GovStateC $ Consensus.shelleyLedgerState cls ^. Shelley.newEpochStateGovStateL
+  LedgerStateDijkstra dls ->
+    Just $ Generic.GovStateD $ Consensus.shelleyLedgerState dls ^. Shelley.newEpochStateGovStateL
   _ -> Nothing
 
 getStakeSlice :: HasLedgerEnv -> CardanoLedgerState -> Bool -> Generic.StakeSliceRes
@@ -672,6 +681,10 @@ getPrices st = case ledgerState $ clsState st of
 getGovExpiration :: CardanoLedgerState -> Strict.Maybe Ledger.EpochInterval
 getGovExpiration st = case ledgerState $ clsState st of
   LedgerStateConway bls ->
+    Strict.Just $
+      Shelley.nesEs (Consensus.shelleyLedgerState bls)
+        ^. (Shelley.curPParamsEpochStateL . Shelley.ppGovActionLifetimeL)
+  LedgerStateDijkstra bls ->
     Strict.Just $
       Shelley.nesEs (Consensus.shelleyLedgerState bls)
         ^. (Shelley.curPParamsEpochStateL . Shelley.ppGovActionLifetimeL)

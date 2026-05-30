@@ -178,7 +178,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
-  , apGovActionState :: !(Maybe (ConwayGovState ConwayEra))
+  , apGovActionState :: !(Maybe Generic.GovStateW)
   , apDepositsMap :: !DepositsMap
   }
 
@@ -336,6 +336,22 @@ instance HasNewEpochState ConwayEra where
         :* fn id
         :* fn (applyNewEpochState' st)
         :* fn id
+        :* Nil
+
+instance HasNewEpochState DijkstraEra where
+  getNewEpochState st = case ledgerState st of
+    LedgerStateDijkstra dijkstra -> Just (shelleyLedgerState dijkstra)
+    _ -> Nothing
+
+  applyNewEpochState st =
+    hApplyExtLedgerState $
+      fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn (applyNewEpochState' st)
         :* Nil
 
 hApplyExtLedgerState ::
