@@ -19,6 +19,7 @@ import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import Cardano.Prelude
+import LeiosDemoTypes (EbAnnouncement (..), EbHash (..))
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
@@ -93,6 +94,10 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
             DB.blockVrfKey = Just $ Generic.blkVrfKey blk
           , DB.blockOpCert = Just $ Generic.blkOpCert blk
           , DB.blockOpCertCounter = Just $ Generic.blkOpCertCounter blk
+          , -- Leios (Dijkstra)
+            DB.blockHasLeiosCert = Generic.blkHasLeiosCert blk
+          , DB.blockEbAnnouncementHash = ebHashBytes . ebAnnouncementHash <$> Generic.blkLeiosEbAnnouncement blk
+          , DB.blockEbAnnouncementSize = ebAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)

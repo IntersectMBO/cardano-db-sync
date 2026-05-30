@@ -98,6 +98,9 @@ insertABOBBoundary syncEnv blk details = do
           DB.blockVrfKey = Nothing
         , DB.blockOpCert = Nothing
         , DB.blockOpCertCounter = Nothing
+        , DB.blockHasLeiosCert = False
+        , DB.blockEbAnnouncementHash = Nothing
+        , DB.blockEbAnnouncementSize = Nothing
         }
 
   -- now that we've inserted the Block and all it's txs lets cache what we'll need
@@ -153,6 +156,9 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
           DB.blockVrfKey = Nothing
         , DB.blockOpCert = Nothing
         , DB.blockOpCertCounter = Nothing
+        , DB.blockHasLeiosCert = False
+        , DB.blockEbAnnouncementHash = Nothing
+        , DB.blockEbAnnouncementSize = Nothing
         }
 
   txFees <- zipWithM (insertByronTx syncEnv blkId) (Byron.blockPayload blk) [0 ..]

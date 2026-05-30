@@ -106,6 +106,9 @@ insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
                     DB.blockVrfKey = Nothing
                   , DB.blockOpCert = Nothing
                   , DB.blockOpCertCounter = Nothing
+                  , DB.blockHasLeiosCert = False
+                  , DB.blockEbAnnouncementHash = Nothing
+                  , DB.blockEbAnnouncementSize = Nothing
                   }
           mapM_ (insertTxOutsByron syncEnv disInOut bid) $ genesisTxos cfg
           liftIO . logInfo tracer $
