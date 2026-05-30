@@ -103,7 +103,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
               { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
               , Consensus.shelleyBasedLeaderCredentials = shelleyCred
               }
-        , cardanoProtocolVersion = ProtVer (natVersion @10) 0
+        , cardanoProtocolVersion = ProtVer (natVersion @12) 0
         , cardanoLedgerTransitionConfig =
             Ledger.mkLatestTransitionConfig
               shelleyGenesis

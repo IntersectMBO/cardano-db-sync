@@ -106,12 +106,18 @@ if impl (ghc >= 9.12)
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 5ee1ab7c95758425338380f8ebf2b8cfcefb5fa2
-  --sha256: 0xyp48d7w708qzmsd5lqr8h7d48aslcbn14miqwpb0c9ksjz4blf
+  tag: 16b6bae87f5afeead5ae8c15d4a93b36b5a5b142
+  --sha256: 1p87vw47a14sm6k5p7ixda77p8yghmx95v3g02awqqf9d5df2wab
   subdir:
     cardano-node
     trace-forward
     trace-resources
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/ouroboros-consensus
+  tag: eddb8b78de9e5f0d45dbf1410289f8e491c515ab
+  --sha256: sha256-T8OXHl55WH9uqYP2Ja9zGzyuPEfP7b2XpJcH+aJ5gMY=
 
 source-repository-package
   type: git
@@ -125,12 +131,29 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/ouroboros-network
-  tag: c66e9a27961da4b2550e0c91974e31aebd76fc9d
-  --sha256: 1ybawvmwvxh23i92dikaa7qsvid3zaybv1cwnirw0gqx6k15gcnw
+  tag: ff3e39af5aa51d4d89c23c72d67716fd9bfcc516
+  --sha256: 00havv7igm3pjkw954mmz2s8wh4ki6pk9d2rnn1srx135xb3zp0a
   subdir:
     ouroboros-network
     cardano-diffusion
     network-mux
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-api
+  tag: 38add439ea702046e0633eae8cf828b3c1215162
+  --sha256: 1pn41ggm06bzbrs9cyab6by92j43gyx7644p6l0kfhljdqszx26s
+  subdir:
+    cardano-api
+    cardano-api-gen
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-cli
+  tag: 4f0907405ad4faa9323f2ee543ea404a8a57421d
+  --sha256: sha256-wxCFJ7KNgBMtUMa21MQjC1+KiPLoV0Sbz9GOPWZ2mtc=
+  subdir:
+    cardano-cli
 
 if impl(ghc >= 9.12)
   -- GHC 9.12 support - master branch

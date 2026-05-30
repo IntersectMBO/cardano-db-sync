@@ -13,6 +13,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Cert (..),
   Voting (..),
   Proposal (..),
+  GovStateW (..),
+  DrepSnapW (..),
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
@@ -99,6 +101,14 @@ data Voting
 data Proposal
   = ProposalC !(ProposalProcedure ConwayEra)
   | ProposalD !(ProposalProcedure DijkstraEra)
+
+data GovStateW
+  = GovStateC !(ConwayGovState ConwayEra)
+  | GovStateD !(ConwayGovState DijkstraEra)
+
+data DrepSnapW
+  = DrepSnapC !(DRepPulsingState ConwayEra)
+  | DrepSnapD !(DRepPulsingState DijkstraEra)
 
 data TxCertificate = TxCertificate
   { txcRedeemerIndex :: !(Maybe Word64)

@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Cardano.DbSync.Era.Universal.Insert.GovAction (
@@ -67,7 +68,6 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (ConwayEra)
 
 insertGovActionProposal ::
   ConwayEraPParams era =>
@@ -164,13 +164,19 @@ insertProposal ::
   DB.BlockId ->
   DB.TxId ->
   Maybe EpochNo ->
-  Maybe (ConwayGovState ConwayEra) ->
+  Maybe Generic.GovStateW ->
   (Word64, (GovActionId, Generic.Proposal)) ->
   ExceptT SyncNodeError DB.DbM ()
-insertProposal syncEnv blkId txId expiry mcgs (idx, (govId, Generic.ProposalC pp)) =
-  insertGovActionProposal syncEnv blkId txId expiry mcgs (idx, (govId, pp))
-insertProposal syncEnv blkId txId expiry _ (idx, (govId, Generic.ProposalD pp)) =
-  insertGovActionProposal syncEnv blkId txId expiry Nothing (idx, (govId, pp))
+insertProposal syncEnv blkId txId expiry mgsw (idx, (govId, proposal)) =
+  case (proposal, mgsw) of
+    (Generic.ProposalC pp, Just (Generic.GovStateC cgs)) ->
+      insertGovActionProposal syncEnv blkId txId expiry (Just cgs) (idx, (govId, pp))
+    (Generic.ProposalC pp, _) ->
+      insertGovActionProposal syncEnv blkId txId expiry Nothing (idx, (govId, pp))
+    (Generic.ProposalD pp, Just (Generic.GovStateD cgs)) ->
+      insertGovActionProposal syncEnv blkId txId expiry (Just cgs) (idx, (govId, pp))
+    (Generic.ProposalD pp, _) ->
+      insertGovActionProposal syncEnv blkId txId expiry Nothing (idx, (govId, pp))
 
 insertCommittee ::
   Maybe DB.GovActionProposalId ->
@@ -396,7 +402,7 @@ insertCredDrepHash cred = do
   where
     bs = Generic.unCredentialHash cred
 
-insertDrepDistr :: EpochNo -> PulsingSnapshot ConwayEra -> ExceptT SyncNodeError DB.DbM ()
+insertDrepDistr :: EpochNo -> PulsingSnapshot era -> ExceptT SyncNodeError DB.DbM ()
 insertDrepDistr e pSnapshot = do
   let drepEntries = Map.toList $ psDRepDistr pSnapshot
       drepChunks = DB.chunkForBulkQuery (Proxy @DB.DrepDistr) Nothing drepEntries
@@ -439,7 +445,7 @@ insertCostModel _blkId cms =
 updateRatified ::
   SyncEnv ->
   EpochNo ->
-  [GovActionState ConwayEra] ->
+  [GovActionState era] ->
   ExceptT SyncNodeError DB.DbM ()
 updateRatified syncEnv epochNo ratifiedActions = do
   forM_ ratifiedActions $ \action -> do
@@ -467,10 +473,12 @@ updateDropped syncEnv epochNo ratifiedActions = do
     lift $ DB.updateGovActionDropped gaId (unEpochNo epochNo)
 
 insertUpdateEnacted ::
+  forall era.
+  (ConwayEraGov era, GovState era ~ ConwayGovState era) =>
   SyncEnv ->
   DB.BlockId ->
   EpochNo ->
-  ConwayGovState ConwayEra ->
+  ConwayGovState era ->
   ExceptT SyncNodeError DB.DbM ()
 insertUpdateEnacted syncEnv blkId epochNo enactedState = do
   (mcommitteeId, mnoConfidenceGaId) <- handleCommittee
@@ -485,6 +493,7 @@ insertUpdateEnacted syncEnv blkId epochNo enactedState = do
           , DB.epochStateEpochNo = unEpochNo epochNo
           }
   where
+    govIds :: GovRelation StrictMaybe
     govIds = govStatePrevGovActionIds enactedState
 
     trce = getTrace syncEnv

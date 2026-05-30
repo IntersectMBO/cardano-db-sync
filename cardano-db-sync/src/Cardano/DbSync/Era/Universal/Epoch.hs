@@ -33,7 +33,7 @@ import Cardano.Ledger.Binary.Version (getVersion)
 import qualified Cardano.Ledger.Coin as Shelley
 import Cardano.Ledger.Compactible
 import Cardano.Ledger.Conway.Core (PoolVotingThresholds (..))
-import Cardano.Ledger.Conway.Governance (finishDRepPulser)
+import Cardano.Ledger.Conway.Governance (ConwayEraGov, DRepPulsingState, finishDRepPulser)
 import qualified Cardano.Ledger.Conway.Governance.DRepPulser as Ledger
 import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
@@ -72,14 +72,20 @@ insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
     insertPots blkId slotNo epochNo pots
   spoVoting <- whenStrictJustDefault Map.empty (Generic.neDRepState newEpoch) $ \dreps -> whenDefault Map.empty (ioGov iopts) $ do
-    let (drepSnapshot, ratifyState) = finishDRepPulser dreps
-    insertDrepDistr epochNo drepSnapshot
-    updateRatified syncEnv epochNo (toList $ rsEnacted ratifyState)
-    updateExpired syncEnv epochNo (toList $ rsExpired ratifyState)
-    pure (Ledger.psPoolDistr drepSnapshot)
+    let go :: forall era. ConwayEraGov era => DRepPulsingState era -> ExceptT SyncNodeError DB.DbM (Map.Map PoolKeyHash (CompactForm Shelley.Coin))
+        go d = do
+          let (drepSnapshot, ratifyState) = finishDRepPulser d
+          insertDrepDistr epochNo drepSnapshot
+          updateRatified syncEnv epochNo (toList $ rsEnacted ratifyState)
+          updateExpired syncEnv epochNo (toList $ rsExpired ratifyState)
+          pure (Ledger.psPoolDistr drepSnapshot)
+    case dreps of
+      Generic.DrepSnapC d -> go d
+      Generic.DrepSnapD d -> go d
   whenStrictJust (Generic.neEnacted newEpoch) $ \enactedSt -> do
-    when (ioGov iopts) $ do
-      insertUpdateEnacted syncEnv blkId epochNo enactedSt
+    when (ioGov iopts) $ case enactedSt of
+      Generic.GovStateC st -> insertUpdateEnacted syncEnv blkId epochNo st
+      Generic.GovStateD st -> insertUpdateEnacted syncEnv blkId epochNo st
   whenStrictJust (Generic.nePoolDistr newEpoch) $ \(poolDistrDeleg, poolDistrNBlocks) ->
     when (ioPoolStats iopts) $ do
       let nothingMap = Map.fromList $ (,Nothing) <$> (Map.keys poolDistrNBlocks <> Map.keys spoVoting)
