@@ -25,7 +25,7 @@ import Control.Monad.Extra (whenJust)
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getLatestPoints, getPruneConsume, getTrace, getTxOutVariantType, verifySnapshotPoint)
-import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..), SyncOptions (..))
+import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.DbEvent (liftDbLookup)
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
@@ -61,11 +61,6 @@ rollbackFromBlockNo syncEnv blkNo = do
       addConstraintsIfNotExist syncEnv trce
 
     rollbackCache cache
-    -- The surviving block's epoch is no longer finalised; drop its (now stale) row so epoch_current takes over.
-    when (soptEpochViewEnabled (envOptions syncEnv)) $
-      void $
-        lift $
-          DB.deleteEpochFinalizedFromEpoch epochNo
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace syncEnv

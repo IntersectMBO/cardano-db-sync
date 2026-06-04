@@ -36,6 +36,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.MinIds (MinIds (..), MinIdsWrapper (..), textToMinIds)
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 import Cardano.Db.Schema.Variants (TxOutVariantType)
+import Cardano.Db.Statement.EpochAndProtocol (deleteEpochFinalizedFromEpoch)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), runSession, runSessionEntity)
 import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
@@ -724,6 +725,9 @@ deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
     -- Step 2: Delete epoch-related data
     liftIO $ updateProgress (Just trce) progressRef 2 (rb <> "Deleting epoch data...")
     deleteEpochLogsE <- deleteUsingEpochNo trce epochN
+    -- Drop the surviving epoch's now-stale finalised row; no-op when the view is disabled.
+    epochFinalizedDeleted <- deleteEpochFinalizedFromEpoch epochN
+    let epochFinalizedLogs = [("epoch_finalized", epochFinalizedDeleted)]
 
     -- Step 3: Delete block-related data
     liftIO $ updateProgress (Just trce) progressRef 3 (rb <> "Deleting block data...")
@@ -738,7 +742,7 @@ deleteBlocksBlockId trce txOutVariantType blockId epochN isConsumedTxOut = do
 
     -- Step 5: Generate summary
     liftIO $ updateProgress (Just trce) progressRef 5 (rb <> "Generating summary...")
-    let summary = mkRollbackSummary (deleteEpochLogsE <> blockDeleteLogs) setNullLogs
+    let summary = mkRollbackSummary (deleteEpochLogsE <> epochFinalizedLogs <> blockDeleteLogs) setNullLogs
 
     -- Step 6: Complete
     liftIO $ updateProgress (Just trce) progressRef 6 (rb <> "Complete!")

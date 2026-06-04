@@ -3,7 +3,7 @@ DECLARE
   next_version int ;
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
-  IF next_version = 48 THEN
+  IF next_version = 49 THEN
 
     DROP TABLE IF EXISTS "epoch" CASCADE ;
 
