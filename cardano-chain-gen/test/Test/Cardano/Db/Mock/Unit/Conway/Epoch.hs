@@ -39,9 +39,9 @@ finalizedBlkCountFor n = do
     Right ep -> DB.epochBlkCount ep
     Left _ -> 0
 
-checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
-checkEpochDisabledArg =
-  withCustomConfigDropDB initCommandLineArgs (Just configEpochDisable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+checkEpochDisabledArg :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+checkEpochDisabledArg source =
+  withCustomConfigDropDB initCommandLineArgs (Just configEpochDisable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -62,9 +62,9 @@ checkEpochDisabledArg =
   where
     testLabel = "conwayCLACheckEpochDisabledArg"
 
-checkEpochEnabled :: IOManager -> [(Text, Text)] -> Assertion
-checkEpochEnabled =
-  withCustomConfig initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+checkEpochEnabled :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+checkEpochEnabled source =
+  withCustomConfig initCommandLineArgs (Just configEpochEnable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some blocks
@@ -85,9 +85,9 @@ checkEpochEnabled =
   where
     testLabel = "conwayCLACheckEpochEnabledConfig"
 
-checkEpochCurrentLiveUpdates :: IOManager -> [(Text, Text)] -> Assertion
-checkEpochCurrentLiveUpdates =
-  withCustomConfig initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+checkEpochCurrentLiveUpdates :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+checkEpochCurrentLiveUpdates source =
+  withCustomConfig initCommandLineArgs (Just configEpochEnable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ forgeAndSubmitBlocks interpreter mockServer 10
@@ -102,9 +102,9 @@ checkEpochCurrentLiveUpdates =
 
 -- | Rollback into the middle of epoch 0 after epoch 0 was finalised: the
 --   surviving epoch should be reported via epoch_current.
-checkEpochRollbackStaleFinalized :: IOManager -> [(Text, Text)] -> Assertion
-checkEpochRollbackStaleFinalized =
-  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+checkEpochRollbackStaleFinalized :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+checkEpochRollbackStaleFinalized source =
+  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     let preRollbackBlocks = 90
@@ -128,9 +128,9 @@ checkEpochRollbackStaleFinalized =
 
 -- | Rollback target = first block of a new epoch (the boundary block survives).
 --   epoch 0's finalised row must be preserved.
-checkEpochRollbackToFirstOfEpoch :: IOManager -> [(Text, Text)] -> Assertion
-checkEpochRollbackToFirstOfEpoch =
-  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+checkEpochRollbackToFirstOfEpoch :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+checkEpochRollbackToFirstOfEpoch source =
+  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     epoch0Blks <- fillUntilNextEpoch interpreter mockServer
@@ -155,9 +155,9 @@ checkEpochRollbackToFirstOfEpoch =
 --   epoch 0's stale finalised row must be dropped during rollback; the rollback
 --   dummy then re-crosses the boundary into epoch 1, which must re-finalise
 --   epoch 0 with only the surviving blocks.
-checkEpochRollbackToLastOfEpoch :: IOManager -> [(Text, Text)] -> Assertion
-checkEpochRollbackToLastOfEpoch =
-  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+checkEpochRollbackToLastOfEpoch :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+checkEpochRollbackToLastOfEpoch source =
+  withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     epoch0Blks <- fillUntilNextEpoch interpreter mockServer

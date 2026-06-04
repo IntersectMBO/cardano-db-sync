@@ -43,9 +43,9 @@ import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff, assertEqQuery, asser
 import Test.Tasty.HUnit (Assertion (), assertBool, assertEqual)
 import Prelude (error, head, last)
 
-simpleRollback :: IOManager -> [(Text, Text)] -> Assertion
-simpleRollback =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+simpleRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+simpleRollback source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -67,9 +67,9 @@ simpleRollback =
   where
     testLabel = "conwaySimpleRollback"
 
-bigChain :: IOManager -> [(Text, Text)] -> Assertion
-bigChain =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+bigChain :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+bigChain source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
 
@@ -93,9 +93,9 @@ bigChain =
   where
     testLabel = "conwayBigChain"
 
-restartAndRollback :: IOManager -> [(Text, Text)] -> Assertion
-restartAndRollback =
-  withFullConfigDropDBNoFingerprint conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+restartAndRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+restartAndRollback source =
+  withFullConfigDropDBNoFingerprint source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge some blocks
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
 
@@ -123,9 +123,9 @@ restartAndRollback =
   where
     testLabel = "conwayRestartAndRollback"
 
-restartAndRollbackLarge :: IOManager -> [(Text, Text)] -> Assertion
-restartAndRollbackLarge =
-  withFullConfigDropDBNoFingerprint conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+restartAndRollbackLarge :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+restartAndRollbackLarge source =
+  withFullConfigDropDBNoFingerprint source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge initial blocks
     forM_ (replicate 101 mockBlock0) (forgeNextAndSubmit interpreter mockServer)
 
@@ -151,9 +151,9 @@ restartAndRollbackLarge =
   where
     testLabel = "conwayRestartAndRollbackLarge"
 
-lazyRollback :: IOManager -> [(Text, Text)] -> Assertion
-lazyRollback =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+lazyRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+lazyRollback source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -176,9 +176,9 @@ lazyRollback =
   where
     testLabel = "conwayLazyRollback"
 
-lazyRollbackRestart :: IOManager -> [(Text, Text)] -> Assertion
-lazyRollbackRestart =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+lazyRollbackRestart :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+lazyRollbackRestart source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -204,9 +204,9 @@ lazyRollbackRestart =
   where
     testLabel = "conwayLazyRollbackRestart"
 
-doubleRollback :: IOManager -> [(Text, Text)] -> Assertion
-doubleRollback =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+doubleRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+doubleRollback source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create points to rollback to
@@ -239,9 +239,9 @@ doubleRollback =
   where
     testLabel = "conwayDoubleRollback"
 
-stakeAddressRollback :: IOManager -> [(Text, Text)] -> Assertion
-stakeAddressRollback =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+stakeAddressRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+stakeAddressRollback source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollbackTo
@@ -273,9 +273,9 @@ stakeAddressRollback =
   where
     testLabel = "conwayStakeAddressRollback"
 
-rollbackChangeTxOrder :: IOManager -> [(Text, Text)] -> Assertion
-rollbackChangeTxOrder =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+rollbackChangeTxOrder :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackChangeTxOrder source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -304,9 +304,9 @@ rollbackChangeTxOrder =
   where
     testLabel = "conwayRollbackChangeTxOrder"
 
-rollbackFullTx :: IOManager -> [(Text, Text)] -> Assertion
-rollbackFullTx =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+rollbackFullTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackFullTx source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create a point to rollback to
@@ -339,9 +339,9 @@ rollbackFullTx =
 -- | Test for DrepDistr rollback edge case when rolling back to an epoch boundary.
 -- Verifies that DrepDistr records are properly deleted during rollback and replay succeeds
 -- without duplicate key constraint violations.
-drepDistrRollback :: IOManager -> [(Text, Text)] -> Assertion
-drepDistrRollback =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+drepDistrRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+drepDistrRollback source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Register stake credentials and DReps
@@ -409,9 +409,9 @@ drepDistrRollback =
   where
     testLabel = "conwayDrepDistrRollback"
 
-poolStatBasicTest :: IOManager -> [(Text, Text)] -> Assertion
-poolStatBasicTest =
-  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel $
+poolStatBasicTest :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolStatBasicTest source =
+  withCustomConfigDropDB args (Just configPoolStats) source conwayConfigDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
@@ -433,9 +433,9 @@ poolStatBasicTest =
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayPoolStatBasicTest"
 
-poolStatRollbackNoDuplicates :: IOManager -> [(Text, Text)] -> Assertion
-poolStatRollbackNoDuplicates =
-  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel $
+poolStatRollbackNoDuplicates :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolStatRollbackNoDuplicates source =
+  withCustomConfigDropDB args (Just configPoolStats) source conwayConfigDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
@@ -467,9 +467,9 @@ poolStatRollbackNoDuplicates =
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayPoolStatRollbackNoDuplicates"
 
-poolStatRollbackGeneral :: IOManager -> [(Text, Text)] -> Assertion
-poolStatRollbackGeneral =
-  withCustomConfigDropDB args (Just configPoolStats) conwayConfigDir testLabel $
+poolStatRollbackGeneral :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolStatRollbackGeneral source =
+  withCustomConfigDropDB args (Just configPoolStats) source conwayConfigDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
 
@@ -517,9 +517,9 @@ poolStatRollbackGeneral =
     args = initCommandLineArgs {claFullMode = False}
     testLabel = "conwayPoolStatRollbackGeneral"
 
-adaPots :: IOManager -> [(Text, Text)] -> Assertion
-adaPots =
-  withFullConfigDropDB "config-conway-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
+adaPots :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+adaPots source =
+  withFullConfigDropDB source "config-conway-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blks0 <- fillEpochs interpreter mockServer 3
     blks1 <- forgeAndSubmitBlocks interpreter mockServer 70

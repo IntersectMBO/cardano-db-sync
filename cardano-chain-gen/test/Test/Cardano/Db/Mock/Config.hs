@@ -259,8 +259,8 @@ getPoolLayer env = do
       nullTracer
       pool
 
-withConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> (Config -> IO a) -> IO a
-withConfig staticDir mutableDir cmdLineArgs config action = do
+withConfig :: DB.PGPassSource -> FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> (Config -> IO a) -> IO a
+withConfig source staticDir mutableDir cmdLineArgs config action = do
   let cfgDir = mkConfigDir staticDir
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
   let (pInfoDbSync, _) = mkProtocolInfoCardano genCfg []
@@ -271,7 +271,7 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
     (allocateRes mkForgings)
     (mapM finalize)
     ( \forgings -> do
-        syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
+        syncPars <- mkSyncNodeParams source staticDir mutableDir cmdLineArgs
         let cfg = Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forgings syncPars
         action cfg
     )
@@ -310,9 +310,9 @@ mkShelleyCredentials bulkFile = do
         }
 
 -- | staticDir can be shared by tests running in parallel. mutableDir not.
-mkSyncNodeParams :: FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
-mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
-  pgconfig <- runOrThrowIO DB.readPGPassDefault
+mkSyncNodeParams :: DB.PGPassSource -> FilePath -> FilePath -> CommandLineArgs -> IO SyncNodeParams
+mkSyncNodeParams source staticDir mutableDir CommandLineArgs {..} = do
+  pgconfig <- runOrThrowIO (DB.readPGPass source)
 
   pure $
     SyncNodeParams
@@ -428,6 +428,7 @@ emptyMetricsSetters =
     }
 
 withFullConfig ::
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -449,6 +450,7 @@ withFullConfig =
 
 -- this function needs to be used where the schema needs to be rebuilt
 withFullConfigDropDB ::
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -469,6 +471,7 @@ withFullConfigDropDB =
     Nothing
 
 withFullConfigDropDBLog ::
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -490,6 +493,7 @@ withFullConfigDropDBLog =
 
 -- For tests that rollback and restart, fingerprints create divergent chains
 withFullConfigDropDBNoFingerprint ::
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -510,6 +514,7 @@ withFullConfigDropDBNoFingerprint =
     Nothing
 
 withFullConfigLog ::
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -533,6 +538,7 @@ withCustomConfig ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -554,6 +560,7 @@ withCustomConfigDropDB ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -576,6 +583,7 @@ withCustomConfigLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -597,6 +605,7 @@ withCustomConfigDropDBLog ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -619,6 +628,7 @@ withFullConfig' ::
   CommandLineArgs ->
   -- | custom SyncNodeConfig
   Maybe (SyncNodeConfig -> SyncNodeConfig) ->
+  DB.PGPassSource ->
   -- | config filepath
   FilePath ->
   -- | test label
@@ -627,7 +637,7 @@ withFullConfig' ::
   IOManager ->
   [(Text, Text)] ->
   IO a
-withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath testLabelFilePath action iom migr = do
+withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig source configFilePath testLabelFilePath action iom migr = do
   recreateDir mutableDir
   -- check if custom syncNodeConfigs have been passed or not
   syncNodeConfig <-
@@ -637,7 +647,7 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
         pure $ updateFn initConfigFile
       Nothing -> mkSyncNodeConfig configFilePath cmdLineArgs
 
-  withConfig configFilePath mutableDir cmdLineArgs syncNodeConfig $ \cfg -> do
+  withConfig source configFilePath mutableDir cmdLineArgs syncNodeConfig $ \cfg -> do
     fingerFile <- if hasFingerprint then Just <$> prepareFingerprintFile testLabelFilePath else pure Nothing
     let dbsyncParams = syncNodeParams cfg
     envLog <- lookupEnv "DBSYNC_TEST_LOG"

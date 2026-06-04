@@ -1,5 +1,7 @@
+import Cardano.Db (PGPassSource (..), readPGPassDefault)
 import Cardano.Mock.ChainSync.Server
 import Cardano.Prelude (Text)
+import Control.Exception (throwIO)
 import Control.Monad (when, (>=>))
 import Data.Maybe (isNothing)
 import MigrationValidations (KnownMigration (..), knownMigrations)
@@ -30,14 +32,16 @@ tests :: IOManager -> IO TestTree
 tests iom = do
   -- Tests share a single Postgres instance and DB, so they must run serially.
   -- tasty 1.5+ defaults to parallel execution; override that here.
+  pgCfg <- either throwIO pure =<< readPGPassDefault
+
   pure $
     localOption (NumThreads 1) $
       testGroup
         "cardano-chain-gen"
-        [ Conway.unitTests iom knownMigrationsPlain
-        , Babbage.unitTests iom knownMigrationsPlain
-        , Alonzo.unitTests iom knownMigrationsPlain
-        , testProperty "QSM" $ Property.prop_empty_blocks iom knownMigrationsPlain
+        [ Conway.unitTests iom knownMigrationsPlain (PGPassCached pgCfg)
+        , Babbage.unitTests iom knownMigrationsPlain (PGPassCached pgCfg)
+        , Alonzo.unitTests iom knownMigrationsPlain (PGPassCached pgCfg)
+        , testProperty "QSM" $ Property.prop_empty_blocks (PGPassCached pgCfg) iom knownMigrationsPlain
         ]
   where
     knownMigrationsPlain :: [(Text, Text)]

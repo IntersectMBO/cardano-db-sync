@@ -9,6 +9,7 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Tx (
   consumeSameBlock,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager)
 import qualified Cardano.Mock.Forging.Tx.Alonzo as Alonzo
 import Cardano.Mock.Forging.Types (UTxOIndex (..))
@@ -27,9 +28,9 @@ import Test.Cardano.Db.Mock.UnifiedApi (
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion)
 
-addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTx =
-  withFullConfigDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleTx source =
+  withFullConfigDropDB source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- translate the block to a real Cardano block.
     void $
       withAlonzoFindLeaderAndSubmitTx interpreter mockServer $
@@ -40,9 +41,9 @@ addSimpleTx =
   where
     testLabel = "addSimpleTx-alonzo"
 
-consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-consumeSameBlock =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+consumeSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+consumeSameBlock source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do

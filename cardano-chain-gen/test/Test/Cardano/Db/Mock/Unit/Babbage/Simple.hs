@@ -7,6 +7,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Simple (
   nodeRestartBoundary,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Ledger.BaseTypes (BlockNo (BlockNo))
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, restartServer, waitForNextConnection)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
@@ -20,9 +21,9 @@ import Test.Cardano.Db.Mock.UnifiedApi (fillUntilNextEpoch, forgeAndSubmitBlocks
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion, assertBool)
 
-forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
-forgeBlocks = do
-  withFullConfigDropDB babbageConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
+forgeBlocks :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+forgeBlocks source = do
+  withFullConfigDropDB source babbageConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
     _block0 <- forgeNext interpreter mockBlock0
     _block1 <- forgeNext interpreter mockBlock1
     block2 <- forgeNext interpreter mockBlock2
@@ -33,9 +34,9 @@ forgeBlocks = do
   where
     testLabel = "forgeBlocks"
 
-addSimple :: IOManager -> [(Text, Text)] -> Assertion
-addSimple =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimple :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimple source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Given a mock block, translate it into a real block and submit it to the
     -- chainsync server
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
@@ -45,9 +46,9 @@ addSimple =
   where
     testLabel = "addSimple"
 
-addSimpleChain :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleChain =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleChain :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleChain source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- translate the blocks to real Cardano blocks.
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -62,9 +63,9 @@ addSimpleChain =
   where
     testLabel = "addSimpleChain"
 
-restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
-restartDBSync =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+restartDBSync :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+restartDBSync source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
     -- start db-sync and let it sync
     startDBSync dbSync
@@ -77,9 +78,9 @@ restartDBSync =
   where
     testLabel = "restartDBSync"
 
-nodeRestart :: IOManager -> [(Text, Text)] -> Assertion
-nodeRestart =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+nodeRestart :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+nodeRestart source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge blocks before starting db-sync so it syncs them cleanly in one shot.
     void $ forgeAndSubmitBlocks interpreter mockServer 5
     startDBSync dbSync
@@ -98,9 +99,9 @@ nodeRestart =
   where
     testLabel = "nodeRestart"
 
-nodeRestartBoundary :: IOManager -> [(Text, Text)] -> Assertion
-nodeRestartBoundary =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+nodeRestartBoundary :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+nodeRestartBoundary source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blks <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync $ length blks
