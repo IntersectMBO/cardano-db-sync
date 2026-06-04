@@ -158,6 +158,11 @@
               create database $DBNAME with owner = $DBUSER;
               \\connect $DBNAME
               ALTER SCHEMA public   OWNER TO $DBUSER;
+
+              create database ''${DBNAME}_1 template $DBNAME;
+              create database ''${DBNAME}_2 template $DBNAME;
+              create database ''${DBNAME}_3 template $DBNAME;
+              create database ''${DBNAME}_4 template $DBNAME;
             EOF
           '';
 

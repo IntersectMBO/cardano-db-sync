@@ -1,4 +1,7 @@
-import Cardano.Db (PGPassSource (..), readPGPassDefault)
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+
+import Cardano.Db (PGConfig (..), PGPassSource (..), readPGPassDefault)
 import Cardano.Mock.ChainSync.Server
 import Cardano.Prelude (Text)
 import Control.Exception (throwIO)
@@ -32,16 +35,28 @@ tests :: IOManager -> IO TestTree
 tests iom = do
   -- Tests share a single Postgres instance and DB, so they must run serially.
   -- tasty 1.5+ defaults to parallel execution; override that here.
-  pgCfg <- either throwIO pure =<< readPGPassDefault
+  pgCfg@PGConfig {..} <- either throwIO pure =<< readPGPassDefault
+
+  -- TODO[sgillespie]: create a PG config for each era
+  let
+    pgCfg1 = pgCfg {pgcDbname = pgcDbname <> "_1"}
+    pgCfg2 = pgCfg {pgcDbname = pgcDbname <> "_2"}
+    pgCfg3 = pgCfg {pgcDbname = pgcDbname <> "_3"}
+    pgCfg4 = pgCfg {pgcDbname = pgcDbname <> "_4"}
 
   pure $
     localOption (NumThreads 1) $
       testGroup
-        "cardano-chain-gen"
-        [ Conway.unitTests iom knownMigrationsPlain (PGPassCached pgCfg)
-        , Babbage.unitTests iom knownMigrationsPlain (PGPassCached pgCfg)
-        , Alonzo.unitTests iom knownMigrationsPlain (PGPassCached pgCfg)
-        , testProperty "QSM" $ Property.prop_empty_blocks (PGPassCached pgCfg) iom knownMigrationsPlain
+        "all"
+        [ -- Tests share a single Postgres instance and DB, so they must run serially.
+          -- tasty 1.5+ defaults to parallel execution; override that here.
+          testGroup
+            "cardano-chain-gen"
+            [ Conway.unitTests iom knownMigrationsPlain (PGPassCached pgCfg1)
+            , Babbage.unitTests iom knownMigrationsPlain (PGPassCached pgCfg2)
+            , Alonzo.unitTests iom knownMigrationsPlain (PGPassCached pgCfg3)
+            , testProperty "QSM" $ Property.prop_empty_blocks (PGPassCached pgCfg4) iom knownMigrationsPlain
+            ]
         ]
   where
     knownMigrationsPlain :: [(Text, Text)]
