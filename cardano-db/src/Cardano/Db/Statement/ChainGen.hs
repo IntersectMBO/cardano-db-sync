@@ -26,6 +26,7 @@ import qualified Cardano.Db.Schema.Core.GovernanceAndVoting as SGV
 import qualified Cardano.Db.Schema.Core.MultiAsset as MultiAsset
 import qualified Cardano.Db.Schema.Core.Pool as SCP
 import qualified Cardano.Db.Schema.Core.StakeDelegation as SCSD
+import qualified Cardano.Db.Schema.Ids as Id
 import qualified Cardano.Db.Schema.Variants as SV
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
@@ -836,6 +837,33 @@ queryPoolRelayCount :: DbM Word64
 queryPoolRelayCount =
   runSession mkDbCallStack $
     HsqlSes.statement () (countAll @SCP.PoolRelay)
+
+-- | The @pool_relay.port@ of a single relay, looked up by row id and decoded straight
+-- from the int4 column. A relay port is an unsigned Word16 (0-65535), so the result must
+-- never be negative; a negative value would mean a port > 32767 was wrapped by a
+-- signed-16-bit encoder. Used as regression coverage for issue #2135.
+queryPoolRelayPortStmt :: HsqlStmt.Statement Int64 (Maybe Int64)
+queryPoolRelayPortStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    relayTableN = tableName (Proxy @SCP.PoolRelay)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT port"
+          , " FROM " <> relayTableN
+          , " WHERE id = $1"
+          , " LIMIT 1"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder =
+      HsqlD.singleRow $
+        HsqlD.column (HsqlD.nullable (fromIntegral <$> HsqlD.int4))
+
+queryPoolRelayPort :: Id.PoolRelayId -> DbM (Maybe Int64)
+queryPoolRelayPort relayId =
+  runSession mkDbCallStack $
+    HsqlSes.statement (Id.getPoolRelayId relayId) queryPoolRelayPortStmt
 
 ------------------------------------------------------------------------------
 -- Database Column Order Information

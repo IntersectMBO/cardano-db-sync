@@ -326,7 +326,9 @@ consPoolParams poolId rwCred owners =
     , sppMargin = minBound
     , sppAccountAddress = AccountAddress Testnet (AccountId rwCred)
     , sppOwners = Set.fromList owners
-    , sppRelays = StrictSeq.singleton $ SingleHostAddr SNothing SNothing SNothing
+    , -- Port 41950 is > 32767 on purpose so that pool_relay.port exercises the full
+      -- unsigned Word16 range (regression coverage for issue #2135).
+      sppRelays = StrictSeq.singleton $ SingleHostAddr (SJust (Port 41950)) SNothing SNothing
     , sppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") (let !(SBS.SBS ba) = SBS.toShort "89237365492387654983275634298756" in ByteArray ba)
     }
 

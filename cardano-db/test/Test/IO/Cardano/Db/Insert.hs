@@ -23,6 +23,7 @@ tests =
     , testCase "Insert first block" insertFirstTest
     , testCase "Insert twice" insertTwice
     , testCase "Insert foreign key missing" insertForeignKeyMissing
+    , testCase "Insert pool relay with large port" insertPoolRelayLargePort
     ]
 
 insertZeroTest :: IO ()
@@ -95,6 +96,31 @@ insertForeignKeyMissing = do
 
     count2 <- countOffChainPoolFetchError
     assertBool (show count2 ++ "/= 0") (count2 == 0)
+
+-- Regression test for issue #2135: relay ports above 32767 used to be encoded as a
+-- signed int2, which wrapped them to negative values (port - 65536) in the int4 column.
+-- A port is an unsigned Word16, so the value read back must equal the value inserted.
+insertPoolRelayLargePort :: IO ()
+insertPoolRelayLargePort =
+  runDbStandaloneSilent $ do
+    -- 41950 > 32767, so it exercises the half of the Word16 range that used to wrap.
+    relayId <- insertPoolRelay (poolRelayWithPort 41950)
+    port <- queryPoolRelayPort relayId
+    assertBool
+      ("Expected port Just 41950 but got " ++ show port)
+      (port == Just 41950)
+  where
+    -- pool_relay.update_id has no foreign key (dropped in migration-2-0025), so a
+    -- standalone relay row can be inserted without a parent pool_update.
+    poolRelayWithPort p =
+      PoolRelay
+        { poolRelayUpdateId = PoolUpdateId 1
+        , poolRelayIpv4 = Just "127.0.0.1"
+        , poolRelayIpv6 = Nothing
+        , poolRelayDnsName = Nothing
+        , poolRelayDnsSrvName = Nothing
+        , poolRelayPort = Just p
+        }
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =
