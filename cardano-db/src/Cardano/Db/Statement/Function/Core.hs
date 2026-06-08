@@ -13,6 +13,7 @@ import Cardano.Db.Error (DbCallStack, DbSessionError (..), formatSessionError)
 import Cardano.Db.Statement.Types (Entity (..))
 import Cardano.Db.Types (DbEnv (..), DbM (..))
 import Cardano.Prelude (MonadIO (..), ask, throwIO)
+import qualified Data.Text as Text
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
@@ -42,7 +43,12 @@ data ResultType c r where
 -- | The bulk insert result type
 data ResultTypeBulk a where
   NoResultBulk :: ResultTypeBulk () -- No results returned
-  WithResultBulk :: HsqlD.Result [a] -> ResultTypeBulk [a] -- Return generated IDs
+  WithResultBulk :: HsqlD.Result [a] -> ResultTypeBulk [a] -- Return generated IDs (RETURNING id)
+
+  -- | Return the given columns via @RETURNING@, decoded with the supplied result decoder.
+  -- Useful when the caller needs more than the @id@ (e.g. to match returned rows back to their
+  -- inputs by natural key when @ON CONFLICT DO NOTHING@ only returns the newly-inserted rows).
+  WithResultBulkColumns :: [Text.Text] -> HsqlD.Result [a] -> ResultTypeBulk [a]
 
 -- | Creates a parameter encoder for an array of values from a single-value encoder
 bulkEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
