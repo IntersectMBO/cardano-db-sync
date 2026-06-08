@@ -279,14 +279,13 @@ instance FromJSON DrepBody where
 instance FromJSON Image where
   parseJSON v = withObjectV v "Image" $ \o -> do
     curl <- o .: "contentUrl"
-    case Text.stripPrefix "data:" (textValue curl) of
-      Just ctb
-        | (_, tb) <- Text.break (== '/') ctb
-        , Text.isPrefixOf "/" tb
-        , (_, b) <- Text.break (== ';') tb
-        , Just imageData <- Text.stripPrefix ";base64," b ->
-            pure $ Image (TextValue imageData) Nothing
-      _ -> fromImageUrl <$> parseJSON v
+    -- An inline image is a data URI (CIP-119: "data:<content/type>;base64,..."); the contentUrl
+    -- IS the image and there is no separate sha256. Store it verbatim - do NOT strip the
+    -- "data:<mime>;base64," prefix (issue #1966). A regular URL instead carries a sha256, handled
+    -- by the ImageUrl decoder below.
+    if Text.isPrefixOf "data:" (textValue curl)
+      then pure $ Image curl Nothing
+      else fromImageUrl <$> parseJSON v
     where
       withObjectV v' s p = withObject s p v'
 
