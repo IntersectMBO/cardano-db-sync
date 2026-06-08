@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## Unreleased
+- Fix duplicate off-chain vote metadata child rows (`off_chain_vote_drep_data`, `off_chain_vote_author`, `off_chain_vote_reference`, `off_chain_vote_external_update`, `off_chain_vote_gov_action_data`) that were inserted again whenever an anchor's metadata was re-processed. Insertion is now idempotent: child rows are written only for newly stored anchors (#1966).
+
 ## 13.7.1.0
 - Auto-repair `epoch.out_sum` / `epoch.fees` / `epoch.tx_count` / `epoch.blk_count` corruption introduced by issue [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) in 13.7.0.0 - 13.7.0.4. A startup migration recomputes every epoch row from the underlying `tx` / `block` tables and rewrites only the rows whose stored values disagree. Adds a one-time 5-15 minute delay on the first startup after upgrade on a mainnet-sized database; subsequent restarts and fresh syncs are unaffected. Operators on older release lines who do not upgrade can apply the same fix manually via [`scripts/fix-epoch-table.sql`](scripts/fix-epoch-table.sql).
 
