@@ -29,6 +29,16 @@ blkCountFor n = do
     Right ep -> DB.epochBlkCount ep
     Left _ -> 0
 
+-- | Block count read directly from the epoch_finalized table, ignoring the
+-- epoch_current view. Returns 0 when no finalised row exists, so tests can
+-- distinguish a real finalised epoch from one only surfaced by epoch_current.
+finalizedBlkCountFor :: Word64 -> DB.DbM Word64
+finalizedBlkCountFor n = do
+  res <- DB.queryEpochFinalizedEntry n
+  pure $ case res of
+    Right ep -> DB.epochBlkCount ep
+    Left _ -> 0
+
 checkEpochDisabledArg :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochDisabledArg =
   withCustomConfigDropDB initCommandLineArgs (Just configEpochDisable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
@@ -135,12 +145,16 @@ checkEpochRollbackToFirstOfEpoch =
 
     assertEqQuery dbSync (blkCountFor 0) epoch0FinalisedCount "epoch 0 should stay finalised when the boundary block survives"
     assertEqQuery dbSync (blkCountFor 1) 2 "epoch 1 should contain boundary block + rollback dummy"
+    -- The boundary block survived, so epoch_finalized must still hold epoch 0
+    -- directly (not via the epoch_current fallback in the view).
+    assertEqQuery dbSync (finalizedBlkCountFor 0) epoch0FinalisedCount "epoch_finalized must still contain epoch 0 when its boundary block survives"
   where
     testLabel = "conwayCheckEpochRollbackToFirstOfEpoch"
 
 -- | Rollback target = last block of an epoch (the boundary block is removed).
---   epoch 0's stale finalised row must be dropped during rollback; the next
---   forged block re-finalises epoch 0 with only the surviving blocks.
+--   epoch 0's stale finalised row must be dropped during rollback; the rollback
+--   dummy then re-crosses the boundary into epoch 1, which must re-finalise
+--   epoch 0 with only the surviving blocks.
 checkEpochRollbackToLastOfEpoch :: IOManager -> [(Text, Text)] -> Assertion
 checkEpochRollbackToLastOfEpoch =
   withCustomConfigDropDB initCommandLineArgs (Just configEpochEnable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
@@ -160,5 +174,10 @@ checkEpochRollbackToLastOfEpoch =
 
     assertEqQuery dbSync (blkCountFor 0) epoch0SurvivingCount "epoch 0 finalised count must match surviving blocks"
     assertEqQuery dbSync (blkCountFor 1) 1 "epoch 1 should contain only the rollback dummy"
+    -- Regression check for the stale envCurrentEpochNo bug: the dummy crosses
+    -- the epoch boundary again, so LedgerNewEpoch must fire and re-append the
+    -- epoch 0 row to epoch_finalized. Querying the view alone hides the bug
+    -- because epoch_current would still surface the surviving blocks.
+    assertEqQuery dbSync (finalizedBlkCountFor 0) epoch0SurvivingCount "epoch_finalized must be re-populated for epoch 0 after the dummy re-crosses the boundary"
   where
     testLabel = "conwayCheckEpochRollbackToLastOfEpoch"

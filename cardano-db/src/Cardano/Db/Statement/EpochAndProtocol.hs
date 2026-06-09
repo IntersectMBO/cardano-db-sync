@@ -241,6 +241,34 @@ queryEpochEntry epochNum = do
     errorMsg = "Epoch not found with number: " <> Text.pack (show epochNum)
 
 --------------------------------------------------------------------------------
+
+-- | Read a row directly from the epoch_finalized table, bypassing the public
+-- epoch view. Tests use this to distinguish a real finalised epoch from one
+-- that the epoch_current view is merely surfacing.
+queryEpochFinalizedEntryStmt :: HsqlStmt.Statement Word64 (Maybe SEnP.Epoch)
+queryEpochFinalizedEntryStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    encoder = HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+    decoder = HsqlD.rowMaybe (entityVal <$> SEnP.entityEpochDecoder)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT *"
+          , " FROM epoch_finalized"
+          , " WHERE no = $1"
+          ]
+
+queryEpochFinalizedEntry :: Word64 -> DbM (Either DbLookupError SEnP.Epoch)
+queryEpochFinalizedEntry epochNum = do
+  result <- runSession mkDbCallStack $ HsqlSes.statement epochNum queryEpochFinalizedEntryStmt
+  case result of
+    Just res -> pure $ Right res
+    Nothing -> pure $ Left $ DbLookupError mkDbCallStack errorMsg
+  where
+    errorMsg = "epoch_finalized has no row for epoch " <> Text.pack (show epochNum)
+
+--------------------------------------------------------------------------------
 queryLatestEpochStmt :: HsqlStmt.Statement () (Maybe SEnP.Epoch)
 queryLatestEpochStmt =
   HsqlStmt.Statement sql HsqlE.noParams decoder True

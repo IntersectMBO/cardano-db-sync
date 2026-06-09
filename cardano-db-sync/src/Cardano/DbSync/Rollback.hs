@@ -21,11 +21,12 @@ import Ouroboros.Network.Block
 import Ouroboros.Network.Point
 
 import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Extra (whenJust)
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api (getLatestPoints, getPruneConsume, getTrace, getTxOutVariantType, verifySnapshotPoint)
-import Cardano.DbSync.Api.Types (LedgerEnv (..), SyncEnv (..))
+import Cardano.DbSync.Api.Types (CurrentEpochNo (..), LedgerEnv (..), SyncEnv (..))
 import Cardano.DbSync.Cache
 import Cardano.DbSync.DbEvent (liftDbLookup)
 import Cardano.DbSync.Error (SyncNodeError (..), logAndThrowIO, mkSyncNodeCallStack)
@@ -34,7 +35,7 @@ import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..), HasLedgerEnv (..), 
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
 import Cardano.DbSync.Util.Constraint (addConstraintsIfNotExist)
-import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 
 rollbackFromBlockNo ::
   SyncEnv ->
@@ -61,6 +62,11 @@ rollbackFromBlockNo syncEnv blkNo = do
       addConstraintsIfNotExist syncEnv trce
 
     rollbackCache cache
+    -- Resync envCurrentEpochNo to the new tip's epoch so that generateNewEpochEvents
+    -- detects the next epoch boundary instead of comparing against a stale value.
+    liftIO . atomically $
+      writeTVar (envCurrentEpochNo syncEnv) $
+        CurrentEpochNo (Strict.Just (EpochNo epochNo))
     liftIO . logInfo trce $ "Blocks deleted"
   where
     trce = getTrace syncEnv

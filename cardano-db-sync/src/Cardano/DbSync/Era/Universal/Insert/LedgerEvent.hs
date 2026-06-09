@@ -111,10 +111,9 @@ insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
           -- Reset epoch statistics for new epoch
           resetEpochStatistics syncEnv
         LedgerStartAtEpoch en -> do
-          -- This is different from the previous case in that the db-sync started
-          -- in this epoch, for example after a restart, instead of after an epoch boundary.
+          -- Emitted when the TVar is empty: first block after startup, before any
+          -- epoch boundary has been observed in this process.
           liftIO . logInfo tracer $ "Starting at epoch " <> textShow (unEpochNo en)
-          -- Reset epoch statistics for new epoch
           resetEpochStatistics syncEnv
         LedgerDeltaRewards _e rwd -> do
           let rewards = Map.toList $ Generic.unRewards rwd
