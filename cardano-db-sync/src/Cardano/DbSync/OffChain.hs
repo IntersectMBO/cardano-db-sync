@@ -159,9 +159,9 @@ insertOffChainVoteResults trce resultQueue = do
         -- Now prepare all the related data for bulk inserts
         let allGovActions = catMaybes [offChainVoteGovAction acc ocvdId | (acc, ocvdId) <- newMetadata]
             allDrepData = catMaybes [offChainVoteDrep acc ocvdId | (acc, ocvdId) <- newMetadata]
-            allAuthors = concatMap (\(acc, ocvdId) -> offChainVoteAuthors acc ocvdId) newMetadata
-            allReferences = concatMap (\(acc, ocvdId) -> offChainVoteReferences acc ocvdId) newMetadata
-            allExternalUpdates = concatMap (\(acc, ocvdId) -> offChainVoteExternalUpdates acc ocvdId) newMetadata
+            allAuthors = concatMap (uncurry offChainVoteAuthors) newMetadata
+            allReferences = concatMap (uncurry offChainVoteReferences) newMetadata
+            allExternalUpdates = concatMap (uncurry offChainVoteExternalUpdates) newMetadata
         -- Execute all bulk inserts in a pipeline
         DB.runSession DB.mkDbCallStack $
           HsqlSes.pipeline $
