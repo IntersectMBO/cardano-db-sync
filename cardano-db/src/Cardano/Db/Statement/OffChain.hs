@@ -455,14 +455,17 @@ insertBulkOffChainVoteAuthorsStmt =
 
 --------------------------------------------------------------------------------
 
-insertBulkOffChainVoteDataStmt :: HsqlStmt.Statement [SO.OffChainVoteData] [Id.OffChainVoteDataId]
-insertBulkOffChainVoteDataStmt =
+-- ON CONFLICT DO NOTHING, so only newly-inserted rows are returned; the caller inserts children
+-- only for those, keeping re-fetches idempotent (#1966).
+insertBulkOffChainVoteDataReturningNewStmt ::
+  HsqlStmt.Statement [SO.OffChainVoteData] [(Id.VotingAnchorId, ByteString, Id.OffChainVoteDataId)]
+insertBulkOffChainVoteDataReturningNewStmt =
   insertBulkWith
-    (ReplaceWithColumns (uniqueFields (Proxy @SO.OffChainVoteData))) -- ON CONFLICT DO UPDATE to ensure we get IDs back
+    (IgnoreWithColumns (uniqueFields (Proxy @SO.OffChainVoteData))) -- ON CONFLICT (hash, voting_anchor_id) DO NOTHING
     False
     extractOffChainVoteData
     SO.offChainVoteDataBulkEncoder
-    (WithResultBulk $ Id.idBulkDecoder Id.OffChainVoteDataId)
+    (WithResultBulkColumns ["voting_anchor_id", "hash", "id"] newRowsDecoder)
   where
     extractOffChainVoteData :: [SO.OffChainVoteData] -> ([Id.VotingAnchorId], [ByteString], [Text], [ByteString], [Maybe Text], [Text], [Maybe Text], [Maybe Bool])
     extractOffChainVoteData xs =
@@ -476,9 +479,19 @@ insertBulkOffChainVoteDataStmt =
       , map SO.offChainVoteDataIsValid xs
       )
 
-insertBulkOffChainVoteData :: [SO.OffChainVoteData] -> DbM [Id.OffChainVoteDataId]
-insertBulkOffChainVoteData offChainVoteData = do
-  -- Check existence and filter in one pass
+    -- Column order matches the RETURNING list above.
+    newRowsDecoder :: HsqlD.Result [(Id.VotingAnchorId, ByteString, Id.OffChainVoteDataId)]
+    newRowsDecoder =
+      HsqlD.rowList $
+        (,,)
+          <$> Id.idDecoder Id.VotingAnchorId
+          <*> HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+          <*> Id.idDecoder Id.OffChainVoteDataId
+
+insertBulkOffChainVoteDataReturningNew ::
+  [SO.OffChainVoteData] -> DbM [(Id.VotingAnchorId, ByteString, Id.OffChainVoteDataId)]
+insertBulkOffChainVoteDataReturningNew offChainVoteData = do
+  -- Only insert rows whose voting anchor exists (the FK is `noreference`, so we guard it here).
   existenceResults <-
     runSession mkDbCallStack $
       HsqlS.pipeline $ do
@@ -496,12 +509,11 @@ insertBulkOffChainVoteData offChainVoteData = do
         , exists
         ]
 
-  -- Run the bulk insert and return the generated IDs
   if null filteredOffChainVoteData
     then pure []
     else
       runSession mkDbCallStack $
-        HsqlSes.statement filteredOffChainVoteData insertBulkOffChainVoteDataStmt
+        HsqlSes.statement filteredOffChainVoteData insertBulkOffChainVoteDataReturningNewStmt
 
 --------------------------------------------------------------------------------
 
@@ -523,6 +535,19 @@ insertBulkOffChainVoteDrepDataStmt =
       , map SO.offChainVoteDrepDataImageUrl xs
       , map SO.offChainVoteDrepDataImageHash xs
       )
+
+-- Standalone session wrapper; production batches this in a pipeline with the other child inserts.
+insertBulkOffChainVoteDrepData :: [SO.OffChainVoteDrepData] -> DbM ()
+insertBulkOffChainVoteDrepData xs =
+  runSession mkDbCallStack $ HsqlSes.statement xs insertBulkOffChainVoteDrepDataStmt
+
+countOffChainVoteData :: DbM Word64
+countOffChainVoteData =
+  runSession mkDbCallStack $ HsqlSes.statement () (countAll @SO.OffChainVoteData)
+
+countOffChainVoteDrepData :: DbM Word64
+countOffChainVoteDrepData =
+  runSession mkDbCallStack $ HsqlSes.statement () (countAll @SO.OffChainVoteDrepData)
 
 --------------------------------------------------------------------------------
 queryNewVoteWorkQueueDataStmt :: HsqlStmt.Statement Int [(Id.VotingAnchorId, ByteString, VoteUrl, AnchorType)]

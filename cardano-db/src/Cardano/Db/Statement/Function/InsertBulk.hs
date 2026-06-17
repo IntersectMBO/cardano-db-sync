@@ -111,6 +111,8 @@ insertBulkWith conflictStrategy removeJsonb extract enc returnIds =
         (decoder, shouldReturnId) = case returnIds of
           NoResultBulk -> (HsqlD.noResult, "")
           WithResultBulk dec -> (dec, " RETURNING id")
+          WithResultBulkColumns cols dec ->
+            (dec, " RETURNING " <> Text.intercalate ", " cols)
 
         sql =
           TextEnc.encodeUtf8 $
