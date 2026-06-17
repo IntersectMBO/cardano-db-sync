@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## Unreleased
+- Fix off-chain DRep metadata image handling: when `body.image.contentUrl` is an inline base64 data URI (`data:<mime>;base64,...`), store it verbatim in `off_chain_vote_drep_data.image_url` instead of stripping the `data:<mime>;base64,` prefix (#1966).
+
 ## 13.7.1.0
 - Auto-repair `epoch.out_sum` / `epoch.fees` / `epoch.tx_count` / `epoch.blk_count` corruption introduced by issue [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) in 13.7.0.0 - 13.7.0.4. A startup migration recomputes every epoch row from the underlying `tx` / `block` tables and rewrites only the rows whose stored values disagree. Adds a one-time 5-15 minute delay on the first startup after upgrade on a mainnet-sized database; subsequent restarts and fresh syncs are unaffected. Operators on older release lines who do not upgrade can apply the same fix manually via [`scripts/fix-epoch-table.sql`](scripts/fix-epoch-table.sql).
 

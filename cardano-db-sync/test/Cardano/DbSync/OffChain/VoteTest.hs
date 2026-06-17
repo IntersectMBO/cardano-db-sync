@@ -6,6 +6,7 @@ module Cardano.DbSync.OffChain.VoteTest (tests) where
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Error (runOrThrowIO)
 import Cardano.DbSync.OffChain.Http (parseAndValidateVoteData)
+import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import Cardano.Prelude hiding ((%))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as AesonKey
@@ -24,7 +25,20 @@ tests =
       , ("parseAndValidateVoteData handles invalid CIP format (type error)", prop_parseInvalidCIPFormat)
       , ("parseAndValidateVoteData handles valid JSON but invalid structure", prop_parseValidJsonInvalidStructure)
       , ("parseAndValidateVoteData handles unparseable JSON", prop_parseUnparseableJson)
+      , ("image contentUrl base64 data URI keeps its prefix (#1966)", prop_imageDataUriKeepsPrefix)
       ]
+
+-- | Regression test for #1966: an inline base64 data URI contentUrl is stored verbatim, not stripped.
+prop_imageDataUriKeepsPrefix :: Property
+prop_imageDataUriKeepsPrefix = withTests 1 $ property $ do
+  let dataUri =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" ::
+          Text.Text
+      payload = Aeson.encode (Aeson.object ["contentUrl" Aeson..= dataUri])
+  annotate "image_url must keep the data:<mime>;base64, prefix"
+  case Aeson.eitherDecode' payload :: Either [Char] Vote.Image of
+    Left err -> annotate err >> failure
+    Right img -> Vote.textValue (Vote.content img) === dataUri
 
 -- | Test that we can parse valid CIP-119 format correctly
 -- Scenario: Valid JSON + Valid CIP schema -> is_valid = true
