@@ -1,14 +1,14 @@
 # Revision history for cardano-db-sync
 
-## Unreleased
-- Fix `pool_relay.port` corruption introduced by issue [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135) in 13.7.0.0 - 13.7.1.0. Relay ports above 32767 were encoded as a signed 16-bit integer and wrapped to negative values (`port - 65536`) in the `int4` column. The encoder now uses `int4`, and a startup migration repairs already-stored rows by adding 65536 to every negative port. The migration is a no-op on a clean or freshly synced database.
+## 13.7.2.1
+- The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
+- Fix `pool_relay.port` overflow [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135); a startup migration repairs existing rows.
+- Add `--allow-private-offchain-urls` CLI flag enabling off-chain metadata fetches against private/loopback addresses. Intended for local-cluster testing only; off by default.
 
 ## 13.7.1.0
 - Auto-repair `epoch.out_sum` / `epoch.fees` / `epoch.tx_count` / `epoch.blk_count` corruption introduced by issue [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) in 13.7.0.0 - 13.7.0.4. A startup migration recomputes every epoch row from the underlying `tx` / `block` tables and rewrites only the rows whose stored values disagree. Adds a one-time 5-15 minute delay on the first startup after upgrade on a mainnet-sized database; subsequent restarts and fresh syncs are unaffected. Operators on older release lines who do not upgrade can apply the same fix manually via [`scripts/fix-epoch-table.sql`](scripts/fix-epoch-table.sql).
 
 ## 13.7.0.5
-- Replace the `epoch` table with a view that unions an `epoch_finalized` table (one row appended per completed epoch, rolled back via `DELETE WHERE no > $rollback_epoch`) with a live `epoch_current` view. Removes the in-memory epoch cache layer that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) and similar bugs. `id` is now derived as `no + 1`. The first start after upgrading runs a one-time backfill of `epoch_finalized` from `block`/`tx`, which can take several minutes on mainnet; subsequent boundary updates take ~1–3s. `INSERT`/`UPDATE`/`DELETE` against `epoch` is no longer possible; clients must read from the view.
-- Replace the `--disable-epoch` CLI flag with the `disable_epoch` boolean in `insert_options`. Defaults to `false` (epoch view enabled), preserving the historical default.
 - Update to cardano-node 11.0.1
 - Fix `epoch.out_sum` / `epoch.fees` corruption caused by numeric decoders truncating values [#2118]
 
