@@ -221,7 +221,10 @@ poolRelayEncoder =
     , poolRelayIpv6 >$< E.param (E.nullable E.text)
     , poolRelayDnsName >$< E.param (E.nullable E.text)
     , poolRelayDnsSrvName >$< E.param (E.nullable E.text)
-    , poolRelayPort >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , -- NB: the SQL column is int4 and the field is an unsigned Word16, so it must
+      -- be encoded as int4. Using int2 (signed 16-bit) wraps ports > 32767 to
+      -- negative values (port - 65536). See issue #2135.
+      poolRelayPort >$< E.param (E.nullable $ fromIntegral >$< E.int4)
     ]
 
 -- |
