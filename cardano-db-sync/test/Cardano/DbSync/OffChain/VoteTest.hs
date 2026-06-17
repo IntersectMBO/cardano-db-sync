@@ -28,9 +28,7 @@ tests =
       , ("image contentUrl base64 data URI keeps its prefix (#1966)", prop_imageDataUriKeepsPrefix)
       ]
 
--- | Regression test for issue #1966: when an image's @contentUrl@ is an inline base64 data URI
--- (@data:<mime>;base64,...@), db-sync must store the value verbatim, NOT strip the
--- @data:<mime>;base64,@ prefix. CIP-119 defines @contentUrl@ as the full data URI for inline images.
+-- | Regression test for #1966: an inline base64 data URI contentUrl is stored verbatim, not stripped.
 prop_imageDataUriKeepsPrefix :: Property
 prop_imageDataUriKeepsPrefix = withTests 1 $ property $ do
   let dataUri =
