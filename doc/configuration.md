@@ -620,6 +620,10 @@ When enabled, the same URL restrictions apply as `offchain_pool_data` (HTTPS req
 
 **Migration Note**: Prior to version 13.7.0.1, governance vote metadata fetching was controlled by the `governance` flag.
 
+### Bypassing the URL restriction for local-cluster testing
+
+The private-IP restriction is enforced for every production deployment and cannot be disabled via configuration. For local-cluster test setups whose pools or governance anchors are served from `http://localhost:.../...` URLs, the `--allow-private-offchain-urls` CLI flag (see [command-line-options.md](command-line-options.md)) replaces the restriction with a no-op so the fetchers can connect to private, loopback, and link-local addresses. The flag is off by default and is intended for testing only.
+
 ## Pool Stat
 
 `pool_stat`

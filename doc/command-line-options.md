@@ -12,6 +12,7 @@
   - `--disable-cache`: Disables the db-sync caches. Reduces memory usage but it takes longer to sync.
   - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot. See [Manual Rollbacks](manual-rollbacks.md) for details.
   - `--disable-in-out`: Disables the `tx_in` and `tx_out` table.
+  - `--allow-private-offchain-urls`: Allows the off-chain pool and vote metadata fetchers to connect to URLs whose host or resolved IP is in a private, loopback, or link-local range. Off by default. Intended for local-cluster testing.
 
 - **Deprecated Options (for historical reference only):**
   - For more details, refer to [Configuration Documentation](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md)

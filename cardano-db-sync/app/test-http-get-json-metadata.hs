@@ -41,7 +41,7 @@ main = do
       let poolUrl = toUrl testPoolOffChain
           mHash = Just $ toHash testPoolOffChain
       eres <- runExceptT $ do
-        request <- parseOffChainUrl (OffChainPoolUrl poolUrl)
+        request <- parseOffChainUrl False (OffChainPoolUrl poolUrl)
         httpGetOffChainPoolData manager request poolUrl mHash
       case eres of
         Left err -> do

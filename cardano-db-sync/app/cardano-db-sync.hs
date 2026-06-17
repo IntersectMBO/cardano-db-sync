@@ -103,6 +103,7 @@ pRunDbSyncNode = do
     <*> pForceIndexes
     <*> pHasInOut
     <*> optional pRollbackSlotNo
+    <*> pAllowPrivateOffChainUrls
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -160,6 +161,19 @@ pHasCache =
     False
     ( Opt.long "disable-cache"
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
+    )
+
+pAllowPrivateOffChainUrls :: Parser Bool
+pAllowPrivateOffChainUrls =
+  Opt.flag
+    False
+    True
+    ( Opt.long "allow-private-offchain-urls"
+        <> Opt.help
+          ( "Allow the off-chain pool and vote metadata fetchers to connect to "
+              <> "URLs whose host or resolved IP is in a private, loopback, or "
+              <> "link-local range. Intended for local-cluster testing; off by default."
+          )
     )
 
 pSocketPath :: Parser SocketPath

@@ -71,6 +71,11 @@ data SyncOptions = SyncOptions
   , soptPruneConsumeMigration :: !DB.PruneConsumeMigration
   , soptInsertOptions :: !InsertOptions
   , soptSnapshotInterval :: !SnapshotIntervalConfig
+  , soptAllowPrivateOffChainUrls :: !Bool
+  -- ^ When 'True', the off-chain HTTP fetcher accepts URLs whose host or
+  -- resolved IP is in a private / loopback / link-local range. Set from
+  -- the @--allow-private-offchain-urls@ CLI flag; off by default. Intended
+  -- for local-cluster testing only.
   }
   deriving (Show)
 

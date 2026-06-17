@@ -325,6 +325,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpForceIndexes = claForceIndexes
       , enpHasInOut = True
       , enpMaybeRollback = Nothing
+      , enpAllowPrivateOffChainUrls = False
       }
 
 ------------------------------------------------------------------------------

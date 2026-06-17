@@ -78,6 +78,7 @@ syncNodeParams =
     <*> Gen.bool
     <*> Gen.bool
     <*> pure Nothing
+    <*> Gen.bool
 
 syncNodeConfig :: Logging.Configuration -> Gen SyncNodeConfig
 syncNodeConfig loggingCfg =
