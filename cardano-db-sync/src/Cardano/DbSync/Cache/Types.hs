@@ -11,9 +11,7 @@ module Cardano.DbSync.Cache.Types (
   CacheStatus (..),
   CacheCapacity (..),
   CacheAction (..),
-  CacheEpoch (..),
   CacheInternal (..),
-  EpochBlockDiff (..),
   StakeCache (..),
   StakePoolCache,
 
@@ -45,8 +43,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   readTVarIO,
  )
 import qualified Data.Map.Strict as Map
-import Data.Time.Clock (UTCTime)
-import Data.WideWord.Word128 (Word128)
 
 type StakePoolCache = Map PoolKeyHash DB.PoolHashId
 
@@ -79,7 +75,6 @@ data CacheInternal = CacheInternal
   , cDatum :: !(StrictTVar IO (LRUCache DataHash DB.DatumId))
   , cMultiAssets :: !(StrictTVar IO (LRUCache (PolicyID, AssetName) DB.MultiAssetId))
   , cPrevBlock :: !(StrictTVar IO (Maybe (DB.BlockId, ByteString)))
-  , cEpoch :: !(StrictTVar IO CacheEpoch)
   , cAddress :: !(StrictTVar IO (LRUCache ByteString DB.AddressId))
   , cTxIds :: !(StrictTVar IO (FIFOCache Ledger.TxId DB.TxId))
   , -- Optimisation target sizes for Map-based caches
@@ -116,25 +111,6 @@ data CacheCapacity = CacheCapacity
     cacheOptimisePools :: !Word64
   , cacheOptimiseStake :: !Word64
   }
-
--- When inserting Txs and Blocks we also caculate values which can later be used when calculating a Epochs.
--- For this reason we store these values in cache.
-data EpochBlockDiff = EpochBlockDiff
-  { ebdBlockId :: !DB.BlockId
-  -- ^ The blockId of the current block, this is used as the key for MapEpoch.
-  , ebdFees :: !Word64
-  , ebdOutSum :: !Word128
-  , ebdTxCount :: !Word64
-  , ebdEpochNo :: !Word64
-  , ebdTime :: !UTCTime
-  }
-  deriving (Show)
-
-data CacheEpoch = CacheEpoch
-  { ceMapEpoch :: !(Map DB.BlockId DB.Epoch)
-  , ceEpochBlockDiff :: !(Maybe EpochBlockDiff)
-  }
-  deriving (Show)
 
 textShowCacheStats :: CacheStatistics -> CacheStatus -> IO Text
 textShowCacheStats _ NoCache = pure "No Caches"
@@ -229,7 +205,6 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
   cAddress <- newTVarIO (LRU.empty cacheCapacityAddress)
   cMultiAssets <- newTVarIO (LRU.empty cacheCapacityMultiAsset)
   cPrevBlock <- newTVarIO Nothing
-  cEpoch <- newTVarIO initCacheEpoch
   cTxIds <- newTVarIO (FIFO.empty cacheCapacityTx)
 
   pure
@@ -241,7 +216,6 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
       , cDatum = cDatum
       , cMultiAssets = cMultiAssets
       , cPrevBlock = cPrevBlock
-      , cEpoch = cEpoch
       , cAddress = cAddress
       , cTxIds = cTxIds
       , cOptimisePools = cacheOptimisePools
@@ -250,9 +224,6 @@ newEmptyCache CacheCapacity {..} = liftIO $ do
 
 initCacheStatistics :: CacheStatistics
 initCacheStatistics = CacheStatistics 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-
-initCacheEpoch :: CacheEpoch
-initCacheEpoch = CacheEpoch mempty Nothing
 
 shouldCache :: CacheAction -> Bool
 shouldCache = \case

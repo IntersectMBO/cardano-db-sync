@@ -3,11 +3,11 @@ module Test.Cardano.Db.Mock.Unit.Conway (unitTests) where
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Prelude
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
-import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.EpochDisabled as EpochDisabled
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Schema as Schema
+import qualified Test.Cardano.Db.Mock.Unit.Conway.Epoch as Epoch
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Governance as Governance
 import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
@@ -108,11 +108,15 @@ unitTests iom knownMigrations =
                 "fails if incorrect config file given"
                 $ ConfigFile.checkConfigFileArg iom knownMigrations
             ]
-        , testGroup
-            "disable-epoch"
-            [ test "Epoch doesn't update when disabled" EpochDisabled.checkEpochDisabledArg
-            , test "Epoch updates when enabled" EpochDisabled.checkEpochEnabled
-            ]
+        ]
+    , testGroup
+        "Epoch"
+        [ test "Epoch view is empty when disabled" Epoch.checkEpochDisabledArg
+        , test "Epoch view is populated when enabled" Epoch.checkEpochEnabled
+        , test "Epoch current view updates live within an epoch" Epoch.checkEpochCurrentLiveUpdates
+        , test "Epoch rollback refreshes epoch_finalized" Epoch.checkEpochRollbackStaleFinalized
+        , test "Epoch rollback to first block of epoch" Epoch.checkEpochRollbackToFirstOfEpoch
+        , test "Epoch rollback to last block of epoch" Epoch.checkEpochRollbackToLastOfEpoch
         ]
     , testGroup
         "rollbacks"

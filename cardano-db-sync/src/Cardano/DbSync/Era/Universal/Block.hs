@@ -22,7 +22,7 @@ import Cardano.Prelude
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
+import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (
   cleanCachesForTip,
   insertBlockAndCache,
@@ -30,8 +30,7 @@ import Cardano.DbSync.Cache (
   queryPoolKeyWithCache,
   queryPrevBlockWithCache,
  )
-import Cardano.DbSync.Cache.Epoch (writeEpochBlockDiffToCache)
-import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..), EpochBlockDiff (..))
+import Cardano.DbSync.Cache.Types (CacheAction (..), CacheStatus (..))
 import Cardano.DbSync.DbEvent (liftDbLookup)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Epoch
@@ -100,21 +99,6 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp (Generic.blkEra blk)) mempty zippedTx
 
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
-
-    -- now that we've inserted the Block and all it's txs lets cache what we'll need
-    -- when we later update the epoch values.
-    -- if have --dissable-epoch && --dissable-cache then no need to cache data.
-    when (soptEpochAndCacheEnabled $ envOptions syncEnv) $
-      writeEpochBlockDiffToCache
-        cache
-        EpochBlockDiff
-          { ebdBlockId = blkId
-          , ebdTime = sdSlotTime details
-          , ebdFees = groupedTxFees blockGroupedData
-          , ebdEpochNo = unEpochNo (sdEpochNo details)
-          , ebdOutSum = fromIntegral $ groupedTxOutSum blockGroupedData
-          , ebdTxCount = fromIntegral $ length (Generic.blkTxs blk)
-          }
 
     when withinHalfHour $
       insertReverseIndex blkId minIds

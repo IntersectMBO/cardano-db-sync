@@ -17,8 +17,7 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
-import Cardano.DbSync.Cache (insertAddressUsingCache, tryUpdateCacheTx)
-import Cardano.DbSync.Cache.Epoch (withNoCache)
+import Cardano.DbSync.Cache (insertAddressUsingCache, tryUpdateCacheTx, withNoCache)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
 import Cardano.DbSync.DbEvent (liftDbLookup, runDbSyncTransaction, runDbSyncTransactionNoLogging)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Util as Generic

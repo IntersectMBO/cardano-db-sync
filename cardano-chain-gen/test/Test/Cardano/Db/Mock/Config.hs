@@ -40,6 +40,8 @@ module Test.Cardano.Db.Mock.Config (
   configMetadataDisable,
   configMetadataKeys,
   configPoolStats,
+  configEpochEnable,
+  configEpochDisable,
   mkFingerPrint,
   mkMutableDir,
   mkDBSyncEnv,
@@ -133,7 +135,6 @@ data DBSyncEnv = DBSyncEnv
 
 data CommandLineArgs = CommandLineArgs
   { claConfigFilename :: FilePath
-  , claEpochDisabled :: Bool
   , claHasCache :: Bool
   , claHasLedger :: Bool
   , claForceIndexes :: Bool
@@ -320,7 +321,6 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
       , enpPGPassSource = DB.PGPassCached pgconfig
-      , enpEpochDisabled = claEpochDisabled
       , enpHasCache = claHasCache
       , enpForceIndexes = claForceIndexes
       , enpHasInOut = True
@@ -390,11 +390,18 @@ configPoolStats :: SyncNodeConfig -> SyncNodeConfig
 configPoolStats cfg = do
   cfg {dncInsertOptions = (dncInsertOptions cfg) {sioPoolStats = PoolStatsConfig True}}
 
+configEpochEnable :: SyncNodeConfig -> SyncNodeConfig
+configEpochEnable cfg =
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioEpoch = EpochConfig False}}
+
+configEpochDisable :: SyncNodeConfig -> SyncNodeConfig
+configEpochDisable cfg =
+  cfg {dncInsertOptions = (dncInsertOptions cfg) {sioEpoch = EpochConfig True}}
+
 initCommandLineArgs :: CommandLineArgs
 initCommandLineArgs =
   CommandLineArgs
     { claConfigFilename = "test-db-sync-config.json"
-    , claEpochDisabled = True
     , claHasCache = True
     , claHasLedger = True
     , claForceIndexes = False

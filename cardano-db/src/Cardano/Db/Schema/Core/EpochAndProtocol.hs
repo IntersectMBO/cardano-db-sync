@@ -27,7 +27,6 @@ import Cardano.Db.Types (
   maybeDbWord64Encoder,
   syncStateEncoder,
   word128Decoder,
-  word128Encoder,
  )
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
@@ -37,7 +36,7 @@ import Data.WideWord.Word128 (Word128)
 import Data.Word (Word16, Word64)
 import GHC.Generics (Generic)
 
-import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder, utcTimeAsTimestampEncoder)
+import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
@@ -86,18 +85,6 @@ epochDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochNo
     <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochStartTime
     <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- epochEndTime
-
-epochEncoder :: E.Params Epoch
-epochEncoder =
-  mconcat
-    [ epochOutSum >$< E.param (E.nonNullable word128Encoder)
-    , epochFees >$< dbLovelaceEncoder
-    , epochTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochBlkCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochStartTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
-    , epochEndTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
-    ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
 

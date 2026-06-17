@@ -20,6 +20,7 @@ module Cardano.DbSync.Api (
   runConsumedTxOutMigrationsMaybe,
   runAddJsonbToSchema,
   runRemoveJsonbFromSchema,
+  syncEpochViewConfig,
   getSafeBlockNoDiff,
   getPruneInterval,
   whenConsumeOrPruneTxOut,
@@ -154,6 +155,16 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
       txOutVariantType
       (getSafeBlockNoDiff syncEnv)
       pcm
+
+syncEpochViewConfig :: SyncEnv -> IO ()
+syncEpochViewConfig syncEnv = do
+  let enabled = soptEpochViewEnabled (envOptions syncEnv)
+      trce = getTrace syncEnv
+  DB.runDbDirectSilent (envDbEnv syncEnv) $ DB.setEpochSyncEnabled enabled
+  when enabled $ do
+    logWarning trce "Backfilling epoch_finalized from block/tx; on mainnet this one-time cost can take several minutes."
+    DB.runDbDirectSilent (envDbEnv syncEnv) DB.backfillEpochFinalized
+    logInfo trce "epoch_finalized backfill complete."
 
 runAddJsonbToSchema :: SyncEnv -> IO ()
 runAddJsonbToSchema syncEnv =
