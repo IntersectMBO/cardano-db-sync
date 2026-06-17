@@ -98,19 +98,11 @@ insertForeignKeyMissing = do
     count2 <- countOffChainPoolFetchError
     assertBool (show count2 ++ "/= 0") (count2 == 0)
 
--- | Regression test for issue #1966: re-processing the off-chain metadata of an anchor that is
--- already stored must NOT duplicate its child rows.
---
--- We insert the parent twice (simulating the anchor being fetched twice) and, as production does,
--- insert the DRep child only for the parents reported as newly inserted. The second insert
--- conflicts on @(voting_anchor_id, hash)@ and is skipped, so no second child row is created.
--- A unique anchor (hash + url derived from the current time) keeps the test independent of any
--- rows left by other test cases; assertions are on the row-count delta.
+-- Regression test for #1966: re-fetching an already-stored anchor must not duplicate its children.
 insertOffChainVoteDataNoDuplicateChildren :: IO ()
 insertOffChainVoteDataNoDuplicateChildren = do
   t <- getCurrentTime
-  -- Full timestamp (incl. date) so the anchor is unique per run even when the test DB is reused
-  -- (rows persist: the suite commits and deleteAllBlocks does not cascade to voting_anchor).
+  -- Unique per run so the test is independent of rows left by other cases.
   let stamp = filter (/= ' ') (show t)
       vaHash = BS.take 32 (BS.pack stamp <> BS.replicate 32 'v')
       ocvdHash = BS.take 32 (BS.pack stamp <> BS.replicate 32 'o')
