@@ -39,7 +39,7 @@ BEGIN
       FROM "block" b
       LEFT JOIN "tx" ON tx.block_id = b.id
       WHERE b.epoch_no IS NOT NULL
-        AND b.epoch_no > COALESCE((SELECT MAX("no") FROM "epoch_finalized"), -1)
+        AND NOT EXISTS (SELECT 1 FROM "epoch_finalized" ef WHERE ef.no = b.epoch_no)
         AND (SELECT enabled FROM "epoch_sync_enabled" WHERE singleton = TRUE)
       GROUP BY b.epoch_no ;
 
