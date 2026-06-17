@@ -455,17 +455,8 @@ insertBulkOffChainVoteAuthorsStmt =
 
 --------------------------------------------------------------------------------
 
--- | Bulk-insert @off_chain_vote_data@ rows, returning the natural key + id of only the rows that
--- were *newly* inserted.
---
--- Uses @ON CONFLICT (hash, voting_anchor_id) DO NOTHING RETURNING voting_anchor_id, hash, id@:
--- an anchor whose metadata is already stored conflicts and is skipped, so it is NOT returned.
--- This is what makes off-chain vote insertion idempotent - the caller inserts the child rows
--- (drep data, authors, references, ...) only for the returned (newly-inserted) parents, so
--- re-processing the same anchor never duplicates children (issue #1966).
---
--- The previous behaviour used @DO UPDATE ... RETURNING id@, which returned the existing id on a
--- re-fetch and so caused the children to be inserted again.
+-- ON CONFLICT DO NOTHING, so only newly-inserted rows are returned; the caller inserts children
+-- only for those, keeping re-fetches idempotent (#1966).
 insertBulkOffChainVoteDataReturningNewStmt ::
   HsqlStmt.Statement [SO.OffChainVoteData] [(Id.VotingAnchorId, ByteString, Id.OffChainVoteDataId)]
 insertBulkOffChainVoteDataReturningNewStmt =
@@ -488,7 +479,7 @@ insertBulkOffChainVoteDataReturningNewStmt =
       , map SO.offChainVoteDataIsValid xs
       )
 
-    -- RETURNING voting_anchor_id, hash, id (column order matches the WithResultBulkColumns list).
+    -- Column order matches the RETURNING list above.
     newRowsDecoder :: HsqlD.Result [(Id.VotingAnchorId, ByteString, Id.OffChainVoteDataId)]
     newRowsDecoder =
       HsqlD.rowList $
@@ -545,8 +536,7 @@ insertBulkOffChainVoteDrepDataStmt =
       , map SO.offChainVoteDrepDataImageHash xs
       )
 
--- | Run the bulk DRep-data insert as its own session. Production batches this in a pipeline with
--- the other child inserts; this wrapper exists for callers/tests that insert DRep data directly.
+-- Standalone session wrapper; production batches this in a pipeline with the other child inserts.
 insertBulkOffChainVoteDrepData :: [SO.OffChainVoteDrepData] -> DbM ()
 insertBulkOffChainVoteDrepData xs =
   runSession mkDbCallStack $ HsqlSes.statement xs insertBulkOffChainVoteDrepDataStmt

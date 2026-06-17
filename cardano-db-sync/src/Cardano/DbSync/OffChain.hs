@@ -152,11 +152,8 @@ insertOffChainVoteResults trce resultQueue = do
         insertBulkOffChainVoteFetchErrors errors
       -- Process metadata in a pipeline if any
       unless (null metadataWithAccessors) $ do
-        -- Insert the parent rows and get back, for each NEWLY inserted parent, its accessor
-        -- paired with the new row id. Parents that were already stored are not returned, so we
-        -- never re-insert their child rows (this is the fix for the duplicate-rows bug, #1966).
+        -- Only newly-inserted parents are returned, so we never re-insert their children (#1966).
         newMetadata <- insertMetadataWithIds metadataWithAccessors
-        -- Now prepare all the related data for bulk inserts
         let allGovActions = catMaybes [offChainVoteGovAction acc ocvdId | (acc, ocvdId) <- newMetadata]
             allDrepData = catMaybes [offChainVoteDrep acc ocvdId | (acc, ocvdId) <- newMetadata]
             allAuthors = concatMap (uncurry offChainVoteAuthors) newMetadata
@@ -184,12 +181,7 @@ insertOffChainVoteResults trce resultQueue = do
                   HsqlP.statement allExternalUpdates DB.insertBulkOffChainVoteExternalUpdatesStmt
               pure ()
 
-    -- Insert the off-chain vote metadata rows and return, for each NEWLY inserted parent, its
-    -- accessor paired with the new row id. Anchors whose (voting_anchor_id, hash) is already
-    -- stored are skipped by `insertBulkOffChainVoteDataReturningNew` (ON CONFLICT DO NOTHING) and
-    -- so are not returned, which prevents re-inserting (duplicating) their child rows. Repeats
-    -- within a single batch are collapsed by keying on (voting_anchor_id, hash), and matching is
-    -- by natural key rather than list order, so it is robust to RETURNING ordering.
+    -- Dedup the batch by (voting_anchor_id, hash) and return accessors only for newly-inserted parents.
     insertMetadataWithIds ::
       [(DB.OffChainVoteData, OffChainVoteAccessors)] ->
       DB.DbM [(OffChainVoteAccessors, DB.OffChainVoteDataId)]
