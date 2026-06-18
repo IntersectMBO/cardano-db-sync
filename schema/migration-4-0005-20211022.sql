@@ -1,7 +1,6 @@
 
 -- Indexes which optimize inserting new rewards
 CREATE INDEX IF NOT EXISTS idx_stake_address_view ON stake_address USING hash (view);
-CREATE INDEX IF NOT EXISTS idx_epoch_no ON epoch(no);
 CREATE INDEX IF NOT EXISTS idx_tx_in_redeemer_id ON tx_in (redeemer_id);
 CREATE INDEX IF NOT EXISTS idx_delegation_redeemer_id ON delegation (redeemer_id);
 CREATE INDEX IF NOT EXISTS idx_withdrawal_redeemer_id ON withdrawal (redeemer_id);
