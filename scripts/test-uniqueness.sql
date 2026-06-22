@@ -78,6 +78,7 @@ BEGIN
   _total := _total + 1; _passed := _passed + check_unique('pool_retire', 'announced_tx_id', 'cert_index');
   _total := _total + 1; _passed := _passed + check_unique('pool_relay', 'update_id', 'ipv4', 'ipv6', 'dns_name');
   _total := _total + 1; _passed := _passed + check_unique('pool_owner', 'addr_id', 'pool_update_id');
+  _total := _total + 1; _passed := _passed + check_unique('pool_stat', 'pool_hash_id', 'epoch_no');
 
   -- =====================================================
   -- EPOCH / PROTOCOL PARAMS (dropped in migration-2-0021)
