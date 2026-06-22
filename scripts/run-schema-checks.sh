@@ -15,3 +15,7 @@ psql -d "$DB" -f "$SCRIPTS_DIR/test-referential-integrity.sql"
 echo ""
 echo "Running uniqueness tests on ${DB}..."
 psql -d "$DB" -f "$SCRIPTS_DIR/test-uniqueness.sql"
+
+echo ""
+echo "Running value domain tests on ${DB}..."
+psql -d "$DB" -f "$SCRIPTS_DIR/test-value-domains.sql"
