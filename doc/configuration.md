@@ -322,6 +322,8 @@ can be changed.
  
 When using `consumed` configuration `tx_in` will not be populated. That behaviour can be overridden by setting this value to `true`.
 
+`force_tx_in` only takes effect when `tx_out.value` is `consumed`, `prune`, or `bootstrap`. It is ignored for `enable` and `disable`: `disable` turns off transaction inputs and outputs entirely, so `tx_in` is not populated regardless of this flag, and `enable` already populates `tx_in`.
+
 ### Address Table
 
 `tx_out.use_address_table`
