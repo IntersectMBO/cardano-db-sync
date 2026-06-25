@@ -933,7 +933,7 @@ A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 |-|-|-|
 | `id` | integer (64) |  |
 | `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. This can be null for genesis committees. |
-| `quorum_numerator` | integer (64) | The proposed quorum nominator. |
+| `quorum_numerator` | integer (64) | The proposed quorum numerator. |
 | `quorum_denominator` | integer (64) | The proposed quorum denominator. |
 
 ### `committee_member`
