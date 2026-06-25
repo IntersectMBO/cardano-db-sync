@@ -1,6 +1,6 @@
 # Schema Documentation for cardano-db-sync
 
-**Note:** This file is auto-generated from the documentation in cardano-db/src/Cardano/Db/Schema/BaseSchema.hs by the command `cabal run -- gen-schema-docs doc/schema.md`. This document should only be updated during the release process and updated on the release branch.
+**Note:** This file is maintained manually and should be updated on the release branch whenever the database schema changes. (It was previously auto-generated, but the generator was removed during the Persistent->Hasql migration.)
 
 ### `schema_version`
 
@@ -179,7 +179,37 @@ A table containing metadata about the chain. There will probably only ever be on
 
 ### `epoch`
 
-Aggregation of data within an epoch.
+A view aggregating data within an epoch. As of schema stage-two v49 (migration-2-0049) `epoch` is a view, not a table: the `UNION ALL` of `epoch_finalized` (materialised past epochs) and `epoch_current` (the live, in-progress epoch). It returns rows only when epoch sync is enabled (see `epoch_sync_enabled`); otherwise it is empty.
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `out_sum` | numeric | The sum of the transaction output values (in Lovelace) in this epoch. |
+| `fees` | numeric | The sum of the fees (in Lovelace) in this epoch. |
+| `tx_count` | integer (64) | The number of transactions in this epoch. |
+| `blk_count` | integer (64) | The number of blocks in this epoch. |
+| `no` | integer (64) | The epoch number. |
+| `start_time` | timestamp | The epoch start time. |
+| `end_time` | timestamp | The epoch end time. |
+
+### `epoch_current`
+
+A view computing aggregates for the current (not-yet-finalized) epoch live from `block` and `tx`. Excludes any epoch already present in `epoch_finalized`, and returns rows only when epoch sync is enabled (see `epoch_sync_enabled`).
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) | Synthetic id (epoch number + 1). |
+| `out_sum` | numeric | The sum of the transaction output values (in Lovelace) in this epoch. |
+| `fees` | numeric | The sum of the fees (in Lovelace) in this epoch. |
+| `tx_count` | integer (64) | The number of transactions in this epoch. |
+| `blk_count` | integer (64) | The number of blocks in this epoch. |
+| `no` | integer (64) | The epoch number. |
+| `start_time` | timestamp | The epoch start time. |
+| `end_time` | timestamp | The epoch end time. |
+
+### `epoch_finalized`
+
+Materialised aggregates for finalized (completed) epochs. Together with `epoch_current` it backs the `epoch` view.
 
 * Primary Id: `id`
 
@@ -190,9 +220,20 @@ Aggregation of data within an epoch.
 | `fees` | lovelace | The sum of the fees (in Lovelace) in this epoch. |
 | `tx_count` | word31type | The number of transactions in this epoch. |
 | `blk_count` | word31type | The number of blocks in this epoch. |
-| `no` | word31type | The epoch number. |
+| `no` | word31type | The epoch number (unique). |
 | `start_time` | timestamp | The epoch start time. |
 | `end_time` | timestamp | The epoch end time. |
+
+### `epoch_sync_enabled`
+
+A single-row toggle controlling whether the `epoch` and `epoch_current` views return data.
+
+* Primary Id: `singleton`
+
+| Column name | Type | Description |
+|-|-|-|
+| `singleton` | boolean | Always `TRUE`; enforces a single row. |
+| `enabled` | boolean | Whether epoch aggregation (the `epoch` / `epoch_current` views) is enabled. |
 
 ### `ada_pots`
 
@@ -892,7 +933,7 @@ A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 |-|-|-|
 | `id` | integer (64) |  |
 | `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. This can be null for genesis committees. |
-| `quorum_numerator` | integer (64) | The proposed quorum nominator. |
+| `quorum_numerator` | integer (64) | The proposed quorum numerator. |
 | `quorum_denominator` | integer (64) | The proposed quorum denominator. |
 
 ### `committee_member`
