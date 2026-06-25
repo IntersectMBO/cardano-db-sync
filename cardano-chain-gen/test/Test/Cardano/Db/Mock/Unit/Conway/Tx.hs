@@ -11,6 +11,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Tx (
   addSimpleTxNoLedger,
   addTxTreasuryDonation,
   consumeSameBlock,
+  blockSizeReflectsBlockBody,
   addTxMetadata,
   addTxMetadataDisabled,
   addTxMetadataWhitelist,
@@ -25,9 +26,10 @@ import Cardano.Mock.Forging.Types (UTxOIndex (..))
 import Cardano.Prelude hiding (head)
 import qualified Data.Map as Map
 import Test.Cardano.Db.Mock.Config
+import Test.Cardano.Db.Mock.Examples (mockBlock0)
 import qualified Test.Cardano.Db.Mock.UnifiedApi as UnifiedApi
 import Test.Cardano.Db.Mock.Validate
-import Test.Tasty.HUnit (Assertion ())
+import Test.Tasty.HUnit (Assertion (), assertBool, assertFailure)
 import Prelude (head)
 
 addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
@@ -120,6 +122,47 @@ consumeSameBlock =
     assertTxCount dbSync 13
   where
     testLabel = "conwayConsumeSameBlock"
+
+-- | Regression test for #1451: block.size must be the full block size (header + body),
+-- not just the header size, so a block with txs is larger than an empty one. The
+-- original bug stored the ~constant header size for every block.
+blockSizeReflectsBlockBody :: IOManager -> [(Text, Text)] -> Assertion
+blockSizeReflectsBlockBody =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    void $ UnifiedApi.forgeNextAndSubmit interpreter mockServer mockBlock0
+
+    startDBSync dbSync
+    assertBlockNoBackoff dbSync 1
+    emptySize <- blockSizeOfLatest dbSync
+
+    -- A block with several chained payment txs; its body is well over 200 bytes.
+    void $ UnifiedApi.withConwayFindLeaderAndSubmit interpreter mockServer $ \state' -> do
+      tx0 <- Conway.mkPaymentTx (UTxOIndex 0) (UTxOIndex 1) 20_000 20_000 0 state'
+      let utxo0 = head (Conway.mkUTxOConway tx0)
+      tx1 <- Conway.mkPaymentTx (UTxOPair utxo0) (UTxOIndex 2) 10_000 10_000 0 state'
+      let utxo1 = head (Conway.mkUTxOConway tx1)
+      tx2 <- Conway.mkPaymentTx (UTxOPair utxo1) (UTxOIndex 3) 5_000 500 0 state'
+      pure [tx0, tx1, tx2]
+    assertBlockNoBackoff dbSync 2
+    txSize <- blockSizeOfLatest dbSync
+
+    assertBool "block.size must be populated (non-zero)" (emptySize > 0)
+    assertBool
+      ( "block with txs must be larger than empty block; got empty="
+          <> show emptySize
+          <> " withTxs="
+          <> show txSize
+      )
+      (txSize >= emptySize + 200)
+  where
+    testLabel = "conwayBlockSizeReflectsBlockBody"
+
+blockSizeOfLatest :: DBSyncEnv -> IO Word64
+blockSizeOfLatest dbSync = do
+  mBlock <- runQuery dbSync DB.queryLatestBlock
+  case mBlock of
+    Just block -> pure (DB.blockSize block)
+    Nothing -> assertFailure "expected at least one block in the db"
 
 addTxMetadata :: IOManager -> [(Text, Text)] -> Assertion
 addTxMetadata = do

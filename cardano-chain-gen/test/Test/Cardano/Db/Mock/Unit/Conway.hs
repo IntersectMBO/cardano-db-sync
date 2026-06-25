@@ -148,6 +148,7 @@ unitTests iom knownMigrations =
         , test "simple tx with ledger disabled" Tx.addSimpleTxNoLedger
         , test "tx with treasury donation" Tx.addTxTreasuryDonation
         , test "consume utxo same block" Tx.consumeSameBlock
+        , test "block size reflects block body" Tx.blockSizeReflectsBlockBody
         , test "tx with metadata" Tx.addTxMetadata
         , test "tx with metadata disabled" Tx.addTxMetadataDisabled
         , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
