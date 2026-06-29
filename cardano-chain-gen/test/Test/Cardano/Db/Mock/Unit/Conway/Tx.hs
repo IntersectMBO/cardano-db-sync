@@ -32,9 +32,9 @@ import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion (), assertBool, assertFailure)
 import Prelude (head)
 
-addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTx =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleTx source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge a block
     void $
       UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
@@ -49,9 +49,9 @@ addSimpleTx =
   where
     testLabel = "conwayAddSimpleTx"
 
-addSimpleTxShelley :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTxShelley =
-  withFullConfig shelleyConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleTxShelley :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleTxShelley source =
+  withFullConfig source shelleyConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge a shelley block
     void $
       UnifiedApi.withShelleyFindLeaderAndSubmitTx interpreter mockServer $
@@ -64,9 +64,9 @@ addSimpleTxShelley =
   where
     testLabel = "conwayAddSimpleTxShelley"
 
-addSimpleTxNoLedger :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTxNoLedger = do
-  withCustomConfig args (Just configLedgerIgnore) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleTxNoLedger :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleTxNoLedger source = do
+  withCustomConfig args (Just configLedgerIgnore) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Forge a block
     void $
       UnifiedApi.withConwayFindLeaderAndSubmitTx interpreter mockServer $
@@ -85,9 +85,9 @@ addSimpleTxNoLedger = do
         }
     testLabel = "conwayConfigLedgerDisabled"
 
-addTxTreasuryDonation :: IOManager -> [(Text, Text)] -> Assertion
-addTxTreasuryDonation =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addTxTreasuryDonation :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addTxTreasuryDonation source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -102,11 +102,11 @@ addTxTreasuryDonation =
 
     assertTxCount dbSync 12
   where
-    testLabel = "conwayAddSimpleTx"
+    testLabel = "conwayAddTxTreasuryDonation"
 
-consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-consumeSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+consumeSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+consumeSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some transactions
@@ -126,9 +126,9 @@ consumeSameBlock =
 -- | Regression test for #1451: block.size must be the full block size (header + body),
 -- not just the header size, so a block with txs is larger than an empty one. The
 -- original bug stored the ~constant header size for every block.
-blockSizeReflectsBlockBody :: IOManager -> [(Text, Text)] -> Assertion
-blockSizeReflectsBlockBody =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+blockSizeReflectsBlockBody :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+blockSizeReflectsBlockBody source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ UnifiedApi.forgeNextAndSubmit interpreter mockServer mockBlock0
 
     startDBSync dbSync
@@ -164,9 +164,9 @@ blockSizeOfLatest dbSync = do
     Just block -> pure (DB.blockSize block)
     Nothing -> assertFailure "expected at least one block in the db"
 
-addTxMetadata :: IOManager -> [(Text, Text)] -> Assertion
-addTxMetadata = do
-  withCustomConfigDropDB args (Just configMetadataEnable) cfgDir testLabel $
+addTxMetadata :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addTxMetadata source = do
+  withCustomConfigDropDB args (Just configMetadataEnable) source cfgDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
       -- Add blocks with transactions
@@ -185,9 +185,9 @@ addTxMetadata = do
     testLabel = "conwayConfigMetadataEnabled"
     cfgDir = conwayConfigDir
 
-addTxMetadataWhitelist :: IOManager -> [(Text, Text)] -> Assertion
-addTxMetadataWhitelist = do
-  withCustomConfigDropDB args (Just configMetadataKeys) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+addTxMetadataWhitelist :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addTxMetadataWhitelist source = do
+  withCustomConfigDropDB args (Just configMetadataKeys) source cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add blocks with transactions
@@ -209,9 +209,9 @@ addTxMetadataWhitelist = do
     testLabel = "conwayConfigMetadataKeep"
     cfgDir = conwayConfigDir
 
-addTxMetadataDisabled :: IOManager -> [(Text, Text)] -> Assertion
-addTxMetadataDisabled = do
-  withCustomConfigDropDB args (Just configMetadataDisable) cfgDir testLabel $
+addTxMetadataDisabled :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addTxMetadataDisabled source = do
+  withCustomConfigDropDB args (Just configMetadataDisable) source cfgDir testLabel $
     \interpreter mockServer dbSync -> do
       startDBSync dbSync
       -- Add blocks with transactions

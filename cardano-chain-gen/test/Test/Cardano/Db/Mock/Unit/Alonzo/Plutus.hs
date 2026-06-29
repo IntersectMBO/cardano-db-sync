@@ -82,9 +82,9 @@ import Test.Cardano.Db.Mock.Validate (
 ----------------------------------------------------------------------------------------------------------
 -- Plutus Spend Scripts
 ----------------------------------------------------------------------------------------------------------
-simpleScript :: IOManager -> [(Text, Text)] -> Assertion
-simpleScript =
-  withFullConfigDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+simpleScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+simpleScript source =
+  withFullConfigDropDB source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -120,9 +120,9 @@ simpleScript =
       , Just $ Crypto.hashToBytes (extractHash $ hashData @StandardAlonzo plutusDataList)
       )
 
-_unlockScript :: IOManager -> [(Text, Text)] -> Assertion
-_unlockScript =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+_unlockScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+_unlockScript source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -140,9 +140,9 @@ _unlockScript =
   where
     testLabel = "unlockScript-alonzo"
 
-unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-unlockScriptSameBlock =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+unlockScriptSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+unlockScriptSameBlock source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -157,9 +157,9 @@ unlockScriptSameBlock =
   where
     testLabel = "unlockScriptSameBlock-alonzo"
 
-failedScript :: IOManager -> [(Text, Text)] -> Assertion
-failedScript =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+failedScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+failedScript source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [False] 20000 20000
@@ -175,9 +175,9 @@ failedScript =
   where
     testLabel = "failedScript-alonzo"
 
-failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-failedScriptSameBlock =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+failedScriptSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+failedScriptSameBlock source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -192,9 +192,9 @@ failedScriptSameBlock =
   where
     testLabel = "failedScriptSameBlock-alonzo"
 
-multipleScripts :: IOManager -> [(Text, Text)] -> Assertion
-multipleScripts =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScripts :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScripts source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
@@ -213,9 +213,9 @@ multipleScripts =
   where
     testLabel = "multipleScripts-alonzo"
 
-multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsSameBlock =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsSameBlock source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -231,9 +231,9 @@ multipleScriptsSameBlock =
   where
     testLabel = "multipleScriptsSameBlock-alonzo"
 
-multipleScriptsFailed :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsFailed =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsFailed :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsFailed source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     tx0 <- withAlonzoLedgerState interpreter $ Alonzo.mkLockByScriptTx (UTxOIndex 0) [True, False, True] 20000 20000
@@ -250,9 +250,9 @@ multipleScriptsFailed =
   where
     testLabel = "multipleScriptsFailed-alonzo"
 
-multipleScriptsFailedSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsFailedSameBlock =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsFailedSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsFailedSameBlock source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -271,9 +271,9 @@ multipleScriptsFailedSameBlock =
 -- Plutus Cert Scripts
 ----------------------------------------------------------------------------------------------------------
 
-registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
-registrationScriptTx =
-  withFullConfigDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+registrationScriptTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registrationScriptTx source =
+  withFullConfigDropDB source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $
@@ -284,9 +284,9 @@ registrationScriptTx =
   where
     testLabel = "registrationScriptTx-alonzo"
 
-deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationScriptTx =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationScriptTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationScriptTx source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -299,9 +299,9 @@ deregistrationScriptTx =
   where
     testLabel = "deregistrationScriptTx-alonzo"
 
-deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTxs =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTxs :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTxs source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -317,9 +317,9 @@ deregistrationsScriptTxs =
   where
     testLabel = "deregistrationsScriptTxs-alonzo"
 
-deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTx =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -341,9 +341,9 @@ deregistrationsScriptTx =
     testLabel = "deregistrationsScriptTx-alonzo"
 
 -- Like previous but missing a redeemer. This is a known ledger issue
-deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTx' =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTx' :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx' source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -367,9 +367,9 @@ deregistrationsScriptTx' =
     testLabel = "deregistrationsScriptTx'-alonzo"
 
 -- Like previous but missing the other redeemer. This is a known ledger issue
-deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTx'' =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTx'' :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx'' source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
@@ -394,9 +394,9 @@ deregistrationsScriptTx'' =
 -- Plutus MultiAsset Scripts
 ----------------------------------------------------------------------------------------------------------
 
-mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
-mintMultiAsset =
-  withFullConfigDropDB alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+mintMultiAsset :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mintMultiAsset source =
+  withFullConfigDropDB source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withAlonzoFindLeaderAndSubmitTx interpreter mockServer $ \st -> do
       let val0 = MultiAsset $ Map.singleton (PolicyID alwaysMintScriptHash) (Map.singleton (head assetNames) 1)
@@ -407,9 +407,9 @@ mintMultiAsset =
   where
     testLabel = "mintMultiAsset-alonzo"
 
-mintMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
-mintMultiAssets =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+mintMultiAssets :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mintMultiAssets source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       let assets0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]
@@ -425,9 +425,9 @@ mintMultiAssets =
   where
     testLabel = "mintMultiAssets-alonzo"
 
-swapMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
-swapMultiAssets =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+swapMultiAssets :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+swapMultiAssets source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ withAlonzoFindLeaderAndSubmit interpreter mockServer $ \st -> do
       let assetsMinted0 = Map.fromList [(head assetNames, 10), (assetNames !! 1, 4)]

@@ -49,9 +49,9 @@ import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion (), assertEqual, assertFailure)
 import Prelude ()
 
-configNoPools :: IOManager -> [(Text, Text)] -> Assertion
-configNoPools =
-  withFullConfig "config-conway-no-pools" testLabel $ \_ _ dbSync -> do
+configNoPools :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+configNoPools source =
+  withFullConfig source "config-conway-no-pools" testLabel $ \_ _ dbSync -> do
     startDBSync dbSync
 
     -- Wait for it to sync
@@ -73,9 +73,9 @@ configNoPools =
   where
     testLabel = "conwayConfigNoPools"
 
-configNoStakes :: IOManager -> [(Text, Text)] -> Assertion
-configNoStakes =
-  withFullConfig "config-conway-no-stakes" testLabel $ \interpreter _ dbSync -> do
+configNoStakes :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+configNoStakes source =
+  withFullConfig source "config-conway-no-stakes" testLabel $ \interpreter _ dbSync -> do
     startDBSync dbSync
 
     -- Wait for it to sync
@@ -107,9 +107,9 @@ configNoStakes =
   where
     testLabel = "conwayConfigNoStakes"
 
-poolReg :: IOManager -> [(Text, Text)] -> Assertion
-poolReg =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+poolReg :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolReg source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -143,9 +143,9 @@ poolReg =
     testLabel = "conwayPoolReg"
 
 -- Issue https://github.com/IntersectMBO/cardano-db-sync/issues/997
-nonexistentPoolQuery :: IOManager -> [(Text, Text)] -> Assertion
-nonexistentPoolQuery =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+nonexistentPoolQuery :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+nonexistentPoolQuery source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -164,9 +164,9 @@ nonexistentPoolQuery =
   where
     testLabel = "conwayNonexistentPoolQuery"
 
-poolDeReg :: IOManager -> [(Text, Text)] -> Assertion
-poolDeReg =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+poolDeReg :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolDeReg source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -219,9 +219,9 @@ poolDeReg =
   where
     testLabel = "conwayPoolDeReg"
 
-poolDeRegMany :: IOManager -> [(Text, Text)] -> Assertion
-poolDeRegMany =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+poolDeRegMany :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolDeRegMany source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -317,9 +317,9 @@ poolDeRegMany =
   where
     testLabel = "conwayPoolDeRegMany"
 
-poolDelist :: IOManager -> [(Text, Text)] -> Assertion
-poolDelist =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+poolDelist :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+poolDelist source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -384,9 +384,9 @@ mkPoolDereg ::
   ConwayTxCert ConwayEra
 mkPoolDereg epochNo _ keyHash = ConwayTxCertPool (RetirePool keyHash epochNo)
 
-forkFixedEpoch :: IOManager -> [(Text, Text)] -> Assertion
-forkFixedEpoch =
-  withFullConfigDropDB configDir testLabel $ \interpreter mockServer dbSync -> do
+forkFixedEpoch :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+forkFixedEpoch source =
+  withFullConfigDropDB source configDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add a Babbage tx
@@ -409,9 +409,9 @@ forkFixedEpoch =
     configDir = "config-conway-hf-epoch1"
     testLabel = "conwayForkFixedEpoch"
 
-rollbackFork :: IOManager -> [(Text, Text)] -> Assertion
-rollbackFork =
-  withFullConfig configDir testLabel $ \interpreter mockServer dbSync -> do
+rollbackFork :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackFork source =
+  withFullConfig source configDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a Babbage tx
@@ -442,9 +442,9 @@ rollbackFork =
     configDir = "config-conway-hf-epoch1"
     testLabel = "conwayRollbackFork"
 
-forkParam :: IOManager -> [(Text, Text)] -> Assertion
-forkParam =
-  withFullConfig configDir testLabel $ \interpreter mockServer dbSync -> do
+forkParam :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+forkParam source =
+  withFullConfig source configDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Protocol params aren't added to the DB until the following epoch

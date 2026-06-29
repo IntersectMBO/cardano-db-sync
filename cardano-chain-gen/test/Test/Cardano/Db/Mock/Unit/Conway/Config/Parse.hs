@@ -9,6 +9,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Config.Parse (
   defaultInsertConfig,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
@@ -19,41 +20,41 @@ import Test.Cardano.Db.Mock.Config
 import Test.Tasty.HUnit (Assertion (), assertBool, (@?=))
 import Prelude ()
 
-conwayGenesis :: Assertion
-conwayGenesis = do
+conwayGenesis :: DB.PGPassSource -> Assertion
+conwayGenesis source = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
-  withConfig configDir mutableDir cmdLineArgs cfg (\_ -> pure ())
+  withConfig source configDir mutableDir cmdLineArgs cfg (\_ -> pure ())
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigSimple"
     cmdLineArgs = initCommandLineArgs
 
-missingConwayGenesis :: Assertion
-missingConwayGenesis = do
+missingConwayGenesis :: DB.PGPassSource -> Assertion
+missingConwayGenesis source = do
   res <- try $ do
     cfg <- mkSyncNodeConfig configDir initCommandLineArgs
-    withConfig configDir mutableDir cmdLineArgs cfg pure
+    withConfig source configDir mutableDir cmdLineArgs cfg pure
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
     configDir = "config-conway-missing-genesis"
     mutableDir = mkMutableDir "conwayConfigMissingGenesis"
     cmdLineArgs = initCommandLineArgs
 
-noConwayGenesisHash :: Assertion
-noConwayGenesisHash = do
+noConwayGenesisHash :: DB.PGPassSource -> Assertion
+noConwayGenesisHash source = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let cfg' = cfg {dncConwayGenesisHash = Nothing}
-  withConfig configDir mutableDir initCommandLineArgs cfg' (\_ -> pure ())
+  withConfig source configDir mutableDir initCommandLineArgs cfg' (\_ -> pure ())
   where
     configDir = "config-conway"
     mutableDir = mkMutableDir "conwayConfigNoGenesis"
 
-wrongConwayGenesisHash :: Assertion
-wrongConwayGenesisHash = do
+wrongConwayGenesisHash :: DB.PGPassSource -> Assertion
+wrongConwayGenesisHash source = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   hash <- Aeson.throwDecode "\"0000000000000000000000000000000000000000000000000000000000000000\""
   let cfg' = cfg {dncConwayGenesisHash = Just hash}
-  res <- try (withConfig configDir mutableDir initCommandLineArgs cfg' (\_ -> pure ()))
+  res <- try (withConfig source configDir mutableDir initCommandLineArgs cfg' (\_ -> pure ()))
   assertBool "Not a SyncNodeError" (isConwayConfigError res)
   where
     configDir = "config-conway"
@@ -65,15 +66,15 @@ isConwayConfigError = either isConwayConfigError' (const False)
     isConwayConfigError' (SNErrConwayConfig _ _) = True
     isConwayConfigError' _ = False
 
-defaultInsertConfig :: Assertion
-defaultInsertConfig = do
+defaultInsertConfig :: DB.PGPassSource -> Assertion
+defaultInsertConfig _source = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   dncInsertOptions cfg @?= def
   where
     configDir = "config-conway"
 
-insertConfig :: Assertion
-insertConfig = do
+insertConfig :: DB.PGPassSource -> Assertion
+insertConfig _source = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
         SyncInsertOptions

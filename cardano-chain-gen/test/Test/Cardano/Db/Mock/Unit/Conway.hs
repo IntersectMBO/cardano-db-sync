@@ -1,5 +1,6 @@
 module Test.Cardano.Db.Mock.Unit.Conway (unitTests) where
 
+import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Prelude
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
@@ -18,24 +19,27 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Stake as Stake
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Tx as Tx
 import Test.Cardano.Db.Mock.Validate (expectFailSilent)
-import Test.Tasty (TestTree (), testGroup)
+import Test.Tasty (DependencyType (..), TestTree (), dependentTestGroup)
 import Test.Tasty.HUnit (Assertion (), testCase)
 import Prelude (String ())
 
-unitTests :: IOManager -> [(Text, Text)] -> TestTree
-unitTests iom knownMigrations =
-  testGroup
+unitTests :: IOManager -> [(Text, Text)] -> DB.PGPassSource -> TestTree
+unitTests iom knownMigrations source =
+  dependentTestGroup
     "Conway unit tests"
-    [ testGroup
+    AllFinish
+    [ dependentTestGroup
         "config"
-        [ testCase "conway genesis and hash" Config.conwayGenesis
-        , testCase "missing conway genesis file" Config.missingConwayGenesis
-        , testCase "no conway genesis hash" Config.noConwayGenesisHash
-        , testCase "mismatched conway genesis hash" Config.wrongConwayGenesisHash
-        , testCase "default insert config" Config.defaultInsertConfig
-        , testCase "insert config" Config.insertConfig
-        , testGroup
+        AllFinish
+        [ testCase "conway genesis and hash" (Config.conwayGenesis source)
+        , testCase "missing conway genesis file" (Config.missingConwayGenesis source)
+        , testCase "no conway genesis hash" (Config.noConwayGenesisHash source)
+        , testCase "mismatched conway genesis hash" (Config.wrongConwayGenesisHash source)
+        , testCase "default insert config" (Config.defaultInsertConfig source)
+        , testCase "insert config" (Config.insertConfig source)
+        , dependentTestGroup
             "simple"
+            AllFinish
             [ test "simple forge blocks" Simple.forgeBlocks
             , test "sync one block" Simple.addSimple
             , test "sync small chain" Simple.addSimpleChain
@@ -43,21 +47,24 @@ unitTests iom knownMigrations =
             , test "node restart" Simple.nodeRestart
             , test "node restart boundary" Simple.nodeRestartBoundary
             ]
-        , testGroup
+        , dependentTestGroup
             "jsonb-in-schema"
+            AllFinish
             [ test "jsonb in schema true" Config.configRemoveJsonbFromSchemaEnabled
             , test "jsonb in schema false" Config.configRemoveJsonbFromSchemaDisabled
             , test
                 "remove jsonb from schema and add back"
                 Config.configJsonbInSchemaShouldRemoveThenAdd
             ]
-        , testGroup
+        , dependentTestGroup
             "Schema"
+            AllFinish
             [ test "validate schema table columns" Schema.validateSchemaColumns
             , test "validate schema table columns address variant" Schema.validateVariantAddressSchemaColumns
             ]
-        , testGroup
+        , dependentTestGroup
             "tx-out"
+            AllFinish
             [ test "basic prune" MigrateConsumedPruneTxOut.basicPrune
             , test "prune with simple rollback" MigrateConsumedPruneTxOut.pruneWithSimpleRollback
             , test "prune with full tx rollback" MigrateConsumedPruneTxOut.pruneWithFullTxRollback
@@ -68,16 +75,17 @@ unitTests iom knownMigrations =
             , test "no pruning same block" MigrateConsumedPruneTxOut.noPruneSameBlock
             , expectFailSilent
                 "restart with new consumed set to false"
-                $ MigrateConsumedPruneTxOut.migrateAndPruneRestart iom knownMigrations
+                $ MigrateConsumedPruneTxOut.migrateAndPruneRestart source iom knownMigrations
             , expectFailSilent
                 "set prune flag, restart missing prune flag"
-                $ MigrateConsumedPruneTxOut.pruneRestartMissingFlag iom knownMigrations
+                $ MigrateConsumedPruneTxOut.pruneRestartMissingFlag source iom knownMigrations
             , expectFailSilent
                 "set bootstrap flag, restart missing bootstrap flag"
-                $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag iom knownMigrations
+                $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlag source iom knownMigrations
             ]
-        , testGroup
+        , dependentTestGroup
             "tx-out with use_address_table config"
+            AllFinish
             [ test "basic prune, with use_address_table config" MigrateConsumedPruneTxOut.basicPruneWithAddress
             , test "prune with simple rollback, with use_address_table config" MigrateConsumedPruneTxOut.pruneWithSimpleRollbackWithAddress
             , test "prune with full tx rollback, with use_address_table config" MigrateConsumedPruneTxOut.pruneWithFullTxRollbackWithAddress
@@ -88,29 +96,32 @@ unitTests iom knownMigrations =
             , test "no pruning same block, with use_address_table config" MigrateConsumedPruneTxOut.noPruneSameBlockWithAddress
             , expectFailSilent
                 "restart with new consumed set to false, with use_address_table config"
-                $ MigrateConsumedPruneTxOut.migrateAndPruneRestartWithAddress iom knownMigrations
+                $ MigrateConsumedPruneTxOut.migrateAndPruneRestartWithAddress source iom knownMigrations
             , expectFailSilent
                 "set prune flag, restart missing prune flag, with use_address_table config"
-                $ MigrateConsumedPruneTxOut.pruneRestartMissingFlagWithAddress iom knownMigrations
+                $ MigrateConsumedPruneTxOut.pruneRestartMissingFlagWithAddress source iom knownMigrations
             , expectFailSilent
                 "set bootstrap flag, restart missing bootstrap flag, with use_address_table config"
-                $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlagWithAddress iom knownMigrations
+                $ MigrateConsumedPruneTxOut.bootstrapRestartMissingFlagWithAddress source iom knownMigrations
             , expectFailSilent
                 "populate db then reset with use_address_table config config active"
-                $ MigrateConsumedPruneTxOut.populateDbRestartWithAddressConfig iom knownMigrations
+                $ MigrateConsumedPruneTxOut.populateDbRestartWithAddressConfig source iom knownMigrations
             ]
         ]
-    , testGroup
+    , dependentTestGroup
         "Command Line Arguments"
-        [ testGroup
+        AllFinish
+        [ dependentTestGroup
             "config"
+            AllFinish
             [ expectFailSilent
                 "fails if incorrect config file given"
-                $ ConfigFile.checkConfigFileArg iom knownMigrations
+                $ ConfigFile.checkConfigFileArg source iom knownMigrations
             ]
         ]
-    , testGroup
+    , dependentTestGroup
         "Epoch"
+        AllFinish
         [ test "Epoch view is empty when disabled" Epoch.checkEpochDisabledArg
         , test "Epoch view is populated when enabled" Epoch.checkEpochEnabled
         , test "Epoch current view updates live within an epoch" Epoch.checkEpochCurrentLiveUpdates
@@ -118,8 +129,9 @@ unitTests iom knownMigrations =
         , test "Epoch rollback to first block of epoch" Epoch.checkEpochRollbackToFirstOfEpoch
         , test "Epoch rollback to last block of epoch" Epoch.checkEpochRollbackToLastOfEpoch
         ]
-    , testGroup
+    , dependentTestGroup
         "rollbacks"
+        AllFinish
         [ test "simple rollback" Rollback.simpleRollback
         , test "drepDistr rollback" Rollback.drepDistrRollback
         , test "sync bigger chain" Rollback.bigChain
@@ -136,13 +148,15 @@ unitTests iom knownMigrations =
         , test "pool stat rollback general" Rollback.poolStatRollbackGeneral
         , test "ada pots max supply and rollback" Rollback.adaPots
         ]
-    , testGroup
+    , dependentTestGroup
         "different configs"
+        AllFinish
         [ test "genesis config without pool" Other.configNoPools
         , test "genesis config without stakes" Other.configNoStakes
         ]
-    , testGroup
+    , dependentTestGroup
         "blocks with txs"
+        AllFinish
         [ test "simple tx" Tx.addSimpleTx
         , test "simple tx in Shelley era" Tx.addSimpleTxShelley
         , test "simple tx with ledger disabled" Tx.addSimpleTxNoLedger
@@ -153,8 +167,9 @@ unitTests iom knownMigrations =
         , test "tx with metadata disabled" Tx.addTxMetadataDisabled
         , test "tx with metadata whitelist" Tx.addTxMetadataWhitelist
         ]
-    , testGroup
+    , dependentTestGroup
         "stake addresses"
+        AllFinish
         [ test "(de)registrations" Stake.registrationTx
         , test "(de)registrations in same block" Stake.registrationsSameBlock
         , test "(de)registrations in same tx" Stake.registrationsSameTx
@@ -165,8 +180,9 @@ unitTests iom knownMigrations =
         , test "register stake creds" Stake.registerStakeCreds
         , test "register stake creds with shelley disabled" Stake.registerStakeCredsNoShelley
         ]
-    , testGroup
+    , dependentTestGroup
         "stake distribution"
+        AllFinish
         [ test "stake distribution from genesis" Stake.stakeDistGenesis
         , test "2000 delegations" Stake.delegations2000
         , test "2001 delegations" Stake.delegations2001
@@ -174,14 +190,16 @@ unitTests iom knownMigrations =
         , test "many delegations" Stake.delegationsMany
         , test "many delegations, sparse chain" Stake.delegationsManyNotDense
         ]
-    , testGroup
+    , dependentTestGroup
         "rewards"
+        AllFinish
         [ test "rewards simple" Reward.simpleRewards
         , test "shelley rewards from multiple sources" Reward.rewardsShelley
         , test "rollback on epoch boundary" Reward.rollbackBoundary
         ]
-    , testGroup
+    , dependentTestGroup
         "plutus send scripts"
+        AllFinish
         [ test "simple script lock" Plutus.simpleScript
         , test "unlock script in same block" Plutus.unlockScriptSameBlock
         , test "unlock script with plutus disabled" Plutus.unlockScriptNoPlutus
@@ -196,7 +214,7 @@ unitTests iom knownMigrations =
         ]
     , -- TODO: re-enable after fixing credential format for cardano-node 10.7.1
       -- PraosCredentialsSource vs NodeOperationalCertificate mismatch
-      -- testGroup
+      -- dependentTestGroup
       --   "plutus cert scripts"
       --   [ test "stake scripts" Plutus.registrationScriptTx
       --   , test "stake scripts deregistration" Plutus.deregistrationScriptTx
@@ -209,14 +227,14 @@ unitTests iom knownMigrations =
       --       "multiple stake scripts deregistration in same tx missing redeemer 2"
       --       Plutus.deregistrationsScriptTx''
       --   ]
-      -- , testGroup
+      -- , dependentTestGroup
       --   "MultiAssets plutus scripts"
       --   [ test "mint simple multi asset" Plutus.mintMultiAsset
       --   , test "mint many multi assets" Plutus.mintMultiAssets
       --   , test "swap many multi assets" Plutus.swapMultiAssets
       --   , test "swap with multi assets disabled" Plutus.swapMultiAssetsDisabled
       --   ]
-      -- , testGroup
+      -- , dependentTestGroup
       --   "Pools and smash"
       --   [ test "pool registration" Other.poolReg
       --   , test "query pool that's not registered" Other.nonexistentPoolQuery
@@ -224,8 +242,9 @@ unitTests iom knownMigrations =
       --   , test "multiple deregistration" Other.poolDeRegMany
       --   , test "delist pool" Other.poolDelist
       --   ]
-      testGroup
+      dependentTestGroup
         "Inline and reference"
+        AllFinish
         [ test "spend inline datum" InlineRef.unlockDatumOutput
         , test "spend inline datum same block" InlineRef.unlockDatumOutputSameBlock
         , test "inline datum with noncanonical CBOR" InlineRef.inlineDatumCBOR
@@ -250,14 +269,16 @@ unitTests iom knownMigrations =
         , test "reference script as minting" InlineRef.referenceMintingScript
         , test "reference script as delegation" InlineRef.referenceDelegation
         ]
-    , testGroup
+    , dependentTestGroup
         "Hard Fork"
+        AllFinish
         [ test "fork from Babbage to Conway fixed epoch" Other.forkFixedEpoch
         , test "fork from Babbage to Conway and rollback" Other.rollbackFork
         , test "fork with protocol change proposal" Other.forkParam
         ]
-    , testGroup
+    , dependentTestGroup
         "Governance"
+        AllFinish
         [ test "drep distribution" Governance.drepDistr
         , test "new committee member" Governance.newCommittee
         , test "chained committee proposals" Governance.chainedNewCommittee
@@ -273,5 +294,5 @@ unitTests iom knownMigrations =
         ]
     ]
   where
-    test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
-    test str action = testCase str (action iom knownMigrations)
+    test :: String -> (DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion) -> TestTree
+    test str action = testCase str (action source iom knownMigrations)

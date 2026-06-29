@@ -21,6 +21,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference (
   referenceDelegation,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..), PolicyID (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), ServerHandle ())
@@ -38,9 +39,9 @@ import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion ())
 import Prelude (head, (!!))
 
-unlockDatumOutput :: IOManager -> [(Text, Text)] -> Assertion
-unlockDatumOutput =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+unlockDatumOutput :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+unlockDatumOutput source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block
@@ -80,9 +81,9 @@ unlockDatumOutput =
   where
     testLabel = "conwayUnlockDatumOutput"
 
-unlockDatumOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-unlockDatumOutputSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+unlockDatumOutputSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+unlockDatumOutputSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake creds
@@ -131,9 +132,9 @@ unlockDatumOutputSameBlock =
   where
     testLabel = "conwayUnlockDatumOutputSameBlock"
 
-inlineDatumCBOR :: IOManager -> [(Text, Text)] -> Assertion
-inlineDatumCBOR =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+inlineDatumCBOR :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+inlineDatumCBOR source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -162,9 +163,9 @@ inlineDatumCBOR =
   where
     testLabel = "conwayInlineDatumCBOR"
 
-spendRefScript :: IOManager -> [(Text, Text)] -> Assertion
-spendRefScript =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+spendRefScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+spendRefScript source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a blockr with stake credentials
@@ -207,9 +208,9 @@ spendRefScript =
   where
     testLabel = "conwayRefScript"
 
-spendRefScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-spendRefScriptSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+spendRefScriptSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+spendRefScriptSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -256,9 +257,9 @@ spendRefScriptSameBlock =
   where
     testLabel = "conwaySpendRefScriptSameBlock"
 
-spendCollateralOutput :: IOManager -> [(Text, Text)] -> Assertion
-spendCollateralOutput =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+spendCollateralOutput :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+spendCollateralOutput source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -314,9 +315,9 @@ spendCollateralOutput =
   where
     testLabel = "conwaySpendCollateralOutput"
 
-spendCollateralOutputRollback :: IOManager -> [(Text, Text)] -> Assertion
-spendCollateralOutputRollback =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+spendCollateralOutputRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+spendCollateralOutputRollback source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -383,9 +384,9 @@ spendCollateralOutputRollback =
       assertBlockNoBackoff dbSync (n + 4)
       assertBabbageCounts dbSync (1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1)
 
-spendCollateralOutputSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-spendCollateralOutputSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+spendCollateralOutputSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+spendCollateralOutputSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -439,9 +440,9 @@ spendCollateralOutputSameBlock =
   where
     testLabel = "conwaySpindCollateralOutputSameBlock"
 
-referenceInputUnspend :: IOManager -> [(Text, Text)] -> Assertion
-referenceInputUnspend =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+referenceInputUnspend :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+referenceInputUnspend source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -486,9 +487,9 @@ referenceInputUnspend =
   where
     testLabel = "conwayReferenceInputUnspend"
 
-supplyScriptsTwoWays :: IOManager -> [(Text, Text)] -> Assertion
-supplyScriptsTwoWays =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+supplyScriptsTwoWays :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+supplyScriptsTwoWays source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -529,9 +530,9 @@ supplyScriptsTwoWays =
   where
     testLabel = "conwaySupplyScriptToWays"
 
-supplyScriptsTwoWaysSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-supplyScriptsTwoWaysSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+supplyScriptsTwoWaysSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+supplyScriptsTwoWaysSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -575,9 +576,9 @@ supplyScriptsTwoWaysSameBlock =
   where
     testLabel = "conwaySupplyScriptsTwoWaysSameBlock"
 
-referenceMintingScript :: IOManager -> [(Text, Text)] -> Assertion
-referenceMintingScript =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+referenceMintingScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+referenceMintingScript source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -623,9 +624,9 @@ referenceMintingScript =
     testLabel = "conwayReferenceMintingScript"
 
 -- TODO[sgillespie]: This looks the same as @referenceMintingScript@
-referenceDelegation :: IOManager -> [(Text, Text)] -> Assertion
-referenceDelegation =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+referenceDelegation :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+referenceDelegation source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials

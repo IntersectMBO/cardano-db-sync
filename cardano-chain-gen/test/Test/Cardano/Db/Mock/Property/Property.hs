@@ -15,6 +15,7 @@ module Test.Cardano.Db.Mock.Property.Property (
   prop_empty_blocks,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Mock.Chain
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
@@ -288,12 +289,12 @@ sm interpreter mockServer dbSync =
     mock
     noCleanup
 
-prop_empty_blocks :: IOManager -> [(Text, Text)] -> Property
-prop_empty_blocks iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
+prop_empty_blocks :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Property
+prop_empty_blocks source iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
   (hist, res) <- run $ runAction $ \interpreter mockServer dbSync -> do
     (hist, _model, res) <- runCommands' (sm interpreter mockServer dbSync) cmds
     pure (hist, res)
   prettyCommands smSymbolic hist (checkCommandNames cmds (res === Ok))
   where
     smSymbolic = sm (error "inter") (error "mockServer") (error "dbSync")
-    runAction action = withFullConfig' (WithConfigArgs False False False) initCommandLineArgs Nothing "config" "qsm" action iom knownMigrations
+    runAction action = withFullConfig' (WithConfigArgs False False False) initCommandLineArgs Nothing source "config" "qsm" action iom knownMigrations

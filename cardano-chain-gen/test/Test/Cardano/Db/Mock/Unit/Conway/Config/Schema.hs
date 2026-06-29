@@ -25,9 +25,9 @@ import Test.Tasty.HUnit (Assertion, assertBool)
 ------------------------------------------------------------------------------
 
 -- | Test all table schemas for column compatibility
-validateSchemaColumns :: IOManager -> [(Text, Text)] -> Assertion
-validateSchemaColumns =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+validateSchemaColumns :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+validateSchemaColumns source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Setup test data
@@ -106,9 +106,9 @@ validateSchemaColumns =
   where
     testLabel = "validateSchemaColumns"
 
-validateVariantAddressSchemaColumns :: IOManager -> [(Text, Text)] -> Assertion
-validateVariantAddressSchemaColumns =
-  withCustomConfigDropDB args (Just $ configPruneForceTxIn True) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+validateVariantAddressSchemaColumns :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+validateVariantAddressSchemaColumns source =
+  withCustomConfigDropDB args (Just $ configPruneForceTxIn True) source cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Setup test data

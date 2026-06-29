@@ -5,6 +5,7 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Simple (
   restartDBSync,
 ) where
 
+import qualified Cardano.Db as DB
 import Control.Concurrent.Class.MonadSTM.Strict (MonadSTM (atomically))
 import Control.Monad (void)
 import Data.Text (Text)
@@ -20,9 +21,9 @@ import Test.Cardano.Db.Mock.Examples (mockBlock0, mockBlock1, mockBlock2)
 import Test.Cardano.Db.Mock.UnifiedApi (forgeNextAndSubmit)
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 
-forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
-forgeBlocks = do
-  withFullConfigDropDB alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
+forgeBlocks :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+forgeBlocks source = do
+  withFullConfigDropDB source alonzoConfigDir testLabel $ \interpreter _mockServer _dbSync -> do
     _block0 <- forgeNext interpreter mockBlock0
     _block1 <- forgeNext interpreter mockBlock1
     block2 <- forgeNext interpreter mockBlock2
@@ -32,9 +33,9 @@ forgeBlocks = do
   where
     testLabel = "forgeBlocks-alonzo"
 
-addSimple :: IOManager -> [(Text, Text)] -> Assertion
-addSimple =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimple :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimple source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Given a mock block, translate it into a real block and submit it to the
     -- chainsync server
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
@@ -44,9 +45,9 @@ addSimple =
   where
     testLabel = "addSimple-alonzo"
 
-addSimpleChain :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleChain =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleChain :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleChain source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- translate the blocks to real Cardano blocks.
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -61,9 +62,9 @@ addSimpleChain =
   where
     testLabel = "addSimpleChain-alonzo"
 
-restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
-restartDBSync =
-  withFullConfig alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
+restartDBSync :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+restartDBSync source =
+  withFullConfig source alonzoConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
     -- start db-sync and let it sync
     startDBSync dbSync

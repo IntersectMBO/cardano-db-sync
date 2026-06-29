@@ -10,6 +10,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Tx (
   consumeSameBlock,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
 import qualified Cardano.Mock.Forging.Tx.Shelley as Shelley
@@ -25,9 +26,9 @@ import Test.Cardano.Db.Mock.UnifiedApi (
 import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion)
 
-addSimpleTx :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTx =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+addSimpleTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleTx source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     -- translate the block to a real Cardano block.
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -38,9 +39,9 @@ addSimpleTx =
   where
     testLabel = "addSimpleTx"
 
-addSimpleTxShelley :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleTxShelley =
-  withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSyncEnv -> do
+addSimpleTxShelley :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleTxShelley source =
+  withFullConfig source "config-shelley" testLabel $ \interpreter mockServer dbSyncEnv -> do
     -- translate the block to a real Cardano block.
     void $
       withShelleyFindLeaderAndSubmitTx interpreter mockServer $
@@ -52,9 +53,9 @@ addSimpleTxShelley =
   where
     testLabel = "addSimpleTxShelley"
 
-consumeSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-consumeSameBlock =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
+consumeSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+consumeSameBlock source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
 
     void $ withBabbageFindLeaderAndSubmit interpreter mockServer $ \st -> do

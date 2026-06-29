@@ -3,6 +3,7 @@ module Test.Cardano.Db.Mock.Unit.Alonzo.Config (
   insertConfig,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Types
 import Cardano.Prelude
@@ -11,13 +12,13 @@ import Test.Cardano.Db.Mock.Config
 import Test.Tasty.HUnit (Assertion (), (@?=))
 import Prelude ()
 
-defaultInsertConfig :: Assertion
-defaultInsertConfig = do
+defaultInsertConfig :: DB.PGPassSource -> Assertion
+defaultInsertConfig _source = do
   cfg <- mkSyncNodeConfig alonzoConfigDir initCommandLineArgs
   dncInsertOptions cfg @?= def
 
-insertConfig :: Assertion
-insertConfig = do
+insertConfig :: DB.PGPassSource -> Assertion
+insertConfig _source = do
   cfg <- mkSyncNodeConfig configDir initCommandLineArgs
   let expected =
         SyncInsertOptions

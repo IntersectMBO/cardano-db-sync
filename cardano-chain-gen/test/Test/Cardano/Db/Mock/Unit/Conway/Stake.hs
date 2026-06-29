@@ -41,9 +41,9 @@ import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion (), assertBool)
 import Prelude ()
 
-registrationTx :: IOManager -> [(Text, Text)] -> Assertion
-registrationTx =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+registrationTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registrationTx source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge some registration txs
@@ -70,9 +70,9 @@ registrationTx =
   where
     testLabel = "conwayRegistrationTx"
 
-registrationsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-registrationsSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+registrationsSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registrationsSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with some registrations
@@ -98,9 +98,9 @@ registrationsSameBlock =
   where
     testLabel = "conwayRegistrationsSameBlock"
 
-registrationsSameTx :: IOManager -> [(Text, Text)] -> Assertion
-registrationsSameTx =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+registrationsSameTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registrationsSameTx source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a transaction with some registrations
@@ -120,9 +120,9 @@ registrationsSameTx =
   where
     testLabel = "conwayRegistrationsSameTx"
 
-stakeAddressPtr :: IOManager -> [(Text, Text)] -> Assertion
-stakeAddressPtr =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+stakeAddressPtr :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtr source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a cert
@@ -142,9 +142,9 @@ stakeAddressPtr =
   where
     testLabel = "conwayStakeAddressPtr"
 
-stakeAddressPtrDereg :: IOManager -> [(Text, Text)] -> Assertion
-stakeAddressPtrDereg =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+stakeAddressPtrDereg :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtrDereg source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a registration
@@ -200,9 +200,9 @@ stakeAddressPtrDereg =
   where
     testLabel = "conwayStakeAddressPtrDereg"
 
-stakeAddressPtrUseBefore :: IOManager -> [(Text, Text)] -> Assertion
-stakeAddressPtrUseBefore =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+stakeAddressPtrUseBefore :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtrUseBefore source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Use a stake credential
@@ -233,9 +233,9 @@ stakeAddressPtrUseBefore =
 -- | Test that Pointer addresses in Conway era have NULL stake_address_id
 -- This verifies the fix for issue #2051: Pointer addresses in Conway era
 -- should be treated as Enterprise addresses with no stake key association
-stakeAddressPtrNullInConway :: IOManager -> [(Text, Text)] -> Assertion
-stakeAddressPtrNullInConway =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+stakeAddressPtrNullInConway :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+stakeAddressPtrNullInConway source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a stake registration cert
@@ -267,9 +267,9 @@ stakeAddressPtrNullInConway =
   where
     testLabel = "conwayStakeAddressPtrNullInConway"
 
-stakeDistGenesis :: IOManager -> [(Text, Text)] -> Assertion
-stakeDistGenesis =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+stakeDistGenesis :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+stakeDistGenesis source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge an entire epoch
@@ -282,9 +282,9 @@ stakeDistGenesis =
   where
     testLabel = "conwayStakeDistGenesis"
 
-delegations2000 :: IOManager -> [(Text, Text)] -> Assertion
-delegations2000 =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+delegations2000 :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+delegations2000 source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- We want exactly 2000 delegations, 5 from genesis and 1995 manually added
@@ -310,9 +310,9 @@ delegations2000 =
   where
     testLabel = "conwayDelegations2000"
 
-delegations2001 :: IOManager -> [(Text, Text)] -> Assertion
-delegations2001 =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+delegations2001 :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+delegations2001 source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- We want exactly 2001 delegations, 5 from genesis and 1996 manually added
@@ -337,9 +337,9 @@ delegations2001 =
   where
     testLabel = "conwayDelegations2001"
 
-delegations8000 :: IOManager -> [(Text, Text)] -> Assertion
-delegations8000 =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+delegations8000 :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+delegations8000 source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- We want exactly 8000 delegations, 5 from genesis and 7995 manually added
@@ -369,9 +369,9 @@ delegations8000 =
   where
     testLabel = "conwayDelegations8000"
 
-delegationsMany :: IOManager -> [(Text, Text)] -> Assertion
-delegationsMany =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+delegationsMany :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+delegationsMany source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge many delegations
@@ -400,9 +400,9 @@ delegationsMany =
   where
     testLabel = "conwayDelegationsMany"
 
-delegationsManyNotDense :: IOManager -> [(Text, Text)] -> Assertion
-delegationsManyNotDense =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+delegationsManyNotDense :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+delegationsManyNotDense source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge many delegations
@@ -433,9 +433,9 @@ delegationsManyNotDense =
   where
     testLabel = "conwayDelegationsManyNotDense"
 
-registerStakeCreds :: IOManager -> [(Text, Text)] -> Assertion
-registerStakeCreds = do
-  withCustomConfig args Nothing cfgDir testLabel $ \interpreter mockServer dbSync -> do
+registerStakeCreds :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registerStakeCreds source = do
+  withCustomConfig args Nothing source cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- These will be saved
@@ -455,9 +455,9 @@ registerStakeCreds = do
     testLabel = "conwayConfigShelleyEnabled"
     cfgDir = conwayConfigDir
 
-registerStakeCredsNoShelley :: IOManager -> [(Text, Text)] -> Assertion
-registerStakeCredsNoShelley = do
-  withCustomConfig args (Just configShelleyDisable) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+registerStakeCredsNoShelley :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registerStakeCredsNoShelley source = do
+  withCustomConfig args (Just configShelleyDisable) source cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- These should not be saved when shelley is disabled
