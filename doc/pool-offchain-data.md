@@ -21,27 +21,34 @@ The basic operation is a follows:
 
 ### http-get-json-metadata
 
-This is an testing/debugging program. It uses *the same code* to fetch the offchain metadata as
-`cardano-db-sync`. It is not code copy, this application calls the function in `db-sync` that does
-the actual fetch (the function is named `httpGetOffChainData`).
+This is a testing/debugging program. It uses *the same code* to fetch the offchain metadata as
+`cardano-db-sync`. It is not a code copy, this application calls the functions in `db-sync` that do
+the actual fetch (`httpGetOffChainPoolData` and `httpGetOffChainVoteData` in
+`Cardano.DbSync.OffChain.Http`).
 
-On success, this program will print "Success" and then print the retrieved JSON.
+On a successful network fetch (pool metadata, or governance metadata with the `url` keyword) this
+program prints "Success" and then the retrieved JSON. On failure, the error message is printed.
+Reading governance metadata from a local file uses a different, more verbose output - see the
+governance section below.
 
-On failure, the error message is printed.
+It is included in the release tarball alongside `cardano-db-sync`, or it can be run from the
+`cardano-db-sync` git checkout with `cabal run`.
 
-The program can be run from the `cardano-db-sync` git checkout as:
+#### Pool metadata
+
+With no type keyword, the program fetches and parses pool metadata. The program can be run as:
 ```
 > cabal run -- http-get-json-metadata <url>
 ```
 
-If you also want to check the JSON meta data hash, the program can be run as:
+If you also want to check the JSON metadata hash, the program can be run as:
 ```
 > cabal run -- http-get-json-metadata <url> <hash>
 ```
 where the hash is specified as a string of hexadecimal digits.
 
 If you don't know the hash, you can provide an empty string for this field and the program will
-print the execpted hash in the error message. Eg:
+print the expected hash in the error message. Eg:
 ```
 > cabal run -- http-get-json-metadata https://git.io/Jt01O ""
 Up to date
@@ -58,20 +65,80 @@ Success
 "homepage":"https://cardano.afterschoollabs.io","name":"After School Labs","ticker":"ASLAB"}
 ```
 
-**Note:** Up until now (2022/09/30) the code to fetch the pool offchain metadata did not check the
-"content-type" field in the response headers, but now it does. The rules for how this field is
-handled is as follows:
+#### Governance (vote) metadata
+
+Adding a type keyword switches the program to governance metadata, parsed according to CIP-100,
+CIP-108 and CIP-119. This is the way to check how `db-sync` treats a given anchor before it shows up
+in the database. The type keyword selects the anchor type:
+
+* `drep` - DRep registration metadata
+* `ga` - governance action metadata
+* `vote` - vote metadata
+* `committee_dereg` - committee member deregistration metadata
+* `const` - constitution metadata
+* `other` - any other anchor
+
+Add the `url` keyword to fetch over the network, together with one type keyword:
+```
+> cabal run -- http-get-json-metadata url drep <url>
+> cabal run -- http-get-json-metadata url drep <url> <hash>
+```
+
+Without the `url` keyword, a type keyword reads from a local file instead of fetching. The path
+takes the place of the URL:
+```
+> cabal run -- http-get-json-metadata drep ./drep-metadata.json
+```
+Local-file mode prints a lower-level debug dump rather than the `Success` line used by the network
+fetch. In order, it prints: the parsed metadata as an internal record, the same file as a raw JSON
+value, the file's computed blake2b-256 hash, any validation warning (`Nothing` if none), and finally
+`Is valid JSON: True`. The `Is valid JSON` line is the pass/fail signal here, and the printed hash is
+the anchor's hash - useful when you have the file but not the hash. If you pass an expected hash as a
+trailing argument, a mismatch is reported in the warning slot.
+
+#### `ipfs://` URLs
+
+Many real governance anchors use an `ipfs://<CID>` URL rather than an `https://` one. The running
+`db-sync` daemon resolves these through its `ipfs_gateway` config field (a list of gateway prefixes,
+default `["https://ipfs.io/ipfs"]`), but this debug tool passes an *empty* gateway list, so it
+cannot resolve `ipfs://` on its own. Fetching one directly fails with:
+```
+Error Offchain Voting Anchor: No ipfs_gateway provided in the db-sync config
+```
+To test an `ipfs://` anchor, rewrite it into a plain gateway URL yourself before passing it in -
+replace the `ipfs://` scheme with a gateway prefix. The content (and therefore the hash) is the
+same, so any hash check still applies:
+```
+ipfs://QmXdfDSSkR8TYBntMT4nuTL9sE9E44FJnpWVpaY8ZTfwjj
+    ->  https://ipfs.io/ipfs/QmXdfDSSkR8TYBntMT4nuTL9sE9E44FJnpWVpaY8ZTfwjj
+```
+Note that public IPFS gateways are frequently rate-limited or briefly unavailable (HTTP 429 / 504 /
+timeout). A failure of that kind is a gateway problem, not a sign that the anchor or its hash is
+bad - retry, or try a different gateway prefix, before drawing a conclusion.
+
+#### Content-type handling
+
+The fetch checks the "content-type" field in the response headers. The rules are as follows:
 
 * `application/json`: This is the expected value.
-* `text/plain`: Currently accepted.
-* `application/octet-stream`: Currently accepted.
-* `binary/octet-stream`: Currently accepted.
-* `application/binary`: Currently accepted.
-* `text/html`: Currently accepted only if it might be JSON (ie first non-whitespace character of
-      body is `{`). Some time after 2024/01/01 this will no longer be accepted.
-     the future
-* missing content-type header: Currently accepted, but some time after 2024/01/01 this will no
-     longer be accepted.
+* `application/ld+json`: Accepted.
+* `text/plain`: Accepted.
+* `application/octet-stream`: Accepted.
+* `binary/octet-stream`: Accepted.
+* `application/binary`: Accepted.
+* `text/html`: Accepted only if it might be JSON (ie first non-whitespace character of body is `{`).
+* missing content-type header: Accepted.
 * all others: Rejected.
 
-Also note that extra text in the `comtemt-type` header fieled (eg `charset=utf-8`) is ignored.
+Extra text in the `content-type` header field (eg `charset=utf-8`) is ignored.
+
+### test-http-get-json-metadata
+
+This is a bulk health check for pool metadata. It takes no arguments and uses `PGPASSFILE` to
+connect to an existing `db-sync` database. It queries every stored pool metadata reference (skipping
+retired pools), re-fetches each URL with the same code as above, and prints a summary of how many
+fetches failed in each error category (hash mismatch, timeout, bad content-type, and so on). It
+covers pool metadata only.
+```
+> PGPASSFILE=config/pgpass-mainnet cabal run -- test-http-get-json-metadata
+```
