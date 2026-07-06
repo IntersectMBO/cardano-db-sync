@@ -15,7 +15,7 @@ BEGIN
     EXECUTE 'ALTER TABLE "instant_reward" DROP COLUMN "earned_epoch"' ;
     EXECUTE 'ALTER TABLE "instant_reward" ADD COLUMN "earned_epoch" bigint NOT NULL GENERATED ALWAYS AS ((CASE WHEN spendable_epoch >= 1 then spendable_epoch-1 else 0 end)) STORED' ;
     EXECUTE 'ALTER TABLE "instant_reward" DROP COLUMN "pool_id"' ;
-    EXECUTE 'ALTER TABLE "instant_reward" ADD CONSTRAINT "unique_instant_reward" UNIQUE("addr_id","earned_epoch","type")' ;
+    EXECUTE 'ALTER TABLE "instant_reward" ADD CONSTRAINT "unique_instant_reward" UNIQUE("earned_epoch","addr_id","type")' ;
 
     EXECUTE 'DELETE FROM "reward" WHERE "pool_id" IS NULL' ;
     EXECUTE 'ALTER TABLE "reward" ALTER COLUMN "pool_id" SET NOT NULL' ;
