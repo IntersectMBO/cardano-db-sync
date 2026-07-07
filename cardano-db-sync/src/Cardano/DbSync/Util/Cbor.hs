@@ -9,6 +9,8 @@ import Cardano.Ledger.Binary.Encoding (serialize')
 import Cardano.Ledger.Binary.Version (shelleyProtVer)
 import Cardano.Ledger.Shelley.TxAuxData (Metadatum (..))
 import Cardano.Prelude
+import qualified Data.ByteString.Short as SBS
+import Data.MemPack.Buffer (byteArrayFromShortByteString, byteArrayToShortByteString)
 import Prelude ()
 
 serialiseTxMetadataToCbor :: Map Word64 TxMetadataValue -> ByteString
@@ -16,7 +18,7 @@ serialiseTxMetadataToCbor = serialize' shelleyProtVer . map toShelleyMetadatum
   where
     toShelleyMetadatum :: TxMetadataValue -> Metadatum
     toShelleyMetadatum (TxMetaNumber n) = I n
-    toShelleyMetadatum (TxMetaBytes b) = B b
+    toShelleyMetadatum (TxMetaBytes b) = B (byteArrayFromShortByteString (SBS.toShort b))
     toShelleyMetadatum (TxMetaText s) = S s
     toShelleyMetadatum (TxMetaList xs) = List $ map toShelleyMetadatum xs
     toShelleyMetadatum (TxMetaMap ms) =
@@ -29,7 +31,7 @@ deserialiseTxMetadataFromCbor =
   where
     fromShelleyMetadatum :: Metadatum -> TxMetadataValue
     fromShelleyMetadatum (I n) = TxMetaNumber n
-    fromShelleyMetadatum (B b) = TxMetaBytes b
+    fromShelleyMetadatum (B b) = TxMetaBytes (SBS.fromShort (byteArrayToShortByteString b))
     fromShelleyMetadatum (S s) = TxMetaText s
     fromShelleyMetadatum (List xs) = TxMetaList $ map fromShelleyMetadatum xs
     fromShelleyMetadatum (Map ms) =

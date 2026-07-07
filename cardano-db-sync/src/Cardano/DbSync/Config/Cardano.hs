@@ -41,6 +41,10 @@ import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import System.FS.API (SomeHasFS (..))
+import System.FS.API.Types (MountPoint (MountPoint))
+import System.FS.IO (ioHasFS)
+import System.FilePath (takeDirectory)
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
@@ -73,8 +77,8 @@ readCardanoGenesisConfig enc =
 
 -- -------------------------------------------------------------------------------------------------
 
-mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
-mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg []
+mkTopLevelConfig :: GenesisConfig -> IO (TopLevelConfig CardanoBlock)
+mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg []
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
 
@@ -85,10 +89,11 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
-  (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
+  IO (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
 mkProtocolInfoCardano genesisConfig shelleyCred =
-  second (\f -> f nullTracer) $
-    protocolInfoCardano $
+  second (\f -> f nullTracer)
+    <$> protocolInfoCardano
+      shelleyGenesisFS
       CardanoProtocolParams
         { byronProtocolParams =
             Consensus.ProtocolParamsByron
@@ -129,6 +134,14 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
       (ShelleyConfig shelleyGenesis genesisHash)
       alonzoGenesis
       conwayGenesis = genesisConfig
+
+    -- Mirrors cardano-node: the consensus layer uses this filesystem (rooted at
+    -- the directory holding the Shelley genesis) to resolve ledger InjectionData
+    -- referenced from sgExtraConfig when building the initial ledger state.
+    shelleyGenesisFS :: SomeHasFS IO
+    shelleyGenesisFS =
+      SomeHasFS . ioHasFS . MountPoint . takeDirectory . unGenesisFile $
+        dncShelleyGenesisFile dnc
 
 shelleyPraosNonce :: GenesisHashShelley -> Nonce
 shelleyPraosNonce hsh = Nonce (Crypto.castHash . unGenesisHashShelley $ hsh)

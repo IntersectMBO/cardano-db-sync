@@ -1,0 +1,151 @@
+name:                 iohk-monitoring
+version:              0.2.1.2
+synopsis:             logging, benchmarking and monitoring framework
+-- description:
+license:              Apache-2.0
+license-files:        LICENSE, NOTICE
+author:               Alexander Diemand, Andreas Triantafyllos
+maintainer:           operations@iohk.io
+copyright:            2018 IOHK
+category:             Benchmarking
+build-type:           Simple
+extra-source-files:   README.md
+                      src/Cardano/BM/Counters/os-support-darwin.h
+                      src/Cardano/BM/Counters/os-support-win.h
+
+cabal-version:        >=1.10
+
+flag disable-observables
+  description:         Turn off observables, observers.
+  default:             False
+  manual:              True
+
+flag performance-test-queue
+  description:         Set the huge size for backends' queues.
+  default:             False
+  manual:              True
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Paths_iohk_monitoring
+
+                       Control.Tracer.Legacy
+                       Control.Tracer.Observe
+
+                       Cardano.BM.Configuration
+                       Cardano.BM.Configuration.Model
+                       Cardano.BM.Configuration.Static
+
+                       Cardano.BM.Counters
+                       Cardano.BM.Counters.Common
+                       Cardano.BM.Counters.Dummy
+
+                       Cardano.BM.Stats
+                       Cardano.BM.Stats.Resources
+
+                       Cardano.BM.Data.Aggregated
+                       Cardano.BM.Data.AggregatedKind
+                       Cardano.BM.Data.Backend
+                       Cardano.BM.Data.BackendKind
+                       Cardano.BM.Data.Configuration
+                       Cardano.BM.Data.Counter
+                       Cardano.BM.Data.LogItem
+                       Cardano.BM.Data.MonitoringEval
+                       Cardano.BM.Data.Observable
+                       Cardano.BM.Data.Output
+                       Cardano.BM.Data.Rotation
+                       Cardano.BM.Data.Severity
+                       Cardano.BM.Data.SubTrace
+                       Cardano.BM.Data.Trace
+                       Cardano.BM.Data.Tracer
+                       Cardano.BM.Data.Transformers
+                       Cardano.BM.Internal.ElidingTracer
+                       Cardano.BM.Tracing
+
+                       Cardano.BM.Backend.Log
+                       Cardano.BM.Backend.LogBuffer
+                       Cardano.BM.Backend.ProcessQueue
+                       Cardano.BM.Backend.Switchboard
+                       Cardano.BM.Plugin
+                       Cardano.BM.Rotator
+                       Cardano.BM.Setup
+                       Cardano.BM.Trace
+                       Cardano.BM.Tracer
+
+                       -- shamelessly stolen from ouroboros-network-framework
+                       Cardano.BM.IOManager
+                       Cardano.BM.Snocket
+
+  if !flag(disable-observables)
+    exposed-modules:   Cardano.BM.Observer.Monadic
+                       Cardano.BM.Observer.STM
+
+  if os(linux) || os(android)
+    exposed-modules:   Cardano.BM.Counters.Linux
+  if os(windows)
+    exposed-modules:   Cardano.BM.Counters.Windows
+    c-sources:         src/Cardano/BM/Counters/os-support-win.c
+    include-dirs:      src/Cardano/BM/Counters/
+    cc-options:        -DPSAPI_VERSION=2
+  if os(darwin)
+    exposed-modules:   Cardano.BM.Counters.Darwin
+    c-sources:         src/Cardano/BM/Counters/os-support-darwin.c
+    include-dirs:      src/Cardano/BM/Counters/
+
+  other-modules:
+
+  default-language:    Haskell2010
+  default-extensions:  OverloadedStrings
+  other-extensions:    OverloadedStrings
+  build-depends:       base >= 4.11,
+                       aeson >= 1.4.2,
+                       array,
+                       async-timer,
+                       async,
+                       attoparsec,
+                       auto-update,
+                       base64-bytestring,
+                       bytestring,
+                       clock,
+                       containers,
+                       -- Make sure to use the IOG package instead of the one on Hackage.
+                       contra-tracer >= 0.2.1,
+                       contravariant,
+                       directory,
+                       ekg-core,
+                       ekg-wai,
+                       filepath,
+                       katip,
+                       libyaml,
+                       mtl,
+                       network,
+                       safe-exceptions,
+                       safe,
+                       scientific,
+                       stm,
+                       template-haskell,
+                       text,
+                       time-units,
+                       time,
+                       tracer-transformers,
+                       transformers,
+                       unordered-containers,
+                       vector,
+                       Win32-network,
+                       yaml
+
+
+  if os(windows)
+     build-depends:    Win32
+  else
+     build-depends:    unix
+
+  if !flag(disable-observables)
+    cpp-options:       -DENABLE_OBSERVABLES
+
+  if flag(performance-test-queue)
+    cpp-options:       -DPERFORMANCE_TEST_QUEUE
+
+  ghc-options:         -Wall
+                       -fno-ignore-asserts
+
