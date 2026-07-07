@@ -27,7 +27,9 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Aeson
 import qualified Data.Aeson.Text as Aeson.Text
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
+import Data.MemPack.Buffer (byteArrayToShortByteString)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Lazy as Text.Lazy
@@ -101,7 +103,7 @@ bytesPrefix = "0x"
 fromMetadatum :: Shelley.Metadatum -> TxMetadataValue
 fromMetadatum = \case
   Shelley.I x -> TxMetaNumber x
-  Shelley.B x -> TxMetaBytes x
+  Shelley.B x -> TxMetaBytes (SBS.fromShort (byteArrayToShortByteString x))
   Shelley.S x -> TxMetaText x
   Shelley.List xs -> TxMetaList $ map fromMetadatum xs
   Shelley.Map xs -> TxMetaMap $ map (both fromMetadatum) xs

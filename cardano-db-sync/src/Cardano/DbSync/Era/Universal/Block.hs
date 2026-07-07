@@ -15,6 +15,8 @@ where
 import Data.Either.Extra (eitherToMaybe)
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.Binary (serialize')
+import Cardano.Crypto.Leios (LeiosCert (..), encodeBitField, leiosSignatureToBytes)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
@@ -97,6 +99,8 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
             DB.blockHasLeiosCert = Generic.blkHasLeiosCert blk
           , DB.blockEbAnnouncementHash = ebHashBytes . ebAnnouncementHash <$> Generic.blkLeiosEbAnnouncement blk
           , DB.blockEbAnnouncementSize = ebAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
+          , DB.blockLeiosCertSigners = serialize' . encodeBitField . leiosCertSigners <$> Generic.blkLeiosCert blk
+          , DB.blockLeiosCertSignature = leiosSignatureToBytes . leiosCertSignature <$> Generic.blkLeiosCert blk
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)

@@ -29,7 +29,6 @@ import qualified Cardano.Ledger.Api.Transition as Ledger
 import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
 import Cardano.Node.Protocol.Dijkstra
-import Cardano.Prelude (second)
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Tracer (nullTracer)
 import Ouroboros.Consensus.Block.Forging
@@ -41,6 +40,8 @@ import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import System.FS.API (MountPoint (..), SomeHasFS (..))
+import System.FS.IO (ioHasFS)
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig
@@ -73,8 +74,8 @@ readCardanoGenesisConfig enc =
 
 -- -------------------------------------------------------------------------------------------------
 
-mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
-mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg []
+mkTopLevelConfig :: GenesisConfig -> IO (TopLevelConfig CardanoBlock)
+mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg []
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
 
@@ -85,10 +86,11 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
-  (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
-mkProtocolInfoCardano genesisConfig shelleyCred =
-  second (\f -> f nullTracer) $
-    protocolInfoCardano $
+  IO (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
+mkProtocolInfoCardano genesisConfig shelleyCred = do
+  -- db-sync doesn't forge, so the KES-agent FS is never consulted.
+  (pInfo, mkForgings) <-
+    protocolInfoCardano (SomeHasFS (ioHasFS (MountPoint ""))) $
       CardanoProtocolParams
         { byronProtocolParams =
             Consensus.ProtocolParamsByron
@@ -122,6 +124,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
               }
         , cardanoCheckpoints = emptyCheckpointsMap
         }
+  pure (pInfo, mkForgings nullTracer)
   where
     GenesisCardano
       dnc

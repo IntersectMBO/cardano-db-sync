@@ -153,10 +153,10 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
         }
 
     muxTracer :: Tracer IO (Mux.WithBearer (ConnectionId LocalAddress) MuxTrace)
-    muxTracer = toLogObject $ appendName "Mux" trce
+    muxTracer = Logging.nullTracer
 
     subscriptionTracer :: Tracer IO (SubscriptionTrace ())
-    subscriptionTracer = toLogObject $ appendName "Subscription" trce
+    subscriptionTracer = Logging.nullTracer
 
     handshakeTracer ::
       Tracer
@@ -165,7 +165,9 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
             (ConnectionId LocalAddress)
             (TraceSendRecv (Handshake Network.NodeToClientVersion CBOR.Term))
         )
-    handshakeTracer = toLogObject $ appendName "Handshake" trce
+    -- w27: the Transformable instance for the handshake TraceSendRecv type is no
+    -- longer in scope; drop to nullTracer (as with the mux channel/bearer tracers).
+    handshakeTracer = Logging.nullTracer
 
 dbSyncProtocols ::
   SyncEnv ->
@@ -190,7 +192,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
     codecs = clientCodecs codecConfig bversion version
 
     localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
-    localChainSyncTracer = toLogObject $ appendName "ChainSync" tracer
+    localChainSyncTracer = Logging.nullTracer
 
     tracer :: Trace IO Text
     tracer = getTrace syncEnv

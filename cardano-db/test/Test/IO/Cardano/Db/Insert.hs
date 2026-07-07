@@ -143,6 +143,8 @@ blockZero slid =
     , blockHasLeiosCert = False
     , blockEbAnnouncementHash = Nothing
     , blockEbAnnouncementSize = Nothing
+    , blockLeiosCertSigners = Nothing
+    , blockLeiosCertSignature = Nothing
     }
 
 blockOne :: SlotLeaderId -> Block
@@ -166,6 +168,8 @@ blockOne slid =
     , blockHasLeiosCert = False
     , blockEbAnnouncementHash = Nothing
     , blockEbAnnouncementSize = Nothing
+    , blockLeiosCertSigners = Nothing
+    , blockLeiosCertSignature = Nothing
     }
 
 adaPotsZero :: BlockId -> AdaPots

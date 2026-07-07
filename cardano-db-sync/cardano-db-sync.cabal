@@ -172,6 +172,7 @@ library
                       , cardano-diffusion
                       , cardano-diffusion:api
                       , cardano-ledger-binary
+                      , cardano-crypto-leios
                       , cardano-ledger-dijkstra
                       , cardano-ledger-mary
                       , cardano-ledger-shelley >= 1.12.3.0
@@ -200,6 +201,7 @@ library
                       , network
                       , lifted-base
                       , memory
+                      , mempack
                       , microlens
                       , network-mux
                       , ouroboros-consensus

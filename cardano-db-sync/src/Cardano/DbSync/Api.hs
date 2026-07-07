@@ -455,14 +455,15 @@ mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigF
               , " /= "
               , textShow (Shelley.sgSystemStart $ scConfig sCfg)
               ]
-      | otherwise ->
+      | otherwise -> do
+          pInfo <- fst <$> mkProtocolInfoCardano genCfg []
           Right
             <$> mkSyncEnv
               metricsSetters
               trce
               dbEnv
               syncOptions
-              (fst $ mkProtocolInfoCardano genCfg [])
+              pInfo
               (Shelley.sgNetworkId $ scConfig sCfg)
               (Shelley.sgMaxLovelaceSupply $ scConfig sCfg)
               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)

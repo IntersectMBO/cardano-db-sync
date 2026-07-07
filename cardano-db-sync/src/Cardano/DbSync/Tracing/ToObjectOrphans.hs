@@ -8,7 +8,6 @@ module Cardano.DbSync.Tracing.ToObjectOrphans () where
 import Cardano.BM.Data.Severity (Severity (..))
 import Cardano.BM.Data.Tracer
 import Cardano.Client.Subscription (SubscriptionTrace (..))
-import Cardano.Tracing.OrphanInstances.Network ()
 import Data.Aeson ((.=))
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -19,6 +18,15 @@ import Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 
 instance HasTextFormatter (TraceSendRecv (ChainSync blk (Point blk) (Tip blk))) where
   formatText _ = Text.pack . show
+
+instance HasPrivacyAnnotation (TraceSendRecv (ChainSync blk (Point blk) (Tip blk)))
+instance HasSeverityAnnotation (TraceSendRecv (ChainSync blk (Point blk) (Tip blk))) where
+  getSeverityAnnotation _ = Info
+instance ToObject (TraceSendRecv (ChainSync blk (Point blk) (Tip blk))) where
+  toObject _verb _msg =
+    mconcat
+      [ "kind" .= ("TraceSendRecv ChainSync" :: Text)
+      ]
 
 instance ToObject ByronBlock where
   toObject _verb msg =

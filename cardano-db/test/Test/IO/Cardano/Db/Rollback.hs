@@ -102,6 +102,8 @@ createAndInsertBlocks blockCount =
               , blockHasLeiosCert = False
               , blockEbAnnouncementHash = Nothing
               , blockEbAnnouncementSize = Nothing
+              , blockLeiosCertSigners = Nothing
+              , blockLeiosCertSignature = Nothing
               }
 
       blkId <- insertBlock newBlock

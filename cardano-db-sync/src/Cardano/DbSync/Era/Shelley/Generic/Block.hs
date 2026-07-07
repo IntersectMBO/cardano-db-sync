@@ -40,6 +40,10 @@ import qualified Cardano.Protocol.TPraos.BHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
 import Cardano.Slotting.Slot (SlotNo (..))
 import Lens.Micro ((^.))
+import Cardano.Crypto.Leios (LeiosCert)
+import Cardano.Ledger.Dijkstra.BlockBody (leiosCertBlockBodyL)
+import Data.Maybe.Strict (strictMaybeToMaybe)
+import LeiosDemoTypes (EbAnnouncement)
 import Ouroboros.Consensus.Cardano.Block (
   AllegraEra,
   AlonzoEra,
@@ -69,6 +73,10 @@ data Block = Block
   , blkOpCert :: !ByteString
   , blkOpCertCounter :: !Word64
   , blkTxs :: [Tx] -- intentionally left lazy to delay the tx transformation
+  -- Leios (Dijkstra-only; False / Nothing for earlier eras)
+  , blkHasLeiosCert :: !Bool
+  , blkLeiosEbAnnouncement :: !(Maybe EbAnnouncement)
+  , blkLeiosCert :: !(Maybe LeiosCert)
   }
 
 fromAllegraBlock :: ShelleyBlock (TPraosStandard StandardCrypto) AllegraEra -> Block
@@ -86,6 +94,9 @@ fromAllegraBlock blk =
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
     , blkTxs = map fromAllegraTx (getTxs blk)
+    , blkHasLeiosCert = False
+    , blkLeiosEbAnnouncement = Nothing
+    , blkLeiosCert = Nothing
     }
 
 fromShelleyBlock :: ShelleyBlock (TPraosStandard StandardCrypto) ShelleyEra -> Block
@@ -103,6 +114,9 @@ fromShelleyBlock blk =
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
     , blkTxs = map fromShelleyTx (getTxs blk)
+    , blkHasLeiosCert = False
+    , blkLeiosEbAnnouncement = Nothing
+    , blkLeiosCert = Nothing
     }
 
 fromMaryBlock :: ShelleyBlock (TPraosStandard StandardCrypto) MaryEra -> Block
@@ -120,6 +134,9 @@ fromMaryBlock blk =
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
     , blkTxs = map fromMaryTx (getTxs blk)
+    , blkHasLeiosCert = False
+    , blkLeiosEbAnnouncement = Nothing
+    , blkLeiosCert = Nothing
     }
 
 fromAlonzoBlock :: Bool -> Maybe Prices -> ShelleyBlock (TPraosStandard StandardCrypto) AlonzoEra -> Block
@@ -137,6 +154,9 @@ fromAlonzoBlock iope mprices blk =
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
     , blkTxs = map (fromAlonzoTx iope mprices) (getTxs blk)
+    , blkHasLeiosCert = False
+    , blkLeiosEbAnnouncement = Nothing
+    , blkLeiosCert = Nothing
     }
 
 fromBabbageBlock :: Bool -> Maybe Prices -> ShelleyBlock (PraosStandard StandardCrypto) BabbageEra -> Block
@@ -154,6 +174,9 @@ fromBabbageBlock iope mprices blk =
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
     , blkTxs = map (fromBabbageTx iope mprices) (getTxs blk)
+    , blkHasLeiosCert = False
+    , blkLeiosEbAnnouncement = Nothing
+    , blkLeiosCert = Nothing
     }
 
 fromConwayBlock :: Bool -> Maybe Prices -> ShelleyBlock (PraosStandard StandardCrypto) ConwayEra -> Block
@@ -171,6 +194,9 @@ fromConwayBlock iope mprices blk =
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
     , blkTxs = map (fromConwayTx iope mprices) (getTxs blk)
+    , blkHasLeiosCert = False
+    , blkLeiosEbAnnouncement = Nothing
+    , blkLeiosCert = Nothing
     }
 
 fromDijkstraBlock :: Bool -> Maybe Prices -> ShelleyBlock (PraosStandard StandardCrypto) DijkstraEra -> Block
@@ -188,7 +214,13 @@ fromDijkstraBlock iope mprices blk =
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
     , blkTxs = map (fromDijkstraTx iope mprices) (getTxs blk)
+    , blkHasLeiosCert = isJust leiosCert
+    , blkLeiosEbAnnouncement = strictMaybeToMaybe (Praos.hbLeiosEbAnnouncement headerBody)
+    , blkLeiosCert = leiosCert
     }
+  where
+    leiosCert = strictMaybeToMaybe (Ledger.blockBody (Consensus.shelleyBlockRaw blk) ^. leiosCertBlockBodyL)
+    headerBody = getHeaderBodyPraos (blockHeader blk)
 
 -- -------------------------------------------------------------------------------------------------
 

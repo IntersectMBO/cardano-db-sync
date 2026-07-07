@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2026-03-26T20:21:33Z
-  , cardano-haskell-packages 2026-05-02T16:21:41Z
+  , hackage.haskell.org 2026-06-29T22:49:53Z
+  , cardano-haskell-packages 2026-06-29T12:05:19Z
 active-repositories:
   , :rest
   , cardano-haskell-packages:override
@@ -78,10 +78,25 @@ constraints:
   -- then clashes with the `show` in `Prelude`.
   , text < 2.1.2
   , hasql ==1.9.3
+  -- cardano-rpc needs proto-lens 0.7.1.7+; haskell.nix would otherwise pin 0.7.1.5
+  , any.proto-lens >= 0.7.1.7
+  -- transformers-compat-0.8 breaks monad-control (needs <0.8); pin below it
+  , transformers-compat < 0.8
+  -- some-1.1 breaks dependent-sum (needs <1.0.7); pin below it
+  , some < 1.0.7
+  -- microlens-0.5 breaks byron-spec-ledger (needs <0.5); pin below it
+  , microlens < 0.5
 
 allow-newer:
     , cardano-api:plutus-core
     , resource-registry:nothunks
+    , ekg:network
+
+allow-older:
+    , cardano-ledger-binary:cuddle
+    , cardano-ledger-binary:antigen
+    , cardano-ledger-core:cuddle
+    , cardano-ledger-core:antigen
 
 if impl (ghc >= 9.12)
   allow-newer:
@@ -106,8 +121,8 @@ if impl (ghc >= 9.12)
 source-repository-package
   type: git
   location: https://github.com/input-output-hk/cardano-node
-  tag: 40888f50725e473d91f40e554e2d436dfc80a924
-  --sha256: 1rif670qgj8ilrh0v1gqnndlmgsybmammxn75pyr1q9qg2ha5179
+  tag: 3cc6340a896eadee5cdbf2b256751d23dc267ba3
+  --sha256: 08aqp88q34b6im3nway18lg3hclljacl9ws3y6yynd2cibdg1a3z
   subdir:
     cardano-node
     trace-forward
@@ -116,23 +131,37 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/ouroboros-consensus
-  tag: e3803b0c86fc0b5f0a7b8f3a977aebf5afe31b8b
-  --sha256: sha256-PxhS4cB4pnP+izLMOTfsyjrEUCsW2aSEMUKl603Bpk4=
+  tag: 63d4d4e3c7ffb1911a63a65e7a84dc5132f82137
+  --sha256: sha256-sTsafdrdo/WQ9a+nL/ed2kc5zKhTYW9HaJO7g260fBk=
 
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-ledger
-  tag: 4bf2edca4ccbf18d4e2574b1544a2cf7ffc992eb
-  --sha256: sha256-rFFN26bjo0Wji9htl5Bj5Et7m3FsREv72vdP91fo8+o=
+  tag: 9edd1c664054803348e5f9edfa13529e4e844284
+  --sha256: sha256-TkgeO5d1p18VwTMtuNY8SsPZXXyn1HIrZBZ4IHVTWuE=
   subdir:
+    libs/cardano-data
+    libs/cardano-ledger-api
+    libs/small-steps
+    libs/cardano-ledger-binary
     libs/cardano-ledger-core
+    libs/cardano-protocol-tpraos
+    eras/shelley/impl
+    eras/shelley/test-suite
+    eras/shelley-ma/test-suite
+    eras/mary/impl
+    eras/allegra/impl
+    eras/alonzo/impl
+    eras/alonzo/test-suite
+    eras/babbage/impl
+    eras/conway/impl
     eras/dijkstra/impl
 
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/ouroboros-network
-  tag: ff3e39af5aa51d4d89c23c72d67716fd9bfcc516
-  --sha256: sha256-Ctw/Vi8j9KyDtVm0NK+Jk0COtPi1kpL4lHfUF8/eCgI=
+  tag: 4b3ab7664f609a1aee0f0c24dcfcfd0ab899fc42
+  --sha256: sha256-fIqpI2whstetodpiONmUDVgnhTpzXeq1/gmzuHItK5A=
   subdir:
     ouroboros-network
     cardano-diffusion
@@ -141,37 +170,47 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-api
-  tag: 7609dd62dbbe273209e9ab0cc313e5098d1ffd03
-  --sha256: sha256-Xup5zJGd8SqXXCg9Z4NYZFXv5PKFSYX7tJRQMC1HcNY=
+  tag: 28e2f4f085eceee4cb63c3eb9103a80e3852ce7a
+  --sha256: sha256-9Wugp6Cd+ERSc8kfIUDFbq3QjuhIr1gu6rRSV3Yo/9M=
   subdir:
     cardano-api
     cardano-api-gen
+    cardano-rpc
+
+source-repository-package
+  type: git
+  location: https://github.com/f-f/kes-agent.git
+  tag: 32c1ed675d22a30735d9f22f7afa436a3ef3e64a
+  --sha256: sha256-o7hFX1JnraS6Xq0WoXQwd9Z8GsPPv0Ls2DWvZ08o0ZU=
+  subdir:
+    kes-agent
+    kes-agent-crypto
 
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-cli
-  tag: 5e138d6bab9d4dc1f95e7334581ae184bca961a7
-  --sha256: sha256-a72/4NuZHDxXHvgSEmxxdKEV8CVx8rLr9RkYi5Q1Tgs=
+  tag: 97a1258f9654478dff6c7e7497fcc693213b1a36
+  --sha256: sha256-e2mxwfy2pN3itQIx0+1j2XV7JTNKckIpfzaN6rOtZn0=
   subdir:
     cardano-cli
 
-if impl(ghc >= 9.12)
-  -- GHC 9.12 support - master branch
-  source-repository-package
-    type: git
-    location: https://github.com/google/proto-lens
-    tag: 13ce67409ad87e8c29eea58b31aa37f44e82457c
-    --sha256: sha256-8XPGLheOo5ZStL7YD5x29GechWFjubw+in5GsUrKWPc=
-    subdir:
-      discrimination-ieee754
-      proto-lens-arbitrary
-      proto-lens-benchmarks
-      proto-lens-discrimination
-      proto-lens-optparse
-      proto-lens-protobuf-types
-      proto-lens-protoc
-      proto-lens-runtime
-      proto-lens-setup
-      proto-lens-tests-dep
-      proto-lens-tests
-      proto-lens
+-- Fork with iohk-monitoring + tracer-transformers ported to contra-tracer 0.2.
+-- Do NOT include the bundled contra-tracer subdir (still on 0.1.x); CHaP's
+-- contra-tracer 0.2 is used instead.
+source-repository-package
+  type: git
+  location: https://github.com/kderme/iohk-monitoring-framework.git
+  tag: b6e1d40e1c85a15fbd1351f113ab5ba95da19f73
+  --sha256: sha256-UuKIbcahBfOpSNSUDTNEcwTcMiYZSynmDytr3lb2ycA=
+  subdir:
+    iohk-monitoring
+    tracer-transformers
+
+-- CHaP's ekg-forward-1.2 is too old for the newer ouroboros-network
+-- ConnectToArgs API; use the same fork node-leios pins.
+source-repository-package
+  type: git
+  location: https://github.com/f-f/ekg-forward
+  tag: b24b3aba2806ce223c62f8ce3e267ec92dcc52e2
+  --sha256: sha256-s5Hxxm04HmFVmdBjAnFEsJEhTqr5Z/uiB4K1s2VaVwE=
+

@@ -87,6 +87,9 @@ newtype ExtraKeyWitnessId = ExtraKeyWitnessId {getExtraKeyWitnessId :: Int64}
 newtype SlotLeaderId = SlotLeaderId {getSlotLeaderId :: Int64}
   deriving (Eq, Show, Ord)
 
+newtype LeiosCertSignerId = LeiosCertSignerId {getLeiosCertSignerId :: Int64}
+  deriving (Eq, Show, Ord)
+
 newtype SchemaVersionId = SchemaVersionId {getSchemaVersionId :: Int64}
   deriving (Eq, Show, Ord)
 

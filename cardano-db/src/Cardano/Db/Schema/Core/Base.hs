@@ -79,6 +79,8 @@ data Block = Block
   , blockHasLeiosCert :: !Bool
   , blockEbAnnouncementHash :: !(Maybe ByteString) -- sqltype=hash32type
   , blockEbAnnouncementSize :: !(Maybe Word32) -- sqltype=word31type
+  , blockLeiosCertSigners :: !(Maybe ByteString) -- committee-signer bitfield (Dijkstra LeiosCert)
+  , blockLeiosCertSignature :: !(Maybe ByteString) -- BLS aggregate signature (48 bytes)
   }
   deriving (Eq, Show, Generic)
 
@@ -113,6 +115,8 @@ blockDecoder =
     <*> D.column (D.nonNullable D.bool) -- blockHasLeiosCert
     <*> D.column (D.nullable D.bytea) -- blockEbAnnouncementHash
     <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- blockEbAnnouncementSize
+    <*> D.column (D.nullable D.bytea) -- blockLeiosCertSigners
+    <*> D.column (D.nullable D.bytea) -- blockLeiosCertSignature
 
 blockEncoder :: E.Params Block
 blockEncoder =
@@ -135,6 +139,39 @@ blockEncoder =
     , blockHasLeiosCert >$< E.param (E.nonNullable E.bool)
     , blockEbAnnouncementHash >$< E.param (E.nullable E.bytea)
     , blockEbAnnouncementSize >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , blockLeiosCertSigners >$< E.param (E.nullable E.bytea)
+    , blockLeiosCertSignature >$< E.param (E.nullable E.bytea)
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: leios_cert_signer
+-- Description: One row per pool that signed a block's Leios certificate. Resolved from the
+-- certificate's signer bitfield against the committee (the stake-ordered pool distribution of
+-- the parent ledger state, apOldLedger). Enables per-pool certification / certifying-stake views.
+-----------------------------------------------------------------------------------------------------------------------------------
+data LeiosCertSigner = LeiosCertSigner
+  { leiosCertSignerBlockId :: !BlockId -- noreference
+  , leiosCertSignerPoolHashId :: !PoolHashId -- noreference
+  , leiosCertSignerSeatIndex :: !Word32 -- committee seat / bit index in the signer bitfield
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key LeiosCertSigner = LeiosCertSignerId
+instance DbInfo LeiosCertSigner
+
+leiosCertSignerDecoder :: D.Row LeiosCertSigner
+leiosCertSignerDecoder =
+  LeiosCertSigner
+    <$> idDecoder BlockId -- leiosCertSignerBlockId
+    <*> idDecoder PoolHashId -- leiosCertSignerPoolHashId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- leiosCertSignerSeatIndex
+
+leiosCertSignerEncoder :: E.Params LeiosCertSigner
+leiosCertSignerEncoder =
+  mconcat
+    [ leiosCertSignerBlockId >$< idEncoder getBlockId
+    , leiosCertSignerPoolHashId >$< idEncoder getPoolHashId
+    , leiosCertSignerSeatIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

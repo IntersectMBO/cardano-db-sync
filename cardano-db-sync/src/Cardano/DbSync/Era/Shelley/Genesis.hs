@@ -163,6 +163,8 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
         , DB.blockHasLeiosCert = False
         , DB.blockEbAnnouncementHash = Nothing
         , DB.blockEbAnnouncementSize = Nothing
+        , DB.blockLeiosCertSigners = Nothing
+        , DB.blockLeiosCertSignature = Nothing
         }
 
 -- | Validate that the initial Genesis distribution in the DB matches the Genesis data.
