@@ -15,8 +15,8 @@ jobs:
         uses: input-output-hk/install-nix-action@v31.10.6
         with:
           extra_nix_config: |
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-            substituters = https://cache.iog.io/ https://cache.nixos.org/
+            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            extra-substituters = https://cache.nixos.org/
             experimental-features = nix-command flakes fetch-closure
             allow-import-from-derivation = true
             accept-flake-config = true
