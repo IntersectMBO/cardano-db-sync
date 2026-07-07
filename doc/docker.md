@@ -75,28 +75,36 @@ entrypoint. Possible values are:
  * sanchonet
  * shelley_qa
 
-#### `POSTGRES_HOST` (required)
+#### `POSTGRES_HOST`
 
-The PostgreSQL server host to connect to.
+The PostgreSQL server host to connect to. This variable is ignored if `PGPASSFILE` is set.
 
-#### `POSTGRES_PORT` (required)
+#### `POSTGRES_PORT`
 
-Specifies the PostgreSQL server port to connect to.
+Specifies the PostgreSQL server port to connect to. This variable is ignored if `PGPASSFILE` is set.
 
-#### `POSTGRES_USER` (required)
+#### `POSTGRES_DB`
 
-The PostgreSQL server user to connect as.
+The PostgreSQL database name to connect to. If left unset, the value is read from `/run/secrets/postgres_db`. Both the variable and the file are ignored if `PGPASSFILE` is set.
 
-#### `POSTGRES_PASSWORD` (required)
+#### `POSTGRES_USER`
 
-Specifies the PostgreSQL server password to connect as.
+The PostgreSQL server user to connect as. If left unset, the value is read from `/run/secrets/postgres_user`. Both the variable and the file are ignored if `PGPASSFILE` is set.
+
+#### `POSTGRES_PASSWORD`
+
+Specifies the PostgreSQL server password to connect as. If left unset, the value is read from `/run/secrets/postgres_password`. Both the variable and the file are ignored if `PGPASSFILE` is set.
+
+#### `PGPASSFILE`
+
+Path to a file containing PostgreSQL connection information. Note that `PGPASSFILE` with Docker secrets is preferred when Docker secrets are available.
 
 #### `RESTORE_SNAPSHOT` (optional)
 
 Specifies a `cardano-db-sync` snapshot archive to download and restore from. If omitted,
 it will sync from genesis. see [Restoring From Snapshots](#restoring-from-snapshots)
 
-### `DB_SYNC_CONFIG` (optional)
+#### `DB_SYNC_CONFIG` (optional)
 
 Overrides the `db-sync-config.json` provided by the network configuration. See [Overriding
 Network Configuration](#overriding-network-configuration).
@@ -206,21 +214,29 @@ entrypoint. Possible values are:
  * sanchonet
  * shelley_qa
 
-#### `POSTGRES_HOST` (required)
+#### `POSTGRES_HOST`
 
-The PostgreSQL server host to connect to.
+The PostgreSQL server host to connect to. This variable is ignored if `PGPASSFILE` is set.
 
-#### `POSTGRES_PORT` (required)
+#### `POSTGRES_PORT`
 
-Specifies the PostgreSQL server port to connect to.
+Specifies the PostgreSQL server port to connect to. This variable is ignored if `PGPASSFILE` is set.
 
-#### `POSTGRES_USER` (required)
+#### `POSTGRES_DB`
 
-The PostgreSQL server user to connect as.
+The PostgreSQL database name to connect to. If left unset, the value is read from `/run/secrets/postgres_db`. Both the variable and the file are ignored if `PGPASSFILE` is set.
 
-#### `POSTGRES_PASSWORD` (required)
+#### `POSTGRES_USER`
 
-Specifies the PostgreSQL server password to connect as.
+The PostgreSQL server user to connect as. If left unset, the value is read from `/run/secrets/postgres_user`. Both the variable and the file are ignored if `PGPASSFILE` is set.
+
+#### `POSTGRES_PASSWORD`
+
+Specifies the PostgreSQL server password to connect as. If left unset, the value is read from `/run/secrets/postgres_password`. Both the variable and the file are ignored if `PGPASSFILE` is set.
+
+#### `PGPASSFILE`
+
+Path to a file containing PostgreSQL connection information. Note that `PGPASSFILE` with Docker secrets is preferred when Docker secrets are available.
 
 #### `SMASH_USER` (optional)
 
