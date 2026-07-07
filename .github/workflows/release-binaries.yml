@@ -60,6 +60,7 @@ jobs:
           cp "result-macos/${macos_base}.tar.gz" "assets/${macos_base}-arm64.tar.gz"
 
       - name: Release
+        if: github.event_name == 'release'
         uses: input-output-hk/action-gh-release@v1
         with:
           draft: true
