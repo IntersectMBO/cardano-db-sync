@@ -599,7 +599,7 @@
             } // lib.optionalAttrs (system == "x86_64-linux") {
               # No need to run static checks on all architectures
               checks = staticChecks;
-            } // lib.optionalAttrs (system == "x86_64-darwin") {
+            } // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
               inherit cardano-smash-server-no-basic-auth profiled;
@@ -612,7 +612,7 @@
                 cardano-db-sync-linux
                 cardano-db-sync-docker
                 cardano-smash-server-docker;
-            } // lib.optionalAttrs (system == "x86_64-darwin") {
+            } // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
               inherit
