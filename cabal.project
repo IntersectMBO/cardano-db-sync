@@ -10,8 +10,8 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2026-05-03T23:05:52Z
-  , cardano-haskell-packages 2026-05-03T22:28:43Z
+  , hackage.haskell.org 2026-03-26T20:21:33Z
+  , cardano-haskell-packages 2026-05-02T16:21:41Z
 active-repositories:
   , :rest
   , cardano-haskell-packages:override
@@ -73,15 +73,30 @@ package snap-server
 -- ---------------------------------------------------------
 
 constraints:
+  -- New version of `text` exposes a `show` function and in the `node`
+  -- code,`Data.Text` is being imported unqualified (bad idea IMO) which
+  -- then clashes with the `show` in `Prelude`.
+  , text < 2.1.2
   , hasql ==1.9.3
-  -- haskell.nix tries to use 0.7.1.5; the patched 0.7.1.6 fork is in source-repository-package.
-  , any.proto-lens >= 0.7.1.6
-  -- haskell.nix patch does not work for 1.6.8
-  , any.crypton-x509-system < 1.6.8
-  , validation < 1.2
 
 allow-newer:
     , cardano-api:plutus-core
+    , resource-registry:nothunks
+
+if impl (ghc >= 9.12)
+  allow-newer:
+    -- https://github.com/kapralVV/Unique/issues/11
+    , Unique:hashable
+
+    -- https://github.com/Gabriella439/Haskell-Pipes-Safe-Library/pull/70
+    , pipes-safe:base
+
+    , io-classes:time
+    , ouroboros-network:time
+    , nothunks:time
+    , network-mux:time
+    , cardano-ping:time
+
 
 -- The two following one-liners will cut off / restore the remainder of this file (for nix-shell users):
 -- when using the "cabal" wrapper script provided by nix-shell.
@@ -90,10 +105,73 @@ allow-newer:
 
 source-repository-package
   type: git
-  location: https://github.com/IntersectMBO/cardano-node
-  tag: 97036a66bcf8c89f687ae57a048eecc0389977ef
-  --sha256: sha256-+dod+EL73MICgbgflyJnwDlxbCeaBbBLrr2tLX59hAA=
+  location: https://github.com/input-output-hk/cardano-node
+  tag: 40888f50725e473d91f40e554e2d436dfc80a924
+  --sha256: 1rif670qgj8ilrh0v1gqnndlmgsybmammxn75pyr1q9qg2ha5179
   subdir:
     cardano-node
     trace-forward
     trace-resources
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/ouroboros-consensus
+  tag: e3803b0c86fc0b5f0a7b8f3a977aebf5afe31b8b
+  --sha256: sha256-PxhS4cB4pnP+izLMOTfsyjrEUCsW2aSEMUKl603Bpk4=
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-ledger
+  tag: 4bf2edca4ccbf18d4e2574b1544a2cf7ffc992eb
+  --sha256: sha256-rFFN26bjo0Wji9htl5Bj5Et7m3FsREv72vdP91fo8+o=
+  subdir:
+    libs/cardano-ledger-core
+    eras/dijkstra/impl
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/ouroboros-network
+  tag: ff3e39af5aa51d4d89c23c72d67716fd9bfcc516
+  --sha256: sha256-Ctw/Vi8j9KyDtVm0NK+Jk0COtPi1kpL4lHfUF8/eCgI=
+  subdir:
+    ouroboros-network
+    cardano-diffusion
+    network-mux
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-api
+  tag: 7609dd62dbbe273209e9ab0cc313e5098d1ffd03
+  --sha256: sha256-Xup5zJGd8SqXXCg9Z4NYZFXv5PKFSYX7tJRQMC1HcNY=
+  subdir:
+    cardano-api
+    cardano-api-gen
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-cli
+  tag: 5e138d6bab9d4dc1f95e7334581ae184bca961a7
+  --sha256: sha256-a72/4NuZHDxXHvgSEmxxdKEV8CVx8rLr9RkYi5Q1Tgs=
+  subdir:
+    cardano-cli
+
+if impl(ghc >= 9.12)
+  -- GHC 9.12 support - master branch
+  source-repository-package
+    type: git
+    location: https://github.com/google/proto-lens
+    tag: 13ce67409ad87e8c29eea58b31aa37f44e82457c
+    --sha256: sha256-8XPGLheOo5ZStL7YD5x29GechWFjubw+in5GsUrKWPc=
+    subdir:
+      discrimination-ieee754
+      proto-lens-arbitrary
+      proto-lens-benchmarks
+      proto-lens-discrimination
+      proto-lens-optparse
+      proto-lens-protobuf-types
+      proto-lens-protoc
+      proto-lens-runtime
+      proto-lens-setup
+      proto-lens-tests-dep
+      proto-lens-tests
+      proto-lens

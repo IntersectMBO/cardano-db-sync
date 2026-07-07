@@ -235,9 +235,6 @@
                 hlint = "3.8";
 
                 weeder = "latest";
-                hoogle.cabalProjectLocal = ''
-                  constraints: alfred-margaret <2.1.1.0 || >2.1.1.0
-                '';                
               };
 
               # Now we use pkgsBuildBuild, to make sure that even in the cross
@@ -486,7 +483,7 @@
           let
             mkDist = platform: project:
               let
-                exeVals = builtins.attrValues (setGitRevs project.exes);
+                exeVals = builtins.attrValues project.exes;
                 name = "cardano-db-sync-${version}-${platform}";
                 version = project.exes.cardano-db-sync.identifier.version;
                 env = {
