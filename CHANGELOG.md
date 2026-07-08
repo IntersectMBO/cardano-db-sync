@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## Unreleased
+- Add static binaries and docker images for aarch64-linux
+
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
 - Fix `pool_relay.port` overflow [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135); a startup migration repairs existing rows.
