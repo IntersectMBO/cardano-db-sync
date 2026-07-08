@@ -59,7 +59,15 @@ jobs:
           macos_base="$(basename result-macos/cardano-db-sync-*-macos.tar.gz .tar.gz)"
           cp "result-macos/${macos_base}.tar.gz" "assets/${macos_base}-arm64.tar.gz"
 
+      - name: Upload build artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-dist
+          path: assets/*.tar.gz
+
       - name: Release
+        if: github.event_name == 'release'
         uses: input-output-hk/action-gh-release@v1
         with:
           draft: true
