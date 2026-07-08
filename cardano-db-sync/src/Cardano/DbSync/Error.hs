@@ -18,13 +18,14 @@ module Cardano.DbSync.Error (
   mkSyncNodeCallStack,
 ) where
 
-import Cardano.BM.Trace (Trace, logError)
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (LogMessage, logError)
 import qualified Cardano.DbSync.Era.Byron.Util as Byron
 import Cardano.DbSync.Util
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 
 import qualified Data.ByteString.Base16 as Base16
@@ -195,7 +196,7 @@ runOrThrowIO ioEither = do
     Left err -> throwIO err
     Right a -> pure a
 
-logAndThrowIO :: Trace IO Text -> SyncNodeError -> IO ()
+logAndThrowIO :: Trace IO LogMessage -> SyncNodeError -> IO a
 logAndThrowIO tracer err = do
   logError tracer $ show err
   throwIO err

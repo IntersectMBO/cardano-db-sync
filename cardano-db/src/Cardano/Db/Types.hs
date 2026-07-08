@@ -10,8 +10,9 @@
 
 module Cardano.Db.Types where
 
-import Cardano.BM.Trace (Trace)
+import Cardano.Db.Log (LogMessage)
 import Cardano.Ledger.Coin (DeltaCoin (..))
+import Cardano.Logging.Types (Trace)
 import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, ReaderT, fromMaybe)
 import qualified Codec.Binary.Bech32 as Bech32
 import Crypto.Hash (Blake2b_160)
@@ -67,7 +68,7 @@ newtype DbM a = DbM
 data DbEnv = DbEnv
   { dbConnection :: !HsqlCon.Connection
   , dbPoolConnection :: !(Maybe (Pool HsqlCon.Connection)) -- not all operations use a pool connection
-  , dbTracer :: !(Maybe (Trace IO Text))
+  , dbTracer :: !(Maybe (Trace IO LogMessage))
   }
 
 ----------------------------------------------------------------------------

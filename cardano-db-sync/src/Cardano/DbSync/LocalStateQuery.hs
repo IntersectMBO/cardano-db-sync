@@ -10,11 +10,12 @@ module Cardano.DbSync.LocalStateQuery (
   newStateQueryTMVar,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.DbSync.Error (SyncNodeError (..))
 import Cardano.DbSync.StateQuery
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (atomically, (.))
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -55,7 +56,7 @@ import qualified Ouroboros.Network.Protocol.LocalStateQuery.Client as StateQuery
 import Ouroboros.Network.Protocol.LocalStateQuery.Type (AcquireFailure, Target (..))
 
 data NoLedgerEnv = NoLedgerEnv
-  { nleTracer :: !(Trace IO Text)
+  { nleTracer :: !(Trace IO LogMessage)
   , nleSystemStart :: !SystemStart
   , nleQueryVar :: StateQueryTMVar CardanoBlock CardanoInterpreter
   , nleHistoryInterpreterVar :: StrictTVar IO (Strict.Maybe CardanoInterpreter)
@@ -72,7 +73,7 @@ newtype StateQueryTMVar blk result = StateQueryTMVar
         )
   }
 
-mkNoLedgerEnv :: Trace IO Text -> Consensus.ProtocolInfo CardanoBlock -> Ledger.Network -> SystemStart -> IO NoLedgerEnv
+mkNoLedgerEnv :: Trace IO LogMessage -> Consensus.ProtocolInfo CardanoBlock -> Ledger.Network -> SystemStart -> IO NoLedgerEnv
 mkNoLedgerEnv trce protoInfo network systemStart = do
   qVar <- newStateQueryTMVar
   interVar <- newTVarIO Strict.Nothing

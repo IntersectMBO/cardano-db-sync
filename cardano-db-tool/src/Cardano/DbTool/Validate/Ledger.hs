@@ -7,7 +7,6 @@ import qualified Cardano.Db as DB
 import Cardano.DbSync.Config
 import Cardano.DbSync.Error
 import Cardano.DbSync.Ledger.Types (CardanoLedgerState (..))
-import Cardano.DbSync.Tracing.ToObjectOrphans ()
 import Cardano.DbTool.Validate.Balance (ledgerAddrBalance)
 import Cardano.DbTool.Validate.Util
 import Cardano.Network.NodeToClient (withIOManager)

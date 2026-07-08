@@ -69,12 +69,11 @@ module Cardano.DbSync.Config.Types (
   disableAllInsertOptions,
 ) where
 
-import qualified Cardano.BM.Configuration as Logging
-import qualified Cardano.BM.Data.Configuration as Logging
 import qualified Cardano.Chain.Update as Byron
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import qualified Cardano.Crypto.Hash as Crypto
 import Cardano.Db (MigrationDir, PGPassSource (..), TxOutVariantType (..))
+import Cardano.Logging.Types (TraceConfig)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..))
 import Control.Monad (fail)
@@ -109,6 +108,8 @@ data SyncCommand
 data SyncNodeParams = SyncNodeParams
   { enpConfigFile :: !ConfigFile
   , enpSocketPath :: !SocketPath
+  , enpTracerSocket :: !(Maybe FilePath)
+  -- ^ Socket path of a cardano-tracer to forward logs and metrics to.
   , enpMaybeLedgerStateDir :: !(Maybe LedgerStateDir)
   , enpMigrationDir :: !MigrationDir
   , enpPGPassSource :: !PGPassSource
@@ -130,7 +131,7 @@ data SyncProtocol
 
 data SyncNodeConfig = SyncNodeConfig
   { dncNetworkName :: !NetworkName
-  , dncLoggingConfig :: !Logging.Configuration
+  , dncTraceConfig :: !TraceConfig
   , dncNodeConfigFile :: !NodeConfigFile
   , dncProtocol :: !SyncProtocol
   , dncRequiresNetworkMagic :: !RequiresNetworkMagic
@@ -161,7 +162,6 @@ data SyncNodeConfig = SyncNodeConfig
 
 data SyncPreConfig = SyncPreConfig
   { pcNetworkName :: !NetworkName
-  , pcLoggingConfig :: !Logging.Representation
   , pcNodeConfigFile :: !NodeConfigFile
   , pcEnableFutureGenesis :: !Bool
   , pcEnableLogging :: !Bool
@@ -446,7 +446,6 @@ parseGenSyncNodeConfig :: Aeson.Object -> Parser SyncPreConfig
 parseGenSyncNodeConfig o =
   SyncPreConfig
     <$> fmap NetworkName (o .: "NetworkName")
-    <*> parseJSON (Object o)
     <*> fmap NodeConfigFile (o .: "NodeConfigFile")
     <*> fmap (fromMaybe True) (o .:? "EnableFutureGenesis")
     <*> o .: "EnableLogging"

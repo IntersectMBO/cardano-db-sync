@@ -28,10 +28,11 @@ module Cardano.DbSync.DbEvent (
   runDbSyncTransactionPool,
 ) where
 
-import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (LogMessage)
 import Cardano.DbSync.Error (SyncNodeCallStack, SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Types
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTMVar, StrictTVar, newEmptyTMVarIO, newTVarIO, takeTMVar)
 import qualified Control.Concurrent.STM as STM
@@ -66,7 +67,7 @@ data ThreadChannels = ThreadChannels
 runDbSyncTransaction ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.DbEnv ->
   Maybe DB.IsolationLevel ->
   ExceptT SyncNodeError DB.DbM a ->
@@ -100,7 +101,7 @@ runDbSyncTransactionNoLogging dbEnv exceptTAction = do
 runDbSyncNoTransaction ::
   forall m a.
   (MonadUnliftIO m, HasCallStack) =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.DbEnv ->
   ExceptT SyncNodeError DB.DbM a ->
   m (Either SyncNodeError a)
@@ -130,7 +131,7 @@ runDbSyncNoTransactionNoLogging dbEnv exceptTAction = do
 -- | Execute database operations in a single transaction using the connection pool
 runDbSyncTransactionPool ::
   (MonadUnliftIO m, HasCallStack) =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.DbEnv ->
   ExceptT SyncNodeError DB.DbM a ->
   m (Either SyncNodeError a)

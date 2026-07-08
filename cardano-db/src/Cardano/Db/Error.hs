@@ -15,7 +15,8 @@ module Cardano.Db.Error (
   formatDbCallStack,
 ) where
 
-import Cardano.BM.Trace (Trace, logError)
+import Cardano.Db.Log (LogMessage, logError)
+import Cardano.Logging.Types (Trace)
 import Cardano.Prelude (HasCallStack, MonadIO, SrcLoc (..), callStack, getCallStack, textShow, throwIO)
 import Control.Exception (Exception)
 import Data.Text (Text)
@@ -63,7 +64,7 @@ runOrThrowIO ioEither = do
     Left err -> throwIO err
     Right a -> pure a
 
-logAndThrowIO :: Trace IO Text -> Text -> IO a
+logAndThrowIO :: Trace IO LogMessage -> Text -> IO a
 logAndThrowIO tracer msg = do
   logError tracer msg
   throwIO $ userError $ show msg

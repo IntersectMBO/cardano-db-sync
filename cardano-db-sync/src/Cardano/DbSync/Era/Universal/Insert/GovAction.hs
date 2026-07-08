@@ -29,10 +29,10 @@ module Cardano.DbSync.Era.Universal.Insert.GovAction (
 )
 where
 
-import Cardano.BM.Trace (logWarning)
 import qualified Cardano.Crypto as Crypto
 import Cardano.Db (DbWord64 (..))
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (logWarning)
 import Cardano.DbSync.Api (getTrace)
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Cache (queryOrInsertRewardAccount, queryPoolKeyOrInsert, queryTxIdWithCache)

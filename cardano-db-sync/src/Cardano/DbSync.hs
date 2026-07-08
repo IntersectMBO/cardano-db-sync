@@ -30,23 +30,26 @@ import Control.Concurrent.Async
 import Control.Monad.Extra (whenJust)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
+import Data.Time.Clock (UTCTime, getCurrentTime)
 import Data.Version (showVersion)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Connection.Setting as HsqlSet
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
+import Ouroboros.Network.Magic (NetworkMagic (..))
 import Paths_cardano_db_sync (version)
 import System.Directory (createDirectoryIfMissing)
 import Prelude (id)
 
-import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
+import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Crypto as Crypto
+import Cardano.Db.Log (LogMessage, logError, logInfo, logWarning)
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (Nat, (%))
 import Cardano.Slotting.Slot (EpochNo (..))
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), LedgerEnv (..), RunMigration, SyncEnv (..), SyncOptions (..), envLedgerEnv)
-import Cardano.DbSync.Config (configureLogging)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Database
@@ -58,26 +61,49 @@ import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..))
 import Cardano.DbSync.OffChain (runFetchOffChainPoolThread, runFetchOffChainVoteThread)
 import Cardano.DbSync.Rollback (handlePostRollbackSnapshots, unsafeRollback)
 import Cardano.DbSync.Sync (runSyncNodeClient)
-import Cardano.DbSync.Tracing.ToObjectOrphans ()
+import Cardano.DbSync.Tracing.Setup (DbSyncTracers (..), mkDbSyncTracers)
 import Cardano.DbSync.Types
 
 runDbSyncNode :: MetricSetters -> [(Text, Text)] -> SyncNodeParams -> SyncNodeConfig -> IO ()
 runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
   withIOManager $ \iomgr -> do
-    trce <- configureLogging syncNodeConfigFromFile "db-sync-node"
+    -- The genesis config is read before the tracers are created, because the
+    -- network magic and system start time are needed for forwarding to
+    -- cardano-tracer.
+    eGenCfg <- runExceptT $ readCardanoGenesisConfig syncNodeConfigFromFile
+    now <- getCurrentTime
+    let networkMagic = either (const $ NetworkMagic 0) genesisNetworkMagic eGenCfg
+        systemStart = either (const now) genesisSystemStart eGenCfg
+
+    tracers <-
+      mkDbSyncTracers
+        iomgr
+        (dncEnableLogging syncNodeConfigFromFile)
+        (dncTraceConfig syncNodeConfigFromFile)
+        (enpTracerSocket params)
+        networkMagic
+        (unNetworkName $ dncNetworkName syncNodeConfigFromFile)
+        systemStart
+    let trce = dstTracer tracers
 
     abortOnPanic <- hasAbortOnPanicEnv
     startupReport trce abortOnPanic params
 
+    genCfg <- case eGenCfg of
+      Left err -> do
+        logError trce $ "readCardanoGenesisConfig: " <> show err
+        throwIO err
+      Right genCfg -> pure genCfg
+
     -- Run initial migrations synchronously first
     runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile
 
-    runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic
+    runDbSync metricsSetters iomgr tracers params syncNodeConfigFromFile abortOnPanic genCfg
 
 -- Extract just the initial migration logic (no indexes)
 runMigrationsOnly ::
   [(Text, Text)] ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   SyncNodeParams ->
   SyncNodeConfig ->
   IO ()
@@ -122,13 +148,14 @@ runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile = do
 runDbSync ::
   MetricSetters ->
   IOManager ->
-  Trace IO Text ->
+  DbSyncTracers ->
   SyncNodeParams ->
   SyncNodeConfig ->
   -- Should abort on panic
   Bool ->
+  GenesisConfig ->
   IO ()
-runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic = do
+runDbSync metricsSetters iomgr tracers params syncNodeConfigFromFile abortOnPanic genCfg = do
   logInfo trce $ textShow syncOpts
 
   -- Read the PG connection info
@@ -155,19 +182,22 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
 
   runSyncNode
     metricsSetters
-    trce
+    tracers
     iomgr
     dbConnectionSetting
     (void . runNearTipMigration)
     syncNodeConfigFromFile
     params
     syncOpts
+    genCfg
   where
+    trce = dstTracer tracers
     dbMigrationDir :: DB.MigrationDir
     dbMigrationDir = enpMigrationDir params
     syncOpts = extractSyncOptions params abortOnPanic syncNodeConfigFromFile
     txOutConfig = sioTxOut $ dncInsertOptions syncNodeConfigFromFile
 
+    indexesMsg :: Text
     indexesMsg =
       mconcat
         [ "Creating Indexes. This may require an extended period of time to perform."
@@ -179,7 +209,7 @@ runDbSync metricsSetters iomgr trce params syncNodeConfigFromFile abortOnPanic =
 
 runSyncNode ::
   MetricSetters ->
-  Trace IO Text ->
+  DbSyncTracers ->
   IOManager ->
   -- | Database connection settings
   HsqlSet.Setting ->
@@ -188,8 +218,9 @@ runSyncNode ::
   SyncNodeConfig ->
   SyncNodeParams ->
   SyncOptions ->
+  GenesisConfig ->
   IO ()
-runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions = do
+runSyncNode metricsSetters tracers iomgr dbConnSetting runNearTipMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions genCfg = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -207,7 +238,6 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
           -- Create connection pool for parallel operations
           pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
           let dbEnv = DB.createDbEnv dbConn (Just pool) (Just trce)
-          genCfg <- readCardanoGenesisConfig syncNodeConfigFromFile
           isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
           logProtocolMagicId trce $ genesisProtocolMagicId genCfg
 
@@ -258,7 +288,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
             mapConcurrently_
               id
               [ runDbThread syncEnv threadChannels
-              , runSyncNodeClient metricsSetters syncEnv iomgr trce threadChannels (enpSocketPath syncNodeParams)
+              , runSyncNodeClient metricsSetters syncEnv iomgr tracers threadChannels (enpSocketPath syncNodeParams)
               , runFetchOffChainPoolThread syncEnv
               , runFetchOffChainVoteThread syncEnv
               , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
@@ -266,6 +296,8 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
               `finally` closeLedgerEnv syncEnv
     )
   where
+    trce = dstTracer tracers
+
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
       case dncShelleyHardFork cfg of
@@ -275,7 +307,7 @@ runSyncNode metricsSetters trce iomgr dbConnSetting runNearTipMigrationFnc syncN
     removeJsonbFromSchemaConfig = ioRemoveJsonbFromSchema $ soptInsertOptions syncOptions
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 
-logProtocolMagicId :: Trace IO Text -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
+logProtocolMagicId :: Trace IO LogMessage -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
 logProtocolMagicId tracer pm =
   liftIO
     . logInfo tracer
@@ -283,6 +315,18 @@ logProtocolMagicId tracer pm =
       [ "NetworkMagic: "
       , textShow (Crypto.unProtocolMagicId pm)
       ]
+
+-- | The network magic of the network this genesis config is for.
+genesisNetworkMagic :: GenesisConfig -> NetworkMagic
+genesisNetworkMagic =
+  NetworkMagic . Crypto.unProtocolMagicId . genesisProtocolMagicId
+
+-- | The chain start time from the (Byron) genesis config.
+genesisSystemStart :: GenesisConfig -> UTCTime
+genesisSystemStart genCfg =
+  case genCfg of
+    GenesisCardano _ bCfg _ _ _ ->
+      Byron.gdStartTime (Byron.configGenesisData bCfg)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -347,7 +391,7 @@ extractSyncOptions snp aop snc =
     forceTxIn' = forceTxIn . sioTxOut . dncInsertOptions $ snc
     ioTxOutVariantType' = txOutConfigToTableType $ sioTxOut $ dncInsertOptions snc
 
-startupReport :: Trace IO Text -> Bool -> SyncNodeParams -> IO ()
+startupReport :: Trace IO LogMessage -> Bool -> SyncNodeParams -> IO ()
 startupReport trce aop params = do
   logInfo trce $ mconcat ["Version number: ", Text.pack (showVersion version)]
   logInfo trce $ mconcat ["Git hash: ", DB.gitRev]

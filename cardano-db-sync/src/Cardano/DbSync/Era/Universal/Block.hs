@@ -14,10 +14,11 @@ where
 
 import Data.Either.Extra (eitherToMaybe)
 
-import Cardano.BM.Trace (Trace, logDebug, logInfo)
+import Cardano.Db.Log (LogMessage, logDebug, logInfo)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 
 import qualified Cardano.Db as DB
@@ -147,7 +148,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
   where
     iopts = getInsertOptions syncEnv
 
-    logger :: Trace IO a -> a -> IO ()
+    logger :: Trace IO LogMessage -> Text -> IO ()
     logger
       | shouldLog = logInfo
       | withinTwoMins = logInfo
@@ -164,7 +165,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
         Generic.Shelley -> "insertBlockForEra"
         other -> mconcat ["insertBlockForEra(", textShow other, ")"]
 
-    tracer :: Trace IO Text
+    tracer :: Trace IO LogMessage
     tracer = getTrace syncEnv
 
     cache :: CacheStatus

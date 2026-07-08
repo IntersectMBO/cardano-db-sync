@@ -30,6 +30,7 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.Db
+                        Cardano.Db.Log
                         Cardano.Db.Progress
                         Cardano.Db.Schema.Core
                         Cardano.Db.Schema.Variants
@@ -86,7 +87,6 @@ library
                       , cardano-ledger-core
                       , cardano-prelude
                       , containers
-                      , contra-tracer
                       , contravariant-extras
                       , cryptonite
                       , directory
@@ -95,7 +95,6 @@ library
                       , file-embed
                       , filepath
                       , hasql
-                      , iohk-monitoring
                       , memory
                       , monad-logger
                       , process
@@ -106,6 +105,7 @@ library
                       , template-haskell
                       , text
                       , time
+                      , trace-dispatcher
                       -- , transformers
                       -- , unliftio-core
                       -- This is never intended to run on non-POSIX systems.

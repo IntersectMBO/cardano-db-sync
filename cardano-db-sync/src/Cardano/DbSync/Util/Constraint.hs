@@ -2,11 +2,11 @@
 
 module Cardano.DbSync.Util.Constraint where
 
-import Cardano.BM.Data.Trace (Trace)
+import Cardano.Db.Log (LogMessage)
+import Cardano.Logging (Trace)
 import Cardano.Prelude (ExceptT, MonadIO (..), atomically, lift)
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad (unless)
-import Data.Text (Text)
 
 import Cardano.Db (ManualDbConstraints (..))
 import qualified Cardano.Db as DB
@@ -17,7 +17,7 @@ import Cardano.DbSync.Error (SyncNodeError)
 addConstraintsIfNotExist ::
   -- | TVar for tracking constraint state
   SyncEnv ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   ExceptT SyncNodeError DB.DbM ()
 addConstraintsIfNotExist syncEnv trce = do
   addStakeConstraintsIfNotExist syncEnv trce
@@ -26,7 +26,7 @@ addConstraintsIfNotExist syncEnv trce = do
 -- | Add EpochStake constraints if not exist
 addStakeConstraintsIfNotExist ::
   SyncEnv ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   ExceptT SyncNodeError DB.DbM ()
 addStakeConstraintsIfNotExist syncEnv trce = do
   let eDbConstraints = envDbConstraints syncEnv
@@ -39,7 +39,7 @@ addStakeConstraintsIfNotExist syncEnv trce = do
 -- | Add Reward constraints if not exist
 addRewardConstraintsIfNotExist ::
   SyncEnv ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   ExceptT SyncNodeError DB.DbM ()
 addRewardConstraintsIfNotExist syncEnv trce = do
   let eDbConstraints = envDbConstraints syncEnv

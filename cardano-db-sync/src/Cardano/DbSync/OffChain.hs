@@ -21,8 +21,8 @@ module Cardano.DbSync.OffChain (
   fetchOffChainVoteData,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.DbSync.Api (determineIsolationLevel, getInsertOptions, getTrace)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..), SyncOptions (..))
 import Cardano.DbSync.Config.Types
@@ -30,6 +30,7 @@ import Cardano.DbSync.OffChain.Http
 import Cardano.DbSync.OffChain.Query
 import qualified Cardano.DbSync.OffChain.Vote.Types as Vote
 import Cardano.DbSync.Types
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Control.Concurrent.Class.MonadSTM.Strict (
   StrictTBQueue (..),
@@ -56,7 +57,7 @@ data LoadOffChainWorkQueue a m = LoadOffChainWorkQueue
   }
 
 loadOffChainPoolWorkQueue ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   StrictTBQueue IO OffChainPoolWorkQueue ->
   DB.DbM ()
 loadOffChainPoolWorkQueue trce workQueue =
@@ -69,7 +70,7 @@ loadOffChainPoolWorkQueue trce workQueue =
       }
 
 loadOffChainVoteWorkQueue ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   StrictTBQueue IO OffChainVoteWorkQueue ->
   DB.DbM ()
 loadOffChainVoteWorkQueue trce workQueue =
@@ -83,7 +84,7 @@ loadOffChainVoteWorkQueue trce workQueue =
 
 loadOffChainWorkQueue ::
   MonadIO m =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   LoadOffChainWorkQueue a m ->
   DB.DbM ()
 loadOffChainWorkQueue _trce offChainWorkQueue = do
@@ -99,7 +100,7 @@ loadOffChainWorkQueue _trce offChainWorkQueue = do
 -- Insert OffChain
 ---------------------------------------------------------------------------------------------------------------------------------
 insertOffChainPoolResults ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   StrictTBQueue IO OffChainPoolResult ->
   DB.DbM ()
 insertOffChainPoolResults trce resultQueue = do
@@ -123,7 +124,7 @@ insertOffChainPoolResults trce resultQueue = do
       OffChainPoolResultError {} -> True
 
 insertOffChainVoteResults ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   StrictTBQueue IO OffChainVoteResult ->
   DB.DbM ()
 insertOffChainVoteResults trce resultQueue = do
@@ -310,7 +311,7 @@ tDelay = threadDelay 300_000_000
 ---------------------------------------------------------------------------------------------------------------------------------
 -- Fetch OffChain data
 ---------------------------------------------------------------------------------------------------------------------------------
-fetchOffChainPoolData :: Trace IO Text -> Bool -> Http.Manager -> Time.POSIXTime -> OffChainPoolWorkQueue -> IO OffChainPoolResult
+fetchOffChainPoolData :: Trace IO LogMessage -> Bool -> Http.Manager -> Time.POSIXTime -> OffChainPoolWorkQueue -> IO OffChainPoolResult
 fetchOffChainPoolData _tracer allowPrivate manager time oPoolWorkQ =
   convert <<$>> runExceptT $ do
     let url = oPoolWqUrl oPoolWorkQ

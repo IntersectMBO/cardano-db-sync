@@ -58,9 +58,9 @@ import System.IO (
  )
 import Text.Read (readMaybe)
 
-import Cardano.BM.Trace (Trace)
 import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import Cardano.Db.Error (mkDbCallStack)
+import Cardano.Db.Log (LogMessage)
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
 import Cardano.Db.Progress (updateProgress, withProgress)
@@ -68,6 +68,7 @@ import Cardano.Db.Run
 import Cardano.Db.Schema.Variants (TxOutVariantType (..))
 import qualified Cardano.Db.Statement.Function.Core as DB
 import qualified Cardano.Db.Types as DB
+import Cardano.Logging.Types (Trace)
 import System.Process (readProcessWithExitCode)
 
 newtype MigrationDir
@@ -96,7 +97,7 @@ data MigrationToRun = Initial | Full | NearTip
 
 -- | Run the migrations in the provided 'MigrationDir' and write date stamped log file
 -- to 'LogFileDir'. It returns a list of file names of all non-official schema migration files.
-runMigrations :: Maybe (Trace IO Text.Text) -> PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutVariantType -> IO (Bool, [FilePath])
+runMigrations :: Maybe (Trace IO LogMessage) -> PGConfig -> Bool -> MigrationDir -> Maybe LogFileDir -> MigrationToRun -> TxOutVariantType -> IO (Bool, [FilePath])
 runMigrations trce pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantType = do
   allScripts <- getMigrationScripts migrationDir
   ranAll <- case (mLogfiledir, allScripts) of
@@ -375,7 +376,7 @@ readStageFromFilename fn =
   case takeWhile isDigit . drop 1 $ dropWhile (/= '-') (takeFileName fn) of
     stage -> fromMaybe 0 $ readMaybe stage
 
-noLedgerMigrations :: DB.DbEnv -> Trace IO Text.Text -> IO ()
+noLedgerMigrations :: DB.DbEnv -> Trace IO LogMessage -> IO ()
 noLedgerMigrations dbEnv trce = do
   let action :: DB.DbM ()
       action = do

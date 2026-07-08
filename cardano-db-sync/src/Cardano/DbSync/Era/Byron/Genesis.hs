@@ -15,12 +15,13 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import Cardano.BM.Trace (Trace, logInfo)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.Genesis as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Crypto as Crypto
+import Cardano.Db.Log (LogMessage, logInfo)
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Paths_cardano_db_sync (version)
 
@@ -120,7 +121,7 @@ validateGenesisDistribution ::
   SyncEnv ->
   Bool ->
   Bool ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   Text ->
   Byron.Config ->
   DB.BlockId ->

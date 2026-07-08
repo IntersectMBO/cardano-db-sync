@@ -22,9 +22,9 @@ module Cardano.DbSync.Era.Universal.Insert.Grouped (
 import qualified Data.List as List
 import qualified Data.Text as Text
 
-import Cardano.BM.Trace (logWarning)
 import Cardano.Db (DbLovelace (..), MinIds (..))
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (logWarning)
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api

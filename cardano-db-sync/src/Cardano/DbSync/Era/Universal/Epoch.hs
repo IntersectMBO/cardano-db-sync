@@ -25,7 +25,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.Ledger.Address (AccountAddress (..), AccountId (..))
 import Cardano.Ledger.BaseTypes (Network, unEpochInterval)
 import qualified Cardano.Ledger.BaseTypes as Ledger
@@ -37,6 +37,7 @@ import Cardano.Ledger.Conway.Governance (finishDRepPulser)
 import qualified Cardano.Ledger.Conway.Governance.DRepPulser as Ledger
 import Cardano.Ledger.Conway.PParams (DRepVotingThresholds (..))
 import Cardano.Ledger.Conway.Rules (RatifyState (..))
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 
@@ -102,7 +103,7 @@ insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
     iopts = getInsertOptions syncEnv
 
 insertEpochParam ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.BlockId ->
   EpochNo ->
   Generic.ProtoParams ->
@@ -203,7 +204,7 @@ insertStakeSlice syncEnv (Generic.Slice slice finalSlice) = do
       . logInfo tracer
       $ mconcat ["Inserted ", show size, " EpochStake for ", show (Generic.sliceEpochNo slice)]
   where
-    tracer :: Trace IO Text
+    tracer :: Trace IO LogMessage
     tracer = getTrace syncEnv
 
     network :: Network

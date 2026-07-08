@@ -11,12 +11,21 @@ module Cardano.SMASH.Server.Config (
   paramsToConfig,
 ) where
 
-import qualified Cardano.BM.Configuration.Model as Logging
-import qualified Cardano.BM.Setup as Logging
-import Cardano.BM.Trace (Trace)
+import Cardano.Db.Log (LogMessage)
+import Cardano.Logging (
+  BackendConfig (..),
+  DetailLevel (..),
+  FormatLogging (..),
+  SeverityS (..),
+  Trace,
+  readConfigurationWithFallback,
+ )
 import Cardano.Prelude
+import Cardano.SMASH.Server.Tracing (defaultSmashTraceConfig, mkSmashTracer)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.Aeson (FromJSON (..), ToJSON (..))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -56,7 +65,7 @@ paramsToConfig params = do
 -- | SMASH Server configuration
 data SmashServerConfig = SmashServerConfig
   { sscSmashPort :: Int
-  , sscTrace :: Trace IO Text
+  , sscTrace :: Trace IO LogMessage
   , sscAdmins :: ApplicationUsers
   , sspPsqlPool :: Int
   }
@@ -102,15 +111,16 @@ parseAppUser line = case Text.breakOn "," line of
   where
     prepareCred = Text.strip
 
-configureLogging :: FilePath -> Text -> IO (Trace IO Text)
+configureLogging :: FilePath -> Text -> IO (Trace IO LogMessage)
 configureLogging fp loggingName = do
   bs <- readByteString fp "DbSync" -- only uses the db-sync config
-  case Yaml.decodeEither' bs of
-    Left err -> throwIO $ ConfigError ("readSyncNodeConfig: Error parsing config: " <> textShow err)
-    Right representation -> do
-      -- Logging.Configuration
-      logConfig <- Logging.setupFromRepresentation representation
-      liftIO $ Logging.setupTrace (Right logConfig) loggingName
+  traceConfig <- case Yaml.decodeEither' bs of
+    Left err -> throwIO $ ConfigError ("configureLogging: Error parsing config: " <> textShow err)
+    Right (Aeson.Object o)
+      | any (`KeyMap.member` o) ["TraceOptions", "HermodTracing", "Options"] ->
+          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) fp
+    Right _ -> pure defaultSmashTraceConfig
+  mkSmashTracer traceConfig loggingName
 
 readByteString :: FilePath -> Text -> IO ByteString
 readByteString fp cfgType =

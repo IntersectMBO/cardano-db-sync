@@ -49,11 +49,12 @@ module Cardano.DbSync.Api (
 )
 where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
 import qualified Cardano.Chain.Genesis as Byron
 import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
+import Cardano.Db.Log (LogMessage, logInfo, logWarning)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (
@@ -242,7 +243,7 @@ getTopLevelConfig syncEnv =
     HasLedger hasLedgerEnv -> Consensus.pInfoConfig $ leProtocolInfo hasLedgerEnv
     NoLedger noLedgerEnv -> Consensus.pInfoConfig $ nleProtocolInfo noLedgerEnv
 
-getTrace :: SyncEnv -> Trace IO Text
+getTrace :: SyncEnv -> Trace IO LogMessage
 getTrace sEnv =
   case envLedgerEnv sEnv of
     HasLedger hasLedgerEnv -> leTrace hasLedgerEnv
@@ -309,7 +310,7 @@ logDbState env = do
         , textShow (unBlockNo $ bBlockNo tipInfo)
         ]
 
-    tracer :: Trace IO Text
+    tracer :: Trace IO LogMessage
     tracer = getTrace env
 
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
@@ -321,7 +322,7 @@ getCurrentTipBlockNo env = do
 
 mkSyncEnv ::
   MetricSetters ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.DbEnv ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
@@ -422,7 +423,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
 
 mkSyncEnvFromConfig ::
   MetricSetters ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.DbEnv ->
   SyncOptions ->
   GenesisConfig ->
@@ -531,7 +532,7 @@ getMaxRollbacks ::
 getMaxRollbacks = Ledger.unNonZero . maxRollbacks . configSecurityParam . pInfoConfig
 
 getBootstrapInProgress ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   Bool ->
   DB.DbEnv ->
   IO Bool

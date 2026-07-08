@@ -10,7 +10,7 @@ module Cardano.DbSync.Era.Universal.Insert.LedgerEvent (
   insertNewEpochLedgerEvents,
 ) where
 
-import Cardano.BM.Trace (logInfo)
+import Cardano.Db.Log (logInfo)
 
 import qualified Cardano.Db as DB
 import qualified Cardano.Ledger.Address as Ledger

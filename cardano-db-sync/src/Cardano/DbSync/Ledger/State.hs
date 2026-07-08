@@ -7,6 +7,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -34,7 +35,7 @@ module Cardano.DbSync.Ledger.State (
   module Cardano.DbSync.Ledger.Snapshot,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncOptions (..))
 import Cardano.DbSync.Config.Types
 import qualified Cardano.DbSync.Era.Cardano.Util as Cardano
@@ -56,6 +57,7 @@ import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Conway.Governance as Shelley
 import Cardano.Ledger.Shelley.AdaPots (AdaPots (..), sumAdaPots)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.EpochInfo (EpochInfo, epochInfoEpoch)
 import Cardano.Slotting.Slot (
@@ -72,7 +74,6 @@ import Control.Concurrent.Class.MonadSTM.Strict (
  )
 import Control.Concurrent.STM.TBQueue (newTBQueueIO)
 import Control.ResourceRegistry (runWithTempRegistry)
-import qualified Control.Tracer as Tracer
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Short as SBS
@@ -121,6 +122,7 @@ import System.FS.IO (ioHasFS)
 import System.FilePath ((</>))
 import System.Mem (performMajorGC)
 import System.Random (genWord64, newStdGen)
+import qualified "contra-tracer" Control.Tracer as Tracer
 
 -- Note: The decision on whether a ledger-state is written to disk is based on the block number
 -- rather than the slot number because while the block number is fully populated (for every block
@@ -187,7 +189,7 @@ ledgerDbCurrent db = case ledgerDbCheckpoints db of
   SSeq.Empty -> panic "ledgerDbCurrent: empty LedgerDB"
 
 mkHasLedgerEnv ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   Consensus.ProtocolInfo CardanoBlock ->
   LedgerStateDir ->
   Ledger.Network ->

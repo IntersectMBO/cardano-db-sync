@@ -7,8 +7,9 @@ module Cardano.SMASH.Server.Run (
   runAppStubbed,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (LogMessage, logInfo)
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Cardano.SMASH.Server.Api
 import Cardano.SMASH.Server.Config
@@ -47,7 +48,7 @@ runSmashServer config = do
   -- Run the web server
   runSettings settings app
 
-mkApp :: Trace IO Text -> PoolDataLayer -> ApplicationUsers -> IO Application
+mkApp :: Trace IO LogMessage -> PoolDataLayer -> ApplicationUsers -> IO Application
 mkApp trce dataLayer appUsers = do
   -- Ugly hack, wait 2s for migrations to run for the admin user to be created.
   -- You can always run the migrations first.
@@ -88,7 +89,7 @@ checkIfUserValid (ApplicationUsers applicationUsers) applicationUser@(Applicatio
 
 -- Stub api
 
-runAppStubbed :: Trace IO Text -> Int -> IO ()
+runAppStubbed :: Trace IO LogMessage -> Int -> IO ()
 runAppStubbed trce port = do
   let settings =
         setPort port $
@@ -98,7 +99,7 @@ runAppStubbed trce port = do
 
   runSettings settings =<< mkAppStubbed trce
 
-mkAppStubbed :: Trace IO Text -> IO Application
+mkAppStubbed :: Trace IO LogMessage -> IO Application
 mkAppStubbed trce = do
   dataLayer <- createCachedPoolDataLayer Nothing
 

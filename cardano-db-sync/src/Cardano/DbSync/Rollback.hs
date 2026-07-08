@@ -20,7 +20,8 @@ import Ouroboros.Consensus.Ledger.Extended
 import Ouroboros.Network.Block
 import Ouroboros.Network.Point
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Cardano.Db.Log (LogMessage, logInfo, logWarning)
+import Cardano.Logging (Trace)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Monad.Extra (whenJust)
 
@@ -143,7 +144,7 @@ rollbackLedger syncEnv point =
     NoLedger _ -> pure Nothing
 
 -- For testing and debugging. A rollback that logs more information.
-unsafeRollback :: Trace IO Text -> DB.TxOutVariantType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
+unsafeRollback :: Trace IO LogMessage -> DB.TxOutVariantType -> DB.PGConfig -> SlotNo -> IO (Either SyncNodeError ())
 unsafeRollback trce txOutVariantType config slotNo = do
   logWarning trce $ "Starting a forced rollback to slot: " <> textShow (unSlotNo slotNo)
 

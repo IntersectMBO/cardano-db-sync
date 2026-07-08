@@ -5,9 +5,9 @@
 
 module Cardano.Db.Statement.Constraint where
 
-import Cardano.BM.Data.Trace (Trace)
-import Cardano.BM.Trace (logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.Db.Schema.Core.StakeDelegation (EpochStake, Reward)
+import Cardano.Logging.Types (Trace)
 import Cardano.Prelude (HasCallStack, Proxy (..), liftIO)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
@@ -113,7 +113,7 @@ queryRewardAndEpochStakeConstraints = do
 
 -- | Add reward table constraint
 addRewardTableConstraint ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   DbM ()
 addRewardTableConstraint trce = do
   let proxy = Proxy @Reward
@@ -131,7 +131,7 @@ addRewardTableConstraint trce = do
 
 -- | Add epoch stake table constraint
 addEpochStakeTableConstraint ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   DbM ()
 addEpochStakeTableConstraint trce = do
   let proxy = Proxy @EpochStake
@@ -145,7 +145,7 @@ addEpochStakeTableConstraint trce = do
 
 -- | Log new constraint creation
 logNewConstraint ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   -- | Table name
   Text.Text ->
   -- | Constraint name

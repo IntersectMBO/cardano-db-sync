@@ -9,7 +9,7 @@
 
 module Cardano.DbSync.Ledger.Types where
 
-import Cardano.BM.Trace (Trace)
+import Cardano.Db.Log (LogMessage)
 import Cardano.DbSync.Config.Types (LedgerBackend (..), LedgerStateDir)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Ledger.Event (LedgerEvent)
@@ -28,6 +28,7 @@ import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState ())
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (
   EpochNo (..),
@@ -66,7 +67,7 @@ import Prelude (id)
 type ConsensusStateRef = Consensus.StateRef IO (ExtLedgerState CardanoBlock)
 
 data HasLedgerEnv = HasLedgerEnv
-  { leTrace :: !(Trace IO Text)
+  { leTrace :: !(Trace IO LogMessage)
   , leUseLedger :: !Bool
   , leHasRewards :: !Bool
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)

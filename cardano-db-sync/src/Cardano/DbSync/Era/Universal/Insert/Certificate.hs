@@ -22,8 +22,8 @@ module Cardano.DbSync.Era.Universal.Insert.Certificate (
   mkAdaPots,
 ) where
 
-import Cardano.BM.Trace (logWarning)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (logWarning)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncEnv (..))
 import Cardano.DbSync.Cache (

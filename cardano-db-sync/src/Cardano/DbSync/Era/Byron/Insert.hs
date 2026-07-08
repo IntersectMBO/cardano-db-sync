@@ -16,13 +16,14 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 
-import Cardano.BM.Trace (Trace, logDebug, logInfo)
 import Cardano.Binary (serialize')
 import qualified Cardano.Chain.Block as Byron hiding (blockHash)
 import qualified Cardano.Chain.Common as Byron
 import qualified Cardano.Chain.UTxO as Byron
 import qualified Cardano.Chain.Update as Byron hiding (protocolVersion)
 import qualified Cardano.Crypto as Crypto (serializeCborHash)
+import Cardano.Db.Log (LogMessage, logDebug, logInfo)
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), EpochSize (..))
 import Ouroboros.Consensus.Byron.Ledger (ByronBlock (..))
@@ -169,10 +170,10 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         , renderByteArray (Byron.blockHash blk)
         ]
   where
-    tracer :: Trace IO Text
+    tracer :: Trace IO LogMessage
     tracer = getTrace syncEnv
 
-    logger :: Bool -> Trace IO a -> a -> IO ()
+    logger :: Bool -> Trace IO LogMessage -> Text -> IO ()
     logger followingClosely
       | firstBlockOfEpoch = logInfo
       | followingClosely = logInfo
@@ -284,7 +285,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
     txOutVariantType = getTxOutVariantType syncEnv
     iopts = getInsertOptions syncEnv
 
-    tracer :: Trace IO Text
+    tracer :: Trace IO LogMessage
     tracer = getTrace syncEnv
 
     annotateTx :: SyncNodeError -> SyncNodeError
@@ -356,7 +357,7 @@ insertTxOutByron syncEnv _hasConsumed bootStrap txId index txout =
         }
 
 insertTxIn ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.TxId ->
   (Byron.TxIn, DB.TxId, DB.TxOutIdW, DbLovelace) ->
   ExceptT SyncNodeError DB.DbM DB.TxInId
