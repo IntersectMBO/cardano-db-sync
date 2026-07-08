@@ -9,20 +9,36 @@ on:
       - '**'
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
 
 jobs:
   build:
-    name: "Upload to ghcr.io"
+    name: "Build ${{ matrix.image.name }} (${{ matrix.arch.name }})"
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - name: amd64
+            system: x86_64-linux
+          - name: arm64
+            system: aarch64-linux
+        image:
+          - name: cardano-db-sync
+            nix_key: cardano-db-sync-docker
+          - name: cardano-smash-server
+            nix_key: cardano-smash-server-docker
     steps:
       - name: Install Nix with good defaults
-        uses: input-output-hk/install-nix-action@v31
+        uses: input-output-hk/install-nix-action@v31.10.6
         with:
           extra_nix_config: |
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-            substituters = https://cache.iog.io/ https://cache.nixos.org/
+            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            extra-substituters = https://cache.nixos.org/
             experimental-features = nix-command flakes fetch-closure
             allow-import-from-derivation = true
             accept-flake-config = true
@@ -48,36 +64,93 @@ jobs:
           echo "REPO_OWNER=${REPO_OWNER}" >> "$GITHUB_ENV"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-      - name: Upload ${{ github.actor }}/cardano-db-sync
+      - name: Upload ${{ matrix.image.name }} (${{ matrix.arch.name }})
+        env:
+          IMAGE_NAME: ${{ matrix.image.name }}
+          NIX_KEY: ${{ matrix.image.nix_key }}
+          ARCH_NAME: ${{ matrix.arch.name }}
+          ARCH_SYSTEM: ${{ matrix.arch.system }}
         run: |
-          # Download the image from the nix binary cachhe
-          nix build --builders "" --max-jobs 0 .#cardano-db-sync-docker
+          # Download the image from the nix binary cache
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link "result-${IMAGE_NAME}-${ARCH_NAME}" \
+            ".#packages.${ARCH_SYSTEM}.${NIX_KEY}"
 
-          # Push the image
+          # Push the arch-suffixed image
           skopeo copy \
-            docker-archive:./result \
-            docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:$IMAGE_TAG
+            "docker-archive:./result-${IMAGE_NAME}-${ARCH_NAME}" \
+            "docker://ghcr.io/${REPO_OWNER}/${IMAGE_NAME}:${IMAGE_TAG}-${ARCH_NAME}"
 
-          # If it's a tag build, also tag it as latest
-          if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
-            skopeo copy \
-              docker-archive:./result \
-              docker://ghcr.io/${REPO_OWNER}/cardano-db-sync:latest
-          fi
+  create-manifest:
+    name: "Create multi-arch manifest"
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Nix with good defaults
+        uses: input-output-hk/install-nix-action@v31.10.6
+        with:
+          extra_nix_config: |
+            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            extra-substituters = https://cache.nixos.org/
+            experimental-features = nix-command flakes fetch-closure
+            allow-import-from-derivation = true
+            accept-flake-config = true
+          nix_path: nixpkgs=channel:nixos-unstable
 
-      - name: Upload ${{ github.actor }}/cardano-smash-server
+      - name: Install regctl # simplifies obtaining multi-arch digests
+        run: nix profile install nixpkgs#regctl
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v2.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set environment variables
         run: |
-          # Download the image from the nix binary cachhe
-          nix build --builders "" --max-jobs 0 .#cardano-smash-server-docker
+          REPO_OWNER="$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')"
+          IMAGE_TAG="$(echo $GITHUB_REF_NAME | tr '/' '_')"
 
-          # Push the image
-          skopeo copy \
-            docker-archive:./result \
-            docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:$IMAGE_TAG
+          echo "REPO_OWNER=${REPO_OWNER}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-          # If it's a tag build, also tag it as latest
-          if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
-            skopeo copy \
-              docker-archive:./result \
-              docker://ghcr.io/${REPO_OWNER}/cardano-smash-server:latest
-          fi
+      - name: Create and verify manifests
+        run: |
+          IMAGES=(cardano-db-sync cardano-smash-server)
+          ARCHES=(amd64 arm64)
+
+          for IMAGE in "${IMAGES[@]}"; do
+            IMAGE_REPO="ghcr.io/${REPO_OWNER}/${IMAGE}"
+            DIGESTS=()
+
+            echo "::group::Fetching digests for ${IMAGE}"
+            for ARCH in "${ARCHES[@]}"; do
+              DIGEST=$(skopeo inspect --no-tags "docker://${IMAGE_REPO}:${IMAGE_TAG}-${ARCH}" | jq -r .Digest)
+              echo "${IMAGE} ${ARCH} digest: ${DIGEST}"
+              DIGESTS+=("${IMAGE_REPO}@${DIGEST}")
+            done
+            echo "::endgroup::"
+
+            echo "::group::Creating manifest for ${IMAGE_REPO}:${IMAGE_TAG}"
+            docker buildx imagetools create --tag "${IMAGE_REPO}:${IMAGE_TAG}" "${DIGESTS[@]}"
+            echo "::endgroup::"
+
+            # If it's a tag build, also tag the multi-arch manifest as latest
+            if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
+              MANIFEST_DIGEST=$(regctl manifest head "${IMAGE_REPO}:${IMAGE_TAG}")
+              echo "::group::Tagging ${IMAGE_REPO}:latest"
+              docker buildx imagetools create --tag "${IMAGE_REPO}:latest" "${IMAGE_REPO}@${MANIFEST_DIGEST}"
+              echo "::endgroup::"
+            fi
+
+            echo "::group::Verifying ${IMAGE_REPO}:${IMAGE_TAG}"
+            regctl manifest head "${IMAGE_REPO}:${IMAGE_TAG}"
+            skopeo inspect --raw "docker://${IMAGE_REPO}:${IMAGE_TAG}" | jq
+            echo "::endgroup::"
+          done
