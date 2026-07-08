@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix with good defaults
-        uses: input-output-hk/install-nix-action@v31
+        uses: input-output-hk/install-nix-action@v31.10.6
         with:
           extra_nix_config: |
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
@@ -25,23 +25,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Download archive from cache
+      - name: Download archives from cache
         run: |
           nix build \
             --builders "" \
             --max-jobs 0 \
-            --out-link result-linux \
-            .#cardano-db-sync-linux
+            --out-link result-amd64 \
+            .#packages.x86_64-linux.cardano-db-sync-linux
+          nix build \
+            --builders "" \
+            --max-jobs 0 \
+            --out-link result-arm64 \
+            .#packages.aarch64-linux.cardano-db-sync-linux
           nix build \
             --builders "" \
             --max-jobs 0 \
             --out-link result-macos \
-            .#packages.x86_64-darwin.cardano-db-sync-macos
+            .#packages.aarch64-darwin.cardano-db-sync-macos
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p assets
+
+          # The linux tarballs are named "cardano-db-sync-<ver>-<platform>.tar.gz". This
+          # should be the same on any architecture, so we just choose one of them.
+          linux_base="$(basename result-amd64/cardano-db-sync-*-linux.tar.gz .tar.gz)"
+
+          # Copy the renamed linux archives
+          cp "result-amd64/${linux_base}.tar.gz" "assets/${linux_base}-amd64.tar.gz"
+          cp "result-arm64/${linux_base}.tar.gz" "assets/${linux_base}-arm64.tar.gz"
+
+          # Do the same for macOS
+          macos_base="$(basename result-macos/cardano-db-sync-*-macos.tar.gz .tar.gz)"
+          cp "result-macos/${macos_base}.tar.gz" "assets/${macos_base}-arm64.tar.gz"
 
       - name: Release
         uses: input-output-hk/action-gh-release@v1
         with:
           draft: true
           files: |
-            result-linux/cardano-db-sync-*-linux.tar.gz
-            result-macos/cardano-db-sync-*-macos.tar.gz
+            assets/cardano-db-sync-*-linux-amd64.tar.gz
+            assets/cardano-db-sync-*-linux-arm64.tar.gz
+            assets/cardano-db-sync-*-macos-arm64.tar.gz
