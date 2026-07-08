@@ -1075,6 +1075,15 @@ insertExtraKeyWitnessStmt =
 insertExtraKeyWitness :: HasCallStack => SCB.ExtraKeyWitness -> DbM Id.ExtraKeyWitnessId
 insertExtraKeyWitness eKeyWitness = runSession mkDbCallStack $ HsqlSes.statement eKeyWitness insertExtraKeyWitnessStmt
 
+insertLeiosCertSignerStmt :: HsqlStmt.Statement SCB.LeiosCertSigner Id.LeiosCertSignerId
+insertLeiosCertSignerStmt =
+  insert
+    SCB.leiosCertSignerEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.LeiosCertSignerId)
+
+insertLeiosCertSigner :: HasCallStack => SCB.LeiosCertSigner -> DbM Id.LeiosCertSignerId
+insertLeiosCertSigner signer = runSession mkDbCallStack $ HsqlSes.statement signer insertLeiosCertSignerStmt
+
 --------------------------------------------------------------------------------
 -- Meta
 --------------------------------------------------------------------------------

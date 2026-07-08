@@ -12,16 +12,26 @@ module Cardano.DbSync.Era.Universal.Block (
 )
 where
 
+import Data.Bits (testBit)
 import Data.Either.Extra (eitherToMaybe)
+import Data.List (sortOn)
+import qualified Data.ByteString as BS
+import qualified Data.Map.Strict as Map
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
-import Cardano.Binary (serialize')
-import Cardano.Crypto.Leios (LeiosCert (..), encodeBitField, leiosSignatureToBytes)
+import Cardano.Binary (decodeFull', serialize')
+import Cardano.Crypto.Leios (BitField, LeiosCert (..), encodeBitField, leiosSignatureToBytes)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
+import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
+import qualified Cardano.Ledger.State as LState
 import Cardano.Prelude
 import LeiosDemoTypes (EbAnnouncement (..), EbHash (..))
+import Lens.Micro ((^.))
+import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
+import Ouroboros.Consensus.Ledger.Extended (ledgerState)
+import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Api
@@ -41,7 +51,7 @@ import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
 import Cardano.DbSync.Era.Universal.Insert.Tx (insertTx)
 import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
-import Cardano.DbSync.Ledger.Types (ApplyResult (..))
+import Cardano.DbSync.Ledger.Types (ApplyResult (..), CardanoLedgerState (..))
 import Cardano.DbSync.OffChain
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
@@ -102,6 +112,13 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
           , DB.blockLeiosCertSigners = serialize' . encodeBitField . leiosCertSigners <$> Generic.blkLeiosCert blk
           , DB.blockLeiosCertSignature = leiosSignatureToBytes . leiosCertSignature <$> Generic.blkLeiosCert blk
           }
+
+    -- Leios: resolve the cert's signer bitfield against the committee (the stake-ordered pool
+    -- distribution of the parent ledger state — apOldLedger, which is exactly the committee
+    -- consensus verified the cert against) and record one row per signing pool.
+    forM_ (Generic.blkLeiosCert blk) $ \cert ->
+      whenStrictJust (apOldLedger applyResult) $
+        insertLeiosCertSigners syncEnv blkId cert
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
@@ -178,3 +195,67 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
 
     cache :: CacheStatus
     cache = envCache syncEnv
+
+-- | Resolve a block's LeiosCert signer bitfield to the signing pools and insert one
+-- 'DB.LeiosCertSigner' row per signer. The committee is the "everyone votes" stake-ordered
+-- pool distribution of the parent ledger state ('apOldLedger'): seat @i@ (bit @i@, MSB-first)
+-- is the @i@-th pool when pools are sorted by ascending active stake (ties by pool-id) — exactly
+-- how the ledger's @mkCommitteeEveryoneVotes@ orders the committee.
+insertLeiosCertSigners ::
+  SyncEnv ->
+  DB.BlockId ->
+  LeiosCert ->
+  CardanoLedgerState ->
+  ExceptT SyncNodeError DB.DbM ()
+insertLeiosCertSigners syncEnv blkId cert oldLedger =
+  case committeeOrder oldLedger of
+    Nothing ->
+      liftIO $ logInfo trce "leios-resolve: no Dijkstra committee in parent ledger state"
+    Just ordered -> do
+      let seats = bitFieldSetBits (leiosCertSigners cert) (length ordered)
+      liftIO $
+        logInfo trce $
+          "leios-resolve: committee=" <> textShow (length ordered) <> " signer-seats=" <> textShow seats
+      forM_ seats $ \seat ->
+        case drop seat ordered of
+          [] -> liftIO $ logInfo trce $ "leios-resolve: seat " <> textShow seat <> " beyond committee"
+          ((poolId, _) : _) -> do
+            ePhid <- queryPoolKeyWithCache syncEnv UpdateCache poolId
+            case ePhid of
+              Left _ ->
+                liftIO $ logInfo trce $ "leios-resolve: seat " <> textShow seat <> " pool not in db"
+              Right phid ->
+                void $
+                  lift $
+                    DB.insertLeiosCertSigner $
+                      DB.LeiosCertSigner
+                        { DB.leiosCertSignerBlockId = blkId
+                        , DB.leiosCertSignerPoolHashId = phid
+                        , DB.leiosCertSignerSeatIndex = fromIntegral seat
+                        }
+  where
+    trce = getTrace syncEnv
+
+-- | The Leios committee ordering from the parent ledger state's active pool distribution
+-- ('nesPd'): pools sorted by ascending normalised stake, ties broken by pool-id (Map order).
+-- 'Nothing' for non-Dijkstra parent states (which never carry a cert).
+committeeOrder cls =
+  case ledgerState (clsState cls) of
+    LedgerStateDijkstra dls ->
+      let nes = Consensus.shelleyLedgerState dls
+          pd = Shelley.nesPd nes ^. LState.poolDistrDistrL
+       in Just $ sortOn (LState.individualPoolStake . snd) (Map.toList pd)
+    _ -> Nothing
+
+-- | Set-bit indices of a LeiosCert signer bitfield, MSB-first, over @n@ committee seats.
+-- Mirrors the ledger's private @bitFieldMembers@: seat @i@ is byte @i \`div\` 8@, bit @7 - (i \`mod\` 8)@.
+bitFieldSetBits :: BitField -> Int -> [Int]
+bitFieldSetBits bf n =
+  [ i
+  | i <- [0 .. n - 1]
+  , let byteIx = i `div` 8
+  , byteIx < BS.length raw
+  , testBit (BS.index raw byteIx) (7 - (i `mod` 8))
+  ]
+  where
+    raw = either (const BS.empty) identity (decodeFull' (serialize' (encodeBitField bf)))
