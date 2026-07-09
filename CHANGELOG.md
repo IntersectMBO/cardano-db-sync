@@ -1,8 +1,5 @@
 # Revision history for cardano-db-sync
 
-## Unreleased
-- Add `scripts/test-value-domains.sql` to the schema-check suite (`scripts/run-schema-checks.sh`): value-range, non-negativity, recomputed-total, and duplicate/missing-row checks over a populated database, covering corruption that uniqueness/FK checks cannot see (e.g. [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135), [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118), [#2155](https://github.com/IntersectMBO/cardano-db-sync/issues/2155)). Read-only; on a mainnet-sized database a full run takes ~10-15 minutes.
-
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
 - Fix `pool_relay.port` overflow [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135); a startup migration repairs existing rows.
