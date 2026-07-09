@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## Unreleased
+- Fix duplicate `epoch_state` rows [#2155](https://github.com/IntersectMBO/cardano-db-sync/issues/2155) (earlier [#2060](https://github.com/IntersectMBO/cardano-db-sync/issues/2060)): a rollback across an epoch boundary left a stale row that was re-inserted on re-sync. A startup migration removes existing duplicates and adds a `UNIQUE (epoch_no)` constraint, and the insert now upserts on that key.
+
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
 - Fix `pool_relay.port` overflow [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135); a startup migration repairs existing rows.

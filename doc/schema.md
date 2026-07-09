@@ -1008,7 +1008,7 @@ Table with governance (and in the future other) stats per epoch.
 | `committee_id` | integer (64) | The reference to the current committee. |
 | `no_confidence_id` | integer (64) | The reference to the current gov_action_proposal of no confidence. TODO: This remains NULL. |
 | `constitution_id` | integer (64) | The reference to the current constitution. Should never be null. |
-| `epoch_no` | word31type | The epoch in question. |
+| `epoch_no` | word31type | The epoch in question (unique). |
 
 ### `event_info`
 
