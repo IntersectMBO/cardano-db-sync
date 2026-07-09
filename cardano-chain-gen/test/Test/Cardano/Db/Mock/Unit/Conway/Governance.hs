@@ -137,11 +137,11 @@ rollbackNewCommittee =
     -- Fast forward to next epoch
     epoch2' <- Api.fillUntilNextEpoch interpreter server
     assertBlockNoBackoff dbSync (length $ epoch1 <> epoch1' <> epoch2')
-    -- Should now have 2 identical committees
+    -- Exactly one epoch_state row per epoch, even after re-crossing the boundary (#2155)
     assertEqQuery
       dbSync
       (DB.queryEpochStateCount 3)
-      2
+      1
       "Unexpected epoch state count for epoch 3"
   where
     testLabel = "conwayRollbackNewCommittee"
