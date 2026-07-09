@@ -11,6 +11,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
   rollbackNewCommittee,
+  rollbackDuplicateEpochState,
   rollbackNewCommitteeProposal,
   updateConstitution,
   treasuryWithdrawal,
@@ -145,6 +146,38 @@ rollbackNewCommittee =
       "Unexpected epoch state count for epoch 3"
   where
     testLabel = "conwayRollbackNewCommittee"
+
+-- | Regression test for #2155 (earlier reported as #2060): a rollback across an
+-- epoch boundary must not leave a duplicate epoch_state row. doc/schema.md
+-- describes epoch_state as governance "stats per epoch", i.e. one row per epoch.
+-- This drives the same rollback-across-boundary as rollbackNewCommittee but
+-- asserts that documented invariant (exactly one row for epoch 3). It fails on
+-- current code, which stores a second row, until the duplicate-epoch_state fix.
+rollbackDuplicateEpochState :: IOManager -> [(Text, Text)] -> Assertion
+rollbackDuplicateEpochState =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
+    -- Propose, ratify, and enact a new committee member (writes epoch_state for epoch 3)
+    epoch3 <- enactNewCommittee interpreter server
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
+
+    -- Roll back across the epoch 3 boundary, then fast forward past it again
+    epoch1' <- rollbackBlocks interpreter server 4 epoch3
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch1')
+    epoch2' <- Api.fillUntilNextEpoch interpreter server
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch1' <> epoch2')
+
+    -- doc/schema.md: epoch_state holds stats per epoch, so there must be exactly one
+    assertEqQuery
+      dbSync
+      (DB.queryEpochStateCount 3)
+      1
+      "epoch_state has a duplicate row for epoch 3 (see #2155)"
+  where
+    testLabel = "conwayRollbackDuplicateEpochState"
 
 chainedNewCommittee :: IOManager -> [(Text, Text)] -> Assertion
 chainedNewCommittee =
