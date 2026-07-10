@@ -160,6 +160,10 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
 
     whenStrictJust (apNewEpoch applyResult) $ \newEpoch -> do
       insertOnNewEpoch syncEnv blkId (Generic.blkSlotNo blk) epochNo newEpoch
+      -- Leios: at the epoch boundary, record the full committee (every seat) for the new epoch,
+      -- resolved from the post-tick ledger state (apNewLedger).
+      whenStrictJust (apNewLedger applyResult) $
+        insertLeiosCommittee syncEnv blkId epochNo
 
     insertStakeSlice syncEnv $ apStakeSlice applyResult
 
@@ -236,16 +240,51 @@ insertLeiosCertSigners syncEnv blkId cert oldLedger =
   where
     trce = getTrace syncEnv
 
--- | The Leios committee ordering from the parent ledger state's active pool distribution
--- ('nesPd'): pools sorted by ascending normalised stake, ties broken by pool-id (Map order).
--- 'Nothing' for non-Dijkstra parent states (which never carry a cert).
-committeeOrder cls =
+insertLeiosCommittee ::
+  SyncEnv ->
+  DB.BlockId ->
+  EpochNo ->
+  CardanoLedgerState ->
+  ExceptT SyncNodeError DB.DbM ()
+insertLeiosCommittee syncEnv blkId epochNo newLedger =
+  case committeeOrderNext newLedger of
+    Nothing -> pure ()
+    Just [] -> pure ()
+    Just ordered -> do
+      liftIO $
+        logInfo trce $
+          "leios-committee: epoch " <> textShow (unEpochNo epochNo + 1) <> " committee=" <> textShow (length ordered)
+      forM_ (zip [0 ..] ordered) $ \(seat, (poolId, ips)) -> do
+        ePhid <- queryPoolKeyWithCache syncEnv UpdateCache poolId
+        case ePhid of
+          Left _ ->
+            liftIO $ logInfo trce $ "leios-committee: seat " <> textShow (seat :: Int) <> " pool not in db"
+          Right phid ->
+            void $
+              lift $
+                DB.insertLeiosCommittee $
+                  DB.LeiosCommittee
+                    { DB.leiosCommitteeBlockId = blkId
+                    , DB.leiosCommitteeEpochNo = fromIntegral (unEpochNo epochNo + 1)
+                    , DB.leiosCommitteeSeatIndex = fromIntegral (seat :: Int)
+                    , DB.leiosCommitteePoolHashId = phid
+                    , DB.leiosCommitteeWeight = fromRational (LState.individualPoolStake ips)
+                    }
+  where
+    trce = getTrace syncEnv
+
+committeeOrderFrom pick cls =
   case ledgerState (clsState cls) of
     LedgerStateDijkstra dls ->
       let nes = Consensus.shelleyLedgerState dls
-          pd = Shelley.nesPd nes ^. LState.poolDistrDistrL
+          pd = pick nes ^. LState.poolDistrDistrL
        in Just $ sortOn (LState.individualPoolStake . snd) (Map.toList pd)
     _ -> Nothing
+
+committeeOrder cls = committeeOrderFrom Shelley.nesPd cls
+
+committeeOrderNext cls =
+  committeeOrderFrom (\nes -> LState.ssStakeMarkPoolDistr (Shelley.esSnapshots (Shelley.nesEs nes))) cls
 
 -- | Set-bit indices of a LeiosCert signer bitfield, MSB-first, over @n@ committee seats.
 -- Mirrors the ledger's private @bitFieldMembers@: seat @i@ is byte @i \`div\` 8@, bit @7 - (i \`mod\` 8)@.

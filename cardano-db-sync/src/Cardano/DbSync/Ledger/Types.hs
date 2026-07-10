@@ -174,6 +174,7 @@ data ApplyResult = ApplyResult
   , apPoolsRegistered :: !(Set.Set PoolKeyHash) -- registered before the block application
   , apNewEpoch :: !(Strict.Maybe Generic.NewEpoch) -- Only Just for a single block at the epoch boundary
   , apOldLedger :: !(Strict.Maybe CardanoLedgerState)
+  , apNewLedger :: !(Strict.Maybe CardanoLedgerState) -- post-tick ledger state (committee of the new epoch)
   , apDeposits :: !(Strict.Maybe Generic.Deposits) -- The current required deposits
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
@@ -190,6 +191,7 @@ defaultApplyResult slotDetails =
     , apPoolsRegistered = Set.empty
     , apNewEpoch = Strict.Nothing
     , apOldLedger = Strict.Nothing
+    , apNewLedger = Strict.Nothing
     , apDeposits = Strict.Nothing
     , apSlotDetails = slotDetails
     , apStakeSlice = Generic.NoSlices

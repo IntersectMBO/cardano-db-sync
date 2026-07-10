@@ -342,6 +342,7 @@ applyBlock env blk = do
             , apPoolsRegistered = getRegisteredPools oldCls
             , apNewEpoch = maybeToStrict newEpoch
             , apOldLedger = Strict.Just oldCls
+            , apNewLedger = Strict.Just newState
             , apDeposits = maybeToStrict $ Generic.getDeposits newLedgerState
             , apSlotDetails = details
             , apStakeSlice = getStakeSlice env newState False

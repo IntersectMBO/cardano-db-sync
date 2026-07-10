@@ -122,19 +122,22 @@ deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
       reverseIndexStmt = deleteWhereCount @SCB.ReverseIndex "block_id" ">=" blockIdEncoder
       epochParamStmt = deleteWhereCount @SCE.EpochParam "block_id" ">=" blockIdEncoder
       leiosCertSignerStmt = deleteWhereCount @SCB.LeiosCertSigner "block_id" ">=" blockIdEncoder
+      leiosCommitteeStmt = deleteWhereCount @SCB.LeiosCommittee "block_id" ">=" blockIdEncoder
 
-  (adaPotsCount, reverseIndexCount, epochParamCount, leiosCertSignerCount) <- runSession mkDbCallStack $ HsqlSes.pipeline $ do
+  (adaPotsCount, reverseIndexCount, epochParamCount, leiosCertSignerCount, leiosCommitteeCount) <- runSession mkDbCallStack $ HsqlSes.pipeline $ do
     ada <- HsqlP.statement blkId adaPotsStmt
     rev <- HsqlP.statement blkId reverseIndexStmt
     epoch <- HsqlP.statement blkId epochParamStmt
     leios <- HsqlP.statement blkId leiosCertSignerStmt
-    pure (ada, rev, epoch, leios)
+    committee <- HsqlP.statement blkId leiosCommitteeStmt
+    pure (ada, rev, epoch, leios, committee)
 
   let initialLogs =
         [ (tableName (Proxy @SCE.AdaPots), adaPotsCount)
         , (tableName (Proxy @SCB.ReverseIndex), reverseIndexCount)
         , (tableName (Proxy @SCE.EpochParam), epochParamCount)
         , (tableName (Proxy @SCB.LeiosCertSigner), leiosCertSignerCount)
+        , (tableName (Proxy @SCB.LeiosCommittee), leiosCommitteeCount)
         ]
 
   -- Handle off-chain related deletions

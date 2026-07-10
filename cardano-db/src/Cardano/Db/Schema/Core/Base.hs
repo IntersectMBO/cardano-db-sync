@@ -175,6 +175,45 @@ leiosCertSignerEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: leios_committee
+-- Description: One row per committee seat for each epoch — the full "everyone votes" stake-ordered
+-- pool distribution (apNewLedger) of the epoch, not just the seats that signed any given block.
+-- seat_index is the committee position (ascending active stake, ties by pool-id) and weight is the
+-- pool's normalised active stake. block_id is the epoch-boundary block that populated the committee
+-- (used to key rollbacks, mirroring leios_cert_signer).
+-----------------------------------------------------------------------------------------------------------------------------------
+data LeiosCommittee = LeiosCommittee
+  { leiosCommitteeBlockId :: !BlockId -- noreference
+  , leiosCommitteeEpochNo :: !Word32
+  , leiosCommitteeSeatIndex :: !Word32 -- committee seat index
+  , leiosCommitteePoolHashId :: !PoolHashId -- noreference
+  , leiosCommitteeWeight :: !Double -- normalised active stake for this seat
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key LeiosCommittee = LeiosCommitteeId
+instance DbInfo LeiosCommittee
+
+leiosCommitteeDecoder :: D.Row LeiosCommittee
+leiosCommitteeDecoder =
+  LeiosCommittee
+    <$> idDecoder BlockId -- leiosCommitteeBlockId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- leiosCommitteeEpochNo
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- leiosCommitteeSeatIndex
+    <*> idDecoder PoolHashId -- leiosCommitteePoolHashId
+    <*> D.column (D.nonNullable D.float8) -- leiosCommitteeWeight
+
+leiosCommitteeEncoder :: E.Params LeiosCommittee
+leiosCommitteeEncoder =
+  mconcat
+    [ leiosCommitteeBlockId >$< idEncoder getBlockId
+    , leiosCommitteeEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
+    , leiosCommitteeSeatIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
+    , leiosCommitteePoolHashId >$< idEncoder getPoolHashId
+    , leiosCommitteeWeight >$< E.param (E.nonNullable E.float8)
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
 
 -- |
 -- Table Name: tx

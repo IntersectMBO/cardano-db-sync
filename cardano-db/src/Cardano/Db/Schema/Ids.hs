@@ -90,6 +90,9 @@ newtype SlotLeaderId = SlotLeaderId {getSlotLeaderId :: Int64}
 newtype LeiosCertSignerId = LeiosCertSignerId {getLeiosCertSignerId :: Int64}
   deriving (Eq, Show, Ord)
 
+newtype LeiosCommitteeId = LeiosCommitteeId {getLeiosCommitteeId :: Int64}
+  deriving (Eq, Show, Ord)
+
 newtype SchemaVersionId = SchemaVersionId {getSchemaVersionId :: Int64}
   deriving (Eq, Show, Ord)
 

@@ -1084,6 +1084,15 @@ insertLeiosCertSignerStmt =
 insertLeiosCertSigner :: HasCallStack => SCB.LeiosCertSigner -> DbM Id.LeiosCertSignerId
 insertLeiosCertSigner signer = runSession mkDbCallStack $ HsqlSes.statement signer insertLeiosCertSignerStmt
 
+insertLeiosCommitteeStmt :: HsqlStmt.Statement SCB.LeiosCommittee Id.LeiosCommitteeId
+insertLeiosCommitteeStmt =
+  insert
+    SCB.leiosCommitteeEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.LeiosCommitteeId)
+
+insertLeiosCommittee :: HasCallStack => SCB.LeiosCommittee -> DbM Id.LeiosCommitteeId
+insertLeiosCommittee seat = runSession mkDbCallStack $ HsqlSes.statement seat insertLeiosCommitteeStmt
+
 --------------------------------------------------------------------------------
 -- Meta
 --------------------------------------------------------------------------------
