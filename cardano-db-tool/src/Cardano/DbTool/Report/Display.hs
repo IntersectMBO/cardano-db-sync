@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Cardano.DbTool.Report.Display (
+  formatReportTime,
   leftPad,
   rightPad,
   separator,
@@ -11,6 +12,11 @@ import qualified Data.List as List
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.ICU as ICU
+import Data.Time.Clock (UTCTime)
+
+-- Crude placeholder rendering, replaced by a fixed-width format in the fix commit.
+formatReportTime :: UTCTime -> Text
+formatReportTime = Text.pack . show
 
 leftPad :: Int -> Text -> Text
 leftPad width txt = Text.take (width - textDisplayLen txt) spaces <> txt

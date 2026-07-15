@@ -29,11 +29,11 @@ library
                         -Wunused-packages
 
   exposed-modules:      Cardano.DbTool
+                        Cardano.DbTool.Report.Display
 
   other-modules:        Cardano.DbTool.PrepareSnapshot
                         Cardano.DbTool.Report
                         Cardano.DbTool.Report.Balance
-                        Cardano.DbTool.Report.Display
                         Cardano.DbTool.Report.StakeReward
                         Cardano.DbTool.Report.StakeReward.History
                         Cardano.DbTool.Report.StakeReward.Latest
@@ -81,6 +81,29 @@ library
                       , time
                       , transformers
                       , transformers-except
+
+test-suite test
+  default-language:     Haskell2010
+  type:                 exitcode-stdio-1.0
+  main-is:              test.hs
+  hs-source-dirs:       test
+
+  ghc-options:          -Wall
+                        -Wcompat
+                        -Wredundant-constraints
+                        -Wincomplete-patterns
+                        -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns
+                        -Wunused-imports
+                        -Wunused-packages
+
+  other-modules:        Test.Cardano.DbTool.Report.DisplayTest
+
+  build-depends:        base
+                      , cardano-db-tool
+                      , tasty
+                      , tasty-hunit
+                      , time
 
 executable cardano-db-tool
   default-language:     Haskell2010
