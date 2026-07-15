@@ -128,7 +128,8 @@ test-suite test
                         -Wunused-imports
                         -Wunused-packages
 
-  other-modules:        Test.Property.Cardano.Db.Migration
+  other-modules:        Test.Property.Cardano.Db.ErrorRender
+                        Test.Property.Cardano.Db.Migration
                         Test.Property.Cardano.Db.Types
                         Test.Property.Upstream
 
