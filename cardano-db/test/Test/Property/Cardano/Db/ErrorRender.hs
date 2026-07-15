@@ -9,27 +9,28 @@ import Cardano.Db (DbCallStack (..), DbLookupError (..), DbSessionError (..))
 import Control.Exception (displayException)
 import Data.List (isInfixOf)
 import GHC.Stack (SrcLoc (..))
-import Hedgehog (Property, discover)
+import Hedgehog (Property, discover, (===))
 import qualified Hedgehog as H
 
 -- A user-facing error must show its message, not the derived Show of the record
--- (which leaks the DbCallStack / SrcLoc internals).
+-- (which leaks the DbCallStack / SrcLoc internals as raw record fields).
 
-prop_lookupErrorIsClean :: Property
-prop_lookupErrorIsClean =
-  H.withTests 1 . H.property $ do
-    let rendered = displayException (DbLookupError callStack "Slot not found for slot_no: 5")
-    H.assert ("Slot not found for slot_no: 5" `isInfixOf` rendered)
-    H.assert (not ("SrcLoc" `isInfixOf` rendered))
-    H.assert (not ("DbCallStack" `isInfixOf` rendered))
+-- A business lookup error is just its message: no call chain, no internals.
+prop_lookupErrorShowsMessageOnly :: Property
+prop_lookupErrorShowsMessageOnly =
+  H.withTests 1 . H.property $
+    displayException (DbLookupError callStack "Slot not found for slot_no: 5")
+      === "Slot not found for slot_no: 5"
 
-prop_sessionErrorIsClean :: Property
-prop_sessionErrorIsClean =
+-- A session (infrastructure) error keeps a readable call chain for diagnostics,
+-- but must not dump the derived Show of the DbCallStack / SrcLoc records.
+prop_sessionErrorHasNoRawRecordDump :: Property
+prop_sessionErrorHasNoRawRecordDump =
   H.withTests 1 . H.property $ do
     let rendered = displayException (DbSessionError callStack "ResultError (RowError 0 6 UnexpectedNull)")
     H.assert ("ResultError (RowError 0 6 UnexpectedNull)" `isInfixOf` rendered)
-    H.assert (not ("SrcLoc" `isInfixOf` rendered))
-    H.assert (not ("DbCallStack" `isInfixOf` rendered))
+    H.assert (not ("dbCsFncName" `isInfixOf` rendered))
+    H.assert (not ("srcLocFile" `isInfixOf` rendered))
 
 callStack :: DbCallStack
 callStack =

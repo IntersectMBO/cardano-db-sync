@@ -6,7 +6,6 @@ module Cardano.DbTool.Validate.BlockTxs (
 
 import qualified Cardano.Db as DB
 import Cardano.DbTool.Validate.Util
-import Control.Monad (forM_, when)
 import Data.Either (lefts)
 import Data.Word (Word64)
 import qualified System.Random as Random
@@ -38,18 +37,16 @@ validateBlockTxs epoch = do
   results <- DB.runDbStandaloneSilent $ mapM validateBlockCount blks
   case lefts results of
     [] -> putStrLn $ greenText "ok"
-    xs -> do
-      when (length xs > 1) $ putStrLn ""
-      forM_ xs $ \ve ->
-        putStrLn $
-          redText
-            ( "Failed on block no "
-                ++ show (veBlockNo ve)
-                ++ ": expected tx count of "
-                ++ show (veTxCountExpected ve)
-                ++ " but got "
-                ++ show (veTxCountActual ve)
-            )
+    xs -> error $ redText (concatMap (("\n" ++) . reportFailure) xs)
+  where
+    reportFailure :: ValidateError -> String
+    reportFailure ve =
+      "Failed on block no "
+        ++ show (veBlockNo ve)
+        ++ ": expected tx count of "
+        ++ show (veTxCountExpected ve)
+        ++ " but got "
+        ++ show (veTxCountActual ve)
 
 validateBlockCount :: (Word64, Word64) -> DB.DbM (Either ValidateError ())
 validateBlockCount (blockNo, txCountExpected) = do
