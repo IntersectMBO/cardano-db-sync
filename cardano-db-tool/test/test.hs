@@ -1,5 +1,5 @@
-import Test.Tasty (defaultMain, testGroup)
 import qualified Test.Cardano.DbTool.Report.DisplayTest
+import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()
 main =

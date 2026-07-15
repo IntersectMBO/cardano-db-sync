@@ -37,7 +37,7 @@ reportTransactions txOutVariantType addrs =
   forM_ addrs $ \saddr -> do
     Text.putStrLn $ "\nTransactions for: " <> saddr <> "\n"
     xs <- runDbStandaloneSilent (queryStakeAddressTransactions txOutVariantType saddr)
-    renderTransactions $ coaleseTxs xs
+    renderTransactions $ coalesceTxs xs
 
 -- -------------------------------------------------------------------------------------------------
 -- This command is designed to emulate the output of the script:
@@ -136,8 +136,8 @@ sumAmounts =
         Incoming -> acc + trAmount tr
         Outgoing -> acc - trAmount tr
 
-coaleseTxs :: [Transaction] -> [Transaction]
-coaleseTxs =
+coalesceTxs :: [Transaction] -> [Transaction]
+coalesceTxs =
   mapMaybe coalese . List.groupOn trHash
   where
     coalese :: [Transaction] -> Maybe Transaction
@@ -150,7 +150,7 @@ coaleseTxs =
             if trAmount a > trAmount b
               then Transaction (trHash a) (trTime a) Outgoing (trAmount a - trAmount b)
               else Transaction (trHash a) (trTime a) Incoming (trAmount b - trAmount a)
-        _otherwise -> error $ "coaleseTxs: " ++ show (length xs)
+        _otherwise -> error $ "coalesceTxs: " ++ show (length xs)
 
 convertTx :: Direction -> (ByteString, UTCTime, DbLovelace) -> Transaction
 convertTx dir (hash, time, ll) =
@@ -163,22 +163,21 @@ convertTx dir (hash, time, ll) =
 
 renderTransactions :: [Transaction] -> IO ()
 renderTransactions xs = do
-  putStrLn "                             tx_hash                              |        date/time        | direction |      amount"
-  putStrLn "------------------------------------------------------------------+-------------------------+-----------+----------------"
-  mapM_ renderTx xs
+  mapM_ Text.putStrLn (renderTable cols (map toRow xs))
   putStrLn ""
   where
-    renderTx :: Transaction -> IO ()
-    renderTx tr =
-      Text.putStrLn $
-        mconcat
-          [ " "
-          , trHash tr
-          , separator
-          , textShow (trTime tr)
-          , separator
-          , " "
-          , textShow (trDirection tr)
-          , separator
-          , leftPad 14 (renderAda $ trAmount tr)
-          ]
+    cols :: [(Align, Text)]
+    cols =
+      [ (AlignLeft, "tx_hash")
+      , (AlignLeft, "date/time")
+      , (AlignLeft, "direction")
+      , (AlignRight, "amount")
+      ]
+
+    toRow :: Transaction -> [Text]
+    toRow tr =
+      [ trHash tr
+      , formatReportTime (trTime tr)
+      , textShow (trDirection tr)
+      , renderAda (trAmount tr)
+      ]

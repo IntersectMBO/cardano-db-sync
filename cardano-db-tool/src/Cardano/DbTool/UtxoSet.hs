@@ -45,7 +45,7 @@ utxoSetAtSlot txOutVariantType slotNo = do
           , "\nAfter aggregation:"
           , "  Utxo entries: " ++ show (length aggregated)
           , "  Utxo supply : " ++ show (sum $ map snd aggregated) ++ " Lovelace"
-          , "\nAfter paritioning:"
+          , "\nAfter partitioning:"
           , "  Accepted Utxo entries: " ++ show (length accept)
           , "  Rejected Utxo entries: " ++ show (length reject)
           , "  Accepted Utxo supply: " ++ show (sum $ map snd accept) ++ " Lovelace"

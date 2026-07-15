@@ -103,6 +103,7 @@ test-suite test
                       , cardano-db-tool
                       , tasty
                       , tasty-hunit
+                      , text
                       , time
 
 executable cardano-db-tool

@@ -289,7 +289,7 @@ pReport =
       , Opt.command "transactions" $
           Opt.info
             (ReportTransactions <$> pStakeAddress)
-            (Opt.progDesc "Report the transaction histiory for a given stake address (or addresses)")
+            (Opt.progDesc "Report the transaction history for a given stake address (or addresses)")
       ]
   where
     pReward :: Parser Report
@@ -299,7 +299,7 @@ pReport =
           [ Opt.command "epoch" $
               Opt.info
                 (ReportEpochRewards <$> pEpochNo <*> pStakeAddress)
-                (Opt.progDesc "Report the rewards fof the gievn epoch and stake address (or addresses)")
+                (Opt.progDesc "Report the rewards for the given epoch and stake address (or addresses)")
           , Opt.command "latest" $
               Opt.info
                 (ReportLatestRewards <$> pStakeAddress)
@@ -307,7 +307,7 @@ pReport =
           , Opt.command "history" $
               Opt.info
                 (ReportAllRewards <$> pStakeAddress)
-                (Opt.progDesc "Report the reward histiory for a given stake address (or addresses)")
+                (Opt.progDesc "Report the reward history for a given stake address (or addresses)")
           ]
 
     pStakeAddress :: Parser [Text]

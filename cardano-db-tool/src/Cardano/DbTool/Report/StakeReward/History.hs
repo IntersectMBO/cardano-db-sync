@@ -79,32 +79,33 @@ queryHistoryStakeRewards address = do
 renderRewards :: Text -> [EpochReward] -> IO ()
 renderRewards saddr xs = do
   Text.putStrLn $ mconcat ["\nRewards for: ", saddr, "\n"]
-  putStrLn " epoch |      reward_date        |    delegated   | pool_id | ticker |   reward     | RoS (%pa)"
-  putStrLn "-------+-------------------------+----------------+---------+--------+--------------+-----------"
-  mapM_ renderReward xs
+  mapM_ Text.putStrLn (renderTable cols (map toRow xs))
   putStrLn ""
   where
-    renderReward :: EpochReward -> IO ()
-    renderReward er =
-      Text.putStrLn $
-        mconcat
-          [ leftPad 6 (textShow $ erEpochNo er)
-          , separator
-          , textShow (erDate er)
-          , separator
-          , leftPad 14 (DB.renderAda (erDelegated er))
-          , separator
-          , leftPad 7 (textShow $ erPoolId er)
-          , separator
-          , rightPad 6 (erPoolTicker er)
-          , separator
-          , leftPad 12 (specialRenderAda (erReward er))
-          , separator
-          , Text.pack (if erPercent er == 0.0 then "   0.0" else printf "%8.3f" (erPercent er))
-          ]
+    cols :: [(Align, Text)]
+    cols =
+      [ (AlignRight, "epoch")
+      , (AlignLeft, "reward_date")
+      , (AlignRight, "delegated")
+      , (AlignRight, "pool_id")
+      , (AlignLeft, "ticker")
+      , (AlignRight, "reward")
+      , (AlignRight, "RoS (%pa)")
+      ]
+
+    toRow :: EpochReward -> [Text]
+    toRow er =
+      [ textShow (erEpochNo er)
+      , formatReportTime (erDate er)
+      , DB.renderAda (erDelegated er)
+      , textShow (erPoolId er)
+      , erPoolTicker er
+      , specialRenderAda (erReward er)
+      , Text.pack (if erPercent er == 0.0 then "0.0" else printf "%.3f" (erPercent er))
+      ]
 
     specialRenderAda :: DB.Ada -> Text
-    specialRenderAda ada = if ada == 0 then "0.0     " else DB.renderAda ada
+    specialRenderAda ada = if ada == 0 then "0.0" else DB.renderAda ada
 
 rewardPercent :: Word64 -> Maybe Word64 -> Double
 rewardPercent reward mDelegated =
