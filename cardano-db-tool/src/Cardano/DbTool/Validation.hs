@@ -15,7 +15,7 @@ import Cardano.DbTool.Validate.PoolOwner (validateAllPoolsHaveOwners)
 import Cardano.DbTool.Validate.TotalSupply (validateTotalSupplyDecreasing)
 import Cardano.DbTool.Validate.TxAccounting (validateTxAccounting)
 import Cardano.DbTool.Validate.Withdrawal (validateWithdrawals)
-import Control.Exception (ErrorCall (..), SomeException, displayException, fromException, try)
+import Control.Exception (ErrorCall (..), SomeAsyncException, SomeException, displayException, fromException, throwIO, try)
 import Control.Monad (unless)
 import System.Exit (exitFailure)
 
@@ -54,9 +54,12 @@ runCheck action = do
   result <- try action
   case result of
     Right () -> pure True
-    Left (e :: SomeException) -> do
-      putStrLn (renderCheckError e)
-      pure False
+    Left (e :: SomeException)
+      -- Let async exceptions (e.g. Ctrl-C) propagate instead of counting them as a failed check.
+      | Just (_ :: SomeAsyncException) <- fromException e -> throwIO e
+      | otherwise -> do
+          putStrLn (renderCheckError e)
+          pure False
 
 renderCheckError :: SomeException -> String
 renderCheckError e =
