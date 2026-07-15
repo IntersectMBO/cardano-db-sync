@@ -87,10 +87,10 @@ queryInputs txOutVariantType saId = do
   pure $ groupByTxHash (map (convertTx Incoming) res1 ++ map (convertTx Outgoing) res2)
   where
     groupByTxHash :: [Transaction] -> [Transaction]
-    groupByTxHash = mapMaybe coaleseInputs . List.groupOn trHash . List.sortOn trHash
+    groupByTxHash = mapMaybe coalesceInputs . List.groupOn trHash . List.sortOn trHash
 
-    coaleseInputs :: [Transaction] -> Maybe Transaction
-    coaleseInputs xs =
+    coalesceInputs :: [Transaction] -> Maybe Transaction
+    coalesceInputs xs =
       case xs of
         [] -> Nothing
         (x : _) ->
@@ -111,10 +111,10 @@ queryOutputs txOutVariantType saId = do
   pure . groupOutputs $ map (convertTx Outgoing) res
   where
     groupOutputs :: [Transaction] -> [Transaction]
-    groupOutputs = mapMaybe coaleseInputs . List.groupOn trHash . List.sortOn trHash
+    groupOutputs = mapMaybe coalesceInputs . List.groupOn trHash . List.sortOn trHash
 
-    coaleseInputs :: [Transaction] -> Maybe Transaction
-    coaleseInputs xs =
+    coalesceInputs :: [Transaction] -> Maybe Transaction
+    coalesceInputs xs =
       case xs of
         [] -> Nothing
         (x : _) ->
@@ -138,10 +138,10 @@ sumAmounts =
 
 coalesceTxs :: [Transaction] -> [Transaction]
 coalesceTxs =
-  mapMaybe coalese . List.groupOn trHash
+  mapMaybe coalesce . List.groupOn trHash
   where
-    coalese :: [Transaction] -> Maybe Transaction
-    coalese xs =
+    coalesce :: [Transaction] -> Maybe Transaction
+    coalesce xs =
       case xs of
         [] -> Nothing
         [a] -> Just a

@@ -4,7 +4,6 @@
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
 - Fix `pool_relay.port` overflow [#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135); a startup migration repairs existing rows.
 - Add `--allow-private-offchain-urls` CLI flag enabling off-chain metadata fetches against private/loopback addresses. Intended for local-cluster testing only; off by default.
-- Fix `cardano-db-tool report` table alignment (columns now sized to the data), render timestamps at a uniform second precision, and correct help-text typos [#2164](https://github.com/IntersectMBO/cardano-db-sync/issues/2164).
 
 ## 13.7.1.0
 - Auto-repair `epoch.out_sum` / `epoch.fees` / `epoch.tx_count` / `epoch.blk_count` corruption introduced by issue [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) in 13.7.0.0 - 13.7.0.4. A startup migration recomputes every epoch row from the underlying `tx` / `block` tables and rewrites only the rows whose stored values disagree. Adds a one-time 5-15 minute delay on the first startup after upgrade on a mainnet-sized database; subsequent restarts and fresh syncs are unaffected. Operators on older release lines who do not upgrade can apply the same fix manually via [`scripts/fix-epoch-table.sql`](scripts/fix-epoch-table.sql).

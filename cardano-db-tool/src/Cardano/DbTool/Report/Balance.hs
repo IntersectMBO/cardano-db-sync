@@ -71,7 +71,7 @@ queryStakeAddressBalance txOutVariantType address = do
 
 renderBalances :: [Balance] -> IO ()
 renderBalances xs = do
-  mapM_ Text.putStrLn (renderTable cols (map toRow sorted ++ [totalRow]))
+  mapM_ Text.putStrLn (withTotalDivider (renderTable cols (map toRow sorted ++ [totalRow])))
   putStrLn ""
   where
     sorted = List.sortOn (Down . balTotal) xs
@@ -87,3 +87,15 @@ renderBalances xs = do
 
     totalRow :: [Text]
     totalRow = ["total", renderAda . sum $ map balTotal xs]
+
+    -- Set the total row off with a divider, reusing the header underline.
+    withTotalDivider :: [Text] -> [Text]
+    withTotalDivider ls = case ls of
+      (header : divider : body) -> header : divider : dividerBeforeLast divider body
+      _ -> ls
+
+    dividerBeforeLast :: Text -> [Text] -> [Text]
+    dividerBeforeLast divider rows = case rows of
+      [] -> []
+      [final] -> [divider, final]
+      (row : rest) -> row : dividerBeforeLast divider rest
