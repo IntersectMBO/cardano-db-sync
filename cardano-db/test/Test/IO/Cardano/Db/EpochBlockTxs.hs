@@ -32,8 +32,8 @@ epochBlockTxCountUsesId =
       [] -> error "mkTxs returned empty list"
     rows <- queryEpochBlockNumbers 0
     case rows of
-      [(blockNo, expected)] -> do
-        actual <- queryBlockTxCount (BlockId (fromIntegral blockNo))
+      [(blockId, _blockNo, expected)] -> do
+        actual <- queryBlockTxCount blockId
         assertBool
           ("expected tx count " ++ show expected ++ " but got " ++ show actual)
           (actual == expected)

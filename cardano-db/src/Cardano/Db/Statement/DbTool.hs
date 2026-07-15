@@ -871,7 +871,7 @@ queryOutputsAddress saId =
 
 --------------------------------------------------------------------------------
 
-queryEpochBlockNumbersStmt :: HsqlStmt.Statement Word64 [(Word64, Word64)]
+queryEpochBlockNumbersStmt :: HsqlStmt.Statement Word64 [(Id.BlockId, Word64, Word64)]
 queryEpochBlockNumbersStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
@@ -880,7 +880,7 @@ queryEpochBlockNumbersStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT COALESCE(block_no, 0), tx_count"
+          [ "SELECT id, COALESCE(block_no, 0), tx_count"
           , " FROM " <> blockTableN
           , " WHERE epoch_no = $1"
           ]
@@ -888,10 +888,11 @@ queryEpochBlockNumbersStmt =
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
 
     decoder = HsqlD.rowList $ do
+      blockId <- Id.idDecoder Id.BlockId
       blockNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       txCount <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      pure (blockNo, txCount)
+      pure (blockId, blockNo, txCount)
 
-queryEpochBlockNumbers :: Word64 -> DbM [(Word64, Word64)]
+queryEpochBlockNumbers :: Word64 -> DbM [(Id.BlockId, Word64, Word64)]
 queryEpochBlockNumbers epoch =
   runSession mkDbCallStack $ HsqlSes.statement epoch queryEpochBlockNumbersStmt
