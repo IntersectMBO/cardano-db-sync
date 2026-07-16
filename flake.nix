@@ -532,7 +532,12 @@
                     echo "file binary-dist $out/$dist_file" > $out/nix-support/hydra-build-products
                   '';
 
-            cardano-db-sync-linux = mkDist "linux" project.projectCross.musl64;
+            cardano-db-sync-linux = 
+              if system == "aarch64-linux" then
+                mkDist "linux" project.projectCross.aarch64-multiplatform-musl
+              else
+                mkDist "linux" project.projectCross.musl64;
+
             cardano-db-sync-macos = mkDist "macos" project;
             cardano-smash-server-no-basic-auth = (project.appendModule {
               modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
@@ -586,15 +591,15 @@
             hydraJobs = callPackages inputs.iohkNix.utils.ciJobsAggregates {
               ciJobs = flake.hydraJobs;
               nonRequiredPaths = map lib.hasPrefix nonRequiredPaths;
-            } // lib.optionalAttrs (system == "x86_64-linux") {
+            } // lib.optionalAttrs hostPlatform.isLinux {
               inherit
                 cardano-db-sync-linux
                 cardano-db-sync-docker
                 cardano-smash-server-docker;
-
+            } // lib.optionalAttrs (system == "x86_64-linux") {
               # No need to run static checks on all architectures
               checks = staticChecks;
-            } // lib.optionalAttrs (system == "x86_64-darwin") {
+            } // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
               inherit cardano-smash-server-no-basic-auth profiled;
@@ -602,18 +607,20 @@
 
             legacyPackages = pkgs;
 
-            packages = lib.optionalAttrs (system == "x86_64-linux") {
+            packages = lib.optionalAttrs hostPlatform.isLinux {
               inherit
                 cardano-db-sync-linux
                 cardano-db-sync-docker
-                cardano-smash-server-docker
+                cardano-smash-server-docker;
+            } // lib.optionalAttrs (system == "aarch64-darwin") {
+              inherit cardano-db-sync-macos;
+            } // {
+              inherit
+                cardano-smash-server-no-basic-auth
+                profiled
                 project;
 
               default = exes.cardano-db-sync;
-            } // lib.optionalAttrs (system == "x86_64-darwin") {
-              inherit cardano-db-sync-macos;
-            } // {
-              inherit cardano-smash-server-no-basic-auth profiled;
             # Run setGitRev on all packages that have ":exe:" in their key
             } // builtins.mapAttrs exeSetGitRev flake.packages;
           })) // {
