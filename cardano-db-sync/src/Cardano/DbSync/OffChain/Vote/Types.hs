@@ -279,14 +279,10 @@ instance FromJSON DrepBody where
 instance FromJSON Image where
   parseJSON v = withObjectV v "Image" $ \o -> do
     curl <- o .: "contentUrl"
-    case Text.stripPrefix "data:" (textValue curl) of
-      Just ctb
-        | (_, tb) <- Text.break (== '/') ctb
-        , Text.isPrefixOf "/" tb
-        , (_, b) <- Text.break (== ';') tb
-        , Just imageData <- Text.stripPrefix ";base64," b ->
-            pure $ Image (TextValue imageData) Nothing
-      _ -> fromImageUrl <$> parseJSON v
+    -- Inline images are data URIs (CIP-119); store the contentUrl verbatim, don't strip the prefix (#1966).
+    if Text.isPrefixOf "data:" (textValue curl)
+      then pure $ Image curl Nothing
+      else fromImageUrl <$> parseJSON v
     where
       withObjectV v' s p = withObject s p v'
 
