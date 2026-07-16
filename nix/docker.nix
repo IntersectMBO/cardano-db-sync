@@ -134,7 +134,7 @@ let
         #!${runtimeShell}
 
         ${genPgpass}
-        export PGPASSFILE=/configuration/pgpass
+        export PGPASSFILE=''${PGPASSFILE:-/configuration/pgpass}
 
         ${setupTmp}
 
@@ -228,7 +228,7 @@ let
         #!${runtimeShell}
 
         ${genPgpass}
-        export PGPASSFILE=/configuration/pgpass
+        export PGPASSFILE=''${PGPASSFILE:-/configuration/pgpass}
 
         ${setupTmp}
 
@@ -254,10 +254,13 @@ let
   # Scripts supporting entrypoint
   genPgpass = writeScript "gen-pgpass" ''
     #!${runtimeShell}
+    if [ -n "''${PGPASSFILE:-}" ]; then
+       exit 0
+    fi
     mkdir -p /configuration
     if [ -f /configuration/pgpass ]; then
        # No need to generate pgpass
-      exit 0
+       exit 0
     fi
 
     SECRET_DIR=/run/secrets

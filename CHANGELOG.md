@@ -1,6 +1,7 @@
 # Revision history for cardano-db-sync
 
 ## Unreleased
+- Update Docker configuration to allow PostgreSQL connection details to be provided via Docker secrets or a `.pgpass` file using the `PGPASSFILE` environment variable.
 - Add static binaries and docker images for aarch64-linux
 
 ## 13.7.2.1
