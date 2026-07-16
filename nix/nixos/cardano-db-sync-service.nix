@@ -286,7 +286,6 @@ in {
           done
         fi
 
-        mkdir -p log-dir
         ${dbSyncCommand}'';
     };
     systemd.services.cardano-db-sync = {
