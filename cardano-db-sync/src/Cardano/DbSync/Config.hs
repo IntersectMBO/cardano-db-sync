@@ -51,8 +51,8 @@ import System.FilePath (takeDirectory, (</>))
 -- creates its tracers (with optional forwarding to cardano-tracer) via
 -- 'Cardano.DbSync.Tracing.Setup.mkDbSyncTracers'.
 configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO LogMessage)
-configureLogging syncNodeConfig loggingName =
-  mkStdoutTracer (dncEnableLogging syncNodeConfig) (dncTraceConfig syncNodeConfig) loggingName
+configureLogging syncNodeConfig =
+  mkStdoutTracer (dncEnableLogging syncNodeConfig) (dncTraceConfig syncNodeConfig)
 
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do

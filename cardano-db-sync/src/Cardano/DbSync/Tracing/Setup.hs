@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports #-}
-{-# LANGUAGE RecordWildCards #-}
 
 -- | Initialisation of the @trace-dispatcher@ tracers used by db-sync.
 --
@@ -264,14 +263,14 @@ addForwarderBackend mSocket tc =
       any (any hasForwarder) (Map.elems (tcOptions tc))
 
     hasForwarder :: ConfigOption -> Bool
-    hasForwarder (ConfBackend backends) = Forwarder `elem` backends
+    hasForwarder (ConfBackend bcks) = Forwarder `elem` bcks
     hasForwarder _ = False
 
     addToRoot :: Maybe [ConfigOption] -> Maybe [ConfigOption]
     addToRoot Nothing = Just [ConfBackend [Stdout HumanFormatUncoloured, Forwarder]]
     addToRoot (Just opts) = Just (map addBackend opts <> newBackend opts)
       where
-        addBackend (ConfBackend backends) = ConfBackend (backends <> [Forwarder])
+        addBackend (ConfBackend bcks) = ConfBackend (bcks <> [Forwarder])
         addBackend other = other
         newBackend os =
           [ ConfBackend [Stdout HumanFormatUncoloured, Forwarder]
