@@ -441,6 +441,8 @@ Shelley Properties:
 
 Enables or disables data related to shelley: all certificates, withdrawals, and param
 proposals. Does not control `epoch_stake` and `rewards`, For this check `ledger`.
+This governs transaction-era certificates only; genesis-era stake and pool registrations
+are always inserted regardless of this setting.
 
 `shelley.enable`
 
