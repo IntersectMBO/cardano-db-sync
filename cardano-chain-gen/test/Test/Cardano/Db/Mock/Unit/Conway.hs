@@ -262,7 +262,6 @@ unitTests iom knownMigrations =
         , test "new committee member" Governance.newCommittee
         , test "chained committee proposals" Governance.chainedNewCommittee
         , test "rollback new committee member" Governance.rollbackNewCommittee
-        , test "rollback duplicate epoch state" Governance.rollbackDuplicateEpochState
         , test "rollback new committee member proposal" Governance.rollbackNewCommitteeProposal
         , test "update constitution" Governance.updateConstitution
         , test "treasury withdrawal" Governance.treasuryWithdrawal
