@@ -90,9 +90,15 @@ usageExit = do
   mapM_
     putStrLn
     [ "\nUsage:"
-    , "    " ++ name ++ "<metadata url>"
-    , "    " ++ name ++ "<metadata url> <metadata hash in hex>"
-    , "with options [vote], [pool], [ga]"
+    , "  Pool metadata:"
+    , "    " ++ name ++ " <url> [<metadata hash in hex>]"
+    , "  Governance metadata (fetch over the network):"
+    , "    " ++ name ++ " url <type> <url> [<metadata hash in hex>]"
+    , "  Governance metadata (read from a local file):"
+    , "    " ++ name ++ " <type> <file> [<metadata hash in hex>]"
+    , ""
+    , "  <type> is one of: drep | ga | vote | committee_dereg | const | other"
+    , ""
     , "A debug/test program to debug the offchain metadata fetch mechanism.\n"
     ]
   exitFailure
