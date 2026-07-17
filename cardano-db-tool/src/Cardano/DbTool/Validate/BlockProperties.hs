@@ -51,16 +51,24 @@ validateBlockTimesInPast = do
     showFirst (mEpoch, mBlockNo, time) =
       mconcat ["epoch ", show mEpoch, " block ", show mBlockNo, " time ", show time]
 
+-- The random start block and how many blocks to sample, clamped so the range
+-- never underflows on a database with fewer than testBlocks blocks.
+sampleWindow :: Word64 -> Word64 -> (Word64, Word64)
+sampleWindow blkCount testBlocks =
+  let count = min testBlocks blkCount
+   in (blkCount - count, count)
+
 validataBlockNosContiguous :: Word64 -> IO ()
 validataBlockNosContiguous blkCount = do
-  startBlock <- Random.randomRIO (0, blkCount - testBlocks)
+  let (maxStart, count) = sampleWindow blkCount testBlocks
+  startBlock <- Random.randomRIO (0, maxStart)
   putStrF $
     "Block numbers ["
       ++ show startBlock
       ++ " .. "
-      ++ show (startBlock + testBlocks)
+      ++ show (startBlock + count)
       ++ "] are contiguous: "
-  blockNos <- DB.runDbStandaloneSilent $ DB.queryBlockNoList startBlock testBlocks
+  blockNos <- DB.runDbStandaloneSilent $ DB.queryBlockNoList startBlock count
   case checkContinguous blockNos of
     Nothing -> putStrLn $ greenText "ok"
     Just xs -> error $ redText "failed: " ++ show xs
@@ -79,14 +87,15 @@ validataBlockNosContiguous blkCount = do
 
 validateTimestampsOrdered :: Word64 -> IO ()
 validateTimestampsOrdered blkCount = do
-  startBlock <- Random.randomRIO (0, blkCount - testBlocks)
+  let (maxStart, count) = sampleWindow blkCount testBlocks
+  startBlock <- Random.randomRIO (0, maxStart)
   putStrF $
     "Block time stamps for blocks ["
       ++ show startBlock
       ++ " .. "
-      ++ show (startBlock + testBlocks)
+      ++ show (startBlock + count)
       ++ "] are ordered: "
-  ts <- DB.runDbStandaloneSilent $ DB.queryBlockTimestamps startBlock testBlocks
+  ts <- DB.runDbStandaloneSilent $ DB.queryBlockTimestamps startBlock count
   if List.nubOrd ts == ts
     then putStrLn $ greenText "ok"
     else error $ redText "failed: " ++ show ts

@@ -51,9 +51,9 @@ validateBlockTxs epoch = do
                 ++ show (veTxCountActual ve)
             )
 
-validateBlockCount :: (Word64, Word64) -> DB.DbM (Either ValidateError ())
-validateBlockCount (blockNo, txCountExpected) = do
-  txCountActual <- DB.queryBlockTxCount $ DB.BlockId $ fromIntegral blockNo
+validateBlockCount :: (DB.BlockId, Word64, Word64) -> DB.DbM (Either ValidateError ())
+validateBlockCount (blockId, blockNo, txCountExpected) = do
+  txCountActual <- DB.queryBlockTxCount blockId
   pure $
     if txCountActual == txCountExpected
       then Right ()

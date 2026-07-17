@@ -5,6 +5,7 @@ import Data.Maybe (isNothing)
 import System.Directory (getCurrentDirectory)
 import System.Environment (lookupEnv, setEnv)
 import System.FilePath ((</>))
+import qualified Test.IO.Cardano.Db.EpochBlockTxs
 import qualified Test.IO.Cardano.Db.EpochCalc
 import qualified Test.IO.Cardano.Db.Insert
 import qualified Test.IO.Cardano.Db.Migration
@@ -26,6 +27,7 @@ main = do
     testGroup
       "Database"
       [ Test.IO.Cardano.Db.Migration.tests
+      , Test.IO.Cardano.Db.EpochBlockTxs.tests
       , Test.IO.Cardano.Db.Insert.tests
       , Test.IO.Cardano.Db.TotalSupply.tests
       , Test.IO.Cardano.Db.Rollback.tests
