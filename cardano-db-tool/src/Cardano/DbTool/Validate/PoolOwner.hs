@@ -11,4 +11,4 @@ validateAllPoolsHaveOwners = do
   count <- DB.runDbStandaloneSilent DB.queryPoolsWithoutOwners
   if count == 0
     then putStrLn $ greenText "ok"
-    else putStrLn $ redText ("Failed, " ++ show count ++ " pools are without owners.")
+    else error $ redText ("Failed, " ++ show count ++ " pools are without owners.")

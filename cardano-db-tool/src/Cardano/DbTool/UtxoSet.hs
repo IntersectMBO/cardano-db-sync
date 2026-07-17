@@ -10,6 +10,7 @@ import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.Prelude (textShow)
+import Control.Exception (displayException)
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
@@ -95,7 +96,7 @@ queryAtSlot txOutVariantType slotNo =
 reportSlotDate :: Word64 -> Either DB.DbLookupError UTCTime -> IO ()
 reportSlotDate slotNo eUtcTime = do
   case eUtcTime of
-    Left err -> putStrLn $ "\nDatabase not initialized or not accessible: " <> show err
+    Left err -> putStrLn $ "\n" <> displayException err
     Right time -> putStrLn $ "\nSlot number " ++ show slotNo ++ " will occur at " ++ show time ++ ".\n"
   exitSuccess
 
