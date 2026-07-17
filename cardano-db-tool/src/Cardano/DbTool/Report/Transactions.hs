@@ -37,7 +37,7 @@ reportTransactions txOutVariantType addrs =
   forM_ addrs $ \saddr -> do
     Text.putStrLn $ "\nTransactions for: " <> saddr <> "\n"
     xs <- runDbStandaloneSilent (queryStakeAddressTransactions txOutVariantType saddr)
-    renderTransactions $ coaleseTxs xs
+    renderTransactions $ coalesceTxs xs
 
 -- -------------------------------------------------------------------------------------------------
 -- This command is designed to emulate the output of the script:
@@ -87,10 +87,10 @@ queryInputs txOutVariantType saId = do
   pure $ groupByTxHash (map (convertTx Incoming) res1 ++ map (convertTx Outgoing) res2)
   where
     groupByTxHash :: [Transaction] -> [Transaction]
-    groupByTxHash = mapMaybe coaleseInputs . List.groupOn trHash . List.sortOn trHash
+    groupByTxHash = mapMaybe coalesceInputs . List.groupOn trHash . List.sortOn trHash
 
-    coaleseInputs :: [Transaction] -> Maybe Transaction
-    coaleseInputs xs =
+    coalesceInputs :: [Transaction] -> Maybe Transaction
+    coalesceInputs xs =
       case xs of
         [] -> Nothing
         (x : _) ->
@@ -111,10 +111,10 @@ queryOutputs txOutVariantType saId = do
   pure . groupOutputs $ map (convertTx Outgoing) res
   where
     groupOutputs :: [Transaction] -> [Transaction]
-    groupOutputs = mapMaybe coaleseInputs . List.groupOn trHash . List.sortOn trHash
+    groupOutputs = mapMaybe coalesceInputs . List.groupOn trHash . List.sortOn trHash
 
-    coaleseInputs :: [Transaction] -> Maybe Transaction
-    coaleseInputs xs =
+    coalesceInputs :: [Transaction] -> Maybe Transaction
+    coalesceInputs xs =
       case xs of
         [] -> Nothing
         (x : _) ->
@@ -136,12 +136,12 @@ sumAmounts =
         Incoming -> acc + trAmount tr
         Outgoing -> acc - trAmount tr
 
-coaleseTxs :: [Transaction] -> [Transaction]
-coaleseTxs =
-  mapMaybe coalese . List.groupOn trHash
+coalesceTxs :: [Transaction] -> [Transaction]
+coalesceTxs =
+  mapMaybe coalesce . List.groupOn trHash
   where
-    coalese :: [Transaction] -> Maybe Transaction
-    coalese xs =
+    coalesce :: [Transaction] -> Maybe Transaction
+    coalesce xs =
       case xs of
         [] -> Nothing
         [a] -> Just a
@@ -150,7 +150,7 @@ coaleseTxs =
             if trAmount a > trAmount b
               then Transaction (trHash a) (trTime a) Outgoing (trAmount a - trAmount b)
               else Transaction (trHash a) (trTime a) Incoming (trAmount b - trAmount a)
-        _otherwise -> error $ "coaleseTxs: " ++ show (length xs)
+        _otherwise -> error $ "coalesceTxs: " ++ show (length xs)
 
 convertTx :: Direction -> (ByteString, UTCTime, DbLovelace) -> Transaction
 convertTx dir (hash, time, ll) =
@@ -163,22 +163,21 @@ convertTx dir (hash, time, ll) =
 
 renderTransactions :: [Transaction] -> IO ()
 renderTransactions xs = do
-  putStrLn "                             tx_hash                              |        date/time        | direction |      amount"
-  putStrLn "------------------------------------------------------------------+-------------------------+-----------+----------------"
-  mapM_ renderTx xs
+  mapM_ Text.putStrLn (renderTable cols (map toRow xs))
   putStrLn ""
   where
-    renderTx :: Transaction -> IO ()
-    renderTx tr =
-      Text.putStrLn $
-        mconcat
-          [ " "
-          , trHash tr
-          , separator
-          , textShow (trTime tr)
-          , separator
-          , " "
-          , textShow (trDirection tr)
-          , separator
-          , leftPad 14 (renderAda $ trAmount tr)
-          ]
+    cols :: [(Align, Text)]
+    cols =
+      [ (AlignLeft, "tx_hash")
+      , (AlignLeft, "date/time")
+      , (AlignLeft, "direction")
+      , (AlignRight, "amount")
+      ]
+
+    toRow :: Transaction -> [Text]
+    toRow tr =
+      [ trHash tr
+      , formatReportTime (trTime tr)
+      , textShow (trDirection tr)
+      , renderAda (trAmount tr)
+      ]

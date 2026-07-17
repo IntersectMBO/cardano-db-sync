@@ -71,20 +71,31 @@ queryStakeAddressBalance txOutVariantType address = do
 
 renderBalances :: [Balance] -> IO ()
 renderBalances xs = do
-  putStrLn "                       stake_address                         |     balance"
-  putStrLn "-------------------------------------------------------------+----------------"
-  mapM_ renderReward (List.sortOn (Down . balTotal) xs)
-  putStrLn "-------------------------------------------------------------+----------------"
-  putStr "                          total                              | "
-  Text.putStrLn $ leftPad 14 (renderAda . sum $ map balTotal xs)
+  mapM_ Text.putStrLn (withTotalDivider (renderTable cols (map toRow sorted ++ [totalRow])))
   putStrLn ""
   where
-    renderReward :: Balance -> IO ()
-    renderReward b =
-      Text.putStrLn $
-        mconcat
-          [ " "
-          , balAddress b
-          , separator
-          , leftPad 14 (renderAda $ balTotal b)
-          ]
+    sorted = List.sortOn (Down . balTotal) xs
+
+    cols :: [(Align, Text)]
+    cols =
+      [ (AlignLeft, "stake_address")
+      , (AlignRight, "balance")
+      ]
+
+    toRow :: Balance -> [Text]
+    toRow b = [balAddress b, renderAda (balTotal b)]
+
+    totalRow :: [Text]
+    totalRow = ["total", renderAda . sum $ map balTotal xs]
+
+    -- Set the total row off with a divider, reusing the header underline.
+    withTotalDivider :: [Text] -> [Text]
+    withTotalDivider ls = case ls of
+      (header : divider : body) -> header : divider : dividerBeforeLast divider body
+      _ -> ls
+
+    dividerBeforeLast :: Text -> [Text] -> [Text]
+    dividerBeforeLast divider rows = case rows of
+      [] -> []
+      [final] -> [divider, final]
+      (row : rest) -> row : dividerBeforeLast divider rest
