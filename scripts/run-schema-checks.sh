@@ -15,3 +15,8 @@ psql -d "$DB" -f "$SCRIPTS_DIR/test-referential-integrity.sql"
 echo ""
 echo "Running uniqueness tests on ${DB}..."
 psql -d "$DB" -f "$SCRIPTS_DIR/test-uniqueness.sql"
+
+echo ""
+echo "Running value domain tests on ${DB}..."
+# ON_ERROR_STOP so the script's failure RAISE propagates as a non-zero exit.
+psql -v ON_ERROR_STOP=1 -d "$DB" -f "$SCRIPTS_DIR/test-value-domains.sql"
