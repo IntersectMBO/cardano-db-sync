@@ -1,18 +1,16 @@
 #!/bin/bash
 
-# This is a git pre-commit hook that runs sytlish-haskell and hlint over the
-# Haskell files you are about to commit. Sylish-haskell will modify the files
-# that need modification in place. Hlinf warnings are reported as that and
-# the commit is aborted, so you can fix it.
-# Obviously you need hlint on your path. The versions you
-# will need are the latest versions that were released before the Hackage
-# index-state specified in the cabal.project file.
+# This is a git pre-commit hook that runs hlint over the Haskell files you are
+# about to commit. Hlint warnings are reported and the commit is aborted so you
+# can fix them. It does not format code: formatting is a separate concern handled
+# by fourmolu (see scripts/fourmolize.sh).
+#
+# You need hlint on your PATH. Use the version CI pins (hlint 3.8) so local
+# results match the Hydra hlint check.
 
-# To install this, copy it to '.git/hooks/pre-commit' in the checkout and make
-# it executatble.
-
-# It would be possible to symlink it but that is probably a bad idea security
-# wise.
+# To install this, symlink it into the checkout's hooks directory:
+#   (cd .git/hooks/ && ln -s ../../scripts/git-pre-commit-hook pre-commit)
+# (see doc/hlint-stylish-haskell.md).
 
 
 #-------------------------------------------------------------------------------
