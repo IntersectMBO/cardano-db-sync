@@ -509,7 +509,7 @@ queryTxInputsCoreStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowList SVC.txOutCoreDecoder
+    decoder = HsqlD.rowList (entityVal <$> SVC.entityTxOutCoreDecoder)
 
 queryTxInputsAddressStmt :: HsqlStmt.Statement Word64 [SVA.TxOutAddress]
 queryTxInputsAddressStmt =
@@ -531,7 +531,7 @@ queryTxInputsAddressStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowList SVA.txOutAddressDecoder
+    decoder = HsqlD.rowList (entityVal <$> SVA.entityTxOutAddressDecoder)
 
 queryTxInputs :: SV.TxOutVariantType -> Word64 -> DbM [SV.TxOutW]
 queryTxInputs txOutTableType txId = do
@@ -566,7 +566,7 @@ queryTxOutputsCoreStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowList SVC.txOutCoreDecoder
+    decoder = HsqlD.rowList (entityVal <$> SVC.entityTxOutCoreDecoder)
 
 queryTxOutputsAddressStmt :: HsqlStmt.Statement Word64 [SVA.TxOutAddress]
 queryTxOutputsAddressStmt =
@@ -585,7 +585,7 @@ queryTxOutputsAddressStmt =
           ]
 
     encoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
-    decoder = HsqlD.rowList SVA.txOutAddressDecoder
+    decoder = HsqlD.rowList (entityVal <$> SVA.entityTxOutAddressDecoder)
 
 queryTxOutputs :: SV.TxOutVariantType -> Word64 -> DbM [SV.TxOutW]
 queryTxOutputs txOutTableType txId = do

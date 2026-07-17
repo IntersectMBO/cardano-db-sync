@@ -17,7 +17,7 @@ import qualified Hasql.Encoders as E
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (textDecoder)
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
-import Cardano.Db.Statement.Types (DbInfo (..), Key)
+import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
 import Cardano.Db.Types (DbLovelace, DbWord64 (..), dbLovelaceDecoder, dbLovelaceEncoder, dbLovelaceValueEncoder, dbWord64ValueEncoder)
 
 -- |
@@ -63,6 +63,12 @@ instance DbInfo TxOutAddress where
       , "consumed_by_tx_id"
       , "address_id"
       ]
+
+entityTxOutAddressDecoder :: D.Row (Entity TxOutAddress)
+entityTxOutAddressDecoder =
+  Entity
+    <$> Id.idDecoder Id.TxOutAddressId
+    <*> txOutAddressDecoder
 
 txOutAddressDecoder :: D.Row TxOutAddress
 txOutAddressDecoder =
@@ -165,6 +171,12 @@ data Address = Address
 
 type instance Key Address = Id.AddressId
 instance DbInfo Address
+
+entityAddressDecoder :: D.Row (Entity Address)
+entityAddressDecoder =
+  Entity
+    <$> Id.idDecoder Id.AddressId
+    <*> addressDecoder
 
 addressDecoder :: D.Row Address
 addressDecoder =

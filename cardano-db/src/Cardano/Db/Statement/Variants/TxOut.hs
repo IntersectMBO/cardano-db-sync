@@ -752,7 +752,7 @@ queryScriptOutputsVariantStmt =
           , " JOIN tx_out ON tx_out.address_id = address.id"
           , " WHERE address.address_has_script = TRUE"
           ]
-    decoder = HsqlD.rowList $ (,) <$> SVA.txOutAddressDecoder <*> SVA.addressDecoder
+    decoder = HsqlD.rowList $ (,) . entityVal <$> SVA.entityTxOutAddressDecoder <*> (entityVal <$> SVA.entityAddressDecoder)
 
 queryScriptOutputs :: TxOutVariantType -> DbM [TxOutW]
 queryScriptOutputs txOutVariantType = do

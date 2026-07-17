@@ -32,7 +32,7 @@ import qualified Cardano.Db.Schema.Variants.TxOutAddress as SVA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Statement.Function.Query (adaDecoder)
-import Cardano.Db.Statement.Types (tableName)
+import Cardano.Db.Statement.Types (entityVal, tableName)
 import Cardano.Db.Types (Ada (..), DbLovelace, DbM, dbLovelaceDecoder, lovelaceToAda)
 
 ------------------------------------------------------------------------------------------------------------
@@ -364,7 +364,7 @@ queryUtxoAtBlockIdCoreStmt =
     encoder = Id.idEncoder Id.getBlockId
 
     decoder = HsqlD.rowList $ do
-      txOut <- SVC.txOutCoreDecoder
+      txOut <- entityVal <$> SVC.entityTxOutCoreDecoder
       address <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
       txHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
       pure $
@@ -394,8 +394,8 @@ queryUtxoAtBlockIdVariantStmt =
     encoder = Id.idEncoder Id.getBlockId
 
     decoder = HsqlD.rowList $ do
-      txOut <- SVA.txOutAddressDecoder
-      addr <- SVA.addressDecoder
+      txOut <- entityVal <$> SVA.entityTxOutAddressDecoder
+      addr <- entityVal <$> SVA.entityAddressDecoder
       txHash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
       pure $
         UtxoQueryResult
