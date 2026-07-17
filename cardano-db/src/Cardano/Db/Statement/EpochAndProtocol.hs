@@ -299,7 +299,8 @@ queryEpochCount =
 --------------------------------------------------------------------------------
 insertEpochStateStmt :: HsqlStmt.Statement SEnP.EpochState Id.EpochStateId
 insertEpochStateStmt =
-  insert
+  -- Upsert so a re-crossed epoch boundary updates rather than duplicating (#2155).
+  insertReplace
     SEnP.epochStateEncoder
     (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.EpochStateId)
 
