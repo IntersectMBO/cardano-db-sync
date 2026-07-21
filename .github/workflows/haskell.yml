@@ -102,7 +102,7 @@ jobs:
           chmod 600 $PGPASSFILE
 
           # Run tests
-          cabal test all -j1
+          cabal test all -j4
       - name: postgres shutdown
         if: ${{ always() }}
         run: |

@@ -6,17 +6,18 @@ module Test.Cardano.Db.Mock.Unit.Babbage (
   unitTests,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
-import Test.Tasty (TestTree, testGroup)
+import Test.Tasty (TestTree, testGroup, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase)
 
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Reward as BabReward
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Simple as BabSimple
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Tx as BabTx
 
-unitTests :: IOManager -> [(Text, Text)] -> TestTree
-unitTests iom knownMigrations =
+unitTests :: IOManager -> [(Text, Text)] -> DB.PGPassSource -> TestTree
+unitTests iom knownMigrations source =
   testGroup
     "Babbage unit tests"
     [ testGroup
@@ -50,5 +51,5 @@ unitTests iom knownMigrations =
         ]
     ]
   where
-    test :: String -> (IOManager -> [(Text, Text)] -> Assertion) -> TestTree
-    test str action = testCase str (action iom knownMigrations)
+    test :: String -> (DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion) -> TestTree
+    test str action = testCase str (action source iom knownMigrations)

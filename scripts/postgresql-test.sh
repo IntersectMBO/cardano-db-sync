@@ -35,6 +35,11 @@ function start_postgres {
         create database $DB_NAME with owner = $DB_USER;
         \\connect $DB_NAME
         ALTER SCHEMA public OWNER TO $DB_USER;
+
+        create database ${DB_NAME}_1 template $DB_NAME;
+        create database ${DB_NAME}_2 template $DB_NAME;
+        create database ${DB_NAME}_3 template $DB_NAME;
+        create database ${DB_NAME}_4 template $DB_NAME;
 EOF
 }
 

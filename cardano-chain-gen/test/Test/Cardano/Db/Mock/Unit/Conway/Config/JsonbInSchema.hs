@@ -15,9 +15,9 @@ import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion ())
 
-configRemoveJsonbFromSchemaEnabled :: IOManager -> [(Text, Text)] -> Assertion
-configRemoveJsonbFromSchemaEnabled = do
-  withCustomConfigDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
+configRemoveJsonbFromSchemaEnabled :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+configRemoveJsonbFromSchemaEnabled source = do
+  withCustomConfigDropDB args (Just configRemoveJsonFromSchema) source cfgDir testLabel $ \_interpreter _mockServer dbSync -> do
     startDBSync dbSync
     assertEqQuery
       dbSync
@@ -31,9 +31,9 @@ configRemoveJsonbFromSchemaEnabled = do
 
     cfgDir = conwayConfigDir
 
-configRemoveJsonbFromSchemaDisabled :: IOManager -> [(Text, Text)] -> Assertion
-configRemoveJsonbFromSchemaDisabled = do
-  withCustomConfigDropDB args (Just configRemoveJsonFromSchemaFalse) cfgDir testLabel $
+configRemoveJsonbFromSchemaDisabled :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+configRemoveJsonbFromSchemaDisabled source = do
+  withCustomConfigDropDB args (Just configRemoveJsonFromSchemaFalse) source cfgDir testLabel $
     \_interpreter _mockServer dbSync -> do
       startDBSync dbSync
       assertEqQuery
@@ -47,9 +47,9 @@ configRemoveJsonbFromSchemaDisabled = do
     testLabel = "conwayConfigRemoveJsonbFromSchemaDisabled"
     cfgDir = conwayConfigDir
 
-configJsonbInSchemaShouldRemoveThenAdd :: IOManager -> [(Text, Text)] -> Assertion
-configJsonbInSchemaShouldRemoveThenAdd =
-  withCustomConfigDropDB args (Just configRemoveJsonFromSchema) cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
+configJsonbInSchemaShouldRemoveThenAdd :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+configJsonbInSchemaShouldRemoveThenAdd source =
+  withCustomConfigDropDB args (Just configRemoveJsonFromSchema) source cfgDir testLabel $ \_interpreter _mockServer dbSyncEnv -> do
     startDBSync dbSyncEnv
     assertEqQuery
       dbSyncEnv

@@ -75,9 +75,9 @@ import Prelude (head, tail, (!!))
 ------------------------------------------------------------------------------
 -- Tests
 ------------------------------------------------------------------------------
-simpleScript :: IOManager -> [(Text, Text)] -> Assertion
-simpleScript =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+simpleScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+simpleScript source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     let txOutVariantType = txOutVariantTypeFromConfig dbSync
 
@@ -126,9 +126,9 @@ simpleScript =
           hashToBytes (extractHash $ hashData @ConwayEra Examples.plutusDataList)
       )
 
-unlockScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-unlockScriptSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+unlockScriptSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+unlockScriptSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -160,9 +160,9 @@ unlockScriptSameBlock =
   where
     testLabel = "conwayUnlockScriptSameBlock"
 
-unlockScriptNoPlutus :: IOManager -> [(Text, Text)] -> Assertion
-unlockScriptNoPlutus =
-  withCustomConfig args (Just configPlutusDisable) conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+unlockScriptNoPlutus :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+unlockScriptNoPlutus source =
+  withCustomConfig args (Just configPlutusDisable) source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -196,9 +196,9 @@ unlockScriptNoPlutus =
         }
     testLabel = "conwayConfigPlutusDisbaled"
 
-failedScript :: IOManager -> [(Text, Text)] -> Assertion
-failedScript =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+failedScript :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+failedScript source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a script
@@ -227,9 +227,9 @@ failedScript =
   where
     testLabel = "conwayFailedScript"
 
-failedScriptFees :: IOManager -> [(Text, Text)] -> Assertion
-failedScriptFees =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+failedScriptFees :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+failedScriptFees source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a lock script
@@ -259,9 +259,9 @@ failedScriptFees =
   where
     testLabel = "conwayFailedScriptFees"
 
-failedScriptSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-failedScriptSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+failedScriptSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+failedScriptSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake registrations
@@ -297,9 +297,9 @@ failedScriptSameBlock =
   where
     testLabel = "conwayFailedScriptSameBlock"
 
-multipleScripts :: IOManager -> [(Text, Text)] -> Assertion
-multipleScripts =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScripts :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScripts source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge multiple script transactions
@@ -337,9 +337,9 @@ multipleScripts =
   where
     testLabel = "conwayMultipleScripts"
 
-multipleScriptsRollback :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsRollback =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsRollback source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Create multiple scripts
@@ -392,9 +392,9 @@ multipleScriptsRollback =
   where
     testLabel = "conwayMultipleScriptsRollback"
 
-multipleScriptsSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a single block with multiple scripts
@@ -425,9 +425,9 @@ multipleScriptsSameBlock =
   where
     testLabel = "conwayMultipleScriptsSameBlock"
 
-multipleScriptsFailed :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsFailed =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsFailed :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsFailed source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with multiple scripts
@@ -463,9 +463,9 @@ multipleScriptsFailed =
   where
     testLabel = "conwayMultipleScriptsFailed"
 
-multipleScriptsFailedSameBlock :: IOManager -> [(Text, Text)] -> Assertion
-multipleScriptsFailedSameBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+multipleScriptsFailedSameBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+multipleScriptsFailedSameBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Add multiple scripts in the same block
@@ -496,9 +496,9 @@ multipleScriptsFailedSameBlock =
   where
     testLabel = "conwayMultipleScriptsFailedSameBlock"
 
-registrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
-registrationScriptTx =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+registrationScriptTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+registrationScriptTx source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a transaction with a registration cert
@@ -512,9 +512,9 @@ registrationScriptTx =
   where
     testLabel = "conwayRegistrationScriptTx"
 
-deregistrationScriptTx :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationScriptTx =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationScriptTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationScriptTx source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge registration/deregistration cert transaction
@@ -535,9 +535,9 @@ deregistrationScriptTx =
   where
     testLabel = "conwayDeregistrationScriptTx"
 
-deregistrationsScriptTxs :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTxs =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTxs :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTxs source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge multiple reg/dereg transactions in a single block
@@ -566,9 +566,9 @@ deregistrationsScriptTxs =
   where
     testLabel = "conwayDeregistrationsScriptTxs"
 
-deregistrationsScriptTx :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTx =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTx :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge multiple reg/dereg transactions in a single block
@@ -599,9 +599,9 @@ deregistrationsScriptTx =
     testLabel = "conwayDeregistrationsScriptTx"
 
 -- Like previous but missing a redeemer. This is a known ledger issue
-deregistrationsScriptTx' :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTx' =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTx' :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx' source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge registrations/deregistrations without a redeemer
@@ -633,9 +633,9 @@ deregistrationsScriptTx' =
     testLabel = "conwayDeregistrationsScriptTx'"
 
 -- Like previous but missing the other redeemer. This is a known ledger issue
-deregistrationsScriptTx'' :: IOManager -> [(Text, Text)] -> Assertion
-deregistrationsScriptTx'' =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+deregistrationsScriptTx'' :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+deregistrationsScriptTx'' source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge registrations/deregistrations without a redeemer
@@ -665,9 +665,9 @@ deregistrationsScriptTx'' =
   where
     testLabel = "conwayDeregistrationsScriptTx''"
 
-mintMultiAsset :: IOManager -> [(Text, Text)] -> Assertion
-mintMultiAsset =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+mintMultiAsset :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mintMultiAsset source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with a multi-asset script
@@ -693,9 +693,9 @@ mintMultiAsset =
   where
     testLabel = "conwayMintMultiAsset"
 
-mintMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
-mintMultiAssets =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+mintMultiAssets :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mintMultiAssets source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with multiple multi-asset scripts
@@ -732,9 +732,9 @@ mintMultiAssets =
   where
     testLabel = "conwayMintMultiAssets"
 
-swapMultiAssets :: IOManager -> [(Text, Text)] -> Assertion
-swapMultiAssets =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+swapMultiAssets :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+swapMultiAssets source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with multiple multi-asset scripts
@@ -793,9 +793,9 @@ swapMultiAssets =
   where
     testLabel = "conwaySwapMultiAssets"
 
-swapMultiAssetsDisabled :: IOManager -> [(Text, Text)] -> Assertion
-swapMultiAssetsDisabled =
-  withCustomConfig args (Just configMultiAssetsDisable) cfgDir testLabel $ \interpreter mockServer dbSync -> do
+swapMultiAssetsDisabled :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+swapMultiAssetsDisabled source =
+  withCustomConfig args (Just configMultiAssetsDisable) source cfgDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with multiple multi-asset scripts

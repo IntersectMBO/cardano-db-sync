@@ -7,6 +7,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Reward (
   rollbackBoundary,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Ledger.Keys (KeyHash (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
@@ -20,9 +21,9 @@ import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion ())
 import Prelude ()
 
-simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
-simpleRewards =
-  withFullConfigDropDB "config-conway-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
+simpleRewards :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+simpleRewards source =
+  withFullConfigDropDB source "config-conway-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -55,9 +56,9 @@ simpleRewards =
 -- delegates to a pool B and is not an owner of pool B. In this case it receives
 -- leader rewards from pool A and member rewards from pool B. In this test, we
 -- have 2 instances of this case, one where A = B and one where A /= B.
-rewardsShelley :: IOManager -> [(Text, Text)] -> Assertion
-rewardsShelley =
-  withFullConfig "config-shelley-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
+rewardsShelley :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rewardsShelley source =
+  withFullConfig source "config-shelley-rewards-rho" testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials
@@ -83,9 +84,9 @@ rewardsShelley =
   where
     testLabel = "conwayRewardsShelley"
 
-rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
-rollbackBoundary =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+rollbackBoundary :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackBoundary source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     -- Forge a block with stake credentials

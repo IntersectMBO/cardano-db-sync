@@ -7,6 +7,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Simple (
   nodeRestartBoundary,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Ledger.BaseTypes (BlockNo (..))
 import Cardano.Mock.ChainSync.Server (IOManager, addBlock, restartServer, waitForNextConnection)
 import Cardano.Mock.Forging.Interpreter (forgeNext)
@@ -19,9 +20,9 @@ import Test.Cardano.Db.Mock.Validate (assertBlockNoBackoff)
 import Test.Tasty.HUnit (Assertion (), assertBool)
 import Prelude ()
 
-forgeBlocks :: IOManager -> [(Text, Text)] -> Assertion
-forgeBlocks = do
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter _ _ -> do
+forgeBlocks :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+forgeBlocks source = do
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter _ _ -> do
     void $ forgeNext interpreter mockBlock0
     void $ forgeNext interpreter mockBlock1
     block <- forgeNext interpreter mockBlock2
@@ -32,9 +33,9 @@ forgeBlocks = do
   where
     testLabel = "conwayForgeBlocks"
 
-addSimple :: IOManager -> [(Text, Text)] -> Assertion
-addSimple =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimple :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimple source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Translate the mock block until a real one and submit it to the chain server
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
 
@@ -43,9 +44,9 @@ addSimple =
   where
     testLabel = "conwayAddSimple"
 
-addSimpleChain :: IOManager -> [(Text, Text)] -> Assertion
-addSimpleChain =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+addSimpleChain :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+addSimpleChain source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     -- Create some mock blocks
     blk0 <- forgeNext interpreter mockBlock0
     blk1 <- forgeNext interpreter mockBlock1
@@ -63,9 +64,9 @@ addSimpleChain =
   where
     testLabel = "conwayAddSimpleChain"
 
-restartDBSync :: IOManager -> [(Text, Text)] -> Assertion
-restartDBSync =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+restartDBSync :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+restartDBSync source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ forgeNextAndSubmit interpreter mockServer mockBlock0
 
     startDBSync dbSync
@@ -77,9 +78,9 @@ restartDBSync =
   where
     testLabel = "conwayRestartDBSync"
 
-nodeRestart :: IOManager -> [(Text, Text)] -> Assertion
-nodeRestart =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+nodeRestart :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+nodeRestart source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     void $ forgeAndSubmitBlocks interpreter mockServer 5
     startDBSync dbSync
     assertBlockNoBackoff dbSync 5
@@ -94,9 +95,9 @@ nodeRestart =
   where
     testLabel = "conwayNodeRestart"
 
-nodeRestartBoundary :: IOManager -> [(Text, Text)] -> Assertion
-nodeRestartBoundary =
-  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+nodeRestartBoundary :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+nodeRestartBoundary source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     blks <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync $ length blks

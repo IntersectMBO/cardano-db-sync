@@ -11,6 +11,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage.Reward (
   singleMIRCertMultiOut,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.Ledger.Address (Withdrawals (..))
 import Cardano.Ledger.Coin (Coin (Coin), DeltaCoin (DeltaCoin))
 import Cardano.Ledger.Keys (KeyHash (KeyHash))
@@ -54,9 +55,9 @@ import Test.Cardano.Db.Mock.Validate (
  )
 import Test.Tasty.HUnit (Assertion)
 
-simpleRewards :: IOManager -> [(Text, Text)] -> Assertion
-simpleRewards =
-  withFullConfigDropDB babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+simpleRewards :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+simpleRewards source =
+  withFullConfigDropDB source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -105,9 +106,9 @@ simpleRewards =
   where
     testLabel = "simpleRewards"
 
-rewardsDeregistration :: IOManager -> [(Text, Text)] -> Assertion
-rewardsDeregistration =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+rewardsDeregistration :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rewardsDeregistration source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -173,9 +174,9 @@ rewardsDeregistration =
 -- If a stake address is deregistered during the reward computation initialisation,
 -- and is registered later it doesn't receive rewards before Babbage. It does receive
 -- on Babbage. See the same test on Alonzo.
-rewardsReregistration :: IOManager -> [(Text, Text)] -> Assertion
-rewardsReregistration =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+rewardsReregistration :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rewardsReregistration source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $
       withBabbageFindLeaderAndSubmitTx interpreter mockServer $
@@ -232,9 +233,9 @@ rewardsReregistration =
   where
     testLabel = "rewardsReregistration"
 
-mirReward :: IOManager -> [(Text, Text)] -> Assertion
-mirReward =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+mirReward :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mirReward source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -280,9 +281,9 @@ mirReward =
   where
     testLabel = "mirReward"
 
-_mirRewardRollback :: IOManager -> [(Text, Text)] -> Assertion
-_mirRewardRollback =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+_mirRewardRollback :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+_mirRewardRollback source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -327,9 +328,9 @@ _mirRewardRollback =
   where
     testLabel = "mirRewardRollback"
 
-mirRewardShelley :: IOManager -> [(Text, Text)] -> Assertion
-mirRewardShelley =
-  withFullConfig "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
+mirRewardShelley :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mirRewardShelley source =
+  withFullConfig source "config-shelley" testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -358,9 +359,9 @@ mirRewardShelley =
   where
     testLabel = "mirRewardShelley"
 
-mirRewardDereg :: IOManager -> [(Text, Text)] -> Assertion
-mirRewardDereg =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+mirRewardDereg :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+mirRewardDereg source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -410,9 +411,9 @@ mirRewardDereg =
   where
     testLabel = "mirRewardDereg"
 
-_rewardsEmptyChainLast :: IOManager -> [(Text, Text)] -> Assertion
-_rewardsEmptyChainLast =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+_rewardsEmptyChainLast :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+_rewardsEmptyChainLast source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
 
@@ -445,9 +446,9 @@ _rewardsEmptyChainLast =
 -- It is almost impossible to create a delta event. This event is created when there is
 -- a big gap in the chain. But with current changes to ledger such big gaps cannot exist.
 -- So we disable this test.
-_rewardsDelta :: IOManager -> [(Text, Text)] -> Assertion
-_rewardsDelta =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+_rewardsDelta :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+_rewardsDelta source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     -- These delegation push the computation of the 3 leader
     -- rewards toward the 8k/f slot, so it can be delayed even more
@@ -474,9 +475,9 @@ _rewardsDelta =
   where
     testLabel = "rewardsDelta"
 
-rollbackBoundary :: IOManager -> [(Text, Text)] -> Assertion
-rollbackBoundary =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+rollbackBoundary :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackBoundary source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
     void $ registerAllStakeCreds interpreter mockServer
     a <- fillEpochs interpreter mockServer 2
@@ -499,9 +500,9 @@ rollbackBoundary =
   where
     testLabel = "rollbackBoundary"
 
-singleMIRCertMultiOut :: IOManager -> [(Text, Text)] -> Assertion
-singleMIRCertMultiOut =
-  withFullConfig babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
+singleMIRCertMultiOut :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+singleMIRCertMultiOut source =
+  withFullConfig source babbageConfigDir testLabel $ \interpreter mockServer dbSync -> do
     startDBSync dbSync
 
     void $ withBabbageFindLeaderAndSubmitTx interpreter mockServer $ \_ ->

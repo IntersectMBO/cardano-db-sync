@@ -50,9 +50,9 @@ import qualified Test.Cardano.Db.Mock.UnifiedApi as Api
 import Test.Cardano.Db.Mock.Validate
 import Test.Tasty.HUnit (Assertion, assertFailure)
 
-drepDistr :: IOManager -> [(Text, Text)] -> Assertion
-drepDistr =
-  withFullConfigDropDB conwayConfigDir testLabel $ \interpreter server dbSync -> do
+drepDistr :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+drepDistr source =
+  withFullConfigDropDB source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -84,9 +84,9 @@ initGovernance interpreter server = do
 
   pure $ (blk1 : blk2 : epoch0) ++ [blk3]
 
-newCommittee :: IOManager -> [(Text, Text)] -> Assertion
-newCommittee =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+newCommittee :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+newCommittee source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -105,9 +105,9 @@ newCommittee =
   where
     testLabel = "conwayNewCommittee"
 
-rollbackNewCommittee :: IOManager -> [(Text, Text)] -> Assertion
-rollbackNewCommittee =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+rollbackNewCommittee :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackNewCommittee source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -146,9 +146,9 @@ rollbackNewCommittee =
   where
     testLabel = "conwayRollbackNewCommittee"
 
-chainedNewCommittee :: IOManager -> [(Text, Text)] -> Assertion
-chainedNewCommittee =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+chainedNewCommittee :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+chainedNewCommittee source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -194,9 +194,9 @@ chainedNewCommittee =
   where
     testLabel = "conwayChainedNewCommittee"
 
-rollbackNewCommitteeProposal :: IOManager -> [(Text, Text)] -> Assertion
-rollbackNewCommitteeProposal =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+rollbackNewCommitteeProposal :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackNewCommitteeProposal source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -286,9 +286,9 @@ rollbackBlocks interpreter server n blocks = do
 
   pure $ reverse ([newBlock] <> rbBlocks <> blocks')
 
-updateConstitution :: IOManager -> [(Text, Text)] -> Assertion
-updateConstitution =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+updateConstitution :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+updateConstitution source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -335,9 +335,9 @@ updateConstitution =
   where
     testLabel = "conwayUpdateConstitution"
 
-treasuryWithdrawal :: IOManager -> [(Text, Text)] -> Assertion
-treasuryWithdrawal =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+treasuryWithdrawal :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+treasuryWithdrawal source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -389,9 +389,9 @@ treasuryWithdrawal =
   where
     testLabel = "conwayTreasuryWithdrawal"
 
-parameterChange :: IOManager -> [(Text, Text)] -> Assertion
-parameterChange =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+parameterChange :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+parameterChange source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -447,9 +447,9 @@ parameterChange =
       pure (DB.epochParamMaxTxSize <$> param)
     getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
 
-hardFork :: IOManager -> [(Text, Text)] -> Assertion
-hardFork =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+hardFork :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+hardFork source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -483,9 +483,9 @@ hardFork =
 -- (PV 10 -> PV 11 within Conway). After enacting the HF, we forge additional blocks
 -- containing payment transactions and governance actions, then verify db-sync
 -- indexes them without errors.
-hardForkPostBlock :: IOManager -> [(Text, Text)] -> Assertion
-hardForkPostBlock =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+hardForkPostBlock :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+hardForkPostBlock source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -542,9 +542,9 @@ hardForkPostBlock =
     testLabel = "conwayGovernanceHardForkPostBlock"
     getEpochNo = fmap unEpochNo . liftIO . getCurrentEpoch
 
-rollbackHardFork :: IOManager -> [(Text, Text)] -> Assertion
-rollbackHardFork =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+rollbackHardFork :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+rollbackHardFork source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
@@ -639,9 +639,9 @@ enactHardFork interpreter server = do
 
   pure (blk : epoch2)
 
-infoAction :: IOManager -> [(Text, Text)] -> Assertion
-infoAction =
-  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+infoAction :: DB.PGPassSource -> IOManager -> [(Text, Text)] -> Assertion
+infoAction source =
+  withFullConfig source conwayConfigDir testLabel $ \interpreter server dbSync -> do
     startDBSync dbSync
 
     -- Register SPOs, DReps, and committee to vote
