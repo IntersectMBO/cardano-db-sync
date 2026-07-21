@@ -9,7 +9,7 @@ module Test.Cardano.Db.Mock.Unit.Babbage (
 import qualified Cardano.Db as DB
 import Cardano.Mock.ChainSync.Server (IOManager)
 import Data.Text (Text)
-import Test.Tasty (DependencyType (..), TestTree, dependentTestGroup)
+import Test.Tasty (TestTree, testGroup, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase)
 
 import qualified Test.Cardano.Db.Mock.Unit.Babbage.Reward as BabReward
@@ -18,12 +18,10 @@ import qualified Test.Cardano.Db.Mock.Unit.Babbage.Tx as BabTx
 
 unitTests :: IOManager -> [(Text, Text)] -> DB.PGPassSource -> TestTree
 unitTests iom knownMigrations source =
-  dependentTestGroup
+  testGroup
     "Babbage unit tests"
-    AllFinish
-    [ dependentTestGroup
+    [ testGroup
         "simple"
-        AllFinish
         [ test "simple forge blocks" BabSimple.forgeBlocks
         , test "sync one block" BabSimple.addSimple
         , test "sync small chain" BabSimple.addSimpleChain
@@ -31,16 +29,14 @@ unitTests iom knownMigrations source =
         , test "node restart" BabSimple.nodeRestart
         , test "node restart boundary" BabSimple.nodeRestartBoundary
         ]
-    , dependentTestGroup
+    , testGroup
         "blocks with txs"
-        AllFinish
         [ test "simple tx" BabTx.addSimpleTx
         , test "simple tx in Shelley era" BabTx.addSimpleTxShelley
         , test "consume utxo same block" BabTx.consumeSameBlock
         ]
-    , dependentTestGroup
+    , testGroup
         "rewards"
-        AllFinish
         [ -- test "rewards simple" BabReward.simpleRewards TODO: possible upstream changed in shelley genesis
           test "rewards with deregistration" BabReward.rewardsDeregistration
         , test "rewards with reregistration. Fixed in Babbage." BabReward.rewardsReregistration
