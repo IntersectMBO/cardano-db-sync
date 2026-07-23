@@ -1,0 +1,23 @@
+# Ignore common build artifacts and large nix store paths
+result
+result.tar.gz
+result-*.tar.gz
+dist
+dist-newstyle
+dist/*
+*.o
+*.hi
+.stack-work
+.ghc.environment.*
+.cabal-sandbox
+.cabal-sandbox/*
+node_modules
+.git
+*.lock
+**/.DS_Store
+
+# Ignore Nix store references and temporary files
+/nix
+*.drv
+*.nar
+
