@@ -52,6 +52,7 @@ library
                         Cardano.SMASH.Server.Impl
                         Cardano.SMASH.Server.PoolDataLayer
                         Cardano.SMASH.Server.Run
+                        Cardano.SMASH.Server.Tracing
                         Cardano.SMASH.Server.Types
 
   other-modules:        Paths_cardano_smash_server
@@ -68,7 +69,6 @@ library
                       , hasql
                       , http-client
                       , http-conduit
-                      , iohk-monitoring
                       , ip
                       , network
                       , network-uri
@@ -79,6 +79,7 @@ library
                       , swagger2
                       , text
                       , time
+                      , trace-dispatcher
                       , transformers-except
                       , wai
                       , warp

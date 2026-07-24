@@ -8,14 +8,8 @@
 
 module Cardano.Db.Run where
 
-import Cardano.BM.Data.LogItem (
-  LOContent (..),
-  LogObject (..),
-  PrivacyAnnotation (..),
-  mkLOMeta,
- )
-import Cardano.BM.Data.Severity (Severity (..))
-import Cardano.BM.Trace (Trace, logWarning)
+import Cardano.Logging.Trace (traceWith)
+import Cardano.Logging.Types (SeverityS (..), Trace)
 import Cardano.Prelude
 import Control.Monad.Logger (
   LogLevel (..),
@@ -25,7 +19,6 @@ import Control.Monad.Logger (
   runNoLoggingT,
  )
 import Control.Monad.Trans.Resource (MonadUnliftIO)
-import Control.Tracer (traceWith)
 import Data.Pool (Pool, defaultPoolConfig, destroyAllResources, newPool, withResource)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -40,6 +33,7 @@ import System.Log.FastLogger (LogStr, fromLogStr)
 import Prelude (userError)
 
 import Cardano.Db.Error (DbSessionError (..), formatSessionError, mkDbCallStack, runOrThrowIO)
+import Cardano.Db.Log (LogMessage (..), logWarning)
 import Cardano.Db.PGConfig (PGPassSource (..), readPGPass, toConnectionSetting)
 import Cardano.Db.Statement.Function.Core (runSession)
 import Cardano.Db.Types (DbEnv (..), DbM (..))
@@ -56,7 +50,7 @@ import Cardano.Db.Types (DbEnv (..), DbM (..))
 -- Accepts an optional isolation level (defaults to RepeatableRead).
 runDbTransLogged ::
   MonadUnliftIO m =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DbEnv ->
   Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
@@ -73,7 +67,7 @@ runDbTransLogged tracer dbEnv mIsolationLevel action = do
     transactionSession = do
       HsqlS.statement () (beginTransactionStmt isolationLevel)
 
-      result <- liftIO $ try @SomeException $ runIohkLogging tracer $ liftIO $ runReaderT (runDbM action) dbEnv
+      result <- liftIO $ try @SomeException $ runDbLogging tracer $ liftIO $ runReaderT (runDbM action) dbEnv
       case result of
         Left err -> do
           HsqlS.statement () rollbackTransactionStmt
@@ -119,7 +113,7 @@ runDbTransSilent dbEnv isolationLevel action = do
 -- Useful for operations that manage their own transactions or don't need ACID guarantees.
 runDbDirectLogged ::
   MonadUnliftIO m =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DbEnv ->
   DbM a ->
   m a
@@ -133,7 +127,7 @@ runDbDirectLogged tracer dbEnv action = do
   where
     simpleSession = do
       -- No transaction management - just run the action
-      result <- liftIO $ try @SomeException $ runIohkLogging tracer $ liftIO $ runReaderT (runDbM action) dbEnv
+      result <- liftIO $ try @SomeException $ runDbLogging tracer $ liftIO $ runReaderT (runDbM action) dbEnv
       case result of
         Left err -> liftIO $ throwIO err
         Right value -> pure value
@@ -166,7 +160,7 @@ runDbDirectSilent dbEnv action = do
 -- Accepts an optional isolation level (defaults to RepeatableRead).
 runDbPoolTransLogged ::
   MonadUnliftIO m =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DbEnv ->
   Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
@@ -175,7 +169,7 @@ runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
   case dbPoolConnection dbEnv of
     Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
     Just pool -> do
-      runIohkLogging tracer $ do
+      runDbLogging tracer $ do
         liftIO $ withResource pool $ \conn -> do
           result <- HsqlS.run (transactionSession conn) conn
           case result of
@@ -198,7 +192,7 @@ runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
 
 runDbPoolLogged ::
   MonadUnliftIO m =>
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DbEnv ->
   DbM a ->
   m a
@@ -206,7 +200,7 @@ runDbPoolLogged tracer dbEnv action = do
   case dbPoolConnection dbEnv of
     Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
     Just pool -> do
-      runIohkLogging tracer $ do
+      runDbLogging tracer $ do
         liftIO $ withResource pool $ \conn -> do
           result <- HsqlS.run (transactionSession conn) conn
           case result of
@@ -234,11 +228,11 @@ runDbPoolLogged tracer dbEnv action = do
 runDbWithPool ::
   MonadIO m =>
   Pool HsqlCon.Connection ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DbM a ->
   m (Either DbSessionError a)
 runDbWithPool connPool tracer action = do
-  liftIO $ try $ runIohkLogging tracer $ do
+  liftIO $ try $ runDbLogging tracer $ do
     liftIO $ withResource connPool $ \conn -> do
       let tempDbEnv = createDbEnv conn (Just connPool) (Just tracer)
       runReaderT (runDbM action) tempDbEnv
@@ -418,7 +412,7 @@ createHasqlConnectionPool settings numConnections = do
 --
 -- The primary connection is used for sequential/transactional operations,
 -- while the pool is used for parallel/async operations.
-createDbEnv :: HsqlCon.Connection -> Maybe (Pool HsqlCon.Connection) -> Maybe (Trace IO Text) -> DbEnv
+createDbEnv :: HsqlCon.Connection -> Maybe (Pool HsqlCon.Connection) -> Maybe (Trace IO LogMessage) -> DbEnv
 createDbEnv conn pool mTracer =
   DbEnv
     { dbConnection = conn -- Primary connection for main thread operations
@@ -440,27 +434,22 @@ withManagedPool settings numConns action = do
 -- Logging Utilities
 -----------------------------------------------------------------------------------------
 
--- | Convert monad-logger LoggingT to IOHK-style tracing
+-- | Convert monad-logger LoggingT to trace-dispatcher tracing
 --
 -- This function bridges the gap between monad-logger's LoggingT and
--- the IOHK tracing system used throughout the cardano ecosystem.
-runIohkLogging :: Trace IO Text -> LoggingT m a -> m a
-runIohkLogging tracer action =
-  runLoggingT action toIohkLog
+-- the trace-dispatcher system used throughout the cardano ecosystem.
+runDbLogging :: Trace IO LogMessage -> LoggingT m a -> m a
+runDbLogging tracer action =
+  runLoggingT action toDbLog
   where
-    toIohkLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-    toIohkLog _loc _src level msg = do
-      meta <- mkLOMeta (toIohkSeverity level) Public
-      traceWith
-        tracer
-        (name, LogObject name meta (LogMessage . Text.decodeLatin1 $ fromLogStr msg))
+    toDbLog :: Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+    toDbLog _loc _src level msg =
+      traceWith tracer $
+        LogMessage (toSeverity level) (Text.decodeLatin1 $ fromLogStr msg)
 
-    name :: Text
-    name = "db-sync"
-
-    -- \| Convert monad-logger LogLevel to IOHK Severity
-    toIohkSeverity :: LogLevel -> Severity
-    toIohkSeverity =
+    -- \| Convert monad-logger LogLevel to trace-dispatcher severity
+    toSeverity :: LogLevel -> SeverityS
+    toSeverity =
       \case
         LevelDebug -> Debug
         LevelInfo -> Info

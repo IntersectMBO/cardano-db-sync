@@ -30,11 +30,12 @@ module Cardano.DbSync.Ledger.Snapshot (
   getSlotNoSnapshot,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo, logWarning)
+import Cardano.Db.Log (LogMessage, logInfo, logWarning)
 import Cardano.DbSync.Api.Types (LedgerEnv (..))
 import Cardano.DbSync.Config.Types (LedgerStateDir (..))
 import Cardano.DbSync.Ledger.Types
 import Cardano.DbSync.Types (CardanoPoint)
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
@@ -54,7 +55,7 @@ import System.FilePath (takeExtension, (</>))
 
 -- | Remove old .lstate files from a previous db-sync version.
 -- This is a one-time migration on first startup with the new format.
-migrateOldSnapshots :: LedgerStateDir -> Trace IO Text -> IO ()
+migrateOldSnapshots :: LedgerStateDir -> Trace IO LogMessage -> IO ()
 migrateOldSnapshots (LedgerStateDir stateDir) tracer = do
   exists <- doesDirectoryExist stateDir
   when exists $ do
@@ -80,14 +81,14 @@ saveCleanupState :: HasLedgerEnv -> DbSyncStateRef -> Maybe EpochNo -> IO ()
 saveCleanupState = saveCurrentLedgerState
 
 -- | The write thread that takes snapshots from the queue.
-runLedgerStateWriteThread :: Trace IO Text -> LedgerEnv -> IO ()
+runLedgerStateWriteThread :: Trace IO LogMessage -> LedgerEnv -> IO ()
 runLedgerStateWriteThread tracer lenv =
   case lenv of
     HasLedger le -> snapshotWriteLoop tracer le
     NoLedger _ -> forever $ threadDelay 600000000
 
 -- | Write loop: read from queue, take snapshot via consensus SnapshotManager.
-snapshotWriteLoop :: Trace IO Text -> HasLedgerEnv -> IO ()
+snapshotWriteLoop :: Trace IO LogMessage -> HasLedgerEnv -> IO ()
 snapshotWriteLoop tracer env = loop
   where
     loop :: IO ()

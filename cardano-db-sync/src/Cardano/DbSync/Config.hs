@@ -19,49 +19,82 @@ module Cardano.DbSync.Config (
   readCardanoGenesisConfig,
   readSyncNodeConfig,
   configureLogging,
+  defaultTraceConfig,
 ) where
 
-import qualified Cardano.BM.Configuration.Model as Logging
-import qualified Cardano.BM.Setup as Logging
-import Cardano.BM.Trace (Trace)
-import qualified Cardano.BM.Trace as Logging
+import Cardano.Db.Log (LogMessage)
 import Cardano.DbSync.Api (extractInsertOptions)
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPreConfig, readByteStringFromFile)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Tracing.Setup (mkStdoutTracer)
+import Cardano.Logging (
+  BackendConfig (..),
+  DetailLevel (..),
+  FormatLogging (..),
+  SeverityS (..),
+  Trace,
+  TraceConfig,
+  mkConfigurationWithFallback,
+  readConfigurationWithFallback,
+ )
 import Cardano.Prelude
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Text as Text
+import qualified Data.Yaml as Yaml
 import System.FilePath (takeDirectory, (</>))
 
-configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO Text)
-configureLogging syncNodeConfig loggingName = do
-  if not (dncEnableLogging syncNodeConfig)
-    then pure Logging.nullTracer
-    else liftIO $ Logging.setupTrace (Right $ dncLoggingConfig syncNodeConfig) loggingName
+-- | Create a simple stdout tracer configured from the db-sync config file.
+-- This is what the tests and simple tools use; @cardano-db-sync@ itself
+-- creates its tracers (with optional forwarding to cardano-tracer) via
+-- 'Cardano.DbSync.Tracing.Setup.mkDbSyncTracers'.
+configureLogging :: SyncNodeConfig -> Text -> IO (Trace IO LogMessage)
+configureLogging syncNodeConfig =
+  mkStdoutTracer (dncEnableLogging syncNodeConfig) (dncTraceConfig syncNodeConfig)
 
 readSyncNodeConfig :: ConfigFile -> IO SyncNodeConfig
 readSyncNodeConfig (ConfigFile fp) = do
-  pcfg <- (adjustNodeFilePath . parseSyncPreConfig) =<< readByteStringFromFile fp "DbSync"
+  configBytes <- readByteStringFromFile fp "DbSync"
+  pcfg <- adjustNodeFilePath <$> parseSyncPreConfig configBytes
   ncfg <- parseNodeConfig =<< readByteStringFromFile (pcNodeConfigFilePath pcfg) "node"
-  coalesceConfig pcfg ncfg (mkAdjustPath pcfg)
+  traceConfig <- readTraceConfig fp configBytes
+  coalesceConfig traceConfig pcfg ncfg (mkAdjustPath pcfg)
   where
-    adjustNodeFilePath :: IO SyncPreConfig -> IO SyncPreConfig
-    adjustNodeFilePath spc = do
-      cfg <- spc
-      pure $ cfg {pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg)}
+    adjustNodeFilePath :: SyncPreConfig -> SyncPreConfig
+    adjustNodeFilePath cfg =
+      cfg {pcNodeConfigFile = adjustNodeConfigFilePath (takeDirectory fp </>) (pcNodeConfigFile cfg)}
+
+-- | The default trace-dispatcher configuration for db-sync: everything at
+-- 'Info' severity to stdout (human readable).
+defaultTraceConfig :: TraceConfig
+defaultTraceConfig =
+  mkConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured)
+
+-- | Read the trace-dispatcher configuration ('TraceOptions' et al.) from the
+-- db-sync config file. When the file does not contain any tracing options
+-- (for example an old config file with the legacy @iohk-monitoring@ keys,
+-- which are silently ignored), the default configuration is used.
+readTraceConfig :: FilePath -> ByteString -> IO TraceConfig
+readTraceConfig fp configBytes =
+  case Yaml.decodeEither' configBytes of
+    Right (Aeson.Object o)
+      | any (`KeyMap.member` o) ["TraceOptions", "HermodTracing", "Options"] ->
+          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) fp
+    _otherwise -> pure defaultTraceConfig
 
 coalesceConfig ::
+  TraceConfig ->
   SyncPreConfig ->
   NodeConfig ->
   (FilePath -> FilePath) ->
   IO SyncNodeConfig
-coalesceConfig pcfg ncfg adjustGenesisPath = do
-  lc <- Logging.setupFromRepresentation $ pcLoggingConfig pcfg
+coalesceConfig traceConfig pcfg ncfg adjustGenesisPath =
   pure $
     SyncNodeConfig
       { dncNetworkName = pcNetworkName pcfg
-      , dncLoggingConfig = lc
+      , dncTraceConfig = traceConfig
       , dncNodeConfigFile = pcNodeConfigFile pcfg
       , dncProtocol = ncProtocol ncfg
       , dncRequiresNetworkMagic = ncRequiresNetworkMagic ncfg

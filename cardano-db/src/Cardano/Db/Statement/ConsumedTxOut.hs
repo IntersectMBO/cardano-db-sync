@@ -11,7 +11,8 @@
 
 module Cardano.Db.Statement.ConsumedTxOut where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
+import Cardano.Logging.Types (Trace)
 import Cardano.Prelude (ByteString, Int64, textShow)
 import Contravariant.Extras (contrazip2, contrazip3)
 import Control.Exception (throwIO)
@@ -49,7 +50,7 @@ data ConsumedTriplet = ConsumedTriplet
 -- | Run extra migrations for the database
 runConsumedTxOutMigrations ::
   -- | Tracer for logging
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   -- | Bulk size
   Int ->
   -- | TxOut table type being used
@@ -156,7 +157,7 @@ queryTxOutIsNullImpl = do
 
 -- | Update tx_out tables and create address table
 updateTxOutAndCreateAddress ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   DbM ()
 updateTxOutAndCreateAddress trce = do
   runStep "Dropped views" dropViewsQuery
@@ -222,7 +223,7 @@ updateTxOutAndCreateAddress trce = do
 migrateTxOut ::
   -- | Bulk size
   Int ->
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   Maybe MigrationValues ->
   DbM ()
@@ -240,7 +241,7 @@ migrateTxOut bulkSize trce txOutVariantType mMvs = do
 migrateNextPageTxOut ::
   -- | Bulk size
   Int ->
-  Maybe (Trace IO Text.Text) ->
+  Maybe (Trace IO LogMessage) ->
   TxOutVariantType ->
   Word64 ->
   DbM ()
@@ -447,7 +448,7 @@ deleteConsumedBeforeTxStmt =
 
 -- Function to run delete operation
 deleteConsumedBeforeTx ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   Id.TxId ->
   DbM ()
@@ -462,7 +463,7 @@ deleteConsumedBeforeTx trce txOutVariantType txId =
 
 -- Delete consumed tx outputs
 deleteConsumedTxOut ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   Word64 ->
   DbM ()
@@ -592,7 +593,7 @@ bulkConsumedByHashEncoder =
 
 -- Helper function for creating consumed index if needed
 shouldCreateConsumedTxOut ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   Bool ->
   DbM ()
 shouldCreateConsumedTxOut trce rcc = do
@@ -604,7 +605,7 @@ shouldCreateConsumedTxOut trce rcc = do
 
 -- Split and process page entries
 splitAndProcessPageEntries ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   Bool ->
   Id.TxId ->
@@ -639,7 +640,7 @@ splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId 
 deleteAndUpdateConsumedTxOut ::
   -- | Bulk size
   Int ->
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   MigrationValues ->
   Word64 ->

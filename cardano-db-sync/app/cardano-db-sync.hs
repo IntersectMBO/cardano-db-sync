@@ -96,6 +96,7 @@ pRunDbSyncNode = do
   SyncNodeParams
     <$> pConfigFile
     <*> pSocketPath
+    <*> optional pTracerSocketPath
     <*> optional pLedgerStateDir
     <*> pMigrationDir
     <*> pPGPassSource
@@ -185,6 +186,15 @@ pSocketPath =
           <> Opt.completer (Opt.bashCompleter "file")
           <> Opt.metavar "FILEPATH"
       )
+
+pTracerSocketPath :: Parser FilePath
+pTracerSocketPath =
+  Opt.strOption
+    ( Opt.long "tracer-socket-path-connect"
+        <> Opt.help "Connect to a cardano-tracer on this socket to forward logs and metrics."
+        <> Opt.completer (Opt.bashCompleter "file")
+        <> Opt.metavar "FILEPATH"
+    )
 
 pRollbackSlotNo :: Parser SlotNo
 pRollbackSlotNo =

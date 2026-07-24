@@ -15,101 +15,46 @@ EnableLogging: True
 NodeConfigFile: /nix/store/3yi8nb7s8hw6x2gami2jdp7jhgbqnv0y-config-0-0.json
 
 # ------------------------------------------------------------------------------
-# Logging configuration follows.
+# Logging configuration follows (trace-dispatcher).
+#
+# db-sync uses the same tracing system as cardano-node. The old
+# iohk-monitoring keys (minSeverity, setupScribes, defaultScribes,
+# setupBackends, rotation, options, ...) are no longer read.
+#
+# Logs and metrics can be forwarded to a cardano-tracer process by starting
+# db-sync with: --tracer-socket-path-connect /path/to/tracer.socket
 
-# global filter; messages must have at least this severity to pass:
-minSeverity: Info
+# Per namespace configuration. The empty string is the root namespace and
+# applies to every message unless a more specific namespace overrides it.
+TraceOptions:
+  "":
+    severity: Info
+    detail: DNormal
+    backends:
+      - Stdout HumanFormatUncoloured
+      # Forward messages to cardano-tracer. This backend is added
+      # automatically when db-sync is started with
+      # --tracer-socket-path-connect:
+      # - Forwarder
+      # Expose metrics to an EKG store (pulled by cardano-tracer):
+      # - EKGBackend
 
-# global file rotation settings:
-rotation:
-  rpLogLimitBytes: 5000000
-  rpKeepFilesNum:  10
-  rpMaxAgeHours:   24
+  # The network protocol tracers are noisy, so restrict them to errors.
+  Mux:
+    severity: Error
+  Subscription:
+    severity: Error
 
-# these backends are initialized:
-setupBackends:
-  - AggregationBK
-  - KatipBK
-  # - EditorBK
-  # - EKGViewBK
+# Options for the connection to cardano-tracer.
+# TraceOptionForwarder:
+#   queueSize: 192
+#   verbosity: Minimum
+#   maxReconnectDelay: 45
 
-# if not indicated otherwise, then messages are passed to these backends:
-defaultBackends:
-  - KatipBK
+# The name of this process used when forwarding to cardano-tracer.
+# Defaults to the NetworkName from this file.
+# TraceOptionNodeName: preprod-db-sync
 
-# if wanted, the GUI is listening on this port:
-# hasGUI: 12787
-
-# if wanted, the EKG interface is listening on this port:
-# hasEKG: 12788
-
-# here we set up outputs of logging in 'katip':
-setupScribes:
-  - scKind: StdoutSK
-    scName: stdout
-    scFormat: ScText
-    scRotation: null
-
-# if not indicated otherwise, then log output is directed to this:
-defaultScribes:
-  - - StdoutSK
-    - stdout
-
-# more options which can be passed as key-value pairs:
-options:
-  cfokey:
-    value: "Release-1.0.0"
-  mapSubtrace:
-    benchmark:
-      contents:
-        - GhcRtsStats
-        - MonotonicClock
-      subtrace: ObservableTrace
-    '#ekgview':
-      contents:
-      - - tag: Contains
-          contents: 'cardano.epoch-validation.benchmark'
-        - - tag: Contains
-            contents: .monoclock.basic.
-      - - tag: Contains
-          contents: 'cardano.epoch-validation.benchmark'
-        - - tag: Contains
-            contents: diff.RTS.cpuNs.timed.
-      - - tag: StartsWith
-          contents: '#ekgview.#aggregation.cardano.epoch-validation.benchmark'
-        - - tag: Contains
-            contents: diff.RTS.gcNum.timed.
-      subtrace: FilterTrace
-    'cardano.epoch-validation.utxo-stats':
-      # Change the `subtrace` value to `Neutral` in order to log
-      # `UTxO`-related messages during epoch validation.
-      subtrace: NoTrace
-    '#messagecounters.aggregation':
-      subtrace: NoTrace
-    '#messagecounters.ekgview':
-      subtrace: NoTrace
-    '#messagecounters.switchboard':
-      subtrace: NoTrace
-    '#messagecounters.katip':
-      subtrace: NoTrace
-    '#messagecounters.monitoring':
-      subtrace: NoTrace
-    'cardano.#messagecounters.aggregation':
-      subtrace: NoTrace
-    'cardano.#messagecounters.ekgview':
-      subtrace: NoTrace
-    'cardano.#messagecounters.switchboard':
-      subtrace: NoTrace
-    'cardano.#messagecounters.katip':
-      subtrace: NoTrace
-    'cardano.#messagecounters.monitoring':
-      subtrace: NoTrace
-  mapBackends:
-    cardano.epoch-validation.benchmark:
-      - AggregationBK
-    '#aggregation.cardano.epoch-validation.benchmark':
-      - EKGViewBK
-  mapSeverity:
-    db-sync-node.Subscription: Error
-    db-sync-node.Mux: Error
-    db-sync-node: Info
+# Emit resource usage (memory, GC, CPU) messages with this period in
+# milliseconds. Disabled when not set.
+# TraceOptionResourceFrequency: 5000

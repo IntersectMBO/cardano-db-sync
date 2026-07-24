@@ -12,9 +12,9 @@
 
 module Cardano.Db.Statement.Base where
 
-import Cardano.BM.Data.Trace (Trace)
-import Cardano.BM.Trace (logInfo, logWarning, nullTracer)
+import Cardano.Db.Log (LogMessage, logInfo, logWarning)
 import Cardano.Ledger.BaseTypes (SlotNo (..))
+import Cardano.Logging.Types (Trace)
 import Cardano.Prelude (ByteString, HasCallStack, Int64, MonadIO (..), Proxy (..), Word64, for, textShow, void)
 import Data.Functor.Contravariant ((>$<))
 import Data.List (partition)
@@ -685,7 +685,7 @@ queryPreviousSlotNo slotNo =
 -----------------------------------------------------------------------------------
 
 deleteBlocksBlockId ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   Id.BlockId ->
   Word64 ->
@@ -790,7 +790,7 @@ mkRollbackSummary logs setNullLogs =
 
 ---------------------------------------------------------------------------------
 
-deleteUsingEpochNo :: Trace IO Text.Text -> Word64 -> DbM [(Text.Text, Int64)]
+deleteUsingEpochNo :: Trace IO LogMessage -> Word64 -> DbM [(Text.Text, Int64)]
 deleteUsingEpochNo trce epochN = do
   let epochEncoder = fromIntegral >$< HsqlE.param (HsqlE.nonNullable HsqlE.int8)
       epochInt64 = fromIntegral epochN
@@ -848,7 +848,7 @@ deleteUsingEpochNo trce epochN = do
 
 --------------------------------------------------------------------------------
 deleteBlocksSlotNo ::
-  Trace IO Text.Text ->
+  Trace IO LogMessage ->
   TxOutVariantType ->
   SlotNo ->
   Bool ->
@@ -892,12 +892,12 @@ deleteBlocksSlotNo trce txOutVariantType (SlotNo slotNo) isConsumedTxOut = do
 
 --------------------------------------------------------------------------------
 deleteBlocksSlotNoNoTrace :: TxOutVariantType -> SlotNo -> DbM Bool
-deleteBlocksSlotNoNoTrace txOutVariantType slotNo = deleteBlocksSlotNo nullTracer txOutVariantType slotNo True
+deleteBlocksSlotNoNoTrace txOutVariantType slotNo = deleteBlocksSlotNo mempty txOutVariantType slotNo True
 
 --------------------------------------------------------------------------------
 deleteBlocksForTests :: HasCallStack => TxOutVariantType -> Id.BlockId -> Word64 -> DbM (Either DbLookupError ())
 deleteBlocksForTests txOutVariantType blockId epochN = do
-  resCount <- deleteBlocksBlockId nullTracer txOutVariantType blockId epochN False
+  resCount <- deleteBlocksBlockId mempty txOutVariantType blockId epochN False
   if resCount > 0
     then pure $ Right ()
     else pure $ Left $ mkDbLookupError "No blocks deleted"
@@ -912,7 +912,7 @@ deleteBlock txOutVariantType block = do
   case mBlockId of
     Nothing -> pure False
     Just (blockId, epochN) -> do
-      void $ deleteBlocksBlockId nullTracer txOutVariantType blockId epochN False
+      void $ deleteBlocksBlockId mempty txOutVariantType blockId epochN False
       pure True
 
 --------------------------------------------------------------------------------

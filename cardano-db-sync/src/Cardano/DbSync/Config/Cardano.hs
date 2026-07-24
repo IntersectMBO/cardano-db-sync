@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -31,7 +32,6 @@ import Cardano.Ledger.Conway.Genesis
 import Cardano.Node.Protocol.Dijkstra
 import Cardano.Prelude (second)
 import Control.Monad.Trans.Except (ExceptT)
-import Control.Tracer (nullTracer)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
@@ -41,6 +41,7 @@ import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import "contra-tracer" Control.Tracer (nullTracer)
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
 data GenesisConfig

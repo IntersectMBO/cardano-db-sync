@@ -18,11 +18,12 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 
-import Cardano.BM.Trace (Trace)
+import Cardano.Db.Log (LogMessage)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
 import Cardano.Ledger.Mary.Value (AssetName (..), MultiAsset (..), PolicyID (..))
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 
 import Cardano.Db (DbLovelace (..), DbWord64 (..))
@@ -453,7 +454,7 @@ insertCollateralTxOut syncEnv iopts (txId, _txHash) (Generic.TxOut index addr va
 
 insertCollateralTxIn ::
   SyncEnv ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError DB.DbM ()
@@ -473,7 +474,7 @@ insertCollateralTxIn syncEnv _tracer txInId txIn = do
 
 insertReferenceTxIn ::
   SyncEnv ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError DB.DbM ()

@@ -11,7 +11,7 @@ import Data.List (unzip4)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 
-import Cardano.BM.Trace (logInfo)
+import Cardano.Db.Log (logInfo)
 import Cardano.Prelude hiding (from, groupBy, on)
 import Cardano.Slotting.Slot (EpochNo (..))
 

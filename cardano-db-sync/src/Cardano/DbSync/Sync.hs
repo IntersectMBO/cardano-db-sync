@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -23,44 +24,37 @@ module Cardano.DbSync.Sync (
   runSyncNodeClient,
 ) where
 
-import Cardano.BM.Data.Tracer (ToLogObject (..))
-import Cardano.BM.Trace (Trace, appendName, logInfo)
-import qualified Cardano.BM.Trace as Logging
-import Cardano.Client.Subscription (Decision (..), MuxTrace, SubscriptionParams (..), SubscriptionTrace, SubscriptionTracers (..), subscribe)
+import Cardano.Client.Subscription (Decision (..), SubscriptionParams (..), SubscriptionTracers (..), subscribe)
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
 import Cardano.DbSync.Config
 import Cardano.DbSync.DbEvent
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
-import Cardano.DbSync.Tracing.ToObjectOrphans ()
+import Cardano.DbSync.Tracing.Setup (DbSyncTracers (..), toTracer)
 import Cardano.DbSync.Types
 import Cardano.DbSync.Util
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (Meta, Nat, (%))
 import Cardano.Slotting.Slot (WithOrigin (..))
-import qualified Codec.CBOR.Term as CBOR
 import Control.Concurrent.Async (AsyncCancelled (..))
-import Control.Tracer (Tracer)
 import qualified Data.ByteString.Lazy as BSL
-import Data.Functor.Contravariant (contramap)
 import qualified Data.List as List
-import qualified Data.Text as Text
-import qualified Network.Mux as Mux
 import Network.TypedProtocol.Peer (N (..), Nat (..))
+import "contra-tracer" Control.Tracer (nullTracer)
 
 import Cardano.Network.NodeToClient (
-  ConnectionId,
-  Handshake,
   IOManager,
   LocalAddress,
   NodeToClientProtocols (..),
-  TraceSendRecv,
   localSnocket,
   localStateQueryPeerNull,
   localTxMonitorPeerNull,
   localTxSubmissionPeerNull,
  )
 import qualified Cardano.Network.NodeToClient.Version as Network
+import qualified Network.Mux as Mux
 import Ouroboros.Consensus.Block.Abstract (CodecConfig)
 import Ouroboros.Consensus.Byron.Node ()
 import Ouroboros.Consensus.Cardano.Node ()
@@ -101,7 +95,6 @@ import Ouroboros.Network.Protocol.ChainSync.PipelineDecision (
   pipelineDecisionLowHighMark,
   runPipelineDecision,
  )
-import Ouroboros.Network.Protocol.ChainSync.Type (ChainSync)
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
 import qualified Ouroboros.Network.Snocket as Snocket
@@ -110,12 +103,12 @@ runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->
   IOManager ->
-  Trace IO Text ->
+  DbSyncTracers ->
   ThreadChannels ->
   SocketPath ->
   IO ()
-runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) = do
-  logInfo trce $ "Connecting to node via " <> textShow socketPath
+runSyncNodeClient metricsSetters syncEnv iomgr tracers tc (SocketPath socketPath) = do
+  logInfo (dstTracer tracers) $ "Connecting to node via " <> textShow socketPath
   void $
     subscribe
       (localSnocket iomgr)
@@ -123,7 +116,7 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
       (supportedNodeToClientVersions (Proxy @CardanoBlock))
       subscriptionTracers
       subscriptionParams
-      (dbSyncProtocols syncEnv metricsSetters tc codecConfig)
+      (dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig)
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
@@ -145,37 +138,23 @@ runSyncNodeClient metricsSetters syncEnv iomgr trce tc (SocketPath socketPath) =
 
     subscriptionTracers =
       SubscriptionTracers
-        { stMuxTracer = muxTracer
-        , stHandshakeTracer = handshakeTracer
-        , stSubscriptionTracer = subscriptionTracer
-        , stMuxChannelTracer = Logging.nullTracer
-        , stMuxBearerTracer = Logging.nullTracer
+        { stMuxTracer = toTracer (dstMuxTracer tracers)
+        , stHandshakeTracer = toTracer (dstHandshakeTracer tracers)
+        , stSubscriptionTracer = toTracer (dstSubscriptionTracer tracers)
+        , stMuxChannelTracer = nullTracer
+        , stMuxBearerTracer = nullTracer
         }
-
-    muxTracer :: Tracer IO (Mux.WithBearer (ConnectionId LocalAddress) MuxTrace)
-    muxTracer = toLogObject $ appendName "Mux" trce
-
-    subscriptionTracer :: Tracer IO (SubscriptionTrace ())
-    subscriptionTracer = toLogObject $ appendName "Subscription" trce
-
-    handshakeTracer ::
-      Tracer
-        IO
-        ( Mux.WithBearer
-            (ConnectionId LocalAddress)
-            (TraceSendRecv (Handshake Network.NodeToClientVersion CBOR.Term))
-        )
-    handshakeTracer = toLogObject $ appendName "Handshake" trce
 
 dbSyncProtocols ::
   SyncEnv ->
   MetricSetters ->
+  DbSyncTracers ->
   ThreadChannels ->
   CodecConfig CardanoBlock ->
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
   NodeToClientProtocols 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
-dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
+dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig version bversion =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -184,15 +163,12 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
         InitiatorProtocolOnly $
           Mux.mkMiniProtocolCbFromPeer $
             const
-              (Logging.nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
+              (nullTracer, cTxMonitorCodec codecs, localTxMonitorPeerNull)
     }
   where
     codecs = clientCodecs codecConfig bversion version
 
-    localChainSyncTracer :: Tracer IO (TraceSendRecv (ChainSync CardanoBlock (Point CardanoBlock) (Tip CardanoBlock)))
-    localChainSyncTracer = toLogObject $ appendName "ChainSync" tracer
-
-    tracer :: Trace IO Text
+    tracer :: Trace IO LogMessage
     tracer = getTrace syncEnv
 
     localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
@@ -213,7 +189,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
               ]
           void $
             runPipelinedPeer
-              localChainSyncTracer
+              (toTracer (dstChainSyncTracer tracers))
               (cChainSyncCodec codecs)
               channel
               ( chainSyncClientPeerPipelined $
@@ -230,7 +206,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
       InitiatorProtocolOnly $
         Mux.mkMiniProtocolCbFromPeer $
           const
-            ( Logging.nullTracer
+            ( nullTracer
             , cTxSubmissionCodec codecs
             , localTxSubmissionPeerNull
             )
@@ -242,7 +218,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
           InitiatorProtocolOnly $
             Mux.mkMiniProtocolCbFromPeerSt $
               const
-                ( Logging.nullTracer
+                ( nullTracer
                 , cStateQueryCodec codecs
                 , LocalStateQuery.StateIdle
                 , localStateQueryPeerNull
@@ -251,7 +227,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
           InitiatorProtocolOnly $
             Mux.mkMiniProtocolCbFromPeerSt $
               const
-                ( contramap (Text.pack . show) . toLogObject $ appendName "local-state-query" tracer
+                ( toTracer (dstStateQueryTracer tracers)
                 , cStateQueryCodec codecs
                 , LocalStateQuery.StateIdle
                 , localStateQueryClientPeer $ localStateQueryHandler nle
@@ -272,7 +248,7 @@ dbSyncProtocols syncEnv metricsSetters tc codecConfig version bversion =
 -- in the pipeline policy.
 chainSyncClient ::
   MetricSetters ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   [Point CardanoBlock] ->
   WithOrigin BlockNo ->
   ThreadChannels ->

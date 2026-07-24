@@ -9,9 +9,10 @@ module Cardano.DbSync.Era.Universal.Validate (
   validateEpochRewards,
 ) where
 
-import Cardano.BM.Trace (Trace, logError, logInfo, logWarning)
+import Cardano.Db.Log (LogMessage, logError, logInfo, logWarning)
 import Cardano.Ledger.Shelley.API (Network)
 import qualified Cardano.Ledger.Shelley.Rewards as Ledger
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (from, on)
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.List as List
@@ -119,7 +120,7 @@ validateEpochRewards syncEnv network earnedEpochNo spendableEpochNo rmap = do
     expectedCount = fromIntegral . sum $ map Set.size (Map.elems rmap)
 
 logFullRewardMap ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   EpochNo ->
   Network ->
   Generic.Rewards ->
@@ -152,7 +153,7 @@ processRewardMapData results =
         x : _ -> (fst x, List.sort $ map snd xs)
 
 diffRewardMap ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   Network ->
   Map ByteString [(DB.RewardSource, DB.DbLovelace)] ->
   Map ByteString [(DB.RewardSource, Word64)] ->

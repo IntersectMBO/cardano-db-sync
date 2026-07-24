@@ -33,11 +33,12 @@ module Cardano.DbSync.Util (
   whenFalseMempty,
 ) where
 
-import Cardano.BM.Trace (Trace, logError)
 import Cardano.Db (RewardSource (..))
+import Cardano.Db.Log (LogMessage, logError)
 import Cardano.DbSync.Config.Types ()
 import Cardano.DbSync.Types
 import qualified Cardano.Ledger.Shelley.Rewards as Shelley
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (catch)
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Exception.Lifted (catch)
@@ -75,11 +76,11 @@ getSyncStatus sd = isSyncedWithinSeconds sd 120
 isSyncedWithintwoMinutes :: SlotDetails -> Bool
 isSyncedWithintwoMinutes sd = isSyncedWithinSeconds sd 120 == SyncFollowing
 
--- | ouroboros-network catches 'SomeException' and if a 'nullTracer' is passed into that
+-- | ouroboros-network catches 'SomeException' and if a 'mempty' is passed into that
 -- code, the caught exception will not be logged. Therefore wrap all cardano-db-sync code that
 -- is called from network with an exception logger so at least the exception will be
 -- logged (instead of silently swallowed) and then rethrown.
-logException :: Trace IO Text -> Text -> IO a -> IO a
+logException :: Trace IO LogMessage -> Text -> IO a -> IO a
 logException tracer txt action =
   action `catch` logger
   where

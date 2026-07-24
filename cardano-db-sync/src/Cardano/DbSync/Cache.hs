@@ -29,7 +29,7 @@ module Cardano.DbSync.Cache (
   withNoCache,
 ) where
 
-import Cardano.BM.Trace
+import Cardano.Db.Log (logWarning)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes (Network)
 import Cardano.Ledger.Mary.Value

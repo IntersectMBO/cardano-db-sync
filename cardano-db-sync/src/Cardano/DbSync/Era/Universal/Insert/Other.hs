@@ -17,8 +17,8 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
   insertExtraKeyWitness,
 ) where
 
-import Cardano.BM.Trace (Trace)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (LogMessage)
 import Cardano.DbSync.Api.Types (SyncEnv (..), UnicodeNullSource (..))
 import Cardano.DbSync.Cache (insertDatumAndCache, queryDatum, queryMAWithCache, queryOrInsertRewardAccount, queryOrInsertStakeAddress)
 import Cardano.DbSync.Cache.Types (CacheAction (..))
@@ -33,6 +33,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Mary.Value (AssetName (..), PolicyID (..))
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 
 --------------------------------------------------------------------------------------------
@@ -199,7 +200,7 @@ insertScript syncEnv txId script = do
       maybe (pure Nothing) (safeDecodeToJson syncEnv InsertScript txId) (Generic.txScriptJson s)
 
 insertExtraKeyWitness ::
-  Trace IO Text ->
+  Trace IO LogMessage ->
   DB.TxId ->
   ByteString ->
   ExceptT SyncNodeError DB.DbM ()

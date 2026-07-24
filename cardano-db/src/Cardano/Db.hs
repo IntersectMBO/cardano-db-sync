@@ -10,6 +10,7 @@ module Cardano.Db (
 
 import Cardano.Db.Error as X
 import Cardano.Db.Git.Version (gitRev)
+import Cardano.Db.Log as X
 import Cardano.Db.Migration as X
 import Cardano.Db.Migration.Version as X
 import Cardano.Db.PGConfig as X

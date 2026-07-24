@@ -6,7 +6,7 @@
 
 module Cardano.DbSync.Api.Ledger where
 
-import Cardano.BM.Trace (logError, logInfo, logWarning)
+import Cardano.Db.Log (logError, logInfo, logWarning)
 import Cardano.Ledger.Allegra.Scripts (Timelock)
 import Cardano.Ledger.Alonzo.Scripts
 import Cardano.Ledger.Babbage.Core

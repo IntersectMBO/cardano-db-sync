@@ -110,6 +110,7 @@ import Cardano.DbSync.Config
 import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error (runOrThrowIO)
+import Cardano.DbSync.Tracing.Setup (stdoutOnlyTracers)
 import Cardano.DbSync.Types (CardanoBlock, MetricSetters (..))
 import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
@@ -124,6 +125,7 @@ data Config = Config
   , protocolInfoForging :: Consensus.ProtocolInfo CardanoBlock
   , protocolInfoForger :: [BlockForging IO CardanoBlock]
   , syncNodeParams :: SyncNodeParams
+  , genesisConfig :: GenesisConfig
   }
 
 data DBSyncEnv = DBSyncEnv
@@ -256,7 +258,7 @@ getPoolLayer env = do
   pool <- DB.createHasqlConnectionPool [connSetting] 1 -- Pool size of 1 for tests
   pure $
     postgresqlPoolDataLayer
-      nullTracer
+      mempty
       pool
 
 withConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> (Config -> IO a) -> IO a
@@ -272,7 +274,7 @@ withConfig staticDir mutableDir cmdLineArgs config action = do
     (mapM finalize)
     ( \forgings -> do
         syncPars <- mkSyncNodeParams staticDir mutableDir cmdLineArgs
-        let cfg = Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forgings syncPars
+        let cfg = Config (Consensus.pInfoConfig pInfoDbSync) pInfoDbSync pInfoForger forgings syncPars genCfg
         action cfg
     )
   where
@@ -318,6 +320,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
     SyncNodeParams
       { enpConfigFile = mkConfigFile staticDir claConfigFilename
       , enpSocketPath = SocketPath $ mutableDir </> ".socket"
+      , enpTracerSocket = Nothing
       , enpMaybeLedgerStateDir = Just $ LedgerStateDir $ mutableDir </> "ledger-states"
       , enpMigrationDir = MigrationDir "../schema"
       , enpPGPassSource = DB.PGPassCached pgconfig
@@ -644,9 +647,10 @@ withFullConfig' WithConfigArgs {..} cmdLineArgs mSyncNodeConfig configFilePath t
     trce <-
       if shouldLog || isJust envLog
         then configureLogging syncNodeConfig "db-sync-node"
-        else pure nullTracer
+        else pure mempty
     -- runDbSync is partially applied so we can pass in syncNodeParams at call site / within tests
-    let partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom trce params cfg' True
+    let tracers = stdoutOnlyTracers trce
+        partialDbSyncRun params cfg' = runDbSync emptyMetricsSetters iom tracers params cfg' True (genesisConfig cfg)
         initSt = Consensus.pInfoInitLedger $ protocolInfo cfg
 
     withInterpreter (protocolInfoForging cfg) (protocolInfoForger cfg) nullTracer fingerFile $ \interpreter -> do

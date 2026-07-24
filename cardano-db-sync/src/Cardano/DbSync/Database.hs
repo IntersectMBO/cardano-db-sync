@@ -7,8 +7,8 @@ module Cardano.DbSync.Database (
   runDbThread,
 ) where
 
-import Cardano.BM.Trace (logDebug, logError, logInfo)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (logDebug, logError, logInfo)
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (ConsistentLevel (..), SyncEnv (..))
 import Cardano.DbSync.DbEvent

@@ -12,9 +12,10 @@ module Cardano.DbSync.Default (
   insertListBlocks,
 ) where
 
-import Cardano.BM.Trace (Trace, logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
+import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
 import qualified Data.ByteString.Short as SBS
@@ -87,7 +88,7 @@ insertListBlocksWithStopCondition syncEnv blocks targetBlock = do
 
 applyAndInsertBlockMaybe ::
   SyncEnv ->
-  Trace IO Text ->
+  Trace IO LogMessage ->
   CardanoBlock ->
   ExceptT SyncNodeError DB.DbM ()
 applyAndInsertBlockMaybe syncEnv tracer cblk = do

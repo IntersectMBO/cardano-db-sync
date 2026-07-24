@@ -6,7 +6,8 @@ module Cardano.SMASH.Server.Impl (
   server,
 ) where
 
-import Cardano.BM.Trace
+import Cardano.Db.Log (LogMessage, logInfo, logWarning)
+import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (Handler)
 import Cardano.SMASH.Server.Api
 import Cardano.SMASH.Server.FetchPolicies
@@ -23,7 +24,7 @@ import Servant (Handler (..), Server, err400, err403, err404, errBody, (:<|>) (.
 import Servant.Swagger (toSwagger)
 
 data ServerEnv = ServerEnv
-  { seTrace :: Trace IO Text
+  { seTrace :: Trace IO LogMessage
   , seDataLayer :: PoolDataLayer
   }
 
@@ -255,7 +256,7 @@ fetchPolicies' (ServerEnv trce dataLayer) smashURL =
       Right policyResult' -> pure . ApiResult . Right $ policyResult'
 
 -- | Generic throwing of exception when something goes bad.
-throwDBFailException :: Trace IO Text -> DBFail -> IO (ApiResult DBFail a)
+throwDBFailException :: Trace IO LogMessage -> DBFail -> IO (ApiResult DBFail a)
 throwDBFailException trce dbFail = do
   logWarning trce $ textShow dbFail
   throwIO $ err400 {errBody = encode dbFail}

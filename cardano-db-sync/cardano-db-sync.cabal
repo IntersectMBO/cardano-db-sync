@@ -133,7 +133,8 @@ library
                         Cardano.DbSync.LocalStateQuery
                         Cardano.DbSync.StateQuery
                         Cardano.DbSync.Sync
-                        Cardano.DbSync.Tracing.ToObjectOrphans
+                        Cardano.DbSync.Tracing.Network
+                        Cardano.DbSync.Tracing.Setup
                         Cardano.DbSync.Types
 
                         Cardano.DbSync.Util
@@ -184,9 +185,11 @@ library
                       , vector-map
                       , containers
                       , contra-tracer
+                      , deepseq
                       , directory
                       , data-default-class
                       , either
+                      , ekg-core
                       , extra
                       , filepath
                       , fs-api
@@ -196,7 +199,6 @@ library
                       , http-client
                       , http-client-restricted
                       , http-types
-                      , iohk-monitoring
                       , network
                       , lifted-base
                       , memory
@@ -210,6 +212,7 @@ library
                       , ouroboros-consensus:protocol
                       , ouroboros-network:api
                       , ouroboros-network:framework
+                      , ouroboros-network:framework-tracing
                       , ouroboros-network:protocols
                       , plutus-ledger-api
                       , prometheus
@@ -228,6 +231,9 @@ library
                       , swagger2
                       , text
                       , time
+                      , trace-dispatcher
+                      , trace-forward
+                      , trace-resources
                       , transformers
                       , transformers-except
                       , typed-protocols
@@ -382,7 +388,6 @@ test-suite test
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-db
-                      , iohk-monitoring
                       , cardano-ledger-api
                       , cardano-ledger-binary
                       , cardano-ledger-byron
@@ -398,9 +403,9 @@ test-suite test
                       , cardano-strict-containers
                       , containers
                       , data-default-class
-                      , iohk-monitoring
                       , hedgehog
                       , hedgehog-quickcheck
                       , network
                       , ouroboros-consensus:cardano
                       , text
+                      , trace-dispatcher

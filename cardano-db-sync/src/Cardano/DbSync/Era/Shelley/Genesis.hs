@@ -11,8 +11,8 @@ module Cardano.DbSync.Era.Shelley.Genesis (
   insertValidateShelleyGenesisDist,
 ) where
 
-import Cardano.BM.Trace (logError, logInfo)
 import qualified Cardano.Db as DB
+import Cardano.Db.Log (logError, logInfo)
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
 import Cardano.DbSync.Api

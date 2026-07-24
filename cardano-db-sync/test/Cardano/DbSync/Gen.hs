@@ -25,9 +25,6 @@ module Cardano.DbSync.Gen (
   triggerHardFork,
 ) where
 
-import qualified Cardano.BM.Configuration.Model as Logging (Configuration ())
-import qualified Cardano.BM.Data.Configuration as Logging
-import qualified Cardano.BM.Data.Severity as Logging
 import Cardano.Chain.Update (ProtocolVersion (..))
 import Cardano.Crypto (RequiresNetworkMagic (..))
 import Cardano.Crypto.Hash (Blake2b_256 (), Hash ())
@@ -36,6 +33,7 @@ import Cardano.Db (PGPassSource (..))
 import Cardano.DbSync
 import Cardano.DbSync.Config.Types
 import Cardano.Ledger.Slot (EpochNo (..))
+import Cardano.Logging (emptyTraceConfig)
 import Cardano.Prelude
 import Data.ByteString.Short (ShortByteString (), toShort)
 import Data.Maybe (fromJust)
@@ -50,7 +48,6 @@ syncPreConfig :: Gen SyncPreConfig
 syncPreConfig =
   SyncPreConfig
     <$> networkName
-    <*> pure loggingRepresentation
     <*> (NodeConfigFile <$> filePath)
     <*> Gen.bool
     <*> Gen.bool
@@ -71,6 +68,7 @@ syncNodeParams =
   SyncNodeParams . ConfigFile
     <$> filePath
     <*> (SocketPath <$> filePath)
+    <*> Gen.maybe filePath
     <*> Gen.maybe (LedgerStateDir <$> filePath)
     <*> (MigrationDir <$> filePath)
     <*> Gen.constant PGPassDefaultEnv
@@ -80,11 +78,11 @@ syncNodeParams =
     <*> pure Nothing
     <*> Gen.bool
 
-syncNodeConfig :: Logging.Configuration -> Gen SyncNodeConfig
-syncNodeConfig loggingCfg =
+syncNodeConfig :: Gen SyncNodeConfig
+syncNodeConfig =
   SyncNodeConfig
     <$> networkName
-    <*> pure loggingCfg
+    <*> pure emptyTraceConfig
     <*> (NodeConfigFile <$> filePath)
     <*> Gen.constant SyncProtocolCardano
     <*> Gen.element [RequiresNoMagic, RequiresMagic]
@@ -219,23 +217,3 @@ triggerHardFork =
     [ Gen.constant CardanoTriggerHardForkAtDefaultVersion
     , CardanoTriggerHardForkAtEpoch . EpochNo <$> Gen.word64 (Range.linear minBound maxBound)
     ]
-
--- | @Logging.Representation@ is not useful for our testing, so we just generate a minimal example
-loggingRepresentation :: Logging.Representation
-loggingRepresentation =
-  Logging.Representation
-    { Logging.minSeverity = Logging.Info
-    , Logging.rotation = Nothing
-    , Logging.setupScribes = []
-    , Logging.defaultScribes = []
-    , Logging.setupBackends = []
-    , Logging.defaultBackends = []
-    , Logging.hasEKG = Nothing
-    , Logging.hasGraylog = Nothing
-    , Logging.hasPrometheus = Nothing
-    , Logging.hasGUI = Nothing
-    , Logging.traceForwardTo = Nothing
-    , Logging.forwardDelay = Nothing
-    , Logging.traceAcceptAt = Nothing
-    , Logging.options = mempty
-    }

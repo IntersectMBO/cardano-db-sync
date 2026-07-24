@@ -1,0 +1,56 @@
+---
+# Configuration for running a local cardano-tracer that cardano-db-sync
+# (and optionally cardano-node) forward their logs, metrics and datapoints
+# to. Both processes keep logging to their own stdout as usual; forwarding
+# is additive. Start the forwarders with:
+#
+#   cardano-db-sync ... --tracer-socket-path-connect /tmp/cardano-tracer.sock
+#   cardano-node run ... --tracer-socket-path-connect /tmp/cardano-tracer.sock
+#
+# and the tracer with:
+#
+#   cardano-tracer --config config/cardano-tracer-config.yaml
+#
+# Note: cardano-tracer only supports FileMode (log files) and JournalMode
+# (systemd journal) sinks - it never prints forwarded logs to its own
+# stdout. To follow the aggregated logs live:
+#
+#   tail -F /tmp/cardano-tracer-logs/*/node.log
+#
+# (scripts/run-everything-zellij.sh does exactly that in its tracer pane,
+# and wipes the log directory on each run.)
+
+# Mainnet. Use 1 for preprod / 2 for preview.
+networkMagic: 764824073
+
+# The forwarders connect *out* to this socket (initiator mode), so the
+# tracer accepts at it. Must match --tracer-socket-path-connect above.
+network:
+  tag: AcceptAt
+  contents: "/tmp/cardano-tracer.sock"
+
+# Each connected process gets its own sub-directory beneath logRoot
+# (named after the process' TraceOptionNodeName), containing rotated log
+# files plus a stable `node.log` symlink to the current one.
+logging:
+- logRoot: "/tmp/cardano-tracer-logs"
+  logMode: FileMode
+  logFormat: ForHuman
+
+# Forwarded EKG metrics, served for Prometheus to scrape. Note db-sync
+# also serves its own Prometheus metrics directly on port 8080.
+hasPrometheus:
+  epHost: 127.0.0.1
+  epPort: 3000
+
+# Keep the transient log files small: rotate at 100 MB, keep 10 files,
+# drop anything older than a day.
+rotation:
+  rpFrequencySecs: 60
+  rpKeepFilesNum: 10
+  rpLogLimitBytes: 100000000
+  rpMaxAgeHours: 24
+
+# Maximum | ErrorsOnly | Minimum - how chatty the tracer itself is on its
+# own stdout (connection setup etc.), not the forwarded logs.
+verbosity: Maximum

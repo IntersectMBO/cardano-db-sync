@@ -15,8 +15,8 @@ module Cardano.Db.Progress (
   withProgress,
 ) where
 
-import Cardano.BM.Data.Trace (Trace)
-import Cardano.BM.Trace (logInfo)
+import Cardano.Db.Log (LogMessage, logInfo)
+import Cardano.Logging.Types (Trace)
 import Control.Concurrent (threadDelay)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
@@ -40,7 +40,7 @@ initProgress totalSteps initialPhase = liftIO $ do
   newIORef $ Progress 0 totalSteps initialPhase
 
 -- | Update progress with new step and phase
-updateProgress :: MonadIO m => Maybe (Trace IO Text) -> ProgressRef -> Int -> Text -> m ()
+updateProgress :: MonadIO m => Maybe (Trace IO LogMessage) -> ProgressRef -> Int -> Text -> m ()
 updateProgress mTrace progressRef step phase = liftIO $ do
   modifyIORef' progressRef $ \p ->
     p
@@ -52,7 +52,7 @@ updateProgress mTrace progressRef step phase = liftIO $ do
     Just trce -> renderProgressBar trce =<< readIORef progressRef
 
 -- | Render the progress bar to stdout
-renderProgressBar :: Trace IO Text -> Progress -> IO ()
+renderProgressBar :: Trace IO LogMessage -> Progress -> IO ()
 renderProgressBar trce progress = do
   let percentage :: Double
       percentage =
@@ -74,7 +74,7 @@ renderProgressBar trce progress = do
   logInfo trce progressMsg
 
 -- | Run an action with progress tracking, cleaning up the display afterward
-withProgress :: MonadIO m => Maybe (Trace IO Text) -> Int -> Text -> (ProgressRef -> m a) -> m a
+withProgress :: MonadIO m => Maybe (Trace IO LogMessage) -> Int -> Text -> (ProgressRef -> m a) -> m a
 withProgress mTrace totalSteps initialPhase action =
   case mTrace of
     Nothing -> do

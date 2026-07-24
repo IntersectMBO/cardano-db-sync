@@ -14,7 +14,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as Text
 
-import Cardano.BM.Trace (logWarning)
+import Cardano.Db.Log (logWarning)
 import Cardano.Prelude
 
 import qualified Cardano.Db as DB

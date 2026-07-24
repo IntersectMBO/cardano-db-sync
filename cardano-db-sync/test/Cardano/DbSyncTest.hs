@@ -3,7 +3,6 @@
 
 module Cardano.DbSyncTest (tests) where
 
-import qualified Cardano.BM.Configuration.Model as Logging
 import Cardano.DbSync
 import Cardano.DbSync.Api (initPruneConsumeMigration)
 import Cardano.DbSync.Api.Types (InsertOptions (..), SyncOptions (..))
@@ -32,13 +31,12 @@ tests =
 
 prop_extractSyncOptionsPruneConsumeMigration :: Property
 prop_extractSyncOptionsPruneConsumeMigration = property $ do
-  loggingCfg <- liftIO Logging.empty
   syncNodeParams <- forAll Gen.syncNodeParams
   abortOnPanic <- forAll Gen.bool
   syncNodeConfig <-
     forAllWith
       (const "SyncNodeConfig") -- SyncNodeConfig does not have Show
-      $ Gen.syncNodeConfig loggingCfg
+      Gen.syncNodeConfig
 
   coverTxOut syncNodeConfig
 
@@ -55,13 +53,12 @@ prop_extractSyncOptionsPruneConsumeMigration = property $ do
 
 prop_extractSyncOptionsOffchainPoolData :: Property
 prop_extractSyncOptionsOffchainPoolData = property $ do
-  loggingCfg <- liftIO Logging.empty
   syncNodeParams <- forAll Gen.syncNodeParams
   abortOnPanic <- forAll Gen.bool
   syncNodeConfig <-
     forAllWith
       (const "SyncNodeConfig") -- SyncNodeConfig does not have Show
-      $ Gen.syncNodeConfig loggingCfg
+      Gen.syncNodeConfig
 
   let syncOptions = extractSyncOptions syncNodeParams abortOnPanic syncNodeConfig
 
@@ -70,13 +67,12 @@ prop_extractSyncOptionsOffchainPoolData = property $ do
 
 prop_extractSyncOptionsDisable :: Property
 prop_extractSyncOptionsDisable = property $ do
-  loggingCfg <- liftIO Logging.empty
   syncNodeParams <- forAll Gen.syncNodeParams
   abortOnPanic <- forAll Gen.bool
   syncNodeConfig <-
     forAllWith
       (const "SyncNodeConfig") -- SyncNodeConfig does not have Show
-      $ Gen.syncNodeConfig loggingCfg
+      Gen.syncNodeConfig
 
   coverTxOut syncNodeConfig
 
@@ -87,13 +83,12 @@ prop_extractSyncOptionsDisable = property $ do
 
 prop_extractSyncOptionsGov :: Property
 prop_extractSyncOptionsGov = property $ do
-  loggingCfg <- liftIO Logging.empty
   syncNodeParams <- forAll Gen.syncNodeParams
   abortOnPanic <- forAll Gen.bool
   syncNodeConfig <-
     forAllWith
       (const "SyncNodeConfig") -- SyncNodeConfig does not have Show
-      $ Gen.syncNodeConfig loggingCfg
+      Gen.syncNodeConfig
 
   let syncOptions = extractSyncOptions syncNodeParams abortOnPanic syncNodeConfig
 
