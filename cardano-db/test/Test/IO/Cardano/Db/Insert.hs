@@ -10,6 +10,7 @@ import Control.Monad (void)
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as BS
 import Data.Maybe (fromJust)
+import qualified Data.Text as Text
 import Data.Time.Clock
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
@@ -24,6 +25,7 @@ tests =
     , testCase "Insert twice" insertTwice
     , testCase "Insert foreign key missing" insertForeignKeyMissing
     , testCase "Insert pool relay with large port" insertPoolRelayLargePort
+    , testCase "Off-chain vote data re-fetch does not duplicate children" insertOffChainVoteDataNoDuplicateChildren
     ]
 
 insertZeroTest :: IO ()
@@ -121,6 +123,81 @@ insertPoolRelayLargePort =
         , poolRelayDnsSrvName = Nothing
         , poolRelayPort = Just p
         }
+
+-- Regression test for #1966: re-fetching an already-stored anchor must not duplicate its children.
+insertOffChainVoteDataNoDuplicateChildren :: IO ()
+insertOffChainVoteDataNoDuplicateChildren = do
+  t <- getCurrentTime
+  -- Unique per run so the test is independent of rows left by other cases.
+  let stamp = filter (/= ' ') (show t)
+      vaHash = BS.take 32 (BS.pack stamp <> BS.replicate 32 'v')
+      ocvdHash = BS.take 32 (BS.pack stamp <> BS.replicate 32 'o')
+      vaUrl = VoteUrl ("anchor://dedup/" <> Text.pack stamp)
+  runDbStandaloneSilent $ do
+    deleteAllBlocks
+    slid <- insertSlotLeader testSlotLeader
+    bid <- insertCheckUniqueBlock (blockZero slid)
+    vaid <- insertVotingAnchor (drepVotingAnchor vaUrl vaHash bid)
+    let ocvd = drepOffChainVoteData vaid ocvdHash
+
+    parentsBefore <- countOffChainVoteData
+    childrenBefore <- countOffChainVoteDrepData
+
+    -- First fetch: parent is new, so one child is inserted.
+    new1 <- insertBulkOffChainVoteDataReturningNew [ocvd]
+    insertBulkOffChainVoteDrepData [drepData ocvdId | (_, _, ocvdId) <- new1]
+
+    -- Re-fetch the same anchor: parent already exists, so nothing new -> no extra child.
+    new2 <- insertBulkOffChainVoteDataReturningNew [ocvd]
+    insertBulkOffChainVoteDrepData [drepData ocvdId | (_, _, ocvdId) <- new2]
+
+    parentsAfter <- countOffChainVoteData
+    childrenAfter <- countOffChainVoteDrepData
+
+    assertBool
+      ("re-fetch should report no new parents, got " ++ show (length new2))
+      (null new2)
+    assertBool
+      ("off_chain_vote_data delta should be 1, got " ++ show (parentsAfter - parentsBefore))
+      (parentsAfter == parentsBefore + 1)
+    assertBool
+      ("off_chain_vote_drep_data delta should be 1 (not 2), got " ++ show (childrenAfter - childrenBefore))
+      (childrenAfter == childrenBefore + 1)
+
+drepVotingAnchor :: VoteUrl -> ByteString -> BlockId -> VotingAnchor
+drepVotingAnchor url dataHash bid =
+  VotingAnchor
+    { votingAnchorUrl = url
+    , votingAnchorDataHash = dataHash
+    , votingAnchorType = DrepAnchor
+    , votingAnchorBlockId = bid
+    }
+
+drepOffChainVoteData :: VotingAnchorId -> ByteString -> OffChainVoteData
+drepOffChainVoteData vaid dataHash =
+  OffChainVoteData
+    { offChainVoteDataVotingAnchorId = vaid
+    , offChainVoteDataHash = dataHash
+    , offChainVoteDataJson = "{}"
+    , offChainVoteDataBytes = "{}"
+    , offChainVoteDataWarning = Nothing
+    , offChainVoteDataLanguage = ""
+    , offChainVoteDataComment = Nothing
+    , offChainVoteDataIsValid = Just True
+    }
+
+drepData :: OffChainVoteDataId -> OffChainVoteDrepData
+drepData ocvdId =
+  OffChainVoteDrepData
+    { offChainVoteDrepDataOffChainVoteDataId = ocvdId
+    , offChainVoteDrepDataPaymentAddress = Nothing
+    , offChainVoteDrepDataGivenName = "Test DRep"
+    , offChainVoteDrepDataObjectives = Nothing
+    , offChainVoteDrepDataMotivations = Nothing
+    , offChainVoteDrepDataQualifications = Nothing
+    , offChainVoteDrepDataImageUrl = Nothing
+    , offChainVoteDrepDataImageHash = Nothing
+    }
 
 blockZero :: SlotLeaderId -> Block
 blockZero slid =

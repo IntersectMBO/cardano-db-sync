@@ -37,7 +37,7 @@ import Control.Concurrent.Class.MonadSTM.Strict (
   isEmptyTBQueue,
   writeTBQueue,
  )
-import Data.List (nubBy)
+import qualified Data.Map.Strict as Map
 import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Data.Time.Clock.POSIX as Time
 import GHC.IO.Exception (userError)
@@ -152,14 +152,13 @@ insertOffChainVoteResults trce resultQueue = do
         insertBulkOffChainVoteFetchErrors errors
       -- Process metadata in a pipeline if any
       unless (null metadataWithAccessors) $ do
-        -- First insert all metadata and collect the IDs
-        metadataIds <- insertMetadataWithIds metadataWithAccessors
-        -- Now prepare all the related data for bulk inserts
-        let allGovActions = catMaybes [offChainVoteGovAction acc id | (_, acc, id) <- metadataIds]
-            allDrepData = catMaybes [offChainVoteDrep acc id | (_, acc, id) <- metadataIds]
-            allAuthors = concatMap (\(_, acc, id) -> offChainVoteAuthors acc id) metadataIds
-            allReferences = concatMap (\(_, acc, id) -> offChainVoteReferences acc id) metadataIds
-            allExternalUpdates = concatMap (\(_, acc, id) -> offChainVoteExternalUpdates acc id) metadataIds
+        -- Only newly-inserted parents are returned, so we never re-insert their children (#1966).
+        newMetadata <- insertMetadataWithIds metadataWithAccessors
+        let allGovActions = catMaybes [offChainVoteGovAction acc ocvdId | (acc, ocvdId) <- newMetadata]
+            allDrepData = catMaybes [offChainVoteDrep acc ocvdId | (acc, ocvdId) <- newMetadata]
+            allAuthors = concatMap (uncurry offChainVoteAuthors) newMetadata
+            allReferences = concatMap (uncurry offChainVoteReferences) newMetadata
+            allExternalUpdates = concatMap (uncurry offChainVoteExternalUpdates) newMetadata
         -- Execute all bulk inserts in a pipeline
         DB.runSession DB.mkDbCallStack $
           HsqlSes.pipeline $
@@ -182,27 +181,24 @@ insertOffChainVoteResults trce resultQueue = do
                   HsqlP.statement allExternalUpdates DB.insertBulkOffChainVoteExternalUpdatesStmt
               pure ()
 
-    -- Helper function to insert metadata and get back IDs
+    -- Dedup the batch by (voting_anchor_id, hash) and return accessors only for newly-inserted parents.
     insertMetadataWithIds ::
       [(DB.OffChainVoteData, OffChainVoteAccessors)] ->
-      DB.DbM [(DB.OffChainVoteData, OffChainVoteAccessors, DB.OffChainVoteDataId)]
+      DB.DbM [(OffChainVoteAccessors, DB.OffChainVoteDataId)]
     insertMetadataWithIds metadataWithAccessors = do
-      -- Extract just the metadata for insert and deduplicate by unique key
-      let metadata = map fst metadataWithAccessors
-          deduplicatedMetadata =
-            nubBy
-              ( \a b ->
-                  DB.offChainVoteDataVotingAnchorId a
-                    == DB.offChainVoteDataVotingAnchorId b
-                    && DB.offChainVoteDataHash a
-                      == DB.offChainVoteDataHash b
-              )
-              metadata
-      -- Insert and get IDs
-      ids <- DB.insertBulkOffChainVoteData deduplicatedMetadata
-
-      -- Return original data with IDs (note: length mismatch possible if duplicates were removed)
-      pure $ zipWith (\(md, acc) id -> (md, acc, id)) metadataWithAccessors ids
+      let byKey =
+            Map.fromListWith
+              (\_new old -> old)
+              [ ((DB.offChainVoteDataVotingAnchorId md, DB.offChainVoteDataHash md), (md, acc))
+              | (md, acc) <- metadataWithAccessors
+              ]
+          dedupedMetadata = map fst (Map.elems byKey)
+      newRows <- DB.insertBulkOffChainVoteDataReturningNew dedupedMetadata
+      pure
+        [ (acc, ocvdId)
+        | (anchorId, hash, ocvdId) <- newRows
+        , Just (_, acc) <- [Map.lookup (anchorId, hash) byKey]
+        ]
 
     -- Bulk insert for errors (you'll need to create this statement)
     insertBulkOffChainVoteFetchErrors :: [DB.OffChainVoteFetchError] -> DB.DbM ()

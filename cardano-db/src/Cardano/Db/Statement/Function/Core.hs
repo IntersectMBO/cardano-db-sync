@@ -13,6 +13,7 @@ import Cardano.Db.Error (DbCallStack, DbSessionError (..), formatSessionError)
 import Cardano.Db.Statement.Types (Entity (..))
 import Cardano.Db.Types (DbEnv (..), DbM (..))
 import Cardano.Prelude (MonadIO (..), ask, throwIO)
+import qualified Data.Text as Text
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
 import qualified Hasql.Session as HsqlS
@@ -43,6 +44,7 @@ data ResultType c r where
 data ResultTypeBulk a where
   NoResultBulk :: ResultTypeBulk () -- No results returned
   WithResultBulk :: HsqlD.Result [a] -> ResultTypeBulk [a] -- Return generated IDs
+  WithResultBulkColumns :: [Text.Text] -> HsqlD.Result [a] -> ResultTypeBulk [a] -- Return given columns via RETURNING
 
 -- | Creates a parameter encoder for an array of values from a single-value encoder
 bulkEncoder :: HsqlE.NullableOrNot HsqlE.Value a -> HsqlE.Params [a]
