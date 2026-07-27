@@ -110,6 +110,8 @@ data PoolUpdate = PoolUpdate
   , poolUpdateRegisteredTxId :: !Id.TxId -- noreference -- Slot number in which the pool was registered.
   , poolUpdateRewardAddrId :: !Id.StakeAddressId -- noreference
   , poolUpdateDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , poolUpdateLeiosVkey :: !(Maybe ByteString) -- Leios BLS12-381 verification key (Dijkstra LeiosKey); Nothing if not registered.
+  , poolUpdateLeiosPop :: !(Maybe ByteString) -- Leios BLS12-381 proof-of-possession accompanying the verification key.
   }
   deriving (Eq, Show, Generic)
 
@@ -130,6 +132,8 @@ poolUpdateEncoder =
     , poolUpdateRegisteredTxId >$< Id.idEncoder Id.getTxId
     , poolUpdateRewardAddrId >$< Id.idEncoder Id.getStakeAddressId
     , poolUpdateDeposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
+    , poolUpdateLeiosVkey >$< E.param (E.nullable E.bytea)
+    , poolUpdateLeiosPop >$< E.param (E.nullable E.bytea)
     ]
 
 -- |

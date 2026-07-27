@@ -16,6 +16,7 @@ module Cardano.DbSync.Era.Universal.Insert.Pool (
   insertPoolCert,
 ) where
 
+import Cardano.Crypto.DSIGN (rawSerialisePossessionProofDSIGN, rawSerialiseVerKeyDSIGN)
 import Cardano.Crypto.Hash (hashToBytes)
 import Cardano.Db (PoolUrl (..))
 import qualified Cardano.Db as DB
@@ -65,6 +66,11 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
   isRegistration <- isPoolRegistration poolHashId
   let epochActivationDelay = if isRegistration then 2 else 3
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
+      -- Leios (Dijkstra): optional BLS12-381 key registered alongside VRF/KES. Nothing on
+      -- earlier eras and on Dijkstra registrations that omit it.
+      mLeiosKey = strictMaybeToMaybe $ PoolP.sppLeiosKey params
+      leiosVkey = rawSerialiseVerKeyDSIGN . PoolP.unLeiosPubKey . PoolP.leiosPubKey <$> mLeiosKey
+      leiosPop = rawSerialisePossessionProofDSIGN . PoolP.unLeiosPossessionProof . PoolP.leiosPossessionProof <$> mLeiosKey
 
   saId <- queryOrInsertRewardAccount syncEnv UpdateCache (adjustNetworkTag $ PoolP.sppAccountAddress params)
   poolUpdateId <-
@@ -82,6 +88,8 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
           , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (PoolP.sppCost params)
           , DB.poolUpdateDeposit = deposit
           , DB.poolUpdateRegisteredTxId = txId
+          , DB.poolUpdateLeiosVkey = leiosVkey
+          , DB.poolUpdateLeiosPop = leiosPop
           }
 
   mapM_ (insertPoolOwner syncEnv network poolUpdateId) $ toList (PoolP.sppOwners params)
