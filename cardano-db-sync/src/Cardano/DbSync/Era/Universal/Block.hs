@@ -14,7 +14,6 @@ where
 
 import Data.Bits (testBit)
 import Data.Either.Extra (eitherToMaybe)
-import Data.List (sortOn)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
@@ -28,7 +27,7 @@ import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.State as LState
 import Cardano.Prelude
-import LeiosDemoTypes (EbAnnouncement (..), EbHash (..))
+import LeiosDemoTypes (EbAnnouncement (..), EbHash (..), committeeStakeCoverage, selectCommitteeByStake)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Extended (ledgerState)
@@ -274,12 +273,21 @@ insertLeiosCommittee syncEnv blkId epochNo newLedger =
   where
     trce = getTrace syncEnv
 
+-- | The Leios voting committee, in the node's seat order. Mirrors consensus'
+-- @mkLeiosCommittee . selectCommitteeByStake committeeStakeCoverage@ (CIP-164):
+-- pools sorted by descending active stake, taking the shortest prefix whose
+-- cumulative stake reaches the coverage target. Reuses the node's own
+-- 'selectCommitteeByStake'/'committeeStakeCoverage' so seat indices (and hence
+-- the cert signer bitfield resolution) match exactly.
 committeeOrderFrom pick cls =
   case ledgerState (clsState cls) of
     LedgerStateDijkstra dls ->
       let nes = Consensus.shelleyLedgerState dls
           pd = pick nes ^. LState.poolDistrDistrL
-       in Just $ sortOn (LState.individualPoolStake . snd) (Map.toList pd)
+       in Just . map fst $
+            selectCommitteeByStake
+              committeeStakeCoverage
+              [((poolId, ips), LState.individualPoolStake ips) | (poolId, ips) <- Map.toList pd]
     _ -> Nothing
 
 committeeOrder cls = committeeOrderFrom Shelley.nesPd cls
