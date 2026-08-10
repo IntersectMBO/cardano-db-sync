@@ -16,11 +16,12 @@ import Data.Bits (testBit)
 import Data.Either.Extra (eitherToMaybe)
 import Data.List (sortOn)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
+import Data.MemPack.Buffer (byteArrayToShortByteString)
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
-import Cardano.Binary (decodeFull', serialize')
-import Cardano.Crypto.Leios (BitField, LeiosCert (..), encodeBitField, leiosSignatureToBytes)
+import Cardano.Crypto.Leios (BitField (..), LeiosCert (..), leiosSignatureToBytes)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
@@ -109,7 +110,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
             DB.blockHasLeiosCert = Generic.blkHasLeiosCert blk
           , DB.blockEbAnnouncementHash = ebHashBytes . ebAnnouncementHash <$> Generic.blkLeiosEbAnnouncement blk
           , DB.blockEbAnnouncementSize = ebAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
-          , DB.blockLeiosCertSigners = serialize' . encodeBitField . leiosCertSigners <$> Generic.blkLeiosCert blk
+          , DB.blockLeiosCertSigners = bitFieldToBytes . leiosCertSigners <$> Generic.blkLeiosCert blk
           , DB.blockLeiosCertSignature = leiosSignatureToBytes . leiosCertSignature <$> Generic.blkLeiosCert blk
           }
 
@@ -297,4 +298,10 @@ bitFieldSetBits bf n =
   , testBit (BS.index raw byteIx) (7 - (i `mod` 8))
   ]
   where
-    raw = either (const BS.empty) identity (decodeFull' (serialize' (encodeBitField bf)))
+    raw = bitFieldToBytes bf
+
+-- | The raw MSB-first bytes backing a 'BitField'. The ledger stores the signer
+-- set as a fixed-size byte array; the old CBOR 'encodeBitField' was dropped in
+-- favour of this direct representation.
+bitFieldToBytes :: BitField -> BS.ByteString
+bitFieldToBytes (BitField ba) = SBS.fromShort (byteArrayToShortByteString ba)
