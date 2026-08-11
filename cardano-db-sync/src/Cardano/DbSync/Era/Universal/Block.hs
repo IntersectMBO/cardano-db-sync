@@ -14,20 +14,23 @@ where
 
 import Data.Bits (testBit)
 import Data.Either.Extra (eitherToMaybe)
-import Data.List (sortOn)
+import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as BS
+import Data.ByteString.Short (ShortByteString (SBS))
+import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
-import Cardano.Binary (decodeFull', serialize')
-import Cardano.Crypto.Leios (BitField, LeiosCert (..), encodeBitField, leiosSignatureToBytes)
+import Cardano.Binary (serialize')
+import Cardano.Crypto.DSIGN (rawSerialiseVerKeyDSIGN)
+import Cardano.Crypto.Leios (BitField (..), LeiosCert (..), leiosSignatureToBytes)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.State as LState
 import Cardano.Prelude
-import LeiosDemoTypes (EbAnnouncement (..), EbHash (..))
+import LeiosDemoTypes (EbAnnouncement (..), EbHash (..), committeeStakeCoverage, selectCommitteeByStake)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Extended (ledgerState)
@@ -109,7 +112,7 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
             DB.blockHasLeiosCert = Generic.blkHasLeiosCert blk
           , DB.blockEbAnnouncementHash = ebHashBytes . ebAnnouncementHash <$> Generic.blkLeiosEbAnnouncement blk
           , DB.blockEbAnnouncementSize = ebAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
-          , DB.blockLeiosCertSigners = serialize' . encodeBitField . leiosCertSigners <$> Generic.blkLeiosCert blk
+          , DB.blockLeiosCertSigners = serialize' . bitFieldToBytes . leiosCertSigners <$> Generic.blkLeiosCert blk
           , DB.blockLeiosCertSignature = leiosSignatureToBytes . leiosCertSignature <$> Generic.blkLeiosCert blk
           }
 
@@ -201,10 +204,11 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     cache = envCache syncEnv
 
 -- | Resolve a block's LeiosCert signer bitfield to the signing pools and insert one
--- 'DB.LeiosCertSigner' row per signer. The committee is the "everyone votes" stake-ordered
--- pool distribution of the parent ledger state ('apOldLedger'): seat @i@ (bit @i@, MSB-first)
--- is the @i@-th pool when pools are sorted by ascending active stake (ties by pool-id) — exactly
--- how the ledger's @mkCommitteeEveryoneVotes@ orders the committee.
+-- 'DB.LeiosCertSigner' row per signer. The committee is derived from the parent ledger
+-- state ('apOldLedger') exactly as the node does (ouroboros-consensus
+-- 'HasLeiosVoting DijkstraEra'): pools selected by descending active stake until P99
+-- coverage ('selectCommitteeByStake'/'committeeStakeCoverage'), keyless seats included.
+-- Seat @i@ (bit @i@, MSB-first) is the @i@-th pool in that selected order.
 insertLeiosCertSigners ::
   SyncEnv ->
   DB.BlockId ->
@@ -269,16 +273,37 @@ insertLeiosCommittee syncEnv blkId epochNo newLedger =
                     , DB.leiosCommitteeSeatIndex = fromIntegral (seat :: Int)
                     , DB.leiosCommitteePoolHashId = phid
                     , DB.leiosCommitteeWeight = fromRational (LState.individualPoolStake ips)
+                    , DB.leiosCommitteeBlsVkey = leiosVkeyOf ips
                     }
   where
     trce = getTrace syncEnv
+
+-- | The registered Leios BLS verification key for a committee seat, or 'Nothing'
+-- for a keyless seat (a pool that has not registered a key). Serialised the same
+-- way as the pool-registration capture in "Insert.Pool".
+leiosVkeyOf :: LState.IndividualPoolStake -> Maybe ByteString
+leiosVkeyOf ips =
+  rawSerialiseVerKeyDSIGN . LState.unLeiosPubKey . LState.leiosPubKey
+    <$> strictMaybeToMaybe (LState.individualPoolStakeBls ips)
 
 committeeOrderFrom pick cls =
   case ledgerState (clsState cls) of
     LedgerStateDijkstra dls ->
       let nes = Consensus.shelleyLedgerState dls
           pd = pick nes ^. LState.poolDistrDistrL
-       in Just $ sortOn (LState.individualPoolStake . snd) (Map.toList pd)
+          -- Mirror the node's committee selection (ouroboros-consensus
+          -- 'HasLeiosVoting DijkstraEra'): take pools by descending stake until
+          -- 'committeeStakeCoverage' (P99) of active stake is covered. Keyless
+          -- pools keep their seat (they simply cannot vote, dropped to a keyless
+          -- seat by 'mkLeiosCommittee'), so they are NOT filtered out here — that
+          -- keeps our seat_index aligned with the node's LeiosVoter ids.
+          seats =
+            selectCommitteeByStake
+              committeeStakeCoverage
+              [ ((poolId, ips), LState.individualPoolStake ips)
+              | (poolId, ips) <- Map.toList pd
+              ]
+       in Just [pair | (pair, _w) <- seats]
     _ -> Nothing
 
 committeeOrder cls = committeeOrderFrom Shelley.nesPd cls
@@ -297,4 +322,10 @@ bitFieldSetBits bf n =
   , testBit (BS.index raw byteIx) (7 - (i `mod` 8))
   ]
   where
-    raw = either (const BS.empty) identity (decodeFull' (serialize' (encodeBitField bf)))
+    raw = bitFieldToBytes bf
+
+-- | Raw bytes of a Leios cert signer 'BitField'. In w32+ 'BitField' is a thin
+-- 'ByteArray' wrapper (the old 'encodeBitField' was dropped), so the bytes come
+-- straight off the accessor.
+bitFieldToBytes :: BitField -> ByteString
+bitFieldToBytes (BitField (ByteArray ba)) = SBS.fromShort (SBS ba)

@@ -188,6 +188,7 @@ data LeiosCommittee = LeiosCommittee
   , leiosCommitteeSeatIndex :: !Word32 -- committee seat index
   , leiosCommitteePoolHashId :: !PoolHashId -- noreference
   , leiosCommitteeWeight :: !Double -- normalised active stake for this seat
+  , leiosCommitteeBlsVkey :: !(Maybe ByteString) -- registered Leios BLS vkey; Nothing for a keyless seat
   }
   deriving (Eq, Show, Generic)
 
@@ -202,6 +203,7 @@ leiosCommitteeDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- leiosCommitteeSeatIndex
     <*> idDecoder PoolHashId -- leiosCommitteePoolHashId
     <*> D.column (D.nonNullable D.float8) -- leiosCommitteeWeight
+    <*> D.column (D.nullable D.bytea) -- leiosCommitteeBlsVkey
 
 leiosCommitteeEncoder :: E.Params LeiosCommittee
 leiosCommitteeEncoder =
@@ -211,6 +213,7 @@ leiosCommitteeEncoder =
     , leiosCommitteeSeatIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
     , leiosCommitteePoolHashId >$< idEncoder getPoolHashId
     , leiosCommitteeWeight >$< E.param (E.nonNullable E.float8)
+    , leiosCommitteeBlsVkey >$< E.param (E.nullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
