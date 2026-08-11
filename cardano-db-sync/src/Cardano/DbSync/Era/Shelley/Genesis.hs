@@ -27,7 +27,8 @@ import Cardano.DbSync.Era.Universal.Insert.Pool (insertPoolRegister)
 import Cardano.DbSync.Error
 import Cardano.DbSync.Types (BlockEra (..))
 import Cardano.DbSync.Util
-import Cardano.Ledger.Address (serialiseAddr)
+import Cardano.Ledger.Address (Addr, serialiseAddr)
+import Cardano.Ledger.BaseTypes (StrictMaybe (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (KeyHashObj))
@@ -36,6 +37,7 @@ import Cardano.Ledger.Shelley.Scripts ()
 import Cardano.Ledger.Shelley.TxOut
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 import Cardano.Ledger.TxIn
+import qualified Cardano.Ledger.Val as Val
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.ByteString.Char8 as BS
@@ -75,7 +77,9 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
     tracer = getTrace syncEnv
 
     hasInitialFunds :: Bool
-    hasInitialFunds = not $ null $ ListMap.unListMap $ sgInitialFunds cfg
+    hasInitialFunds =
+      not (null (ListMap.unListMap (sgInitialFunds cfg)))
+        || not (null (extraConfigInitialFunds cfg))
 
     hasStakes :: Bool
     hasStakes = sgStaking cfg /= emptyGenesisStaking
@@ -388,8 +392,27 @@ genesisTxoAssocList =
     unTxOut txOut = txOut ^. Core.valueTxOutL
 
 genesisUtxOs :: ShelleyGenesis -> [(TxIn, ShelleyTxOut ShelleyEra)]
-genesisUtxOs =
-  Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
+genesisUtxOs cfg =
+  (Map.toList . Shelley.unUTxO . Shelley.genesisUTxO $ cfg)
+    ++ [ (Shelley.initialFundsPseudoTxIn addr, Core.mkBasicTxOut addr (Val.inject amount))
+       | (addr, amount) <- extraConfigInitialFunds cfg
+       ]
+
+-- | Initial funds declared in the newer 'sgExtraConfig' genesis section
+-- (Leios prototype-2026w32+). They carry the same pseudo-UTxO scheme as the
+-- classic 'sgInitialFunds': the TxIn is 'initialFundsPseudoTxIn addr'
+-- (blake2b-256 of the serialised address, output index 0), so block 0 tx
+-- inputs resolve against them. Only the embedded ('EmbeddedInjection') form
+-- is handled; a file-based injection would require effectful reading and is
+-- not used by the networks db-sync indexes.
+extraConfigInitialFunds :: ShelleyGenesis -> [(Addr, Ledger.Coin)]
+extraConfigInitialFunds cfg =
+  case sgExtraConfig cfg of
+    SNothing -> []
+    SJust ec -> case Shelley.secInitialFunds ec of
+      Shelley.NoInjection -> []
+      Shelley.EmbeddedInjection lm -> ListMap.unListMap lm
+      Shelley.InjectionFromFile{} -> []
 
 configStartTime :: ShelleyGenesis -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart
