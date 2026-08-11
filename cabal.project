@@ -12,9 +12,6 @@ repository cardano-haskell-packages
 index-state:
   , hackage.haskell.org 2026-07-15T21:58:35Z
   , cardano-haskell-packages 2026-07-27T20:44:57Z
-active-repositories:
-  , :rest
-  , cardano-haskell-packages:override
 
 packages:
   cardano-db
@@ -98,10 +95,6 @@ allow-newer:
     , cardano-crypto-class
 
 allow-older:
-    , cardano-ledger-binary:cuddle
-    , cardano-ledger-binary:antigen
-    , cardano-ledger-core:cuddle
-    , cardano-ledger-core:antigen
     -- ekg-forward 1.3 wants ouroboros-network ^>=1.2 but the SRP is still
     -- 1.1.0.0 (matches the cardano-node cabal.project allow-older).
     , ekg-forward:ouroboros-network
