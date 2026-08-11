@@ -11,7 +11,7 @@ module Cardano.DbSync.Era.Shelley.Genesis (
   insertValidateShelleyGenesisDist,
 ) where
 
-import Cardano.BM.Trace (logError, logInfo)
+import Cardano.BM.Trace (logError, logInfo, logWarning)
 import qualified Cardano.Db as DB
 import qualified Cardano.Db.Schema.Variants.TxOutAddress as VA
 import qualified Cardano.Db.Schema.Variants.TxOutCore as VC
@@ -28,6 +28,7 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Types (BlockEra (..))
 import Cardano.DbSync.Util
 import Cardano.Ledger.Address (serialiseAddr)
+import Cardano.Ledger.BaseTypes (StrictMaybe, strictMaybeToMaybe)
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (KeyHashObj))
@@ -75,16 +76,25 @@ insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
     tracer = getTrace syncEnv
 
     hasInitialFunds :: Bool
-    hasInitialFunds = not $ null $ ListMap.unListMap $ sgInitialFunds cfg
+    hasInitialFunds = not $ null $ ListMap.unListMap $ resolvedInitialFunds cfg
 
     hasStakes :: Bool
-    hasStakes = sgStaking cfg /= emptyGenesisStaking
+    hasStakes =
+      sgStaking cfg /= emptyGenesisStaking
+        || not (null (ListMap.unListMap (resolvedPools cfg)))
+        || not (null (ListMap.unListMap (resolvedStakeCreds cfg)))
 
     expectedTxCount :: Word64
     expectedTxCount = fromIntegral $ genesisUTxOSize cfg + if hasStakes then 1 else 0
 
     insertAction :: Bool -> ExceptT SyncNodeError DB.DbM ()
     insertAction prunes = do
+      when (anyFileInjection cfg) $
+        liftIO $
+          logWarning tracer $
+            "Shelley genesis extraConfig uses InjectionFromFile, which db-sync does not "
+              <> "read; those initial funds/pools/stake will be missing. (Embedded injection "
+              <> "is supported.)"
       ebid <- lift $ DB.queryBlockIdEither (configGenesisHash cfg)
       case ebid of
         Right bid -> validateGenesisDistribution syncEnv prunes networkName cfg bid expectedTxCount
@@ -352,11 +362,11 @@ insertStaking syncEnv blkId genesis = do
           , DB.txScriptSize = 0
           , DB.txTreasuryDonation = DB.DbLovelace 0
           }
-  let params = zip [0 ..] $ ListMap.elems $ sgsPools $ sgStaking genesis
+  let params = zip [0 ..] $ ListMap.elems $ resolvedPools genesis
   let network = sgNetworkId genesis
   -- TODO: add initial deposits for genesis pools.
   forM_ params $ uncurry (insertPoolRegister syncEnv (const False) Nothing network (EpochNo 0) blkId txId)
-  let stakes = zip [0 ..] $ ListMap.toList (sgsStake $ sgStaking genesis)
+  let stakes = zip [0 ..] $ ListMap.toList (resolvedStakeCreds genesis)
   forM_ stakes $ \(n, (keyStaking, keyPool)) -> do
     -- TODO: add initial deposits for genesis stake keys.
     insertStakeRegistration syncEnv (EpochNo 0) Nothing txId (2 * n) (Generic.annotateStakingCred network (KeyHashObj keyStaking))
@@ -388,8 +398,60 @@ genesisTxoAssocList =
     unTxOut txOut = txOut ^. Core.valueTxOutL
 
 genesisUtxOs :: ShelleyGenesis -> [(TxIn, ShelleyTxOut ShelleyEra)]
-genesisUtxOs =
-  Map.toList . Shelley.unUTxO . Shelley.genesisUTxO
+genesisUtxOs cfg =
+  -- Feed the resolved initial funds (extraConfig injection or legacy) through the
+  -- ledger's own 'genesisUTxO' so the UTxO TxIds are derived by the ledger's
+  -- 'initialFundsPseudoTxIn' (blake2b_256 of the raw serialised address) — the same
+  -- derivation the node applies, so a genesis-funded output resolves on first spend.
+  Map.toList . Shelley.unUTxO . Shelley.genesisUTxO $
+    cfg {sgInitialFunds = resolvedInitialFunds cfg}
+
+-- | The genesis initial funds actually in effect: the Leios @extraConfig.initialFunds@
+-- streaming injection when present, otherwise the legacy @sgInitialFunds@. Mirrors the
+-- ledger's @resolveInjectionSource@ (exactly one source). (Signatures elided; the types
+-- are fixed by use — a @ListMap Addr Coin@ here.)
+resolvedInitialFunds cfg =
+  resolveInjection (sgExtraConfig cfg) Shelley.secInitialFunds (sgInitialFunds cfg)
+
+-- | Genesis-registered stake pools: @extraConfig.stakePools@ injection or legacy staking.
+resolvedPools cfg =
+  resolveInjection (sgExtraConfig cfg) Shelley.secStakePools (sgsPools (sgStaking cfg))
+
+-- | Genesis stake credential → pool delegations: @extraConfig.stakeCredentials@ or legacy.
+resolvedStakeCreds cfg =
+  resolveInjection (sgExtraConfig cfg) Shelley.secStakeCredentials (sgsStake (sgStaking cfg))
+
+-- | Mirror the ledger's @resolveInjectionSource@: a genesis field comes from exactly one
+-- source — the @extraConfig@ streaming injection when present, otherwise the legacy field.
+-- Only 'Shelley.EmbeddedInjection' (inline) is resolved here; 'Shelley.InjectionFromFile'
+-- side-files fall back to the legacy field and are flagged by 'anyFileInjection' (the Leios
+-- devnets carry everything inline, so this is exact for them).
+resolveInjection ::
+  StrictMaybe Shelley.ShelleyExtraConfig ->
+  (Shelley.ShelleyExtraConfig -> Shelley.InjectionData k v) ->
+  ListMap.ListMap k v ->
+  ListMap.ListMap k v
+resolveInjection mExtra getInj legacy =
+  case strictMaybeToMaybe mExtra >>= embedded . getInj of
+    Just injected -> injected
+    Nothing -> legacy
+  where
+    embedded (Shelley.EmbeddedInjection lm) = Just lm
+    embedded _ = Nothing
+
+-- | Does the genesis extraConfig reference any (unsupported) 'InjectionFromFile' side-file?
+anyFileInjection :: ShelleyGenesis -> Bool
+anyFileInjection cfg =
+  case strictMaybeToMaybe (sgExtraConfig cfg) of
+    Nothing -> False
+    Just e ->
+      isFile (Shelley.secInitialFunds e)
+        || isFile (Shelley.secStakePools e)
+        || isFile (Shelley.secStakeCredentials e)
+  where
+    isFile :: Shelley.InjectionData k v -> Bool
+    isFile Shelley.InjectionFromFile {} = True
+    isFile _ = False
 
 configStartTime :: ShelleyGenesis -> UTCTime
 configStartTime = roundToMillseconds . Shelley.sgSystemStart
