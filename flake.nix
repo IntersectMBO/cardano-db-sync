@@ -247,6 +247,8 @@
                 git
                 protobuf
                 snappy
+                graphviz # scripts/generate-erd.sh (ER diagram rendering)
+                python3 # scripts/generate-erd.sh (ER diagram generator)
               ] ++ lib.optionals (system == "x86_64-linux") [
                 liburing # io_uring is linux-only
               ];
