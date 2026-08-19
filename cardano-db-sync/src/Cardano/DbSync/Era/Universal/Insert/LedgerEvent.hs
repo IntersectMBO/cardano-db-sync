@@ -19,7 +19,7 @@ import Cardano.Slotting.Slot (EpochNo (..))
 
 import Cardano.DbSync.Api
 import Cardano.DbSync.Api.Types (EpochStatistics (..), InsertOptions (..), SyncEnv (..), UnicodeNullSource, formatUnicodeNullSource)
-import Cardano.DbSync.Cache.Types (textShowCacheStats)
+import Cardano.DbSync.Cache.Types (CacheStatistics (..), textShowCacheStats)
 import Cardano.DbSync.Era.Cardano.Util (insertEpochSyncTime, resetEpochStatistics)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Universal.Adjust (adjustEpochRewards)
@@ -31,7 +31,7 @@ import Cardano.DbSync.Types
 
 import Cardano.DbSync.Error (SyncNodeError)
 import Cardano.DbSync.Ledger.Types
-import Cardano.DbSync.Metrics (setDbEpochSyncDuration, setDbEpochSyncNumber)
+import Cardano.DbSync.Metrics (setCacheHitRate, setDbEpochSyncDuration, setDbEpochSyncNumber)
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Control.Monad.Extra (whenJust)
 import qualified Data.Map.Strict as Map
@@ -95,6 +95,17 @@ insertNewEpochLedgerEvents syncEnv applyRes currentEpochNo@(EpochNo curEpoch) =
           -- add epoch metricI's to prometheus
           liftIO $ setDbEpochSyncDuration metricSetters (epochDurationSeconds (elsStartTime epochStats) currentTime)
           liftIO $ setDbEpochSyncNumber metricSetters (fromIntegral $ unEpochNo en - 1)
+
+          -- Calculate and set cache hit rates
+          let cacheStats = elsCaches epochStats
+              hitRate hits queries = if queries == 0 then 0.0 else fromIntegral hits / fromIntegral queries
+          liftIO $ setCacheHitRate metricSetters CacheStake (hitRate (credsHits cacheStats) (credsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CachePools (hitRate (poolsHits cacheStats) (poolsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheDatum (hitRate (datumHits cacheStats) (datumQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheMultiAssets (hitRate (multiAssetsHits cacheStats) (multiAssetsQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CachePrevBlock (hitRate (prevBlockHits cacheStats) (prevBlockQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheAddress (hitRate (addressHits cacheStats) (addressQueries cacheStats))
+          liftIO $ setCacheHitRate metricSetters CacheTxIds (hitRate (txIdsHits cacheStats) (txIdsQueries cacheStats))
 
           -- Log comprehensive epoch statistics
           liftIO . logInfo tracer $
