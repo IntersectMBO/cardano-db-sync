@@ -305,6 +305,36 @@ This shows that the first delegation became active (ie earning rewards) in epoch
 address owner subsequently re-delegated their stake with those re-delegations becoming active in
 epochs 214, 216 and 217.
 
+### Get the delegation history for a specified stake pool
+```sql
+select pool_ticker, stake_address, max(from_epoch) as from_epoch, till_epoch
+from (
+    select pod.ticker_name as pool_ticker, sa.view as stake_address, d.active_epoch_no as from_epoch,
+        first_value(ld.active_epoch_no) over (partition by sa.view, d.active_epoch_no order by ld.active_epoch_no asc) as till_epoch
+    from delegation d
+    left join delegation ld on ld.addr_id = d.addr_id
+        and ld.active_epoch_no >= d.active_epoch_no
+        and ld.pool_hash_id != d.pool_hash_id
+    inner join pool_hash ph on ph.id = d.pool_hash_id
+    inner join stake_address sa on sa.id = d.addr_id
+    inner join pool_offline_data pod on pod.pool_id = ph.id
+    where ph.view = 'pool1a8n7f97dmgtgrnl53exccknjdchqxrr9508hlxlgqp6xvjmzhej'
+    group by stake_address, pool_ticker, d.active_epoch_no, ld.active_epoch_no
+) t
+group by stake_address, pool_ticker, till_epoch
+order by from_epoch;;
+ pool_ticker |                        stake_address                        | from_epoch | till_epoch
+-------------+-------------------------------------------------------------+------------+------------
+ HAPPY       | stake1u95rnek2jdhkslq5d6z6u7c3csdwf0jgpmf6wfun8fakdds8l94l2 |        389 |
+ HAPPY       | stake1u9rq7cn7pdydmhr4rjr4r0x70mm8ltc09j3jc0mj9j7540q8nyvfk |        389 |
+ HAPPY       | stake1uxdtkv4lzgn90yldfdv4ypz3s24tzj4dsprcgja3llfk75slp3ymz |        392 |
+ HAPPY       | stake1ux0mymju4vnypz7ugn37h2f07ftvljwx442svrkprmtu5qs0hcv7p |        397 |        397
+ HAPPY       | stake1uxf6eeg3f8swtjkacw2h24gq5ztxl92kdlmwysrrq7qadwcjgtrza |        404 |        413
+ HAPPY       | stake1u9vzap5gdlqhmahperu4rsfj2zr8zwagun5ffrc9wyy50mcv0nth4 |        408 |
+(6 rows)
+
+```
+The `'from_epoch'` is the epoch when the stake became active for the given pool. The `'till_epoch'` is the epoch when the stake became active in another pool. A `null` value in the `'till_epoch'` means that the stake is currently active. The same value in both `'from_epoch'` and `'till_epoch'` means that the stake was redelegated within the epoch.
 
 ### Get the reward history for a specified stake address
 
