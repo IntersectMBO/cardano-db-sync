@@ -229,6 +229,10 @@ queryTxOutIdStmt =
           [ "SELECT tx_out.tx_id, tx_out.id"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
           , " WHERE tx_out.index = $2 AND tx.hash = $1"
+          -- doomsday mode: tx.hash may be non-unique (same tx in two certified
+          -- Leios EBs), so this join can return >1 row. Resolve the input to
+          -- the canonical (earliest) tx's output rather than crashing.
+          , " ORDER BY tx.id ASC LIMIT 1"
           ]
 
     encoder =
@@ -325,6 +329,10 @@ queryTxOutIdValueStmt =
           [ "SELECT tx_out.tx_id, tx_out.id, tx_out.value"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
           , " WHERE tx_out.index = $2 AND tx.hash = $1"
+          -- doomsday mode: tx.hash may be non-unique (same tx in two certified
+          -- Leios EBs), so this join can return >1 row. Resolve the input to
+          -- the canonical (earliest) tx's output rather than crashing.
+          , " ORDER BY tx.id ASC LIMIT 1"
           ]
 
     encoder =
@@ -368,6 +376,9 @@ queryTxOutCredentialsCoreStmt =
           [ "SELECT tx_out.payment_cred"
           , " FROM tx INNER JOIN tx_out ON tx.id = tx_out.tx_id"
           , " WHERE tx_out.index = $2 AND tx.hash = $1"
+          -- doomsday mode: tx.hash may be non-unique; pick the canonical
+          -- (earliest) tx's output instead of throwing on >1 row.
+          , " ORDER BY tx.id ASC LIMIT 1"
           ]
 
     encoder =
@@ -389,6 +400,9 @@ queryTxOutCredentialsVariantStmt =
           , " INNER JOIN tx_out ON tx.id = tx_out.tx_id"
           , " INNER JOIN address addr ON tx_out.address_id = addr.id"
           , " WHERE tx_out.index = $2 AND tx.hash = $1"
+          -- doomsday mode: tx.hash may be non-unique; pick the canonical
+          -- (earliest) tx's output instead of throwing on >1 row.
+          , " ORDER BY tx.id ASC LIMIT 1"
           ]
 
     encoder =

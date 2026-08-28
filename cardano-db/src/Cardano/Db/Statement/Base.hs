@@ -1304,6 +1304,11 @@ queryTxIdStmt = HsqlStmt.Statement sql encoder decoder True
           [ "SELECT id"
           , " FROM " <> table
           , " WHERE hash = $1"
+          -- doomsday mode: a broken chain can carry the same tx hash in >1
+          -- block (e.g. one tx included in two certified Leios EBs). Do not
+          -- assume uniqueness here: resolve to the canonical (earliest) row
+          -- instead of throwing UnexpectedAmountOfRows and stalling the sync.
+          , " ORDER BY id ASC LIMIT 1"
           ]
 
 -- | Get the 'TxId' associated with the given hash.
