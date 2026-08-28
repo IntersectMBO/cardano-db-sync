@@ -179,7 +179,7 @@ resolveTxInputs ::
   Bool ->
   [ExtendedTxOut] ->
   Generic.TxIn ->
-  ExceptT SyncNodeError DB.DbM (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
+  ExceptT SyncNodeError DB.DbM (Maybe (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace))
 resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
   qres <- case (hasConsumed, needsValue) of
     -- No cache (complex query)
@@ -190,10 +190,13 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
       case mTxId of
         Just txId -> pure $ Right $ convertnotFoundCache txId
         Nothing ->
-          throwError $
-            SNErrDefault
-              mkSyncNodeCallStack
-              ("TxId not found for hash: " <> show (Generic.unTxHash $ Generic.txInTxId txIn))
+          -- doomsday: the source tx of this input isn't in the DB. Don't die —
+          -- fall through to in-memory resolution; if that also fails the input
+          -- is skipped (see below) instead of stalling the whole sync.
+          pure $
+            Left $
+              DB.DbLookupError DB.mkDbCallStack $
+                "TxId not found for hash: " <> textShow (Generic.unTxHash $ Generic.txInTxId txIn)
     (True, False) -> do
       -- Consumed mode use cache
       eTxId <- queryTxIdWithCache syncEnv (Generic.txInTxId txIn)
@@ -207,20 +210,22 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
             Left err -> pure $ Left err
         Left err -> pure $ Left err
   case qres of
-    Right result -> pure result
+    Right result -> pure (Just result)
     Left _dbErr ->
       -- Don't throw immediately, try in-memory resolution first
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
-        (Nothing, _, _) ->
-          -- Only throw if in-memory resolution also fails
-          throwError $
-            SNErrDefault
-              mkSyncNodeCallStack
-              ("TxIn not found in memory: " <> textShow txIn)
+        (Nothing, _, _) -> do
+          -- doomsday: this input references an output that isn't on our chain
+          -- (phantom / uncertified-EB tx that the unvalidated network allowed).
+          -- Skip the input instead of crashing the whole sync.
+          liftIO $
+            logWarning (getTrace syncEnv) $
+              "doomsday: skipping unresolvable tx input (missing source tx): " <> textShow txIn
+          pure Nothing
         (Just eutxo, True, True) ->
-          pure $ convertFoundValue (etoTxOut eutxo)
+          pure $ Just $ convertFoundValue (etoTxOut eutxo)
         (Just eutxo, _, _) ->
-          pure $ convertnotFound (etoTxOut eutxo)
+          pure $ Just $ convertnotFound (etoTxOut eutxo)
   where
     convertnotFoundCache :: DB.TxId -> (Generic.TxIn, DB.TxId, Either Generic.TxIn DB.TxOutIdW, Maybe DbLovelace)
     convertnotFoundCache txId = (txIn, txId, Left txIn, Nothing)
