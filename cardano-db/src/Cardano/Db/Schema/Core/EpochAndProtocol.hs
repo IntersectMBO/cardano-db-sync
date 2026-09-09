@@ -146,6 +146,12 @@ data EpochParam = EpochParam
   , epochParamDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamPvtppSecurityGroup :: !(Maybe Double)
   , epochParamMinFeeRefScriptCostPerByte :: !(Maybe Double)
+  , -- Leios (Dijkstra) protocol parameters. Only set from the Dijkstra era on; Nothing before.
+    epochParamLeiosCommitteeSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosQuorumStakeThreshold :: !(Maybe Double)
+  , epochParamLeiosAnnouncementPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , epochParamLeiosVotePeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , epochParamLeiosDiffusionPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
   }
   deriving (Eq, Show, Generic)
 
@@ -216,6 +222,11 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamDrepActivity
     <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
+    <*> maybeDbWord64Decoder -- epochParamLeiosCommitteeSize
+    <*> D.column (D.nullable D.float8) -- epochParamLeiosQuorumStakeThreshold
+    <*> maybeDbWord64Decoder -- epochParamLeiosAnnouncementPeriodLength
+    <*> maybeDbWord64Decoder -- epochParamLeiosVotePeriodLength
+    <*> maybeDbWord64Decoder -- epochParamLeiosDiffusionPeriodLength
 
 epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
@@ -274,6 +285,11 @@ epochParamEncoder =
     , epochParamDrepActivity >$< maybeDbWord64Encoder
     , epochParamPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , epochParamMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
+    , epochParamLeiosCommitteeSize >$< maybeDbWord64Encoder
+    , epochParamLeiosQuorumStakeThreshold >$< E.param (E.nullable E.float8)
+    , epochParamLeiosAnnouncementPeriodLength >$< maybeDbWord64Encoder
+    , epochParamLeiosVotePeriodLength >$< maybeDbWord64Encoder
+    , epochParamLeiosDiffusionPeriodLength >$< maybeDbWord64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

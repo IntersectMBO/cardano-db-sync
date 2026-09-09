@@ -55,7 +55,7 @@ insertPoolRegister ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolP.StakePoolParams ->
+  PoolP.StakePoolParams era ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
   poolHashId <- insertPoolKeyWithCache syncEnv UpdateCache (PoolP.sppId params)
@@ -68,9 +68,11 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
       deposit = if isRegistration then Generic.coinToDbLovelace . Generic.poolDeposit <$> mdeposits else Nothing
       -- Leios (Dijkstra): optional BLS12-381 key registered alongside VRF/KES. Nothing on
       -- earlier eras and on Dijkstra registrations that omit it.
-      mLeiosKey = strictMaybeToMaybe $ PoolP.sppLeiosKey params
-      leiosVkey = rawSerialiseVerKeyDSIGN . PoolP.unLeiosPubKey . PoolP.leiosPubKey <$> mLeiosKey
-      leiosPop = rawSerialisePossessionProofDSIGN . PoolP.unLeiosPossessionProof . PoolP.leiosPossessionProof <$> mLeiosKey
+      -- w36 renamed LeiosKey -> BlsKey; blsPubKey/blsPossessionProof now hold the
+      -- DSIGN types directly (the LeiosPubKey/LeiosPossessionProof newtypes are gone).
+      mLeiosKey = strictMaybeToMaybe $ PoolP.sppBlsKey params
+      leiosVkey = rawSerialiseVerKeyDSIGN . PoolP.blsPubKey <$> mLeiosKey
+      leiosPop = rawSerialisePossessionProofDSIGN . PoolP.blsPossessionProof <$> mLeiosKey
 
   saId <- queryOrInsertRewardAccount syncEnv UpdateCache (adjustNetworkTag $ PoolP.sppAccountAddress params)
   poolUpdateId <-
@@ -205,7 +207,7 @@ insertPoolCert ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolCert ->
+  PoolCert era ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolCert syncEnv isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of

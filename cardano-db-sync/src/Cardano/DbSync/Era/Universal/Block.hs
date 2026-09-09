@@ -18,19 +18,20 @@ import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (ShortByteString (SBS))
 import qualified Data.ByteString.Short as SBS
-import qualified Data.Map.Strict as Map
+import qualified Data.Vector as V
+import qualified Data.Vector.Strict as VS
 
 import Cardano.BM.Trace (Trace, logDebug, logInfo)
 import Cardano.Binary (serialize')
 import Cardano.Crypto.DSIGN (rawSerialiseVerKeyDSIGN)
-import Cardano.Crypto.Leios (BitField (..), LeiosCert (..), leiosSignatureToBytes)
+import Cardano.Crypto.Leios (BitField (..), LeiosCert (..), LeiosSeat (..), leiosCommitteeSeats, leiosSignatureToBytes)
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.State as LState
 import Cardano.Prelude
-import LeiosDemoTypes (EbAnnouncement (..), EbHash (..), committeeStakeCoverage, selectCommitteeByStake)
+import LeiosDemoTypes (EbAnnouncement (..), EbHash (..))
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Extended (ledgerState)
@@ -204,11 +205,11 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
     cache = envCache syncEnv
 
 -- | Resolve a block's LeiosCert signer bitfield to the signing pools and insert one
--- 'DB.LeiosCertSigner' row per signer. The committee is derived from the parent ledger
--- state ('apOldLedger') exactly as the node does (ouroboros-consensus
--- 'HasLeiosVoting DijkstraEra'): pools selected by descending active stake until P99
--- coverage ('selectCommitteeByStake'/'committeeStakeCoverage'), keyless seats included.
--- Seat @i@ (bit @i@, MSB-first) is the @i@-th pool in that selected order.
+-- 'DB.LeiosCertSigner' row per signer. The committee is read from the parent ledger
+-- state's set snapshot ('ssStakeSet.ssLeiosCommittee') — exactly what the node validates
+-- the cert against (ouroboros-consensus 'HasLeiosVoting DijkstraEra') — and each seat is
+-- attributed to its pool via the ledger's own ranking. Seat @i@ (bit @i@, MSB-first) is
+-- the @i@-th pool of that committee.
 insertLeiosCertSigners ::
   SyncEnv ->
   DB.BlockId ->
@@ -258,11 +259,11 @@ insertLeiosCommittee syncEnv blkId epochNo newLedger =
       liftIO $
         logInfo trce $
           "leios-committee: epoch " <> textShow (unEpochNo epochNo + 1) <> " committee=" <> textShow (length ordered)
-      forM_ (zip [0 ..] ordered) $ \(seat, (poolId, ips)) -> do
+      forM_ (zip [0 ..] ordered) $ \(seatIx, (poolId, lseat)) -> do
         ePhid <- queryPoolKeyWithCache syncEnv UpdateCache poolId
         case ePhid of
           Left _ ->
-            liftIO $ logInfo trce $ "leios-committee: seat " <> textShow (seat :: Int) <> " pool not in db"
+            liftIO $ logInfo trce $ "leios-committee: seat " <> textShow (seatIx :: Int) <> " pool not in db"
           Right phid ->
             void $
               lift $
@@ -270,46 +271,43 @@ insertLeiosCommittee syncEnv blkId epochNo newLedger =
                   DB.LeiosCommittee
                     { DB.leiosCommitteeBlockId = blkId
                     , DB.leiosCommitteeEpochNo = fromIntegral (unEpochNo epochNo + 1)
-                    , DB.leiosCommitteeSeatIndex = fromIntegral (seat :: Int)
+                    , DB.leiosCommitteeSeatIndex = fromIntegral (seatIx :: Int)
                     , DB.leiosCommitteePoolHashId = phid
-                    , DB.leiosCommitteeWeight = fromRational (LState.individualPoolStake ips)
-                    , DB.leiosCommitteeBlsVkey = leiosVkeyOf ips
+                    , DB.leiosCommitteeWeight = fromRational (seatWeight lseat)
+                    , -- The honoured voting key of the seat (Nothing when the pool is seated
+                      -- keyless: no key, aged-out key, or a proof of possession that failed).
+                      DB.leiosCommitteeBlsVkey = rawSerialiseVerKeyDSIGN <$> strictMaybeToMaybe (seatVKey lseat)
                     }
   where
     trce = getTrace syncEnv
 
--- | The registered Leios BLS verification key for a committee seat, or 'Nothing'
--- for a keyless seat (a pool that has not registered a key). Serialised the same
--- way as the pool-registration capture in "Insert.Pool".
-leiosVkeyOf :: LState.IndividualPoolStake -> Maybe ByteString
-leiosVkeyOf ips =
-  rawSerialiseVerKeyDSIGN . LState.unLeiosPubKey . LState.leiosPubKey
-    <$> strictMaybeToMaybe (LState.individualPoolStakeBls ips)
-
-committeeOrderFrom pick cls =
+-- | The Leios committee the ledger seated on the given stake snapshot, each seat paired
+-- with its pool, in seat order. w36 selects the committee at the epoch boundary and stores
+-- it in the snapshot ('ssLeiosCommittee'); a 'LeiosSeat' carries the weight and the honoured
+-- voting key but not the pool id, so we recover the pool by re-running the ledger's own
+-- candidate ranking ('leiosCandidates' + 'seatedLeiosCandidates') over the same snapshot —
+-- seat @i@ of 'ssLeiosCommittee' then lines up with candidate @i@ by construction.
+committeeOrderFrom pickSnap cls =
   case ledgerState (clsState cls) of
     LedgerStateDijkstra dls ->
       let nes = Consensus.shelleyLedgerState dls
-          pd = pick nes ^. LState.poolDistrDistrL
-          -- Mirror the node's committee selection (ouroboros-consensus
-          -- 'HasLeiosVoting DijkstraEra'): take pools by descending stake until
-          -- 'committeeStakeCoverage' (P99) of active stake is covered. Keyless
-          -- pools keep their seat (they simply cannot vote, dropped to a keyless
-          -- seat by 'mkLeiosCommittee'), so they are NOT filtered out here — that
-          -- keeps our seat_index aligned with the node's LeiosVoter ids.
-          seats =
-            selectCommitteeByStake
-              committeeStakeCoverage
-              [ ((poolId, ips), LState.individualPoolStake ips)
-              | (poolId, ips) <- Map.toList pd
-              ]
-       in Just [pair | (pair, _w) <- seats]
+          snap = pickSnap (Shelley.esSnapshots (Shelley.nesEs nes))
+          seats = VS.toList $ leiosCommitteeSeats (snap ^. LState.ssLeiosCommitteeL)
+          pools =
+            V.toList . V.map LState.lcPoolId $
+              LState.seatedLeiosCandidates
+                (fromIntegral (length seats))
+                (LState.leiosCandidates (LState.ssStakePoolsSnapShot snap))
+       in Just (zip pools seats)
     _ -> Nothing
 
-committeeOrder cls = committeeOrderFrom Shelley.nesPd cls
+-- The committee that governs the parent block's epoch — the same snapshot the node
+-- validates a block's Leios cert against ('HasLeiosVoting DijkstraEra' reads ssStakeSet).
+committeeOrder cls = committeeOrderFrom (^. LState.ssStakeSetL) cls
 
-committeeOrderNext cls =
-  committeeOrderFrom (\nes -> LState.ssStakeMarkPoolDistr (Shelley.esSnapshots (Shelley.nesEs nes))) cls
+-- The committee selected for the upcoming epoch (the mark snapshot becomes ssStakeSet, and
+-- thus the active committee, after the next boundary), recorded ahead of time as epoch+1.
+committeeOrderNext cls = committeeOrderFrom (^. LState.ssStakeMarkL) cls
 
 -- | Set-bit indices of a LeiosCert signer bitfield, MSB-first, over @n@ committee seats.
 -- Mirrors the ledger's private @bitFieldMembers@: seat @i@ is byte @i \`div\` 8@, bit @7 - (i \`mod\` 8)@.

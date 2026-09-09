@@ -44,6 +44,7 @@ import qualified Cardano.Ledger.Shelley.TxBody as Shelley
 import Cardano.Ledger.Shelley.TxCert
 import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
+import Data.Coerce (coerce)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
@@ -199,7 +200,9 @@ mkTxCertificates bd =
 toShelleyCert :: ShelleyTxCert era -> ShelleyCert
 toShelleyCert cert = case cert of
   ShelleyTxCertDelegCert a -> ShelleyTxCertDelegCert a
-  ShelleyTxCertPool a -> ShelleyTxCertPool a
+  -- w36: PoolCert/StakePoolParams gained a (phantom) era parameter; the pool cert is
+  -- era-independent, so coerce it into the ShelleyEra the normalised ShelleyCert uses.
+  ShelleyTxCertPool a -> ShelleyTxCertPool (coerce a)
   ShelleyTxCertGenesisDeleg a -> ShelleyTxCertGenesisDeleg a
   ShelleyTxCertMir a -> ShelleyTxCertMir a
 

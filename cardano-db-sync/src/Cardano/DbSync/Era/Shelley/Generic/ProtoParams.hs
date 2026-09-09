@@ -18,6 +18,13 @@ import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
 import Cardano.Ledger.Conway.Core
 import Cardano.Ledger.Conway.PParams (ppMinFeeRefScriptCostPerByteL)
+import Cardano.Ledger.Dijkstra.PParams (
+  ppLeiosAnnouncementPeriodLengthL,
+  ppLeiosCommitteeSizeL,
+  ppLeiosDiffusionPeriodLengthL,
+  ppLeiosQuorumStakeThresholdL,
+  ppLeiosVotePeriodLengthL,
+ )
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
@@ -68,6 +75,12 @@ data ProtoParams = ProtoParams
   , ppDRepDeposit :: !(Maybe Natural)
   , ppDRepActivity :: !(Maybe EpochInterval)
   , ppMinFeeRefScriptCostPerByte :: !(Maybe Rational)
+  , -- New for Dijkstra (Leios). All 'Nothing' before the Dijkstra era.
+    ppLeiosCommitteeSize :: !(Maybe Word16)
+  , ppLeiosQuorumStakeThreshold :: !(Maybe UnitInterval)
+  , ppLeiosAnnouncementPeriodLength :: !(Maybe Word32) -- milliseconds
+  , ppLeiosVotePeriodLength :: !(Maybe Word32) -- milliseconds
+  , ppLeiosDiffusionPeriodLength :: !(Maybe Word32) -- milliseconds
   }
 
 data Deposits = Deposits
@@ -154,6 +167,11 @@ fromDijkstraParams params =
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
     , ppDRepActivity = Just $ params ^. ppDRepActivityL
     , ppMinFeeRefScriptCostPerByte = Just $ Ledger.unboundRational $ params ^. ppMinFeeRefScriptCostPerByteL
+    , ppLeiosCommitteeSize = Just $ params ^. ppLeiosCommitteeSizeL
+    , ppLeiosQuorumStakeThreshold = Just $ params ^. ppLeiosQuorumStakeThresholdL
+    , ppLeiosAnnouncementPeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosAnnouncementPeriodLengthL
+    , ppLeiosVotePeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosVotePeriodLengthL
+    , ppLeiosDiffusionPeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosDiffusionPeriodLengthL
     }
 
 fromConwayParams :: PParams ConwayEra -> ProtoParams
@@ -196,6 +214,11 @@ fromConwayParams params =
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
     , ppDRepActivity = Just $ params ^. ppDRepActivityL
     , ppMinFeeRefScriptCostPerByte = Just $ Ledger.unboundRational $ params ^. ppMinFeeRefScriptCostPerByteL
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
     }
 
 fromBabbageParams :: PParams BabbageEra -> ProtoParams
@@ -238,6 +261,11 @@ fromBabbageParams params =
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
     , ppMinFeeRefScriptCostPerByte = Nothing
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
     }
 
 fromAlonzoParams :: PParams AlonzoEra -> ProtoParams
@@ -280,6 +308,11 @@ fromAlonzoParams params =
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
     , ppMinFeeRefScriptCostPerByte = Nothing
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
     }
 
 fromShelleyParams :: (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) => PParams era -> ProtoParams
@@ -322,4 +355,9 @@ fromShelleyParams params =
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
     , ppMinFeeRefScriptCostPerByte = Nothing
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
     }

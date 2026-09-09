@@ -174,6 +174,12 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamDrepActivity = fromIntegral . unEpochInterval <$> Generic.ppDRepActivity params
       , DB.epochParamMinFeeRefScriptCostPerByte = fromRational <$> Generic.ppMinFeeRefScriptCostPerByte params
       , DB.epochParamBlockId = blkId
+      , -- Leios (Dijkstra) protocol parameters; Nothing before the Dijkstra era.
+        DB.epochParamLeiosCommitteeSize = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosCommitteeSize params
+      , DB.epochParamLeiosQuorumStakeThreshold = toDouble <$> Generic.ppLeiosQuorumStakeThreshold params
+      , DB.epochParamLeiosAnnouncementPeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosAnnouncementPeriodLength params
+      , DB.epochParamLeiosVotePeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosVotePeriodLength params
+      , DB.epochParamLeiosDiffusionPeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosDiffusionPeriodLength params
       }
 
 hasNewEpochEvent :: [LedgerEvent] -> Bool
