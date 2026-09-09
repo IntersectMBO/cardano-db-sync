@@ -214,14 +214,19 @@ resolveTxInputs syncEnv hasConsumed needsValue groupedOutputs txIn = do
     Left _dbErr ->
       -- Don't throw immediately, try in-memory resolution first
       case (resolveInMemory txIn groupedOutputs, hasConsumed, needsValue) of
-        (Nothing, _, _) -> do
-          -- doomsday: this input references an output that isn't on our chain
-          -- (phantom / uncertified-EB tx that the unvalidated network allowed).
-          -- Skip the input instead of crashing the whole sync.
-          liftIO $
-            logWarning (getTrace syncEnv) $
-              "doomsday: skipping unresolvable tx input (missing source tx): " <> textShow txIn
-          pure Nothing
+        (Nothing, _, _)
+          | ioDoomsday (soptInsertOptions (envOptions syncEnv)) -> do
+              -- doomsday: this input references an output that isn't on our chain
+              -- (phantom / uncertified-EB tx that the unvalidated network allowed).
+              -- Skip the input instead of crashing the whole sync.
+              liftIO $
+                logWarning (getTrace syncEnv) $
+                  "doomsday: skipping unresolvable tx input (missing source tx): " <> textShow txIn
+              pure Nothing
+          | otherwise ->
+              -- Strict (default): an unresolvable input is a real error on a validated chain.
+              throwError $
+                SNErrDefault mkSyncNodeCallStack ("TxIn not found in memory: " <> textShow txIn)
         (Just eutxo, True, True) ->
           pure $ Just $ convertFoundValue (etoTxOut eutxo)
         (Just eutxo, _, _) ->

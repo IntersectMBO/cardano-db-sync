@@ -120,6 +120,9 @@ data SyncNodeParams = SyncNodeParams
   -- ^ When 'True', the off-chain HTTP fetcher (pool and vote metadata) does not
   -- reject URLs whose host or resolved IP is in a private / loopback / link-local
   -- range. Intended for local-cluster testing only; off by default.
+  , enpDoomsday :: !Bool
+  -- ^ When 'True', enable "doomsday mode": tolerate an unvalidated Leios chain by
+  -- skipping tx inputs whose source tx is missing instead of aborting. Off by default.
   }
   deriving (Show)
 

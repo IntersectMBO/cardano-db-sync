@@ -318,6 +318,7 @@ extractSyncOptions snp aop snc =
         , ioTxCBOR = isTxCBOREnabled (sioTxCBOR (dncInsertOptions snc))
         , ioUseLedger = useLedger
         , ioShelley = isShelleyEnabled (sioShelley (dncInsertOptions snc))
+        , ioDoomsday = enpDoomsday snp
         , -- Rewards are only disabled on "disable_all" and "only_gov" presets
           ioRewards = True
         , ioMultiAssets = isMultiAssetEnabled (sioMultiAsset (dncInsertOptions snc))

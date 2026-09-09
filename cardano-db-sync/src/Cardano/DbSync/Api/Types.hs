@@ -95,6 +95,10 @@ data InsertOptions = InsertOptions
   , ioGov :: !Bool
   , ioRemoveJsonbFromSchema :: !Bool
   , ioTxOutVariantType :: !DB.TxOutVariantType
+  , ioDoomsday :: !Bool
+  -- ^ When 'True', tolerate an unvalidated Leios chain: a tx input whose source tx is
+  -- not on our chain is skipped instead of aborting the sync (see 'resolveTxInputs').
+  -- Off by default; only needed against pre-w35 nodes that voted EBs before validation.
   }
   deriving (Show)
 

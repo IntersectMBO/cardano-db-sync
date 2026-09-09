@@ -104,6 +104,7 @@ pRunDbSyncNode = do
     <*> pHasInOut
     <*> optional pRollbackSlotNo
     <*> pAllowPrivateOffChainUrls
+    <*> pDoomsday
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -161,6 +162,16 @@ pHasCache =
     False
     ( Opt.long "disable-cache"
         <> Opt.help "Disables the db-sync caches. Reduces memory usage but it takes longer to sync."
+    )
+
+pDoomsday :: Parser Bool
+pDoomsday =
+  Opt.flag
+    False
+    True
+    ( Opt.long "doomsday"
+        <> Opt.help
+          "Doomsday mode: tolerate an unvalidated Leios chain by skipping tx inputs whose source tx is missing, instead of aborting. Off by default; only needed against pre-w35 nodes."
     )
 
 pAllowPrivateOffChainUrls :: Parser Bool
