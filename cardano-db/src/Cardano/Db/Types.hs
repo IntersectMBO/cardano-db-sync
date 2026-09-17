@@ -293,7 +293,7 @@ scriptTypeDecoder = HsqlD.enum $ \case
   "plutusV1" -> Just PlutusV1
   "plutusV2" -> Just PlutusV2
   "plutusV3" -> Just PlutusV3
-  "plutusV4" -> Just PlutusV4 -- TODO(Dijkstra): Add to Schema
+  "plutusV4" -> Just PlutusV4
   _ -> Nothing
 
 scriptTypeEncoder :: HsqlE.Value ScriptType
