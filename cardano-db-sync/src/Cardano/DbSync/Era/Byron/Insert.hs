@@ -217,6 +217,7 @@ insertByronTx syncEnv blkId tx blockIndex = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               , DB.txTreasuryDonation = DbLovelace 0
+              , DB.txParentTxId = Nothing
               }
 
       when (ioTxCBOR iopts) $ do
@@ -265,6 +266,7 @@ insertByronTx' syncEnv blkId tx blockIndex = do
           , DB.txValidContract = True
           , DB.txScriptSize = 0
           , DB.txTreasuryDonation = DbLovelace 0
+          , DB.txParentTxId = Nothing
           }
 
   -- Insert CBOR if enabled

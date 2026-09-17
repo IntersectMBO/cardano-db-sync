@@ -80,10 +80,25 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingD) (unVotingProcedures $ dtbVotingProcedures txBody)
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dtbProposalProcedures txBody
     , txTreasuryDonation = dtbTreasuryDonation txBody
+    , txSubTransactions =
+        map (fromDijkstraSubTx ioExtraPlutus mprices blkIndex) $
+          toList (txBody ^. subTransactionsTxBodyL)
     }
   where
     txBody :: Core.TxBody Core.TopTx DijkstraEra
     txBody = tx ^. Core.bodyTxL
+
+    -- TODO(Dijkstra): the following new tx-body fields are not yet captured. They are
+    -- deferred (each needs its own schema) rather than silently dropped without a note:
+    --   * directDeposits (dtbDirectDeposits :: Map AccountAddress Coin) — a real value
+    --     movement; worth a small `direct_deposit(tx_id, addr_id, amount)` table. First
+    --     candidate to actually capture.
+    --   * guards / requiredTopLevelGuards (OSet (Credential Guard) / Map (Credential Guard)
+    --     (StrictMaybe Data)) — script-gated credentials; only indexes script usage.
+    --   * accountBalanceIntervals / startingAccountBalanceIntervals — pure validation
+    --     assertions the ledger already enforced; low indexing value, likely skip.
+    -- Leios protocol parameters are captured on epoch_param but NOT param_proposal yet
+    -- (see ParamProposal.hs TODO(Dijkstra)).
 
     txId :: TxId
     txId = mkTxId tx
@@ -116,6 +131,55 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     mkProposalIndex :: Word16 -> a -> (GovActionId, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
 
+-- | Build a 'Tx' for a Dijkstra nested sub-transaction. A sub-tx has its own TxId,
+-- body and witnesses, but no collateral and no phase-2 validity flag of its own (the
+-- enclosing top-level tx governs validity), and it cannot itself carry sub-transactions.
+-- It inherits the top-level tx's block index; the parent link is set at insertion time.
+fromDijkstraSubTx :: Bool -> Maybe Alonzo.Prices -> Word64 -> Core.Tx Core.SubTx DijkstraEra -> Tx
+fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
+  Tx
+    { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
+    , txBlockIndex = blkIndex
+    , txCBOR = getTxCBOR tx
+    , txSize = getTxSize tx
+    , txValidContract = True
+    , txInputs = Map.elems $ rmInps finalMaps
+    , txCollateralInputs = []
+    , txReferenceInputs = map fromTxIn . toList $ txBody ^. referenceInputsTxBodyL
+    , txOutputs = outputs
+    , txCollateralOutputs = []
+    , txFees = Just mempty -- sub-transactions carry no fee of their own; the top tx pays
+    , txOutSum = sumTxOutCoin outputs
+    , txInvalidBefore = invalidBef
+    , txInvalidHereafter = invalidAfter
+    , txWithdrawalSum = calcWithdrawalSum txBody
+    , txMetadata = fromAlonzoMetadata <$> getTxMetadata tx
+    , txCertificates = snd <$> rmCerts finalMaps
+    , txWithdrawals = Map.elems $ rmWdrl finalMaps
+    , txParamProposal = []
+    , txMint = txBody ^. mintTxBodyL
+    , txRedeemer = redeemers
+    , txData = txDataWitness tx
+    , txScriptSizes = getPlutusSizes tx
+    , txScripts = getDijkstraScripts tx
+    , txExtraKeyWitnesses = extraKeyWits txBody
+    , -- Governance (voting/proposals) is only at the top level in Dijkstra.
+      txVotingProcedure = []
+    , txProposalProcedure = []
+    , txTreasuryDonation = mempty -- treasury donations are a top-level concern
+    , txSubTransactions = []
+    }
+  where
+    txBody :: Core.TxBody Core.SubTx DijkstraEra
+    txBody = tx ^. Core.bodyTxL
+
+    outputs :: [TxOut]
+    outputs = zipWith fromDijkstraTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
+
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx DCert
+    (invalidBef, invalidAfter) = getInterval txBody
+
 -- | Dijkstra-specific TxOut conversion. DijkstraNativeScript is not Timelock,
 -- so we can't reuse Babbage.fromTxOut which requires NativeScript era ~ Timelock era.
 fromDijkstraTxOut :: Word64 -> BabbageTxOut DijkstraEra -> TxOut
@@ -147,7 +211,7 @@ fromDijkstraDatum bdat =
 
 -- | Dijkstra-specific script extraction. DijkstraNativeScript has no ToJSON,
 -- so we store CBOR for native scripts instead of JSON.
-getDijkstraScripts :: Core.Tx Core.TopTx DijkstraEra -> [TxScript]
+getDijkstraScripts :: Core.Tx l DijkstraEra -> [TxScript]
 getDijkstraScripts tx =
   mkDijkstraTxScript
     <$> ( Map.toList (tx ^. (Core.witsTxL . Core.scriptTxWitsL))

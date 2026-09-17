@@ -281,6 +281,7 @@ insertTxOuts syncEnv blkId (TxIn txInId _, txOut) = do
           , DB.txValidContract = True
           , DB.txScriptSize = 0
           , DB.txTreasuryDonation = DB.DbLovelace 0
+          , DB.txParentTxId = Nothing
           }
 
   tryUpdateCacheTx (envCache syncEnv) txInId txId
@@ -361,6 +362,7 @@ insertStaking syncEnv blkId genesis = do
           , DB.txValidContract = True
           , DB.txScriptSize = 0
           , DB.txTreasuryDonation = DB.DbLovelace 0
+          , DB.txParentTxId = Nothing
           }
   let params = zip [0 ..] $ ListMap.elems $ resolvedPools genesis
   let network = sgNetworkId genesis

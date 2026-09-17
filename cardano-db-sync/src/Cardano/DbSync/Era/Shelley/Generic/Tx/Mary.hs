@@ -51,6 +51,7 @@ fromMaryTx (blkIndex, tx) =
     , txVotingProcedure = []
     , txProposalProcedure = []
     , txTreasuryDonation = mempty -- Mary does not support treasury donations
+    , txSubTransactions = [] -- no nested transactions before Dijkstra
     }
   where
     txBody :: Core.TxBody Core.TopTx MaryEra
