@@ -39,44 +39,34 @@ import Cardano.Db.Types (Ada (..), DbLovelace, DbM, dbLovelaceDecoder, lovelaceT
 -- DbTool Epcoh
 ------------------------------------------------------------------------------------------------------------
 
--- | Query delegation for specific address and epoch
-queryDelegationForEpochStmt :: HsqlStmt.Statement (Text.Text, Word64) (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
-queryDelegationForEpochStmt =
+-- | Query the stake delegated by a stake address in a specific epoch, and the pool it was
+-- delegated to. Reads 'epoch_stake' directly so the result does not depend on the 'epoch' view.
+queryEpochStakeForAddressStmt :: HsqlStmt.Statement (Id.StakeAddressId, Word64) (Maybe (DbLovelace, Id.PoolHashId))
+queryEpochStakeForAddressStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder =
       mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
+        [ fst >$< Id.idEncoder Id.getStakeAddressId
         , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
         ]
     decoder = HsqlD.rowMaybe $ do
-      addrId <- Id.idDecoder Id.StakeAddressId
-      endTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       poolId <- Id.idDecoder Id.PoolHashId
-      pure (addrId, endTime, amount, poolId)
-    epochTable = tableName (Proxy @SC.Epoch)
+      pure (amount, poolId)
     epochStakeTable = tableName (Proxy @SC.EpochStake)
-    stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT es.addr_id, ep.end_time, es.amount, es.pool_id"
-          , " FROM " <> epochTable <> " ep"
-          , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
-          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
-          , " WHERE saddr.view = $1"
-          , " AND es.epoch_no <= $2"
-          , " ORDER BY es.epoch_no DESC"
-          , " LIMIT 1"
+          [ "SELECT amount, pool_id"
+          , " FROM " <> epochStakeTable
+          , " WHERE addr_id = $1"
+          , " AND epoch_no = $2"
           ]
 
-queryDelegationForEpoch ::
-  Text.Text ->
-  Word64 ->
-  DbM (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
-queryDelegationForEpoch address epochNum =
-  runSession mkDbCallStack $ HsqlSes.statement (address, epochNum) queryDelegationForEpochStmt
+queryEpochStakeForAddress :: Id.StakeAddressId -> Word64 -> DbM (Maybe (DbLovelace, Id.PoolHashId))
+queryEpochStakeForAddress saId epochNum =
+  runSession mkDbCallStack $ HsqlSes.statement (saId, epochNum) queryEpochStakeForAddressStmt
 
 ------------------------------------------------------------------------------------------------------------
 
@@ -179,36 +169,6 @@ queryLatestMemberRewardEpochNo = do
   pure $ maybe 0 (\x -> if x >= 2 then x - 2 else 0) result
 
 --------------------------------------------------------------------------------
-
--- | Query reward amount for epoch and stake address
-queryRewardAmountStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe DbLovelace)
-queryRewardAmountStmt =
-  HsqlStmt.Statement sql encoder decoder True
-  where
-    encoder =
-      mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-        , snd >$< Id.idEncoder Id.getStakeAddressId
-        ]
-    decoder = HsqlD.rowMaybe dbLovelaceDecoder
-    epochTable = tableName (Proxy @SC.Epoch)
-    rewardTable = tableName (Proxy @SC.Reward)
-    stakeAddressTable = tableName (Proxy @SC.StakeAddress)
-    sql =
-      TextEnc.encodeUtf8 $
-        Text.concat
-          [ "SELECT reward.amount"
-          , " FROM " <> epochTable <> " ep"
-          , " INNER JOIN " <> rewardTable <> " reward ON ep.no = reward.earned_epoch"
-          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = reward.addr_id"
-          , " WHERE ep.no = $1"
-          , " AND saddr.id = $2"
-          , " ORDER BY ep.no ASC"
-          ]
-
-queryRewardAmount :: Word64 -> Id.StakeAddressId -> DbM (Maybe DbLovelace)
-queryRewardAmount epochNo saId =
-  runSession mkDbCallStack $ HsqlSes.statement (epochNo, saId) queryRewardAmountStmt
 
 ------------------------------------------------------------------------------------------------------------
 

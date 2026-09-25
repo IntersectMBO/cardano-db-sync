@@ -138,6 +138,27 @@ queryPoolHashId hash =
   runSession mkDbCallStack $ HsqlSes.statement hash queryPoolHashIdStmt
 
 -----------------------------------------------------------------------------------
+
+-- | Query the Bech32 encoded pool id (eg "pool1...") for a pool.
+queryPoolHashViewStmt :: HsqlStmt.Statement Id.PoolHashId (Maybe Text.Text)
+queryPoolHashViewStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    table = tableName (Proxy @SCP.PoolHash)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT view FROM " <> table
+          , " WHERE id = $1"
+          ]
+    encoder = Id.idEncoder Id.getPoolHashId
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.text)
+
+queryPoolHashView :: Id.PoolHashId -> DbM (Maybe Text.Text)
+queryPoolHashView poolId =
+  runSession mkDbCallStack $ HsqlSes.statement poolId queryPoolHashViewStmt
+
+-----------------------------------------------------------------------------------
 queryPoolHashIdExistsStmt :: HsqlStmt.Statement Id.PoolHashId Bool
 queryPoolHashIdExistsStmt =
   existsById

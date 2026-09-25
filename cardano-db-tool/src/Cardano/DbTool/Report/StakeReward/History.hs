@@ -75,8 +75,8 @@ data EpochReward = EpochReward
   , erEpochNo :: !Word64
   , erDate :: !(Maybe UTCTime)
   , erAddress :: !Text
-  , erPoolId :: !Word64
   , erPoolTicker :: !Text
+  , erPoolView :: !Text
   , erReward :: !DB.Ada
   , erDelegated :: !DB.Ada
   , erPercent :: !Double
@@ -104,16 +104,16 @@ queryHistoryStakeRewards address = do
       DB.DbM EpochReward
     queryReward (saId, en, date, DB.DbLovelace delegated, poolId) = do
       mReward <- DB.queryRewardForEpoch en saId poolId
-      mPoolTicker <- DB.queryPoolTicker poolId
-
+      mPoolTicker <- DB.queryPoolTickerForEpoch poolId en
+      mPoolView <- DB.queryPoolHashView poolId
       let reward = maybe 0 DB.unDbLovelace mReward
           poolTicker = fromMaybe "???" mPoolTicker
 
       pure $
         EpochReward
           { erAddressId = saId
-          , erPoolId = fromIntegral $ DB.getPoolHashId poolId
           , erPoolTicker = poolTicker
+          , erPoolView = maybe "???" shortenPoolId mPoolView
           , erEpochNo = en
           , erDate = date
           , erAddress = address
@@ -133,7 +133,7 @@ renderRewards saddr xs = do
       [ (AlignRight, "epoch")
       , (AlignLeft, "reward_date")
       , (AlignRight, "delegated")
-      , (AlignRight, "pool_id")
+      , (AlignLeft, "stake pool")
       , (AlignLeft, "ticker")
       , (AlignRight, "reward")
       , (AlignRight, "RoS (%pa)")
@@ -144,7 +144,7 @@ renderRewards saddr xs = do
       [ textShow (erEpochNo er)
       , maybe "-" formatReportTime (erDate er)
       , DB.renderAda (erDelegated er)
-      , textShow (erPoolId er)
+      , erPoolView er
       , erPoolTicker er
       , specialRenderAda (erReward er)
       , Text.pack (if erPercent er == 0.0 then "0.0" else printf "%.3f" (erPercent er))

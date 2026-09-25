@@ -7,6 +7,7 @@ module Cardano.DbTool.Report.Display (
   renderTable,
   rightPad,
   separator,
+  shortenPoolId,
 ) where
 
 import qualified Data.List as List
@@ -39,6 +40,12 @@ renderTable cols rows =
     headerLine = Text.intercalate separator (zipWith3 pad aligns widths headers)
     underline = Text.intercalate "-+-" (map (`Text.replicate` "-") widths)
     renderRow = Text.intercalate separator . zipWith3 pad aligns widths
+
+-- | Shorten a Bech32 encoded pool id to "pool..." followed by its last 8 characters.
+shortenPoolId :: Text -> Text
+shortenPoolId poolId
+  | Text.length poolId <= 15 = poolId
+  | otherwise = "pool..." <> Text.takeEnd 8 poolId
 
 formatReportTime :: UTCTime -> Text
 formatReportTime = Text.pack . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC"
