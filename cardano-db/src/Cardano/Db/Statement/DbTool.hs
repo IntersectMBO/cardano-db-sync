@@ -212,40 +212,74 @@ queryRewardAmount epochNo saId =
 
 ------------------------------------------------------------------------------------------------------------
 
--- | Query delegation history for stake address
-queryDelegationHistoryStmt :: HsqlStmt.Statement (Text.Text, Word64) [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
+-- | Query the epoch view enabled flag. Returns 'Nothing' if the 'epoch_sync_enabled' table has
+-- no row (cardano-db-sync has not yet initialised it).
+queryEpochSyncEnabledStmt :: HsqlStmt.Statement () (Maybe Bool)
+queryEpochSyncEnabledStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.bool)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT enabled FROM epoch_sync_enabled"
+          , " WHERE singleton = TRUE"
+          ]
+
+queryEpochSyncEnabled :: DbM (Maybe Bool)
+queryEpochSyncEnabled =
+  runSession mkDbCallStack $ HsqlSes.statement () queryEpochSyncEnabledStmt
+
+------------------------------------------------------------------------------------------------------------
+
+-- | Count the rows in the 'epoch_finalized' table.
+queryEpochFinalizedCountStmt :: HsqlStmt.Statement () Word64
+queryEpochFinalizedCountStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    sql = "SELECT COUNT(*) FROM epoch_finalized"
+
+queryEpochFinalizedCount :: DbM Word64
+queryEpochFinalizedCount =
+  runSession mkDbCallStack $ HsqlSes.statement () queryEpochFinalizedCountStmt
+
+------------------------------------------------------------------------------------------------------------
+
+-- | Query delegation history for stake address, ordered by epoch.
+-- Reads 'epoch_finalized' directly rather than the 'epoch' view, and uses a LEFT JOIN so that
+-- delegations are still returned (with no end time) if an epoch row is missing.
+queryDelegationHistoryStmt :: HsqlStmt.Statement (Id.StakeAddressId, Word64) [(Id.StakeAddressId, Word64, Maybe UTCTime, DbLovelace, Id.PoolHashId)]
 queryDelegationHistoryStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder =
       mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
+        [ fst >$< Id.idEncoder Id.getStakeAddressId
         , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
         ]
     decoder = HsqlD.rowList $ do
       addrId <- Id.idDecoder Id.StakeAddressId
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      endTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
+      endTime <- HsqlD.column (HsqlD.nullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       poolId <- Id.idDecoder Id.PoolHashId
       pure (addrId, epochNo, endTime, amount, poolId)
-    epochTable = tableName (Proxy @SC.Epoch)
     epochStakeTable = tableName (Proxy @SC.EpochStake)
-    stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT es.addr_id, es.epoch_no, ep.end_time, es.amount, es.pool_id"
-          , " FROM " <> epochTable <> " ep"
-          , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
-          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
-          , " WHERE saddr.view = $1"
+          [ "SELECT es.addr_id, es.epoch_no, ef.end_time, es.amount, es.pool_id"
+          , " FROM " <> epochStakeTable <> " es"
+          , " LEFT JOIN epoch_finalized ef ON ef.no = es.epoch_no"
+          , " WHERE es.addr_id = $1"
           , " AND es.epoch_no <= $2"
+          , " ORDER BY es.epoch_no ASC"
           ]
 
-queryDelegationHistory :: Text.Text -> Word64 -> DbM [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
-queryDelegationHistory address maxEpoch =
-  runSession mkDbCallStack $ HsqlSes.statement (address, maxEpoch) queryDelegationHistoryStmt
+queryDelegationHistory :: Id.StakeAddressId -> Word64 -> DbM [(Id.StakeAddressId, Word64, Maybe UTCTime, DbLovelace, Id.PoolHashId)]
+queryDelegationHistory saId maxEpoch =
+  runSession mkDbCallStack $ HsqlSes.statement (saId, maxEpoch) queryDelegationHistoryStmt
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool AdaPots
