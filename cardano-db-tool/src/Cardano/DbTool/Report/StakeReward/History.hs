@@ -113,7 +113,7 @@ queryHistoryStakeRewards address = do
         EpochReward
           { erAddressId = saId
           , erPoolTicker = poolTicker
-          , erPoolView = maybe "???" shortenPoolId mPoolView
+          , erPoolView = maybe "???" shortenBech32 mPoolView
           , erEpochNo = en
           , erDate = date
           , erAddress = address

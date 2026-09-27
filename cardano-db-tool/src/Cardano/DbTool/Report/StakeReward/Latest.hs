@@ -102,7 +102,7 @@ queryReward en address saId (DB.DbLovelace delegated, poolId) = do
     EpochReward
       { erAddressId = saId
       , erPoolTicker = poolTicker
-      , erPoolView = maybe "???" shortenPoolId mPoolView
+      , erPoolView = maybe "???" shortenBech32 mPoolView
       , erEpochNo = en
       , erAddress = address
       , erReward = DB.word64ToAda reward

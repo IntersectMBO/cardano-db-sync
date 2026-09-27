@@ -693,6 +693,85 @@ queryOutputTransactionsAddress saId =
   runSession mkDbCallStack $ HsqlSes.statement saId queryOutputTransactionsAddressStmt
 
 --------------------------------------------------------------------------------
+
+-- | Whether to query the multi-assets received by (sent to) a stake address, or spent from it.
+data AssetFlow = AssetsReceived | AssetsSpent
+
+-- | Query the multi-assets received by, or spent from, a stake address, summed per transaction
+-- and asset. Each result is (tx hash, asset fingerprint, asset name, quantity). The joins mirror
+-- those of the input/output transaction queries above, so the results match their transactions.
+queryAssetTransactionsStmt ::
+  TxOutVariantType ->
+  AssetFlow ->
+  HsqlStmt.Statement Id.StakeAddressId [(ByteString, Text.Text, ByteString, Integer)]
+queryAssetTransactionsStmt txOutVariantType flow =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    encoder = Id.idEncoder Id.getStakeAddressId
+    decoder = HsqlD.rowList $ do
+      hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      fingerprint <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
+      name <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      quantity <- HsqlD.column (HsqlD.nonNullable (truncate <$> HsqlD.numeric))
+      pure (hash, fingerprint, name, quantity)
+    txTable = tableName (Proxy @SVC.Tx)
+    txInTable = tableName (Proxy @SVC.TxIn)
+    multiAssetTable = tableName (Proxy @SC.MultiAsset)
+
+    -- The tx_out and ma_tx_out tables for the variant, and the condition selecting the
+    -- tx_out rows that belong to the stake address.
+    (txOutTable, maTxOutTable, addressJoin, stakeAddressColumn) =
+      case txOutVariantType of
+        TxOutVariantCore ->
+          ( tableName (Proxy @SVC.TxOutCore)
+          , tableName (Proxy @SVC.MaTxOutCore)
+          , ""
+          , "txo.stake_address_id"
+          )
+        TxOutVariantAddress ->
+          ( tableName (Proxy @SVA.TxOutAddress)
+          , tableName (Proxy @SVA.MaTxOutAddress)
+          , " INNER JOIN " <> tableName (Proxy @SVA.Address) <> " addr ON txo.address_id = addr.id"
+          , "addr.stake_address_id"
+          )
+
+    -- The transaction the assets are attributed to: the one that created the tx_out
+    -- (received), or the one that spent it (spent).
+    txJoin =
+      case flow of
+        AssetsReceived ->
+          " INNER JOIN " <> txTable <> " tx ON txo.tx_id = tx.id"
+        AssetsSpent ->
+          Text.concat
+            [ " INNER JOIN " <> txInTable <> " txin"
+            , " ON txin.tx_out_id = txo.tx_id AND txin.tx_out_index = txo.index"
+            , " INNER JOIN " <> txTable <> " tx ON tx.id = txin.tx_in_id"
+            ]
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT tx.hash, ma.fingerprint, ma.name, SUM(mto.quantity)"
+          , " FROM " <> txOutTable <> " txo"
+          , addressJoin
+          , txJoin
+          , " INNER JOIN " <> maTxOutTable <> " mto ON mto.tx_out_id = txo.id"
+          , " INNER JOIN " <> multiAssetTable <> " ma ON ma.id = mto.ident"
+          , " WHERE " <> stakeAddressColumn <> " = $1"
+          , " GROUP BY tx.hash, ma.id, ma.fingerprint, ma.name"
+          ]
+
+queryReceivedAssetTransactions :: TxOutVariantType -> Id.StakeAddressId -> DbM [(ByteString, Text.Text, ByteString, Integer)]
+queryReceivedAssetTransactions txOutVariantType saId =
+  runSession mkDbCallStack $
+    HsqlSes.statement saId (queryAssetTransactionsStmt txOutVariantType AssetsReceived)
+
+querySpentAssetTransactions :: TxOutVariantType -> Id.StakeAddressId -> DbM [(ByteString, Text.Text, ByteString, Integer)]
+querySpentAssetTransactions txOutVariantType saId =
+  runSession mkDbCallStack $
+    HsqlSes.statement saId (queryAssetTransactionsStmt txOutVariantType AssetsSpent)
+
+--------------------------------------------------------------------------------
 -- Cardano DbTool - Balance
 --------------------------------------------------------------------------------
 

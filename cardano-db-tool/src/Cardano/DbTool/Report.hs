@@ -21,7 +21,7 @@ data Report
   | ReportBalance [Text]
   | ReportEpochRewards Word64 [Text]
   | ReportLatestRewards [Text]
-  | ReportTransactions [Text]
+  | ReportTransactions !Bool [Text]
 
 runReport :: Report -> TxOutVariantType -> IO ()
 runReport report txOutTableType = do
@@ -31,4 +31,4 @@ runReport report txOutTableType = do
     ReportBalance sas -> reportBalance txOutTableType sas
     ReportEpochRewards ep sas -> reportEpochStakeRewards ep sas
     ReportLatestRewards sas -> reportLatestStakeRewards sas
-    ReportTransactions sas -> reportTransactions txOutTableType sas
+    ReportTransactions includeAssets sas -> reportTransactions txOutTableType includeAssets sas

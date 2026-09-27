@@ -297,7 +297,7 @@ pReport =
             (Opt.progDesc "Rewards report")
       , Opt.command "transactions" $
           Opt.info
-            (ReportTransactions <$> pStakeAddress)
+            (ReportTransactions <$> pIncludeAssets <*> pStakeAddress)
             (Opt.progDesc "Report the transaction history for a given stake address (or addresses)")
       ]
   where
@@ -318,6 +318,13 @@ pReport =
                 (ReportAllRewards <$> pStakeAddress)
                 (Opt.progDesc "Report the reward history for a given stake address (or addresses)")
           ]
+
+    pIncludeAssets :: Parser Bool
+    pIncludeAssets =
+      Opt.switch
+        ( Opt.long "include-assets"
+            <> Opt.help "Also report the multi-asset (native token) movements of each transaction"
+        )
 
     pStakeAddress :: Parser [Text]
     pStakeAddress =
