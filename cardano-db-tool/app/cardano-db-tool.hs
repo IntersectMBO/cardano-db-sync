@@ -289,7 +289,7 @@ pReport =
     mconcat
       [ Opt.command "balance" $
           Opt.info
-            (ReportBalance <$> pIncludeAssets <*> pStakeAddress)
+            (ReportBalance <$> pAssetFilter <*> pStakeAddress)
             (Opt.progDesc "Report the balance of a given stake address (or addresses)")
       , Opt.command "rewards" $
           Opt.info
@@ -297,7 +297,7 @@ pReport =
             (Opt.progDesc "Rewards report")
       , Opt.command "transactions" $
           Opt.info
-            (ReportTransactions <$> pIncludeAssets <*> pStakeAddress)
+            (ReportTransactions <$> pAssetFilter <*> pStakeAddress)
             (Opt.progDesc "Report the transaction history for a given stake address (or addresses)")
       ]
   where
@@ -319,12 +319,19 @@ pReport =
                 (Opt.progDesc "Report the reward history for a given stake address (or addresses)")
           ]
 
-    pIncludeAssets :: Parser Bool
-    pIncludeAssets =
-      Opt.switch
-        ( Opt.long "include-assets"
-            <> Opt.help "Also report multi-asset (native token) amounts"
+    pAssetFilter :: Parser AssetFilter
+    pAssetFilter =
+      Opt.flag'
+        AllAssets
+        ( Opt.long "include-all-assets"
+            <> Opt.help "Also report the amounts of all multi-assets (native tokens)"
         )
+        <|> Opt.flag'
+          KnownAssets
+          ( Opt.long "include-known-assets"
+              <> Opt.help "Also report the amounts of the known multi-assets (tokens with known decimals)"
+          )
+        <|> pure NoAssets
 
     pStakeAddress :: Parser [Text]
     pStakeAddress =

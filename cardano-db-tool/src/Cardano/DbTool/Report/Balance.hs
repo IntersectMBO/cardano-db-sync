@@ -16,12 +16,12 @@ import Data.Ord (Down (..))
 import Data.Text (Text)
 import qualified Data.Text.IO as Text
 
--- | Report the balance of each stake address. If 'includeAssets' is set, the multi-asset
+-- | Report the balance of each stake address. Unless 'assetFilter' is 'NoAssets', the multi-asset
 -- balances are also reported.
-reportBalance :: TxOutVariantType -> Bool -> [Text] -> IO ()
-reportBalance txOutVariantType includeAssets saddr = do
-  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM (queryStakeAddressBalance txOutVariantType includeAssets) saddr)
-  renderBalances includeAssets xs
+reportBalance :: TxOutVariantType -> AssetFilter -> [Text] -> IO ()
+reportBalance txOutVariantType assetFilter saddr = do
+  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM (queryStakeAddressBalance txOutVariantType assetFilter) saddr)
+  renderBalances (includesAssets assetFilter) xs
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -38,8 +38,8 @@ data Balance = Balance
   , balAssets :: ![AssetQuantity]
   }
 
-queryStakeAddressBalance :: TxOutVariantType -> Bool -> Text -> DB.DbM (Maybe Balance)
-queryStakeAddressBalance txOutVariantType includeAssets address = do
+queryStakeAddressBalance :: TxOutVariantType -> AssetFilter -> Text -> DB.DbM (Maybe Balance)
+queryStakeAddressBalance txOutVariantType assetFilter address = do
   mSaId <- DB.queryStakeAddressId address
   case mSaId of
     Nothing -> pure Nothing
@@ -53,8 +53,8 @@ queryStakeAddressBalance txOutVariantType includeAssets address = do
       rewards <- DB.queryRewardsSum saId currentEpoch
       withdrawals <- DB.queryWithdrawalsSum saId
       assets <-
-        if includeAssets
-          then queryAssetBalances txOutVariantType saId
+        if includesAssets assetFilter
+          then filterAssets assetFilter <$> queryAssetBalances txOutVariantType saId
           else pure []
       pure $
         Balance
@@ -109,11 +109,12 @@ renderBalances includeAssets xs = do
     totalRows :: [[Text]]
     totalRows = balanceRows "total" (sum $ map balTotal xs) (totalAssets allAssets)
 
-    -- A row for the ADA balance, followed by a row for each asset balance.
+    -- A row for the ADA balance, followed by a row for each asset balance, with the known
+    -- assets first and then by amount (biggest first).
     balanceRows :: Text -> Ada -> [AssetQuantity] -> [[Text]]
     balanceRows label ada assets =
       ([label, renderAda ada] ++ ["ADA" | includeAssets])
-        : map (\aq -> ["", renderAssetQuantity aq, renderAssetName aq]) assets
+        : map (\aq -> ["", renderAssetQuantity aq, renderAssetName aq]) (sortAssetsByAmount assets)
 
     totalAssets :: [AssetQuantity] -> [AssetQuantity]
     totalAssets assets =

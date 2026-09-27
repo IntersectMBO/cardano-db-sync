@@ -35,14 +35,14 @@ import Data.Time.Clock (UTCTime)
 
 {- HLINT ignore "Redundant ^." -}
 
--- | Report the transactions for each stake address. If 'includeAssets' is set, the net
+-- | Report the transactions for each stake address. Unless 'assetFilter' is 'NoAssets', the net
 -- multi-asset movements of each transaction are also reported.
-reportTransactions :: TxOutVariantType -> Bool -> [Text] -> IO ()
-reportTransactions txOutVariantType includeAssets addrs =
+reportTransactions :: TxOutVariantType -> AssetFilter -> [Text] -> IO ()
+reportTransactions txOutVariantType assetFilter addrs =
   forM_ addrs $ \saddr -> do
     Text.putStrLn $ "\nTransactions for: " <> saddr <> "\n"
-    xs <- runDbStandaloneSilent (queryStakeAddressTransactions txOutVariantType includeAssets saddr)
-    renderTransactions includeAssets xs
+    xs <- runDbStandaloneSilent (queryStakeAddressTransactions txOutVariantType assetFilter saddr)
+    renderTransactions (includesAssets assetFilter) xs
 
 -- -------------------------------------------------------------------------------------------------
 -- This command is designed to emulate the output of the script:
@@ -69,8 +69,8 @@ instance Ord Transaction where
       GT -> GT
       EQ -> compare (trDirection tra) (trDirection trb)
 
-queryStakeAddressTransactions :: TxOutVariantType -> Bool -> Text -> DB.DbM [Transaction]
-queryStakeAddressTransactions txOutVariantType includeAssets address = do
+queryStakeAddressTransactions :: TxOutVariantType -> AssetFilter -> Text -> DB.DbM [Transaction]
+queryStakeAddressTransactions txOutVariantType assetFilter address = do
   mSaId <- DB.queryStakeAddressId address
   case mSaId of
     Nothing -> pure []
@@ -81,10 +81,11 @@ queryStakeAddressTransactions txOutVariantType includeAssets address = do
       inputs <- queryInputs txOutVariantType saId
       outputs <- queryOutputs txOutVariantType saId
       let txs = coalesceTxs (inputs ++ outputs)
-      if includeAssets
+      if includesAssets assetFilter
         then do
           assets <- queryAssetMovements txOutVariantType saId
-          pure $ map (\tr -> tr {trAssets = Map.findWithDefault [] (trHash tr) assets}) txs
+          let txAssets tr = filterAssets assetFilter $ Map.findWithDefault [] (trHash tr) assets
+          pure $ map (\tr -> tr {trAssets = txAssets tr}) txs
         else pure txs
 
 -- | Query the net multi-asset movements of each transaction, keyed by transaction hash.

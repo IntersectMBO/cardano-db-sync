@@ -2,13 +2,17 @@
 
 -- | Multi-asset (native token) support shared by the reports.
 module Cardano.DbTool.Report.Asset (
+  AssetFilter (..),
   AssetQuantity (..),
+  filterAssets,
   hasKnownDecimals,
+  includesAssets,
   knownAssetDecimals,
   queryAssetBalances,
   rawQuantityNote,
   renderAssetName,
   renderAssetQuantity,
+  sortAssetsByAmount,
 ) where
 
 import Cardano.Db (TxOutVariantType)
@@ -17,11 +21,35 @@ import Cardano.DbTool.Report.Display (shortenBech32)
 import Cardano.Prelude (textShow)
 import Data.ByteString (ByteString)
 import qualified Data.Char as Char
+import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Ord (Down (..))
 import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+
+-- | Which multi-assets (native tokens) a report includes.
+data AssetFilter
+  = -- | No multi-assets, only ADA.
+    NoAssets
+  | -- | Only the tokens listed in 'knownAssetDecimals'.
+    KnownAssets
+  | -- | All multi-assets.
+    AllAssets
+  deriving (Eq)
+
+-- | Whether a report includes any multi-assets (and so an 'asset' column).
+includesAssets :: AssetFilter -> Bool
+includesAssets assetFilter = assetFilter /= NoAssets
+
+-- | Keep the asset quantities selected by the filter.
+filterAssets :: AssetFilter -> [AssetQuantity] -> [AssetQuantity]
+filterAssets assetFilter =
+  case assetFilter of
+    NoAssets -> const []
+    KnownAssets -> filter hasKnownDecimals
+    AllAssets -> id
 
 -- | A quantity of a multi-asset: the net movement in a transaction (positive if received by the
 -- stake address, negative if sent from it) or the balance held by a stake address.
@@ -66,6 +94,18 @@ renderAssetQuantity aq =
   where
     quantity = abs (aqQuantity aq)
     sign = if aqQuantity aq < 0 then "-" else ""
+
+-- | Sort asset quantities with the known tokens (those in 'knownAssetDecimals') first, and within
+-- each group from the biggest amount to the smallest. Known token amounts are compared with their
+-- decimal places applied (as they are displayed), unknown token amounts as raw quantities.
+sortAssetsByAmount :: [AssetQuantity] -> [AssetQuantity]
+sortAssetsByAmount =
+  List.sortOn (\aq -> (not (hasKnownDecimals aq), Down (displayedAmount aq), aqFingerprint aq))
+  where
+    displayedAmount :: AssetQuantity -> Rational
+    displayedAmount aq =
+      fromIntegral (aqQuantity aq)
+        / 10 ^ Map.findWithDefault 0 (aqFingerprint aq) knownAssetDecimals
 
 -- | The shortened asset fingerprint, followed by the asset name if it is printable text.
 renderAssetName :: AssetQuantity -> Text
