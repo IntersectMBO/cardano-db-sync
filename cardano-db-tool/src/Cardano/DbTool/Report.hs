@@ -18,7 +18,7 @@ import Data.Word (Word64)
 
 data Report
   = ReportAllRewards [Text]
-  | ReportBalance [Text]
+  | ReportBalance !Bool [Text]
   | ReportEpochRewards Word64 [Text]
   | ReportLatestRewards [Text]
   | ReportTransactions !Bool [Text]
@@ -28,7 +28,7 @@ runReport report txOutTableType = do
   assertFullySynced
   case report of
     ReportAllRewards sas -> mapM_ reportStakeRewardHistory sas
-    ReportBalance sas -> reportBalance txOutTableType sas
+    ReportBalance includeAssets sas -> reportBalance txOutTableType includeAssets sas
     ReportEpochRewards ep sas -> reportEpochStakeRewards ep sas
     ReportLatestRewards sas -> reportLatestStakeRewards sas
     ReportTransactions includeAssets sas -> reportTransactions txOutTableType includeAssets sas

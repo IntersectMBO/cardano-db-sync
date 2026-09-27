@@ -6,17 +6,22 @@ module Cardano.DbTool.Report.Balance (
 
 import Cardano.Db
 import qualified Cardano.Db as DB
+import Cardano.DbTool.Report.Asset
 import Cardano.DbTool.Report.Display
+import Control.Monad (unless)
 import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import qualified Data.Text.IO as Text
 
-reportBalance :: TxOutVariantType -> [Text] -> IO ()
-reportBalance txOutVariantType saddr = do
-  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM (queryStakeAddressBalance txOutVariantType) saddr)
-  renderBalances xs
+-- | Report the balance of each stake address. If 'includeAssets' is set, the multi-asset
+-- balances are also reported.
+reportBalance :: TxOutVariantType -> Bool -> [Text] -> IO ()
+reportBalance txOutVariantType includeAssets saddr = do
+  xs <- catMaybes <$> DB.runDbStandaloneSilent (mapM (queryStakeAddressBalance txOutVariantType includeAssets) saddr)
+  renderBalances includeAssets xs
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -30,10 +35,11 @@ data Balance = Balance
   , balRewards :: !Ada
   , balWithdrawals :: !Ada
   , balTotal :: !Ada
+  , balAssets :: ![AssetQuantity]
   }
 
-queryStakeAddressBalance :: TxOutVariantType -> Text -> DB.DbM (Maybe Balance)
-queryStakeAddressBalance txOutVariantType address = do
+queryStakeAddressBalance :: TxOutVariantType -> Bool -> Text -> DB.DbM (Maybe Balance)
+queryStakeAddressBalance txOutVariantType includeAssets address = do
   mSaId <- DB.queryStakeAddressId address
   case mSaId of
     Nothing -> pure Nothing
@@ -46,6 +52,10 @@ queryStakeAddressBalance txOutVariantType address = do
       currentEpoch <- DB.queryLatestEpochNoFromBlock
       rewards <- DB.queryRewardsSum saId currentEpoch
       withdrawals <- DB.queryWithdrawalsSum saId
+      assets <-
+        if includeAssets
+          then queryAssetBalances txOutVariantType saId
+          else pure []
       pure $
         Balance
           { balAddressId = saId
@@ -57,6 +67,7 @@ queryStakeAddressBalance txOutVariantType address = do
           , balRewards = rewards
           , balWithdrawals = withdrawals
           , balTotal = inputs - outputs + rewards - withdrawals
+          , balAssets = assets
           }
 
     queryInputs :: DB.StakeAddressId -> DB.DbM Ada
@@ -69,33 +80,52 @@ queryStakeAddressBalance txOutVariantType address = do
       TxOutVariantCore -> DB.queryOutputsCore saId
       TxOutVariantAddress -> DB.queryOutputsAddress saId
 
-renderBalances :: [Balance] -> IO ()
-renderBalances xs = do
-  mapM_ Text.putStrLn (withTotalDivider (renderTable cols (map toRow sorted ++ [totalRow])))
+-- | Render the balances, followed by the totals. If 'includeAssets' is set, an 'asset' column is
+-- added and each ADA balance is followed by a row for each multi-asset balance.
+renderBalances :: Bool -> [Balance] -> IO ()
+renderBalances includeAssets xs = do
+  mapM_ Text.putStrLn (withTotalDivider (renderTable cols (bodyRows ++ totalRows)))
   putStrLn ""
+  unless (all hasKnownDecimals allAssets) $
+    Text.putStrLn $
+      rawQuantityNote <> "\n"
   where
     sorted = List.sortOn (Down . balTotal) xs
+
+    allAssets :: [AssetQuantity]
+    allAssets = concatMap balAssets xs
 
     cols :: [(Align, Text)]
     cols =
       [ (AlignLeft, "stake_address")
       , (AlignRight, "balance")
       ]
+        ++ [(AlignLeft, "asset") | includeAssets]
 
-    toRow :: Balance -> [Text]
-    toRow b = [balAddress b, renderAda (balTotal b)]
+    bodyRows :: [[Text]]
+    bodyRows = concatMap (\b -> balanceRows (balAddress b) (balTotal b) (balAssets b)) sorted
 
-    totalRow :: [Text]
-    totalRow = ["total", renderAda . sum $ map balTotal xs]
+    -- The total ADA balance, and the total of each asset across all the stake addresses.
+    totalRows :: [[Text]]
+    totalRows = balanceRows "total" (sum $ map balTotal xs) (totalAssets allAssets)
 
-    -- Set the total row off with a divider, reusing the header underline.
+    -- A row for the ADA balance, followed by a row for each asset balance.
+    balanceRows :: Text -> Ada -> [AssetQuantity] -> [[Text]]
+    balanceRows label ada assets =
+      ([label, renderAda ada] ++ ["ADA" | includeAssets])
+        : map (\aq -> ["", renderAssetQuantity aq, renderAssetName aq]) assets
+
+    totalAssets :: [AssetQuantity] -> [AssetQuantity]
+    totalAssets assets =
+      [ AssetQuantity fingerprint name quantity
+      | ((fingerprint, name), quantity) <-
+          Map.toList $
+            Map.fromListWith (+) [((aqFingerprint aq, aqName aq), aqQuantity aq) | aq <- assets]
+      ]
+
+    -- Set the total rows off with a divider, reusing the header underline.
     withTotalDivider :: [Text] -> [Text]
     withTotalDivider ls = case ls of
-      (header : divider : body) -> header : divider : dividerBeforeLast divider body
+      (header : divider : body) ->
+        header : divider : take (length bodyRows) body ++ [divider] ++ drop (length bodyRows) body
       _ -> ls
-
-    dividerBeforeLast :: Text -> [Text] -> [Text]
-    dividerBeforeLast divider rows = case rows of
-      [] -> []
-      [final] -> [divider, final]
-      (row : rest) -> row : dividerBeforeLast divider rest

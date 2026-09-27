@@ -17,19 +17,18 @@ module Cardano.DbTool.Report.Transactions (
 
 import Cardano.Db
 import qualified Cardano.Db as DB
+import Cardano.DbTool.Report.Asset
 import Cardano.DbTool.Report.Display
 import Cardano.Prelude (textShow)
 import Control.Monad (forM_, unless)
 import qualified Data.ByteString.Base16 as Base16
 import Data.ByteString.Char8 (ByteString)
-import qualified Data.Char as Char
 import qualified Data.List as List
 import qualified Data.List.Extra as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import Data.Time.Clock (UTCTime)
@@ -58,16 +57,8 @@ data Transaction = Transaction
   , trTime :: !UTCTime
   , trDirection :: !Direction
   , trAmount :: !Ada
-  , trAssets :: ![AssetMovement]
-  }
-  deriving (Eq)
-
--- | The net movement of a multi-asset in a transaction.
-data AssetMovement = AssetMovement
-  { amFingerprint :: !Text
-  , amName :: !ByteString
-  , amQuantity :: !Integer
-  -- ^ Positive if received by the stake address, negative if sent from it.
+  , trAssets :: ![AssetQuantity]
+  -- ^ The net movement of each multi-asset in the transaction.
   }
   deriving (Eq)
 
@@ -98,7 +89,7 @@ queryStakeAddressTransactions txOutVariantType includeAssets address = do
 
 -- | Query the net multi-asset movements of each transaction, keyed by transaction hash.
 -- Assets whose net movement in a transaction is zero (eg returned as change) are omitted.
-queryAssetMovements :: TxOutVariantType -> DB.StakeAddressId -> DB.DbM (Map Text [AssetMovement])
+queryAssetMovements :: TxOutVariantType -> DB.StakeAddressId -> DB.DbM (Map Text [AssetQuantity])
 queryAssetMovements txOutVariantType saId = do
   received <- DB.queryReceivedAssetTransactions txOutVariantType saId
   spent <- DB.querySpentAssetTransactions txOutVariantType saId
@@ -108,7 +99,7 @@ queryAssetMovements txOutVariantType saId = do
   pure $
     Map.fromListWith
       (flip (++))
-      [ (hash, [AssetMovement fingerprint name quantity])
+      [ (hash, [AssetQuantity fingerprint name quantity])
       | ((hash, fingerprint, name), quantity) <- Map.toList netQuantities
       , quantity /= 0
       ]
@@ -223,7 +214,8 @@ renderTransactions includeAssets xs = do
   mapM_ Text.putStrLn (renderTable cols (concatMap toRows xs))
   putStrLn ""
   unless (all (all hasKnownDecimals . trAssets) xs) $
-    putStrLn "Asset quantities are raw on-chain amounts (token decimals are not applied) unless the token's decimals are known.\n"
+    Text.putStrLn $
+      rawQuantityNote <> "\n"
   where
     cols :: [(Align, Text)]
     cols =
@@ -246,46 +238,11 @@ renderTransactions includeAssets xs = do
       )
         : map assetRow (trAssets tr)
 
-    assetRow :: AssetMovement -> [Text]
-    assetRow am =
+    assetRow :: AssetQuantity -> [Text]
+    assetRow aq =
       [ ""
       , ""
-      , textShow (if amQuantity am < 0 then Outgoing else Incoming)
-      , renderAssetQuantity am
-      , renderAssetName am
+      , textShow (if aqQuantity aq < 0 then Outgoing else Incoming)
+      , renderAssetQuantity aq {aqQuantity = abs (aqQuantity aq)}
+      , renderAssetName aq
       ]
-
--- | The number of decimal places of known tokens, keyed by asset fingerprint. Token decimals are
--- not recorded on chain (they are published off-chain by the token issuer), so they are listed
--- here for the tokens of interest. Quantities of other tokens are shown as raw on-chain amounts.
-knownAssetDecimals :: Map Text Int
-knownAssetDecimals =
-  Map.fromList
-    [ ("asset1wd3llgkhsw6etxf2yca6cgk9ssrpva3wf0pq9a", 6) -- NIGHT
-    , ("asset16fq594uun90f2jajmecjcdt4jnsnq7r3jdqsw5", 6) -- USDA
-    ]
-
-hasKnownDecimals :: AssetMovement -> Bool
-hasKnownDecimals am = Map.member (amFingerprint am) knownAssetDecimals
-
--- | The absolute quantity of an asset movement, with the token's decimal places applied if they
--- are known, eg 1123456 is rendered as "1.123456" for a token with 6 decimal places.
-renderAssetQuantity :: AssetMovement -> Text
-renderAssetQuantity am =
-  case Map.lookup (amFingerprint am) knownAssetDecimals of
-    Just decimals
-      | decimals > 0 ->
-          let (whole, frac) = quantity `divMod` (10 ^ decimals)
-           in textShow whole <> "." <> Text.justifyRight decimals '0' (textShow frac)
-    _otherwise -> textShow quantity
-  where
-    quantity = abs (amQuantity am)
-
--- | The shortened asset fingerprint, followed by the asset name if it is printable text.
-renderAssetName :: AssetMovement -> Text
-renderAssetName am =
-  case Text.decodeUtf8' (amName am) of
-    Right name
-      | not (Text.null name) && Text.all Char.isPrint name ->
-          shortenBech32 (amFingerprint am) <> " " <> name
-    _otherwise -> shortenBech32 (amFingerprint am)

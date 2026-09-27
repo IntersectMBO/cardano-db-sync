@@ -289,7 +289,7 @@ pReport =
     mconcat
       [ Opt.command "balance" $
           Opt.info
-            (ReportBalance <$> pStakeAddress)
+            (ReportBalance <$> pIncludeAssets <*> pStakeAddress)
             (Opt.progDesc "Report the balance of a given stake address (or addresses)")
       , Opt.command "rewards" $
           Opt.info
@@ -323,7 +323,7 @@ pReport =
     pIncludeAssets =
       Opt.switch
         ( Opt.long "include-assets"
-            <> Opt.help "Also report the multi-asset (native token) movements of each transaction"
+            <> Opt.help "Also report multi-asset (native token) amounts"
         )
 
     pStakeAddress :: Parser [Text]
