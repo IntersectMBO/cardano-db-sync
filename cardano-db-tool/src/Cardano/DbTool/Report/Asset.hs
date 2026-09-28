@@ -7,7 +7,7 @@ module Cardano.DbTool.Report.Asset (
   filterAssets,
   hasKnownDecimals,
   includesAssets,
-  knownAssetDecimals,
+  knownAssets,
   queryAssetBalances,
   rawQuantityNote,
   renderAssetName,
@@ -24,6 +24,7 @@ import qualified Data.Char as Char
 import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -33,7 +34,7 @@ import qualified Data.Text.Encoding as Text
 data AssetFilter
   = -- | No multi-assets, only ADA.
     NoAssets
-  | -- | Only the tokens listed in 'knownAssetDecimals'.
+  | -- | Only the tokens listed in 'knownAssets'.
     KnownAssets
   | -- | All multi-assets.
     AllAssets
@@ -60,20 +61,26 @@ data AssetQuantity = AssetQuantity
   }
   deriving (Eq)
 
--- | The number of decimal places of known tokens, keyed by asset fingerprint. Token decimals are
--- not recorded on chain (they are published off-chain by the token issuer), so they are listed
--- here for the tokens of interest. Quantities of other tokens are shown as raw on-chain amounts.
-knownAssetDecimals :: Map Text Int
-knownAssetDecimals =
+-- | The tokens of interest, keyed by asset fingerprint, with the name to display for each and
+-- its number of decimal places. Token decimals are not recorded on chain (they are published
+-- off-chain by the token issuer), and the on-chain asset names are not always the names the
+-- tokens are known by, so both are listed here. Other tokens are shown with their on-chain name
+-- and raw on-chain quantity.
+knownAssets :: Map Text (Text, Int)
+knownAssets =
   Map.fromList
-    [ ("asset1wd3llgkhsw6etxf2yca6cgk9ssrpva3wf0pq9a", 6) -- NIGHT
-    , ("asset16fq594uun90f2jajmecjcdt4jnsnq7r3jdqsw5", 6) -- USDA
-    , ("asset15f3ymkjafxxeunv5gtdl54g5qs8ty9k84tq94x", 6) -- DJED
-    , ("asset12ffdj8kk2w485sr7a5ekmjjdyecz8ps2cm5zed", 6) -- USDM
+    [ ("asset1wd3llgkhsw6etxf2yca6cgk9ssrpva3wf0pq9a", ("NIGHT", 6))
+    , ("asset16fq594uun90f2jajmecjcdt4jnsnq7r3jdqsw5", ("USDA", 6))
+    , ("asset15f3ymkjafxxeunv5gtdl54g5qs8ty9k84tq94x", ("DJED", 6))
+    , ("asset12ffdj8kk2w485sr7a5ekmjjdyecz8ps2cm5zed", ("USDM", 6))
     ]
 
 hasKnownDecimals :: AssetQuantity -> Bool
-hasKnownDecimals aq = Map.member (aqFingerprint aq) knownAssetDecimals
+hasKnownDecimals aq = Map.member (aqFingerprint aq) knownAssets
+
+-- | The number of decimal places of a known token.
+knownDecimals :: AssetQuantity -> Maybe Int
+knownDecimals aq = snd <$> Map.lookup (aqFingerprint aq) knownAssets
 
 -- | The note to print under a table that shows asset quantities without known decimals.
 rawQuantityNote :: Text
@@ -85,7 +92,7 @@ rawQuantityNote =
 renderAssetQuantity :: AssetQuantity -> Text
 renderAssetQuantity aq =
   sign
-    <> case Map.lookup (aqFingerprint aq) knownAssetDecimals of
+    <> case knownDecimals aq of
       Just decimals
         | decimals > 0 ->
             let (whole, frac) = quantity `divMod` (10 ^ decimals)
@@ -95,7 +102,7 @@ renderAssetQuantity aq =
     quantity = abs (aqQuantity aq)
     sign = if aqQuantity aq < 0 then "-" else ""
 
--- | Sort asset quantities with the known tokens (those in 'knownAssetDecimals') first, and within
+-- | Sort asset quantities with the known tokens (those in 'knownAssets') first, and within
 -- each group from the biggest amount to the smallest. Known token amounts are compared with their
 -- decimal places applied (as they are displayed), unknown token amounts as raw quantities.
 sortAssetsByAmount :: [AssetQuantity] -> [AssetQuantity]
@@ -105,16 +112,21 @@ sortAssetsByAmount =
     displayedAmount :: AssetQuantity -> Rational
     displayedAmount aq =
       fromIntegral (aqQuantity aq)
-        / 10 ^ Map.findWithDefault 0 (aqFingerprint aq) knownAssetDecimals
+        / 10 ^ fromMaybe 0 (knownDecimals aq)
 
--- | The shortened asset fingerprint, followed by the asset name if it is printable text.
+-- | The shortened asset fingerprint, followed by the asset name: the name listed in
+-- 'knownAssets' for a known token, otherwise the on-chain name if it is printable text.
 renderAssetName :: AssetQuantity -> Text
 renderAssetName aq =
-  case Text.decodeUtf8' (aqName aq) of
-    Right name
-      | not (Text.null name) && Text.all Char.isPrint name ->
-          shortenBech32 (aqFingerprint aq) <> " " <> name
-    _otherwise -> shortenBech32 (aqFingerprint aq)
+  case Map.lookup (aqFingerprint aq) knownAssets of
+    Just (name, _decimals) -> fingerprint <> " " <> name
+    Nothing ->
+      case Text.decodeUtf8' (aqName aq) of
+        Right name
+          | not (Text.null name) && Text.all Char.isPrint name -> fingerprint <> " " <> name
+        _otherwise -> fingerprint
+  where
+    fingerprint = shortenBech32 (aqFingerprint aq)
 
 -- | Query the multi-asset balances of a stake address: the quantity of each asset received
 -- less the quantity spent, ordered by fingerprint. Assets with a zero balance are omitted.
