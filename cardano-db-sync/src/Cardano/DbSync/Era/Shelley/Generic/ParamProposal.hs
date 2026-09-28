@@ -8,6 +8,7 @@ module Cardano.DbSync.Era.Shelley.Generic.ParamProposal (
   ParamProposal (..),
   convertParamProposal,
   convertConwayParamProposal,
+  convertDijkstraParamProposal,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
@@ -20,14 +21,26 @@ import Cardano.Ledger.Coin (Coin, unCoin)
 import Cardano.Ledger.Compactible (fromCompact)
 import Cardano.Ledger.Conway.Core hiding (Witness)
 import Cardano.Ledger.Conway.PParams (ppuMinFeeRefScriptCostPerByteL)
+import Cardano.Ledger.Dijkstra.PParams (
+  ppuLeiosAnnouncementPeriodLengthL,
+  ppuLeiosCommitteeSizeL,
+  ppuLeiosDiffusionPeriodLengthL,
+  ppuLeiosQuorumStakeThresholdL,
+  ppuLeiosVotePeriodLengthL,
+  ppuMaxEndorserBlockExUnitsL,
+  ppuMaxEndorserBlockReferencesSizeL,
+  ppuMaxEndorserBlockTxsSizeL,
+  ppuMaxRefScriptSizePerEndorserBlockL,
+ )
 import qualified Cardano.Ledger.Keys as Ledger
+import Cardano.Ledger.Plutus.ExUnits (unOrdExUnits)
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, DijkstraEra)
 
 data ParamProposal = ParamProposal
   { pppEpochNo :: !(Maybe EpochNo)
@@ -71,6 +84,17 @@ data ParamProposal = ParamProposal
   , pppDRepDeposit :: !(Maybe Natural)
   , pppDRepActivity :: !(Maybe EpochInterval)
   , pppMinFeeRefScriptCostPerByte :: !(Maybe Rational)
+  , -- New for Dijkstra (Leios).
+    pppLeiosCommitteeSize :: !(Maybe Word16)
+  , pppLeiosQuorumStakeThreshold :: !(Maybe UnitInterval)
+  , pppLeiosAnnouncementPeriodLength :: !(Maybe Word32) -- milliseconds
+  , pppLeiosVotePeriodLength :: !(Maybe Word32) -- milliseconds
+  , pppLeiosDiffusionPeriodLength :: !(Maybe Word32) -- milliseconds
+  , pppLeiosMaxEbReferencesSize :: !(Maybe Word32)
+  , pppLeiosMaxEbTxsSize :: !(Maybe Word32)
+  , pppLeiosMaxEbExMem :: !(Maybe Word64)
+  , pppLeiosMaxEbExSteps :: !(Maybe Word64)
+  , pppLeiosMaxRefScriptSizePerEb :: !(Maybe Word32)
   }
 
 convertParamProposal :: Witness era -> Shelley.Update era -> [ParamProposal]
@@ -98,13 +122,9 @@ babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
 
 -- -------------------------------------------------------------------------------------------------
 
--- TODO(Dijkstra): Dijkstra-only pparam lenses are not read here and are
--- silently dropped when this converter is used for `PParamsUpdate DijkstraEra`.
--- Missing from the resulting ParamProposal:
---   hkdMaxRefScriptSizePerBlockL, hkdMaxRefScriptSizePerTxL,
---   hkdRefScriptCostStrideL,      hkdRefScriptCostMultiplierL
--- These come from the `DijkstraEraPParams` class. Adding them requires new
--- columns on the param_proposal table (Phase D / schema work).
+-- Leios pparams are captured by 'convertDijkstraParamProposal'. The ref-script
+-- Dijkstra pparams (hkdMaxRefScriptSizePerBlockL, hkdMaxRefScriptSizePerTxL,
+-- hkdRefScriptCostStrideL, hkdRefScriptCostMultiplierL) are still dropped.
 convertConwayParamProposal :: ConwayEraPParams era => PParamsUpdate era -> ParamProposal
 convertConwayParamProposal pmap =
   ParamProposal
@@ -148,6 +168,32 @@ convertConwayParamProposal pmap =
     , pppDRepDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuDRepDepositL)
     , pppDRepActivity = strictMaybeToMaybe (pmap ^. ppuDRepActivityL)
     , pppMinFeeRefScriptCostPerByte = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuMinFeeRefScriptCostPerByteL)
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
+    }
+
+-- | Dijkstra reuses the Conway converter and overlays the Leios pparams.
+convertDijkstraParamProposal :: PParamsUpdate DijkstraEra -> ParamProposal
+convertDijkstraParamProposal pmap =
+  (convertConwayParamProposal pmap)
+    { pppLeiosCommitteeSize = strictMaybeToMaybe (pmap ^. ppuLeiosCommitteeSizeL)
+    , pppLeiosQuorumStakeThreshold = strictMaybeToMaybe (pmap ^. ppuLeiosQuorumStakeThresholdL)
+    , pppLeiosAnnouncementPeriodLength = Ledger.unMilliseconds32 <$> strictMaybeToMaybe (pmap ^. ppuLeiosAnnouncementPeriodLengthL)
+    , pppLeiosVotePeriodLength = Ledger.unMilliseconds32 <$> strictMaybeToMaybe (pmap ^. ppuLeiosVotePeriodLengthL)
+    , pppLeiosDiffusionPeriodLength = Ledger.unMilliseconds32 <$> strictMaybeToMaybe (pmap ^. ppuLeiosDiffusionPeriodLengthL)
+    , pppLeiosMaxEbReferencesSize = strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockReferencesSizeL)
+    , pppLeiosMaxEbTxsSize = strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockTxsSizeL)
+    , pppLeiosMaxEbExMem = fromIntegral . Alonzo.exUnitsMem . unOrdExUnits <$> strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockExUnitsL)
+    , pppLeiosMaxEbExSteps = fromIntegral . Alonzo.exUnitsSteps . unOrdExUnits <$> strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockExUnitsL)
+    , pppLeiosMaxRefScriptSizePerEb = strictMaybeToMaybe (pmap ^. ppuMaxRefScriptSizePerEndorserBlockL)
     }
 
 convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate BabbageEra) -> ParamProposal
@@ -192,6 +238,16 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
     , pppMinFeeRefScriptCostPerByte = Nothing
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
     }
 
 convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate AlonzoEra) -> ParamProposal
@@ -237,6 +293,16 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
     , pppMinFeeRefScriptCostPerByte = Nothing
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
     }
 
 -- | This works fine from Shelley to Mary. Not for Alonzo since 'ppuMinUTxOValueL' was removed
@@ -283,4 +349,14 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
     , pppMinFeeRefScriptCostPerByte = Nothing
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
     }

@@ -454,6 +454,17 @@ data ParamProposal = ParamProposal
   , paramProposalDrepDeposit :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalMinFeeRefScriptCostPerByte :: !(Maybe Double)
+  , -- Leios (Dijkstra) protocol parameters. Only set from the Dijkstra era on; Nothing before.
+    paramProposalLeiosCommitteeSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosQuorumStakeThreshold :: !(Maybe Double)
+  , paramProposalLeiosAnnouncementPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , paramProposalLeiosVotePeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , paramProposalLeiosDiffusionPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , paramProposalLeiosMaxEbReferencesSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxEbTxsSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxEbExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxEbExSteps :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxRefScriptSizePerEb :: !(Maybe DbWord64) -- sqltype=word64type
   }
   deriving (Show, Eq, Generic)
 
@@ -523,6 +534,16 @@ paramProposalDecoder =
     <*> maybeDbWord64Decoder -- paramProposalDrepDeposit
     <*> maybeDbWord64Decoder -- paramProposalDrepActivity
     <*> D.column (D.nullable D.float8) -- paramProposalMinFeeRefScriptCostPerByte
+    <*> maybeDbWord64Decoder -- paramProposalLeiosCommitteeSize
+    <*> D.column (D.nullable D.float8) -- paramProposalLeiosQuorumStakeThreshold
+    <*> maybeDbWord64Decoder -- paramProposalLeiosAnnouncementPeriodLength
+    <*> maybeDbWord64Decoder -- paramProposalLeiosVotePeriodLength
+    <*> maybeDbWord64Decoder -- paramProposalLeiosDiffusionPeriodLength
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbReferencesSize
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbTxsSize
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbExMem
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbExSteps
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxRefScriptSizePerEb
 
 paramProposalEncoder :: E.Params ParamProposal
 paramProposalEncoder =
@@ -581,6 +602,16 @@ paramProposalEncoder =
     , paramProposalDrepDeposit >$< maybeDbWord64Encoder
     , paramProposalDrepActivity >$< maybeDbWord64Encoder
     , paramProposalMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
+    , paramProposalLeiosCommitteeSize >$< maybeDbWord64Encoder
+    , paramProposalLeiosQuorumStakeThreshold >$< E.param (E.nullable E.float8)
+    , paramProposalLeiosAnnouncementPeriodLength >$< maybeDbWord64Encoder
+    , paramProposalLeiosVotePeriodLength >$< maybeDbWord64Encoder
+    , paramProposalLeiosDiffusionPeriodLength >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbReferencesSize >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbTxsSize >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbExMem >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbExSteps >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxRefScriptSizePerEb >$< maybeDbWord64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
