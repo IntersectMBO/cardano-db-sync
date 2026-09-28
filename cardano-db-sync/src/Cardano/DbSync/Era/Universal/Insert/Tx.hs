@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -18,7 +19,7 @@ import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
 
-import Cardano.BM.Trace (Trace)
+import Cardano.BM.Trace (Trace, logWarning)
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Coin (Coin (..))
@@ -461,19 +462,22 @@ insertCollateralTxIn ::
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError DB.DbM ()
-insertCollateralTxIn syncEnv _tracer txInId txIn = do
+insertCollateralTxIn syncEnv tracer txInId txIn = do
   eTxOutId <- queryTxIdWithCache syncEnv (txInTxId txIn)
-  txOutId <- case eTxOutId of
-    Right txId -> pure txId
-    Left err -> liftIO $ throwIO err
-  void
-    . lift
-    $ DB.insertCollateralTxIn
-    $ DB.CollateralTxIn
-      { DB.collateralTxInTxInId = txInId
-      , DB.collateralTxInTxOutId = txOutId
-      , DB.collateralTxInTxOutIndex = fromIntegral (txInIndex txIn)
-      }
+  case eTxOutId of
+    Right txOutId ->
+      void
+        . lift
+        $ DB.insertCollateralTxIn
+        $ DB.CollateralTxIn
+          { DB.collateralTxInTxInId = txInId
+          , DB.collateralTxInTxOutId = txOutId
+          , DB.collateralTxInTxOutIndex = fromIntegral (txInIndex txIn)
+          }
+    Left err
+      | ioDoomsday (getInsertOptions syncEnv) ->
+          liftIO $ logWarning tracer $ "doomsday: skipping collateral tx input (missing source tx): " <> textShow txIn
+      | otherwise -> liftIO $ throwIO err
 
 insertReferenceTxIn ::
   SyncEnv ->
@@ -481,20 +485,22 @@ insertReferenceTxIn ::
   DB.TxId ->
   Generic.TxIn ->
   ExceptT SyncNodeError DB.DbM ()
-insertReferenceTxIn syncEnv _tracer txInId txIn = do
+insertReferenceTxIn syncEnv tracer txInId txIn = do
   etxOutId <- queryTxIdWithCache syncEnv (txInTxId txIn)
-  txOutId <- case etxOutId of
-    Right txId -> pure txId
-    Left err -> liftIO $ throwIO err
-
-  void
-    . lift
-    $ DB.insertReferenceTxIn
-    $ DB.ReferenceTxIn
-      { DB.referenceTxInTxInId = txInId
-      , DB.referenceTxInTxOutId = txOutId
-      , DB.referenceTxInTxOutIndex = fromIntegral (txInIndex txIn)
-      }
+  case etxOutId of
+    Right txOutId ->
+      void
+        . lift
+        $ DB.insertReferenceTxIn
+        $ DB.ReferenceTxIn
+          { DB.referenceTxInTxInId = txInId
+          , DB.referenceTxInTxOutId = txOutId
+          , DB.referenceTxInTxOutIndex = fromIntegral (txInIndex txIn)
+          }
+    Left err
+      | ioDoomsday (getInsertOptions syncEnv) ->
+          liftIO $ logWarning tracer $ "doomsday: skipping reference tx input (missing source tx): " <> textShow txIn
+      | otherwise -> liftIO $ throwIO err
 
 --------------------------------------------------------------------------------------
 -- Prepare TX-IN
