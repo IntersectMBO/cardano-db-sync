@@ -152,6 +152,11 @@ data EpochParam = EpochParam
   , epochParamLeiosAnnouncementPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
   , epochParamLeiosVotePeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
   , epochParamLeiosDiffusionPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , epochParamLeiosMaxEbReferencesSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxEbTxsSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxEbExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxEbExSteps :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxRefScriptSizePerEb :: !(Maybe DbWord64) -- sqltype=word64type
   }
   deriving (Eq, Show, Generic)
 
@@ -227,6 +232,11 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamLeiosAnnouncementPeriodLength
     <*> maybeDbWord64Decoder -- epochParamLeiosVotePeriodLength
     <*> maybeDbWord64Decoder -- epochParamLeiosDiffusionPeriodLength
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbReferencesSize
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbTxsSize
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbExMem
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbExSteps
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxRefScriptSizePerEb
 
 epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
@@ -290,6 +300,11 @@ epochParamEncoder =
     , epochParamLeiosAnnouncementPeriodLength >$< maybeDbWord64Encoder
     , epochParamLeiosVotePeriodLength >$< maybeDbWord64Encoder
     , epochParamLeiosDiffusionPeriodLength >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbReferencesSize >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbTxsSize >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbExMem >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbExSteps >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxRefScriptSizePerEb >$< maybeDbWord64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

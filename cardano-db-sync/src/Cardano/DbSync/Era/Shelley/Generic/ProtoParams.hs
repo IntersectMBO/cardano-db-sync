@@ -24,7 +24,12 @@ import Cardano.Ledger.Dijkstra.PParams (
   ppLeiosDiffusionPeriodLengthL,
   ppLeiosQuorumStakeThresholdL,
   ppLeiosVotePeriodLengthL,
+  ppMaxEndorserBlockExUnitsL,
+  ppMaxEndorserBlockReferencesSizeL,
+  ppMaxEndorserBlockTxsSizeL,
+  ppMaxRefScriptSizePerEndorserBlockL,
  )
+import Cardano.Ledger.Plutus.ExUnits (unOrdExUnits)
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
@@ -81,6 +86,11 @@ data ProtoParams = ProtoParams
   , ppLeiosAnnouncementPeriodLength :: !(Maybe Word32) -- milliseconds
   , ppLeiosVotePeriodLength :: !(Maybe Word32) -- milliseconds
   , ppLeiosDiffusionPeriodLength :: !(Maybe Word32) -- milliseconds
+  , ppLeiosMaxEbReferencesSize :: !(Maybe Word32)
+  , ppLeiosMaxEbTxsSize :: !(Maybe Word32)
+  , ppLeiosMaxEbExMem :: !(Maybe Word64)
+  , ppLeiosMaxEbExSteps :: !(Maybe Word64)
+  , ppLeiosMaxRefScriptSizePerEb :: !(Maybe Word32)
   }
 
 data Deposits = Deposits
@@ -172,6 +182,11 @@ fromDijkstraParams params =
     , ppLeiosAnnouncementPeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosAnnouncementPeriodLengthL
     , ppLeiosVotePeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosVotePeriodLengthL
     , ppLeiosDiffusionPeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosDiffusionPeriodLengthL
+    , ppLeiosMaxEbReferencesSize = Just $ params ^. ppMaxEndorserBlockReferencesSizeL
+    , ppLeiosMaxEbTxsSize = Just $ params ^. ppMaxEndorserBlockTxsSizeL
+    , ppLeiosMaxEbExMem = Just . fromIntegral $ Alonzo.exUnitsMem (unOrdExUnits (params ^. ppMaxEndorserBlockExUnitsL))
+    , ppLeiosMaxEbExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (unOrdExUnits (params ^. ppMaxEndorserBlockExUnitsL))
+    , ppLeiosMaxRefScriptSizePerEb = Just $ params ^. ppMaxRefScriptSizePerEndorserBlockL
     }
 
 fromConwayParams :: PParams ConwayEra -> ProtoParams
@@ -219,6 +234,11 @@ fromConwayParams params =
     , ppLeiosAnnouncementPeriodLength = Nothing
     , ppLeiosVotePeriodLength = Nothing
     , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
     }
 
 fromBabbageParams :: PParams BabbageEra -> ProtoParams
@@ -266,6 +286,11 @@ fromBabbageParams params =
     , ppLeiosAnnouncementPeriodLength = Nothing
     , ppLeiosVotePeriodLength = Nothing
     , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
     }
 
 fromAlonzoParams :: PParams AlonzoEra -> ProtoParams
@@ -313,6 +338,11 @@ fromAlonzoParams params =
     , ppLeiosAnnouncementPeriodLength = Nothing
     , ppLeiosVotePeriodLength = Nothing
     , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
     }
 
 fromShelleyParams :: (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) => PParams era -> ProtoParams
@@ -360,4 +390,9 @@ fromShelleyParams params =
     , ppLeiosAnnouncementPeriodLength = Nothing
     , ppLeiosVotePeriodLength = Nothing
     , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
     }

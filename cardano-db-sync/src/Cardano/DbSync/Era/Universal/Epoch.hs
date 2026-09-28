@@ -180,6 +180,11 @@ insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
       , DB.epochParamLeiosAnnouncementPeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosAnnouncementPeriodLength params
       , DB.epochParamLeiosVotePeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosVotePeriodLength params
       , DB.epochParamLeiosDiffusionPeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosDiffusionPeriodLength params
+      , DB.epochParamLeiosMaxEbReferencesSize = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosMaxEbReferencesSize params
+      , DB.epochParamLeiosMaxEbTxsSize = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosMaxEbTxsSize params
+      , DB.epochParamLeiosMaxEbExMem = DB.DbWord64 <$> Generic.ppLeiosMaxEbExMem params
+      , DB.epochParamLeiosMaxEbExSteps = DB.DbWord64 <$> Generic.ppLeiosMaxEbExSteps params
+      , DB.epochParamLeiosMaxRefScriptSizePerEb = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosMaxRefScriptSizePerEb params
       }
 
 hasNewEpochEvent :: [LedgerEvent] -> Bool
