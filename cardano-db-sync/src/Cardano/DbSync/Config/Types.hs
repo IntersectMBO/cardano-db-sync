@@ -18,6 +18,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashByron (..),
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
+  GenesisHashDijkstra (..),
   RemoveJsonbFromSchemaConfig (..),
   TxOutVariantTypeConfig (..),
   SyncNodeConfig (..),
@@ -149,6 +150,8 @@ data SyncNodeConfig = SyncNodeConfig
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
   , dncConwayGenesisFile :: !GenesisFile
   , dncConwayGenesisHash :: !(Maybe GenesisHashConway)
+  , dncDijkstraGenesisFile :: !(Maybe GenesisFile)
+  , dncDijkstraGenesisHash :: !(Maybe GenesisHashDijkstra)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
   , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
   , dncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
@@ -350,6 +353,10 @@ newtype GenesisHashAlonzo = GenesisHashAlonzo
 
 newtype GenesisHashConway = GenesisHashConway
   {unGenesisHashConway :: Crypto.Hash Crypto.Blake2b_256 ByteString}
+  deriving newtype (Eq, Show, ToJSON, FromJSON)
+
+newtype GenesisHashDijkstra = GenesisHashDijkstra
+  {unGenesisHashDijkstra :: Crypto.Hash Crypto.Blake2b_256 ByteString}
   deriving newtype (Eq, Show, ToJSON, FromJSON)
 
 newtype LedgerStateDir = LedgerStateDir

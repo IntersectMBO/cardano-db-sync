@@ -53,6 +53,7 @@ data SyncNodeError
   | SNErrShelleyConfig !FilePath !Text
   | SNErrAlonzoConfig !FilePath !Text
   | SNErrConwayConfig !FilePath !Text
+  | SNErrDijkstraConfig !FilePath !Text
   | SNErrCardanoConfig !Text
   | SNErrPGConfig !String
   | SNErrInsertGenesis !String
@@ -119,6 +120,14 @@ instance Show SyncNodeError where
         mconcat
           [ "Error SNErrConwayConfig: "
           , "Failed reading Conway genesis file "
+          , show fp
+          , ": "
+          , show txt
+          ]
+      SNErrDijkstraConfig fp txt ->
+        mconcat
+          [ "Error SNErrDijkstraConfig: "
+          , "Failed reading Dijkstra genesis file "
           , show fp
           , ": "
           , show txt

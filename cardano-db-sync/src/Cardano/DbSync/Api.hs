@@ -434,7 +434,7 @@ mkSyncEnvFromConfig ::
   IO (Either SyncNodeError SyncEnv)
 mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc isJsonbInSchema =
   case genCfg of
-    GenesisCardano _ bCfg sCfg _ _
+    GenesisCardano _ bCfg sCfg _ _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
           pure
             . Left

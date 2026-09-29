@@ -21,6 +21,6 @@ insertValidateGenesisDist ::
   ExceptT SyncNodeError IO ()
 insertValidateGenesisDist syncEnv nname genCfg shelleyInitiation =
   case genCfg of
-    GenesisCardano _ bCfg sCfg _aCfg _ -> do
+    GenesisCardano _ bCfg sCfg _aCfg _ _ -> do
       Byron.insertValidateByronGenesisDist syncEnv nname bCfg
       Shelley.insertValidateShelleyGenesisDist syncEnv (unNetworkName nname) (scConfig sCfg) shelleyInitiation

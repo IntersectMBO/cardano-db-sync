@@ -20,6 +20,7 @@ import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import Cardano.DbSync.Config.Alonzo
 import Cardano.DbSync.Config.Byron
 import Cardano.DbSync.Config.Conway (readConwayGenesisConfig)
+import Cardano.DbSync.Config.Dijkstra (readDijkstraGenesisConfig)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
@@ -28,7 +29,7 @@ import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
 import qualified Cardano.Ledger.Api.Transition as Ledger
 import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
-import Cardano.Node.Protocol.Dijkstra
+import Cardano.Ledger.Dijkstra.Genesis (DijkstraGenesis)
 import Control.Monad.Trans.Except (ExceptT)
 import Control.Tracer (nullTracer)
 import Ouroboros.Consensus.Block.Forging
@@ -51,11 +52,12 @@ data GenesisConfig
       !ShelleyConfig
       !AlonzoGenesis
       !ConwayGenesis
+      !DijkstraGenesis
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
   case ge of
-    GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg -> shelleyProtocolMagicId (scConfig sCfg)
+    GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg _dCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
     shelleyProtocolMagicId :: ShelleyGenesis -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
@@ -71,6 +73,7 @@ readCardanoGenesisConfig enc =
         <*> readShelleyGenesisConfig enc
         <*> readAlonzoGenesisConfig enc
         <*> readConwayGenesisConfig enc
+        <*> readDijkstraGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -111,7 +114,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred = do
               shelleyGenesis
               alonzoGenesis
               conwayGenesis
-              emptyDijkstraGenesis -- TODO(Dijkstra)
+              dijkstraGenesis
         , cardanoHardForkTriggers =
             Consensus.CardanoHardForkTriggers'
               { triggerHardForkShelley = dncShelleyHardFork dnc
@@ -131,7 +134,8 @@ mkProtocolInfoCardano genesisConfig shelleyCred = do
       bGenesis
       (ShelleyConfig shelleyGenesis genesisHash)
       alonzoGenesis
-      conwayGenesis = genesisConfig
+      conwayGenesis
+      dijkstraGenesis = genesisConfig
 
 shelleyPraosNonce :: GenesisHashShelley -> Nonce
 shelleyPraosNonce hsh = Nonce (Crypto.castHash . unGenesisHashShelley $ hsh)
