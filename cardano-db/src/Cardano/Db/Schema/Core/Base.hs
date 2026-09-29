@@ -81,6 +81,11 @@ data Block = Block
   , blockEbAnnouncementSize :: !(Maybe Word32) -- sqltype=word31type
   , blockLeiosCertSigners :: !(Maybe ByteString) -- committee-signer bitfield (Dijkstra LeiosCert)
   , blockLeiosCertSignature :: !(Maybe ByteString) -- BLS aggregate signature (48 bytes)
+  , -- Set only on a certifying block (has_leios_cert): the certified EB's closure is
+    -- spliced into this block's body. This is the ledger txs-size measure of it --
+    -- Σ (tx sizeTxF + 4-byte perTxOverhead) -- directly comparable to
+    -- maxEndorserBlockTxsSize. Nothing otherwise. Tx count is already block.tx_count.
+    blockEbClosureSize :: !(Maybe Word64) -- sqltype=word63type
   }
   deriving (Eq, Show, Generic)
 
@@ -117,6 +122,7 @@ blockDecoder =
     <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- blockEbAnnouncementSize
     <*> D.column (D.nullable D.bytea) -- blockLeiosCertSigners
     <*> D.column (D.nullable D.bytea) -- blockLeiosCertSignature
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockEbClosureSize
 
 blockEncoder :: E.Params Block
 blockEncoder =
@@ -141,6 +147,7 @@ blockEncoder =
     , blockEbAnnouncementSize >$< E.param (E.nullable $ fromIntegral >$< E.int4)
     , blockLeiosCertSigners >$< E.param (E.nullable E.bytea)
     , blockLeiosCertSignature >$< E.param (E.nullable E.bytea)
+    , blockEbClosureSize >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

@@ -115,6 +115,14 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
           , DB.blockEbAnnouncementSize = ebAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
           , DB.blockLeiosCertSigners = serialize' . bitFieldToBytes . leiosCertSigners <$> Generic.blkLeiosCert blk
           , DB.blockLeiosCertSignature = leiosSignatureToBytes . leiosCertSignature <$> Generic.blkLeiosCert blk
+          , -- A certifying block's body is the certified EB's tx closure (spliced in
+            -- by the ChainSync server). This is the ledger's txs-size measure of it,
+            -- directly comparable to maxEndorserBlockTxsSize: per-tx sizeTxF plus the
+            -- 4-byte perTxOverhead the consensus DijkstraMeasure adds to each tx.
+            DB.blockEbClosureSize =
+              if Generic.blkHasLeiosCert blk
+                then Just $ sum ((+ leiosPerTxOverhead) . Generic.txSize <$> Generic.blkTxs blk)
+                else Nothing
           }
 
     -- Leios: resolve the cert's signer bitfield against the committee (the stake-ordered pool
@@ -333,3 +341,8 @@ bitFieldSetBits bf n =
 -- straight off the accessor.
 bitFieldToBytes :: BitField -> ByteString
 bitFieldToBytes (BitField (ByteArray ba)) = SBS.fromShort (SBS ba)
+
+-- | The per-tx overhead consensus' 'txInBlockSize' adds on top of 'sizeTxF' when
+-- measuring a tx against block/EB byte capacities (mirrors consensus 'perTxOverhead').
+leiosPerTxOverhead :: Word64
+leiosPerTxOverhead = 4
