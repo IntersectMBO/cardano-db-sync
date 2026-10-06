@@ -39,44 +39,34 @@ import Cardano.Db.Types (Ada (..), DbLovelace, DbM, dbLovelaceDecoder, lovelaceT
 -- DbTool Epcoh
 ------------------------------------------------------------------------------------------------------------
 
--- | Query delegation for specific address and epoch
-queryDelegationForEpochStmt :: HsqlStmt.Statement (Text.Text, Word64) (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
-queryDelegationForEpochStmt =
+-- | Query the stake delegated by a stake address in a specific epoch, and the pool it was
+-- delegated to. Reads 'epoch_stake' directly so the result does not depend on the 'epoch' view.
+queryEpochStakeForAddressStmt :: HsqlStmt.Statement (Id.StakeAddressId, Word64) (Maybe (DbLovelace, Id.PoolHashId))
+queryEpochStakeForAddressStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder =
       mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
+        [ fst >$< Id.idEncoder Id.getStakeAddressId
         , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
         ]
     decoder = HsqlD.rowMaybe $ do
-      addrId <- Id.idDecoder Id.StakeAddressId
-      endTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       poolId <- Id.idDecoder Id.PoolHashId
-      pure (addrId, endTime, amount, poolId)
-    epochTable = tableName (Proxy @SC.Epoch)
+      pure (amount, poolId)
     epochStakeTable = tableName (Proxy @SC.EpochStake)
-    stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT es.addr_id, ep.end_time, es.amount, es.pool_id"
-          , " FROM " <> epochTable <> " ep"
-          , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
-          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
-          , " WHERE saddr.view = $1"
-          , " AND es.epoch_no <= $2"
-          , " ORDER BY es.epoch_no DESC"
-          , " LIMIT 1"
+          [ "SELECT amount, pool_id"
+          , " FROM " <> epochStakeTable
+          , " WHERE addr_id = $1"
+          , " AND epoch_no = $2"
           ]
 
-queryDelegationForEpoch ::
-  Text.Text ->
-  Word64 ->
-  DbM (Maybe (Id.StakeAddressId, UTCTime, DbLovelace, Id.PoolHashId))
-queryDelegationForEpoch address epochNum =
-  runSession mkDbCallStack $ HsqlSes.statement (address, epochNum) queryDelegationForEpochStmt
+queryEpochStakeForAddress :: Id.StakeAddressId -> Word64 -> DbM (Maybe (DbLovelace, Id.PoolHashId))
+queryEpochStakeForAddress saId epochNum =
+  runSession mkDbCallStack $ HsqlSes.statement (saId, epochNum) queryEpochStakeForAddressStmt
 
 ------------------------------------------------------------------------------------------------------------
 
@@ -180,72 +170,76 @@ queryLatestMemberRewardEpochNo = do
 
 --------------------------------------------------------------------------------
 
--- | Query reward amount for epoch and stake address
-queryRewardAmountStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe DbLovelace)
-queryRewardAmountStmt =
-  HsqlStmt.Statement sql encoder decoder True
+------------------------------------------------------------------------------------------------------------
+
+-- | Query the epoch view enabled flag. Returns 'Nothing' if the 'epoch_sync_enabled' table has
+-- no row (cardano-db-sync has not yet initialised it).
+queryEpochSyncEnabledStmt :: HsqlStmt.Statement () (Maybe Bool)
+queryEpochSyncEnabledStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
   where
-    encoder =
-      mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-        , snd >$< Id.idEncoder Id.getStakeAddressId
-        ]
-    decoder = HsqlD.rowMaybe dbLovelaceDecoder
-    epochTable = tableName (Proxy @SC.Epoch)
-    rewardTable = tableName (Proxy @SC.Reward)
-    stakeAddressTable = tableName (Proxy @SC.StakeAddress)
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.bool)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT reward.amount"
-          , " FROM " <> epochTable <> " ep"
-          , " INNER JOIN " <> rewardTable <> " reward ON ep.no = reward.earned_epoch"
-          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = reward.addr_id"
-          , " WHERE ep.no = $1"
-          , " AND saddr.id = $2"
-          , " ORDER BY ep.no ASC"
+          [ "SELECT enabled FROM epoch_sync_enabled"
+          , " WHERE singleton = TRUE"
           ]
 
-queryRewardAmount :: Word64 -> Id.StakeAddressId -> DbM (Maybe DbLovelace)
-queryRewardAmount epochNo saId =
-  runSession mkDbCallStack $ HsqlSes.statement (epochNo, saId) queryRewardAmountStmt
+queryEpochSyncEnabled :: DbM (Maybe Bool)
+queryEpochSyncEnabled =
+  runSession mkDbCallStack $ HsqlSes.statement () queryEpochSyncEnabledStmt
 
 ------------------------------------------------------------------------------------------------------------
 
--- | Query delegation history for stake address
-queryDelegationHistoryStmt :: HsqlStmt.Statement (Text.Text, Word64) [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
+-- | Count the rows in the 'epoch_finalized' table.
+queryEpochFinalizedCountStmt :: HsqlStmt.Statement () Word64
+queryEpochFinalizedCountStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    decoder = HsqlD.singleRow (HsqlD.column $ HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
+    sql = "SELECT COUNT(*) FROM epoch_finalized"
+
+queryEpochFinalizedCount :: DbM Word64
+queryEpochFinalizedCount =
+  runSession mkDbCallStack $ HsqlSes.statement () queryEpochFinalizedCountStmt
+
+------------------------------------------------------------------------------------------------------------
+
+-- | Query delegation history for stake address, ordered by epoch.
+-- Reads 'epoch_finalized' directly rather than the 'epoch' view, and uses a LEFT JOIN so that
+-- delegations are still returned (with no end time) if an epoch row is missing.
+queryDelegationHistoryStmt :: HsqlStmt.Statement (Id.StakeAddressId, Word64) [(Id.StakeAddressId, Word64, Maybe UTCTime, DbLovelace, Id.PoolHashId)]
 queryDelegationHistoryStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder =
       mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.text)
+        [ fst >$< Id.idEncoder Id.getStakeAddressId
         , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
         ]
     decoder = HsqlD.rowList $ do
       addrId <- Id.idDecoder Id.StakeAddressId
       epochNo <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
-      endTime <- HsqlD.column (HsqlD.nonNullable utcTimeAsTimestampDecoder)
+      endTime <- HsqlD.column (HsqlD.nullable utcTimeAsTimestampDecoder)
       amount <- dbLovelaceDecoder
       poolId <- Id.idDecoder Id.PoolHashId
       pure (addrId, epochNo, endTime, amount, poolId)
-    epochTable = tableName (Proxy @SC.Epoch)
     epochStakeTable = tableName (Proxy @SC.EpochStake)
-    stakeAddressTable = tableName (Proxy @SC.StakeAddress)
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT es.addr_id, es.epoch_no, ep.end_time, es.amount, es.pool_id"
-          , " FROM " <> epochTable <> " ep"
-          , " INNER JOIN " <> epochStakeTable <> " es ON ep.no = es.epoch_no"
-          , " INNER JOIN " <> stakeAddressTable <> " saddr ON saddr.id = es.addr_id"
-          , " WHERE saddr.view = $1"
+          [ "SELECT es.addr_id, es.epoch_no, ef.end_time, es.amount, es.pool_id"
+          , " FROM " <> epochStakeTable <> " es"
+          , " LEFT JOIN epoch_finalized ef ON ef.no = es.epoch_no"
+          , " WHERE es.addr_id = $1"
           , " AND es.epoch_no <= $2"
+          , " ORDER BY es.epoch_no ASC"
           ]
 
-queryDelegationHistory :: Text.Text -> Word64 -> DbM [(Id.StakeAddressId, Word64, UTCTime, DbLovelace, Id.PoolHashId)]
-queryDelegationHistory address maxEpoch =
-  runSession mkDbCallStack $ HsqlSes.statement (address, maxEpoch) queryDelegationHistoryStmt
+queryDelegationHistory :: Id.StakeAddressId -> Word64 -> DbM [(Id.StakeAddressId, Word64, Maybe UTCTime, DbLovelace, Id.PoolHashId)]
+queryDelegationHistory saId maxEpoch =
+  runSession mkDbCallStack $ HsqlSes.statement (saId, maxEpoch) queryDelegationHistoryStmt
 
 ------------------------------------------------------------------------------------------------------------
 -- DbTool AdaPots
@@ -697,6 +691,85 @@ queryOutputTransactionsAddressStmt =
 queryOutputTransactionsAddress :: Id.StakeAddressId -> DbM [(ByteString, UTCTime, DbLovelace)]
 queryOutputTransactionsAddress saId =
   runSession mkDbCallStack $ HsqlSes.statement saId queryOutputTransactionsAddressStmt
+
+--------------------------------------------------------------------------------
+
+-- | Whether to query the multi-assets received by (sent to) a stake address, or spent from it.
+data AssetFlow = AssetsReceived | AssetsSpent
+
+-- | Query the multi-assets received by, or spent from, a stake address, summed per transaction
+-- and asset. Each result is (tx hash, asset fingerprint, asset name, quantity). The joins mirror
+-- those of the input/output transaction queries above, so the results match their transactions.
+queryAssetTransactionsStmt ::
+  TxOutVariantType ->
+  AssetFlow ->
+  HsqlStmt.Statement Id.StakeAddressId [(ByteString, Text.Text, ByteString, Integer)]
+queryAssetTransactionsStmt txOutVariantType flow =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    encoder = Id.idEncoder Id.getStakeAddressId
+    decoder = HsqlD.rowList $ do
+      hash <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      fingerprint <- HsqlD.column (HsqlD.nonNullable HsqlD.text)
+      name <- HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+      quantity <- HsqlD.column (HsqlD.nonNullable (truncate <$> HsqlD.numeric))
+      pure (hash, fingerprint, name, quantity)
+    txTable = tableName (Proxy @SVC.Tx)
+    txInTable = tableName (Proxy @SVC.TxIn)
+    multiAssetTable = tableName (Proxy @SC.MultiAsset)
+
+    -- The tx_out and ma_tx_out tables for the variant, and the condition selecting the
+    -- tx_out rows that belong to the stake address.
+    (txOutTable, maTxOutTable, addressJoin, stakeAddressColumn) =
+      case txOutVariantType of
+        TxOutVariantCore ->
+          ( tableName (Proxy @SVC.TxOutCore)
+          , tableName (Proxy @SVC.MaTxOutCore)
+          , ""
+          , "txo.stake_address_id"
+          )
+        TxOutVariantAddress ->
+          ( tableName (Proxy @SVA.TxOutAddress)
+          , tableName (Proxy @SVA.MaTxOutAddress)
+          , " INNER JOIN " <> tableName (Proxy @SVA.Address) <> " addr ON txo.address_id = addr.id"
+          , "addr.stake_address_id"
+          )
+
+    -- The transaction the assets are attributed to: the one that created the tx_out
+    -- (received), or the one that spent it (spent).
+    txJoin =
+      case flow of
+        AssetsReceived ->
+          " INNER JOIN " <> txTable <> " tx ON txo.tx_id = tx.id"
+        AssetsSpent ->
+          Text.concat
+            [ " INNER JOIN " <> txInTable <> " txin"
+            , " ON txin.tx_out_id = txo.tx_id AND txin.tx_out_index = txo.index"
+            , " INNER JOIN " <> txTable <> " tx ON tx.id = txin.tx_in_id"
+            ]
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT tx.hash, ma.fingerprint, ma.name, SUM(mto.quantity)"
+          , " FROM " <> txOutTable <> " txo"
+          , addressJoin
+          , txJoin
+          , " INNER JOIN " <> maTxOutTable <> " mto ON mto.tx_out_id = txo.id"
+          , " INNER JOIN " <> multiAssetTable <> " ma ON ma.id = mto.ident"
+          , " WHERE " <> stakeAddressColumn <> " = $1"
+          , " GROUP BY tx.hash, ma.id, ma.fingerprint, ma.name"
+          ]
+
+queryReceivedAssetTransactions :: TxOutVariantType -> Id.StakeAddressId -> DbM [(ByteString, Text.Text, ByteString, Integer)]
+queryReceivedAssetTransactions txOutVariantType saId =
+  runSession mkDbCallStack $
+    HsqlSes.statement saId (queryAssetTransactionsStmt txOutVariantType AssetsReceived)
+
+querySpentAssetTransactions :: TxOutVariantType -> Id.StakeAddressId -> DbM [(ByteString, Text.Text, ByteString, Integer)]
+querySpentAssetTransactions txOutVariantType saId =
+  runSession mkDbCallStack $
+    HsqlSes.statement saId (queryAssetTransactionsStmt txOutVariantType AssetsSpent)
 
 --------------------------------------------------------------------------------
 -- Cardano DbTool - Balance

@@ -4,7 +4,7 @@ import Cardano.Db
 import Cardano.DbSync.Config.Types hiding (CmdVersion, LogFileDir)
 import Cardano.DbTool
 import Cardano.Slotting.Slot (SlotNo (..))
-import Control.Applicative (optional)
+import Control.Applicative (optional, (<|>))
 import Control.Monad (unless, void, when)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -23,7 +23,7 @@ main = do
     opts :: ParserInfo Command
     opts =
       Opt.info
-        (Opt.helper <*> pCommand)
+        (Opt.helper <*> (pVersionFlag <|> pCommand))
         ( Opt.fullDesc
             <> Opt.header "cardano-db-tool - Manage the Cardano PostgreSQL Database"
         )
@@ -193,6 +193,15 @@ pCommand =
     pPrepareSnapshot =
       CmdPrepareSnapshot <$> pPrepareSnapshotArgs
 
+pVersionFlag :: Parser Command
+pVersionFlag =
+  Opt.flag'
+    CmdVersion
+    ( Opt.long "version"
+        <> Opt.help "Show the program version"
+        <> Opt.hidden
+    )
+
 pPrepareSnapshotArgs :: Parser PrepareSnapshotArgs
 pPrepareSnapshotArgs = PrepareSnapshotArgs <$> pLedgerStateDir
 
@@ -280,7 +289,7 @@ pReport =
     mconcat
       [ Opt.command "balance" $
           Opt.info
-            (ReportBalance <$> pStakeAddress)
+            (ReportBalance <$> pAssetFilter <*> pStakeAddress)
             (Opt.progDesc "Report the balance of a given stake address (or addresses)")
       , Opt.command "rewards" $
           Opt.info
@@ -288,7 +297,7 @@ pReport =
             (Opt.progDesc "Rewards report")
       , Opt.command "transactions" $
           Opt.info
-            (ReportTransactions <$> pStakeAddress)
+            (ReportTransactions <$> pAssetFilter <*> pStakeAddress)
             (Opt.progDesc "Report the transaction history for a given stake address (or addresses)")
       ]
   where
@@ -309,6 +318,20 @@ pReport =
                 (ReportAllRewards <$> pStakeAddress)
                 (Opt.progDesc "Report the reward history for a given stake address (or addresses)")
           ]
+
+    pAssetFilter :: Parser AssetFilter
+    pAssetFilter =
+      Opt.flag'
+        AllAssets
+        ( Opt.long "include-all-assets"
+            <> Opt.help "Also report the amounts of all multi-assets (native tokens)"
+        )
+        <|> Opt.flag'
+          KnownAssets
+          ( Opt.long "include-known-assets"
+              <> Opt.help "Also report the amounts of the known multi-assets (tokens with known decimals)"
+          )
+        <|> pure NoAssets
 
     pStakeAddress :: Parser [Text]
     pStakeAddress =

@@ -7,6 +7,7 @@ module Cardano.DbTool.Report.Display (
   renderTable,
   rightPad,
   separator,
+  shortenBech32,
 ) where
 
 import qualified Data.List as List
@@ -36,9 +37,21 @@ renderTable cols rows =
     pad AlignLeft = rightPad
     pad AlignRight = leftPad
 
-    headerLine = Text.intercalate separator (zipWith3 pad aligns widths headers)
+    -- Trailing whitespace (from padding a left aligned last column) is stripped.
+    headerLine = Text.stripEnd $ Text.intercalate separator (zipWith3 pad aligns widths headers)
     underline = Text.intercalate "-+-" (map (`Text.replicate` "-") widths)
-    renderRow = Text.intercalate separator . zipWith3 pad aligns widths
+    renderRow = Text.stripEnd . Text.intercalate separator . zipWith3 pad aligns widths
+
+-- | Shorten a Bech32 encoded value to its human readable prefix, "..." and its last 8
+-- characters, eg "pool1z5uq...d7yws0xt" becomes "pool...d7yws0xt".
+shortenBech32 :: Text -> Text
+shortenBech32 bech32
+  | Text.length bech32 <= Text.length shortened = bech32
+  | otherwise = shortened
+  where
+    -- The human readable prefix is everything before the last '1'.
+    prefix = Text.dropEnd 1 . fst $ Text.breakOnEnd "1" bech32
+    shortened = prefix <> "..." <> Text.takeEnd 8 bech32
 
 formatReportTime :: UTCTime -> Text
 formatReportTime = Text.pack . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S UTC"

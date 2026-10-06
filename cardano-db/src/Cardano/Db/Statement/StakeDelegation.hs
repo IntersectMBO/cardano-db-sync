@@ -21,7 +21,6 @@ import qualified Hasql.Statement as HsqlStmt
 
 import Cardano.Db.Error (mkDbCallStack)
 import qualified Cardano.Db.Schema.Core.Base as SCB
-import qualified Cardano.Db.Schema.Core.EpochAndProtocol as SEP
 import qualified Cardano.Db.Schema.Core.StakeDelegation as SS
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), bulkEncoder, runSession)
@@ -29,7 +28,7 @@ import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkMaybeIgnore, insertBulkMaybeIgnoreWithConstraint)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..))
-import Cardano.Db.Types (Ada, DbLovelace, DbM, RewardSource, dbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
+import Cardano.Db.Types (Ada, DbLovelace, DbM, RewardSource, dbLovelaceDecoder, maybeDbLovelaceDecoder, rewardSourceDecoder, rewardSourceEncoder)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Credential (Ptr (..), SlotNo32 (..))
 import Contravariant.Extras (contrazip2, contrazip4)
@@ -552,35 +551,39 @@ queryAddressInfoData addrId =
 
 ---------------------------------------------------------------------------
 
--- | Query reward for specific stake address and epoch
-queryRewardForEpochStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId) (Maybe DbLovelace)
+-- | Query the reward earned in an epoch by a stake address delegated to the given pool.
+-- An address can have more than one reward row per epoch (eg a pool reward account receives a
+-- 'leader' reward and may also receive a 'member' reward), so the 'member' and 'leader' rewards
+-- from the pool are summed. Other reward types (eg 'refund') are not earnings and are excluded.
+-- Returns 'Nothing' if there are no matching rewards.
+queryRewardForEpochStmt :: HsqlStmt.Statement (Word64, Id.StakeAddressId, Id.PoolHashId) (Maybe DbLovelace)
 queryRewardForEpochStmt =
   HsqlStmt.Statement sql encoder decoder True
   where
     encoder =
       mconcat
-        [ fst >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
-        , snd >$< Id.idEncoder Id.getStakeAddressId
+        [ (\(e, _, _) -> e) >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        , (\(_, a, _) -> a) >$< Id.idEncoder Id.getStakeAddressId
+        , (\(_, _, p) -> p) >$< Id.idEncoder Id.getPoolHashId
         ]
-    decoder = HsqlD.rowMaybe dbLovelaceDecoder
-    stakeAddressTable = tableName (Proxy @SS.StakeAddress)
+    decoder = HsqlD.singleRow maybeDbLovelaceDecoder
     rewardTable = tableName (Proxy @SS.Reward)
-    epochTable = tableName (Proxy @SEP.Epoch)
+    -- Query the reward table directly; joining the 'epoch' view is unnecessary and makes the
+    -- result depend on the state of that view.
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT rwd.amount"
-          , " FROM " <> stakeAddressTable <> " saddr"
-          , " INNER JOIN " <> rewardTable <> " rwd ON saddr.id = rwd.addr_id"
-          , " INNER JOIN " <> epochTable <> " ep ON ep.no = rwd.earned_epoch"
-          , " WHERE ep.no = $1"
-          , " AND saddr.id = $2"
-          , " ORDER BY ep.no ASC"
+          [ "SELECT SUM(amount)"
+          , " FROM " <> rewardTable
+          , " WHERE earned_epoch = $1"
+          , " AND addr_id = $2"
+          , " AND pool_id = $3"
+          , " AND type IN ('member', 'leader')"
           ]
 
-queryRewardForEpoch :: Word64 -> Id.StakeAddressId -> DbM (Maybe DbLovelace)
-queryRewardForEpoch epochNo saId =
-  runSession mkDbCallStack $ HsqlSes.statement (epochNo, saId) queryRewardForEpochStmt
+queryRewardForEpoch :: Word64 -> Id.StakeAddressId -> Id.PoolHashId -> DbM (Maybe DbLovelace)
+queryRewardForEpoch epochNo saId poolId =
+  runSession mkDbCallStack $ HsqlSes.statement (epochNo, saId, poolId) queryRewardForEpochStmt
 
 ---------------------------------------------------------------------------
 -- StakeDeregistration

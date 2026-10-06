@@ -194,6 +194,42 @@ queryPoolTicker poolId =
   runSession mkDbCallStack $
     HsqlSes.statement poolId queryPoolTickerStmt
 
+-- | Query the ticker a pool had in a given epoch.
+-- The ticker comes from the off-chain metadata of the pool registration (or update) that was
+-- active in that epoch. If that metadata was never fetched, fall back to the fetched metadata
+-- whose registration is closest in time: first the most recent one active before the epoch,
+-- then the earliest one that became active after it.
+queryPoolTickerForEpochStmt :: HsqlStmt.Statement (Id.PoolHashId, Word64) (Maybe Text)
+queryPoolTickerForEpochStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    encoder =
+      mconcat
+        [ fst >$< Id.idEncoder Id.getPoolHashId
+        , snd >$< HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8)
+        ]
+    decoder = HsqlD.rowMaybe (HsqlD.column $ HsqlD.nonNullable HsqlD.text)
+    offChainPoolDataTable = tableName (Proxy @SO.OffChainPoolData)
+    poolUpdateTable = tableName (Proxy @SP.PoolUpdate)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT pod.ticker_name"
+          , " FROM " <> offChainPoolDataTable <> " pod"
+          , " INNER JOIN " <> poolUpdateTable <> " pu"
+          , "   ON pu.meta_id = pod.pmr_id AND pu.hash_id = pod.pool_id"
+          , " WHERE pod.pool_id = $1"
+          , " ORDER BY (pu.active_epoch_no <= $2) DESC,"
+          , "   CASE WHEN pu.active_epoch_no <= $2 THEN -pu.active_epoch_no ELSE pu.active_epoch_no END ASC,"
+          , "   pu.id DESC, pod.id DESC"
+          , " LIMIT 1"
+          ]
+
+queryPoolTickerForEpoch :: Id.PoolHashId -> Word64 -> DbM (Maybe Text)
+queryPoolTickerForEpoch poolId epochNo =
+  runSession mkDbCallStack $
+    HsqlSes.statement (poolId, epochNo) queryPoolTickerForEpochStmt
+
 --------------------------------------------------------------------------------
 -- OffChainPoolFetchError
 --------------------------------------------------------------------------------

@@ -18,56 +18,102 @@ import Text.Printf (printf)
 
 reportStakeRewardHistory :: Text -> IO ()
 reportStakeRewardHistory saddr = do
-  xs <- DB.runDbStandaloneSilent (queryHistoryStakeRewards saddr)
-  if List.null xs
-    then errorMsg
-    else renderRewards saddr xs
-  where
-    errorMsg :: IO ()
-    errorMsg =
-      Text.putStrLn $
-        mconcat
-          [ "Error: Stake address '"
-          , saddr
-          , "' not found in database.\n"
-          , "Expecting as Bech32 encoded stake address. eg 'stake1...'."
-          ]
+  result <- DB.runDbStandaloneSilent (queryHistoryStakeRewards saddr)
+  case result of
+    Left err -> Text.putStrLn $ renderHistoryError saddr err
+    Right xs -> renderRewards saddr xs
+
+data HistoryError
+  = EpochSyncUninitialised
+  | EpochSyncDisabled
+  | EpochFinalizedEmpty
+  | StakeAddressNotFound
+  | NoDelegationHistory !Word64
+
+renderHistoryError :: Text -> HistoryError -> Text
+renderHistoryError saddr err =
+  case err of
+    EpochSyncUninitialised ->
+      mconcat
+        [ "Error: The 'epoch_sync_enabled' table has no row.\n"
+        , "This row is written by cardano-db-sync when it starts up. Start cardano-db-sync"
+        , " (with \"disable_epoch\" unset or false in the \"insert_options\" section of its config)"
+        , " to initialise it."
+        ]
+    EpochSyncDisabled ->
+      mconcat
+        [ "Error: Epoch data is disabled in this database (epoch_sync_enabled.enabled = false).\n"
+        , "This report requires epoch data. Remove \"disable_epoch\": true from (or set it to false in)"
+        , " the \"insert_options\" section of the cardano-db-sync config and restart cardano-db-sync."
+        ]
+    EpochFinalizedEmpty ->
+      mconcat
+        [ "Error: The 'epoch_finalized' table is empty.\n"
+        , "It is backfilled by cardano-db-sync on startup when \"disable_epoch\" is false. Restart"
+        , " cardano-db-sync and wait for the 'epoch_finalized backfill complete.' log message."
+        ]
+    StakeAddressNotFound ->
+      mconcat
+        [ "Error: Stake address '"
+        , saddr
+        , "' not found in database.\n"
+        , "Expecting as Bech32 encoded stake address. eg 'stake1...'."
+        ]
+    NoDelegationHistory maxEpoch ->
+      mconcat
+        [ "Error: Stake address '"
+        , saddr
+        , "' has no entries in the 'epoch_stake' table up to epoch "
+        , textShow maxEpoch
+        , "."
+        ]
 
 -- -------------------------------------------------------------------------------------------------
 
 data EpochReward = EpochReward
   { erAddressId :: !DB.StakeAddressId
   , erEpochNo :: !Word64
-  , erDate :: !UTCTime
+  , erDate :: !(Maybe UTCTime)
   , erAddress :: !Text
-  , erPoolId :: !Word64
   , erPoolTicker :: !Text
+  , erPoolView :: !Text
   , erReward :: !DB.Ada
   , erDelegated :: !DB.Ada
   , erPercent :: !Double
   }
 
-queryHistoryStakeRewards :: Text -> DB.DbM [EpochReward]
+queryHistoryStakeRewards :: Text -> DB.DbM (Either HistoryError [EpochReward])
 queryHistoryStakeRewards address = do
-  maxEpoch <- DB.queryLatestMemberRewardEpochNo
-  delegations <- DB.queryDelegationHistory address maxEpoch
-  mapM queryReward delegations
+  mEnabled <- DB.queryEpochSyncEnabled
+  finalizedCount <- DB.queryEpochFinalizedCount
+  mSaId <- DB.queryStakeAddressId address
+  case (mEnabled, mSaId) of
+    (Nothing, _) -> pure $ Left EpochSyncUninitialised
+    (Just False, _) -> pure $ Left EpochSyncDisabled
+    _ | finalizedCount == 0 -> pure $ Left EpochFinalizedEmpty
+    (_, Nothing) -> pure $ Left StakeAddressNotFound
+    (_, Just saId) -> do
+      maxEpoch <- DB.queryLatestMemberRewardEpochNo
+      delegations <- DB.queryDelegationHistory saId maxEpoch
+      if List.null delegations
+        then pure $ Left (NoDelegationHistory maxEpoch)
+        else Right <$> mapM queryReward delegations
   where
     queryReward ::
-      (DB.StakeAddressId, Word64, UTCTime, DB.DbLovelace, DB.PoolHashId) ->
+      (DB.StakeAddressId, Word64, Maybe UTCTime, DB.DbLovelace, DB.PoolHashId) ->
       DB.DbM EpochReward
     queryReward (saId, en, date, DB.DbLovelace delegated, poolId) = do
-      mReward <- DB.queryRewardForEpoch en saId
-      mPoolTicker <- DB.queryPoolTicker poolId
-
+      mReward <- DB.queryRewardForEpoch en saId poolId
+      mPoolTicker <- DB.queryPoolTickerForEpoch poolId en
+      mPoolView <- DB.queryPoolHashView poolId
       let reward = maybe 0 DB.unDbLovelace mReward
           poolTicker = fromMaybe "???" mPoolTicker
 
       pure $
         EpochReward
           { erAddressId = saId
-          , erPoolId = fromIntegral $ DB.getPoolHashId poolId
           , erPoolTicker = poolTicker
+          , erPoolView = maybe "???" shortenBech32 mPoolView
           , erEpochNo = en
           , erDate = date
           , erAddress = address
@@ -87,7 +133,7 @@ renderRewards saddr xs = do
       [ (AlignRight, "epoch")
       , (AlignLeft, "reward_date")
       , (AlignRight, "delegated")
-      , (AlignRight, "pool_id")
+      , (AlignLeft, "stake pool")
       , (AlignLeft, "ticker")
       , (AlignRight, "reward")
       , (AlignRight, "RoS (%pa)")
@@ -96,9 +142,9 @@ renderRewards saddr xs = do
     toRow :: EpochReward -> [Text]
     toRow er =
       [ textShow (erEpochNo er)
-      , formatReportTime (erDate er)
+      , maybe "-" formatReportTime (erDate er)
       , DB.renderAda (erDelegated er)
-      , textShow (erPoolId er)
+      , erPoolView er
       , erPoolTicker er
       , specialRenderAda (erReward er)
       , Text.pack (if erPercent er == 0.0 then "0.0" else printf "%.3f" (erPercent er))
