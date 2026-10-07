@@ -1,0 +1,40 @@
+# Prometheus Configuration for Cardano DB Sync Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'cardano-db-sync-dev'
+
+# Scrape configurations
+scrape_configs:
+  # Cardano DB Sync application metrics (from Haskell)
+  - job_name: 'cardano-db-sync'
+    static_configs:
+      - targets: ['localhost:8080']
+        labels:
+          instance: 'cardano-db-sync'
+          environment: 'development'
+          component: 'application'
+    scrape_interval: 10s
+    metrics_path: '/'  # Note: metrics are served at root path, not /metrics
+    # This endpoint exposes:
+    # - Sync progress metrics (block height, slot height, epoch)
+    # - Database operation metrics (transaction duration, insert performance)
+    # - Queue metrics (depth, processing time)
+    # - Rollback metrics
+
+  # Telegraf - System + PostgreSQL + Process metrics (replaces postgres_exporter + node_exporter)
+  - job_name: 'telegraf'
+    static_configs:
+      - targets: ['localhost:9273']
+        labels:
+          instance: 'macos-dev'
+          environment: 'development'
+          component: 'telegraf'
+    scrape_interval: 10s
+    # This endpoint exposes:
+    # - macOS system metrics (CPU, RAM, disk I/O, network)
+    # - PostgreSQL database metrics (connections, transactions, cache hit ratio)
+    # - Process-specific metrics (cardano-db-sync and postgres processes)
+    # - Custom cardano database queries (block count, tx count, table sizes)
