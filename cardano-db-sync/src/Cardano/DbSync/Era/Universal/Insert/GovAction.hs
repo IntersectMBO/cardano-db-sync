@@ -99,7 +99,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
           , DB.govActionProposalExpiration = (\epochNum -> unEpochNo epochNum + 1) <$> govExpiresAt
           , DB.govActionProposalVotingAnchorId = Just votingAnchorId
           , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
-          , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode (pProcGovAction pp)
+          , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode $ stripJsonNuls $ Aeson.toJSON (pProcGovAction pp)
           , DB.govActionProposalParamProposal = mParamProposalId
           , DB.govActionProposalRatifiedEpoch = Nothing
           , DB.govActionProposalEnactedEpoch = Nothing
@@ -341,7 +341,7 @@ insertVotingAnchor blockId anchorType anchor =
     DB.insertVotingAnchor $
       DB.VotingAnchor
         { DB.votingAnchorBlockId = blockId
-        , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor -- TODO: Conway check unicode and size of URL
+        , DB.votingAnchorUrl = DB.VoteUrl $ Ledger.urlToText $ anchorUrl anchor
         , DB.votingAnchorDataHash = Generic.safeHashToByteString $ anchorDataHash anchor
         , DB.votingAnchorType = anchorType
         }

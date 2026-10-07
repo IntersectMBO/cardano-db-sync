@@ -15,12 +15,14 @@ module Cardano.DbSync.Util (
   getSyncStatus,
   isSyncedWithinSeconds,
   isSyncedWithintwoMinutes,
+  jsonHasNul,
   logException,
   maybeFromStrict,
   maybeToStrict,
   renderByteArray,
   renderPoint,
   rewardTypeToSource,
+  stripJsonNuls,
   textShow,
   forth4,
   splitLast,
@@ -41,11 +43,15 @@ import qualified Cardano.Ledger.Shelley.Rewards as Shelley
 import Cardano.Prelude hiding (catch)
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Exception.Lifted (catch)
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KeyMap
 import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Map.Strict as Map
 import qualified Data.Strict.Maybe as Strict
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Time.Clock as Time
 import Ouroboros.Consensus.Block.Abstract (ConvertRawHash (..))
@@ -91,6 +97,27 @@ logException tracer txt action =
 renderByteArray :: ByteArrayAccess bin => bin -> Text
 renderByteArray =
   Text.decodeUtf8 . Base16.encode . Data.ByteArray.convert
+
+jsonHasNul :: Aeson.Value -> Bool
+jsonHasNul v =
+  case v of
+    Aeson.String t -> Text.any (== '\0') t
+    Aeson.Array xs -> any jsonHasNul xs
+    Aeson.Object o -> any entryHasNul (KeyMap.toList o)
+    _otherwise -> False
+  where
+    entryHasNul (k, val) = Text.any (== '\0') (Key.toText k) || jsonHasNul val
+
+stripJsonNuls :: Aeson.Value -> Aeson.Value
+stripJsonNuls v =
+  case v of
+    Aeson.String t -> Aeson.String (stripNuls t)
+    Aeson.Array xs -> Aeson.Array (stripJsonNuls <$> xs)
+    Aeson.Object o -> Aeson.Object (KeyMap.fromList (stripEntry <$> KeyMap.toList o))
+    _otherwise -> v
+  where
+    stripEntry (k, val) = (Key.fromText (stripNuls (Key.toText k)), stripJsonNuls val)
+    stripNuls = Text.filter (/= '\0')
 
 renderPoint :: CardanoPoint -> Text
 renderPoint point =

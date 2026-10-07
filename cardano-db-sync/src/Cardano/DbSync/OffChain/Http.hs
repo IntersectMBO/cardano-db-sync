@@ -28,7 +28,7 @@ import Cardano.DbSync.Types (
   SimplifiedOffChainVoteData (..),
   showUrl,
  )
-import Cardano.DbSync.Util (renderByteArray)
+import Cardano.DbSync.Util (jsonHasNul, renderByteArray)
 import Cardano.Prelude hiding (show)
 import Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
@@ -67,6 +67,10 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
     case Aeson.eitherDecode' respLBS of
       Left err -> left $ OCFErrJsonDecodeFail (Just url) (Text.pack err)
       Right res -> pure res
+  let decodedJson = Aeson.toJSON decodedMetadata
+  when (jsonHasNul decodedJson) $
+    left $
+      OCFErrJsonDecodeFail (Just url) unicodeNulMsg
   pure $
     SimplifiedOffChainPoolData
       { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
@@ -75,7 +79,7 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
       , -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
         -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
         -- that the Aeson parser accepts.
-        spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
+        spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedJson)
       , spodContentType = mContentType
       }
   where
@@ -115,6 +119,9 @@ httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (mocvd, decodedValue, metadataHash, mWarning, isValidJson) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
+  when (jsonHasNul decodedValue) $
+    left $
+      OCFErrJsonDecodeFail (Just url) unicodeNulMsg
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash
@@ -127,6 +134,9 @@ httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType = do
       }
   where
     url = OffChainVoteUrl vurl
+
+unicodeNulMsg :: Text
+unicodeNulMsg = "Contains a Unicode NUL character, which Postgres cannot store"
 
 parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> DB.AnchorType -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Maybe Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text, Bool)
 parseAndValidateVoteData bs lbs metaHash anchorType murl = do

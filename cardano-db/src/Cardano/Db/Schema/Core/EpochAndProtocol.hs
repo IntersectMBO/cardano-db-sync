@@ -292,6 +292,7 @@ data EpochState = EpochState
 type instance Key EpochState = EpochStateId
 
 instance DbInfo EpochState where
+  uniqueFields _ = ["epoch_no"]
   unnestParamTypes _ =
     [ ("committee_id", "bigint[]")
     , ("no_confidence_id", "bigint[]")
