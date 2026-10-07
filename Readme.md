@@ -166,7 +166,7 @@ possible solutions.
 
 * [BuildingRunning][BuildingRunning]: Building and running the db-sync node.
 * [Docker][Docker]: Instruction for docker-compose, and building the images using nix.
-* [ERD][ERD]: The entity relationship diagram.
+* [ERD][ERD]: The entity relationship diagram. Regenerate with `scripts/generate-erd.sh`.
 * [Example SQL queries][ExampleQueries]: Some example SQL and Haskell/Esqueleto queries.
 * [OffChainPoolData][OffChainPoolData]: Explanation of how stake pool offchain data is retried.
 * [Schema Documentation][Schema Documentation]: The database schema documentation.
@@ -180,7 +180,7 @@ possible solutions.
 [BuildingRunning]: doc/building-running.md
 [Docker]: doc/docker.md
 [Running]: doc/running.md
-[ERD]: doc/ERD.png
+[ERD]: doc/ERD.svg
 [ExampleQueries]: doc/interesting-queries.md
 [PostgresView]: https://www.postgresql.org/docs/current/sql-createview.html
 [OffChainPoolData]: doc/pool-offchain-data.md
