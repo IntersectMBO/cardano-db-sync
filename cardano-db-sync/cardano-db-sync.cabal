@@ -17,6 +17,7 @@ build-type:             Custom
 extra-source-files:     CHANGELOG.md
                         schema/*.sql
                         test/testfiles/*.jsonld
+                        test/testfiles/*.json
 
 flag enable-ghc-debug
   description: Enable ghc-debug profiling support for heap analysis.
@@ -368,6 +369,7 @@ test-suite test
                         -Wunused-packages
 
   other-modules:        Cardano.DbSync.ApiTest
+                        Cardano.DbSync.Config.NodeTest
                         Cardano.DbSync.Config.TypesTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptTest

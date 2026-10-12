@@ -1,6 +1,7 @@
 module Main where
 
 import qualified Cardano.DbSync.ApiTest as Api
+import qualified Cardano.DbSync.Config.NodeTest as NodeConfig
 import qualified Cardano.DbSync.Config.TypesTest as Types
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest as ScriptData
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptTest as Script
@@ -29,4 +30,5 @@ main =
     , VoteTest.tests
     , HttpTest.tests
     , Util.tests
+    , NodeConfig.tests
     ]
