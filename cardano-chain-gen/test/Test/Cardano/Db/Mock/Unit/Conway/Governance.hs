@@ -13,6 +13,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   rollbackNewCommittee,
   rollbackNewCommitteeProposal,
   updateConstitution,
+  nulAnchorUrl,
   treasuryWithdrawal,
   parameterChange,
   chainedNewCommittee,
@@ -334,6 +335,61 @@ updateConstitution =
       "Unexpected constution voting anchor"
   where
     testLabel = "conwayUpdateConstitution"
+
+-- | A Unicode NUL in an on-chain anchor URL must not stop db-sync.
+--
+-- The ledger only length-checks a 'Url', so the proposal is valid on-chain, but
+-- Postgres cannot store 0x00 in a varchar column. Before the fix the insert into
+-- voting_anchor failed, db-sync exited, and the same block was replayed and
+-- failed again on every restart. The URL is now stored percent-encoded.
+--
+-- This also covers gov_action_proposal.description, which is the serialised
+-- proposal and therefore carries the same URL into a jsonb column.
+nulAnchorUrl :: IOManager -> [(Text, Text)] -> Assertion
+nulAnchorUrl =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    -- Register SPOs, DReps, and committee to vote
+    epoch1 <- initGovernance interpreter server
+
+    -- textToUrl only checks the byte length, so the NUL is accepted here.
+    let newUrl = fromJust (textToUrl 64 "constitution\0new")
+        dataHash = hashAnnotated (AnchorData "constitution content")
+        anchor = Governance.Anchor newUrl dataHash
+
+    -- Create and vote for a governance proposal
+    void $
+      Api.withConwayFindLeaderAndSubmit interpreter server $ \_ -> do
+        let
+          proposalTx = Conway.mkNewConstitutionTx anchor
+
+          addVoteTx =
+            Conway.mkGovVoteYesTx
+              govActionId
+              (Forging.drepVoters ++ Forging.committeeVoters)
+          govActionId =
+            GovActionId
+              { gaidTxId = txIdTx proposalTx
+              , gaidGovActionIx = GovActionIx 0
+              }
+
+        pure [proposalTx, addVoteTx]
+
+    epoch3 <- Api.fillEpochs interpreter server 2
+
+    -- The regression check: db-sync is still following the chain rather than
+    -- stuck replaying the block that carries the NUL.
+    assertBlockNoBackoff dbSync (length (epoch1 <> epoch3) + 1)
+
+    (EpochNo epochNo) <- getCurrentEpoch interpreter
+    assertEqQuery
+      dbSync
+      (DB.queryConstitutionAnchor epochNo)
+      (Just ("constitution%00new", originalBytes dataHash))
+      "Expected the NUL in the anchor URL to be stored percent-encoded"
+  where
+    testLabel = "conwayNulAnchorUrl"
 
 treasuryWithdrawal :: IOManager -> [(Text, Text)] -> Assertion
 treasuryWithdrawal =

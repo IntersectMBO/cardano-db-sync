@@ -9,6 +9,7 @@ import qualified Cardano.DbSync.OffChain.VoteTest as VoteTest
 import qualified Cardano.DbSync.Util.AddressTest as Address
 import qualified Cardano.DbSync.Util.Bech32Test as Bech32
 import qualified Cardano.DbSync.Util.CborTest as Cbor
+import qualified Cardano.DbSync.UtilTest as Util
 import qualified Cardano.DbSyncTest as DbSync
 import Cardano.Prelude
 import Hedgehog.Main
@@ -27,4 +28,5 @@ main =
     , Api.tests
     , VoteTest.tests
     , HttpTest.tests
+    , Util.tests
     ]

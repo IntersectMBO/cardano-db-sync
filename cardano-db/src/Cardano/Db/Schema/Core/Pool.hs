@@ -24,7 +24,7 @@ import Hasql.Encoders as E
 import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (
   PoolUrl (..),
-  unPoolUrl,
+  poolUrlEncoder,
  )
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
@@ -150,7 +150,7 @@ poolMetadataRefEncoder :: E.Params PoolMetadataRef
 poolMetadataRefEncoder =
   mconcat
     [ poolMetadataRefPoolId >$< Id.idEncoder Id.getPoolHashId
-    , poolMetadataRefUrl >$< E.param (E.nonNullable (unPoolUrl >$< E.text))
+    , poolMetadataRefUrl >$< E.param (E.nonNullable poolUrlEncoder)
     , poolMetadataRefHash >$< E.param (E.nonNullable E.bytea)
     , poolMetadataRefRegisteredTxId >$< Id.idEncoder Id.getTxId
     ]

@@ -6,6 +6,7 @@ module Cardano.Db.Schema.Types where
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant ((>$<))
 import Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Error as TextError
 import Data.Time (UTCTime, localTimeToUTC, utc, utcToLocalTime)
@@ -42,6 +43,12 @@ newtype PoolUrl = PoolUrl {unPoolUrl :: Text}
 
 poolUrlDecoder :: HsqlD.Value PoolUrl
 poolUrlDecoder = PoolUrl <$> HsqlD.text
+
+poolUrlEncoder :: E.Value PoolUrl
+poolUrlEncoder = (sanitiseUrl . unPoolUrl) >$< E.text
+
+sanitiseUrl :: Text -> Text
+sanitiseUrl = Text.replace (Text.singleton '\0') (Text.pack "%00")
 
 textDecoder :: HsqlD.Value Text
 textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))

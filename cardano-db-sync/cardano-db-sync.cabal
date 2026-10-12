@@ -377,6 +377,7 @@ test-suite test
                         Cardano.DbSync.Util.AddressTest
                         Cardano.DbSync.Util.Bech32Test
                         Cardano.DbSync.Util.CborTest
+                        Cardano.DbSync.UtilTest
                         Cardano.DbSyncTest
 
   build-depends:        base
