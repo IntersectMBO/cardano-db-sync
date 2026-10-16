@@ -103,12 +103,21 @@ import Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Ledger.Abstract (LedgerResult)
 import qualified Ouroboros.Consensus.Ledger.Abstract as Consensus
-import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
+import Ouroboros.Consensus.Ledger.Basics (DiffMK, EmptyMK, ValuesMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
-import Ouroboros.Consensus.Ledger.Tables.Utils (forgetLedgerTables)
+import Ouroboros.Consensus.Ledger.SupportsMempool (HasTxs (extractTxs))
+import Ouroboros.Consensus.Ledger.Tables.Utils (
+  calculateDifference,
+  forgetLedgerTables,
+  prependDiffs,
+  trackingToDiffs,
+ )
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger.Block
 import qualified Ouroboros.Consensus.Shelley.Ledger.Ledger as Consensus
+import Ouroboros.Consensus.Storage.LedgerDB.Forker (
+  ResolveLeiosBlock (applyLeiosClosure, blockLeiosCert, inlineLeiosClosure),
+ )
 import Ouroboros.Consensus.Storage.LedgerDB.Snapshots
 import Ouroboros.Consensus.Storage.LedgerDB.V2.Backend hiding (Trace)
 import qualified Ouroboros.Consensus.Storage.LedgerDB.V2.InMemory as InMem
@@ -576,36 +585,35 @@ tickThenReapplyCheckHash env cfg block = do
       restrictedTables <- read (srTables oldRef) (clsState oldCls) keys
       -- Attach the tables to the ledger state and apply the block
       let ledgerState' = Consensus.withLedgerTables (clsState oldCls) restrictedTables
-          newLedgerResult =
-            Consensus.tickThenReapplyLedgerResult Consensus.ComputeLedgerEvents cfg block ledgerState'
-          newLedgerState = forgetLedgerTables $ Consensus.lrResult newLedgerResult
-          isNewEpoch = case (ledgerEpochNo env (clsState oldCls), ledgerEpochNo env newLedgerState) of
-            (Right oldE, Right newE) -> oldE /= newE
-            _ -> False
-          !newEpochBlockNo = applyToEpochBlockNo (isByronLedger newLedgerState) isNewEpoch (clsEpochBlockNo oldCls)
-          -- Build pure CardanoLedgerState from result
-          newCls =
-            fmap
-              ( \stt ->
-                  CardanoLedgerState
-                    { clsState = forgetLedgerTables stt
-                    , clsEpochBlockNo = newEpochBlockNo
-                    }
-              )
-              newLedgerResult
-      -- Push diffs to the new handle
-      newHandle <- duplicateWithDiffs (srTables oldRef) (clsState oldCls) (Consensus.lrResult newLedgerResult)
-      -- Create new DbSyncStateRef and push to LedgerDB
-      canClose <- newTVarIO True
-      let !newRef =
-            DbSyncStateRef
-              { srState = Consensus.lrResult newCls
-              , srTables = newHandle
-              , srCanClose = canClose
-              }
-      let (!ledgerDB', !prunedRefs) = pushLedgerDB ledgerDB newRef
-      atomically $ writeTVar (leStateVar env) (Strict.Just ledgerDB')
-      pure $ Right (oldRef, newCls, prunedRefs)
+      for (reapplyWithLeiosClosure cfg block ledgerState') $ \newLedgerResult -> do
+        let newLedgerState = forgetLedgerTables $ Consensus.lrResult newLedgerResult
+            isNewEpoch = case (ledgerEpochNo env (clsState oldCls), ledgerEpochNo env newLedgerState) of
+              (Right oldE, Right newE) -> oldE /= newE
+              _ -> False
+            !newEpochBlockNo = applyToEpochBlockNo (isByronLedger newLedgerState) isNewEpoch (clsEpochBlockNo oldCls)
+            -- Build pure CardanoLedgerState from result
+            newCls =
+              fmap
+                ( \stt ->
+                    CardanoLedgerState
+                      { clsState = forgetLedgerTables stt
+                      , clsEpochBlockNo = newEpochBlockNo
+                      }
+                )
+                newLedgerResult
+        -- Push diffs to the new handle
+        newHandle <- duplicateWithDiffs (srTables oldRef) (clsState oldCls) (Consensus.lrResult newLedgerResult)
+        -- Create new DbSyncStateRef and push to LedgerDB
+        canClose <- newTVarIO True
+        let !newRef =
+              DbSyncStateRef
+                { srState = Consensus.lrResult newCls
+                , srTables = newHandle
+                , srCanClose = canClose
+                }
+        let (!ledgerDB', !prunedRefs) = pushLedgerDB ledgerDB newRef
+        atomically $ writeTVar (leStateVar env) (Strict.Just ledgerDB')
+        pure (oldRef, newCls, prunedRefs)
     else
       pure . Left $
         SNErrLedgerState $
@@ -628,6 +636,39 @@ tickThenReapplyCheckHash env cfg block = do
                 renderByteArray (SBS.fromShort . Consensus.getOneEraHash $ blockHash block)
             , "."
             ]
+
+-- | The ChainSync server hands out a certifying block with its EB closure
+-- inlined as the body, but the node applies the closure to the /unticked/
+-- parent state and then the block with its on-wire empty body. Ticking first
+-- diverges from the node whenever a certifying block opens an epoch.
+--
+-- 'applyLeiosClosure' drops the closure's per-tx ledger events, so closure txs
+-- get no 'LedgerDeposits' and 'insertTx' falls back to deriving the deposit.
+reapplyWithLeiosClosure ::
+  ExtLedgerCfg CardanoBlock ->
+  CardanoBlock ->
+  ExtLedgerState CardanoBlock ValuesMK ->
+  Either SyncNodeError (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock DiffMK))
+reapplyWithLeiosClosure cfg block st =
+  case (blockLeiosCert block, extractTxs block) of
+    (Nothing, _) -> Right $ tickThenReapply block st
+    -- The ChainSync server falls back to the bare block when it cannot resolve
+    -- the closure; applying that would silently drop the EB's txs.
+    (Just _, []) -> Left . SNErrLedgerState $ "Certifying block without its EB closure: " <> blockHashStr
+    (Just _, closureTxs) ->
+      case applyLeiosClosure ledgerCfg closureTxs (ledgerState st) of
+        Left err ->
+          Left . SNErrLedgerState $
+            "applyLeiosClosure failed for certifying block " <> blockHashStr <> ": " <> show err
+        Right afterClosure ->
+          let closureDiff = trackingToDiffs $ calculateDifference (ledgerState st) afterClosure
+           in Right $
+                prependDiffs closureDiff
+                  <$> tickThenReapply (inlineLeiosClosure block []) st {ledgerState = afterClosure}
+  where
+    ledgerCfg = configLedger $ getExtLedgerCfg cfg
+    blockHashStr = Text.unpack . renderByteArray . SBS.fromShort . Consensus.getOneEraHash $ blockHash block
+    tickThenReapply = Consensus.tickThenReapplyLedgerResult Consensus.ComputeLedgerEvents cfg
 
 getHeaderHash :: HeaderHash CardanoBlock -> ByteString
 getHeaderHash bh = SBS.fromShort (Consensus.getOneEraHash bh)
