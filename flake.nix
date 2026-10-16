@@ -201,13 +201,13 @@
           project = (nixpkgs.haskell-nix.cabalProject' ({ config, lib, pkgs, ... }: rec {
             src = ./.;
             name = "cardano-db-sync";
-            compiler-nix-name = lib.mkDefault "ghc96";
+            compiler-nix-name = lib.mkDefault "ghc910";
             flake.variants =
               let
                 extraCompilers = 
                   # To avoid excessive jobs, only build for default compiler on macOS
                   lib.optionals (system == "x86_64-linux")
-                    [ "ghc910" "ghc912" ];
+                    [ "ghc912" ];
               in
                 lib.genAttrs extraCompilers (c: { compiler-nix-name = c; });
 
