@@ -41,6 +41,7 @@ import Cardano.DbSync.DbEvent (liftDbLookup, liftDbLookupEither)
 import qualified Cardano.DbSync.Era.Shelley.Generic as Generic
 import Cardano.DbSync.Era.Shelley.Generic.ParamProposal
 import Cardano.DbSync.Era.Universal.Insert.Other (toDouble)
+import Cardano.DbSync.Era.Util (safeEncodeToJson)
 import Cardano.DbSync.Error (SyncNodeError, mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State
 import Cardano.DbSync.Util
@@ -62,9 +63,7 @@ import Cardano.Ledger.State (DRep (..))
 import Cardano.Prelude
 import Control.Monad.Extra (whenJust)
 import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.Map.Strict as Map
-import qualified Data.Text.Encoding as Text
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (ConwayEra)
 
@@ -82,11 +81,12 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
   mParamProposalId <-
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
-        Just <$> insertParamProposal blkId txId (convertConwayParamProposal pparams)
+        Just <$> insertParamProposal syncEnv blkId txId (convertConwayParamProposal pparams)
       _ -> pure Nothing
   prevGovActionDBId <- case mprevGovAction of
     Nothing -> pure Nothing
     Just prevGovActionId -> Just <$> resolveGovActionProposal syncEnv prevGovActionId
+  description <- safeEncodeToJson syncEnv "gov_action_proposal.description" (Aeson.toJSON (pProcGovAction pp))
   govActionProposalId <-
     lift $
       DB.insertGovActionProposal $
@@ -99,7 +99,7 @@ insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)
           , DB.govActionProposalExpiration = (\epochNum -> unEpochNo epochNum + 1) <$> govExpiresAt
           , DB.govActionProposalVotingAnchorId = Just votingAnchorId
           , DB.govActionProposalType = Generic.toGovAction $ pProcGovAction pp
-          , DB.govActionProposalDescription = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode $ stripJsonNuls $ Aeson.toJSON (pProcGovAction pp)
+          , DB.govActionProposalDescription = description
           , DB.govActionProposalParamProposal = mParamProposalId
           , DB.govActionProposalRatifiedEpoch = Nothing
           , DB.govActionProposalEnactedEpoch = Nothing
@@ -205,12 +205,13 @@ resolveGovActionProposal syncEnv gaId = do
     $ DB.queryGovActionProposalId gaTxId (fromIntegral index) -- TODO: Use Word32?
 
 insertParamProposal ::
+  SyncEnv ->
   DB.BlockId ->
   DB.TxId ->
   ParamProposal ->
   ExceptT SyncNodeError DB.DbM DB.ParamProposalId
-insertParamProposal blkId txId pp = do
-  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (pppCostmdls pp)
+insertParamProposal syncEnv blkId txId pp = do
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel syncEnv blkId) (pppCostmdls pp)
   lift
     . DB.insertParamProposal
     $ DB.ParamProposal
@@ -405,15 +406,17 @@ insertDrepDistr e pSnapshot = do
       DRepCredential cred -> drepExpiry <$> Map.lookup cred (psDRepState pSnapshot)
 
 insertCostModel ::
+  SyncEnv ->
   DB.BlockId ->
   Map Language Ledger.CostModel ->
   ExceptT SyncNodeError DB.DbM DB.CostModelId
-insertCostModel _blkId cms =
+insertCostModel syncEnv _blkId cms = do
+  costs <- safeEncodeToJson syncEnv "cost_model.costs" (Aeson.toJSON cms)
   lift $
     DB.insertCostModel $
       DB.CostModel
         { DB.costModelHash = Crypto.abstractHashToBytes $ Crypto.serializeCborHash $ Ledger.mkCostModels cms
-        , DB.costModelCosts = Text.decodeUtf8 $ LBS.toStrict $ Aeson.encode cms
+        , DB.costModelCosts = costs
         }
 
 updateRatified ::

@@ -69,7 +69,7 @@ insertOnNewEpoch ::
   ExceptT SyncNodeError DB.DbM ()
 insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
   whenStrictJust (Generic.euProtoParams epochUpdate) $ \params ->
-    insertEpochParam tracer blkId epochNo params (Generic.euNonce epochUpdate)
+    insertEpochParam syncEnv blkId epochNo params (Generic.euNonce epochUpdate)
   whenStrictJust (Generic.neAdaPots newEpoch) $ \pots ->
     insertPots blkId slotNo epochNo pots
   spoVoting <- whenStrictJustDefault Map.empty (Generic.neDRepState newEpoch) $ \dreps -> whenDefault Map.empty (ioGov iopts) $ do
@@ -99,18 +99,17 @@ insertOnNewEpoch syncEnv blkId slotNo epochNo newEpoch = do
         , Generic.stake = maybe (Shelley.Coin 0) fst deleg
         , Generic.votingPower = fromCompact <$> Map.lookup pkh voting
         }
-    tracer = getTrace syncEnv
     iopts = getInsertOptions syncEnv
 
 insertEpochParam ::
-  Trace IO LogMessage ->
+  SyncEnv ->
   DB.BlockId ->
   EpochNo ->
   Generic.ProtoParams ->
   Ledger.Nonce ->
   ExceptT SyncNodeError DB.DbM ()
-insertEpochParam _tracer blkId (EpochNo epoch) params nonce = do
-  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel blkId) (Generic.ppCostmdls params)
+insertEpochParam syncEnv blkId (EpochNo epoch) params nonce = do
+  cmId <- maybe (pure Nothing) (fmap Just . insertCostModel syncEnv blkId) (Generic.ppCostmdls params)
   void
     . lift
     $ DB.insertEpochParam

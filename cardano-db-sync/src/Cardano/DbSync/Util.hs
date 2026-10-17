@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,6 +17,11 @@ module Cardano.DbSync.Util (
   isSyncedWithinSeconds,
   isSyncedWithintwoMinutes,
   jsonHasNul,
+  jsonbNestingLimit,
+  minMaxStackDepthKb,
+  jsonbNestingExceeded,
+  jsonNumberUnstorable,
+  unstorableAsJsonb,
   logException,
   maybeFromStrict,
   maybeToStrict,
@@ -50,7 +56,9 @@ import qualified Data.Aeson.KeyMap as KeyMap
 import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Char8 as BS
 import qualified Data.Map.Strict as Map
+import Data.Scientific (Scientific, base10Exponent, coefficient)
 import qualified Data.Strict.Maybe as Strict
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -119,6 +127,82 @@ stripJsonNuls v =
   where
     stripEntry (k, val) = (Key.fromText (stripNuls (Key.toText k)), stripJsonNuls val)
     stripNuls = Text.filter (/= '\0')
+
+-- | How deeply nested a JSON document may be before db-sync refuses to store it as
+-- @jsonb@.
+jsonbNestingLimit :: Int
+jsonbNestingLimit = 2000
+
+-- | The @max_stack_depth@, in kB, a server needs to parse a value nested to
+-- 'jsonbNestingLimit'. Measured at around 300 kB, rounded up for margin.
+minMaxStackDepthKb :: Int
+minMaxStackDepthKb = 512
+
+-- | Whether encoded JSON nests deeper than 'jsonbNestingLimit', one level per array
+-- or object, as Postgres counts it.
+jsonbNestingExceeded :: ByteString -> Bool
+jsonbNestingExceeded bs =
+  go 0 False False 0
+  where
+    len = BS.length bs
+
+    go :: Int -> Bool -> Bool -> Int -> Bool
+    go !level !inString !escaped !i
+      | i >= len = False
+      | inString =
+          if escaped
+            then go level True False (i + 1)
+            else case BS.index bs i of
+              '\\' -> go level True True (i + 1)
+              '"' -> go level False False (i + 1)
+              _otherwise -> go level True False (i + 1)
+      | otherwise = case BS.index bs i of
+          '"' -> go level True False (i + 1)
+          '{' -> deeper
+          '[' -> deeper
+          '}' -> go (level - 1) False False (i + 1)
+          ']' -> go (level - 1) False False (i + 1)
+          _otherwise -> go level False False (i + 1)
+      where
+        deeper
+          | level + 1 > jsonbNestingLimit = True
+          | otherwise = go (level + 1) False False (i + 1)
+
+-- | Whether Postgres would reject this number as out of @numeric@ range: more than
+-- 131072 digits before the decimal point, or 16383 after it.
+jsonNumberUnstorable :: Scientific -> Bool
+jsonNumberUnstorable sci
+  | expo >= 0 = integerDigits + expo > 131072
+  | otherwise = negate expo - trailingZeros > 16383
+  where
+    expo = base10Exponent sci
+    digits = show (abs (coefficient sci)) :: [Char]
+    integerDigits = length digits
+    trailingZeros = length (takeWhile (== '0') (reverse digits))
+
+-- | Why Postgres would refuse to store this value as @jsonb@, or 'Nothing' if it will
+-- take it.
+unstorableAsJsonb :: Aeson.Value -> Maybe Text
+unstorableAsJsonb value
+  | jsonHasNul value = Just "Contains a Unicode NUL character, which Postgres cannot store"
+  | hasUnstorableNumber value = Just "Contains a number outside the range Postgres can store as numeric"
+  | tooDeep 0 value = Just ("Nests deeper than " <> textShow jsonbNestingLimit <> " levels, which Postgres cannot parse as jsonb")
+  | otherwise = Nothing
+  where
+    hasUnstorableNumber v =
+      case v of
+        Aeson.Number sci -> jsonNumberUnstorable sci
+        Aeson.Array xs -> any hasUnstorableNumber xs
+        Aeson.Object o -> any hasUnstorableNumber (KeyMap.elems o)
+        _otherwise -> False
+
+    tooDeep !level v
+      | level > jsonbNestingLimit = True
+      | otherwise =
+          case v of
+            Aeson.Array xs -> any (tooDeep (level + 1)) xs
+            Aeson.Object o -> any (tooDeep (level + 1)) (KeyMap.elems o)
+            _otherwise -> False
 
 renderPoint :: CardanoPoint -> Text
 renderPoint point =

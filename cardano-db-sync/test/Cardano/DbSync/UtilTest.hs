@@ -3,11 +3,20 @@
 module Cardano.DbSync.UtilTest (tests) where
 
 import Cardano.Db (sanitiseUrl)
-import Cardano.DbSync.Util (jsonHasNul, stripJsonNuls)
+import Cardano.DbSync.Era.Util (containsUnicodeNul)
+import Cardano.DbSync.Util (
+  jsonHasNul,
+  jsonNumberUnstorable,
+  jsonbNestingExceeded,
+  jsonbNestingLimit,
+  stripJsonNuls,
+  unstorableAsJsonb,
+ )
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Scientific as Sci
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEnc
 import Hedgehog
@@ -31,6 +40,16 @@ tests =
       , ("stripJsonNuls leaves NUL-free JSON unchanged", prop_stripJsonNuls_clean_unchanged)
       , ("encoded stripJsonNuls has no \\u0000 escape", prop_stripJsonNuls_encoding_safe)
       , ("encoding a NUL does produce the escape Postgres rejects", prop_nul_encodes_to_escape)
+      , ("containsUnicodeNul matches only the NUL escape", prop_containsUnicodeNul_only_nul)
+      , ("jsonbNestingExceeded accepts a document at the limit", prop_nesting_at_limit)
+      , ("jsonbNestingExceeded rejects one level past the limit", prop_nesting_past_limit)
+      , ("jsonbNestingExceeded ignores brackets inside strings", prop_nesting_ignores_strings)
+      , ("jsonbNestingExceeded accepts ordinary JSON", prop_nesting_clean)
+      , ("jsonNumberUnstorable follows Postgres numeric range", prop_number_range)
+      , ("jsonNumberUnstorable is False for ordinary numbers", prop_number_clean)
+      , ("unstorableAsJsonb names the limit that was hit", prop_unstorable_reasons)
+      , ("unstorableAsJsonb accepts storable JSON", prop_unstorable_clean)
+      , ("stripJsonNuls removes the reason a NUL is refused", prop_strip_then_storable)
       ]
 
 -- -----------------------------------------------------------------------------
@@ -134,6 +153,93 @@ prop_nul_encodes_to_escape =
     property $
       assert . Text.isInfixOf "\\u0000" . encodeToText $
         Aeson.String "a\0b"
+
+-- -----------------------------------------------------------------------------
+-- jsonb storability
+
+prop_containsUnicodeNul_only_nul :: Property
+prop_containsUnicodeNul_only_nul = withTests 1 $ property $ do
+  assert $ containsUnicodeNul "{\"a\":\"\\u0000\"}"
+  assert . not $ containsUnicodeNul "{\"a\":\"\\u0001\"}"
+  assert . not $ containsUnicodeNul "{\"a\":\"\\u000F\"}"
+  assert . not $ containsUnicodeNul "{\"a\":\"\\u000a\"}"
+  assert . not $ containsUnicodeNul "{\"a\":\"plain\"}"
+
+-- | Nested arrays at exactly @jsonbNestingLimit@ levels.
+nestedArrays :: Int -> ByteString
+nestedArrays n = TextEnc.encodeUtf8 (Text.replicate n "[" <> "1" <> Text.replicate n "]")
+
+prop_nesting_at_limit :: Property
+prop_nesting_at_limit = withTests 1 $ property $ do
+  assert . not $ jsonbNestingExceeded (nestedArrays jsonbNestingLimit)
+
+prop_nesting_past_limit :: Property
+prop_nesting_past_limit = withTests 1 $ property $ do
+  assert $ jsonbNestingExceeded (nestedArrays (jsonbNestingLimit + 1))
+  -- and well past it, as a hostile datum would be
+  assert $ jsonbNestingExceeded (nestedArrays (jsonbNestingLimit * 10))
+
+-- | A bracket inside a string is data, not nesting; an escaped quote does not end it.
+prop_nesting_ignores_strings :: Property
+prop_nesting_ignores_strings = withTests 1 $ property $ do
+  let brackets = TextEnc.encodeUtf8 ("[\"" <> Text.replicate (jsonbNestingLimit * 2) "[" <> "\"]")
+  assert . not $ jsonbNestingExceeded brackets
+  let escapedQuote = TextEnc.encodeUtf8 ("[\"\\\"" <> Text.replicate (jsonbNestingLimit * 2) "[" <> "\"]")
+  assert . not $ jsonbNestingExceeded escapedQuote
+
+prop_nesting_clean :: Property
+prop_nesting_clean = property $ do
+  val <- forAll genCleanValue
+  assert . not . jsonbNestingExceeded . LBS.toStrict $ Aeson.encode val
+
+-- | Postgres @numeric@ holds at most 131072 digits before the point and 16383 after.
+-- Built with 'Sci.scientific', never written as @1e131073@: a decimal literal goes
+-- through 'fromRational', which expands the power of ten.
+prop_number_range :: Property
+prop_number_range = withTests 1 $ property $ do
+  assert $ jsonNumberUnstorable (Sci.scientific 1 131073)
+  assert . not $ jsonNumberUnstorable (Sci.scientific 1 131071)
+  assert $ jsonNumberUnstorable (Sci.scientific 1 1000000000)
+  assert $ jsonNumberUnstorable (Sci.scientific 1 (-16384))
+  assert . not $ jsonNumberUnstorable (Sci.scientific 1 (-16383))
+
+prop_number_clean :: Property
+prop_number_clean = property $ do
+  n <- forAll (Gen.integral (Range.linearFrom 0 (-1000000) 1000000))
+  assert . not $ jsonNumberUnstorable (fromIntegral (n :: Int))
+
+prop_unstorable_reasons :: Property
+prop_unstorable_reasons = withTests 1 $ property $ do
+  let reasonFor = unstorableAsJsonb
+  reasonHas "NUL" (reasonFor (Aeson.String "a\0b"))
+  reasonHas "numeric" (reasonFor (Aeson.Number (Sci.scientific 1 131073)))
+  reasonHas "Nests deeper" (reasonFor (nestedValue (jsonbNestingLimit + 1)))
+  where
+    reasonHas needle mReason =
+      case mReason of
+        Nothing -> annotate ("expected a reason mentioning " <> Text.unpack needle) >> failure
+        Just reason -> do
+          annotate (Text.unpack reason)
+          assert $ Text.isInfixOf needle reason
+
+prop_unstorable_clean :: Property
+prop_unstorable_clean = property $ do
+  val <- forAll genCleanValue
+  unstorableAsJsonb val === Nothing
+
+-- | What 'safeEncodeToJson' relies on: stripping removes the NUL reason.
+prop_strip_then_storable :: Property
+prop_strip_then_storable = property $ do
+  val <- forAll genNulValue
+  case unstorableAsJsonb (stripJsonNuls val) of
+    Nothing -> success
+    Just reason -> do
+      annotate (Text.unpack reason)
+      assert . not $ Text.isInfixOf "NUL" reason
+
+-- | A 'Aeson.Value' nested @n@ levels deep.
+nestedValue :: Int -> Aeson.Value
+nestedValue n = foldr (\_ acc -> Aeson.toJSON [acc]) (Aeson.Number 1) [1 .. n]
 
 -- -----------------------------------------------------------------------------
 -- Helpers

@@ -7,7 +7,7 @@ module Cardano.Db.Statement.JsonB where
 
 import Cardano.Prelude (ExceptT, HasCallStack, forM_, liftIO, throwError)
 import Data.ByteString (ByteString)
-import Data.Int (Int64)
+import Data.Int (Int32, Int64)
 import qualified Hasql.Connection as HsqlC
 import qualified Hasql.Decoders as HsqlD
 import qualified Hasql.Encoders as HsqlE
@@ -89,6 +89,23 @@ jsonbSchemaStatement =
       HsqlD.singleRow $
         HsqlD.column $
           HsqlD.nonNullable HsqlD.int8
+
+-- | The server's @max_stack_depth@, in kB. It is what bounds how deeply nested a
+-- value the @jsonb@ parser can accept, Postgres having no setting of its own for that.
+maxStackDepthStatement :: HsqlStmt.Statement () Int32
+maxStackDepthStatement =
+  HsqlStmt.Statement
+    "SELECT setting::int4 FROM pg_settings WHERE name = 'max_stack_depth'"
+    HsqlE.noParams
+    (HsqlD.singleRow (HsqlD.column (HsqlD.nonNullable HsqlD.int4)))
+    True
+
+queryMaxStackDepthKb :: HsqlC.Connection -> ExceptT DbSessionError IO Int32
+queryMaxStackDepthKb conn = do
+  result <- liftIO $ HsqlSes.run (HsqlSes.statement () maxStackDepthStatement) conn
+  case result of
+    Left err -> throwError $ DbSessionError mkDbCallStack (formatSessionError err)
+    Right kb -> pure kb
 
 -- Original function for direct connection use
 queryJsonbInSchemaExists :: HsqlC.Connection -> ExceptT DbSessionError IO Bool

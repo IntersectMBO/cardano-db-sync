@@ -28,8 +28,9 @@ import Cardano.DbSync.Types (
   SimplifiedOffChainVoteData (..),
   showUrl,
  )
-import Cardano.DbSync.Util (jsonHasNul, renderByteArray)
+import Cardano.DbSync.Util (renderByteArray, unstorableAsJsonb)
 import Cardano.Prelude hiding (show)
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
@@ -68,9 +69,8 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
       Left err -> left $ OCFErrJsonDecodeFail (Just url) (Text.pack err)
       Right res -> pure res
   let decodedJson = Aeson.toJSON decodedMetadata
-  when (jsonHasNul decodedJson) $
-    left $
-      OCFErrJsonDecodeFail (Just url) unicodeNulMsg
+  whenJust (unstorableAsJsonb decodedJson) $
+    left . OCFErrJsonDecodeFail (Just url)
   pure $
     SimplifiedOffChainPoolData
       { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
@@ -119,9 +119,8 @@ httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (mocvd, decodedValue, metadataHash, mWarning, isValidJson) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
-  when (jsonHasNul decodedValue) $
-    left $
-      OCFErrJsonDecodeFail (Just url) unicodeNulMsg
+  whenJust (unstorableAsJsonb decodedValue) $
+    left . OCFErrJsonDecodeFail (Just url)
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash
@@ -134,9 +133,6 @@ httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType = do
       }
   where
     url = OffChainVoteUrl vurl
-
-unicodeNulMsg :: Text
-unicodeNulMsg = "Contains a Unicode NUL character, which Postgres cannot store"
 
 parseAndValidateVoteData :: ByteString -> LBS.ByteString -> Maybe VoteMetaHash -> DB.AnchorType -> Maybe OffChainUrlType -> ExceptT OffChainFetchError IO (Maybe Vote.OffChainVoteData, Aeson.Value, ByteString, Maybe Text, Bool)
 parseAndValidateVoteData bs lbs metaHash anchorType murl = do

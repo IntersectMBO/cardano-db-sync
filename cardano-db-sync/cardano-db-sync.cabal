@@ -408,5 +408,6 @@ test-suite test
                       , hedgehog-quickcheck
                       , network
                       , ouroboros-consensus:cardano
+                      , scientific
                       , text
                       , trace-dispatcher

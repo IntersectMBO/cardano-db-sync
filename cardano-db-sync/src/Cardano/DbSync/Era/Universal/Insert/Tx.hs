@@ -180,7 +180,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertWithdrawals syncEnv txId redeemers) $
           Generic.txWithdrawals tx
       when (ioShelley iopts) $
-        mapM_ (insertParamProposal blkId txId) $
+        mapM_ (insertParamProposal syncEnv blkId txId) $
           Generic.txParamProposal tx
 
       maTxMint <-
