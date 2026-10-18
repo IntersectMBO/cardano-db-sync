@@ -32,7 +32,7 @@ import Cardano.Prelude
 import Data.List.Extra (chunksOf)
 import Data.Maybe.Strict (StrictMaybe (..))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
-import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
+import Ouroboros.Consensus.Ledger.Tables (EmptyMK)
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock ())
 import qualified Prelude

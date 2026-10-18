@@ -354,7 +354,7 @@ mkSimpleTx valid txBody =
     AlonzoTx
       { atBody = txBody
       , atWits = mempty
-      , atIsValid = IsValid valid
+      , atIsPhase2Valid = if valid then Phase2Valid else Phase2Invalid
       , atAuxData = maybeToStrictMaybe Nothing
       }
 
@@ -380,7 +380,7 @@ mkScriptTx valid rdmrs txBody =
   AlonzoTx
     { atBody = txBody
     , atWits = witnesses
-    , atIsValid = IsValid valid
+    , atIsPhase2Valid = if valid then Phase2Valid else Phase2Invalid
     , atAuxData = maybeToStrictMaybe Nothing
     }
   where
@@ -445,7 +445,7 @@ emptyTx =
     AlonzoTx
       { atBody = emptyTxBody
       , atWits = mempty
-      , atIsValid = IsValid True
+      , atIsPhase2Valid = Phase2Valid
       , atAuxData = maybeToStrictMaybe Nothing
       }
 
@@ -469,7 +469,7 @@ mkDummyTxWithSlot slot =
             Strict.SNothing
             (Strict.SJust Testnet)
       , atWits = mempty
-      , atIsValid = IsValid True
+      , atIsPhase2Valid = Phase2Valid
       , atAuxData = Strict.SNothing
       }
 
@@ -483,6 +483,6 @@ mkAuxDataTx isValid' txBody auxData =
     AlonzoTx
       { atBody = txBody
       , atWits = mempty
-      , atIsValid = IsValid isValid'
+      , atIsPhase2Valid = if isValid' then Phase2Valid else Phase2Invalid
       , atAuxData = Strict.SJust (mkAlonzoTxAuxData auxData [])
       }

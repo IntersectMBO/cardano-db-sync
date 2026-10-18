@@ -140,7 +140,7 @@ resolveStakeCreds indx st = case indx of
     rewardAccs :: Map (Credential Staking) (AccountState era)
     rewardAccs = dsAccounts dstate ^. accountsMapL
 
-    poolParams :: Map (KeyHash StakePool) StakePoolParams
+    poolParams :: Map (KeyHash StakePool) (StakePoolParams era)
     poolParams =
       let certState =
             lsCertState $
@@ -164,7 +164,7 @@ resolveStakeCreds indx st = case indx of
           poolMembers = Map.keys $ Map.filter (== poolId) delegs
        in poolMembers !! n
 
-    findPoolParams :: PoolIndex -> StakePoolParams
+    findPoolParams :: PoolIndex -> StakePoolParams era
     findPoolParams (PoolIndex n) = Map.elems poolParams !! n
     findPoolParams (PoolIndexId pid) = poolParams Map.! pid
     findPoolParams pix@(PoolIndexNew _) = poolParams Map.! resolvePool pix st
@@ -204,7 +204,7 @@ allPoolStakeCert st =
        in Map.elems $ Map.mapWithKey (stakePoolStateToStakePoolParams Testnet) $ psStakePools (certState ^. certPStateL)
     creds = concatMap getPoolStakeCreds poolParms
 
-getPoolStakeCreds :: StakePoolParams -> [Credential Staking]
+getPoolStakeCreds :: StakePoolParams era -> [Credential Staking]
 getPoolStakeCreds pparams =
   unAccountId (aaId (sppAccountAddress pparams))
     : (KeyHashObj <$> Set.toList (sppOwners pparams))
@@ -316,11 +316,13 @@ consPoolParams ::
   KeyHash StakePool ->
   Credential Staking ->
   [KeyHash Staking] ->
-  StakePoolParams
+  StakePoolParams era
 consPoolParams poolId rwCred owners =
   StakePoolParams
     { sppId = poolId
     , sppVrf = hashVerKeyVRF @StandardCrypto . snd . mkVRFKeyPair $ RawSeed 0 0 0 0 0 -- undefined
+    , -- The Leios BLS key a pool registers for endorser-block voting. Not exercised here.
+      sppBlsKey = SNothing
     , sppPledge = Coin 1000
     , sppCost = Coin 10000
     , sppMargin = minBound

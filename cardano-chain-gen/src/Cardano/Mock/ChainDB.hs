@@ -26,7 +26,6 @@ import Ouroboros.Consensus.Cardano.Ledger ()
 import Ouroboros.Consensus.Config
 import Ouroboros.Consensus.Ledger.Abstract
 import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
-import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
 import qualified Ouroboros.Consensus.Ledger.Tables as Consensus
 import Ouroboros.Consensus.Ledger.Tables.Utils (applyDiffsMK, forgetLedgerTables, restrictValuesMK)
 import Ouroboros.Consensus.Shelley.Ledger.SupportsProtocol ()
@@ -74,7 +73,7 @@ replaceGenesisDB chainDB st = chainDB {cchain = Genesis st}
 
 extendChainDB ::
   forall block.
-  LedgerSupportsProtocol block =>
+  ApplyBlock Consensus.ExtLedgerState block =>
   ChainDB block ->
   block ->
   ChainDB block
@@ -83,7 +82,7 @@ extendChainDB chainDB blk = do
       -- Get the current ledger state
       (tipState, tables) = getTipState chain
       -- Apply the block and compute the diffs
-      keys :: LedgerTables (Consensus.ExtLedgerState block) KeysMK
+      keys :: LedgerTables block KeysMK
       keys = getBlockKeySets blk
       ledgerTables = Consensus.getLedgerTables tables
       restrictedTables = restrictValuesMK ledgerTables (Consensus.getLedgerTables keys)
