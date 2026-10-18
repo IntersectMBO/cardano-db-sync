@@ -179,6 +179,7 @@ library
                       , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-node
                       , cardano-prelude
+                      , cardano-protocol
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cardano-strict-containers
@@ -213,7 +214,7 @@ library
                       , ouroboros-consensus:protocol
                       , ouroboros-network:api
                       , ouroboros-network:framework
-                      , ouroboros-network:framework-tracing
+                      , ouroboros-network:tracing
                       , ouroboros-network:protocols
                       , plutus-ledger-api
                       , prometheus
