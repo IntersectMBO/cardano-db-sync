@@ -31,6 +31,7 @@ import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Tracing.Setup (mkStdoutTracer)
 import Cardano.Logging (
   BackendConfig (..),
+  ConfigSource (..),
   DetailLevel (..),
   FormatLogging (..),
   SeverityS (..),
@@ -81,7 +82,7 @@ readTraceConfig fp configBytes =
   case Yaml.decodeEither' configBytes of
     Right (Aeson.Object o)
       | any (`KeyMap.member` o) ["TraceOptions", "HermodTracing", "Options"] ->
-          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) fp
+          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) (FromFile fp)
     _otherwise -> pure defaultTraceConfig
 
 coalesceConfig ::
@@ -110,6 +111,8 @@ coalesceConfig traceConfig pcfg ncfg adjustGenesisPath =
       , dncAlonzoGenesisHash = ncAlonzoGenesisHash ncfg
       , dncConwayGenesisFile = adjustGenesisFilePath adjustGenesisPath (ncConwayGenesisFile ncfg)
       , dncConwayGenesisHash = ncConwayGenesisHash ncfg
+      , dncDijkstraGenesisFile = adjustGenesisFilePath adjustGenesisPath <$> ncDijkstraGenesisFile ncfg
+      , dncDijkstraGenesisHash = ncDijkstraGenesisHash ncfg
       , dncByronProtocolVersion = ncByronProtocolVersion ncfg
       , dncShelleyHardFork = ncShelleyHardFork ncfg
       , dncAllegraHardFork = ncAllegraHardFork ncfg

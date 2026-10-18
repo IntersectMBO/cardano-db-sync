@@ -435,7 +435,7 @@ mkSyncEnvFromConfig ::
   IO (Either SyncNodeError SyncEnv)
 mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc isJsonbInSchema =
   case genCfg of
-    GenesisCardano _ bCfg sCfg _ _
+    GenesisCardano _ bCfg sCfg _ _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
           pure
             . Left
@@ -456,14 +456,15 @@ mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigF
               , " /= "
               , textShow (Shelley.sgSystemStart $ scConfig sCfg)
               ]
-      | otherwise ->
+      | otherwise -> do
+          (pInfo, _mkForgings) <- mkProtocolInfoCardano genCfg []
           Right
             <$> mkSyncEnv
               metricsSetters
               trce
               dbEnv
               syncOptions
-              (fst $ mkProtocolInfoCardano genCfg [])
+              pInfo
               (Shelley.sgNetworkId $ scConfig sCfg)
               (Shelley.sgMaxLovelaceSupply $ scConfig sCfg)
               (NetworkMagic . unProtocolMagicId $ Byron.configProtocolMagicId bCfg)
@@ -517,7 +518,8 @@ convertToPoint slot hashBlob =
   Point . Point.block slot <$> convertHashBlob hashBlob
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
-    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
+    -- Rejects a blob of the wrong length, so a malformed hash column is Nothing.
+    convertHashBlob = fromRawHash (Proxy @CardanoBlock)
 
 getSecurityParam :: SyncEnv -> Word64
 getSecurityParam syncEnv =

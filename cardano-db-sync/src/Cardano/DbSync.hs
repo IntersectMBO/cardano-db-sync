@@ -339,7 +339,7 @@ genesisNetworkMagic =
 genesisSystemStart :: GenesisConfig -> UTCTime
 genesisSystemStart genCfg =
   case genCfg of
-    GenesisCardano _ bCfg _ _ _ ->
+    GenesisCardano _ bCfg _ _ _ _ ->
       Byron.gdStartTime (Byron.configGenesisData bCfg)
 
 -- -------------------------------------------------------------------------------------------------

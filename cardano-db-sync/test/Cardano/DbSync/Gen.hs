@@ -98,6 +98,8 @@ syncNodeConfig =
     <*> (GenesisHashAlonzo . fromJust <$> hashBlake2b_256)
     <*> (GenesisFile <$> filePath)
     <*> Gen.maybe (GenesisHashConway . fromJust <$> hashBlake2b_256)
+    <*> Gen.maybe (GenesisFile <$> filePath)
+    <*> Gen.maybe (GenesisHashDijkstra . fromJust <$> hashBlake2b_256)
     <*> protocolVersion
     <*> triggerHardFork
     <*> triggerHardFork
