@@ -14,6 +14,7 @@
 - Fix the per-epoch statistics attributing dropped `datum.value` rows to `redeemer_data` and vice versa.
 - Roll back the database transaction when a block insert reports failure by returning `Left` rather than by throwing. Previously the runner committed it, leaving a partially written batch of blocks behind while db-sync reported the error.
 - Name the migrations that actually ran at startup and summarise the rest, replacing the per-script `Migration N/M` progress lines. Restarting on an up to date database now logs six lines rather than seventy-four ([#2128](https://github.com/IntersectMBO/cardano-db-sync/issues/2128)).
+- Pin dependencies to node 11.2: `ouroboros-consensus` 5.1.0.1, `cardano-ledger-dijkstra` 0.4.0.0 and the new `cardano-protocol` 0.2.0.0. db-sync still negotiates NodeToClient 23 and so stays compatible with 11.1.x nodes.
 
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.

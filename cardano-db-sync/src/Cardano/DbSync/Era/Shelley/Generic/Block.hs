@@ -36,6 +36,7 @@ import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..), hashKey)
 import Cardano.Prelude
 import Cardano.Protocol.Crypto (Crypto, StandardCrypto, VRF)
+import qualified Cardano.Protocol.Praos.BlockHeader as Praos
 import qualified Cardano.Protocol.TPraos.BHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
 import Cardano.Slotting.Slot (SlotNo (..))
@@ -50,7 +51,6 @@ import Ouroboros.Consensus.Cardano.Block (
   ShelleyEra,
  )
 import Ouroboros.Consensus.Protocol.Praos (Praos)
-import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import Ouroboros.Consensus.Shelley.Protocol.Abstract

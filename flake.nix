@@ -264,8 +264,6 @@
 
               ({ lib, pkgs, ... }: {
                 package-keys = [ "ekg" ];
-                # Ignore version bounds
-                packages.katip.doExactConfig = true;
                 # Split data to reduce closure size
                 packages.ekg.components.library.enableSeparateDataOutput = true;
               })

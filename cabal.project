@@ -10,11 +10,10 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2026-05-03T23:05:52Z
-  , cardano-haskell-packages 2026-05-03T22:28:43Z
-active-repositories:
-  , :rest
-  , cardano-haskell-packages:override
+  , hackage.haskell.org 2026-09-29T11:48:37Z
+  , cardano-haskell-packages 2026-10-27T09:47:50Z
+-- No `active-repositories` override: cardano-ledger-core needs cuddle >= 1.8, which
+-- only Hackage has, and overriding with CHaP hides it. cardano-node does the same.
 
 packages:
   cardano-db
@@ -77,8 +76,9 @@ constraints:
   -- haskell.nix tries to use 0.7.1.5; the patched 0.7.1.6 fork is in source-repository-package.
   , any.proto-lens >= 0.7.1.6
   -- haskell.nix patch does not work for 1.6.8
-  , any.crypton-x509-system < 1.6.8
-  , validation < 1.2
+  , any.crypton-x509-system < 1.6.8 || >= 1.7
+  -- https://github.com/channable/alfred-margaret/pull/76
+  , any.alfred-margaret < 2.1.1.0 || > 2.1.1.0
 
 allow-newer:
     , cardano-api:plutus-core
@@ -91,9 +91,8 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: 97036a66bcf8c89f687ae57a048eecc0389977ef
-  --sha256: sha256-+dod+EL73MICgbgflyJnwDlxbCeaBbBLrr2tLX59hAA=
+  tag: dac0d7ab2dfdee1f9eda901589e3c6ac8eaa1899
+  --sha256: sha256-RppioYH9ZAvl5kQk1w1LOwzeC1LEwIwBvLHeaoV3Q74=
   subdir:
     cardano-node
     trace-forward
-    trace-resources
