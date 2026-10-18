@@ -59,6 +59,7 @@ library
                         Cardano.DbSync.Config.Byron
                         Cardano.DbSync.Config.Cardano
                         Cardano.DbSync.Config.Conway
+                        Cardano.DbSync.Config.Dijkstra
                         Cardano.DbSync.Config.Node
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
@@ -204,6 +205,7 @@ library
                       , network
                       , lifted-base
                       , memory
+                      , mempack
                       , microlens
                       , network-mux
                       , ouroboros-consensus
