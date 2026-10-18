@@ -31,7 +31,7 @@ import Ouroboros.Network.Block hiding (RollBack)
 import Test.Cardano.Db.Mock.Config
 import Test.Cardano.Db.Mock.UnifiedApi
 import Test.Cardano.Db.Mock.Validate
-import Test.QuickCheck (Gen, Property, frequency, noShrinking, withMaxSuccess, (===))
+import Test.QuickCheck (Gen, Property, frequency, noShrinking, withNumTests, (===))
 import Test.QuickCheck.Monadic (monadicIO, run)
 import Test.StateMachine
 import Test.StateMachine.Sequential (runCommands')
@@ -289,7 +289,7 @@ sm interpreter mockServer dbSync =
     noCleanup
 
 prop_empty_blocks :: IOManager -> [(Text, Text)] -> Property
-prop_empty_blocks iom knownMigrations = withMaxSuccess 20 $ noShrinking $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
+prop_empty_blocks iom knownMigrations = withNumTests 20 $ noShrinking $ forAllCommands smSymbolic (Just 20) $ \cmds -> monadicIO $ do
   (hist, res) <- run $ runAction $ \interpreter mockServer dbSync -> do
     (hist, _model, res) <- runCommands' (sm interpreter mockServer dbSync) cmds
     pure (hist, res)

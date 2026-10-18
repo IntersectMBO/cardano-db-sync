@@ -3,6 +3,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -56,6 +57,8 @@ import Network.TypedProtocol.Peer (Peer (..))
 import qualified Network.TypedProtocol.Stateful.Peer as St
 import Ouroboros.Consensus.Block (CodecConfig, HasHeader, Point, StandardHash, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig, configCodec)
+import Ouroboros.Consensus.Ledger.Abstract (ApplyBlock)
+import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import Ouroboros.Consensus.Ledger.Query (BlockQuery, BlockSupportsLedgerQuery, QueryFootprint (..), ShowQuery)
 import Ouroboros.Consensus.Ledger.SupportsMempool (ApplyTxErr, GenTx, TxId)
 import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
@@ -124,7 +127,7 @@ readChain handle = do
   cchain . chainDB <$> readTVar (chainProducerState handle)
 
 addBlock ::
-  (LedgerSupportsProtocol blk, MonadSTM m) =>
+  (ApplyBlock Consensus.ExtLedgerState blk, MonadSTM m) =>
   ServerHandle m blk ->
   blk ->
   STM m ()
@@ -239,7 +242,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
           { haHandshakeTracer = nullTracer -- showTracing stdoutTracer
           , haBearerTracer = nullTracer -- showTracing stdoutTracer
           , haHandshakeCodec = codecHandshake nodeToClientVersionCodec
-          , haVersionDataCodec = cborTermVersionDataCodec nodeToClientCodecCBORTerm
+          , haVersionDataCodec = nodeToClientVersionDataCodec
           , haAcceptVersion = acceptableVersion
           , haQueryVersion = queryVersion
           , haTimeLimits = noTimeLimitsHandshake

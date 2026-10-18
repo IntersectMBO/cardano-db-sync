@@ -35,6 +35,7 @@ module Cardano.Mock.Forging.Interpreter (
 ) where
 
 import Cardano.Ledger.Core (txIdTx)
+import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Shelley.API.Mempool as Ledger
 import Cardano.Ledger.Shelley.LedgerState (NewEpochState (..))
 import qualified Cardano.Ledger.TxIn as Ledger
@@ -60,7 +61,7 @@ import Data.Aeson (FromJSON, ToJSON, eitherDecodeFileStrict, encodeFile)
 import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.SOP.Strict (NS (S, Z))
+import Data.SOP.Strict (NS (S, Z), hd, tl)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Data.Word (Word64)
@@ -94,11 +95,16 @@ import Ouroboros.Consensus.Shelley.Ledger.Ledger
 
 import Ouroboros.Consensus.Forecast (Forecast (..))
 import qualified Ouroboros.Consensus.HardFork.Combinator.AcrossEras as Consensus
+import Ouroboros.Consensus.HardFork.Combinator.Basics (
+  distribTopLevelConfig,
+  hardForkLedgerStatePerEra,
+ )
 import Ouroboros.Consensus.HardFork.Combinator.Ledger ()
 import qualified Ouroboros.Consensus.HardFork.Combinator.Mempool as Consensus
+import qualified Ouroboros.Consensus.HardFork.Combinator.State as State
 import Ouroboros.Consensus.HeaderValidation (headerStateChainDep)
 import Ouroboros.Consensus.Ledger.Abstract (TickedLedgerState, applyChainTick, projectLedgerTables, stowLedgerTables, withLedgerTables)
-import Ouroboros.Consensus.Ledger.Basics (ComputeLedgerEvents (..), EmptyMK, ValuesMK)
+import Ouroboros.Consensus.Ledger.Basics (ComputeLedgerEvents (..))
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState, headerState, ledgerState)
 import Ouroboros.Consensus.Ledger.SupportsMempool (
   ApplyTxErr,
@@ -108,6 +114,7 @@ import Ouroboros.Consensus.Ledger.SupportsMempool (
   applyTx,
  )
 import Ouroboros.Consensus.Ledger.SupportsProtocol (ledgerViewForecastAt)
+import Ouroboros.Consensus.Ledger.Tables (EmptyMK, ValuesMK)
 import Ouroboros.Consensus.Ledger.Tables.Utils (forgetLedgerTables)
 import Ouroboros.Consensus.Node.ProtocolInfo (
   ProtocolInfo,
@@ -392,7 +399,11 @@ forgeNextLeaders interpreter txes possibleLeaders = do
             else throwIO $ FailedToValidateSlot currentSlot (lengthSlots <$> istFingerprint interState) (interpFingerFile interpreter)
         Just (proof, blockForging) -> do
           -- Tick the ledger state for the 'SlotNo' we're producing a block for
-          let ledgerState' = ledgerState $ fst $ currentState (istChain interState)
+          let (extLedgerSt, tables) = currentState (istChain interState)
+              ledgerState' = ledgerState extLedgerSt
+
+              -- 'mkValidated' annotates against the UTxO, so it needs the tables.
+              stowedSt = stowLedgerTables $ extLedgerSt `withLedgerTables` tables
 
               tickedLedgerSt =
                 applyChainTick
@@ -401,15 +412,21 @@ forgeNextLeaders interpreter txes possibleLeaders = do
                   currentSlot
                   (forgetLedgerTables ledgerState')
 
+          validatedTxs <- throwLeftIO $ traverse (mkValidated cfg stowedSt currentSlot) txes
+
           !blk <-
             Block.forgeBlock
               blockForging
-              cfg
-              (istNextBlockNo interState)
-              currentSlot
-              (forgetLedgerTables tickedLedgerSt)
-              (mkValidated <$> txes)
-              proof
+              Block.ForgeBlockArgs
+                { Block.fbConfig = cfg
+                , Block.fbCurrentBlockNo = istNextBlockNo interState
+                , Block.fbCurrentSlotNo = currentSlot
+                , -- db-sync's mock chain never produces Peras certificates.
+                  Block.fbPerasCert = Nothing
+                , Block.fbCurrentTickedLedgerState = forgetLedgerTables tickedLedgerSt
+                , Block.fbTxs = validatedTxs
+                , Block.fbIsLeader = proof
+                }
 
           (blk,) <$> throwLeftIO (addOrValidateSlot interpreter (istFingerprint interState) blk)
 
@@ -585,77 +602,95 @@ mkTxId txe =
     TxConway tx -> txIdTx @ConwayEra tx
     TxShelley tx -> txIdTx @ShelleyEra tx
 
-mkValidated :: TxEra -> Validated (Consensus.GenTx CardanoBlock)
-mkValidated txe =
-  case txe of
-    TxAlonzo tx ->
-      Consensus.HardForkValidatedGenTx
-        ( Consensus.OneEraValidatedGenTx
-            ( S
-                ( S
-                    ( S
-                        ( S
-                            ( Z
-                                ( Consensus.WrapValidatedGenTx
-                                    (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        )
-    TxShelley tx ->
-      Consensus.HardForkValidatedGenTx
-        ( Consensus.OneEraValidatedGenTx
-            ( S
-                ( Z
-                    ( Consensus.WrapValidatedGenTx
-                        (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
-                    )
-                )
-            )
-        )
-    TxBabbage tx ->
-      Consensus.HardForkValidatedGenTx
-        ( Consensus.OneEraValidatedGenTx
-            ( S
-                ( S
-                    ( S
-                        ( S
-                            ( S
-                                ( Z
-                                    ( Consensus.WrapValidatedGenTx
-                                        (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        )
-    TxConway tx ->
-      Consensus.HardForkValidatedGenTx
-        ( Consensus.OneEraValidatedGenTx
-            ( S
-                ( S
-                    ( S
-                        ( S
-                            ( S
-                                ( S
-                                    ( Z
-                                        ( Consensus.WrapValidatedGenTx
-                                            (Consensus.mkShelleyValidatedTx $ Ledger.unsafeMakeValidated tx)
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        )
+-- | Build a 'Validated' transaction for the forger without running the LEDGER rule.
+--
+-- The mock transactions carry no witnesses, so real validation would reject every
+-- one of them. Forging only reads the transaction back out of the annotation
+-- 'Ledger.unsafeMakeValidatedTx' builds, so the state need not be ticked to @slot@
+-- and the UTxO-derived parts are never consulted.
+mkValidated ::
+  TopLevelConfig CardanoBlock ->
+  ExtLedgerState CardanoBlock EmptyMK ->
+  SlotNo ->
+  TxEra ->
+  Either ForgingError (Validated (Consensus.GenTx CardanoBlock))
+mkValidated cfg st slot txe =
+  case (txe, ledgerState st) of
+    (TxShelley tx, LedgerStateShelley sta) ->
+      Right $
+        wrap $
+          S $
+            Z $
+              Consensus.WrapValidatedGenTx $
+                validated cfgShelley sta tx
+    (TxAlonzo tx, LedgerStateAlonzo sta) ->
+      Right $
+        wrap $
+          S $
+            S $
+              S $
+                S $
+                  Z $
+                    Consensus.WrapValidatedGenTx $
+                      validated cfgAlonzo sta tx
+    (TxBabbage tx, LedgerStateBabbage sta) ->
+      Right $
+        wrap $
+          S $
+            S $
+              S $
+                S $
+                  S $
+                    Z $
+                      Consensus.WrapValidatedGenTx $
+                        validated cfgBabbage sta tx
+    (TxConway tx, LedgerStateConway sta) ->
+      Right $
+        wrap $
+          S $
+            S $
+              S $
+                S $
+                  S $
+                    S $
+                      Z $
+                        Consensus.WrapValidatedGenTx $
+                          validated cfgConway sta tx
+    -- A transaction can only be annotated against a ledger state of its own era.
+    _otherwise -> Left UnexpectedEra
+  where
+    wrap = Consensus.HardForkValidatedGenTx . Consensus.OneEraValidatedGenTx
+
+    -- The 'EpochInfo' cached in the hard-fork config is a dummy that errors on
+    -- every method, so reconstruct one from the current state.
+    eraCfgs =
+      distribTopLevelConfig
+        (State.epochInfoLedger (configLedger cfg) (hardForkLedgerStatePerEra (ledgerState st)))
+        cfg
+
+    -- By position in 'CardanoEras': 0 Byron, 1 Shelley, 2 Allegra, 3 Mary,
+    -- 4 Alonzo, 5 Babbage, 6 Conway, 7 Dijkstra. 'hd'/'tl' rather than an NP
+    -- pattern bind, which would need MonoLocalBinds for the whole module.
+    cfgShelley = hd (tl eraCfgs)
+    cfgAlonzo = hd (tl (tl (tl (tl eraCfgs))))
+    cfgBabbage = hd (tl (tl (tl (tl (tl eraCfgs)))))
+    cfgConway = hd (tl (tl (tl (tl (tl (tl eraCfgs))))))
+
+    validated ::
+      ShelleyBasedEra era =>
+      TopLevelConfig (ShelleyBlock proto era) ->
+      LedgerState (ShelleyBlock proto era) EmptyMK ->
+      Core.Tx Core.TopTx era ->
+      Validated (GenTx (ShelleyBlock proto era))
+    validated eraCfg sta tx =
+      Consensus.mkShelleyValidatedTx $
+        Ledger.unsafeMakeValidatedTx
+          (shelleyLedgerGlobals (configLedger eraCfg))
+          (Ledger.mkMempoolEnv nes slot)
+          (Ledger.mkMempoolState nes)
+          tx
+      where
+        nes = shelleyLedgerState sta
 
 mkForecast ::
   TopLevelConfig CardanoBlock ->
