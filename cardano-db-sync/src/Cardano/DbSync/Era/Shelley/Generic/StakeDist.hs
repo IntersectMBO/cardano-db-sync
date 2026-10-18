@@ -117,7 +117,7 @@ genericStakeSlice pInfo epochBlockNo lstate isMigration
     -- epoch plus one.
     stakeSnapshot :: Ledger.SnapShot
     stakeSnapshot =
-      Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
+      Ledger.msSnapShot . Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
     activeStakeEntries :: VMap.KVVector VB VS (Credential Staking, StakeWithDelegation)
@@ -194,7 +194,7 @@ genericCountEpochStake lstate =
 
     stakeSnapshot :: Ledger.SnapShot
     stakeSnapshot =
-      Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
+      Ledger.msSnapShot . Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
     activeStake :: VMap VB VS (Credential Staking) StakeWithDelegation
@@ -233,7 +233,7 @@ genericFullStakeSlice lstate =
     -- epoch plus one.
     stakeSnapshot :: Ledger.SnapShot
     stakeSnapshot =
-      Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
+      Ledger.msSnapShot . Ledger.ssStakeMark . Shelley.esSnapshots . Shelley.nesEs $
         Consensus.shelleyLedgerState lstate
 
     activeStakeEntries :: VMap.KVVector VB VS (Credential Staking, StakeWithDelegation)
@@ -285,7 +285,7 @@ genericPoolDistr lstate =
     nes = Consensus.shelleyLedgerState lstate
 
     stakeMark :: Ledger.SnapShot
-    stakeMark = Ledger.ssStakeMark $ Shelley.esSnapshots $ Shelley.nesEs nes
+    stakeMark = Ledger.msSnapShot $ Ledger.ssStakeMark $ Shelley.esSnapshots $ Shelley.nesEs nes
 
     stakePerPool = countStakePerPool (Ledger.ssActiveStake stakeMark)
     blocksPerPool = nes ^. Shelley.nesBprevL

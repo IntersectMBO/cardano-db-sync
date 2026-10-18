@@ -54,7 +54,7 @@ insertPoolRegister ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolP.StakePoolParams ->
+  PoolP.StakePoolParams era ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId idx params = do
   poolHashId <- insertPoolKeyWithCache syncEnv UpdateCache (PoolP.sppId params)
@@ -197,7 +197,7 @@ insertPoolCert ::
   DB.BlockId ->
   DB.TxId ->
   Word16 ->
-  PoolCert ->
+  PoolCert era ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolCert syncEnv isMember mdeposits network epoch blkId txId idx pCert =
   case pCert of

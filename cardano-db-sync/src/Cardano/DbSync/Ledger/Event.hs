@@ -31,8 +31,8 @@ import qualified Cardano.Ledger.Alonzo.Rules as Alonzo
 import Cardano.Ledger.Coin (Coin (..), CompactForm (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
-import Cardano.Ledger.Dijkstra.Rules as Dijkstra (DijkstraLedgerEvent (..))
 import qualified Cardano.Ledger.Core as Ledger
+import Cardano.Ledger.Dijkstra.Rules as Dijkstra (DijkstraLedgerEvent (..))
 import Cardano.Ledger.Hashes (SafeHash)
 import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
@@ -347,7 +347,7 @@ pattern LEDepositShelley ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositShelley hsh coin <-
   ShelleyLedgerEventBBODY
     ( LedgersEvent
@@ -369,7 +369,7 @@ pattern LEDepositAllegra ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositAllegra hsh coin <-
   ShelleyLedgerEventBBODY
     ( LedgersEvent
@@ -391,7 +391,7 @@ pattern LEDepositsAlonzo ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositsAlonzo hsh coin <-
   ShelleyLedgerEventBBODY
     ( ShelleyInAlonzoEvent
@@ -417,7 +417,7 @@ pattern LEDepositsConway ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositsConway hsh coin <-
   ShelleyLedgerEventBBODY
     ( ShelleyInAlonzoEvent
@@ -443,7 +443,7 @@ pattern LEDepositsDijkstra ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositsDijkstra hsh coin <-
   ShelleyLedgerEventBBODY
     ( ShelleyInAlonzoEvent

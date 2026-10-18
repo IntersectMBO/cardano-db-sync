@@ -104,8 +104,8 @@ import Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Ledger.Abstract (LedgerResult)
 import qualified Ouroboros.Consensus.Ledger.Abstract as Consensus
-import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
+import Ouroboros.Consensus.Ledger.Tables (EmptyMK)
 import Ouroboros.Consensus.Ledger.Tables.Utils (forgetLedgerTables)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger.Block
@@ -134,38 +134,6 @@ import qualified "contra-tracer" Control.Tracer as Tracer
 {- HLINT ignore "Reduce duplication" -}
 {- HLINT ignore "Use readTVarIO" -}
 
--- -- | Create a simple in-memory 'LedgerTablesHandle' from 'LedgerTables ValuesMK'.
--- -- Each handle closes over an IORef that is written to at most once (by pushDiffs).
--- mkHandleFromValues ::
---   LedgerTables (ExtLedgerState CardanoBlock) ValuesMK ->
---   IO (LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
--- mkHandleFromValues tables = do
---   ref <- newIORef tables
---   pure
---     LedgerTablesHandle
---       { close = pure ()
---       , transfer = \_ -> pure ()
---       , duplicate = \reg -> do
---           current <- readIORef ref
---           (rk, h) <- allocate reg (\_ -> mkHandleFromValues current) close
---           pure (rk, h)
---       , read = \_st keys -> do
---           vals <- readIORef ref
---           pure $ ltliftA2 restrictValuesMK vals keys
---       , readRange = \_st _ -> do
---           vals <- readIORef ref
---           pure (vals, Nothing)
---       , readAll = \_st -> readIORef ref
---       , pushDiffs = \_oldSt newSt -> do
---           let diffs = ltprj newSt
---           vals <- readIORef ref
---           writeIORef ref $ ltliftA2 applyDiffsMK vals diffs
---       , takeHandleSnapshot = \_st _name -> pure Nothing
---       , tablesSize = pure 0
---       }
-
--- | Push a new DbSyncStateRef and prune old ones. Returns the new DB and
--- any pruned DbSyncStateRefs whose handles should be closed.
 pushLedgerDB :: LedgerDB -> DbSyncStateRef -> (LedgerDB, [DbSyncStateRef])
 pushLedgerDB db st =
   pruneLedgerDb
@@ -235,7 +203,15 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
       -- bundling in scripts/postgresql-setup.sh (it falls back to the InMemory
       -- branch and ships an incomplete tarball; on restore db-sync then can't
       -- find the snapshot and replays from genesis).
-      let args = LSM.LSMArgs (mkFsPath []) salt (LSM.stdMkBlockIOFS lsmPath)
+      -- 'Nothing' is the LSM export path, which db-sync does not use.
+      -- 'DiskCacheAll' is the caching default.
+      let args =
+            LSM.LSMArgs
+              (mkFsPath [])
+              Nothing
+              salt
+              LSM.DiskCacheAll
+              (LSM.stdMkBlockIOFS lsmPath)
       res <-
         runWithTempRegistry $
           (,())
@@ -400,8 +376,10 @@ applyBlock env blk = do
     finaliseDrepDistr :: ExtLedgerState CardanoBlock mk -> ExtLedgerState CardanoBlock mk
     finaliseDrepDistr ledger =
       ledger
-        & newEpochStateT @ConwayEra %~ forceDRepPulsingState
-        & newEpochStateT @DijkstraEra %~ forceDRepPulsingState
+        & newEpochStateT @ConwayEra
+        %~ forceDRepPulsingState
+          & newEpochStateT @DijkstraEra
+        %~ forceDRepPulsingState
 
 getGovState :: ExtLedgerState CardanoBlock mk -> Maybe Generic.GovStateW
 getGovState ls = case ledgerState ls of
@@ -560,7 +538,7 @@ tickThenReapplyCheckHash ::
     ( Either
         SyncNodeError
         ( DbSyncStateRef -- old state ref (for snapshotting)
-        , LedgerResult (ExtLedgerState CardanoBlock) CardanoLedgerState -- new state
+        , LedgerResult CardanoBlock CardanoLedgerState -- new state
         , [DbSyncStateRef] -- pruned refs to close
         )
     )
