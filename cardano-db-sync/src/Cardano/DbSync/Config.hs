@@ -114,6 +114,7 @@ coalesceConfig traceConfig pcfg ncfg adjustGenesisPath =
       , dncDijkstraGenesisFile = adjustGenesisFilePath adjustGenesisPath <$> ncDijkstraGenesisFile ncfg
       , dncDijkstraGenesisHash = ncDijkstraGenesisHash ncfg
       , dncByronProtocolVersion = ncByronProtocolVersion ncfg
+      , dncExperimentalHardForksEnabled = ncExperimentalHardForksEnabled ncfg
       , dncShelleyHardFork = ncShelleyHardFork ncfg
       , dncAllegraHardFork = ncAllegraHardFork ncfg
       , dncMaryHardFork = ncMaryHardFork ncfg

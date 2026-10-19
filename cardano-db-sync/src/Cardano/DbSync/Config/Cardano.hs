@@ -109,7 +109,12 @@ mkProtocolInfoCardano genesisConfig shelleyCred = do
               { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
               , Consensus.shelleyBasedLeaderCredentials = shelleyCred
               }
-        , cardanoProtocolVersion = ProtVer (natVersion @12) 0
+        , -- Consensus' 'MaxMajorProtVer': past it the ledger rules declare this
+          -- node obsolete, so it has to mirror the node's own claim exactly.
+          cardanoProtocolVersion =
+            if dncExperimentalHardForksEnabled dnc
+              then ProtVer (natVersion @12) 0
+              else ProtVer (natVersion @11) 0
         , cardanoLedgerTransitionConfig =
             Ledger.mkLatestTransitionConfig
               shelleyGenesis

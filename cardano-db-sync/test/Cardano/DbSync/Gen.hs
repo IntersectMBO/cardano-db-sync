@@ -101,6 +101,7 @@ syncNodeConfig =
     <*> Gen.maybe (GenesisFile <$> filePath)
     <*> Gen.maybe (GenesisHashDijkstra . fromJust <$> hashBlake2b_256)
     <*> protocolVersion
+    <*> Gen.bool -- dncExperimentalHardForksEnabled
     <*> triggerHardFork
     <*> triggerHardFork
     <*> triggerHardFork

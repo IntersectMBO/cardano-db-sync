@@ -27,7 +27,7 @@ import Data.Aeson (FromJSON (..), Object, (.!=), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.Aeson.Types (Parser)
+import Data.Aeson.Types (Parser, parseFail)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
 import qualified Data.Yaml as Yaml
@@ -51,6 +51,9 @@ data NodeConfig = NodeConfig
   , ncDijkstraGenesisFile :: !(Maybe GenesisFile)
   , ncDijkstraGenesisHash :: !(Maybe GenesisHashDijkstra)
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
+  , ncExperimentalHardForksEnabled :: !Bool
+  -- ^ Whether the node allows the not-yet-released hard fork eras. Decides the
+  -- claimed protocol version and whether the Dijkstra trigger is honoured.
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
   , -- Shelley hardfok parameters
     ncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
@@ -173,6 +176,7 @@ instance FromJSON NodeConfig where
           <*> (o .:? "DijkstraGenesisFile")
           <*> (o .:? "DijkstraGenesisHash")
           <*> (o .: "RequiresNetworkMagic")
+          <*> parseExperimentalHardForksEnabled o
           <*> parseByronProtocolVersion o
           <*> parseShelleyHardForkEpoch o
           <*> parseAllegraHardForkEpoch o
@@ -181,6 +185,18 @@ instance FromJSON NodeConfig where
           <*> parseBabbageHardForkEpoch o
           <*> parseConwayHardForkEpoch o
           <*> parseDijkstraHardForkEpoch o
+
+      -- 'TestEnableDevelopmentHardForkEras' is the former name. Either is accepted;
+      -- only a config setting both, disagreeing, is rejected.
+      parseExperimentalHardForksEnabled :: Object -> Parser Bool
+      parseExperimentalHardForksEnabled o = do
+        mValue <- o .:? "ExperimentalHardForksEnabled"
+        mOldValue <- o .:? "TestEnableDevelopmentHardForkEras"
+        case (mValue, mOldValue) of
+          (Just value, Just oldValue)
+            | value /= oldValue ->
+                parseFail "ExperimentalHardForksEnabled and its former name TestEnableDevelopmentHardForkEras are both set, to different values"
+          _otherwise -> pure (fromMaybe False (mValue <|> mOldValue))
 
       -- The v2 format dropped these three keys. Nothing in db-sync depends on the
       -- value: it is forwarded to Consensus.byronProtocolVersion, two lines above a
@@ -235,9 +251,14 @@ instance FromJSON NodeConfig where
           , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
+      -- The node reads this trigger only when the experimental eras are enabled.
       parseDijkstraHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
-      parseDijkstraHardForkEpoch o =
-        asum
-          [ CardanoTriggerHardForkAtEpoch <$> o .: "TestDijkstraHardForkAtEpoch"
-          , pure CardanoTriggerHardForkAtDefaultVersion
-          ]
+      parseDijkstraHardForkEpoch o = do
+        experimental <- parseExperimentalHardForksEnabled o
+        if experimental
+          then
+            asum
+              [ CardanoTriggerHardForkAtEpoch <$> o .: "TestDijkstraHardForkAtEpoch"
+              , pure CardanoTriggerHardForkAtDefaultVersion
+              ]
+          else pure CardanoTriggerHardForkAtDefaultVersion
