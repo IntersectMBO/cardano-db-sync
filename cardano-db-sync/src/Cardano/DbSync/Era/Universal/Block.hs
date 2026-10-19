@@ -14,6 +14,8 @@ where
 
 import Data.Bits (testBit)
 import Data.Either.Extra (eitherToMaybe)
+import Data.List (sortOn)
+import Data.Ord (Down (..))
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as BS
 import Data.ByteString.Short (ShortByteString (SBS))
@@ -31,7 +33,9 @@ import Cardano.Ledger.Keys
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import qualified Cardano.Ledger.State as LState
 import Cardano.Prelude
-import LeiosDemoTypes (EbAnnouncement (..), EbHash (..), ebHashBytes)
+import qualified Cardano.Crypto.Hash as Crypto
+import Cardano.Ledger.Block (ebReferencesAnnouncementHash, ebReferencesAnnouncementSize)
+import Cardano.Ledger.Hashes (extractHash)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Extended (ledgerState)
@@ -111,8 +115,8 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
           , DB.blockOpCertCounter = Just $ Generic.blkOpCertCounter blk
           , -- Leios (Dijkstra)
             DB.blockHasLeiosCert = Generic.blkHasLeiosCert blk
-          , DB.blockEbAnnouncementHash = ebHashBytes . ebAnnouncementHash <$> Generic.blkLeiosEbAnnouncement blk
-          , DB.blockEbAnnouncementSize = ebAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
+          , DB.blockEbAnnouncementHash = Crypto.hashToBytes . extractHash . ebReferencesAnnouncementHash <$> Generic.blkLeiosEbAnnouncement blk
+          , DB.blockEbAnnouncementSize = ebReferencesAnnouncementSize <$> Generic.blkLeiosEbAnnouncement blk
           , DB.blockLeiosCertSigners = serialize' . bitFieldToBytes . leiosCertSigners <$> Generic.blkLeiosCert blk
           , DB.blockLeiosCertSignature = leiosSignatureToBytes . leiosCertSignature <$> Generic.blkLeiosCert blk
           , -- A certifying block's body is the certified EB's tx closure (spliced in
@@ -313,11 +317,17 @@ committeeOrderFrom pickSnap cls =
       let nes = Consensus.shelleyLedgerState dls
           snap = pickSnap (Shelley.esSnapshots (Shelley.nesEs nes))
           seats = VS.toList $ leiosCommitteeSeats (snap ^. LState.ssLeiosCommitteeL)
+          -- w42 dropped the ledger's exported 'seatedLeiosCandidates'; its seating is now
+          -- inlined inside 'selectLeiosCommittee' (private). We replicate that exact order
+          -- here — descending stake, ties broken by ascending pool id — over the same
+          -- candidates, then take one pool per committee seat. Seat @i@ of 'ssLeiosCommittee'
+          -- lines up with the @i@-th pool by construction.
           pools =
-            V.toList . V.map LState.lcPoolId $
-              LState.seatedLeiosCandidates
-                (fromIntegral (length seats))
-                (LState.leiosCandidates (LState.ssStakePoolsSnapShot (snap ^. LState.ssSnapShotL)))
+            map LState.lcPoolId
+              . take (length seats)
+              . sortOn (\c -> (Down (LState.lcStake c), LState.lcPoolId c))
+              . V.toList
+              $ LState.leiosCandidates (LState.ssStakePoolsSnapShot (snap ^. LState.ssSnapShotL))
        in Just (zip pools seats)
     _ -> Nothing
 

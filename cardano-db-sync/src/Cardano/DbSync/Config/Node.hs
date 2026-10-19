@@ -28,6 +28,7 @@ import qualified Data.Yaml as Yaml
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
 import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, DijkstraEra, MaryEra, ShelleyEra, StandardCrypto)
 import Ouroboros.Consensus.Protocol.Praos (Praos)
+import Ouroboros.Consensus.Protocol.Praos2 (Praos2)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 
@@ -59,7 +60,7 @@ data NodeConfig = NodeConfig
   , -- Conway hardfok parameters
     ncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
   , -- Dijkstra hardfok parameters
-    ncDijkstraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
+    ncDijkstraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos2 StandardCrypto) DijkstraEra))
   }
 
 parseNodeConfig :: ByteString -> IO NodeConfig
@@ -159,7 +160,7 @@ instance FromJSON NodeConfig where
           , pure CardanoTriggerHardForkAtDefaultVersion
           ]
 
-      parseDijkstraHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
+      parseDijkstraHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos2 StandardCrypto) DijkstraEra))
       parseDijkstraHardForkEpoch o =
         asum
           [ CardanoTriggerHardForkAtEpoch <$> o .: "TestDijkstraHardForkAtEpoch"

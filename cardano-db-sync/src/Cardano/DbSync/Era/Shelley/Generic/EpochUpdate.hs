@@ -59,11 +59,16 @@ extractEpochNonce extLedgerState =
     ChainDepStateAlonzo st -> extractNonce st
     ChainDepStateBabbage st -> extractNoncePraos st
     ChainDepStateConway st -> extractNoncePraos st
-    ChainDepStateDijkstra st -> extractNoncePraos st
+    -- w42: Dijkstra runs Praos2, whose chain-dep state is PolyPraosState (Praos2 c),
+    -- not PraosState (= PolyPraosState (Praos c)). praosStateEpochNonce is a field of
+    -- PolyPraosState and so reads the epoch nonce regardless of the protocol.
+    ChainDepStateDijkstra st -> praosStateEpochNonce st
   where
     extractNonce :: Consensus.TPraosState -> Ledger.Nonce
     extractNonce =
       Shelley.ticknStateEpochNonce . Shelley.csTickn . Consensus.tpraosStateChainDepState
 
-    extractNoncePraos :: Consensus.PraosState -> Ledger.Nonce
+    -- w42: PraosState is now parameterised by the protocol (Praos for Babbage/Conway,
+    -- Praos2 for Dijkstra); praosStateEpochNonce is polymorphic over it.
+    extractNoncePraos :: Consensus.PraosState proto -> Ledger.Nonce
     extractNoncePraos = praosStateEpochNonce

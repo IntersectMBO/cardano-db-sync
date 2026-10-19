@@ -103,7 +103,7 @@ import Ouroboros.Consensus.HardFork.Combinator.State (epochInfoLedger)
 import qualified Ouroboros.Consensus.HardFork.History as History
 import Ouroboros.Consensus.Ledger.Abstract (LedgerResult)
 import qualified Ouroboros.Consensus.Ledger.Abstract as Consensus
-import Ouroboros.Consensus.Ledger.Basics (DiffMK, EmptyMK, ValuesMK)
+import Ouroboros.Consensus.Ledger.Tables (DiffMK, EmptyMK, ValuesMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerCfg (..), ExtLedgerState (..))
 import Ouroboros.Consensus.Ledger.SupportsMempool (HasTxs (extractTxs))
 import Ouroboros.Consensus.Ledger.Tables.Utils (
@@ -242,7 +242,9 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
       -- bundling in scripts/postgresql-setup.sh (it falls back to the InMemory
       -- branch and ships an incomplete tarball; on restore db-sync then can't
       -- find the snapshot and replays from genesis).
-      let args = LSM.LSMArgs (mkFsPath []) salt (LSM.stdMkBlockIOFS lsmPath)
+      -- w42: LSMArgs gained an export-path (Maybe FsPath) and a DiskCachePolicy.
+      -- db-sync drives no LSM export, and DiskCacheAll mirrors the node/DBAnalyser default.
+      let args = LSM.LSMArgs (mkFsPath []) Nothing salt LSM.DiskCacheAll (LSM.stdMkBlockIOFS lsmPath)
       res <-
         runWithTempRegistry $
           (,())
@@ -568,7 +570,7 @@ tickThenReapplyCheckHash ::
     ( Either
         SyncNodeError
         ( DbSyncStateRef -- old state ref (for snapshotting)
-        , LedgerResult (ExtLedgerState CardanoBlock) CardanoLedgerState -- new state
+        , LedgerResult CardanoBlock CardanoLedgerState -- new state
         , [DbSyncStateRef] -- pruned refs to close
         )
     )
@@ -648,7 +650,7 @@ reapplyWithLeiosClosure ::
   ExtLedgerCfg CardanoBlock ->
   CardanoBlock ->
   ExtLedgerState CardanoBlock ValuesMK ->
-  Either SyncNodeError (LedgerResult (ExtLedgerState CardanoBlock) (ExtLedgerState CardanoBlock DiffMK))
+  Either SyncNodeError (LedgerResult CardanoBlock (ExtLedgerState CardanoBlock DiffMK))
 reapplyWithLeiosClosure cfg block st =
   case (blockLeiosCert block, extractTxs block) of
     (Nothing, _) -> Right $ tickThenReapply block st

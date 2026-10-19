@@ -43,7 +43,6 @@ import Lens.Micro ((^.))
 import Cardano.Crypto.Leios (LeiosCert)
 import Cardano.Ledger.Dijkstra.BlockBody (leiosCertBlockBodyL)
 import Data.Maybe.Strict (strictMaybeToMaybe)
-import LeiosDemoTypes (EbAnnouncement)
 import Ouroboros.Consensus.Cardano.Block (
   AllegraEra,
   AlonzoEra,
@@ -54,7 +53,9 @@ import Ouroboros.Consensus.Cardano.Block (
   ShelleyEra,
  )
 import Ouroboros.Consensus.Protocol.Praos (Praos)
-import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
+import Ouroboros.Consensus.Protocol.Praos2 (Praos2)
+import qualified Cardano.Protocol.Praos.BlockHeader as Praos
+import qualified Cardano.Protocol.Leios.BlockHeader as Leios
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import Ouroboros.Consensus.Shelley.Protocol.Abstract
@@ -75,7 +76,7 @@ data Block = Block
   , blkTxs :: [Tx] -- intentionally left lazy to delay the tx transformation
   -- Leios (Dijkstra-only; False / Nothing for earlier eras)
   , blkHasLeiosCert :: !Bool
-  , blkLeiosEbAnnouncement :: !(Maybe EbAnnouncement)
+  , blkLeiosEbAnnouncement :: !(Maybe Ledger.EbReferencesAnnouncement)
   , blkLeiosCert :: !(Maybe LeiosCert)
   }
 
@@ -199,7 +200,7 @@ fromConwayBlock iope mprices blk =
     , blkLeiosCert = Nothing
     }
 
-fromDijkstraBlock :: Bool -> Maybe Prices -> ShelleyBlock (PraosStandard StandardCrypto) DijkstraEra -> Block
+fromDijkstraBlock :: Bool -> Maybe Prices -> ShelleyBlock (Praos2 StandardCrypto) DijkstraEra -> Block
 fromDijkstraBlock iope mprices blk =
   Block
     { blkEra = Dijkstra
@@ -209,18 +210,17 @@ fromDijkstraBlock iope mprices blk =
     , blkSlotNo = slotNumber blk
     , blkBlockNo = blockNumber blk
     , blkSize = blockSize blk
-    , blkProto = blockProtoVersionPraos blk
-    , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
-    , blkOpCert = blockOpCertKeyPraos blk
-    , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkProto = blockProtoVersionDijkstra blk
+    , blkVrfKey = blockVrfKeyView $ blockVrfVkDijkstra blk
+    , blkOpCert = blockOpCertKeyDijkstra blk
+    , blkOpCertCounter = blockOpCertCounterDijkstra blk
     , blkTxs = map (fromDijkstraTx iope mprices) (getTxs blk)
     , blkHasLeiosCert = isJust leiosCert
-    , blkLeiosEbAnnouncement = strictMaybeToMaybe (Praos.hbLeiosEbAnnouncement headerBody)
+    , blkLeiosEbAnnouncement = strictMaybeToMaybe (pHeaderLeiosEbAnnouncement (blockHeader blk))
     , blkLeiosCert = leiosCert
     }
   where
     leiosCert = strictMaybeToMaybe (Ledger.blockBody (Consensus.shelleyBlockRaw blk) ^. leiosCertBlockBodyL)
-    headerBody = getHeaderBodyPraos (blockHeader blk)
 
 -- -------------------------------------------------------------------------------------------------
 
@@ -283,6 +283,40 @@ blockVrfVkPraos = Praos.hbVrfVk . getHeaderBodyPraos . blockHeader
 
 getHeaderBodyPraos :: Crypto c => Praos.Header c -> Praos.HeaderBody c
 getHeaderBodyPraos (Praos.Header headerBody _) = headerBody
+
+-- -------------------------------------------------------------------------------------------------
+-- Dijkstra runs the Praos2 protocol with the Leios block header (Cardano.Protocol.Leios.BlockHeader),
+-- so its header accessors read that header rather than the classic Praos one used by Babbage/Conway.
+
+blockOpCertKeyDijkstra :: ShelleyBlock (Praos2 StandardCrypto) era -> ByteString
+blockOpCertKeyDijkstra = KES.rawSerialiseVerKeyKES . TPraos.ocertVkHot . blockOpCertDijkstra
+
+blockOpCertCounterDijkstra :: ShelleyBlock (Praos2 StandardCrypto) era -> Word64
+blockOpCertCounterDijkstra = TPraos.ocertN . blockOpCertDijkstra
+
+blockOpCertDijkstra :: ShelleyBlock (Praos2 StandardCrypto) era -> TPraos.OCert StandardCrypto
+blockOpCertDijkstra = Leios.hbOCert . getHeaderBodyDijkstra . blockHeader
+
+blockProtoVersionDijkstra :: ShelleyBlock (Praos2 StandardCrypto) era -> Ledger.ProtVer
+blockProtoVersionDijkstra = versionInfoToProtVer . Leios.hbVersionInfo . getHeaderBodyDijkstra . blockHeader
+
+blockVrfVkDijkstra :: ShelleyBlock (Praos2 StandardCrypto) era -> VerKeyVRF (VRF StandardCrypto)
+blockVrfVkDijkstra = Leios.hbVrfVk . getHeaderBodyDijkstra . blockHeader
+
+getHeaderBodyDijkstra :: Leios.Header c -> Leios.HeaderBody c
+getHeaderBodyDijkstra = Leios.headerBody
+
+-- The Dijkstra/Leios header carries a 'BlockHeaderVersionInfo' rather than a 'ProtVer'.
+-- It has the same wire shape, and consensus' own forging code builds it as
+-- @BlockHeaderVersionInfo (getVersion32 major) minor@ from @ProtVer major minor@
+-- (see Ouroboros.Consensus.Shelley.Protocol.Praos). We invert that here: the highest
+-- supported major version is the ProtVer major, and the self-reported software tag is
+-- the ProtVer minor.
+versionInfoToProtVer :: Ledger.BlockHeaderVersionInfo -> Ledger.ProtVer
+versionInfoToProtVer vi =
+  Ledger.ProtVer
+    (fromMaybe minBound (Ledger.mkVersion (Ledger.bhviHighestSupportedMajorVersion vi)))
+    (fromIntegral (Ledger.bhviSelfReportedSoftwareTag vi))
 
 blockIssuer ::
   ShelleyProtocol p =>

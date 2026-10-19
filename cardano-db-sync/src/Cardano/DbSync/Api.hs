@@ -517,7 +517,8 @@ convertToPoint slot hashBlob =
   Point . Point.block slot <$> convertHashBlob hashBlob
   where
     convertHashBlob :: ByteString -> Maybe (HeaderHash CardanoBlock)
-    convertHashBlob = Just . fromRawHash (Proxy @CardanoBlock)
+    -- w42: fromRawHash now returns a Maybe (it validates the raw hash length).
+    convertHashBlob = fromRawHash (Proxy @CardanoBlock)
 
 getSecurityParam :: SyncEnv -> Word64
 getSecurityParam syncEnv =
