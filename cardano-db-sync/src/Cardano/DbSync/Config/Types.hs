@@ -151,6 +151,8 @@ data SyncNodeConfig = SyncNodeConfig
   , dncDijkstraGenesisFile :: !(Maybe GenesisFile)
   , dncDijkstraGenesisHash :: !(Maybe GenesisHashDijkstra)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
+  , dncExperimentalHardForksEnabled :: !Bool
+  -- ^ Mirrors the node's @ExperimentalHardForksEnabled@.
   , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
   , dncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
   , dncMaryHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) MaryEra))
