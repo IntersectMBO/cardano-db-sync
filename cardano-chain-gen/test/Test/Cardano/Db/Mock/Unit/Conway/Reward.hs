@@ -31,8 +31,10 @@ simpleRewards =
     epochs <- Api.fillEpochs interpreter mockServer 3
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (1 + length epochs)
-    -- Verify reward counts
-    assertRewardCount dbSync 8
+    -- Two payouts of the genesis staking, for epochs 0 and 1: consensus seeds the
+    -- stake snapshots at genesis on a chain that forks at epoch 0, so the reward
+    -- cycle starts an epoch earlier.
+    assertRewardCount dbSync 16
     -- The pool leaders take leader rewards with value 0
     state' <- Api.getConwayLedgerState interpreter
     assertRewardCounts
@@ -67,8 +69,8 @@ rewardsShelley =
     epochs <- Api.fillEpochs interpreter mockServer 3
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (1 + length epochs)
-    -- Verify reward counts
-    assertRewardCount dbSync 6
+    -- Two payouts, for epochs 0 and 1, as in 'simpleRewards'.
+    assertRewardCount dbSync 12
     -- The pool leaders take leader rewards with value 0
     state' <- Api.getShelleyLedgerState interpreter
     assertRewardCounts
@@ -90,7 +92,7 @@ rollbackBoundary =
 
     -- Forge a block with stake credentials
     void $ Api.registerAllStakeCreds interpreter mockServer
-    -- It takes 2 epochs to create rewards
+    -- Rewards appear from the first epoch boundary, as in 'simpleRewards'.
     epochs <- Api.fillEpochs interpreter mockServer 2
     -- Forge a transaction to distribute rewards
     void $
@@ -101,7 +103,7 @@ rollbackBoundary =
     -- Fill up the rest of the epoch
     epochs' <- Api.fillUntilNextEpoch interpreter mockServer
     -- Wait for it to sync
-    assertRewardCount dbSync 3
+    assertRewardCount dbSync 6
 
     -- Rollback
     rbBlocks <- Api.rollbackTo interpreter mockServer (blockPoint $ last blks)
@@ -112,7 +114,7 @@ rollbackBoundary =
     forM_ epochs' $ atomically . addBlock mockServer
     -- Should have the same amount of rewards
     assertBlockNoBackoff dbSync (1 + length (epochs <> blks <> rbBlocks <> epochs'))
-    assertRewardCount dbSync 3
+    assertRewardCount dbSync 6
     -- Add some more blocks and verify
     epochs'' <- Api.fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (2 + length (epochs <> blks <> rbBlocks <> epochs''))
