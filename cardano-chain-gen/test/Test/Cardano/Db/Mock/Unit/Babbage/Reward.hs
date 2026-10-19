@@ -488,12 +488,12 @@ rollbackBoundary =
     blks <- forgeAndSubmitBlocks interpreter mockServer 50
     blks' <- fillUntilNextEpoch interpreter mockServer
 
-    assertRewardCount dbSync 3
+    assertRewardCount dbSync 6
     rbBlocks <- rollbackTo interpreter mockServer (blockPoint $ last blks)
     assertBlockNoBackoff dbSync (length (a <> blks <> blks' <> rbBlocks) + 1)
     forM_ blks' $ atomically . addBlock mockServer
     assertBlockNoBackoff dbSync (length (a <> blks <> rbBlocks <> blks') + 1)
-    assertRewardCount dbSync 3
+    assertRewardCount dbSync 6
     blks'' <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (length (a <> blks <> rbBlocks <> blks'') + 2)
   where
