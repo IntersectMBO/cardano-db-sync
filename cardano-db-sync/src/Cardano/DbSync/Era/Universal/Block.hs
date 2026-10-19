@@ -270,15 +270,26 @@ insertLeiosCommittee ::
   EpochNo ->
   CardanoLedgerState ->
   ExceptT SyncNodeError DB.DbM ()
-insertLeiosCommittee syncEnv blkId epochNo newLedger =
-  case committeeOrder newLedger of
-    Nothing -> pure ()
-    Just [] -> pure ()
-    Just ordered -> do
+insertLeiosCommittee syncEnv blkId epochNo newLedger = do
+  -- Authoritative committee for the epoch we are entering, from the matured set snapshot.
+  -- Delete any provisional rows written for this epoch during the previous boundary so the
+  -- final committee supersedes them.
+  insertSeats (unEpochNo epochNo) False (committeeOrder newLedger)
+  -- Provisional one-epoch look-ahead from the mark snapshot, labeled epoch+1. Replaced by the
+  -- authoritative row above when the chain enters that epoch.
+  insertSeats (unEpochNo epochNo + 1) True (committeeOrderNext newLedger)
+  where
+    trce = getTrace syncEnv
+
+    insertSeats _ _ Nothing = pure ()
+    insertSeats _ _ (Just []) = pure ()
+    insertSeats ep prov (Just ordered) = do
+      unless prov $ lift $ DB.deleteLeiosCommitteeForEpoch ep
       liftIO $
         logInfo trce $
           "leios-committee: epoch "
-            <> textShow (unEpochNo epochNo)
+            <> textShow ep
+            <> (if prov then " (provisional)" else "")
             <> " committee="
             <> textShow (length ordered)
             <> " sum(weight)="
@@ -294,16 +305,15 @@ insertLeiosCommittee syncEnv blkId epochNo newLedger =
                 DB.insertLeiosCommittee $
                   DB.LeiosCommittee
                     { DB.leiosCommitteeBlockId = blkId
-                    , DB.leiosCommitteeEpochNo = fromIntegral (unEpochNo epochNo)
+                    , DB.leiosCommitteeEpochNo = fromIntegral ep
                     , DB.leiosCommitteeSeatIndex = fromIntegral (seatIx :: Int)
                     , DB.leiosCommitteePoolHashId = phid
                     , DB.leiosCommitteeWeight = fromRational (seatWeight lseat)
                     , -- The honoured voting key of the seat (Nothing when the pool is seated
                       -- keyless: no key, aged-out key, or a proof of possession that failed).
                       DB.leiosCommitteeBlsVkey = rawSerialiseVerKeyDSIGN <$> strictMaybeToMaybe (seatVKey lseat)
+                    , DB.leiosCommitteeProvisional = prov
                     }
-  where
-    trce = getTrace syncEnv
 
 -- | The Leios committee the ledger seated on the given stake snapshot, each seat paired
 -- with its pool, in seat order. w36 selects the committee at the epoch boundary and stores
@@ -311,33 +321,49 @@ insertLeiosCommittee syncEnv blkId epochNo newLedger =
 -- voting key but not the pool id, so we recover the pool by re-running the ledger's own
 -- candidate ranking ('leiosCandidates' + 'seatedLeiosCandidates') over the same snapshot —
 -- seat @i@ of 'ssLeiosCommittee' then lines up with candidate @i@ by construction.
-committeeOrderFrom pickSnap cls =
+-- The @extract@ callback pulls the (committee, snapshot) pair from the SnapShots record.
+-- It differs between the set and mark snapshots, which are distinct ledger types with
+-- distinct accessors (SetSnapShot has the ss* lenses; MarkSnapShot has ms* fields and no
+-- ssLeiosCommittee lens), so it cannot be a single lens applied uniformly.
+committeeOrderFrom extract cls =
   case ledgerState (clsState cls) of
     LedgerStateDijkstra dls ->
       let nes = Consensus.shelleyLedgerState dls
-          snap = pickSnap (Shelley.esSnapshots (Shelley.nesEs nes))
-          seats = VS.toList $ leiosCommitteeSeats (snap ^. LState.ssLeiosCommitteeL)
+          (committee, snapShot) = extract (Shelley.esSnapshots (Shelley.nesEs nes))
+          seats = VS.toList $ leiosCommitteeSeats committee
           -- w42 dropped the ledger's exported 'seatedLeiosCandidates'; its seating is now
           -- inlined inside 'selectLeiosCommittee' (private). We replicate that exact order
           -- here — descending stake, ties broken by ascending pool id — over the same
-          -- candidates, then take one pool per committee seat. Seat @i@ of 'ssLeiosCommittee'
+          -- candidates, then take one pool per committee seat. Seat @i@ of the committee
           -- lines up with the @i@-th pool by construction.
           pools =
             map LState.lcPoolId
               . take (length seats)
               . sortOn (\c -> (Down (LState.lcStake c), LState.lcPoolId c))
               . V.toList
-              $ LState.leiosCandidates (LState.ssStakePoolsSnapShot (snap ^. LState.ssSnapShotL))
+              $ LState.leiosCandidates (LState.ssStakePoolsSnapShot snapShot)
        in Just (zip pools seats)
     _ -> Nothing
 
 -- The committee that governs an epoch — the matured set snapshot the node validates a
 -- block's Leios cert against ('HasLeiosVoting DijkstraEra' reads ssStakeSet). Its seat
 -- weights (pool share of total active stake) are fixed when the snapshot is created, so
--- reading them here matches the node exactly. We deliberately do not read ssStakeMark: it
--- is recomputed at the boundary tick and can be transiently inconsistent, which is how a
--- single epoch once stored committee weights deflated by a uniform factor.
-committeeOrder cls = committeeOrderFrom (^. LState.ssStakeSetL) cls
+-- reading them here matches the node exactly. This is the authoritative committee and the
+-- one 'insertLeiosCertSigners' must resolve against.
+committeeOrder cls =
+  committeeOrderFrom
+    (\ss -> let s = ss ^. LState.ssStakeSetL in (s ^. LState.ssLeiosCommitteeL, s ^. LState.ssSnapShotL))
+    cls
+
+-- The next epoch's committee, read from the mark snapshot — a one-epoch look-ahead. The
+-- mark committee is precomputed once by the ledger when the snapshot is created (for the
+-- epoch following), but the mark stake keeps evolving in-epoch, so this is an early
+-- estimate: it is stored flagged provisional and superseded by the authoritative set-snapshot
+-- row when the chain enters that epoch.
+committeeOrderNext cls =
+  committeeOrderFrom
+    (\ss -> let m = ss ^. LState.ssStakeMarkL in (LState.msLeiosCommittee m, LState.msSnapShot m))
+    cls
 
 -- | Set-bit indices of a LeiosCert signer bitfield, MSB-first, over @n@ committee seats.
 -- Mirrors the ledger's private @bitFieldMembers@: seat @i@ is byte @i \`div\` 8@, bit @7 - (i \`mod\` 8)@.

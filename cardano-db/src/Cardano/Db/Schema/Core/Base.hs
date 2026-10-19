@@ -196,6 +196,7 @@ data LeiosCommittee = LeiosCommittee
   , leiosCommitteePoolHashId :: !PoolHashId -- noreference
   , leiosCommitteeWeight :: !Double -- normalised active stake for this seat
   , leiosCommitteeBlsVkey :: !(Maybe ByteString) -- registered Leios BLS vkey; Nothing for a keyless seat
+  , leiosCommitteeProvisional :: !Bool -- True: mark-snapshot look-ahead for epoch_no (early estimate); False: authoritative set-snapshot committee
   }
   deriving (Eq, Show, Generic)
 
@@ -211,6 +212,7 @@ leiosCommitteeDecoder =
     <*> idDecoder PoolHashId -- leiosCommitteePoolHashId
     <*> D.column (D.nonNullable D.float8) -- leiosCommitteeWeight
     <*> D.column (D.nullable D.bytea) -- leiosCommitteeBlsVkey
+    <*> D.column (D.nonNullable D.bool) -- leiosCommitteeProvisional
 
 leiosCommitteeEncoder :: E.Params LeiosCommittee
 leiosCommitteeEncoder =
@@ -221,6 +223,7 @@ leiosCommitteeEncoder =
     , leiosCommitteePoolHashId >$< idEncoder getPoolHashId
     , leiosCommitteeWeight >$< E.param (E.nonNullable E.float8)
     , leiosCommitteeBlsVkey >$< E.param (E.nullable E.bytea)
+    , leiosCommitteeProvisional >$< E.param (E.nonNullable E.bool)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

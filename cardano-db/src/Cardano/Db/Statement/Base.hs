@@ -38,7 +38,7 @@ import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
 import Cardano.Db.Schema.Variants (TxOutVariantType)
 import Cardano.Db.Statement.EpochAndProtocol (deleteEpochFinalizedFromEpoch)
 import Cardano.Db.Statement.Function.Core (ResultType (..), ResultTypeBulk (..), runSession, runSessionEntity)
-import Cardano.Db.Statement.Function.Delete (deleteWhereCount)
+import Cardano.Db.Statement.Function.Delete (deleteWhereCount, parameterisedDeleteWhere)
 import Cardano.Db.Statement.Function.Insert (insert, insertCheckUnique)
 import Cardano.Db.Statement.Function.InsertBulk (insertBulk, insertBulkJsonb)
 import Cardano.Db.Statement.Function.Query (adaSumDecoder, countAll, parameterisedCountWhere)
@@ -1092,6 +1092,19 @@ insertLeiosCommitteeStmt =
 
 insertLeiosCommittee :: HasCallStack => SCB.LeiosCommittee -> DbM Id.LeiosCommitteeId
 insertLeiosCommittee seat = runSession mkDbCallStack $ HsqlSes.statement seat insertLeiosCommitteeStmt
+
+-- | Delete every committee row for an epoch. Used to replace the provisional look-ahead rows
+-- (written during the previous boundary) with the authoritative committee once the chain
+-- enters the epoch.
+deleteLeiosCommitteeForEpochStmt :: HsqlStmt.Statement Word64 ()
+deleteLeiosCommitteeForEpochStmt =
+  parameterisedDeleteWhere @SCB.LeiosCommittee
+    "epoch_no"
+    "="
+    (HsqlE.param (HsqlE.nonNullable $ fromIntegral >$< HsqlE.int4))
+
+deleteLeiosCommitteeForEpoch :: HasCallStack => Word64 -> DbM ()
+deleteLeiosCommitteeForEpoch ep = runSession mkDbCallStack $ HsqlSes.statement ep deleteLeiosCommitteeForEpochStmt
 
 --------------------------------------------------------------------------------
 -- Meta
