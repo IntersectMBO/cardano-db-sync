@@ -92,7 +92,9 @@ mkProtocolInfoCardano ::
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
   IO (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
 mkProtocolInfoCardano genesisConfig shelleyCred = do
-  -- db-sync never forges, so the KES-agent filesystem is never consulted.
+  -- db-sync never forges, so the KES-agent side of this filesystem is never
+  -- consulted. Consensus does resolve a genesis 'InjectionFromFile' through it,
+  -- which makes the mount point the working directory for those paths.
   (pInfo, mkForgings) <-
     protocolInfoCardano (SomeHasFS (ioHasFS (MountPoint ""))) $
       CardanoProtocolParams
