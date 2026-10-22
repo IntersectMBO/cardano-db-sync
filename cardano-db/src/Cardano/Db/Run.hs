@@ -42,6 +42,41 @@ import Cardano.Db.Types (DbEnv (..), DbM (..))
 -- Transaction Runners for DbM
 -----------------------------------------------------------------------------------------
 
+-- | Run a transaction-control statement, failing loudly if it does not take effect.
+runTxControlStmt :: HsqlCon.Connection -> HsqlStmt.Statement () () -> IO ()
+runTxControlStmt conn stmt = do
+  result <- HsqlS.run (HsqlS.statement () stmt) conn
+  case result of
+    Left sessionErr ->
+      throwIO $
+        DbSessionError mkDbCallStack ("Transaction control failed: " <> formatSessionError sessionErr)
+    Right () -> pure ()
+
+-- | Run an action between BEGIN and COMMIT, rolling back if it throws or if
+-- @commitResult@ rejects what it returned.
+--
+-- An action that reports failure by returning 'Left' has to be rolled back here,
+-- because the error is a value rather than an exception and nothing else will do it.
+-- Committing one leaves behind whatever the action wrote before it failed.
+runInTransaction ::
+  HsqlCon.Connection ->
+  IsolationLevel ->
+  (a -> Bool) ->
+  IO a ->
+  IO a
+runInTransaction conn isolationLevel commitResult action = do
+  runTxControlStmt conn (beginTransactionStmt isolationLevel)
+  result <- try @SomeException action
+  case result of
+    Left err -> do
+      -- Best effort: a failure to roll back must not replace the error on its way out.
+      void $ try @SomeException $ runTxControlStmt conn rollbackTransactionStmt
+      throwIO err
+    Right value -> do
+      runTxControlStmt conn $
+        if commitResult value then commitTransactionStmt else rollbackTransactionStmt
+      pure value
+
 -- | Main database runner for blockchain synchronization operations
 --
 -- This is the primary runner used for cardano-db-sync block processing.
@@ -55,26 +90,42 @@ runDbTransLogged ::
   Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
   m a
-runDbTransLogged tracer dbEnv mIsolationLevel action = do
-  result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
-  case result of
-    Left sessionErr -> do
-      liftIO $ logWarning tracer $ "Database transaction error: " <> Text.pack (show sessionErr)
-      throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
+runDbTransLogged = runDbTransLoggedWith (const True)
+
+-- | 'runDbTransLogged' for an action that reports failure by returning 'Left', which
+-- is rolled back rather than committed.
+runDbTransLoggedEither ::
+  MonadUnliftIO m =>
+  Trace IO LogMessage ->
+  DbEnv ->
+  Maybe IsolationLevel ->
+  DbM (Either e a) ->
+  m (Either e a)
+runDbTransLoggedEither = runDbTransLoggedWith isRight
+
+runDbTransLoggedWith ::
+  MonadUnliftIO m =>
+  (a -> Bool) ->
+  Trace IO LogMessage ->
+  DbEnv ->
+  Maybe IsolationLevel ->
+  DbM a ->
+  m a
+runDbTransLoggedWith commitResult tracer dbEnv mIsolationLevel action = do
+  eResult <-
+    liftIO $
+      try @SomeException $
+        runInTransaction (dbConnection dbEnv) isolationLevel commitResult $
+          runDbLogging tracer $
+            liftIO $
+              runReaderT (runDbM action) dbEnv
+  case eResult of
+    Left err -> do
+      liftIO $ logWarning tracer $ "Database transaction error: " <> Text.pack (show err)
+      throwIO err
     Right dbResult -> pure dbResult
   where
     isolationLevel = fromMaybe RepeatableRead mIsolationLevel
-    transactionSession = do
-      HsqlS.statement () (beginTransactionStmt isolationLevel)
-
-      result <- liftIO $ try @SomeException $ runDbLogging tracer $ liftIO $ runReaderT (runDbM action) dbEnv
-      case result of
-        Left err -> do
-          HsqlS.statement () rollbackTransactionStmt
-          liftIO $ throwIO err
-        Right value -> do
-          HsqlS.statement () commitTransactionStmt
-          pure value
 
 -- | Transaction runner without logging overhead
 --
@@ -87,24 +138,30 @@ runDbTransSilent ::
   IsolationLevel ->
   DbM a ->
   m a
-runDbTransSilent dbEnv isolationLevel action = do
-  runNoLoggingT $ do
-    result <- liftIO $ HsqlS.run transactionSession (dbConnection dbEnv)
-    case result of
-      Left sessionErr ->
-        throwIO $ DbSessionError mkDbCallStack ("Database transaction error: " <> formatSessionError sessionErr)
-      Right dbResult -> pure dbResult
-  where
-    transactionSession = do
-      HsqlS.statement () (beginTransactionStmt isolationLevel)
-      result <- liftIO $ try @SomeException $ runReaderT (runDbM action) dbEnv
-      case result of
-        Left err -> do
-          HsqlS.statement () rollbackTransactionStmt
-          throwIO err
-        Right value -> do
-          HsqlS.statement () commitTransactionStmt
-          pure value
+runDbTransSilent = runDbTransSilentWith (const True)
+
+-- | 'runDbTransSilent' for an action that reports failure by returning 'Left', which
+-- is rolled back rather than committed.
+runDbTransSilentEither ::
+  MonadUnliftIO m =>
+  DbEnv ->
+  IsolationLevel ->
+  DbM (Either e a) ->
+  m (Either e a)
+runDbTransSilentEither = runDbTransSilentWith isRight
+
+runDbTransSilentWith ::
+  MonadUnliftIO m =>
+  (a -> Bool) ->
+  DbEnv ->
+  IsolationLevel ->
+  DbM a ->
+  m a
+runDbTransSilentWith commitResult dbEnv isolationLevel action =
+  runNoLoggingT $
+    liftIO $
+      runInTransaction (dbConnection dbEnv) isolationLevel commitResult $
+        runReaderT (runDbM action) dbEnv
 
 -- | Database runner without transaction management
 --
@@ -165,30 +222,39 @@ runDbPoolTransLogged ::
   Maybe IsolationLevel -> -- Optional isolation level
   DbM a ->
   m a
-runDbPoolTransLogged tracer dbEnv mIsolationLevel action = do
+runDbPoolTransLogged = runDbPoolTransLoggedWith (const True)
+
+-- | 'runDbPoolTransLogged' for an action that reports failure by returning 'Left',
+-- which is rolled back rather than committed.
+runDbPoolTransLoggedEither ::
+  MonadUnliftIO m =>
+  Trace IO LogMessage ->
+  DbEnv ->
+  Maybe IsolationLevel ->
+  DbM (Either e a) ->
+  m (Either e a)
+runDbPoolTransLoggedEither = runDbPoolTransLoggedWith isRight
+
+runDbPoolTransLoggedWith ::
+  MonadUnliftIO m =>
+  (a -> Bool) ->
+  Trace IO LogMessage ->
+  DbEnv ->
+  Maybe IsolationLevel ->
+  DbM a ->
+  m a
+runDbPoolTransLoggedWith commitResult tracer dbEnv mIsolationLevel action =
   case dbPoolConnection dbEnv of
     Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
-    Just pool -> do
-      runDbLogging tracer $ do
-        liftIO $ withResource pool $ \conn -> do
-          result <- HsqlS.run (transactionSession conn) conn
-          case result of
-            Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
-            Right dbResult -> pure dbResult
+    Just pool ->
+      runDbLogging tracer $
+        liftIO $
+          withResource pool $ \conn ->
+            runInTransaction conn isolationLevel commitResult $ do
+              let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
+              runReaderT (runDbM action) tempDbEnv
   where
     isolationLevel = fromMaybe RepeatableRead mIsolationLevel
-    transactionSession conn = do
-      HsqlS.statement () (beginTransactionStmt isolationLevel)
-      result <- liftIO $ try @SomeException $ do
-        let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
-        runReaderT (runDbM action) tempDbEnv
-      case result of
-        Left err -> do
-          HsqlS.statement () rollbackTransactionStmt
-          liftIO $ throwIO err
-        Right value -> do
-          HsqlS.statement () commitTransactionStmt
-          pure value
 
 runDbPoolLogged ::
   MonadUnliftIO m =>
@@ -196,29 +262,7 @@ runDbPoolLogged ::
   DbEnv ->
   DbM a ->
   m a
-runDbPoolLogged tracer dbEnv action = do
-  case dbPoolConnection dbEnv of
-    Nothing -> throwIO $ DbSessionError mkDbCallStack "No connection pool available in DbEnv"
-    Just pool -> do
-      runDbLogging tracer $ do
-        liftIO $ withResource pool $ \conn -> do
-          result <- HsqlS.run (transactionSession conn) conn
-          case result of
-            Left sessionErr -> throwIO $ DbSessionError mkDbCallStack ("Pool transaction error: " <> formatSessionError sessionErr)
-            Right dbResult -> pure dbResult
-  where
-    transactionSession conn = do
-      HsqlS.statement () (beginTransactionStmt RepeatableRead)
-      result <- liftIO $ try @SomeException $ do
-        let tempDbEnv = createDbEnv conn (dbPoolConnection dbEnv) (dbTracer dbEnv)
-        runReaderT (runDbM action) tempDbEnv
-      case result of
-        Left err -> do
-          HsqlS.statement () rollbackTransactionStmt
-          liftIO $ throwIO err
-        Right value -> do
-          HsqlS.statement () commitTransactionStmt
-          pure value
+runDbPoolLogged tracer dbEnv = runDbPoolTransLoggedWith (const True) tracer dbEnv (Just RepeatableRead)
 
 -- | External service database runner with error handling
 --
@@ -254,7 +298,13 @@ runDbStandaloneSilent = runDbStandaloneTransSilent PGPassDefaultEnv
 -- Creates both a main connection and connection pool from the provided configuration.
 -- Self-contained with full cleanup, suitable for applications needing both connection types
 runDbStandaloneTransSilent :: PGPassSource -> DbM a -> IO a
-runDbStandaloneTransSilent source action = do
+runDbStandaloneTransSilent source action =
+  withDbEnvStandalone source $ \dbEnv -> runDbTransSilent dbEnv RepeatableRead action
+
+-- | Acquire a standalone connection from @source@ and hand its 'DbEnv' to the action,
+-- releasing the connection afterwards. Lets a caller pick the transaction runner.
+withDbEnvStandalone :: PGPassSource -> (DbEnv -> IO a) -> IO a
+withDbEnvStandalone source action = do
   pgconfig <- runOrThrowIO (readPGPass source)
   connSetting <- case toConnectionSetting pgconfig of
     Left err -> throwIO $ userError err
@@ -262,10 +312,7 @@ runDbStandaloneTransSilent source action = do
   bracket
     (acquireConnection [connSetting])
     HsqlCon.release
-    ( \connection -> do
-        let dbEnv = createDbEnv connection Nothing Nothing
-        runDbTransSilent dbEnv RepeatableRead action
-    )
+    (\connection -> action (createDbEnv connection Nothing Nothing))
 
 -- | Standalone runner without transaction management
 --

@@ -8,6 +8,7 @@ module Cardano.Db.Migration (
   LogFileDir (..),
   MigrationToRun (..),
   applyMigration,
+  MigrationOutcome (..),
   createMigration,
   getMigrationScripts,
   runMigrations,
@@ -60,10 +61,9 @@ import Text.Read (readMaybe)
 
 import Cardano.Crypto.Hash (Blake2b_256, ByteString, Hash, hashToStringAsHex, hashWith)
 import Cardano.Db.Error (mkDbCallStack)
-import Cardano.Db.Log (LogMessage)
+import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.Db.Migration.Version
 import Cardano.Db.PGConfig
-import Cardano.Db.Progress (updateProgress, withProgress)
 import Cardano.Db.Run
 import Cardano.Db.Schema.Variants (TxOutVariantType (..))
 import qualified Cardano.Db.Statement.Function.Core as DB
@@ -106,12 +106,7 @@ runMigrations trce pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantTy
     (Nothing, scripts) -> do
       putStrLn "Running:"
       (scripts', ranAll) <- filterMigrations scripts
-
-      withProgress trce (length scripts') "Migration" $ \progressRef -> do
-        forM_ (zip [1 :: Integer ..] scripts') $ \(i, script) -> do
-          updateProgress trce progressRef (fromIntegral i) "Migration"
-          applyMigration' Nothing stdout script
-
+      runScripts Nothing stdout scripts'
       putStrLn "Success!"
       pure ranAll
     (Just logfiledir, scripts) -> do
@@ -119,12 +114,7 @@ runMigrations trce pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantTy
       withFile logFilename AppendMode $ \logHandle -> do
         unless quiet $ putStrLn "Running:"
         (scripts', ranAll) <- filterMigrations scripts
-
-        withProgress trce (length scripts') "Migration" $ \progressRef -> do
-          forM_ (zip [1 :: Integer ..] scripts') $ \(i, script) -> do
-            updateProgress trce progressRef (fromIntegral i) "Migration"
-            applyMigration' (Just logFilename) logHandle script
-
+        runScripts (Just logFilename) logHandle scripts'
         unless quiet $ putStrLn "Success!"
         pure ranAll
   pure (ranAll, map (takeFileName . snd) (filter isUnofficialMigration allScripts))
@@ -138,6 +128,40 @@ runMigrations trce pgconfig quiet migrationDir mLogfiledir mToRun txOutVariantTy
       pure $ logdir </> "migrate-" ++ iso8601Show tm ++ ".log"
 
     applyMigration' = applyMigration migrationDir quiet pgconfig
+
+    -- Run each script in turn, naming the ones that did work and counting the ones that
+    -- had nothing to do. A script that is already applied is silent, so restarting on an
+    -- up to date database logs a single summary rather than one line per script.
+    -- See https://github.com/IntersectMBO/cardano-db-sync/issues/2128
+    runScripts :: Maybe FilePath -> Handle -> [(MigrationVersion, FilePath)] -> IO ()
+    runScripts mLogFilename logHandle scripts = do
+      outcomes <- forM scripts $ \script -> do
+        outcome <- applyMigration' mLogFilename logHandle script
+        whenJust trce $ \tracer ->
+          whenJust (describe outcome) $ \what ->
+            logInfo tracer $ what <> " " <> Text.pack (takeFileName (snd script))
+        pure outcome
+      whenJust trce $ \tracer -> logInfo tracer (summarise outcomes)
+
+    describe :: MigrationOutcome -> Maybe Text.Text
+    describe = \case
+      MigrationApplied -> Just "Applied migration"
+      MigrationIdempotent -> Just "Reapplied index or schema script"
+      MigrationAlreadyApplied -> Nothing
+
+    summarise :: [MigrationOutcome] -> Text.Text
+    summarise outcomes =
+      mconcat
+        [ "Migrations: "
+        , textShow (count MigrationApplied)
+        , " applied, "
+        , textShow (count MigrationAlreadyApplied)
+        , " already applied, "
+        , textShow (count MigrationIdempotent)
+        , " reapplied (index and schema scripts)"
+        ]
+      where
+        count o = length (filter (== o) outcomes)
 
     filterMigrations :: [(MigrationVersion, FilePath)] -> IO ([(MigrationVersion, FilePath)], Bool)
     filterMigrations scripts = case mToRun of
@@ -176,8 +200,19 @@ validateMigrations migrationDir knownMigrations = do
     stage4 = (== 4) . readStageFromFilename . Text.unpack . mvFilepath
     stage3or4 = flip elem [3, 4] . readStageFromFilename . Text.unpack . mvFilepath
 
-applyMigration :: MigrationDir -> Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO ()
-applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (_, script) = do
+-- | What running a migration script did.
+--
+-- Stage 1 and 2 scripts are guarded by the schema version they bump and announce
+-- themselves with a notice when they do work, so re-running one is a no-op. Stage 3 and
+-- 4 scripts carry no version guard; they are idempotent DDL reapplied on every run.
+data MigrationOutcome
+  = MigrationApplied
+  | MigrationAlreadyApplied
+  | MigrationIdempotent
+  deriving (Eq, Show)
+
+applyMigration :: MigrationDir -> Bool -> PGConfig -> Maybe FilePath -> Handle -> (MigrationVersion, FilePath) -> IO MigrationOutcome
+applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (mv, script) = do
   hPutStrLn logHandle $ "Running : " ++ script
   unless quiet $ putStr ("    " ++ script ++ " ... ")
   -- hFlush stdout
@@ -203,6 +238,12 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (_,
   case exitCode of
     ExitSuccess -> do
       unless quiet $ putStrLn "ok"
+      -- A guarded script raises a notice on the run that advances the schema version,
+      -- and says nothing on any later run.
+      pure $
+        if any (`List.isInfixOf` (stdt <> stderr)) ["DB has been migrated to", "DB has been initialized"]
+          then MigrationApplied
+          else if mvStage mv <= 2 then MigrationAlreadyApplied else MigrationIdempotent
     ExitFailure _ -> errorExit exitCode
   where
     errorExit :: Show e => e -> IO a

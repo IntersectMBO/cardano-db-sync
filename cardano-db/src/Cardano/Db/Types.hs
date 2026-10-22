@@ -11,6 +11,7 @@
 module Cardano.Db.Types where
 
 import Cardano.Db.Log (LogMessage)
+import Cardano.Db.Schema.Types (sanitiseUrl)
 import Cardano.Ledger.Coin (DeltaCoin (..))
 import Cardano.Logging.Types (Trace)
 import Cardano.Prelude (Bifunctor (..), MonadIO (..), MonadReader, ReaderT, fromMaybe)
@@ -406,7 +407,7 @@ voteUrlDecoder :: HsqlD.Value VoteUrl
 voteUrlDecoder = VoteUrl <$> HsqlD.text
 
 voteUrlEncoder :: HsqlE.Value VoteUrl
-voteUrlEncoder = unVoteUrl >$< HsqlE.text
+voteUrlEncoder = (sanitiseUrl . unVoteUrl) >$< HsqlE.text
 
 --------------------------------------------------------------------------------
 

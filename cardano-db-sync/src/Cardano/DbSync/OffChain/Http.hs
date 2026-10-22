@@ -28,8 +28,9 @@ import Cardano.DbSync.Types (
   SimplifiedOffChainVoteData (..),
   showUrl,
  )
-import Cardano.DbSync.Util (renderByteArray)
+import Cardano.DbSync.Util (renderByteArray, unstorableAsJsonb)
 import Cardano.Prelude hiding (show)
+import Control.Monad.Extra (whenJust)
 import Control.Monad.Trans.Except.Extra (handleExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
@@ -67,6 +68,9 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
     case Aeson.eitherDecode' respLBS of
       Left err -> left $ OCFErrJsonDecodeFail (Just url) (Text.pack err)
       Right res -> pure res
+  let decodedJson = Aeson.toJSON decodedMetadata
+  whenJust (unstorableAsJsonb decodedJson) $
+    left . OCFErrJsonDecodeFail (Just url)
   pure $
     SimplifiedOffChainPoolData
       { spodTickerName = unPoolTicker $ pomTicker decodedMetadata
@@ -75,7 +79,7 @@ httpGetOffChainPoolData manager request purl expectedMetaHash = do
       , -- Instead of inserting the `respBS` here, we encode the JSON and then store that.
         -- This is necessary because the PostgreSQL JSON parser can reject some ByteStrings
         -- that the Aeson parser accepts.
-        spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedMetadata)
+        spodJson = Text.decodeUtf8 $ LBS.toStrict (Aeson.encode decodedJson)
       , spodContentType = mContentType
       }
   where
@@ -115,6 +119,8 @@ httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType = do
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (mocvd, decodedValue, metadataHash, mWarning, isValidJson) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
+  whenJust (unstorableAsJsonb decodedValue) $
+    left . OCFErrJsonDecodeFail (Just url)
   pure $
     SimplifiedOffChainVoteData
       { sovaHash = metadataHash

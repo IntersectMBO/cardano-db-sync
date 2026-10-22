@@ -12,6 +12,7 @@ import qualified Test.IO.Cardano.Db.Migration
 import qualified Test.IO.Cardano.Db.PGConfig
 import qualified Test.IO.Cardano.Db.Rollback
 import qualified Test.IO.Cardano.Db.TotalSupply
+import qualified Test.IO.Cardano.Db.Transaction
 import qualified Test.IO.Cardano.Db.TxOutQuery
 import Test.Tasty (defaultMain, testGroup)
 import Prelude
@@ -34,5 +35,6 @@ main = do
       , Test.IO.Cardano.Db.TxOutQuery.tests
       , Test.IO.Cardano.Db.Rollback.tests
       , Test.IO.Cardano.Db.EpochCalc.tests
+      , Test.IO.Cardano.Db.Transaction.tests
       , Test.IO.Cardano.Db.PGConfig.tests
       ]

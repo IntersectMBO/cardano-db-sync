@@ -8,6 +8,12 @@
 - Add `scripts/test-value-domains.sql` to the schema-check suite (`scripts/run-schema-checks.sh`): value-range, non-negativity, recomputed-total, and duplicate/missing-row checks over a populated database ([#2135](https://github.com/IntersectMBO/cardano-db-sync/issues/2135), [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118), [#2155](https://github.com/IntersectMBO/cardano-db-sync/issues/2155)).
 - Fix duplicate `epoch_state` rows left by a rollback across an epoch boundary; a startup migration removes duplicates, adds a `UNIQUE (epoch_no)` constraint, and the insert now upserts [#2155](https://github.com/IntersectMBO/cardano-db-sync/issues/2155).
 - `cardano-db-tool` fixes: `utxo-set`/`validate` no longer crash on enterprise-address outputs; `validate` runs every check and exits non-zero on failure with clean error messages [#2163](https://github.com/IntersectMBO/cardano-db-sync/issues/2163); `report` aligns columns and formats timestamps [#2164](https://github.com/IntersectMBO/cardano-db-sync/issues/2164); and two `validate` check bugs are fixed [#2170](https://github.com/IntersectMBO/cardano-db-sync/issues/2170).
+- Support the node's nested (v2) configuration format, alongside the flat (v1) one. The `Protocol` and `LastKnownBlockVersion-*` keys, which v2 drops, are now optional.
+- Fix metadata being dropped as if it contained a Unicode NUL: the check matched `\\u000`, which also matches the escapes `\\u0001` through `\\u000F` that Postgres stores without complaint.
+- Sanitize or drop jsonb valuues before inserting.
+- Fix the per-epoch statistics attributing dropped `datum.value` rows to `redeemer_data` and vice versa.
+- Roll back the database transaction when a block insert reports failure by returning `Left` rather than by throwing. Previously the runner committed it, leaving a partially written batch of blocks behind while db-sync reported the error.
+- Name the migrations that actually ran at startup and summarise the rest, replacing the per-script `Migration N/M` progress lines. Restarting on an up to date database now logs six lines rather than seventy-four ([#2128](https://github.com/IntersectMBO/cardano-db-sync/issues/2128)).
 
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.

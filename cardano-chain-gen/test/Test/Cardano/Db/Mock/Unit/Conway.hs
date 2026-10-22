@@ -264,6 +264,7 @@ unitTests iom knownMigrations =
         , test "rollback new committee member" Governance.rollbackNewCommittee
         , test "rollback new committee member proposal" Governance.rollbackNewCommitteeProposal
         , test "update constitution" Governance.updateConstitution
+        , test "NUL in anchor url" Governance.nulAnchorUrl
         , test "treasury withdrawal" Governance.treasuryWithdrawal
         , test "parameter change" Governance.parameterChange
         , test "hard fork" Governance.hardFork

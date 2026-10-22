@@ -83,7 +83,7 @@ insertRedeemerData syncEnv txId txd = do
   case mRedeemerDataId of
     Just redeemerDataId -> pure redeemerDataId
     Nothing -> do
-      value <- safeDecodeToJson syncEnv InsertDatum txId (Generic.txDataValue txd)
+      value <- safeDecodeToJson syncEnv InsertRedeemerData txId (Generic.txDataValue txd)
       lift $
         DB.insertRedeemerData $
           DB.RedeemerData
@@ -106,7 +106,7 @@ insertDatum syncEnv txId txd = do
   case mDatumId of
     Just datumId -> pure datumId
     Nothing -> do
-      value <- safeDecodeToJson syncEnv InsertRedeemerData txId (Generic.txDataValue txd)
+      value <- safeDecodeToJson syncEnv InsertDatum txId (Generic.txDataValue txd)
       insertDatumAndCache (envCache syncEnv) (Generic.txDataHash txd) $
         DB.Datum
           { DB.datumHash = Generic.dataHashToBytes $ Generic.txDataHash txd

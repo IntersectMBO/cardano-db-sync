@@ -76,7 +76,7 @@ rollbackFromBlockNo syncEnv blkNo = do
 
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
 prepareRollback syncEnv point serverTip = do
-  DB.runDbTransSilent (envDbEnv syncEnv) DB.ReadCommitted $ runExceptT action
+  DB.runDbTransSilentEither (envDbEnv syncEnv) DB.ReadCommitted $ runExceptT action
   where
     trce = getTrace syncEnv
 

@@ -74,7 +74,7 @@ runDbSyncTransaction ::
   m (Either SyncNodeError a)
 runDbSyncTransaction tracer dbEnv mIsolationLevel exceptTAction = do
   -- Catch database exceptions and convert to Either
-  eResult <- liftIO $ try $ DB.runDbTransLogged tracer dbEnv mIsolationLevel (runExceptT exceptTAction)
+  eResult <- liftIO $ try $ DB.runDbTransLoggedEither tracer dbEnv mIsolationLevel (runExceptT exceptTAction)
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
@@ -90,7 +90,7 @@ runDbSyncTransactionNoLogging ::
   m (Either SyncNodeError a)
 runDbSyncTransactionNoLogging dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
-  eResult <- liftIO $ try $ DB.runDbTransSilent dbEnv DB.RepeatableRead dbAction
+  eResult <- liftIO $ try $ DB.runDbTransSilentEither dbEnv DB.RepeatableRead dbAction
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
@@ -137,7 +137,7 @@ runDbSyncTransactionPool ::
   m (Either SyncNodeError a)
 runDbSyncTransactionPool tracer dbEnv exceptTAction = do
   let dbAction = runExceptT exceptTAction
-  eResult <- liftIO $ try $ DB.runDbPoolTransLogged tracer dbEnv Nothing dbAction -- Use pool
+  eResult <- liftIO $ try $ DB.runDbPoolTransLoggedEither tracer dbEnv Nothing dbAction -- Use pool
   case eResult of
     Left (dbErr :: DB.DbSessionError) -> do
       pure $ Left $ SNErrDbSessionErr mkSyncNodeCallStack dbErr
