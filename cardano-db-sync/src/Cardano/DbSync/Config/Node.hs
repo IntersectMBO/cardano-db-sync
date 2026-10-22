@@ -23,7 +23,7 @@ import Cardano.Crypto (RequiresNetworkMagic (..))
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error (NodeConfigError (..), SyncNodeError (..))
 import Cardano.Prelude
-import Data.Aeson (FromJSON (..), Object, (.:), (.:?))
+import Data.Aeson (FromJSON (..), Object, (.!=), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -156,7 +156,7 @@ instance FromJSON NodeConfig where
       parse :: Object -> Parser NodeConfig
       parse o =
         NodeConfig
-          <$> (fromMaybe SyncProtocolCardano <$> (o .:? "Protocol"))
+          <$> (o .:? "Protocol" .!= SyncProtocolCardano)
           <*> (o .:? "PBftSignatureThreshold")
           <*> (o .: "ByronGenesisFile")
           <*> (o .: "ByronGenesisHash")
@@ -182,9 +182,9 @@ instance FromJSON NodeConfig where
       parseByronProtocolVersion :: Object -> Parser Byron.ProtocolVersion
       parseByronProtocolVersion o =
         Byron.ProtocolVersion
-          <$> (fromMaybe 0 <$> (o .:? "LastKnownBlockVersion-Major"))
-          <*> (fromMaybe 0 <$> (o .:? "LastKnownBlockVersion-Minor"))
-          <*> (fromMaybe 0 <$> (o .:? "LastKnownBlockVersion-Alt"))
+          <$> (o .:? "LastKnownBlockVersion-Major" .!= 0)
+          <*> (o .:? "LastKnownBlockVersion-Minor" .!= 0)
+          <*> (o .:? "LastKnownBlockVersion-Alt" .!= 0)
 
       parseShelleyHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
       parseShelleyHardForkEpoch o =

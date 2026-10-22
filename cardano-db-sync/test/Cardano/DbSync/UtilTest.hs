@@ -275,4 +275,4 @@ genValue genStr =
     , Aeson.object <$> Gen.list (Range.linear 0 3) genPair
     ]
   where
-    genPair = (,) <$> (Key.fromText <$> genStr) <*> genValue genStr
+    genPair = (,) . Key.fromText <$> genStr <*> genValue genStr
