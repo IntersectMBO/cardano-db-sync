@@ -24,6 +24,7 @@ module Cardano.DbSync.Types (
   SyncState (..),
   TPraosStandard,
   MetricSetters (..),
+  CacheType (..),
   OffChainPoolWorkQueue (..),
   OffChainVoteWorkQueue (..),
   SimplifiedOffChainPoolData (..),
@@ -139,9 +140,22 @@ data MetricSetters = MetricSetters
   , metricsSetDbSlotHeight :: SlotNo -> IO ()
   , metricsSetDbEpochSyncDuration :: Double -> IO ()
   , metricsSetDbEpochSyncNumber :: Word64 -> IO ()
+  , metricsSetDbBlocksPerSecond :: Double -> IO ()
+  , metricsSetInsertDuration :: Double -> IO ()
+  , metricsSetCacheHitRate :: CacheType -> Double -> IO ()
   }
 
 data SyncState = SyncLagging | SyncFollowing
+  deriving (Eq, Show)
+
+data CacheType
+  = CacheStake
+  | CachePools
+  | CacheDatum
+  | CacheMultiAssets
+  | CachePrevBlock
+  | CacheAddress
+  | CacheTxIds
   deriving (Eq, Show)
 
 -------------------------------------------------------------------------------------

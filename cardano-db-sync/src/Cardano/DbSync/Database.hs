@@ -23,6 +23,7 @@ import Cardano.Prelude hiding (atomically)
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict
 import Control.Monad.Extra (whenJust)
+import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import Ouroboros.Network.Block (BlockNo (..), Point (..))
 import Ouroboros.Network.Point (blockPointHash, blockPointSlot)
 
@@ -126,7 +127,21 @@ runActions syncEnv actions = do
           lift $ atomically $ putTMVar resultVar (points, blockNo)
           dbEvent Continue ys
         (ys, zs) -> do
+          -- Record start time and block count for performance metrics
+          startTime <- liftIO getCurrentTime
+          let blockCount = length ys
+
+          -- Process blocks
           ExceptT $ insertListBlocks syncEnv ys
+
+          -- Calculate and record blocks per second
+          when (blockCount > 0) $ do
+            endTime <- liftIO getCurrentTime
+            let duration = realToFrac $ diffUTCTime endTime startTime
+            when (duration > 0) $ do
+              let blocksPerSecond = fromIntegral blockCount / duration
+              liftIO $ setDbBlocksPerSecond (envMetricSetters syncEnv) blocksPerSecond
+
           if null zs
             then pure Continue
             else dbEvent Continue zs

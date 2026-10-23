@@ -15,6 +15,7 @@ launch_*
 gen/
 cardano-chain-gen/test/testfiles/temp/
 /secp256k1/
+monitoring/data/
 
 # Vim
 *.swp
