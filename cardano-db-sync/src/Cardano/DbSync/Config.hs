@@ -28,6 +28,7 @@ import Cardano.DbSync.Config.Cardano
 import Cardano.DbSync.Config.Node (NodeConfig (..), parseNodeConfig, parseSyncPreConfig, readByteStringFromFile)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
+import Cardano.DbSync.Error (NodeConfigError (..), SyncNodeError (..))
 import Cardano.DbSync.Tracing.Setup (mkStdoutTracer)
 import Cardano.Logging (
   BackendConfig (..),
@@ -41,10 +42,12 @@ import Cardano.Logging (
  )
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.Text as Text
 import qualified Data.Yaml as Yaml
 import System.FilePath (takeDirectory, (</>))
+import qualified System.IO as IO
 
 -- | Create a simple stdout tracer configured from the db-sync config file.
 -- This is what the tests and simple tools use; @cardano-db-sync@ itself
@@ -72,17 +75,59 @@ defaultTraceConfig :: TraceConfig
 defaultTraceConfig =
   mkConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured)
 
+-- | The keys that configured logging before the move to @trace-dispatcher@.
+legacyLoggingKeys :: [Text]
+legacyLoggingKeys =
+  [ "defaultBackends"
+  , "defaultScribes"
+  , "minSeverity"
+  , "options"
+  , "rotation"
+  , "setupBackends"
+  , "setupScribes"
+  ]
+
 -- | Read the trace-dispatcher configuration ('TraceOptions' et al.) from the
--- db-sync config file. When the file does not contain any tracing options
--- (for example an old config file with the legacy @iohk-monitoring@ keys,
--- which are silently ignored), the default configuration is used.
+-- db-sync config file. When the file does not contain any tracing options the
+-- default configuration is used; a file that still carries the legacy
+-- @iohk-monitoring@ keys gets a warning, because it asks for logging that is
+-- not what it will get.
 readTraceConfig :: FilePath -> ByteString -> IO TraceConfig
 readTraceConfig fp configBytes =
   case Yaml.decodeEither' configBytes of
     Right (Aeson.Object o)
-      | any (`KeyMap.member` o) ["TraceOptions", "HermodTracing", "Options"] ->
-          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) fp
+      | any (`KeyMap.member` o) ["TraceOptions", "HermodTracing", "Options"] -> parseTraceConfig
+      | otherwise -> warnLegacyKeys (legacyKeysIn o) >> pure defaultTraceConfig
     _otherwise -> pure defaultTraceConfig
+  where
+    -- trace-dispatcher parses the tracing options itself, reading the file again,
+    -- and throws on a malformed one. Left alone that reaches 'main' as a bare
+    -- 'Yaml.ParseException' naming neither db-sync nor the file.
+    parseTraceConfig :: IO TraceConfig
+    parseTraceConfig =
+      catch (readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) fp) $
+        \(err :: Yaml.ParseException) ->
+          throwIO . SNErrNodeConfig . NodeConfigParseError $
+            "Error parsing the tracing configuration in " <> fp <> ": " <> show err
+
+    legacyKeysIn :: Aeson.Object -> [Text]
+    legacyKeysIn o = filter (`elem` map Key.toText (KeyMap.keys o)) legacyLoggingKeys
+
+    -- On stderr rather than through the tracer, which does not exist yet and is
+    -- the very thing this part of the config failed to configure.
+    warnLegacyKeys :: [Text] -> IO ()
+    warnLegacyKeys [] = pure ()
+    warnLegacyKeys keys =
+      IO.hPutStrLn IO.stderr . Text.unpack $
+        mconcat
+          [ "WARNING: ignoring the logging keys "
+          , Text.intercalate ", " keys
+          , " in "
+          , Text.pack fp
+          , ": they configure iohk-monitoring, which db-sync no longer uses. Logging is "
+          , "running on the default configuration, everything at Info severity to stdout. "
+          , "See config/mainnet-config.yaml for the TraceOptions format that replaces them."
+          ]
 
 coalesceConfig ::
   TraceConfig ->

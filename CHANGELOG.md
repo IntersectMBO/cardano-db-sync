@@ -13,6 +13,7 @@
 - Sanitize or drop jsonb valuues before inserting.
 - Fix the per-epoch statistics attributing dropped `datum.value` rows to `redeemer_data` and vice versa.
 - Roll back the database transaction when a block insert reports failure by returning `Left` rather than by throwing. Previously the runner committed it, leaving a partially written batch of blocks behind while db-sync reported the error.
+- Logging is configured with the node's `trace-dispatcher` system. The `iohk-monitoring` keys (`minSeverity`, `setupScribes`, `defaultScribes`, `setupBackends`, `defaultBackends`, `options`, `rotation`) are no longer read; replace them with a `TraceOptions` block, as in [`config/mainnet-config.yaml`](config/mainnet-config.yaml). A config that still carries the old keys starts on the default configuration (everything at `Info` severity to stdout) and warns on stderr.
 - Name the migrations that actually ran at startup and summarise the rest, replacing the per-script `Migration N/M` progress lines. Restarting on an up to date database now logs six lines rather than seventy-four ([#2128](https://github.com/IntersectMBO/cardano-db-sync/issues/2128)).
 
 ## 13.7.2.1
