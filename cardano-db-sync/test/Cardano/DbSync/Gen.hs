@@ -77,6 +77,7 @@ syncNodeParams =
     <*> Gen.bool
     <*> pure Nothing
     <*> Gen.bool
+    <*> Gen.bool
 
 syncNodeConfig :: Gen SyncNodeConfig
 syncNodeConfig =

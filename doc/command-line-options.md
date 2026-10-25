@@ -13,6 +13,7 @@
   - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot. See [Manual Rollbacks](manual-rollbacks.md) for details.
   - `--disable-in-out`: Disables the `tx_in` and `tx_out` table.
   - `--allow-private-offchain-urls`: Allows the off-chain pool and vote metadata fetchers to connect to URLs whose host or resolved IP is in a private, loopback, or link-local range. Off by default. Intended for local-cluster testing.
+  - `--ledger-only`: Replay the chain through the ledger without ever opening the database: no connection, no migration, no query and no insert. db-sync follows the node, advances the ledger state and writes ledger snapshots to `--state-dir`. Needs `"ledger": "enable"` in the config, and no `PGPASSFILE` or running PostgreSQL. See [State Snapshot](state-snapshot.md#producing-snapshots-without-a-database).
 
 - **Deprecated Options (for historical reference only):**
   - For more details, refer to [Configuration Documentation](https://github.com/IntersectMBO/cardano-db-sync/blob/master/doc/configuration.md)

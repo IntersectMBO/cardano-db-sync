@@ -61,6 +61,12 @@ dbSyncMain = do
         -- Otherwise, it's OK
         _otherwise -> pure ()
 
+      -- A ledger-only run has nothing left to do without a ledger, and nothing
+      -- to roll back without a database.
+      when (enpLedgerOnly prms) $ do
+        unless (shouldUseLedger ledgerCfg) $ error ledgerOnlyLedgerErrorMsg
+        when (isJust $ enpMaybeRollback prms) $ error ledgerOnlyRollbackErrorMsg
+
       let prometheusPort = dncPrometheusPort syncNodeConfigFromFile
       withMetricSetters prometheusPort $ \metricsSetters ->
         runDbSyncNode metricsSetters knownMigrationsPlain prms syncNodeConfigFromFile
@@ -71,6 +77,17 @@ dbSyncMain = do
         <> "Either provide --state-dir or set \"ledger\": \"disable\" in the config. "
         <> "See https://github.com/IntersectMBO/cardano-db-sync/blob"
         <> "/master/doc/configuration.md#ledger"
+
+    ledgerOnlyLedgerErrorMsg :: [Char]
+    ledgerOnlyLedgerErrorMsg =
+      "Error: --ledger-only needs \"ledger\": \"enable\" in the config. The ledger "
+        <> "snapshots it writes are its only output, and \"ignore\" and \"disable\" "
+        <> "both leave the apply result empty, so no snapshot is ever taken."
+
+    ledgerOnlyRollbackErrorMsg :: [Char]
+    ledgerOnlyRollbackErrorMsg =
+      "Error: --rollback-to-slot deletes blocks from the database, which "
+        <> "--ledger-only never opens. Drop one of the two flags."
 
 ---------------------------------------------------------------------------------------------------
 -- Command Line Configurations
@@ -105,6 +122,7 @@ pRunDbSyncNode = do
     <*> pHasInOut
     <*> optional pRollbackSlotNo
     <*> pAllowPrivateOffChainUrls
+    <*> pLedgerOnly
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -174,6 +192,21 @@ pAllowPrivateOffChainUrls =
           ( "Allow the off-chain pool and vote metadata fetchers to connect to "
               <> "URLs whose host or resolved IP is in a private, loopback, or "
               <> "link-local range. Intended for local-cluster testing; off by default."
+          )
+    )
+
+pLedgerOnly :: Parser Bool
+pLedgerOnly =
+  Opt.flag
+    False
+    True
+    ( Opt.long "ledger-only"
+        <> Opt.help
+          ( "Replay the chain through the ledger without ever opening the "
+              <> "database. db-sync follows the node, advances the ledger state "
+              <> "and writes ledger snapshots to --state-dir, and performs no "
+              <> "migration, query or insert. Needs no PGPASSFILE and no running "
+              <> "Postgres, and so is independent of any database's tip."
           )
     )
 

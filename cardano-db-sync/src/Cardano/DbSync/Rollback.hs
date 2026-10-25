@@ -74,9 +74,15 @@ rollbackFromBlockNo syncEnv blkNo = do
     cache = envCache syncEnv
     txOutVariantType = getTxOutVariantType syncEnv
 
+-- | Count the blocks a rollback will eventually have to delete, and report
+-- whether the database is now empty. A ledger-only run has no database and so
+-- nothing to delete: the answer is always that it is empty, which leaves the
+-- ledger as the only thing the rollback has to move.
 prepareRollback :: SyncEnv -> CardanoPoint -> Tip CardanoBlock -> IO (Either SyncNodeError Bool)
-prepareRollback syncEnv point serverTip = do
-  DB.runDbTransSilentEither (envDbEnv syncEnv) DB.ReadCommitted $ runExceptT action
+prepareRollback syncEnv point serverTip =
+  case envDbEnv syncEnv of
+    Nothing -> pure $ Right True
+    Just dbEnv -> DB.runDbTransSilentEither dbEnv DB.ReadCommitted $ runExceptT action
   where
     trce = getTrace syncEnv
 
