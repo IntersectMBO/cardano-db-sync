@@ -12,12 +12,12 @@ module Cardano.DbSync.Default (
   insertListBlocks,
 ) where
 
-import Cardano.Db.Log (LogMessage, logInfo)
+import Cardano.Db.Log (LogMessage, logDebug, logInfo)
 import qualified Cardano.Ledger.Alonzo.Scripts as Ledger
 import Cardano.Ledger.Shelley.AdaPots as Shelley
 import Cardano.Logging (Trace)
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..), SlotNo)
+import Cardano.Slotting.Slot (EpochNo (..), SlotNo (..))
 import qualified Data.ByteString.Short as SBS
 import Data.List (span)
 import qualified Data.Set as Set
@@ -40,7 +40,7 @@ import Cardano.DbSync.Era.Universal.Insert.Certificate (mkAdaPots)
 import Cardano.DbSync.Era.Universal.Insert.LedgerEvent (insertNewEpochLedgerEvents)
 import Cardano.DbSync.Error (SyncNodeError (..), mkSyncNodeCallStack)
 import Cardano.DbSync.Ledger.State (applyBlockAndSnapshot, defaultApplyResult)
-import Cardano.DbSync.Ledger.Types (ApplyResult (..))
+import Cardano.DbSync.Ledger.Types (ApplyResult (..), HasLedgerEnv)
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Rollback
 import Cardano.DbSync.Types
@@ -51,28 +51,34 @@ insertListBlocks ::
   SyncEnv ->
   [CardanoBlock] ->
   IO (Either SyncNodeError ())
-insertListBlocks syncEnv blocks = do
-  isolationLevel <- determineIsolationLevel syncEnv
-  -- stop at the exact block number if the option is set
-  case sioStopAtBlock $ dncInsertOptions $ envSyncNodeConfig syncEnv of
-    Nothing -> runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $ do
-      traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocks
-    Just targetBlock ->
-      insertListBlocksWithStopCondition syncEnv blocks targetBlock
+insertListBlocks syncEnv blocks =
+  case envDbEnv syncEnv of
+    -- A ledger-only run advances the ledger and writes snapshots. There is
+    -- nothing to insert, and no transaction to open it on.
+    Nothing -> applyListBlocks syncEnv blocks
+    Just dbEnv -> do
+      isolationLevel <- determineIsolationLevel syncEnv
+      -- stop at the exact block number if the option is set
+      case sioStopAtBlock $ dncInsertOptions $ envSyncNodeConfig syncEnv of
+        Nothing -> runDbSyncTransaction (getTrace syncEnv) dbEnv isolationLevel $ do
+          traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocks
+        Just targetBlock ->
+          insertListBlocksWithStopCondition syncEnv dbEnv blocks targetBlock
 
 insertListBlocksWithStopCondition ::
   SyncEnv ->
+  DB.DbEnv ->
   [CardanoBlock] ->
   Word64 -> -- target block number
   IO (Either SyncNodeError ())
-insertListBlocksWithStopCondition syncEnv blocks targetBlock = do
+insertListBlocksWithStopCondition syncEnv dbEnv blocks targetBlock = do
   -- Find all blocks up to and including the target block
   let (blocksToProcess, _) = span (\cblk -> unBlockNo (blockNo cblk) <= targetBlock) blocks
   -- Check if we hit the stop condition in this batch
   let hitStopCondition = any (\cblk -> unBlockNo (blockNo cblk) >= targetBlock) blocks
   -- Process the blocks in transaction
   isolationLevel <- determineIsolationLevel syncEnv
-  result <- runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) isolationLevel $ do
+  result <- runDbSyncTransaction (getTrace syncEnv) dbEnv isolationLevel $ do
     traverse_ (applyAndInsertBlockMaybe syncEnv (getTrace syncEnv)) blocksToProcess
   -- If we hit the stop condition and transaction succeeded, shutdown
   case result of
@@ -85,6 +91,63 @@ insertListBlocksWithStopCondition syncEnv blocks targetBlock = do
             <> ". Stopping db-sync gracefully."
       pure $ Left $ SNErrDefault mkSyncNodeCallStack "Stop condition reached"
     _ -> pure result
+
+-- | Advance the ledger over a batch of blocks without touching the database.
+--
+-- The ledger-only counterpart of 'insertListBlocks'. Only the insert half of
+-- 'applyAndInsertBlockMaybe' is dropped; the blocks go through
+-- 'applyBlockAndSnapshot' on the same path, with the same snapshot cadence, so
+-- the state left behind in the state dir is the state a normal run would leave
+-- there.
+applyListBlocks :: SyncEnv -> [CardanoBlock] -> IO (Either SyncNodeError ())
+applyListBlocks syncEnv blocks =
+  case envLedgerEnv syncEnv of
+    NoLedger _ ->
+      pure . Left . SNErrDefault mkSyncNodeCallStack $
+        "applyListBlocks: a ledger-only run needs a ledger"
+    HasLedger hle ->
+      case sioStopAtBlock $ dncInsertOptions $ envSyncNodeConfig syncEnv of
+        Nothing -> Right <$> traverse_ (applyBlockOnly syncEnv hle) blocks
+        Just targetBlock -> do
+          let (blocksToProcess, _) = span (\cblk -> unBlockNo (blockNo cblk) <= targetBlock) blocks
+              hitStopCondition = any (\cblk -> unBlockNo (blockNo cblk) >= targetBlock) blocks
+          traverse_ (applyBlockOnly syncEnv hle) blocksToProcess
+          if hitStopCondition
+            then do
+              logInfo (getTrace syncEnv) $
+                "Reached stop condition at block "
+                  <> textShow targetBlock
+                  <> ". Stopping db-sync gracefully."
+              pure . Left $ SNErrDefault mkSyncNodeCallStack "Stop condition reached"
+            else pure $ Right ()
+
+applyBlockOnly :: SyncEnv -> HasLedgerEnv -> CardanoBlock -> IO ()
+applyBlockOnly syncEnv hle cblk = do
+  -- Consistent, because there is no database that could be ahead of the
+  -- ledger. It also gives the snapshot cadence of a normal near-tip run.
+  (!applyRes, _tookSnapshot) <- applyBlockAndSnapshot hle cblk True
+  let !details = apSlotDetails applyRes
+  whenStrictJust (apNewEpoch applyRes) $ \newEpoch ->
+    logInfo tracer $ "Replay reached " <> textShow (Generic.neEpoch newEpoch)
+  logger details tracer $
+    mconcat
+      [ "Replay block: epoch "
+      , textShow (unEpochNo $ sdEpochNo details)
+      , ", slot "
+      , textShow (unSlotNo $ sdSlotNo details)
+      , ", block "
+      , textShow (unBlockNo $ blockNo cblk)
+      ]
+  where
+    tracer = getTrace syncEnv
+
+    -- The cadence the insert path logs its per-block line at: every block near
+    -- the tip, every 5000th while catching up.
+    logger :: SlotDetails -> Trace IO LogMessage -> Text -> IO ()
+    logger details
+      | isWithinTwoMin details = logInfo
+      | unBlockNo (blockNo cblk) `mod` 5000 == 0 = logInfo
+      | otherwise = logDebug
 
 applyAndInsertBlockMaybe ::
   SyncEnv ->

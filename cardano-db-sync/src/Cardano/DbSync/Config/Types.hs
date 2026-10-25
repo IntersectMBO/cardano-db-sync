@@ -121,6 +121,10 @@ data SyncNodeParams = SyncNodeParams
   -- ^ When 'True', the off-chain HTTP fetcher (pool and vote metadata) does not
   -- reject URLs whose host or resolved IP is in a private / loopback / link-local
   -- range. Intended for local-cluster testing only; off by default.
+  , enpLedgerOnly :: !Bool
+  -- ^ When 'True', db-sync replays the chain through the ledger and writes
+  -- snapshots, but never opens a database connection. Set from the
+  -- @--ledger-only@ CLI flag.
   }
   deriving (Show)
 

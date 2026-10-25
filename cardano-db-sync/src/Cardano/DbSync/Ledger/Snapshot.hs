@@ -20,6 +20,7 @@ module Cardano.DbSync.Ledger.Snapshot (
   -- * Load
   loadSnapshotFromDisk,
   findStateFromSnapshot,
+  loadLatestSnapshot,
 
   -- * List / Cleanup
   listDiskSnapshots,
@@ -41,6 +42,7 @@ import Cardano.Slotting.Slot (EpochNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (atomically, readTVarIO, writeTVar)
 import Control.Concurrent.STM.TBQueue (readTBQueue, writeTBQueue)
 import qualified Data.List as List
+import qualified Data.Sequence.Strict as SSeq
 import qualified Data.Strict.Maybe as Strict
 import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import qualified Database.LSMTree as LSMTree
@@ -152,6 +154,28 @@ loadSnapshotFromDisk env ds = do
           ]
       let Consensus.StateRef st _ = cRef
       Right <$> fromConsensusStateRef (deriveEpochBlockNo st) cRef
+
+-- | Load the newest of the given snapshots that can be read, adopt it as the
+-- current ledger state and return the chain point it sits at.
+--
+-- This is the resume path of a ledger-only run, which cannot look a snapshot's
+-- hash up in the @block@ table and so has to take the point from the snapshot
+-- itself. 'Nothing' means none of them loaded, and the caller starts from
+-- genesis.
+loadLatestSnapshot :: HasLedgerEnv -> [DiskSnapshot] -> IO (Maybe CardanoPoint)
+loadLatestSnapshot env = go . List.sortOn (Down . dsNumber)
+  where
+    go :: [DiskSnapshot] -> IO (Maybe CardanoPoint)
+    go [] = pure Nothing
+    go (ds : rest) = do
+      eRes <- loadSnapshotFromDisk env ds
+      case eRes of
+        Left err -> do
+          logWarning (leTrace env) $ err <> ". Trying older."
+          go rest
+        Right sr -> do
+          atomically $ writeTVar (leStateVar env) (Strict.Just . LedgerDB $ SSeq.singleton sr)
+          pure . Just . castPoint . Consensus.getTip . clsState $ srState sr
 
 -- | Try to find a snapshot matching the given point, or fall back to genesis.
 findStateFromSnapshot ::

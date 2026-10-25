@@ -82,11 +82,14 @@ runDbThread syncEnv queue = do
       logDbState syncEnv
       atomically $ putTMVar resultVar (latestPoints, currentTip)
       processQueue -- Continue processing
+      -- The db block and slot height gauges track the database, so a ledger-only
+      -- run leaves them alone rather than reporting the ledger's progress under
+      -- their names.
     updateBlockMetrics :: IO ()
-    updateBlockMetrics = do
+    updateBlockMetrics = whenJust (envDbEnv syncEnv) $ \dbEnv -> do
       let metricsSetters = envMetricSetters syncEnv
       void $ async $ do
-        mBlock <- DB.runDbPoolLogged (fromMaybe mempty $ DB.dbTracer $ envDbEnv syncEnv) (envDbEnv syncEnv) DB.queryLatestBlock
+        mBlock <- DB.runDbPoolLogged (fromMaybe mempty $ DB.dbTracer dbEnv) dbEnv DB.queryLatestBlock
         liftIO $ whenJust mBlock $ \block -> do
           let blockNo = BlockNo $ fromMaybe 0 $ DB.blockBlockNo block
               slotNo = SlotNo $ fromMaybe 0 $ DB.blockSlotNo block
@@ -132,10 +135,11 @@ runActions syncEnv actions = do
             else dbEvent Continue zs
 
 -- | This not only checks that the ledger and ChainSync points are equal, but also that the
--- 'Consistent' Level is correct based on the db tip.
+-- 'Consistent' Level is correct based on the db tip. A ledger-only run has no
+-- db tip to be consistent with, so there is nothing to compare.
 validateConsistentLevel :: SyncEnv -> CardanoPoint -> IO ()
-validateConsistentLevel syncEnv stPoint = do
-  dbTipInfo <- getDbLatestBlockInfo (envDbEnv syncEnv)
+validateConsistentLevel syncEnv stPoint = whenJust (envDbEnv syncEnv) $ \dbEnv -> do
+  dbTipInfo <- getDbLatestBlockInfo dbEnv
   cLevel <- getConsistentLevel syncEnv
   compareTips stPoint dbTipInfo cLevel
   where

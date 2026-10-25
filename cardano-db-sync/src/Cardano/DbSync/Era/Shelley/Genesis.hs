@@ -58,19 +58,20 @@ import Paths_cardano_db_sync (version)
 -- 'shelleyInitiation' is True for testnets that fork at 0 to Shelley.
 insertValidateShelleyGenesisDist ::
   SyncEnv ->
+  DB.DbEnv ->
   Text ->
   ShelleyGenesis ->
   Bool ->
   ExceptT SyncNodeError IO ()
-insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
+insertValidateShelleyGenesisDist syncEnv dbEnv networkName cfg shelleyInitiation = do
   let prunes = getPrunes syncEnv
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
     liftIO $ logError tracer $ show SNErrIgnoreShelleyInitiation
     throwError SNErrIgnoreShelleyInitiation
 
-  case DB.dbTracer $ envDbEnv syncEnv of
-    Just trce -> ExceptT $ runDbSyncTransaction trce (envDbEnv syncEnv) (Just DB.ReadCommitted) (insertAction prunes)
-    Nothing -> ExceptT $ runDbSyncTransactionNoLogging (envDbEnv syncEnv) (insertAction prunes)
+  case DB.dbTracer dbEnv of
+    Just trce -> ExceptT $ runDbSyncTransaction trce dbEnv (Just DB.ReadCommitted) (insertAction prunes)
+    Nothing -> ExceptT $ runDbSyncTransactionNoLogging dbEnv (insertAction prunes)
   where
     tracer = getTrace syncEnv
 

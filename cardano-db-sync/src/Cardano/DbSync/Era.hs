@@ -6,6 +6,7 @@ module Cardano.DbSync.Era (
   insertValidateGenesisDist,
 ) where
 
+import qualified Cardano.Db as DB
 import Cardano.DbSync.Api.Types (SyncEnv)
 import Cardano.DbSync.Config
 import qualified Cardano.DbSync.Era.Byron.Genesis as Byron
@@ -15,12 +16,13 @@ import Cardano.Prelude
 
 insertValidateGenesisDist ::
   SyncEnv ->
+  DB.DbEnv ->
   NetworkName ->
   GenesisConfig ->
   Bool ->
   ExceptT SyncNodeError IO ()
-insertValidateGenesisDist syncEnv nname genCfg shelleyInitiation =
+insertValidateGenesisDist syncEnv dbEnv nname genCfg shelleyInitiation =
   case genCfg of
     GenesisCardano _ bCfg sCfg _aCfg _ -> do
-      Byron.insertValidateByronGenesisDist syncEnv nname bCfg
-      Shelley.insertValidateShelleyGenesisDist syncEnv (unNetworkName nname) (scConfig sCfg) shelleyInitiation
+      Byron.insertValidateByronGenesisDist syncEnv dbEnv nname bCfg
+      Shelley.insertValidateShelleyGenesisDist syncEnv dbEnv (unNetworkName nname) (scConfig sCfg) shelleyInitiation
