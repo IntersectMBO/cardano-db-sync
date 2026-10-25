@@ -16,7 +16,7 @@ module Cardano.DbSync.Api.Types (
   formatUnicodeNullSource,
 ) where
 
-import Cardano.Prelude (Bool, Eq, IO, Ord, Show, Text, Word64)
+import Cardano.Prelude (Bool, Eq, IO, Maybe, Ord, Show, Text, Word64)
 import Cardano.Slotting.Slot (EpochNo (..))
 import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar)
 import Control.Concurrent.Class.MonadSTM.Strict.TBQueue (StrictTBQueue)
@@ -41,7 +41,10 @@ import Cardano.DbSync.Types (
 
 -- | SyncEnv is the main environment for the whole application.
 data SyncEnv = SyncEnv
-  { envDbEnv :: !DB.DbEnv
+  { envDbEnv :: !(Maybe DB.DbEnv)
+  -- ^ 'Nothing' in ledger-only mode, where db-sync never opens a database
+  -- connection. Every code path that reaches for it is reached only when it is
+  -- set, so the type is what guarantees a ledger-only run writes nothing.
   , envMetricSetters :: !MetricSetters
   , envCache :: !CacheStatus
   , envEpochStatistics :: !(StrictTVar IO EpochStatistics)

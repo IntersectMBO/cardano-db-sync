@@ -10,6 +10,7 @@
 
 module Cardano.DbSync.Api (
   extractInsertOptions,
+  isLedgerOnly,
   setConsistentLevel,
   getConsistentLevel,
   isConsistent,
@@ -88,6 +89,7 @@ import Cardano.DbSync.Ledger.Event (LedgerEvent (..))
 import Cardano.DbSync.Ledger.State (
   getHeaderHash,
   listKnownSnapshots,
+  loadLatestSnapshot,
   mkHasLedgerEnv,
  )
 import Cardano.DbSync.Ledger.Types (HasLedgerEnv (..), SnapshotPoint (..))
@@ -111,6 +113,12 @@ isConsistent env = do
   case cst of
     Consistent -> pure True
     _ -> pure False
+
+-- | Whether this is a ledger-only run: the chain is replayed through the
+-- ledger and snapshotted, and the database is never opened. That is exactly
+-- the absence of a database environment, so there is nothing else to store.
+isLedgerOnly :: SyncEnv -> Bool
+isLedgerOnly = isNothing . envDbEnv
 
 getDisableInOutState :: SyncEnv -> IO Bool
 getDisableInOutState syncEnv = do
@@ -142,14 +150,14 @@ initPruneConsumeMigration consumed pruneTxOut bootstrap forceTxIn' =
 getPruneConsume :: SyncEnv -> DB.PruneConsumeMigration
 getPruneConsume = soptPruneConsumeMigration . envOptions
 
-runConsumedTxOutMigrationsMaybe :: SyncEnv -> IO ()
-runConsumedTxOutMigrationsMaybe syncEnv = do
+runConsumedTxOutMigrationsMaybe :: SyncEnv -> DB.DbEnv -> IO ()
+runConsumedTxOutMigrationsMaybe syncEnv dbEnv = do
   let pcm = getPruneConsume syncEnv
       txOutVariantType = getTxOutVariantType syncEnv
       bulkSize = DB.getTxOutBulkSize txOutVariantType
 
   logInfo (getTrace syncEnv) $ "runConsumedTxOutMigrationsMaybe: " <> textShow pcm
-  DB.runDbDirectSilent (envDbEnv syncEnv) $
+  DB.runDbDirectSilent dbEnv $
     DB.runConsumedTxOutMigrations
       (getTrace syncEnv)
       bulkSize
@@ -157,23 +165,23 @@ runConsumedTxOutMigrationsMaybe syncEnv = do
       (getSafeBlockNoDiff syncEnv)
       pcm
 
-syncEpochViewConfig :: SyncEnv -> IO ()
-syncEpochViewConfig syncEnv = do
+syncEpochViewConfig :: SyncEnv -> DB.DbEnv -> IO ()
+syncEpochViewConfig syncEnv dbEnv = do
   let enabled = soptEpochViewEnabled (envOptions syncEnv)
       trce = getTrace syncEnv
-  DB.runDbDirectSilent (envDbEnv syncEnv) $ DB.setEpochSyncEnabled enabled
+  DB.runDbDirectSilent dbEnv $ DB.setEpochSyncEnabled enabled
   when enabled $ do
     logWarning trce "Backfilling epoch_finalized from block/tx; on mainnet this one-time cost can take several minutes."
-    DB.runDbDirectSilent (envDbEnv syncEnv) DB.backfillEpochFinalized
+    DB.runDbDirectSilent dbEnv DB.backfillEpochFinalized
     logInfo trce "epoch_finalized backfill complete."
 
-runAddJsonbToSchema :: SyncEnv -> IO ()
-runAddJsonbToSchema syncEnv =
-  void $ DB.runDbDirectSilent (envDbEnv syncEnv) DB.enableJsonbInSchema
+runAddJsonbToSchema :: DB.DbEnv -> IO ()
+runAddJsonbToSchema dbEnv =
+  void $ DB.runDbDirectSilent dbEnv DB.enableJsonbInSchema
 
-runRemoveJsonbFromSchema :: SyncEnv -> IO ()
-runRemoveJsonbFromSchema syncEnv =
-  void $ DB.runDbDirectSilent (envDbEnv syncEnv) DB.disableJsonbInSchema
+runRemoveJsonbFromSchema :: DB.DbEnv -> IO ()
+runRemoveJsonbFromSchema dbEnv =
+  void $ DB.runDbDirectSilent dbEnv DB.disableJsonbInSchema
 
 getSafeBlockNoDiff :: SyncEnv -> Word64
 getSafeBlockNoDiff syncEnv = 2 * getSecurityParam syncEnv
@@ -291,15 +299,18 @@ determineIsolationLevel syncEnv = do
 
 getDbTipBlockNo :: SyncEnv -> IO (Point.WithOrigin BlockNo)
 getDbTipBlockNo env = do
-  mblk <- getDbLatestBlockInfo (envDbEnv env)
-  pure $ maybe Point.Origin (Point.At . bBlockNo) mblk
+  mblk <- traverse getDbLatestBlockInfo (envDbEnv env)
+  pure $ maybe Point.Origin (Point.At . bBlockNo) (join mblk)
 
 logDbState :: SyncEnv -> IO ()
 logDbState env = do
-  mblk <- getDbLatestBlockInfo (envDbEnv env)
-  case mblk of
-    Nothing -> logInfo tracer "Database is empty"
-    Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
+  case envDbEnv env of
+    Nothing -> logInfo tracer "Not using a database"
+    Just dbEnv -> do
+      mblk <- getDbLatestBlockInfo dbEnv
+      case mblk of
+        Nothing -> logInfo tracer "Database is empty"
+        Just tip -> logInfo tracer $ mconcat ["Database tip is at ", showTip tip]
   where
     showTip :: TipInfo -> Text
     showTip tipInfo =
@@ -313,17 +324,20 @@ logDbState env = do
     tracer :: Trace IO LogMessage
     tracer = getTrace env
 
+-- | The block number db-sync is currently at. The chain-sync client only uses
+-- it to size its pipeline, so the ledger-only answer of 'Origin' costs nothing
+-- but a deeper pipeline on the first batch.
 getCurrentTipBlockNo :: SyncEnv -> IO (WithOrigin BlockNo)
 getCurrentTipBlockNo env = do
-  maybeTip <- getDbLatestBlockInfo (envDbEnv env)
-  case maybeTip of
+  maybeTip <- traverse getDbLatestBlockInfo (envDbEnv env)
+  case join maybeTip of
     Just tip -> pure $ At (bBlockNo tip)
     Nothing -> pure Origin
 
 mkSyncEnv ::
   MetricSetters ->
   Trace IO LogMessage ->
-  DB.DbEnv ->
+  Maybe DB.DbEnv ->
   SyncOptions ->
   ProtocolInfo CardanoBlock ->
   Ledger.Network ->
@@ -335,8 +349,12 @@ mkSyncEnv ::
   RunMigration ->
   Bool ->
   IO SyncEnv
-mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
-  dbCNamesVar <- newTVarIO =<< DB.runDbTransSilent dbEnv DB.ReadCommitted DB.queryRewardAndEpochStakeConstraints
+mkSyncEnv metricSetters trce mDbEnv syncOptions protoInfo nw maxLovelaceSupply nwMagic systemStart syncNodeConfigFromFile syncNP runNearTipMigrationFnc isJsonbInSchema = do
+  dbCNamesVar <-
+    newTVarIO =<< case mDbEnv of
+      Just dbEnv -> DB.runDbTransSilent dbEnv DB.ReadCommitted DB.queryRewardAndEpochStakeConstraints
+      -- No tables, so no constraints on them either.
+      Nothing -> pure $ DB.ManualDbConstraints False False
   cache <-
     if soptCache syncOptions
       then
@@ -361,7 +379,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
           <> "The bootstrap path reads the full UTxO from the in-memory ledger state, "
           <> "which is empty under LSM. Use ledger_backend=inmemory or disable bootstrap."
     _ -> pure ()
-  bts <- getBootstrapInProgress trce bootstrapFlag dbEnv
+  bts <- maybe (pure False) (getBootstrapInProgress trce bootstrapFlag) mDbEnv
   bootstrapVar <- newTVarIO bts
   -- Offline Pool + Anchor queues
   opwq <- newTBQueueIO 1000
@@ -395,7 +413,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
 
   pure $
     SyncEnv
-      { envDbEnv = dbEnv
+      { envDbEnv = mDbEnv
       , envMetricSetters = metricSetters
       , envBootstrap = bootstrapVar
       , envCache = cache
@@ -424,7 +442,7 @@ mkSyncEnv metricSetters trce dbEnv syncOptions protoInfo nw maxLovelaceSupply nw
 mkSyncEnvFromConfig ::
   MetricSetters ->
   Trace IO LogMessage ->
-  DB.DbEnv ->
+  Maybe DB.DbEnv ->
   SyncOptions ->
   GenesisConfig ->
   SyncNodeConfig ->
@@ -433,7 +451,7 @@ mkSyncEnvFromConfig ::
   RunMigration ->
   Bool ->
   IO (Either SyncNodeError SyncEnv)
-mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc isJsonbInSchema =
+mkSyncEnvFromConfig metricsSetters trce mDbEnv syncOptions genCfg syncNodeConfigFromFile syncNodeParams runNearTipMigrationFnc isJsonbInSchema =
   case genCfg of
     GenesisCardano _ bCfg sCfg _ _ _
       | unProtocolMagicId (Byron.configProtocolMagicId bCfg) /= Shelley.sgNetworkMagic (scConfig sCfg) ->
@@ -462,7 +480,7 @@ mkSyncEnvFromConfig metricsSetters trce dbEnv syncOptions genCfg syncNodeConfigF
             <$> mkSyncEnv
               metricsSetters
               trce
-              dbEnv
+              mDbEnv
               syncOptions
               pInfo
               (Shelley.sgNetworkId $ scConfig sCfg)
@@ -481,34 +499,54 @@ getLatestPoints env = do
     HasLedger hasLedgerEnv -> do
       snapshotPoints <- listKnownSnapshots hasLedgerEnv
       verifySnapshotPoint env snapshotPoints
-    NoLedger _ -> do
-      -- Brings the 5 latest.
-      lastPoints <- DB.runDbDirectSilent (envDbEnv env) DB.queryLatestPoints
-      pure $ mapMaybe convert lastPoints
+    NoLedger _ ->
+      case envDbEnv env of
+        -- Brings the 5 latest. A ledger-only run always has a ledger, so there
+        -- is always a database to ask here.
+        Just dbEnv -> mapMaybe convert <$> DB.runDbDirectSilent dbEnv DB.queryLatestPoints
+        Nothing -> pure []
   where
     convert (Nothing, _) = Nothing
     convert (Just slot, bs) = convertToDiskPoint (SlotNo slot) bs
 
 verifySnapshotPoint :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
 verifySnapshotPoint env snapPoints =
-  catMaybes <$> mapM validLedgerFileToPoint snapPoints
+  case envDbEnv env of
+    Just dbEnv -> catMaybes <$> mapM (validLedgerFileToPoint dbEnv) snapPoints
+    Nothing -> ledgerOnlySnapshotPoints env snapPoints
   where
-    validLedgerFileToPoint :: SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
-    validLedgerFileToPoint (OnDisk ds) = do
+    validLedgerFileToPoint :: DB.DbEnv -> SnapshotPoint -> IO (Maybe (CardanoPoint, Bool))
+    validLedgerFileToPoint dbEnv (OnDisk ds) = do
       let slot = SlotNo (dsNumber ds)
-      hashes <- getSlotHash (envDbEnv env) slot
+      hashes <- getSlotHash dbEnv slot
       case hashes of
         [(s, _h)] | s == slot -> pure $ convertToDiskPoint slot _h
         _ -> pure Nothing
-    validLedgerFileToPoint (InMemory pnt) = do
+    validLedgerFileToPoint dbEnv (InMemory pnt) = do
       case pnt of
         GenesisPoint -> pure Nothing
         BlockPoint slotNo hsh -> do
-          hashes <- getSlotHash (envDbEnv env) slotNo
+          hashes <- getSlotHash dbEnv slotNo
           let valid = find (\(_, dbHash) -> getHeaderHash hsh == dbHash) hashes
           case valid of
             Just (dbSlotNo, _) | slotNo == dbSlotNo -> pure $ Just (pnt, True)
             _ -> pure Nothing
+
+-- | The resume points of a ledger-only run, which has no @block@ table to
+-- check the snapshots against. An in-memory snapshot already carries its hash.
+-- An on-disk one records only a slot number, and the normal path recovers the
+-- hash from the database, so here the newest snapshot that loads is adopted as
+-- the current ledger state and its own point is used.
+ledgerOnlySnapshotPoints :: SyncEnv -> [SnapshotPoint] -> IO [(CardanoPoint, Bool)]
+ledgerOnlySnapshotPoints env snapPoints =
+  case envLedgerEnv env of
+    NoLedger _ -> pure []
+    HasLedger hle ->
+      case [pnt | InMemory pnt@BlockPoint {} <- snapPoints] of
+        inMemory@(_ : _) -> pure $ (,True) <$> inMemory
+        [] ->
+          maybeToList . fmap (,False)
+            <$> loadLatestSnapshot hle [ds | OnDisk ds <- snapPoints]
 
 convertToDiskPoint :: SlotNo -> ByteString -> Maybe (CardanoPoint, Bool)
 convertToDiskPoint slot hashBlob = (,False) <$> convertToPoint slot hashBlob
