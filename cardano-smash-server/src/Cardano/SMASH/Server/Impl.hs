@@ -235,25 +235,20 @@ fetchPolicies' (ServerEnv trce dataLayer) smashURL =
     logInfo trce $ "Fetch policies from " <> textShow smashURL
     -- Fetch from the remote SMASH server.
     policyResult <- httpClientFetchPolicies smashURL
-    let delistedPools =
-          case policyResult of
-            Left httpClientErr -> panic $ renderHttpClientError httpClientErr
-            Right policyResult' -> prDelistedPools policyResult'
-
-    -- Clear the database
-    let getDelistedPools' = dlGetDelistedPools dataLayer
-    existingDelistedPools <- getDelistedPools'
-
-    let removeDelistedPool = dlRemoveDelistedPool dataLayer
-    mapM_ removeDelistedPool existingDelistedPools
-
-    let addDelistedPool = dlAddDelistedPool dataLayer
-    _newDelistedPools <- mapM addDelistedPool delistedPools
-
-    -- Horrible.
+    -- Check the fetch before touching the database: the delisted set is replaced
+    -- wholesale below, so a failed fetch must leave the existing rows alone. This
+    -- used to be a lazy binding that deleted every row and only then panicked.
     case policyResult of
-      Left httpClientErr -> pure . ApiResult . Left . UnknownError $ renderHttpClientError httpClientErr
-      Right policyResult' -> pure . ApiResult . Right $ policyResult'
+      Left httpClientErr -> do
+        let msg = renderHttpClientError httpClientErr
+        logWarning trce $ "Fetching policies failed, keeping the current delisted pools: " <> msg
+        pure . ApiResult . Left $ UnknownError msg
+      Right policyResult' -> do
+        let delistedPools = prDelistedPools policyResult'
+        existingDelistedPools <- dlGetDelistedPools dataLayer
+        mapM_ (dlRemoveDelistedPool dataLayer) existingDelistedPools
+        _newDelistedPools <- mapM (dlAddDelistedPool dataLayer) delistedPools
+        pure . ApiResult . Right $ policyResult'
 
 -- | Generic throwing of exception when something goes bad.
 throwDBFailException :: Trace IO LogMessage -> DBFail -> IO (ApiResult DBFail a)
