@@ -16,6 +16,9 @@ import Cardano.SMASH.Server.Config
 import Cardano.SMASH.Server.Impl
 import Cardano.SMASH.Server.PoolDataLayer
 import Cardano.SMASH.Server.Types
+import qualified Data.ByteString as BS
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.Encoding.Error as TextError
 import Network.Wai.Handler.Warp (defaultSettings, runSettings, setBeforeMainLoop, setPort)
 import Servant (
   Application,
@@ -69,8 +72,10 @@ basicAuthServerContext applicationUsers = authCheck applicationUsers :. EmptyCon
     authCheck applicationUsers' =
       let check' :: BasicAuthData -> IO (BasicAuthResult User)
           check' (BasicAuthData username' password') = do
-            let usernameText = decodeUtf8 username'
-            let passwordText = decodeUtf8 password'
+            -- Leniently, because the strict 'decodeUtf8' throws on invalid UTF-8 in
+            -- the Authorization header instead of refusing the request.
+            let usernameText = Text.decodeUtf8With TextError.lenientDecode username'
+            let passwordText = Text.decodeUtf8With TextError.lenientDecode password'
 
             let applicationUser = ApplicationUser usernameText passwordText
             let userAuthValidity = checkIfUserValid applicationUsers' applicationUser
@@ -82,10 +87,24 @@ basicAuthServerContext applicationUsers = authCheck applicationUsers :. EmptyCon
 
 -- | 'BasicAuthCheck' holds the handler we'll use to verify a username and password.
 checkIfUserValid :: ApplicationUsers -> ApplicationUser -> UserValidity
-checkIfUserValid (ApplicationUsers applicationUsers) applicationUser@(ApplicationUser usernameText _) =
-  if applicationUser `elem` applicationUsers
+checkIfUserValid (ApplicationUsers applicationUsers) (ApplicationUser usernameText passwordText) =
+  if any matches applicationUsers
     then UserValid (User usernameText)
     else UserInvalid
+  where
+    matches :: ApplicationUser -> Bool
+    matches (ApplicationUser name secret) =
+      name == usernameText && constantTimeEq secret passwordText
+
+-- | Compare two secrets without leaking where they first differ. Length is still
+-- compared directly, as in any standard digest comparison.
+constantTimeEq :: Text -> Text -> Bool
+constantTimeEq x y =
+  BS.length bx == BS.length by
+    && 0 == BS.foldl' (.|.) 0 (BS.pack (BS.zipWith xor bx by))
+  where
+    bx = Text.encodeUtf8 x
+    by = Text.encodeUtf8 y
 
 -- Stub api
 
