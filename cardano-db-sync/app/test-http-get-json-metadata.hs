@@ -9,6 +9,7 @@
 import qualified Cardano.Db as DB
 import Cardano.DbSync.OffChain.Http (
   httpGetOffChainPoolData,
+  newRestrictedManager,
   parseOffChainUrl,
  )
 import Cardano.DbSync.Types (
@@ -23,14 +24,15 @@ import qualified Data.List.Extra as List
 import Data.Ord (Down (..))
 import Data.Text (Text)
 import qualified Network.HTTP.Client as Http
-import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 -- A test/debug program that pulls PoolMetadataRef data from the database and then tests all
 -- the URLs found.
 
 main :: IO ()
 main = do
-  manager <- Http.newManager tlsManagerSettings
+  -- These urls come from the database, i.e. they are whatever was put on chain,
+  -- so use the same restricted manager db-sync itself uses.
+  manager <- newRestrictedManager False
   xs <- DB.runDbStandaloneTransSilent DB.PGPassDefaultEnv queryTestOffChainData
   putStrLn $ "testOffChainPoolDataFetch: " ++ show (length xs) ++ " tests to run."
   tfs <- foldM (testOne manager) emptyTestFailure xs
