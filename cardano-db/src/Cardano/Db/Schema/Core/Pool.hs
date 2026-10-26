@@ -25,6 +25,7 @@ import qualified Cardano.Db.Schema.Ids as Id
 import Cardano.Db.Schema.Types (
   PoolUrl (..),
   poolUrlEncoder,
+  sanitiseText,
  )
 import Cardano.Db.Statement.Function.Core (bulkEncoder)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), Key)
@@ -219,8 +220,10 @@ poolRelayEncoder =
     [ poolRelayUpdateId >$< Id.idEncoder Id.getPoolUpdateId
     , poolRelayIpv4 >$< E.param (E.nullable E.text)
     , poolRelayIpv6 >$< E.param (E.nullable E.text)
-    , poolRelayDnsName >$< E.param (E.nullable E.text)
-    , poolRelayDnsSrvName >$< E.param (E.nullable E.text)
+    , -- NB: the ledger only length-checks a 'DnsName', so a NUL can reach here and
+      -- Postgres rejects it. Sanitise as the url columns do.
+      (fmap sanitiseText . poolRelayDnsName) >$< E.param (E.nullable E.text)
+    , (fmap sanitiseText . poolRelayDnsSrvName) >$< E.param (E.nullable E.text)
     , -- NB: the SQL column is int4 and the field is an unsigned Word16, so it must
       -- be encoded as int4. Using int2 (signed 16-bit) wraps ports > 32767 to
       -- negative values (port - 65536). See issue #2135.
