@@ -402,6 +402,7 @@ mkSyncEnv metricSetters trce mDbEnv syncOptions protoInfo nw maxLovelaceSupply n
             systemStart
             syncOptions
             (dncLedgerBackend syncNodeConfigFromFile)
+            (isNothing mDbEnv)
       (Nothing, False) -> NoLedger <$> mkNoLedgerEnv trce protoInfo nw systemStart
       (Just _, False) -> do
         logWarning trce $

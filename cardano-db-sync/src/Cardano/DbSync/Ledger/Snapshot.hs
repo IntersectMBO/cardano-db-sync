@@ -189,8 +189,20 @@ findStateFromSnapshot env point = do
   snapshots <- listSnapshots (leSnapshotManager env)
   case getPoint point of
     Origin -> do
-      -- Delete all snapshots and start from genesis
-      forM_ snapshots $ safeDeleteSnapshot (leSnapshotManager env)
+      -- Start from genesis, deleting the snapshots on the way. A ledger-only run
+      -- keeps them: they are its only output, and an operator can resume from them
+      -- by restarting, whereas deleting them discards the whole replay.
+      if leLedgerOnly env
+        then
+          unless (null snapshots) $
+            logWarning (leTrace env) $
+              mconcat
+                [ "Rolling back to genesis with "
+                , textShow (length snapshots)
+                , " snapshot(s) in the state dir. Keeping them, since they are this "
+                , "run's only output; restart to resume from the newest one."
+                ]
+        else forM_ snapshots $ safeDeleteSnapshot (leSnapshotManager env)
       Right <$> initCardanoLedgerState env
     At blk -> do
       let targetSlot = Point.blockPointSlot blk
