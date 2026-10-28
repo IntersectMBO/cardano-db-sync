@@ -27,15 +27,28 @@ curl -o docker-compose.yml \
 Start `cardano-node`, `postgresql`, and `cardano-db-sync` services:
 
 ```bash
+Set a password first. The compose file has no default, because a password
+committed to this repository would be a published one and this account is a
+PostgreSQL superuser. `docker-compose.yml` reads it from a secret file instead,
+which you create yourself:
+
+```bash
+openssl rand -hex 24 > config/secrets/postgres_password
+chmod 0600 config/secrets/postgres_password
+```
+
+`docker-compose.example.yml` takes it from the environment:
+
+```bash
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" > .env
 docker compose up -d && docker compose logs -f
 ```
 
-The PostgreSQL database should now be exposed on localhost port `5432`
-
-To connect to PostgreSQL database:
+The PostgreSQL database is published on `127.0.0.1` port `5432`, reachable from
+this host only. To connect to it:
 
 ```bash
-psql -h 0.0.0.0 -p 5432 -U postgres -d cexplorer
+psql -h 127.0.0.1 -p 5432 -U postgres -d cexplorer
 ```
 
 ### Connecting to a Other Networks
@@ -281,7 +294,7 @@ docker run cardano-db-sync
 Create a `pgpass-test` file with the credentials of (taken from config/secrets/postgres_* files):
 
 ```bash
-echo "localhost:5432:cexplorer:postgres:v8hlDV0yMAHHlIurYupj" > config/pgpass-test
+echo "localhost:5432:cexplorer:postgres:$POSTGRES_PASSWORD" > config/pgpass-test
 chmod 0600 config/pgpass-test
 export PGPASSFILE=$PWD/config/pgpass-test
 ```

@@ -32,3 +32,6 @@ result*
 
 # MacOS
 .DS_Store
+
+# Operator-supplied secrets; must never be committed.
+config/secrets/*

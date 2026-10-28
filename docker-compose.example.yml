@@ -9,11 +9,14 @@ services:
       - POSTGRES_LOGGING=true
       - POSTGRES_DB=cexplorer
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj
+      # No default: a password committed here would be a published one, and this
+      # account is a PostgreSQL superuser. Set it in the environment or a .env file.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, e.g. in a .env file}
     networks:
       - postgres
     ports:
-      - 5432:5432
+      # Loopback only: publishing 5432 on every interface exposes a superuser.
+      - 127.0.0.1:5432:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
@@ -66,7 +69,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_DB=cexplorer
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=v8hlDV0yMAHHlIurYupj
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, e.g. in a .env file}
     depends_on:
       # Depend on both services to be healthy before starting.
       cardano-node:

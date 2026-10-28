@@ -14,7 +14,8 @@ services:
       - postgres_user
       - postgres_db
     ports:
-      - ${POSTGRES_PORT:-5432}:5432
+      # Loopback only; the compose network is what db-sync uses.
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
