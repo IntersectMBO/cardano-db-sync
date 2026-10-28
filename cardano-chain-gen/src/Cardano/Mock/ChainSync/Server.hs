@@ -89,6 +89,7 @@ import Ouroboros.Network.Block (
   mkSerialised,
  )
 import Ouroboros.Network.Channel (Channel)
+import Ouroboros.Network.ConnectionManager.Types (DataFlow (Unidirectional))
 import Ouroboros.Network.Driver.Simple (runPeer)
 import qualified Ouroboros.Network.Driver.Stateful as Stateful
 import Ouroboros.Network.Magic (NetworkMagic)
@@ -249,6 +250,7 @@ runLocalServer iom codecConfig netMagic localDomainSock chainProdState = do
           }
       )
       (versions chainProdState)
+      (const Unidirectional)
       (\_ serverAsync -> wait serverAsync)
   pure ()
   where
