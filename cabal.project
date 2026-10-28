@@ -79,6 +79,9 @@ constraints:
   , any.crypton-x509-system < 1.6.8 || >= 1.7
   -- https://github.com/channable/alfred-margaret/pull/76
   , any.alfred-margaret < 2.1.1.0 || > 2.1.1.0
+  -- crypton 2.2.1 doesn't build on macOS, see:
+  -- https://hackage.haskell.org/package/crypton-2.2.2/changelog
+  , any.crypton < 2.1.2 || >= 2.2.2
 
 allow-newer:
     , cardano-api:plutus-core

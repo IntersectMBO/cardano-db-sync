@@ -236,7 +236,11 @@
 
                 weeder = "latest";
                 hoogle.cabalProjectLocal = ''
-                  constraints: alfred-margaret <2.1.1.0 || >2.1.1.0
+                  constraints: 
+                    , alfred-margaret <2.1.1.0 || >2.1.1.0
+                    -- crypton 2.2.1 doesn't build on macOS, see:
+                    -- https://hackage.haskell.org/package/crypton-2.2.2/changelog
+                    , any.crypton < 2.1.2 || >= 2.2.2
                 '';                
               };
 
