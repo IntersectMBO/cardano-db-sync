@@ -188,8 +188,8 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamMaxBlockExMem
     <*> maybeDbWord64Decoder -- epochParamMaxBlockExSteps
     <*> maybeDbWord64Decoder -- epochParamMaxValSize
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- epochParamCollateralPercent
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- epochParamMaxCollateralInputs
+    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- epochParamCollateralPercent
+    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- epochParamMaxCollateralInputs
     <*> idDecoder BlockId -- epochParamBlockId
     <*> D.column (D.nullable D.bytea) -- epochParamExtraEntropy
     <*> maybeDbLovelaceDecoder -- epochParamCoinsPerUtxoSize
@@ -247,8 +247,8 @@ epochParamEncoder =
     , epochParamMaxBlockExMem >$< maybeDbWord64Encoder
     , epochParamMaxBlockExSteps >$< maybeDbWord64Encoder
     , epochParamMaxValSize >$< maybeDbWord64Encoder
-    , epochParamCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , epochParamMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , epochParamCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , epochParamMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int4)
     , epochParamBlockId >$< idEncoder getBlockId
     , epochParamExtraEntropy >$< E.param (E.nullable E.bytea)
     , epochParamCoinsPerUtxoSize >$< maybeDbLovelaceEncoder

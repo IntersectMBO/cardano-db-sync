@@ -497,8 +497,8 @@ paramProposalDecoder =
     <*> maybeDbWord64Decoder -- paramProposalMaxBlockExMem
     <*> maybeDbWord64Decoder -- paramProposalMaxBlockExSteps
     <*> maybeDbWord64Decoder -- paramProposalMaxValSize
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalCollateralPercent
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalMaxCollateralInputs
+    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- paramProposalCollateralPercent
+    <*> D.column (D.nullable $ fromIntegral <$> D.int4) -- paramProposalMaxCollateralInputs
     <*> Id.idDecoder Id.TxId -- paramProposalRegisteredTxId
     <*> maybeDbLovelaceDecoder -- paramProposalCoinsPerUtxoSize
     <*> D.column (D.nullable D.float8) -- paramProposalPvtMotionNoConfidence
@@ -555,8 +555,11 @@ paramProposalEncoder =
     , paramProposalMaxBlockExMem >$< maybeDbWord64Encoder
     , paramProposalMaxBlockExSteps >$< maybeDbWord64Encoder
     , paramProposalMaxValSize >$< maybeDbWord64Encoder
-    , paramProposalCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , -- NB: int4, matching the word31type columns. int2 is signed, so anything
+      -- above 32767 wrapped negative, and migration 2-0030 dropped the domain
+      -- CHECK that would have caught it. Same defect as issue #2135.
+      paramProposalCollateralPercent >$< E.param (E.nullable $ fromIntegral >$< E.int4)
+    , paramProposalMaxCollateralInputs >$< E.param (E.nullable $ fromIntegral >$< E.int4)
     , paramProposalRegisteredTxId >$< Id.idEncoder Id.getTxId
     , paramProposalCoinsPerUtxoSize >$< maybeDbLovelaceEncoder
     , paramProposalPvtMotionNoConfidence >$< E.param (E.nullable E.float8)
