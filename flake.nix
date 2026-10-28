@@ -541,10 +541,6 @@
                 mkDist "linux" project.projectCross.musl64;
 
             cardano-db-sync-macos = mkDist "macos" project;
-            cardano-smash-server-no-basic-auth = (project.appendModule {
-              modules = [{packages.cardano-smash-server.flags.disable-basic-auth = true;}];
-            }).exes.cardano-smash-server;
-
             docker = callPackage ./nix/docker.nix {
               inherit (inputs.iohkNix.lib) evalService;
             };
@@ -604,7 +600,7 @@
             } // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit cardano-db-sync-macos;
             } // {
-              inherit cardano-smash-server-no-basic-auth profiled;
+              inherit profiled;
             };
 
             legacyPackages = pkgs;
@@ -618,7 +614,6 @@
               inherit cardano-db-sync-macos;
             } // {
               inherit
-                cardano-smash-server-no-basic-auth
                 profiled
                 project;
 
