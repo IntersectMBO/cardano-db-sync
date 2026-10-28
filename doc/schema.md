@@ -560,7 +560,7 @@ A table containing redeemers. A redeemer is provided for all items that are vali
 | `unit_mem` | word63type | The budget in Memory to run a script. |
 | `unit_steps` | word63type | The budget in Cpu steps to run a script. |
 | `fee` | lovelace | The budget in fees to run a script. The fees depend on the ExUnits and the current prices. Is null when --disable-ledger is enabled. New in v13: became nullable. |
-| `purpose` | scriptpurposetype | What kind pf validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward', `voting`, `proposing` |
+| `purpose` | scriptpurposetype | What kind of validation this redeemer is used for. It can be one of 'spend', 'mint', 'cert', 'reward', 'vote', 'propose', 'guard'. 'guard' is new in the Dijkstra era. |
 | `index` | word31type | The index of the redeemer pointer in the transaction. |
 | `script_hash` | hash28type | The script hash this redeemer is used for. |
 | `redeemer_data_id` | integer (64) | The data related to this redeemer. New in v13: renamed from datum_id. |

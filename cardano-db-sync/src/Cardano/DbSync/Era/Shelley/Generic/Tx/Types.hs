@@ -254,7 +254,7 @@ instance DBScriptPurpose DijkstraEra where
     DijkstraWithdrawing idx -> (DB.Rewrd, unAsIx idx)
     DijkstraVoting idx -> (DB.Vote, unAsIx idx)
     DijkstraProposing idx -> (DB.Propose, unAsIx idx)
-    DijkstraGuarding idx -> (DB.Propose, unAsIx idx)
+    DijkstraGuarding idx -> (DB.Guard, unAsIx idx)
 
   toAlonzoPurpose _ = \case
     DijkstraVoting _ -> Nothing
