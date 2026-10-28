@@ -32,3 +32,5 @@ result*
 
 # MacOS
 .DS_Store
+# Operator-supplied database password; must never be committed.
+config/secrets/postgres_password

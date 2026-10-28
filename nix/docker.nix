@@ -232,10 +232,13 @@ let
 
         ${setupTmp}
 
-        # Add an admin csv
-        SMASH_USER="''${SMASH_USER:-smash-admin}"
-        SMASH_PASSWORD="''${SMASH_PASSWORD:-smash-password}"
-        echo "''${SMASH_USER},''${SMASH_PASSWORD}" > /configuration/admins.csv
+        # No defaults: the former smash-admin/smash-password pair was published in
+        # this repository and grants the delist, enlist, ticker and policy endpoints.
+        if [[ -z "''${SMASH_USER:-}" || -z "''${SMASH_PASSWORD:-}" ]]; then
+          echo "Error: SMASH_USER and SMASH_PASSWORD must both be set." >&2
+          exit 1
+        fi
+        (umask 077 && echo "''${SMASH_USER},''${SMASH_PASSWORD}" > /configuration/admins.csv)
 
         if [[ -z "$NETWORK" ]]; then
           echo "Connecting to network specified in configuration.yaml"
@@ -269,8 +272,9 @@ let
     POSTGRES_DB=''${POSTGRES_DB:-$(< ''${SECRET_DIR}/postgres_db)}
     POSTGRES_USER=''${POSTGRES_USER:-$(< ''${SECRET_DIR}/postgres_user)}
     POSTGRES_PASSWORD=''${POSTGRES_PASSWORD:-$(< ''${SECRET_DIR}/postgres_password)}
-    echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /configuration/pgpass
-    chmod 0600 /configuration/pgpass
+    # Written under a restrictive umask rather than chmod'ed after, so the password
+    # is never briefly world readable.
+    (umask 077 && echo "''${POSTGRES_HOST}:''${POSTGRES_PORT}:''${POSTGRES_DB}:''${POSTGRES_USER}:''${POSTGRES_PASSWORD}" > /configuration/pgpass)
   '';
 
   # set up /tmp (override with TMPDIR variable)

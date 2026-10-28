@@ -16,7 +16,8 @@ services:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
     ports:
-      - "5432:5432"
+      # Loopback only.
+      - "127.0.0.1:5432:5432"
     logging:
       driver: "json-file"
       options:
