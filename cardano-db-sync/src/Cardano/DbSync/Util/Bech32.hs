@@ -12,8 +12,9 @@ module Cardano.DbSync.Util.Bech32 (
   serialiseDrepToBech32,
 ) where
 
+import Cardano.Binary.FixedSizeCodec (rawDecodeFixedSized, rawEncodeFixedSized)
 import Cardano.Crypto.Hash.Class (hashFromBytes, hashToBytes)
-import Cardano.Crypto.VRF.Class (VerKeyVRF, rawDeserialiseVerKeyVRF, rawSerialiseVerKeyVRF)
+import Cardano.Crypto.VRF.Class (VerKeyVRF)
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..))
 import Cardano.Prelude
 import Cardano.Protocol.Crypto (StandardCrypto, VRF)
@@ -51,7 +52,7 @@ deserialiseFromBech32 s = decodeLenient' s >>= dataPartToBytes'
 -- | Serialise a Verification Key to bech32 address
 serialiseVerKeyVrfToBech32 :: VerKeyVRF (VRF StandardCrypto) -> Text
 serialiseVerKeyVrfToBech32 =
-  serialiseToBech32 "vrf_vk" . rawSerialiseVerKeyVRF
+  serialiseToBech32 "vrf_vk" . rawEncodeFixedSized
 
 -- deriving instance VRFAlgorithm (VRF PraosVRF)
 
@@ -62,7 +63,7 @@ deserialiseVerKeyVrfFromBech32 text =
   where
     deserialiseFromRawBytes' :: ByteString -> Either DecodeError (VerKeyVRF (VRF StandardCrypto))
     deserialiseFromRawBytes' =
-      maybeToRight DecodeFromRawBytesError . rawDeserialiseVerKeyVRF
+      maybeToRight DecodeFromRawBytesError . rawDecodeFixedSized
 
 -- | Serialise stake pool key hash to a bech32 address
 serialiseStakePoolKeyHashToBech32 :: KeyHash StakePool -> Text

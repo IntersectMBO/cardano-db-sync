@@ -211,12 +211,12 @@ instance DBScriptPurpose AlonzoEra where
     AlonzoSpending idx -> (DB.Spend, unAsIx idx)
     AlonzoMinting idx -> (DB.Mint, unAsIx idx)
     AlonzoCertifying idx -> (DB.Cert, unAsIx idx)
-    AlonzoRewarding idx -> (DB.Rewrd, unAsIx idx)
+    AlonzoWithdrawing idx -> (DB.Rewrd, unAsIx idx)
 
   toAlonzoPurpose txBody pp = case pp of
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
     AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
-    AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
+    AlonzoWithdrawing a -> Just $ Left (AlonzoWithdrawing a, Nothing)
     AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
 instance DBScriptPurpose BabbageEra where
@@ -224,12 +224,12 @@ instance DBScriptPurpose BabbageEra where
     AlonzoSpending idx -> (DB.Spend, unAsIx idx)
     AlonzoMinting idx -> (DB.Mint, unAsIx idx)
     AlonzoCertifying idx -> (DB.Cert, unAsIx idx)
-    AlonzoRewarding idx -> (DB.Rewrd, unAsIx idx)
+    AlonzoWithdrawing idx -> (DB.Rewrd, unAsIx idx)
 
   toAlonzoPurpose txBody pp = case pp of
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
     AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
-    AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
+    AlonzoWithdrawing a -> Just $ Left (AlonzoWithdrawing a, Nothing)
     AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
 instance DBScriptPurpose ConwayEra where
@@ -237,7 +237,7 @@ instance DBScriptPurpose ConwayEra where
     ConwaySpending idx -> (DB.Spend, unAsIx idx)
     ConwayMinting idx -> (DB.Mint, unAsIx idx)
     ConwayCertifying idx -> (DB.Cert, unAsIx idx)
-    ConwayRewarding idx -> (DB.Rewrd, unAsIx idx)
+    ConwayWithdrawing idx -> (DB.Rewrd, unAsIx idx)
     ConwayVoting idx -> (DB.Vote, unAsIx idx)
     ConwayProposing idx -> (DB.Propose, unAsIx idx)
 
@@ -251,7 +251,7 @@ instance DBScriptPurpose DijkstraEra where
     DijkstraSpending idx -> (DB.Spend, unAsIx idx)
     DijkstraMinting idx -> (DB.Mint, unAsIx idx)
     DijkstraCertifying idx -> (DB.Cert, unAsIx idx)
-    DijkstraRewarding idx -> (DB.Rewrd, unAsIx idx)
+    DijkstraWithdrawing idx -> (DB.Rewrd, unAsIx idx)
     DijkstraVoting idx -> (DB.Vote, unAsIx idx)
     DijkstraProposing idx -> (DB.Propose, unAsIx idx)
     DijkstraGuarding idx -> (DB.Propose, unAsIx idx)
@@ -263,7 +263,7 @@ instance DBScriptPurpose DijkstraEra where
     DijkstraSpending idx -> Just $ Right $ ConwaySpending idx
     DijkstraMinting idx -> Just $ Right $ ConwayMinting idx
     DijkstraCertifying idx -> Just $ Right $ ConwayCertifying idx
-    DijkstraRewarding idx -> Just $ Right $ ConwayRewarding idx
+    DijkstraWithdrawing idx -> Just $ Right $ ConwayWithdrawing idx
 
 class AlonzoEraScript era => DBPlutusScript era where
   getPlutusScriptType :: PlutusScript era -> DB.ScriptType

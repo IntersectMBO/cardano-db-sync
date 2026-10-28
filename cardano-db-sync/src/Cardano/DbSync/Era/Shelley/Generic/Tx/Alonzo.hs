@@ -136,8 +136,9 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     -- This is true if second stage contract validation passes or there are no contracts.
     isValid2 :: Bool
     isValid2 =
-      case tx ^. Alonzo.isValidTxL of
-        Alonzo.IsValid x -> x
+      case tx ^. Alonzo.isPhase2ValidTxL of
+        Alonzo.Phase2Valid -> True
+        Alonzo.Phase2Invalid -> False
 
     (invalidBefore, invalidAfter) = getInterval txBody
 
@@ -233,7 +234,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
         (rdmrMps', mScript) = case mkPurpose $ Alonzo.redeemerPointerInverse txBody ptr of
           Just (Left (Alonzo.AlonzoMinting policyId, _)) -> (rdmrMps, Just $ Right $ unScriptHash $ policyID (Alonzo.unAsItem policyId))
           Just (Left (Alonzo.AlonzoSpending txIn, _)) -> handleTxInPtr rdmrIx (Alonzo.unAsItem txIn) rdmrMps
-          Just (Left (Alonzo.AlonzoRewarding rwdAcnt, _)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
+          Just (Left (Alonzo.AlonzoWithdrawing rwdAcnt, _)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
           Just (Left (Alonzo.AlonzoCertifying dcert, Just ptr')) ->
             if ptr == ptr'
               then handleCertPtr rdmrIx (toCert $ Alonzo.unAsItem dcert) rdmrMps
@@ -241,7 +242,7 @@ resolveRedeemers ioExtraPlutus mprices tx toCert =
           Just (Left (Alonzo.AlonzoCertifying _, Nothing)) -> (rdmrMps, Nothing)
           Just (Right (ConwayMinting policyId)) -> (rdmrMps, Just $ Right $ unScriptHash $ policyID (Alonzo.unAsItem policyId))
           Just (Right (ConwaySpending txIn)) -> handleTxInPtr rdmrIx (Alonzo.unAsItem txIn) rdmrMps
-          Just (Right (ConwayRewarding rwdAcnt)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
+          Just (Right (ConwayWithdrawing rwdAcnt)) -> handleRewardPtr rdmrIx (Alonzo.unAsItem rwdAcnt) rdmrMps
           Just (Right (ConwayCertifying dcert)) -> handleCertPtr rdmrIx (toCert $ Alonzo.unAsItem dcert) rdmrMps
           Just (Right (ConwayVoting voter)) -> (rdmrMps, Right <$> getConwayVotingScriptHash (Alonzo.unAsItem voter))
           Just (Right (ConwayProposing proposal)) -> (rdmrMps, Right <$> getConwayProposalScriptHash (Alonzo.unAsItem proposal))
