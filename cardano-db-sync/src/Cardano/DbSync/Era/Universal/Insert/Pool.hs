@@ -34,6 +34,7 @@ import Cardano.DbSync.Util
 import qualified Cardano.Ledger.Address as Ledger
 import Cardano.Ledger.BaseTypes
 import qualified Cardano.Ledger.BaseTypes as Ledger
+import Cardano.Ledger.Binary (rawEncodeFixedSized)
 import Cardano.Ledger.Core (PoolCert (..))
 import qualified Cardano.Ledger.Credential as Ledger
 import qualified Cardano.Ledger.Keys as Ledger
@@ -82,11 +83,18 @@ insertPoolRegister syncEnv isMember mdeposits network (EpochNo epoch) blkId txId
           , DB.poolUpdateFixedCost = Generic.coinToDbLovelace (PoolP.sppCost params)
           , DB.poolUpdateDeposit = deposit
           , DB.poolUpdateRegisteredTxId = txId
+          , -- The BLS key the registration declares, with its proof of possession. The
+            -- ledger has already verified the proof; it is kept because tx_cbor, the
+            -- only other place the certificate survives, is off by default.
+            DB.poolUpdateBlsKey = rawEncodeFixedSized . PoolP.blsPubKey <$> mBlsKey
+          , DB.poolUpdateBlsKeyPop = rawEncodeFixedSized . PoolP.blsPossessionProof <$> mBlsKey
           }
 
   mapM_ (insertPoolOwner syncEnv network poolUpdateId) $ toList (PoolP.sppOwners params)
   mapM_ (insertPoolRelay poolUpdateId) $ toList (PoolP.sppRelays params)
   where
+    mBlsKey = strictMaybeToMaybe (PoolP.sppBlsKey params)
+
     isPoolRegistration :: DB.PoolHashId -> ExceptT SyncNodeError DB.DbM Bool
     isPoolRegistration poolHashId =
       if isMember (PoolP.sppId params)

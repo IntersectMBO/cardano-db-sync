@@ -306,6 +306,8 @@ An on-chain pool update.
 | `margin` | double | The margin (as a percentage) this pool charges. |
 | `fixed_cost` | lovelace | The fixed per epoch fee (in ADA) this pool charges. |
 | `deposit` | lovelace | The deposit payed for this pool update. Null for reregistrations. |
+| `bls_key` | bytea | The BLS verification key this registration declares, used for Leios and Peras certificates. The key rides the pool registration certificate and there is no separate certificate to add or update it, so it is NULL for every registration that does not declare one. New in 13.8-Dijkstra (experimental). |
+| `bls_key_pop` | bytea | The proof of possession accompanying `bls_key`, which the ledger has already verified. NULL whenever `bls_key` is. New in 13.8-Dijkstra (experimental). |
 | `registered_tx_id` | integer (64) | The Tx table index of the transaction in which provided this pool update. |
 
 ### `pool_owner`

@@ -74,6 +74,12 @@ BEGIN
     -- cheap filtering. signers is the committee-seat bitfield and signer_count its
     -- population count. FALSE on every block before the Dijkstra era.
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "has_leios_cert" BOOLEAN NOT NULL DEFAULT FALSE' ;
+    -- The BLS key a Dijkstra pool registration may declare, with its proof of possession.
+    -- The key rides the registration certificate and there is no separate cert to add or
+    -- update it, so both stay NULL until a pool re-registers declaring one.
+    EXECUTE 'ALTER TABLE "pool_update" ADD COLUMN "bls_key" BYTEA NULL' ;
+    EXECUTE 'ALTER TABLE "pool_update" ADD COLUMN "bls_key_pop" BYTEA NULL' ;
+
     -- A Dijkstra direct deposit: lovelace paid straight into an account with no output.
     -- The mirror of a withdrawal, minus the redeemer a deposit cannot have.
     EXECUTE 'CREATE TABLE "direct_deposit"("id" SERIAL8 PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;

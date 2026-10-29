@@ -111,6 +111,11 @@ data PoolUpdate = PoolUpdate
   , poolUpdateRegisteredTxId :: !Id.TxId -- noreference -- Slot number in which the pool was registered.
   , poolUpdateRewardAddrId :: !Id.StakeAddressId -- noreference
   , poolUpdateDeposit :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , -- The BLS key this registration declares, if any, and the proof of possession that
+    -- came with it. New for Dijkstra; the key rides the pool registration certificate,
+    -- so both are NULL until a pool re-registers declaring one.
+    poolUpdateBlsKey :: !(Maybe ByteString)
+  , poolUpdateBlsKeyPop :: !(Maybe ByteString)
   }
   deriving (Eq, Show, Generic)
 
@@ -131,6 +136,8 @@ poolUpdateEncoder =
     , poolUpdateRegisteredTxId >$< Id.idEncoder Id.getTxId
     , poolUpdateRewardAddrId >$< Id.idEncoder Id.getStakeAddressId
     , poolUpdateDeposit >$< E.param (E.nullable $ fromIntegral . unDbLovelace >$< E.int8)
+    , poolUpdateBlsKey >$< E.param (E.nullable E.bytea)
+    , poolUpdateBlsKeyPop >$< E.param (E.nullable E.bytea)
     ]
 
 -- |
