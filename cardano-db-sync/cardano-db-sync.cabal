@@ -160,6 +160,7 @@ library
                       , cardano-diffusion:subscription
                       , cardano-crypto
                       , cardano-crypto-class
+                      , cardano-crypto-leios
                       , cardano-crypto-praos
                       , cardano-crypto-wrapper
                       , cardano-data
@@ -221,6 +222,7 @@ library
                       , plutus-ledger-api
                       , prometheus
                       , psqueues
+                      , primitive
                       , random
                       , random-shuffle
                       , scientific

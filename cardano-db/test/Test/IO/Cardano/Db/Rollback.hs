@@ -99,6 +99,7 @@ createAndInsertBlocks blockCount =
               , blockVrfKey = Nothing
               , blockOpCert = Nothing
               , blockOpCertCounter = Nothing
+              , blockHasLeiosCert = False
               }
 
       blkId <- insertBlock newBlock

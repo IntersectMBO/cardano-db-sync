@@ -121,17 +121,20 @@ deleteTablesAfterBlockId txOutVariantType blkId mtxId minIdsW = do
   let adaPotsStmt = deleteWhereCount @SCE.AdaPots "block_id" ">=" blockIdEncoder
       reverseIndexStmt = deleteWhereCount @SCB.ReverseIndex "block_id" ">=" blockIdEncoder
       epochParamStmt = deleteWhereCount @SCE.EpochParam "block_id" ">=" blockIdEncoder
+      leiosCertStmt = deleteWhereCount @SCB.LeiosCert "block_id" ">=" blockIdEncoder
 
-  (adaPotsCount, reverseIndexCount, epochParamCount) <- runSession mkDbCallStack $ HsqlSes.pipeline $ do
+  (adaPotsCount, reverseIndexCount, epochParamCount, leiosCertCount) <- runSession mkDbCallStack $ HsqlSes.pipeline $ do
     ada <- HsqlP.statement blkId adaPotsStmt
     rev <- HsqlP.statement blkId reverseIndexStmt
     epoch <- HsqlP.statement blkId epochParamStmt
-    pure (ada, rev, epoch)
+    leios <- HsqlP.statement blkId leiosCertStmt
+    pure (ada, rev, epoch, leios)
 
   let initialLogs =
         [ (tableName (Proxy @SCE.AdaPots), adaPotsCount)
         , (tableName (Proxy @SCB.ReverseIndex), reverseIndexCount)
         , (tableName (Proxy @SCE.EpochParam), epochParamCount)
+        , (tableName (Proxy @SCB.LeiosCert), leiosCertCount)
         ]
 
   -- Handle off-chain related deletions

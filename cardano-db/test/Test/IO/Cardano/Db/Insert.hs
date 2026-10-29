@@ -217,6 +217,7 @@ blockZero slid =
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
     , blockOpCertCounter = Nothing
+    , blockHasLeiosCert = False
     }
 
 blockOne :: SlotLeaderId -> Block
@@ -237,6 +238,7 @@ blockOne slid =
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
     , blockOpCertCounter = Nothing
+    , blockHasLeiosCert = False
     }
 
 adaPotsZero :: BlockId -> AdaPots

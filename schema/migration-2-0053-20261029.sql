@@ -68,6 +68,13 @@ BEGIN
     EXECUTE 'ALTER TABLE "param_proposal" ADD COLUMN "peras_target_committee_size" word64type NULL' ;
     EXECUTE 'ALTER TABLE "param_proposal" ADD COLUMN "peras_bootstrap_round" word64type NULL' ;
     EXECUTE 'ALTER TABLE "param_proposal" ADD COLUMN "peras_quorum_threshold_safety_margin" double precision NULL' ;
+
+    -- The Leios certificate a Dijkstra block body may carry. Its presence is what makes
+    -- the block a certifying block; block.has_leios_cert is the same fact as a flag, for
+    -- cheap filtering. signers is the committee-seat bitfield and signer_count its
+    -- population count. FALSE on every block before the Dijkstra era.
+    EXECUTE 'ALTER TABLE "block" ADD COLUMN "has_leios_cert" BOOLEAN NOT NULL DEFAULT FALSE' ;
+    EXECUTE 'CREATE TABLE "leios_cert"("id" SERIAL8 PRIMARY KEY UNIQUE,"block_id" INT8 NOT NULL,"signer_count" word31type NOT NULL,"signers" BYTEA NOT NULL,"signature" BYTEA NOT NULL)' ;
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;
   END IF ;

@@ -8,6 +8,7 @@
 
 module Cardano.DbSync.Era.Shelley.Generic.Block (
   Block (..),
+  LeiosCertificate (..),
   BlockEra (..),
   fromShelleyBlock,
   fromAllegraBlock,
@@ -23,6 +24,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
 
 import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
 import qualified Cardano.Crypto.Hash as Crypto
+import Cardano.Crypto.Leios (BitField (..), LeiosCert (..), leiosSignatureToBytes)
 import Cardano.Crypto.VRF.Class (VerKeyVRF)
 import Cardano.Crypto.VRF.Praos (PraosVRF)
 import Cardano.DbSync.Era.Shelley.Generic.Tx
@@ -33,6 +35,7 @@ import Cardano.Ledger.Alonzo.Scripts (Prices)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import qualified Cardano.Ledger.Block as Ledger
 import qualified Cardano.Ledger.Core as Ledger
+import Cardano.Ledger.Dijkstra.BlockBody (DijkstraEraBlockBody (..))
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..), hashKey)
 import Cardano.Prelude
 import Cardano.Protocol.Crypto (Crypto, StandardCrypto, VRF)
@@ -40,6 +43,9 @@ import qualified Cardano.Protocol.Praos.BlockHeader as Praos
 import qualified Cardano.Protocol.TPraos.BlockHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
 import Cardano.Slotting.Slot (SlotNo (..))
+import Data.Array.Byte (ByteArray)
+import qualified Data.ByteString as BS
+import Data.Primitive.ByteArray (indexByteArray, sizeofByteArray)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (
   AllegraEra,
@@ -68,7 +74,20 @@ data Block = Block
   , blkVrfKey :: !Text
   , blkOpCert :: !ByteString
   , blkOpCertCounter :: !Word64
+  , -- The Leios certificate in the block body, if any; its presence is what makes
+    -- this block a certifying block. Always 'Nothing' before the Dijkstra era.
+    blkLeiosCert :: !(Maybe LeiosCertificate)
   , blkTxs :: [Tx] -- intentionally left lazy to delay the tx transformation
+  }
+
+-- | The contents of a Dijkstra Leios certificate, as stored.
+data LeiosCertificate = LeiosCertificate
+  { lcSigners :: !ByteString
+  -- ^ Bitfield over committee seats, MSB-first; bit @i@ set iff seat @i@ signed.
+  , lcSignature :: !ByteString
+  -- ^ The aggregate BLS signature.
+  , lcSignerCount :: !Word64
+  -- ^ How many seats signed, ie the population count of 'lcSigners'.
   }
 
 fromAllegraBlock :: ShelleyBlock (TPraosStandard StandardCrypto) AllegraEra -> Block
@@ -85,6 +104,7 @@ fromAllegraBlock blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
+    , blkLeiosCert = Nothing
     , blkTxs = map fromAllegraTx (getTxs blk)
     }
 
@@ -102,6 +122,7 @@ fromShelleyBlock blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
+    , blkLeiosCert = Nothing
     , blkTxs = map fromShelleyTx (getTxs blk)
     }
 
@@ -119,6 +140,7 @@ fromMaryBlock blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
+    , blkLeiosCert = Nothing
     , blkTxs = map fromMaryTx (getTxs blk)
     }
 
@@ -136,6 +158,7 @@ fromAlonzoBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkTPraos blk
     , blkOpCert = blockOpCertKeyTPraos blk
     , blkOpCertCounter = blockOpCertCounterTPraos blk
+    , blkLeiosCert = Nothing
     , blkTxs = map (fromAlonzoTx iope mprices) (getTxs blk)
     }
 
@@ -153,6 +176,7 @@ fromBabbageBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkLeiosCert = Nothing
     , blkTxs = map (fromBabbageTx iope mprices) (getTxs blk)
     }
 
@@ -170,6 +194,7 @@ fromConwayBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkLeiosCert = Nothing
     , blkTxs = map (fromConwayTx iope mprices) (getTxs blk)
     }
 
@@ -187,6 +212,7 @@ fromDijkstraBlock iope mprices blk =
     , blkVrfKey = blockVrfKeyView $ blockVrfVkPraos blk
     , blkOpCert = blockOpCertKeyPraos blk
     , blkOpCertCounter = blockOpCertCounterPraos blk
+    , blkLeiosCert = getLeiosCert blk
     , blkTxs = map (fromDijkstraTx iope mprices) (getTxs blk)
     }
 
@@ -194,6 +220,30 @@ fromDijkstraBlock iope mprices blk =
 
 getTxs :: forall p era. Ledger.EraBlockBody era => ShelleyBlock p era -> [(Word64, Ledger.Tx Ledger.TopTx era)]
 getTxs blk = zip [0 ..] $ toList (Ledger.blockBody (Consensus.shelleyBlockRaw blk) ^. Ledger.txSeqBlockBodyL)
+
+-- | The Leios certificate in the block body, if the body carries one. Only a Dijkstra
+-- body has a place to put one; the certificate is what makes the block a certifying block.
+getLeiosCert :: DijkstraEraBlockBody era => ShelleyBlock p era -> Maybe LeiosCertificate
+getLeiosCert blk =
+  fromLeiosCert
+    <$> Ledger.strictMaybeToMaybe (Ledger.blockBody (Consensus.shelleyBlockRaw blk) ^. leiosCertBlockBodyL)
+
+-- | A Leios certificate holds the aggregate BLS signature and the bitfield saying which
+-- committee seats contributed to it. The bitfield is @ceil(committeeSize / 8)@ bytes,
+-- MSB-first, with bit @i@ set iff seat @i@ signed, so the number of signing seats is just
+-- its population count.
+fromLeiosCert :: LeiosCert -> LeiosCertificate
+fromLeiosCert cert =
+  LeiosCertificate
+    { lcSigners = signers
+    , lcSignature = leiosSignatureToBytes (leiosCertSignature cert)
+    , lcSignerCount = fromIntegral $ sum (map popCount (BS.unpack signers))
+    }
+  where
+    signers = byteArrayToByteString . bitFieldBytes $ leiosCertSigners cert
+
+    byteArrayToByteString :: ByteArray -> ByteString
+    byteArrayToByteString ba = BS.pack [indexByteArray ba i | i <- [0 .. sizeofByteArray ba - 1]]
 
 blockHeader :: ShelleyBlock p era -> ShelleyProtocolHeader p
 blockHeader = Ledger.blockHeader . Consensus.shelleyBlockRaw

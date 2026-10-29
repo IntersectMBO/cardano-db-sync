@@ -64,6 +64,7 @@ A table for blocks on the chain.
 | `vrf_key` | string | The VRF key of the creator of this block. |
 | `op_cert` | hash32type | The hash of the operational certificate of the block producer. |
 | `op_cert_counter` | word63type | The value of the counter used to produce the operational certificate. |
+| `has_leios_cert` | boolean | True if the block body carries a Leios certificate, ie if this block certifies an endorser block; the certificate itself is in `leios_cert`. False on every block before the Dijkstra era. New in 13.8-Dijkstra (experimental). |
 
 ### `tx`
 
@@ -257,6 +258,20 @@ The treasury and rewards fields will be correct for the whole epoch, but all oth
 | `deposits_proposal` | lovelace | The amount (in Lovelace) in the obligation pot coming from governance proposal deposits. New in 13.3. |
 | `fees` | lovelace | The amount (in Lovelace) in the fee pot. |
 | `block_id` | integer (64) | The Block table index of the block for which this snapshot was taken. |
+
+### `leios_cert`
+
+The Leios certificate carried by a Dijkstra block body. A block that carries one is a certifying block, which is the same fact that `block.has_leios_cert` records as a flag; this table holds the certificate itself. One row per certifying block, and empty on every network that has not forked to Dijkstra. New in 13.8-Dijkstra (experimental).
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `block_id` | integer (64) | The Block table index of the block whose body carries this certificate. New in 13.8-Dijkstra (experimental). |
+| `signer_count` | word31type | How many committee seats contributed to the certificate, ie the population count of `signers`. New in 13.8-Dijkstra (experimental). |
+| `signers` | bytea | Which committee seats signed, as a bitfield of `ceil(leios_committee_size / 8)` bytes, MSB-first, with bit `i` set iff seat `i` signed. New in 13.8-Dijkstra (experimental). |
+| `signature` | bytea | The aggregate BLS signature over the certified endorser block. New in 13.8-Dijkstra (experimental). |
 
 ### `pool_metadata_ref`
 

@@ -75,6 +75,8 @@ data Block = Block
   , blockVrfKey :: !(Maybe Text)
   , blockOpCert :: !(Maybe ByteString) -- sqltype=hash32type
   , blockOpCertCounter :: !(Maybe Word64) -- sqltype=hash63type
+  -- New for Dijkstra
+  , blockHasLeiosCert :: !Bool -- Whether the block body carries a Leios certificate.
   }
   deriving (Eq, Show, Generic)
 
@@ -106,6 +108,7 @@ blockDecoder =
     <*> D.column (D.nullable D.text) -- blockVrfKey
     <*> D.column (D.nullable D.bytea) -- blockOpCert
     <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- blockOpCertCounter
+    <*> D.column (D.nonNullable D.bool) -- blockHasLeiosCert
 
 blockEncoder :: E.Params Block
 blockEncoder =
@@ -125,6 +128,7 @@ blockEncoder =
     , blockVrfKey >$< E.param (E.nullable E.text)
     , blockOpCert >$< E.param (E.nullable E.bytea)
     , blockOpCertCounter >$< E.param (E.nullable $ fromIntegral >$< E.int8)
+    , blockHasLeiosCert >$< E.param (E.nonNullable E.bool)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -652,6 +656,45 @@ withdrawalEncoder =
     , withdrawalAmount >$< dbLovelaceEncoder
     , withdrawalRedeemerId >$< maybeIdEncoder getRedeemerId
     , withdrawalTxId >$< idEncoder getTxId
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: leios_cert
+-- Description: The Leios certificate carried by a Dijkstra block body. Its presence is
+--   what makes the block a certifying block, which `block.has_leios_cert` also records.
+-----------------------------------------------------------------------------------------------------------------------------------
+data LeiosCert = LeiosCert
+  { leiosCertBlockId :: !BlockId
+  , leiosCertSignerCount :: !Word64 -- sqltype=word31type
+  , leiosCertSigners :: !ByteString
+  , leiosCertSignature :: !ByteString
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key LeiosCert = LeiosCertId
+instance DbInfo LeiosCert
+
+entityLeiosCertDecoder :: D.Row (Entity LeiosCert)
+entityLeiosCertDecoder =
+  Entity
+    <$> idDecoder LeiosCertId
+    <*> leiosCertDecoder
+
+leiosCertDecoder :: D.Row LeiosCert
+leiosCertDecoder =
+  LeiosCert
+    <$> idDecoder BlockId -- leiosCertBlockId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- leiosCertSignerCount
+    <*> D.column (D.nonNullable D.bytea) -- leiosCertSigners
+    <*> D.column (D.nonNullable D.bytea) -- leiosCertSignature
+
+leiosCertEncoder :: E.Params LeiosCert
+leiosCertEncoder =
+  mconcat
+    [ leiosCertBlockId >$< idEncoder getBlockId
+    , leiosCertSignerCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
+    , leiosCertSigners >$< E.param (E.nonNullable E.bytea)
+    , leiosCertSignature >$< E.param (E.nonNullable E.bytea)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

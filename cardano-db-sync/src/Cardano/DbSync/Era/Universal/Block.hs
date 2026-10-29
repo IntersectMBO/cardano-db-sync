@@ -93,7 +93,20 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
             DB.blockVrfKey = Just $ Generic.blkVrfKey blk
           , DB.blockOpCert = Just $ Generic.blkOpCert blk
           , DB.blockOpCertCounter = Just $ Generic.blkOpCertCounter blk
+          , DB.blockHasLeiosCert = isJust (Generic.blkLeiosCert blk)
           }
+
+    -- The certificate's contents, when the body carries one. 'block.has_leios_cert'
+    -- above is the same fact as a flag, for cheap filtering.
+    forM_ (Generic.blkLeiosCert blk) $ \cert ->
+      void . lift $
+        DB.insertLeiosCert $
+          DB.LeiosCert
+            { DB.leiosCertBlockId = blkId
+            , DB.leiosCertSignerCount = Generic.lcSignerCount cert
+            , DB.leiosCertSigners = Generic.lcSigners cert
+            , DB.leiosCertSignature = Generic.lcSignature cert
+            }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
     let insertTx' idx tx gp =

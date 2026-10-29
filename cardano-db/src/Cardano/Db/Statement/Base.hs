@@ -1452,6 +1452,15 @@ insertWithdrawalStmt =
 insertWithdrawal :: HasCallStack => SCB.Withdrawal -> DbM Id.WithdrawalId
 insertWithdrawal withdrawal = runSession mkDbCallStack $ HsqlSes.statement withdrawal insertWithdrawalStmt
 
+insertLeiosCertStmt :: HsqlStmt.Statement SCB.LeiosCert Id.LeiosCertId
+insertLeiosCertStmt =
+  insert
+    SCB.leiosCertEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.LeiosCertId)
+
+insertLeiosCert :: HasCallStack => SCB.LeiosCert -> DbM Id.LeiosCertId
+insertLeiosCert leiosCert = runSession mkDbCallStack $ HsqlSes.statement leiosCert insertLeiosCertStmt
+
 --------------------------------------------------------------------------------
 -- Statement for querying withdrawals with non-null redeemer_id
 queryWithdrawalScriptStmt :: HsqlStmt.Statement () [SCB.Withdrawal]

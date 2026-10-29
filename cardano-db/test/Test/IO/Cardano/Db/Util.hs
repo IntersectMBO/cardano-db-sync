@@ -72,6 +72,7 @@ mkBlock blk slid =
     , blockVrfKey = Nothing
     , blockOpCert = Nothing
     , blockOpCertCounter = Nothing
+    , blockHasLeiosCert = False
     }
 
 mkBlockHash :: Word64 -> ByteString
