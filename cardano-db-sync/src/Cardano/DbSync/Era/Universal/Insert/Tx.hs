@@ -46,6 +46,7 @@ import Cardano.DbSync.Era.Universal.Insert.GovAction (
 import Cardano.DbSync.Era.Universal.Insert.Grouped
 import Cardano.DbSync.Era.Universal.Insert.Other (
   insertDatum,
+  insertDirectDeposits,
   insertExtraKeyWitness,
   insertMultiAsset,
   insertRedeemer,
@@ -83,6 +84,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
       !withdrawalSum = fromIntegral $ unCoin $ Generic.txWithdrawalSum tx
+      !directDepositSum = sum $ map (unCoin . Generic.txddAmount) (Generic.txDirectDeposits tx)
       !treasuryDonation = unCoin $ Generic.txTreasuryDonation tx
       hasConsumed = getHasConsumedOrPruneTxOut syncEnv
       txIn = Generic.txInputs tx
@@ -108,8 +110,10 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       if any isNothing amounts
         then pure (resolvedInputs', fees, Nothing)
         else
+          -- What the tx consumed that did not come back as an output: a deposit. Direct
+          -- deposits leave by the same route without producing one, so they are not it.
           let !inSum = sum $ map unDbLovelace $ catMaybes amounts
-           in pure (resolvedInputs', fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation)
+           in pure (resolvedInputs', fees, Just $ fromIntegral (inSum + withdrawalSum) - fromIntegral outSum - fees - treasuryDonation - directDepositSum)
     (_, _, Nothing) -> do
       -- Nothing in fees means a phase 2 failure
       resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed True (fst <$> groupedTxOut grouped)) txIn
@@ -188,6 +192,9 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       when (ioShelley iopts) $
         mapM_ (insertWithdrawals syncEnv txId redeemers) $
           Generic.txWithdrawals tx
+      when (ioShelley iopts) $
+        mapM_ (insertDirectDeposits syncEnv txId) $
+          Generic.txDirectDeposits tx
       when (ioShelley iopts) $
         mapM_ (insertParamProposal syncEnv blkId txId) $
           Generic.txParamProposal tx

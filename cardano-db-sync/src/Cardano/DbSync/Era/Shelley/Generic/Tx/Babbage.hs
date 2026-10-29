@@ -79,6 +79,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     , txProposalProcedure = []
     , txTreasuryDonation = mempty -- Babbage does not support treasury donations
     , txSubTransactions = [] -- no nested transactions before Dijkstra
+    , txDirectDeposits = [] -- no direct deposits before Dijkstra
     }
   where
     txBody :: Core.TxBody Core.TopTx BabbageEra

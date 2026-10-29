@@ -17,6 +17,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   DrepSnapW (..),
   TxCertificate (..),
   TxWithdrawal (..),
+  TxDirectDeposit (..),
   TxIn (..),
   TxOut (..),
   TxRedeemer (..),
@@ -76,6 +77,7 @@ data Tx = Tx
   , txMetadata :: !(Maybe (Map Word64 TxMetadataValue))
   , txCertificates :: ![TxCertificate]
   , txWithdrawals :: ![TxWithdrawal]
+  , txDirectDeposits :: ![TxDirectDeposit]
   , txParamProposal :: ![ParamProposal]
   , txMint :: !MultiAsset
   , txRedeemer :: [(Word64, TxRedeemer)]
@@ -122,6 +124,13 @@ data TxWithdrawal = TxWithdrawal
   { txwRedeemerIndex :: !(Maybe Word64)
   , txwRewardAccount :: !Ledger.AccountAddress
   , txwAmount :: !Coin
+  }
+
+-- | A Dijkstra direct deposit: lovelace paid straight into an account, with no
+-- corresponding output. The mirror of a 'TxWithdrawal', and carries no redeemer.
+data TxDirectDeposit = TxDirectDeposit
+  { txddAccount :: !Ledger.AccountAddress
+  , txddAmount :: !Coin
   }
 
 data TxIn = TxIn

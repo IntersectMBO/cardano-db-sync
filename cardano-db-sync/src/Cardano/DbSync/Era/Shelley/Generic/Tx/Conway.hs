@@ -73,6 +73,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalC $ toList $ ctbProposalProcedures txBody
     , txTreasuryDonation = ctbTreasuryDonation txBody
     , txSubTransactions = [] -- no nested transactions before Dijkstra
+    , txDirectDeposits = [] -- no direct deposits before Dijkstra
     }
   where
     txBody :: Core.TxBody Core.TopTx ConwayEra

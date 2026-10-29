@@ -84,6 +84,7 @@ fromShelleyTx (blkIndex, tx) =
     , txProposalProcedure = []
     , txTreasuryDonation = mempty -- Shelley does not support treasury donations
     , txSubTransactions = [] -- no nested transactions before Dijkstra
+    , txDirectDeposits = [] -- no direct deposits before Dijkstra
     }
   where
     txBody :: Core.TxBody Core.TopTx ShelleyEra

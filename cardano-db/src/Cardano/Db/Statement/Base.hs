@@ -1452,6 +1452,15 @@ insertWithdrawalStmt =
 insertWithdrawal :: HasCallStack => SCB.Withdrawal -> DbM Id.WithdrawalId
 insertWithdrawal withdrawal = runSession mkDbCallStack $ HsqlSes.statement withdrawal insertWithdrawalStmt
 
+insertDirectDepositStmt :: HsqlStmt.Statement SCB.DirectDeposit Id.DirectDepositId
+insertDirectDepositStmt =
+  insert
+    SCB.directDepositEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.DirectDepositId)
+
+insertDirectDeposit :: HasCallStack => SCB.DirectDeposit -> DbM Id.DirectDepositId
+insertDirectDeposit directDeposit = runSession mkDbCallStack $ HsqlSes.statement directDeposit insertDirectDepositStmt
+
 insertLeiosCertStmt :: HsqlStmt.Statement SCB.LeiosCert Id.LeiosCertId
 insertLeiosCertStmt =
   insert

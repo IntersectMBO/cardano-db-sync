@@ -659,6 +659,42 @@ withdrawalEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: direct_deposit
+-- Description: A Dijkstra direct deposit: a transaction paying lovelace straight into an
+--   account (a staking credential), without an output. The mirror of a withdrawal.
+-----------------------------------------------------------------------------------------------------------------------------------
+data DirectDeposit = DirectDeposit
+  { directDepositAddrId :: !StakeAddressId
+  , directDepositAmount :: !DbLovelace
+  , directDepositTxId :: !TxId
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key DirectDeposit = DirectDepositId
+instance DbInfo DirectDeposit
+
+entityDirectDepositDecoder :: D.Row (Entity DirectDeposit)
+entityDirectDepositDecoder =
+  Entity
+    <$> idDecoder DirectDepositId
+    <*> directDepositDecoder
+
+directDepositDecoder :: D.Row DirectDeposit
+directDepositDecoder =
+  DirectDeposit
+    <$> idDecoder StakeAddressId -- directDepositAddrId
+    <*> dbLovelaceDecoder -- directDepositAmount
+    <*> idDecoder TxId -- directDepositTxId
+
+directDepositEncoder :: E.Params DirectDeposit
+directDepositEncoder =
+  mconcat
+    [ directDepositAddrId >$< idEncoder getStakeAddressId
+    , directDepositAmount >$< dbLovelaceEncoder
+    , directDepositTxId >$< idEncoder getTxId
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: leios_cert
 -- Description: The Leios certificate carried by a Dijkstra block body. Its presence is
 --   what makes the block a certifying block, which `block.has_leios_cert` also records.

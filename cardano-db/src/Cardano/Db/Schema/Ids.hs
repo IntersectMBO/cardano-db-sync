@@ -96,6 +96,9 @@ newtype MetaId = MetaId {getMetaId :: Int64}
 newtype WithdrawalId = WithdrawalId {getWithdrawalId :: Int64}
   deriving (Eq, Show, Ord)
 
+newtype DirectDepositId = DirectDepositId {getDirectDepositId :: Int64}
+  deriving (Eq, Show, Ord)
+
 newtype LeiosCertId = LeiosCertId {getLeiosCertId :: Int64}
   deriving (Eq, Show, Ord)
 

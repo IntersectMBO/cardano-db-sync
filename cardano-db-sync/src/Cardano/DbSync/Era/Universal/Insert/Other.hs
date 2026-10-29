@@ -10,6 +10,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
   insertRedeemer,
   insertDatum,
   insertWithdrawals,
+  insertDirectDeposits,
   insertRedeemerData,
   insertStakeAddressRefIfMissing,
   insertMultiAsset,
@@ -131,6 +132,24 @@ insertWithdrawals syncEnv txId redeemers txWdrl = do
         , DB.withdrawalTxId = txId
         , DB.withdrawalAmount = Generic.coinToDbLovelace $ Generic.txwAmount txWdrl
         , DB.withdrawalRedeemerId = mlookup (Generic.txwRedeemerIndex txWdrl) redeemers
+        }
+
+-- | Insert a Dijkstra direct deposit: lovelace paid straight into an account, with no
+-- output of its own. The mirror of 'insertWithdrawals', and with no redeemer.
+insertDirectDeposits ::
+  SyncEnv ->
+  DB.TxId ->
+  Generic.TxDirectDeposit ->
+  ExceptT SyncNodeError DB.DbM ()
+insertDirectDeposits syncEnv txId txDeposit = do
+  addrId <-
+    queryOrInsertRewardAccount syncEnv UpdateCache $ Generic.txddAccount txDeposit
+  void . lift $
+    DB.insertDirectDeposit $
+      DB.DirectDeposit
+        { DB.directDepositAddrId = addrId
+        , DB.directDepositAmount = Generic.coinToDbLovelace $ Generic.txddAmount txDeposit
+        , DB.directDepositTxId = txId
         }
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of

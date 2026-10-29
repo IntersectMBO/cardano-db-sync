@@ -456,6 +456,19 @@ A table for withdrawals from a reward account.
 | `redeemer_id` | integer (64) | The Redeemer table index that is related with this withdrawal. |
 | `tx_id` | integer (64) | The Tx table index for the transaction that contains this withdrawal. |
 
+### `direct_deposit`
+
+A table for Dijkstra direct deposits: lovelace paid straight into an account (a staking credential) by a transaction, with no corresponding output. The mirror of `withdrawal`, and unlike a withdrawal it carries no redeemer. Both top-level transactions and nested sub-transactions can carry direct deposits; because a sub-transaction is stored as its own `tx` row, its deposits are attributed to that row rather than to the enclosing transaction. Empty on every network that has not forked to Dijkstra. New in 13.8-Dijkstra (experimental).
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `addr_id` | integer (64) | The StakeAddress table index for the account the deposit is paid into. New in 13.8-Dijkstra (experimental). |
+| `amount` | lovelace | The deposit amount (in Lovelace). New in 13.8-Dijkstra (experimental). |
+| `tx_id` | integer (64) | The Tx table index for the transaction that contains this deposit. New in 13.8-Dijkstra (experimental). |
+
 ### `epoch_stake`
 
 A table containing the epoch stake distribution for each epoch. This is inserted incrementally in the first blocks of the previous epoch. The stake distribution is extracted from the `set` snapshot of the ledger. See Shelley specs Sec. 11.2 for more details.

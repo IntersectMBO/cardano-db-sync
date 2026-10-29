@@ -74,6 +74,9 @@ BEGIN
     -- cheap filtering. signers is the committee-seat bitfield and signer_count its
     -- population count. FALSE on every block before the Dijkstra era.
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "has_leios_cert" BOOLEAN NOT NULL DEFAULT FALSE' ;
+    -- A Dijkstra direct deposit: lovelace paid straight into an account with no output.
+    -- The mirror of a withdrawal, minus the redeemer a deposit cannot have.
+    EXECUTE 'CREATE TABLE "direct_deposit"("id" SERIAL8 PRIMARY KEY UNIQUE,"addr_id" INT8 NOT NULL,"amount" lovelace NOT NULL,"tx_id" INT8 NOT NULL)' ;
     EXECUTE 'CREATE TABLE "leios_cert"("id" SERIAL8 PRIMARY KEY UNIQUE,"block_id" INT8 NOT NULL,"signer_count" word31type NOT NULL,"signers" BYTEA NOT NULL,"signature" BYTEA NOT NULL)' ;
     UPDATE schema_version SET stage_two = next_version ;
     RAISE NOTICE 'DB has been migrated to stage_two version %', next_version ;

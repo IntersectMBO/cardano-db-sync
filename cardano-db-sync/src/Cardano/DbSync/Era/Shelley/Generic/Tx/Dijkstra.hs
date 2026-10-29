@@ -17,6 +17,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (extraKeyWits, getPlutusSize
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util (unScriptHash)
+import Cardano.Ledger.Address (DirectDeposits (..))
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
 import Cardano.Ledger.Alonzo.TxAuxData (getAlonzoTxAuxDataScripts)
@@ -83,6 +84,7 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txSubTransactions =
         map (fromDijkstraSubTx ioExtraPlutus mprices blkIndex) $
           toList (txBody ^. subTransactionsTxBodyL)
+    , txDirectDeposits = mkDirectDeposits $ dtbDirectDeposits txBody
     }
   where
     txBody :: Core.TxBody Core.TopTx DijkstraEra
@@ -123,7 +125,8 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
 -- | A Dijkstra nested sub-transaction. It has its own TxId, body and witnesses, but no
 -- collateral, no fee and no phase-2 validity flag of its own; the enclosing top-level tx
 -- governs all three. It cannot nest further. The parent link is set at insertion time.
--- It does carry its own certificates, withdrawals, votes, proposals and treasury donation.
+-- It does carry its own certificates, withdrawals, votes, proposals, treasury donation
+-- and direct deposits.
 fromDijkstraSubTx :: Bool -> Maybe Alonzo.Prices -> Word64 -> Core.Tx Core.SubTx DijkstraEra -> Tx
 fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
   Tx
@@ -160,6 +163,7 @@ fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dstbProposalProcedures txBody
     , txTreasuryDonation = dstbTreasuryDonation txBody
     , txSubTransactions = [] -- cannot nest further
+    , txDirectDeposits = mkDirectDeposits $ dstbDirectDeposits txBody
     }
   where
     txBody :: Core.TxBody Core.SubTx DijkstraEra
@@ -176,6 +180,14 @@ fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
 
     mkProposalIndex :: Word16 -> a -> (GovActionId, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
+
+-- | A tx body's direct deposits: lovelace paid straight into an account, keyed by the
+-- account address. Carried by both top-level and sub-transaction bodies.
+mkDirectDeposits :: DirectDeposits -> [TxDirectDeposit]
+mkDirectDeposits =
+  map (uncurry TxDirectDeposit)
+    . Map.toList
+    . unDirectDeposits
 
 -- | Dijkstra-specific TxOut conversion. DijkstraNativeScript is not Timelock,
 -- so we can't reuse Babbage.fromTxOut which requires NativeScript era ~ Timelock era.
