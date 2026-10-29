@@ -12,15 +12,42 @@ module Cardano.DbSync.Era.Shelley.Generic.ProtoParams (
 import Cardano.DbSync.Types
 import Cardano.Ledger.Alonzo.Core
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
-import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval)
+import Cardano.Ledger.BaseTypes (EpochInterval, UnitInterval, strictMaybeToMaybe)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin (..))
 import qualified Cardano.Ledger.Compactible as Ledger
 import Cardano.Ledger.Conway.Core
 import Cardano.Ledger.Conway.PParams (ppMinFeeRefScriptCostPerByteL)
+import Cardano.Ledger.Dijkstra.PParams (
+  ppLeiosAnnouncementPeriodLengthL,
+  ppLeiosCommitteeSizeL,
+  ppLeiosDiffusionPeriodLengthL,
+  ppLeiosQuorumStakeThresholdL,
+  ppLeiosVotePeriodLengthL,
+  ppMaxEndorserBlockExUnitsL,
+  ppMaxEndorserBlockReferencesSizeL,
+  ppMaxEndorserBlockTxsSizeL,
+  ppMaxPledgeLeverageL,
+  ppMaxRefScriptSizePerBlockL,
+  ppMaxRefScriptSizePerEndorserBlockL,
+  ppMaxRefScriptSizePerTxL,
+  ppMinPoolMarginL,
+  ppPerasBootstrapRoundL,
+  ppPerasCertBoostL,
+  ppPerasHealingFactorL,
+  ppPerasMinCandidateBlockAgeL,
+  ppPerasQuorumThresholdSafetyMarginL,
+  ppPerasTargetCommitteeSizeL,
+  ppRefInputsCostPerDatumByteL,
+  ppRefInputsCostPerMultiAssetPolicyL,
+  ppRefScriptCostMultiplierL,
+  ppRefScriptCostStrideL,
+ )
+import Cardano.Ledger.Plutus.ExUnits (unOrdExUnits)
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.LedgerState as Shelley
 import Cardano.Prelude
+import Cardano.Slotting.Slot (unSlotInterval)
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano (Nonce (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock)
@@ -68,6 +95,35 @@ data ProtoParams = ProtoParams
   , ppDRepDeposit :: !(Maybe Natural)
   , ppDRepActivity :: !(Maybe EpochInterval)
   , ppMinFeeRefScriptCostPerByte :: !(Maybe Rational)
+  , -- New for Dijkstra (Leios). All 'Nothing' before the Dijkstra era.
+    ppLeiosCommitteeSize :: !(Maybe Word16)
+  , ppLeiosQuorumStakeThreshold :: !(Maybe UnitInterval)
+  , ppLeiosAnnouncementPeriodLength :: !(Maybe Word32) -- milliseconds
+  , ppLeiosVotePeriodLength :: !(Maybe Word32) -- milliseconds
+  , ppLeiosDiffusionPeriodLength :: !(Maybe Word32) -- milliseconds
+  , ppLeiosMaxEbReferencesSize :: !(Maybe Word32)
+  , ppLeiosMaxEbTxsSize :: !(Maybe Word32)
+  , ppLeiosMaxEbExMem :: !(Maybe Word64)
+  , ppLeiosMaxEbExSteps :: !(Maybe Word64)
+  , ppLeiosMaxRefScriptSizePerEb :: !(Maybe Word32)
+  , -- New for Dijkstra (reference scripts, reference inputs, CIP-50 pool bounds).
+    ppMaxRefScriptSizePerBlock :: !(Maybe Word32)
+  , ppMaxRefScriptSizePerTx :: !(Maybe Word32)
+  , ppRefScriptCostStride :: !(Maybe Word32)
+  , ppRefScriptCostMultiplier :: !(Maybe Rational)
+  , -- 'Nothing' before Dijkstra, and also when Dijkstra sets no leverage cap at all.
+    ppMaxPledgeLeverage :: !(Maybe Rational)
+  , ppMinPoolMargin :: !(Maybe UnitInterval)
+  , ppRefInputsCostPerMultiAssetPolicy :: !(Maybe Coin)
+  , ppRefInputsCostPerDatumByte :: !(Maybe Coin)
+  , -- New for Dijkstra (Peras).
+    ppPerasMinCandidateBlockAge :: !(Maybe Word32)
+  , ppPerasHealingFactor :: !(Maybe Rational)
+  , ppPerasCertBoost :: !(Maybe Word16)
+  , ppPerasTargetCommitteeSize :: !(Maybe Word16)
+  , -- 'Nothing' before Dijkstra, and also when Peras has no bootstrap round set.
+    ppPerasBootstrapRound :: !(Maybe Word32)
+  , ppPerasQuorumThresholdSafetyMargin :: !(Maybe UnitInterval)
   }
 
 data Deposits = Deposits
@@ -154,6 +210,32 @@ fromDijkstraParams params =
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
     , ppDRepActivity = Just $ params ^. ppDRepActivityL
     , ppMinFeeRefScriptCostPerByte = Just $ Ledger.unboundRational $ params ^. ppMinFeeRefScriptCostPerByteL
+    , ppLeiosCommitteeSize = Just $ params ^. ppLeiosCommitteeSizeL
+    , ppLeiosQuorumStakeThreshold = Just $ params ^. ppLeiosQuorumStakeThresholdL
+    , ppLeiosAnnouncementPeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosAnnouncementPeriodLengthL
+    , ppLeiosVotePeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosVotePeriodLengthL
+    , ppLeiosDiffusionPeriodLength = Just $ Ledger.unMilliseconds32 $ params ^. ppLeiosDiffusionPeriodLengthL
+    , ppLeiosMaxEbReferencesSize = Just $ params ^. ppMaxEndorserBlockReferencesSizeL
+    , ppLeiosMaxEbTxsSize = Just $ params ^. ppMaxEndorserBlockTxsSizeL
+    , ppLeiosMaxEbExMem = Just . fromIntegral $ Alonzo.exUnitsMem (unOrdExUnits (params ^. ppMaxEndorserBlockExUnitsL))
+    , ppLeiosMaxEbExSteps = Just . fromIntegral $ Alonzo.exUnitsSteps (unOrdExUnits (params ^. ppMaxEndorserBlockExUnitsL))
+    , ppLeiosMaxRefScriptSizePerEb = Just $ params ^. ppMaxRefScriptSizePerEndorserBlockL
+    , -- Reference scripts, reference inputs and the CIP-50 pool bounds.
+      ppMaxRefScriptSizePerBlock = Just $ params ^. ppMaxRefScriptSizePerBlockL
+    , ppMaxRefScriptSizePerTx = Just $ params ^. ppMaxRefScriptSizePerTxL
+    , ppRefScriptCostStride = Just . Ledger.unNonZero $ params ^. ppRefScriptCostStrideL
+    , ppRefScriptCostMultiplier = Just . Ledger.unboundRational $ params ^. ppRefScriptCostMultiplierL
+    , ppMaxPledgeLeverage = Ledger.unboundRational <$> strictMaybeToMaybe (unMaxPledgeLeverage (params ^. ppMaxPledgeLeverageL))
+    , ppMinPoolMargin = Just $ params ^. ppMinPoolMarginL
+    , ppRefInputsCostPerMultiAssetPolicy = Just $ params ^. ppRefInputsCostPerMultiAssetPolicyL
+    , ppRefInputsCostPerDatumByte = Just . Ledger.fromCompact . unCoinPerByte $ params ^. ppRefInputsCostPerDatumByteL
+    , -- Peras.
+      ppPerasMinCandidateBlockAge = Just . unSlotInterval $ params ^. ppPerasMinCandidateBlockAgeL
+    , ppPerasHealingFactor = Just . Ledger.unboundRational $ params ^. ppPerasHealingFactorL
+    , ppPerasCertBoost = Just $ params ^. ppPerasCertBoostL
+    , ppPerasTargetCommitteeSize = Just $ params ^. ppPerasTargetCommitteeSizeL
+    , ppPerasBootstrapRound = strictMaybeToMaybe (params ^. ppPerasBootstrapRoundL)
+    , ppPerasQuorumThresholdSafetyMargin = Just $ params ^. ppPerasQuorumThresholdSafetyMarginL
     }
 
 fromConwayParams :: PParams ConwayEra -> ProtoParams
@@ -196,6 +278,30 @@ fromConwayParams params =
     , ppDRepDeposit = Just . fromIntegral . unCoin $ params ^. ppDRepDepositL
     , ppDRepActivity = Just $ params ^. ppDRepActivityL
     , ppMinFeeRefScriptCostPerByte = Just $ Ledger.unboundRational $ params ^. ppMinFeeRefScriptCostPerByteL
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
+    , ppMaxRefScriptSizePerBlock = Nothing
+    , ppMaxRefScriptSizePerTx = Nothing
+    , ppRefScriptCostStride = Nothing
+    , ppRefScriptCostMultiplier = Nothing
+    , ppMaxPledgeLeverage = Nothing
+    , ppMinPoolMargin = Nothing
+    , ppRefInputsCostPerMultiAssetPolicy = Nothing
+    , ppRefInputsCostPerDatumByte = Nothing
+    , ppPerasMinCandidateBlockAge = Nothing
+    , ppPerasHealingFactor = Nothing
+    , ppPerasCertBoost = Nothing
+    , ppPerasTargetCommitteeSize = Nothing
+    , ppPerasBootstrapRound = Nothing
+    , ppPerasQuorumThresholdSafetyMargin = Nothing
     }
 
 fromBabbageParams :: PParams BabbageEra -> ProtoParams
@@ -238,6 +344,30 @@ fromBabbageParams params =
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
     , ppMinFeeRefScriptCostPerByte = Nothing
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
+    , ppMaxRefScriptSizePerBlock = Nothing
+    , ppMaxRefScriptSizePerTx = Nothing
+    , ppRefScriptCostStride = Nothing
+    , ppRefScriptCostMultiplier = Nothing
+    , ppMaxPledgeLeverage = Nothing
+    , ppMinPoolMargin = Nothing
+    , ppRefInputsCostPerMultiAssetPolicy = Nothing
+    , ppRefInputsCostPerDatumByte = Nothing
+    , ppPerasMinCandidateBlockAge = Nothing
+    , ppPerasHealingFactor = Nothing
+    , ppPerasCertBoost = Nothing
+    , ppPerasTargetCommitteeSize = Nothing
+    , ppPerasBootstrapRound = Nothing
+    , ppPerasQuorumThresholdSafetyMargin = Nothing
     }
 
 fromAlonzoParams :: PParams AlonzoEra -> ProtoParams
@@ -280,6 +410,30 @@ fromAlonzoParams params =
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
     , ppMinFeeRefScriptCostPerByte = Nothing
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
+    , ppMaxRefScriptSizePerBlock = Nothing
+    , ppMaxRefScriptSizePerTx = Nothing
+    , ppRefScriptCostStride = Nothing
+    , ppRefScriptCostMultiplier = Nothing
+    , ppMaxPledgeLeverage = Nothing
+    , ppMinPoolMargin = Nothing
+    , ppRefInputsCostPerMultiAssetPolicy = Nothing
+    , ppRefInputsCostPerDatumByte = Nothing
+    , ppPerasMinCandidateBlockAge = Nothing
+    , ppPerasHealingFactor = Nothing
+    , ppPerasCertBoost = Nothing
+    , ppPerasTargetCommitteeSize = Nothing
+    , ppPerasBootstrapRound = Nothing
+    , ppPerasQuorumThresholdSafetyMargin = Nothing
     }
 
 fromShelleyParams :: (ProtVerAtMost era 6, ProtVerAtMost era 4, EraPParams era) => PParams era -> ProtoParams
@@ -322,4 +476,28 @@ fromShelleyParams params =
     , ppDRepDeposit = Nothing
     , ppDRepActivity = Nothing
     , ppMinFeeRefScriptCostPerByte = Nothing
+    , ppLeiosCommitteeSize = Nothing
+    , ppLeiosQuorumStakeThreshold = Nothing
+    , ppLeiosAnnouncementPeriodLength = Nothing
+    , ppLeiosVotePeriodLength = Nothing
+    , ppLeiosDiffusionPeriodLength = Nothing
+    , ppLeiosMaxEbReferencesSize = Nothing
+    , ppLeiosMaxEbTxsSize = Nothing
+    , ppLeiosMaxEbExMem = Nothing
+    , ppLeiosMaxEbExSteps = Nothing
+    , ppLeiosMaxRefScriptSizePerEb = Nothing
+    , ppMaxRefScriptSizePerBlock = Nothing
+    , ppMaxRefScriptSizePerTx = Nothing
+    , ppRefScriptCostStride = Nothing
+    , ppRefScriptCostMultiplier = Nothing
+    , ppMaxPledgeLeverage = Nothing
+    , ppMinPoolMargin = Nothing
+    , ppRefInputsCostPerMultiAssetPolicy = Nothing
+    , ppRefInputsCostPerDatumByte = Nothing
+    , ppPerasMinCandidateBlockAge = Nothing
+    , ppPerasHealingFactor = Nothing
+    , ppPerasCertBoost = Nothing
+    , ppPerasTargetCommitteeSize = Nothing
+    , ppPerasBootstrapRound = Nothing
+    , ppPerasQuorumThresholdSafetyMargin = Nothing
     }

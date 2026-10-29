@@ -54,7 +54,7 @@ import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Ledger.Coin (Coin)
 import qualified Cardano.Ledger.Coin as Ledger
 import Cardano.Ledger.Compactible (Compactible (..))
-import Cardano.Ledger.Conway.Core (ConwayEraPParams, DRepVotingThresholds (..), PoolVotingThresholds (..))
+import Cardano.Ledger.Conway.Core (ConwayEraPParams, DRepVotingThresholds (..), PParamsUpdate, PoolVotingThresholds (..))
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.DRep (DRepState (..))
@@ -75,15 +75,16 @@ insertGovActionProposal ::
   DB.TxId ->
   Maybe EpochNo ->
   Maybe (ConwayGovState era) ->
+  (PParamsUpdate era -> ParamProposal) ->
   (Word64, (GovActionId, ProposalProcedure era)) ->
   ExceptT SyncNodeError DB.DbM ()
-insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs (index, (govId, pp)) = do
+insertGovActionProposal syncEnv blkId txId govExpiresAt mcgs convertParams (index, (govId, pp)) = do
   addrId <- queryOrInsertRewardAccount syncEnv UpdateCache $ pProcReturnAddr pp
   votingAnchorId <- insertVotingAnchor blkId DB.GovActionAnchor $ pProcAnchor pp
   mParamProposalId <-
     case pProcGovAction pp of
       ParameterChange _ pparams _ ->
-        Just <$> insertParamProposal syncEnv blkId txId (convertConwayParamProposal pparams)
+        Just <$> insertParamProposal syncEnv blkId txId (convertParams pparams)
       _ -> pure Nothing
   prevGovActionDBId <- case mprevGovAction of
     Nothing -> pure Nothing
@@ -170,13 +171,13 @@ insertProposal ::
 insertProposal syncEnv blkId txId expiry mgsw (idx, (govId, proposal)) =
   case (proposal, mgsw) of
     (Generic.ProposalC pp, Just (Generic.GovStateC cgs)) ->
-      insertGovActionProposal syncEnv blkId txId expiry (Just cgs) (idx, (govId, pp))
+      insertGovActionProposal syncEnv blkId txId expiry (Just cgs) convertConwayParamProposal (idx, (govId, pp))
     (Generic.ProposalC pp, _) ->
-      insertGovActionProposal syncEnv blkId txId expiry Nothing (idx, (govId, pp))
+      insertGovActionProposal syncEnv blkId txId expiry Nothing convertConwayParamProposal (idx, (govId, pp))
     (Generic.ProposalD pp, Just (Generic.GovStateD cgs)) ->
-      insertGovActionProposal syncEnv blkId txId expiry (Just cgs) (idx, (govId, pp))
+      insertGovActionProposal syncEnv blkId txId expiry (Just cgs) convertDijkstraParamProposal (idx, (govId, pp))
     (Generic.ProposalD pp, _) ->
-      insertGovActionProposal syncEnv blkId txId expiry Nothing (idx, (govId, pp))
+      insertGovActionProposal syncEnv blkId txId expiry Nothing convertDijkstraParamProposal (idx, (govId, pp))
 
 insertCommittee ::
   Maybe DB.GovActionProposalId ->
@@ -292,6 +293,33 @@ insertParamProposal syncEnv blkId txId pp = do
       , DB.paramProposalDrepDeposit = DbWord64 . fromIntegral <$> pppDRepDeposit pp
       , DB.paramProposalDrepActivity = fromIntegral . unEpochInterval <$> pppDRepActivity pp
       , DB.paramProposalMinFeeRefScriptCostPerByte = fromRational <$> pppMinFeeRefScriptCostPerByte pp
+      , -- New for Dijkstra (Leios)
+        DB.paramProposalLeiosCommitteeSize = DbWord64 . fromIntegral <$> pppLeiosCommitteeSize pp
+      , DB.paramProposalLeiosQuorumStakeThreshold = toDouble <$> pppLeiosQuorumStakeThreshold pp
+      , DB.paramProposalLeiosAnnouncementPeriodLength = DbWord64 . fromIntegral <$> pppLeiosAnnouncementPeriodLength pp
+      , DB.paramProposalLeiosVotePeriodLength = DbWord64 . fromIntegral <$> pppLeiosVotePeriodLength pp
+      , DB.paramProposalLeiosDiffusionPeriodLength = DbWord64 . fromIntegral <$> pppLeiosDiffusionPeriodLength pp
+      , DB.paramProposalLeiosMaxEbReferencesSize = DbWord64 . fromIntegral <$> pppLeiosMaxEbReferencesSize pp
+      , DB.paramProposalLeiosMaxEbTxsSize = DbWord64 . fromIntegral <$> pppLeiosMaxEbTxsSize pp
+      , DB.paramProposalLeiosMaxEbExMem = DbWord64 <$> pppLeiosMaxEbExMem pp
+      , DB.paramProposalLeiosMaxEbExSteps = DbWord64 <$> pppLeiosMaxEbExSteps pp
+      , DB.paramProposalLeiosMaxRefScriptSizePerEb = DbWord64 . fromIntegral <$> pppLeiosMaxRefScriptSizePerEb pp
+      , -- The remaining Dijkstra pparams (reference scripts/inputs, CIP-50, Peras)
+        DB.paramProposalMaxRefScriptSizePerBlock = DbWord64 . fromIntegral <$> pppMaxRefScriptSizePerBlock pp
+      , DB.paramProposalMaxRefScriptSizePerTx = DbWord64 . fromIntegral <$> pppMaxRefScriptSizePerTx pp
+      , DB.paramProposalRefScriptCostStride = DbWord64 . fromIntegral <$> pppRefScriptCostStride pp
+      , DB.paramProposalRefScriptCostMultiplier = fromRational <$> pppRefScriptCostMultiplier pp
+      , DB.paramProposalMaxPledgeLeverage = fromRational <$> pppMaxPledgeLeverage pp
+      , DB.paramProposalMinPoolMargin = toDouble <$> pppMinPoolMargin pp
+      , DB.paramProposalRefInputsCostPerMultiAssetPolicy = Generic.coinToDbLovelace <$> pppRefInputsCostPerMultiAssetPolicy pp
+      , DB.paramProposalRefInputsCostPerDatumByte = Generic.coinToDbLovelace <$> pppRefInputsCostPerDatumByte pp
+      , -- Peras
+        DB.paramProposalPerasMinCandidateBlockAge = DbWord64 . fromIntegral <$> pppPerasMinCandidateBlockAge pp
+      , DB.paramProposalPerasHealingFactor = fromRational <$> pppPerasHealingFactor pp
+      , DB.paramProposalPerasCertBoost = DbWord64 . fromIntegral <$> pppPerasCertBoost pp
+      , DB.paramProposalPerasTargetCommitteeSize = DbWord64 . fromIntegral <$> pppPerasTargetCommitteeSize pp
+      , DB.paramProposalPerasBootstrapRound = DbWord64 . fromIntegral <$> pppPerasBootstrapRound pp
+      , DB.paramProposalPerasQuorumThresholdSafetyMargin = toDouble <$> pppPerasQuorumThresholdSafetyMargin pp
       }
 
 insertConstitution ::

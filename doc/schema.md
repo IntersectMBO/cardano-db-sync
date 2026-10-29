@@ -684,6 +684,30 @@ A table containing block chain parameter change proposals.
 | `drep_deposit` | word64type | DRep deposit amount. New in 13.2-Conway. |
 | `drep_activity` | word64type | DRep activity period. New in 13.2-Conway. |
 | `min_fee_ref_script_cost_per_byte` | double |  |
+| `leios_committee_size` | word64type | The number of seats on the Leios voting committee. New in 13.8-Dijkstra (experimental). |
+| `leios_quorum_stake_threshold` | double | The fraction of committee stake that must vote for an endorser block before it counts as certified. New in 13.8-Dijkstra (experimental). |
+| `leios_announcement_period_length` | word64type | The length of the Leios announcement period, in milliseconds. New in 13.8-Dijkstra (experimental). |
+| `leios_vote_period_length` | word64type | The length of the Leios voting period, in milliseconds. New in 13.8-Dijkstra (experimental). |
+| `leios_diffusion_period_length` | word64type | The length of the Leios diffusion period, in milliseconds. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_references_size` | word64type | The maximum total size (in bytes) of the transaction references an endorser block may carry. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_txs_size` | word64type | The maximum total size (in bytes) of the transactions an endorser block may carry. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_ex_mem` | word64type | The maximum script execution memory an endorser block may use; the memory half of the ledger's endorser-block ExUnits. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_ex_steps` | word64type | The maximum script execution steps an endorser block may use; the steps half of the same ExUnits pair. New in 13.8-Dijkstra (experimental). |
+| `leios_max_ref_script_size_per_eb` | word64type | The maximum total reference-script size (in bytes) per endorser block. New in 13.8-Dijkstra (experimental). |
+| `max_ref_script_size_per_block` | word64type | The maximum total size (in bytes) of all reference scripts used by the transactions in a block. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `max_ref_script_size_per_tx` | word64type | The maximum total size (in bytes) of the reference scripts a single transaction may use. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `ref_script_cost_stride` | word64type | The size increment, in bytes, within which the tiered reference-script price grows linearly; the price is multiplied by `ref_script_cost_multiplier` at each increment. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `ref_script_cost_multiplier` | double | The growth factor the reference-script price is multiplied by at each `ref_script_cost_stride` of size. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `max_pledge_leverage` | double | The maximum ratio of a pool's reward-eligible stake to its pledge (CIP-50). NULL both when the proposal does not touch this parameter and when the proposal explicitly removes the cap, so NULL does not tell the two apart. New in 13.8-Dijkstra (experimental). |
+| `min_pool_margin` | double | The smallest margin a stake pool is allowed to declare (CIP-50). New in 13.8-Dijkstra (experimental). |
+| `ref_inputs_cost_per_multi_asset_policy` | lovelace | The fee charged for every multi-asset policy appearing in the values of a transaction's reference inputs, as a deterrent against pulling large amounts of data off disk. New in 13.8-Dijkstra (experimental). |
+| `ref_inputs_cost_per_datum_byte` | lovelace | The fee charged per byte of datum attached to a transaction's reference inputs, on the same rationale as `ref_inputs_cost_per_multi_asset_policy`. New in 13.8-Dijkstra (experimental). |
+| `peras_min_candidate_block_age` | word64type | The minimum age, in slots, a block must reach to be eligible for voting in a Peras round. New in 13.8-Dijkstra (experimental). |
+| `peras_healing_factor` | double | The healing-time coefficient from which the length of a Peras cooldown period is derived. New in 13.8-Dijkstra (experimental). |
+| `peras_cert_boost` | word64type | The extra chain weight a Peras certificate gives the block it boosts. New in 13.8-Dijkstra (experimental). |
+| `peras_target_committee_size` | word64type | The target number of seats on the Peras voting committee. New in 13.8-Dijkstra (experimental). |
+| `peras_bootstrap_round` | word64type | The round number used to bootstrap Peras voting at a chosen time. NULL both when the proposal does not touch this parameter and when the proposal explicitly clears the round, so NULL does not tell the two apart. New in 13.8-Dijkstra (experimental). |
+| `peras_quorum_threshold_safety_margin` | double | The extra safety margin added on top of the 75% Peras quorum threshold baseline; between 0 and 0.25 inclusive. New in 13.8-Dijkstra (experimental). |
 | `registered_tx_id` | integer (64) | The Tx table index for the transaction that contains this parameter proposal. |
 
 ### `epoch_param`
@@ -748,6 +772,30 @@ The accepted protocol parameters for an epoch.
 | `drep_deposit` | word64type | DRep deposit amount. New in 13.2-Conway. |
 | `drep_activity` | word64type | DRep activity period. New in 13.2-Conway. |
 | `min_fee_ref_script_cost_per_byte` | double |  |
+| `leios_committee_size` | word64type | The number of seats on the Leios voting committee. New in 13.8-Dijkstra (experimental). |
+| `leios_quorum_stake_threshold` | double | The fraction of committee stake that must vote for an endorser block before it counts as certified. New in 13.8-Dijkstra (experimental). |
+| `leios_announcement_period_length` | word64type | The length of the Leios announcement period, in milliseconds. New in 13.8-Dijkstra (experimental). |
+| `leios_vote_period_length` | word64type | The length of the Leios voting period, in milliseconds. New in 13.8-Dijkstra (experimental). |
+| `leios_diffusion_period_length` | word64type | The length of the Leios diffusion period, in milliseconds. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_references_size` | word64type | The maximum total size (in bytes) of the transaction references an endorser block may carry. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_txs_size` | word64type | The maximum total size (in bytes) of the transactions an endorser block may carry. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_ex_mem` | word64type | The maximum script execution memory an endorser block may use; the memory half of the ledger's endorser-block ExUnits. New in 13.8-Dijkstra (experimental). |
+| `leios_max_eb_ex_steps` | word64type | The maximum script execution steps an endorser block may use; the steps half of the same ExUnits pair. New in 13.8-Dijkstra (experimental). |
+| `leios_max_ref_script_size_per_eb` | word64type | The maximum total reference-script size (in bytes) per endorser block. New in 13.8-Dijkstra (experimental). |
+| `max_ref_script_size_per_block` | word64type | The maximum total size (in bytes) of all reference scripts used by the transactions in a block. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `max_ref_script_size_per_tx` | word64type | The maximum total size (in bytes) of the reference scripts a single transaction may use. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `ref_script_cost_stride` | word64type | The size increment, in bytes, within which the tiered reference-script price grows linearly; the price is multiplied by `ref_script_cost_multiplier` at each increment. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `ref_script_cost_multiplier` | double | The growth factor the reference-script price is multiplied by at each `ref_script_cost_stride` of size. A fixed constant in Conway, a real protocol parameter from Dijkstra on. New in 13.8-Dijkstra (experimental). |
+| `max_pledge_leverage` | double | The maximum ratio of a pool's reward-eligible stake to its pledge (CIP-50). NULL both before Dijkstra and when Dijkstra has no leverage cap in force, so NULL does not tell the two apart; the ledger itself treats an era without the parameter as equivalent to the parameter being unset. New in 13.8-Dijkstra (experimental). |
+| `min_pool_margin` | double | The smallest margin a stake pool is allowed to declare (CIP-50). New in 13.8-Dijkstra (experimental). |
+| `ref_inputs_cost_per_multi_asset_policy` | lovelace | The fee charged for every multi-asset policy appearing in the values of a transaction's reference inputs, as a deterrent against pulling large amounts of data off disk. New in 13.8-Dijkstra (experimental). |
+| `ref_inputs_cost_per_datum_byte` | lovelace | The fee charged per byte of datum attached to a transaction's reference inputs, on the same rationale as `ref_inputs_cost_per_multi_asset_policy`. New in 13.8-Dijkstra (experimental). |
+| `peras_min_candidate_block_age` | word64type | The minimum age, in slots, a block must reach to be eligible for voting in a Peras round. New in 13.8-Dijkstra (experimental). |
+| `peras_healing_factor` | double | The healing-time coefficient from which the length of a Peras cooldown period is derived. New in 13.8-Dijkstra (experimental). |
+| `peras_cert_boost` | word64type | The extra chain weight a Peras certificate gives the block it boosts. New in 13.8-Dijkstra (experimental). |
+| `peras_target_committee_size` | word64type | The target number of seats on the Peras voting committee. New in 13.8-Dijkstra (experimental). |
+| `peras_bootstrap_round` | word64type | The round number used to bootstrap Peras voting at a chosen time. NULL both before Dijkstra and when no bootstrap round is set, so NULL does not tell the two apart. New in 13.8-Dijkstra (experimental). |
+| `peras_quorum_threshold_safety_margin` | double | The extra safety margin added on top of the 75% Peras quorum threshold baseline; between 0 and 0.25 inclusive. New in 13.8-Dijkstra (experimental). |
 | `block_id` | integer (64) | The Block table index for the first block where these parameters are valid. |
 
 ### `cost_model`

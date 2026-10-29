@@ -454,6 +454,32 @@ data ParamProposal = ParamProposal
   , paramProposalDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalPvtppSecurityGroup :: !(Maybe Double)
   , paramProposalMinFeeRefScriptCostPerByte :: !(Maybe Double)
+  , -- Leios (Dijkstra) protocol parameters. Only set from the Dijkstra era on; Nothing before.
+    paramProposalLeiosCommitteeSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosQuorumStakeThreshold :: !(Maybe Double)
+  , paramProposalLeiosAnnouncementPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , paramProposalLeiosVotePeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , paramProposalLeiosDiffusionPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , paramProposalLeiosMaxEbReferencesSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxEbTxsSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxEbExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxEbExSteps :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalLeiosMaxRefScriptSizePerEb :: !(Maybe DbWord64) -- sqltype=word64type
+  , -- New for Dijkstra; see the experimental note in doc/schema.md.
+    paramProposalMaxRefScriptSizePerBlock :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalMaxRefScriptSizePerTx :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalRefScriptCostStride :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalRefScriptCostMultiplier :: !(Maybe Double)
+  , paramProposalMaxPledgeLeverage :: !(Maybe Double)
+  , paramProposalMinPoolMargin :: !(Maybe Double)
+  , paramProposalRefInputsCostPerMultiAssetPolicy :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , paramProposalRefInputsCostPerDatumByte :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , paramProposalPerasMinCandidateBlockAge :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalPerasHealingFactor :: !(Maybe Double)
+  , paramProposalPerasCertBoost :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalPerasTargetCommitteeSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalPerasBootstrapRound :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalPerasQuorumThresholdSafetyMargin :: !(Maybe Double)
   }
   deriving (Show, Eq, Generic)
 
@@ -523,6 +549,30 @@ paramProposalDecoder =
     <*> maybeDbWord64Decoder -- paramProposalDrepActivity
     <*> D.column (D.nullable D.float8) -- paramProposalPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- paramProposalMinFeeRefScriptCostPerByte
+    <*> maybeDbWord64Decoder -- paramProposalLeiosCommitteeSize
+    <*> D.column (D.nullable D.float8) -- paramProposalLeiosQuorumStakeThreshold
+    <*> maybeDbWord64Decoder -- paramProposalLeiosAnnouncementPeriodLength
+    <*> maybeDbWord64Decoder -- paramProposalLeiosVotePeriodLength
+    <*> maybeDbWord64Decoder -- paramProposalLeiosDiffusionPeriodLength
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbReferencesSize
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbTxsSize
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbExMem
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxEbExSteps
+    <*> maybeDbWord64Decoder -- paramProposalLeiosMaxRefScriptSizePerEb
+    <*> maybeDbWord64Decoder -- paramProposalMaxRefScriptSizePerBlock
+    <*> maybeDbWord64Decoder -- paramProposalMaxRefScriptSizePerTx
+    <*> maybeDbWord64Decoder -- paramProposalRefScriptCostStride
+    <*> D.column (D.nullable D.float8) -- paramProposalRefScriptCostMultiplier
+    <*> D.column (D.nullable D.float8) -- paramProposalMaxPledgeLeverage
+    <*> D.column (D.nullable D.float8) -- paramProposalMinPoolMargin
+    <*> maybeDbLovelaceDecoder -- paramProposalRefInputsCostPerMultiAssetPolicy
+    <*> maybeDbLovelaceDecoder -- paramProposalRefInputsCostPerDatumByte
+    <*> maybeDbWord64Decoder -- paramProposalPerasMinCandidateBlockAge
+    <*> D.column (D.nullable D.float8) -- paramProposalPerasHealingFactor
+    <*> maybeDbWord64Decoder -- paramProposalPerasCertBoost
+    <*> maybeDbWord64Decoder -- paramProposalPerasTargetCommitteeSize
+    <*> maybeDbWord64Decoder -- paramProposalPerasBootstrapRound
+    <*> D.column (D.nullable D.float8) -- paramProposalPerasQuorumThresholdSafetyMargin
 
 paramProposalEncoder :: E.Params ParamProposal
 paramProposalEncoder =
@@ -584,6 +634,30 @@ paramProposalEncoder =
     , paramProposalDrepActivity >$< maybeDbWord64Encoder
     , paramProposalPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , paramProposalMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
+    , paramProposalLeiosCommitteeSize >$< maybeDbWord64Encoder
+    , paramProposalLeiosQuorumStakeThreshold >$< E.param (E.nullable E.float8)
+    , paramProposalLeiosAnnouncementPeriodLength >$< maybeDbWord64Encoder
+    , paramProposalLeiosVotePeriodLength >$< maybeDbWord64Encoder
+    , paramProposalLeiosDiffusionPeriodLength >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbReferencesSize >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbTxsSize >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbExMem >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxEbExSteps >$< maybeDbWord64Encoder
+    , paramProposalLeiosMaxRefScriptSizePerEb >$< maybeDbWord64Encoder
+    , paramProposalMaxRefScriptSizePerBlock >$< maybeDbWord64Encoder
+    , paramProposalMaxRefScriptSizePerTx >$< maybeDbWord64Encoder
+    , paramProposalRefScriptCostStride >$< maybeDbWord64Encoder
+    , paramProposalRefScriptCostMultiplier >$< E.param (E.nullable E.float8)
+    , paramProposalMaxPledgeLeverage >$< E.param (E.nullable E.float8)
+    , paramProposalMinPoolMargin >$< E.param (E.nullable E.float8)
+    , paramProposalRefInputsCostPerMultiAssetPolicy >$< maybeDbLovelaceEncoder
+    , paramProposalRefInputsCostPerDatumByte >$< maybeDbLovelaceEncoder
+    , paramProposalPerasMinCandidateBlockAge >$< maybeDbWord64Encoder
+    , paramProposalPerasHealingFactor >$< E.param (E.nullable E.float8)
+    , paramProposalPerasCertBoost >$< maybeDbWord64Encoder
+    , paramProposalPerasTargetCommitteeSize >$< maybeDbWord64Encoder
+    , paramProposalPerasBootstrapRound >$< maybeDbWord64Encoder
+    , paramProposalPerasQuorumThresholdSafetyMargin >$< E.param (E.nullable E.float8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

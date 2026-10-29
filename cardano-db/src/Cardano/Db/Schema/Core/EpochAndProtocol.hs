@@ -146,6 +146,32 @@ data EpochParam = EpochParam
   , epochParamDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
   , epochParamPvtppSecurityGroup :: !(Maybe Double)
   , epochParamMinFeeRefScriptCostPerByte :: !(Maybe Double)
+  , -- Leios (Dijkstra) protocol parameters. All 'Nothing' before the Dijkstra era.
+    epochParamLeiosCommitteeSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosQuorumStakeThreshold :: !(Maybe Double)
+  , epochParamLeiosAnnouncementPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , epochParamLeiosVotePeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , epochParamLeiosDiffusionPeriodLength :: !(Maybe DbWord64) -- sqltype=word64type (milliseconds)
+  , epochParamLeiosMaxEbReferencesSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxEbTxsSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxEbExMem :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxEbExSteps :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamLeiosMaxRefScriptSizePerEb :: !(Maybe DbWord64) -- sqltype=word64type
+  , -- New for Dijkstra; see the experimental note in doc/schema.md.
+    epochParamMaxRefScriptSizePerBlock :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamMaxRefScriptSizePerTx :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamRefScriptCostStride :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamRefScriptCostMultiplier :: !(Maybe Double)
+  , epochParamMaxPledgeLeverage :: !(Maybe Double)
+  , epochParamMinPoolMargin :: !(Maybe Double)
+  , epochParamRefInputsCostPerMultiAssetPolicy :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , epochParamRefInputsCostPerDatumByte :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , epochParamPerasMinCandidateBlockAge :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamPerasHealingFactor :: !(Maybe Double)
+  , epochParamPerasCertBoost :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamPerasTargetCommitteeSize :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamPerasBootstrapRound :: !(Maybe DbWord64) -- sqltype=word64type
+  , epochParamPerasQuorumThresholdSafetyMargin :: !(Maybe Double)
   }
   deriving (Eq, Show, Generic)
 
@@ -216,6 +242,30 @@ epochParamDecoder =
     <*> maybeDbWord64Decoder -- epochParamDrepActivity
     <*> D.column (D.nullable D.float8) -- epochParamPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- epochParamMinFeeRefScriptCostPerByte
+    <*> maybeDbWord64Decoder -- epochParamLeiosCommitteeSize
+    <*> D.column (D.nullable D.float8) -- epochParamLeiosQuorumStakeThreshold
+    <*> maybeDbWord64Decoder -- epochParamLeiosAnnouncementPeriodLength
+    <*> maybeDbWord64Decoder -- epochParamLeiosVotePeriodLength
+    <*> maybeDbWord64Decoder -- epochParamLeiosDiffusionPeriodLength
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbReferencesSize
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbTxsSize
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbExMem
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxEbExSteps
+    <*> maybeDbWord64Decoder -- epochParamLeiosMaxRefScriptSizePerEb
+    <*> maybeDbWord64Decoder -- epochParamMaxRefScriptSizePerBlock
+    <*> maybeDbWord64Decoder -- epochParamMaxRefScriptSizePerTx
+    <*> maybeDbWord64Decoder -- epochParamRefScriptCostStride
+    <*> D.column (D.nullable D.float8) -- epochParamRefScriptCostMultiplier
+    <*> D.column (D.nullable D.float8) -- epochParamMaxPledgeLeverage
+    <*> D.column (D.nullable D.float8) -- epochParamMinPoolMargin
+    <*> maybeDbLovelaceDecoder -- epochParamRefInputsCostPerMultiAssetPolicy
+    <*> maybeDbLovelaceDecoder -- epochParamRefInputsCostPerDatumByte
+    <*> maybeDbWord64Decoder -- epochParamPerasMinCandidateBlockAge
+    <*> D.column (D.nullable D.float8) -- epochParamPerasHealingFactor
+    <*> maybeDbWord64Decoder -- epochParamPerasCertBoost
+    <*> maybeDbWord64Decoder -- epochParamPerasTargetCommitteeSize
+    <*> maybeDbWord64Decoder -- epochParamPerasBootstrapRound
+    <*> D.column (D.nullable D.float8) -- epochParamPerasQuorumThresholdSafetyMargin
 
 epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
@@ -274,6 +324,30 @@ epochParamEncoder =
     , epochParamDrepActivity >$< maybeDbWord64Encoder
     , epochParamPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , epochParamMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
+    , epochParamLeiosCommitteeSize >$< maybeDbWord64Encoder
+    , epochParamLeiosQuorumStakeThreshold >$< E.param (E.nullable E.float8)
+    , epochParamLeiosAnnouncementPeriodLength >$< maybeDbWord64Encoder
+    , epochParamLeiosVotePeriodLength >$< maybeDbWord64Encoder
+    , epochParamLeiosDiffusionPeriodLength >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbReferencesSize >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbTxsSize >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbExMem >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxEbExSteps >$< maybeDbWord64Encoder
+    , epochParamLeiosMaxRefScriptSizePerEb >$< maybeDbWord64Encoder
+    , epochParamMaxRefScriptSizePerBlock >$< maybeDbWord64Encoder
+    , epochParamMaxRefScriptSizePerTx >$< maybeDbWord64Encoder
+    , epochParamRefScriptCostStride >$< maybeDbWord64Encoder
+    , epochParamRefScriptCostMultiplier >$< E.param (E.nullable E.float8)
+    , epochParamMaxPledgeLeverage >$< E.param (E.nullable E.float8)
+    , epochParamMinPoolMargin >$< E.param (E.nullable E.float8)
+    , epochParamRefInputsCostPerMultiAssetPolicy >$< maybeDbLovelaceEncoder
+    , epochParamRefInputsCostPerDatumByte >$< maybeDbLovelaceEncoder
+    , epochParamPerasMinCandidateBlockAge >$< maybeDbWord64Encoder
+    , epochParamPerasHealingFactor >$< E.param (E.nullable E.float8)
+    , epochParamPerasCertBoost >$< maybeDbWord64Encoder
+    , epochParamPerasTargetCommitteeSize >$< maybeDbWord64Encoder
+    , epochParamPerasBootstrapRound >$< maybeDbWord64Encoder
+    , epochParamPerasQuorumThresholdSafetyMargin >$< E.param (E.nullable E.float8)
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

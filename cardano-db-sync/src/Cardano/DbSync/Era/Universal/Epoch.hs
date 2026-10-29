@@ -173,6 +173,33 @@ insertEpochParam syncEnv blkId (EpochNo epoch) params nonce = do
       , DB.epochParamDrepDeposit = DB.DbWord64 . fromIntegral <$> Generic.ppDRepDeposit params
       , DB.epochParamDrepActivity = fromIntegral . unEpochInterval <$> Generic.ppDRepActivity params
       , DB.epochParamMinFeeRefScriptCostPerByte = fromRational <$> Generic.ppMinFeeRefScriptCostPerByte params
+      , -- Leios (Dijkstra) protocol parameters; Nothing before the Dijkstra era.
+        DB.epochParamLeiosCommitteeSize = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosCommitteeSize params
+      , DB.epochParamLeiosQuorumStakeThreshold = toDouble <$> Generic.ppLeiosQuorumStakeThreshold params
+      , DB.epochParamLeiosAnnouncementPeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosAnnouncementPeriodLength params
+      , DB.epochParamLeiosVotePeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosVotePeriodLength params
+      , DB.epochParamLeiosDiffusionPeriodLength = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosDiffusionPeriodLength params
+      , DB.epochParamLeiosMaxEbReferencesSize = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosMaxEbReferencesSize params
+      , DB.epochParamLeiosMaxEbTxsSize = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosMaxEbTxsSize params
+      , DB.epochParamLeiosMaxEbExMem = DB.DbWord64 <$> Generic.ppLeiosMaxEbExMem params
+      , DB.epochParamLeiosMaxEbExSteps = DB.DbWord64 <$> Generic.ppLeiosMaxEbExSteps params
+      , DB.epochParamLeiosMaxRefScriptSizePerEb = DB.DbWord64 . fromIntegral <$> Generic.ppLeiosMaxRefScriptSizePerEb params
+      , -- The remaining Dijkstra pparams (reference scripts/inputs, CIP-50, Peras)
+        DB.epochParamMaxRefScriptSizePerBlock = DB.DbWord64 . fromIntegral <$> Generic.ppMaxRefScriptSizePerBlock params
+      , DB.epochParamMaxRefScriptSizePerTx = DB.DbWord64 . fromIntegral <$> Generic.ppMaxRefScriptSizePerTx params
+      , DB.epochParamRefScriptCostStride = DB.DbWord64 . fromIntegral <$> Generic.ppRefScriptCostStride params
+      , DB.epochParamRefScriptCostMultiplier = fromRational <$> Generic.ppRefScriptCostMultiplier params
+      , DB.epochParamMaxPledgeLeverage = fromRational <$> Generic.ppMaxPledgeLeverage params
+      , DB.epochParamMinPoolMargin = toDouble <$> Generic.ppMinPoolMargin params
+      , DB.epochParamRefInputsCostPerMultiAssetPolicy = Generic.coinToDbLovelace <$> Generic.ppRefInputsCostPerMultiAssetPolicy params
+      , DB.epochParamRefInputsCostPerDatumByte = Generic.coinToDbLovelace <$> Generic.ppRefInputsCostPerDatumByte params
+      , -- Peras
+        DB.epochParamPerasMinCandidateBlockAge = DB.DbWord64 . fromIntegral <$> Generic.ppPerasMinCandidateBlockAge params
+      , DB.epochParamPerasHealingFactor = fromRational <$> Generic.ppPerasHealingFactor params
+      , DB.epochParamPerasCertBoost = DB.DbWord64 . fromIntegral <$> Generic.ppPerasCertBoost params
+      , DB.epochParamPerasTargetCommitteeSize = DB.DbWord64 . fromIntegral <$> Generic.ppPerasTargetCommitteeSize params
+      , DB.epochParamPerasBootstrapRound = DB.DbWord64 . fromIntegral <$> Generic.ppPerasBootstrapRound params
+      , DB.epochParamPerasQuorumThresholdSafetyMargin = toDouble <$> Generic.ppPerasQuorumThresholdSafetyMargin params
       , DB.epochParamBlockId = blkId
       }
 

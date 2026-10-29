@@ -8,6 +8,7 @@ module Cardano.DbSync.Era.Shelley.Generic.ParamProposal (
   ParamProposal (..),
   convertParamProposal,
   convertConwayParamProposal,
+  convertDijkstraParamProposal,
 ) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
@@ -20,14 +21,40 @@ import Cardano.Ledger.Coin (Coin, unCoin)
 import Cardano.Ledger.Compactible (fromCompact)
 import Cardano.Ledger.Conway.Core hiding (Witness)
 import Cardano.Ledger.Conway.PParams (ppuMinFeeRefScriptCostPerByteL)
+import Cardano.Ledger.Dijkstra.PParams (
+  ppuLeiosAnnouncementPeriodLengthL,
+  ppuLeiosCommitteeSizeL,
+  ppuLeiosDiffusionPeriodLengthL,
+  ppuLeiosQuorumStakeThresholdL,
+  ppuLeiosVotePeriodLengthL,
+  ppuMaxEndorserBlockExUnitsL,
+  ppuMaxEndorserBlockReferencesSizeL,
+  ppuMaxEndorserBlockTxsSizeL,
+  ppuMaxPledgeLeverageL,
+  ppuMaxRefScriptSizePerBlockL,
+  ppuMaxRefScriptSizePerEndorserBlockL,
+  ppuMaxRefScriptSizePerTxL,
+  ppuMinPoolMarginL,
+  ppuPerasBootstrapRoundL,
+  ppuPerasCertBoostL,
+  ppuPerasHealingFactorL,
+  ppuPerasMinCandidateBlockAgeL,
+  ppuPerasQuorumThresholdSafetyMarginL,
+  ppuPerasTargetCommitteeSizeL,
+  ppuRefInputsCostPerDatumByteL,
+  ppuRefInputsCostPerMultiAssetPolicyL,
+  ppuRefScriptCostMultiplierL,
+  ppuRefScriptCostStrideL,
+ )
 import qualified Cardano.Ledger.Keys as Ledger
+import Cardano.Ledger.Plutus.ExUnits (unOrdExUnits)
 import Cardano.Ledger.Plutus.Language (Language)
 import qualified Cardano.Ledger.Shelley.PParams as Shelley
 import Cardano.Prelude
-import Cardano.Slotting.Slot (EpochNo (..))
+import Cardano.Slotting.Slot (EpochNo (..), unSlotInterval)
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, DijkstraEra)
 
 data ParamProposal = ParamProposal
   { pppEpochNo :: !(Maybe EpochNo)
@@ -71,6 +98,35 @@ data ParamProposal = ParamProposal
   , pppDRepDeposit :: !(Maybe Natural)
   , pppDRepActivity :: !(Maybe EpochInterval)
   , pppMinFeeRefScriptCostPerByte :: !(Maybe Rational)
+  , -- New for Dijkstra (Leios).
+    pppLeiosCommitteeSize :: !(Maybe Word16)
+  , pppLeiosQuorumStakeThreshold :: !(Maybe UnitInterval)
+  , pppLeiosAnnouncementPeriodLength :: !(Maybe Word32) -- milliseconds
+  , pppLeiosVotePeriodLength :: !(Maybe Word32) -- milliseconds
+  , pppLeiosDiffusionPeriodLength :: !(Maybe Word32) -- milliseconds
+  , pppLeiosMaxEbReferencesSize :: !(Maybe Word32)
+  , pppLeiosMaxEbTxsSize :: !(Maybe Word32)
+  , pppLeiosMaxEbExMem :: !(Maybe Word64)
+  , pppLeiosMaxEbExSteps :: !(Maybe Word64)
+  , pppLeiosMaxRefScriptSizePerEb :: !(Maybe Word32)
+  , -- New for Dijkstra (reference scripts, reference inputs, CIP-50 pool bounds).
+    pppMaxRefScriptSizePerBlock :: !(Maybe Word32)
+  , pppMaxRefScriptSizePerTx :: !(Maybe Word32)
+  , pppRefScriptCostStride :: !(Maybe Word32)
+  , pppRefScriptCostMultiplier :: !(Maybe Rational)
+  , -- 'Nothing' when the proposal leaves the cap alone, and also when it removes it.
+    pppMaxPledgeLeverage :: !(Maybe Rational)
+  , pppMinPoolMargin :: !(Maybe UnitInterval)
+  , pppRefInputsCostPerMultiAssetPolicy :: !(Maybe Coin)
+  , pppRefInputsCostPerDatumByte :: !(Maybe Coin)
+  , -- New for Dijkstra (Peras).
+    pppPerasMinCandidateBlockAge :: !(Maybe Word32)
+  , pppPerasHealingFactor :: !(Maybe Rational)
+  , pppPerasCertBoost :: !(Maybe Word16)
+  , pppPerasTargetCommitteeSize :: !(Maybe Word16)
+  , -- 'Nothing' when the proposal leaves the round alone, and also when it clears it.
+    pppPerasBootstrapRound :: !(Maybe Word32)
+  , pppPerasQuorumThresholdSafetyMargin :: !(Maybe UnitInterval)
   }
 
 convertParamProposal :: Witness era -> Shelley.Update era -> [ParamProposal]
@@ -98,10 +154,7 @@ babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
 
 -- -------------------------------------------------------------------------------------------------
 
--- TODO(Dijkstra): the `DijkstraEraPParams` lenses are dropped when this converter
--- is used for a `PParamsUpdate DijkstraEra`: hkdMaxRefScriptSizePerBlockL,
--- hkdMaxRefScriptSizePerTxL, hkdRefScriptCostStrideL, hkdRefScriptCostMultiplierL.
--- Reading them needs new param_proposal columns.
+-- The Dijkstra-only pparams are captured by 'convertDijkstraParamProposal'.
 convertConwayParamProposal :: ConwayEraPParams era => PParamsUpdate era -> ParamProposal
 convertConwayParamProposal pmap =
   ParamProposal
@@ -145,6 +198,67 @@ convertConwayParamProposal pmap =
     , pppDRepDeposit = fromIntegral . unCoin <$> strictMaybeToMaybe (pmap ^. ppuDRepDepositL)
     , pppDRepActivity = strictMaybeToMaybe (pmap ^. ppuDRepActivityL)
     , pppMinFeeRefScriptCostPerByte = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuMinFeeRefScriptCostPerByteL)
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
+    , pppMaxRefScriptSizePerBlock = Nothing
+    , pppMaxRefScriptSizePerTx = Nothing
+    , pppRefScriptCostStride = Nothing
+    , pppRefScriptCostMultiplier = Nothing
+    , pppMaxPledgeLeverage = Nothing
+    , pppMinPoolMargin = Nothing
+    , pppRefInputsCostPerMultiAssetPolicy = Nothing
+    , pppRefInputsCostPerDatumByte = Nothing
+    , pppPerasMinCandidateBlockAge = Nothing
+    , pppPerasHealingFactor = Nothing
+    , pppPerasCertBoost = Nothing
+    , pppPerasTargetCommitteeSize = Nothing
+    , pppPerasBootstrapRound = Nothing
+    , pppPerasQuorumThresholdSafetyMargin = Nothing
+    }
+
+-- | Dijkstra reuses the Conway converter and overlays the Leios pparams.
+convertDijkstraParamProposal :: PParamsUpdate DijkstraEra -> ParamProposal
+convertDijkstraParamProposal pmap =
+  (convertConwayParamProposal pmap)
+    { pppLeiosCommitteeSize = strictMaybeToMaybe (pmap ^. ppuLeiosCommitteeSizeL)
+    , pppLeiosQuorumStakeThreshold = strictMaybeToMaybe (pmap ^. ppuLeiosQuorumStakeThresholdL)
+    , pppLeiosAnnouncementPeriodLength = Ledger.unMilliseconds32 <$> strictMaybeToMaybe (pmap ^. ppuLeiosAnnouncementPeriodLengthL)
+    , pppLeiosVotePeriodLength = Ledger.unMilliseconds32 <$> strictMaybeToMaybe (pmap ^. ppuLeiosVotePeriodLengthL)
+    , pppLeiosDiffusionPeriodLength = Ledger.unMilliseconds32 <$> strictMaybeToMaybe (pmap ^. ppuLeiosDiffusionPeriodLengthL)
+    , pppLeiosMaxEbReferencesSize = strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockReferencesSizeL)
+    , pppLeiosMaxEbTxsSize = strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockTxsSizeL)
+    , pppLeiosMaxEbExMem = fromIntegral . Alonzo.exUnitsMem . unOrdExUnits <$> strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockExUnitsL)
+    , pppLeiosMaxEbExSteps = fromIntegral . Alonzo.exUnitsSteps . unOrdExUnits <$> strictMaybeToMaybe (pmap ^. ppuMaxEndorserBlockExUnitsL)
+    , pppLeiosMaxRefScriptSizePerEb = strictMaybeToMaybe (pmap ^. ppuMaxRefScriptSizePerEndorserBlockL)
+    , -- Reference scripts, reference inputs and the CIP-50 pool bounds.
+      pppMaxRefScriptSizePerBlock = strictMaybeToMaybe (pmap ^. ppuMaxRefScriptSizePerBlockL)
+    , pppMaxRefScriptSizePerTx = strictMaybeToMaybe (pmap ^. ppuMaxRefScriptSizePerTxL)
+    , pppRefScriptCostStride = Ledger.unNonZero <$> strictMaybeToMaybe (pmap ^. ppuRefScriptCostStrideL)
+    , pppRefScriptCostMultiplier = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuRefScriptCostMultiplierL)
+    , -- Doubly optional in the ledger: the proposal may leave the cap alone, or set
+      -- it to "no cap". Both arrive here as 'Nothing'.
+      pppMaxPledgeLeverage =
+        Ledger.unboundRational
+          <$> (strictMaybeToMaybe (pmap ^. ppuMaxPledgeLeverageL) >>= strictMaybeToMaybe . unMaxPledgeLeverage)
+    , pppMinPoolMargin = strictMaybeToMaybe (pmap ^. ppuMinPoolMarginL)
+    , pppRefInputsCostPerMultiAssetPolicy = strictMaybeToMaybe (pmap ^. ppuRefInputsCostPerMultiAssetPolicyL)
+    , pppRefInputsCostPerDatumByte = fromCompact . unCoinPerByte <$> strictMaybeToMaybe (pmap ^. ppuRefInputsCostPerDatumByteL)
+    , -- Peras.
+      pppPerasMinCandidateBlockAge = unSlotInterval <$> strictMaybeToMaybe (pmap ^. ppuPerasMinCandidateBlockAgeL)
+    , pppPerasHealingFactor = Ledger.unboundRational <$> strictMaybeToMaybe (pmap ^. ppuPerasHealingFactorL)
+    , pppPerasCertBoost = strictMaybeToMaybe (pmap ^. ppuPerasCertBoostL)
+    , pppPerasTargetCommitteeSize = strictMaybeToMaybe (pmap ^. ppuPerasTargetCommitteeSizeL)
+    , -- Doubly optional, as 'pppMaxPledgeLeverage' above.
+      pppPerasBootstrapRound = strictMaybeToMaybe (pmap ^. ppuPerasBootstrapRoundL) >>= strictMaybeToMaybe
+    , pppPerasQuorumThresholdSafetyMargin = strictMaybeToMaybe (pmap ^. ppuPerasQuorumThresholdSafetyMarginL)
     }
 
 convertBabbageParamProposal :: EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate BabbageEra) -> ParamProposal
@@ -189,6 +303,30 @@ convertBabbageParamProposal epochNo (key, pmap) =
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
     , pppMinFeeRefScriptCostPerByte = Nothing
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
+    , pppMaxRefScriptSizePerBlock = Nothing
+    , pppMaxRefScriptSizePerTx = Nothing
+    , pppRefScriptCostStride = Nothing
+    , pppRefScriptCostMultiplier = Nothing
+    , pppMaxPledgeLeverage = Nothing
+    , pppMinPoolMargin = Nothing
+    , pppRefInputsCostPerMultiAssetPolicy = Nothing
+    , pppRefInputsCostPerDatumByte = Nothing
+    , pppPerasMinCandidateBlockAge = Nothing
+    , pppPerasHealingFactor = Nothing
+    , pppPerasCertBoost = Nothing
+    , pppPerasTargetCommitteeSize = Nothing
+    , pppPerasBootstrapRound = Nothing
+    , pppPerasQuorumThresholdSafetyMargin = Nothing
     }
 
 convertAlonzoParamProposal :: EpochNo -> (Ledger.KeyHash genesis, PParamsUpdate AlonzoEra) -> ParamProposal
@@ -234,6 +372,30 @@ convertAlonzoParamProposal epochNo (key, pmap) =
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
     , pppMinFeeRefScriptCostPerByte = Nothing
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
+    , pppMaxRefScriptSizePerBlock = Nothing
+    , pppMaxRefScriptSizePerTx = Nothing
+    , pppRefScriptCostStride = Nothing
+    , pppRefScriptCostMultiplier = Nothing
+    , pppMaxPledgeLeverage = Nothing
+    , pppMinPoolMargin = Nothing
+    , pppRefInputsCostPerMultiAssetPolicy = Nothing
+    , pppRefInputsCostPerDatumByte = Nothing
+    , pppPerasMinCandidateBlockAge = Nothing
+    , pppPerasHealingFactor = Nothing
+    , pppPerasCertBoost = Nothing
+    , pppPerasTargetCommitteeSize = Nothing
+    , pppPerasBootstrapRound = Nothing
+    , pppPerasQuorumThresholdSafetyMargin = Nothing
     }
 
 -- | This works fine from Shelley to Mary. Not for Alonzo since 'ppuMinUTxOValueL' was removed
@@ -280,4 +442,28 @@ convertShelleyParamProposal epochNo (key, pmap) =
     , pppDRepDeposit = Nothing
     , pppDRepActivity = Nothing
     , pppMinFeeRefScriptCostPerByte = Nothing
+    , pppLeiosCommitteeSize = Nothing
+    , pppLeiosQuorumStakeThreshold = Nothing
+    , pppLeiosAnnouncementPeriodLength = Nothing
+    , pppLeiosVotePeriodLength = Nothing
+    , pppLeiosDiffusionPeriodLength = Nothing
+    , pppLeiosMaxEbReferencesSize = Nothing
+    , pppLeiosMaxEbTxsSize = Nothing
+    , pppLeiosMaxEbExMem = Nothing
+    , pppLeiosMaxEbExSteps = Nothing
+    , pppLeiosMaxRefScriptSizePerEb = Nothing
+    , pppMaxRefScriptSizePerBlock = Nothing
+    , pppMaxRefScriptSizePerTx = Nothing
+    , pppRefScriptCostStride = Nothing
+    , pppRefScriptCostMultiplier = Nothing
+    , pppMaxPledgeLeverage = Nothing
+    , pppMinPoolMargin = Nothing
+    , pppRefInputsCostPerMultiAssetPolicy = Nothing
+    , pppRefInputsCostPerDatumByte = Nothing
+    , pppPerasMinCandidateBlockAge = Nothing
+    , pppPerasHealingFactor = Nothing
+    , pppPerasCertBoost = Nothing
+    , pppPerasTargetCommitteeSize = Nothing
+    , pppPerasBootstrapRound = Nothing
+    , pppPerasQuorumThresholdSafetyMargin = Nothing
     }
