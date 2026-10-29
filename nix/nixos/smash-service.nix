@@ -8,6 +8,8 @@ let
     inherit (cfg.nodeConfig) ByronGenesisFile ShelleyGenesisFile ByronGenesisHash ShelleyGenesisHash Protocol RequiresNetworkMagic;
   };
   configFile = __toFile "config.json" (__toJSON (smashConfig // cfg.logConfig));
+  startupPython = pkgs.python3.withPackages (ps: [ ps.bech32 ]);
+  delistedPoolsFile = pkgs.writeText "smash-delisted-pools.json" (builtins.toJSON cfg.delistedPools);
 in {
 
   options = {
@@ -64,14 +66,26 @@ in {
       delistedPools = lib.mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "List of pool id that should be delisted";
+        description = ''
+          Pool IDs to delist at startup (hex or bech32). Existing delists are
+          preserved. Requires admins; the first nonempty entry is used for
+          authenticated requests to the local server.
+        '';
       };
       admins = lib.mkOption {
         type = types.nullOr (types.either types.str types.path);
         default = null;
-        description = ''File of <username>,<password> (one per line)
-          used to protect secure endpoints (pool delisting and enlisting, ticker reserving, policies fetching)
-          with basic auth'';
+        description = ''
+          File of <username>,<password> (one per line) used to protect
+          administrative endpoints with basic auth. The file is loaded as a
+          systemd credential, so it may be readable only by root. For secrets,
+          use a quoted runtime path rather than a Nix path literal or store
+          file. For example, use sops-nix to decrypt a SOPS-encrypted file to
+          /run/secrets/smash-admins and set this option to
+          config.sops.secrets.smash-admins.path (see doc/smash.md).
+          Changes take effect after restarting the service. With null,
+          public reads remain available but no administrator can authenticate.
+        '';
       };
       postgres = {
         generatePGPASS = lib.mkOption {
@@ -107,6 +121,10 @@ in {
     };
   };
   config = lib.mkIf cfg.enable {
+    assertions = [{
+      assertion = cfg.delistedPools == [] || cfg.admins != null;
+      message = "services.smash.admins is required when services.smash.delistedPools is nonempty.";
+    }];
     services.smash.script = let
     in pkgs.writeShellScript "smash" ''
       set -euo pipefail
@@ -123,10 +141,10 @@ in {
         --port ${toString cfg.port} \
         --config ${configFile} \
         ${lib.optionalString (cfg.admins != null)
-        "--admins ${cfg.admins}"}
+        ''--admins "$CREDENTIALS_DIRECTORY/admins"''}
     '';
     systemd.services.smash = {
-      path = [ pkgs.netcat pkgs.curl ];
+      path = [ pkgs.netcat ];
       preStart = ''
         for x in {1..60}; do
           nc -z localhost ${toString cfg.postgres.port} && break
@@ -136,24 +154,16 @@ in {
         sleep 1
       '';
       postStart = ''
-        for x in {1..10}; do
-          nc -z localhost ${toString cfg.port} && break
-          echo loop $x: waiting for smash 2 sec...
-          sleep 2
-        done
-        sleep 1
-        for p in ${toString cfg.delistedPools}; do
-          echo "Unlisting pool $p."
-          curl --silent --header "Content-Type: application/json" --request PATCH \
-          --data "{ \"poolId\": \"$p\" }" \
-          "http://localhost:${toString cfg.port}/api/v1/delist"
-        done
+        exec ${startupPython}/bin/python ${./smash-startup.py} \
+          --port ${toString cfg.port} --pools ${delistedPoolsFile} \
+          ${lib.optionalString (cfg.admins != null) ''--admins "$CREDENTIALS_DIRECTORY/admins"''}
       '';
       serviceConfig = {
         ExecStart = config.services.smash.script;
         DynamicUser = true;
         RuntimeDirectory = "smash";
         StateDirectory = "smash";
+        LoadCredential = lib.optional (cfg.admins != null) "admins:${toString cfg.admins}";
       };
 
       wantedBy = [ "multi-user.target" ];

@@ -481,6 +481,7 @@
                 hlint = callPackage hlintCheck { inherit src hlint; };
                 fourmolu = callPackage fourmoluCheck { inherit src fourmolu; };
                 shellcheck = callPackage shellCheck { inherit src; };
+                smash-startup = callPackage ./nix/nixos/tests/smash-startup-test.nix {};
               };
 
           flake = project.flake {};
