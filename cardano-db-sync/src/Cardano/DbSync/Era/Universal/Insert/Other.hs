@@ -11,6 +11,8 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
   insertDatum,
   insertWithdrawals,
   insertDirectDeposits,
+  insertTxGuard,
+  insertTxRequiredGuard,
   insertRedeemerData,
   insertStakeAddressRefIfMissing,
   insertMultiAsset,
@@ -150,6 +152,46 @@ insertDirectDeposits syncEnv txId txDeposit = do
         { DB.directDepositAddrId = addrId
         , DB.directDepositAmount = Generic.coinToDbLovelace $ Generic.txddAmount txDeposit
         , DB.directDepositTxId = txId
+        }
+
+-- | Insert a guard credential a Dijkstra transaction body supplies. The index is the
+-- credential's position in the body's ordered guard set, which is also the index of the
+-- matching redeemer with purpose 'guard'.
+insertTxGuard ::
+  DB.TxId ->
+  Generic.TxGuard ->
+  ExceptT SyncNodeError DB.DbM ()
+insertTxGuard txId txGuard =
+  void . lift $
+    DB.insertTxGuard $
+      DB.TxGuard
+        { DB.txGuardTxId = txId
+        , DB.txGuardIndex = Generic.txgIndex txGuard
+        , DB.txGuardCredential = Generic.txgCredential txGuard
+        , DB.txGuardHasScript = Generic.txgHasScript txGuard
+        }
+
+-- | Insert a guard credential a Dijkstra transaction body requires of its enclosing
+-- top-level transaction. The datum is only recorded when plutus extra is enabled, since
+-- that is what populates the `datum` table it points at.
+insertTxRequiredGuard ::
+  SyncEnv ->
+  Bool ->
+  DB.TxId ->
+  Generic.TxRequiredGuard ->
+  ExceptT SyncNodeError DB.DbM ()
+insertTxRequiredGuard syncEnv insertDatums txId reqGuard = do
+  mDatumId <-
+    if insertDatums
+      then mapM (insertDatum syncEnv txId) (Generic.txrgDatum reqGuard)
+      else pure Nothing
+  void . lift $
+    DB.insertTxRequiredGuard $
+      DB.TxRequiredGuard
+        { DB.txRequiredGuardTxId = txId
+        , DB.txRequiredGuardCredential = Generic.txrgCredential reqGuard
+        , DB.txRequiredGuardHasScript = Generic.txrgHasScript reqGuard
+        , DB.txRequiredGuardDataId = mDatumId
         }
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of

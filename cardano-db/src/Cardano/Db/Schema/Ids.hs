@@ -96,6 +96,12 @@ newtype MetaId = MetaId {getMetaId :: Int64}
 newtype WithdrawalId = WithdrawalId {getWithdrawalId :: Int64}
   deriving (Eq, Show, Ord)
 
+newtype TxGuardId = TxGuardId {getTxGuardId :: Int64}
+  deriving (Eq, Show, Ord)
+
+newtype TxRequiredGuardId = TxRequiredGuardId {getTxRequiredGuardId :: Int64}
+  deriving (Eq, Show, Ord)
+
 newtype DirectDepositId = DirectDepositId {getDirectDepositId :: Int64}
   deriving (Eq, Show, Ord)
 

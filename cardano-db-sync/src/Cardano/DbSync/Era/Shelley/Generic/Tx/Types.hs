@@ -18,6 +18,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxCertificate (..),
   TxWithdrawal (..),
   TxDirectDeposit (..),
+  TxGuard (..),
+  TxRequiredGuard (..),
   TxIn (..),
   TxOut (..),
   TxRedeemer (..),
@@ -85,6 +87,8 @@ data Tx = Tx
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txExtraKeyWitnesses :: ![ByteString]
+  , txGuards :: ![TxGuard]
+  , txRequiredGuards :: ![TxRequiredGuard]
   , txVotingProcedure :: ![(Voter, [(GovActionId, Voting)])]
   , txProposalProcedure :: ![(GovActionId, Proposal)]
   , txTreasuryDonation :: !Coin
@@ -131,6 +135,26 @@ data TxWithdrawal = TxWithdrawal
 data TxDirectDeposit = TxDirectDeposit
   { txddAccount :: !Ledger.AccountAddress
   , txddAmount :: !Coin
+  }
+
+-- | A guard credential a Dijkstra transaction body supplies ('guards'): a credential
+-- whose key must sign, or whose script must run, for the body to be valid. 'txgIndex' is
+-- the credential's position in the body's ordered guard set, which is the index the
+-- matching redeemer with purpose 'guard' points at.
+data TxGuard = TxGuard
+  { txgIndex :: !Word64
+  , txgCredential :: !ByteString
+  , txgHasScript :: !Bool
+  }
+
+-- | A guard credential a Dijkstra transaction body requires of its enclosing top-level
+-- transaction ('requiredTopLevelGuards'), with the datum the body supplies for it. The
+-- ledger requires a datum exactly for a Plutus script credential and forbids one for a
+-- key hash or a native script, so 'txrgDatum' is 'Nothing' for those.
+data TxRequiredGuard = TxRequiredGuard
+  { txrgCredential :: !ByteString
+  , txrgHasScript :: !Bool
+  , txrgDatum :: !(Maybe PlutusData)
   }
 
 data TxIn = TxIn

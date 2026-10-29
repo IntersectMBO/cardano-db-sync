@@ -74,6 +74,8 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txTreasuryDonation = ctbTreasuryDonation txBody
     , txSubTransactions = [] -- no nested transactions before Dijkstra
     , txDirectDeposits = [] -- no direct deposits before Dijkstra
+    , txGuards = [] -- no transaction guards before Dijkstra
+    , txRequiredGuards = []
     }
   where
     txBody :: Core.TxBody Core.TopTx ConwayEra

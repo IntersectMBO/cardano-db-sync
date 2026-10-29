@@ -74,6 +74,13 @@ BEGIN
     -- cheap filtering. signers is the committee-seat bitfield and signer_count its
     -- population count. FALSE on every block before the Dijkstra era.
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "has_leios_cert" BOOLEAN NOT NULL DEFAULT FALSE' ;
+    -- The guard credentials a Dijkstra tx body supplies, and those it requires of its
+    -- enclosing top-level tx. Kept apart because a supplied guard always has an index --
+    -- the one its 'guard' redeemer points at -- and a required guard never does, but may
+    -- carry a datum. Both are recorded for sub-transactions as well.
+    EXECUTE 'CREATE TABLE "tx_guard"("id" SERIAL8 PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"index" word31type NOT NULL,"credential" hash28type NOT NULL,"has_script" BOOLEAN NOT NULL)' ;
+    EXECUTE 'CREATE TABLE "tx_required_guard"("id" SERIAL8 PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"credential" hash28type NOT NULL,"has_script" BOOLEAN NOT NULL,"data_id" INT8 NULL)' ;
+
     -- The BLS key a Dijkstra pool registration may declare, with its proof of possession.
     -- The key rides the registration certificate and there is no separate cert to add or
     -- update it, so both stay NULL until a pool re-registers declaring one.

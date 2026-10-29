@@ -52,6 +52,8 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertRedeemer,
   insertScript,
   insertStakeAddressRefIfMissing,
+  insertTxGuard,
+  insertTxRequiredGuard,
   insertWithdrawals,
  )
 import Cardano.DbSync.Era.Universal.Insert.Pool (IsPoolMember)
@@ -195,6 +197,10 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       when (ioShelley iopts) $
         mapM_ (insertDirectDeposits syncEnv txId) $
           Generic.txDirectDeposits tx
+      when (ioShelley iopts) $ do
+        mapM_ (insertTxGuard txId) $ Generic.txGuards tx
+        mapM_ (insertTxRequiredGuard syncEnv (ioPlutusExtra iopts) txId) $
+          Generic.txRequiredGuards tx
       when (ioShelley iopts) $
         mapM_ (insertParamProposal syncEnv blkId txId) $
           Generic.txParamProposal tx

@@ -16,7 +16,7 @@ import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (extraKeyWits, getPlutusSizes, mkCollTxIn, mkTxData, resolveRedeemers, rmCerts, rmInps, rmWdrl, txDataWitness)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
-import Cardano.DbSync.Era.Shelley.Generic.Util (unScriptHash)
+import Cardano.DbSync.Era.Shelley.Generic.Util (hasCredScript, unCredentialHash, unScriptHash)
 import Cardano.Ledger.Address (DirectDeposits (..))
 import qualified Cardano.Ledger.Alonzo.Scripts as Alonzo
 import qualified Cardano.Ledger.Alonzo.Tx as Alonzo
@@ -26,7 +26,9 @@ import Cardano.Ledger.Babbage.TxBody (BabbageTxOut)
 import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Core as Core
+import qualified Cardano.Ledger.Credential as Ledger
 import Cardano.Ledger.Dijkstra.TxBody
+import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import Cardano.Ledger.TxIn
@@ -77,6 +79,8 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txData = txDataWitness tx
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getDijkstraScripts tx
+    , txGuards = mkGuards $ dtbGuards txBody
+    , txRequiredGuards = mkRequiredGuards $ dtbRequiredTopLevelGuards txBody
     , txExtraKeyWitnesses = extraKeyWits txBody
     , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingD) (unVotingProcedures $ dtbVotingProcedures txBody)
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dtbProposalProcedures txBody
@@ -126,7 +130,8 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
 -- collateral, no fee and no phase-2 validity flag of its own; the enclosing top-level tx
 -- governs all three. It cannot nest further. The parent link is set at insertion time.
 -- It does carry its own certificates, withdrawals, votes, proposals, treasury donation
--- and direct deposits.
+-- direct deposits and guard sets. The guards it requires must also appear in the
+-- top-level tx's supplied guards, which the ledger's UTXOW rule enforces across the batch.
 fromDijkstraSubTx :: Bool -> Maybe Alonzo.Prices -> Word64 -> Core.Tx Core.SubTx DijkstraEra -> Tx
 fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
   Tx
@@ -156,6 +161,8 @@ fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
     , txData = txDataWitness tx
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getDijkstraScripts tx
+    , txGuards = mkGuards $ dstbGuards txBody
+    , txRequiredGuards = mkRequiredGuards $ dstbRequiredTopLevelGuards txBody
     , txExtraKeyWitnesses = extraKeyWits txBody
     , -- A proposal made in a sub-tx is keyed by that sub-tx's own TxId, which is what
       -- the ledger uses in the governance state, so insertProposal's lookup finds it.
@@ -180,6 +187,34 @@ fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
 
     mkProposalIndex :: Word16 -> a -> (GovActionId, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
+
+-- | The guard credentials a tx body supplies, numbered by their position in the body's
+-- ordered guard set. That position is the index the body's 'guard' redeemers point at.
+mkGuards :: Foldable f => f (Ledger.Credential Ledger.Guard) -> [TxGuard]
+mkGuards = zipWith mkGuard [0 ..] . toList
+  where
+    mkGuard idx cred =
+      TxGuard
+        { txgIndex = idx
+        , txgCredential = unCredentialHash cred
+        , txgHasScript = hasCredScript cred
+        }
+
+-- | The guard credentials a tx body requires of the enclosing top-level tx, with the
+-- datum supplied for each. For a top-level body it is a requirement on its own 'guards'.
+mkRequiredGuards ::
+  Map (Ledger.Credential Ledger.Guard) (StrictMaybe (Alonzo.Data DijkstraEra)) ->
+  [TxRequiredGuard]
+mkRequiredGuards = map mkRequiredGuard . Map.toList
+  where
+    mkRequiredGuard (cred, mDatum) =
+      TxRequiredGuard
+        { txrgCredential = unCredentialHash cred
+        , txrgHasScript = hasCredScript cred
+        , txrgDatum = mkDatum <$> strictMaybeToMaybe mDatum
+        }
+
+    mkDatum dt = mkTxData (Alonzo.hashData dt, dt)
 
 -- | A tx body's direct deposits: lovelace paid straight into an account, keyed by the
 -- account address. Carried by both top-level and sub-transaction bodies.

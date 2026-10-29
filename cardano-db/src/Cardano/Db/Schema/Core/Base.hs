@@ -695,6 +695,88 @@ directDepositEncoder =
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: tx_guard
+-- Description: A guard credential supplied by a Dijkstra transaction body: a credential
+--   whose key must sign, or whose script must run, for the body to be valid. `index` is
+--   the credential's position in the body's ordered guard set, which is the index the
+--   matching redeemer with purpose 'guard' points at.
+-----------------------------------------------------------------------------------------------------------------------------------
+data TxGuard = TxGuard
+  { txGuardTxId :: !TxId -- noreference
+  , txGuardIndex :: !Word64 -- sqltype=word31type
+  , txGuardCredential :: !ByteString -- sqltype=hash28type
+  , txGuardHasScript :: !Bool
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key TxGuard = TxGuardId
+instance DbInfo TxGuard
+
+entityTxGuardDecoder :: D.Row (Entity TxGuard)
+entityTxGuardDecoder =
+  Entity
+    <$> idDecoder TxGuardId
+    <*> txGuardDecoder
+
+txGuardDecoder :: D.Row TxGuard
+txGuardDecoder =
+  TxGuard
+    <$> idDecoder TxId -- txGuardTxId
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int4) -- txGuardIndex
+    <*> D.column (D.nonNullable D.bytea) -- txGuardCredential
+    <*> D.column (D.nonNullable D.bool) -- txGuardHasScript
+
+txGuardEncoder :: E.Params TxGuard
+txGuardEncoder =
+  mconcat
+    [ txGuardTxId >$< idEncoder getTxId
+    , txGuardIndex >$< E.param (E.nonNullable $ fromIntegral >$< E.int4)
+    , txGuardCredential >$< E.param (E.nonNullable E.bytea)
+    , txGuardHasScript >$< E.param (E.nonNullable E.bool)
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: tx_required_guard
+-- Description: A guard credential a Dijkstra transaction body requires of its enclosing
+--   top-level transaction, with the datum the body supplies for it. The ledger requires a
+--   datum exactly for a Plutus script credential and forbids one otherwise, so `data_id`
+--   is NULL for a key hash and for a native script, and also NULL without plutus extra.
+-----------------------------------------------------------------------------------------------------------------------------------
+data TxRequiredGuard = TxRequiredGuard
+  { txRequiredGuardTxId :: !TxId -- noreference
+  , txRequiredGuardCredential :: !ByteString -- sqltype=hash28type
+  , txRequiredGuardHasScript :: !Bool
+  , txRequiredGuardDataId :: !(Maybe DatumId) -- noreference
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key TxRequiredGuard = TxRequiredGuardId
+instance DbInfo TxRequiredGuard
+
+entityTxRequiredGuardDecoder :: D.Row (Entity TxRequiredGuard)
+entityTxRequiredGuardDecoder =
+  Entity
+    <$> idDecoder TxRequiredGuardId
+    <*> txRequiredGuardDecoder
+
+txRequiredGuardDecoder :: D.Row TxRequiredGuard
+txRequiredGuardDecoder =
+  TxRequiredGuard
+    <$> idDecoder TxId -- txRequiredGuardTxId
+    <*> D.column (D.nonNullable D.bytea) -- txRequiredGuardCredential
+    <*> D.column (D.nonNullable D.bool) -- txRequiredGuardHasScript
+    <*> maybeIdDecoder DatumId -- txRequiredGuardDataId
+
+txRequiredGuardEncoder :: E.Params TxRequiredGuard
+txRequiredGuardEncoder =
+  mconcat
+    [ txRequiredGuardTxId >$< idEncoder getTxId
+    , txRequiredGuardCredential >$< E.param (E.nonNullable E.bytea)
+    , txRequiredGuardHasScript >$< E.param (E.nonNullable E.bool)
+    , txRequiredGuardDataId >$< maybeIdEncoder getDatumId
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
 -- Table Name: leios_cert
 -- Description: The Leios certificate carried by a Dijkstra block body. Its presence is
 --   what makes the block a certifying block, which `block.has_leios_cert` also records.

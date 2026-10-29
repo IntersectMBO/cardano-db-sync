@@ -126,6 +126,34 @@ A table of unique stake addresses. Can be an actual address or a script hash.  T
 | `view` | string | The Bech32 encoded version of the stake address. |
 | `script_hash` | hash28type | The script hash, in case this address is locked by a script. |
 
+### `tx_guard`
+
+The guard credentials a Dijkstra transaction body supplies (`guards`). A Dijkstra transaction gates itself behind a set of credentials: each one's key must sign, or its script must run, for the body to be valid. Both top-level transactions and nested sub-transactions carry a guard set of their own; because a sub-transaction is stored as its own `tx` row, its guards are attributed to that row rather than to the enclosing transaction. The redeemer that runs a guard script is the `redeemer` row with `purpose = 'guard'` and the same `tx_id` and `index`. Empty on every network that has not forked to Dijkstra. New in 13.8-Dijkstra (experimental).
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index for the transaction whose body supplies this guard. New in 13.8-Dijkstra (experimental). |
+| `index` | word31type | The credential's position in the body's ordered guard set, which is the index of the matching `redeemer` row with `purpose = 'guard'`. New in 13.8-Dijkstra (experimental). |
+| `credential` | hash28type | The guard credential: a script hash when `has_script` is true, otherwise a key hash. New in 13.8-Dijkstra (experimental). |
+| `has_script` | boolean | True when the credential is a script hash rather than a key hash. New in 13.8-Dijkstra (experimental). |
+
+### `tx_required_guard`
+
+The guard credentials a Dijkstra transaction body requires of its enclosing top-level transaction (`requiredTopLevelGuards`), with the datum the body supplies for each. The ledger checks that every credential required here, by the top-level transaction or by any of its sub-transactions, also appears in the top-level transaction's `tx_guard` rows. Unlike `tx_guard` this is an unordered set, so it carries no index. Empty on every network that has not forked to Dijkstra. New in 13.8-Dijkstra (experimental).
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index for the transaction whose body requires this guard. New in 13.8-Dijkstra (experimental). |
+| `credential` | hash28type | The guard credential: a script hash when `has_script` is true, otherwise a key hash. New in 13.8-Dijkstra (experimental). |
+| `has_script` | boolean | True when the credential is a script hash rather than a key hash. New in 13.8-Dijkstra (experimental). |
+| `data_id` | integer (64) | The Datum table index for the datum supplied for this guard. The ledger requires a datum exactly for a Plutus script credential and forbids one for a key hash or a native script, so this is NULL for those. It is also NULL when db-sync runs without `plutus` extra, which is what populates the `datum` table. New in 13.8-Dijkstra (experimental). |
+
 ### `tx_in`
 
 A table for transaction inputs.

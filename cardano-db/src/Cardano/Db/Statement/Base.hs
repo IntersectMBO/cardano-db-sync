@@ -1452,6 +1452,24 @@ insertWithdrawalStmt =
 insertWithdrawal :: HasCallStack => SCB.Withdrawal -> DbM Id.WithdrawalId
 insertWithdrawal withdrawal = runSession mkDbCallStack $ HsqlSes.statement withdrawal insertWithdrawalStmt
 
+insertTxGuardStmt :: HsqlStmt.Statement SCB.TxGuard Id.TxGuardId
+insertTxGuardStmt =
+  insert
+    SCB.txGuardEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxGuardId)
+
+insertTxGuard :: HasCallStack => SCB.TxGuard -> DbM Id.TxGuardId
+insertTxGuard txGuard = runSession mkDbCallStack $ HsqlSes.statement txGuard insertTxGuardStmt
+
+insertTxRequiredGuardStmt :: HsqlStmt.Statement SCB.TxRequiredGuard Id.TxRequiredGuardId
+insertTxRequiredGuardStmt =
+  insert
+    SCB.txRequiredGuardEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxRequiredGuardId)
+
+insertTxRequiredGuard :: HasCallStack => SCB.TxRequiredGuard -> DbM Id.TxRequiredGuardId
+insertTxRequiredGuard txGuard = runSession mkDbCallStack $ HsqlSes.statement txGuard insertTxRequiredGuardStmt
+
 insertDirectDepositStmt :: HsqlStmt.Statement SCB.DirectDeposit Id.DirectDepositId
 insertDirectDepositStmt =
   insert
