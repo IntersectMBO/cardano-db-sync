@@ -436,7 +436,6 @@ data ParamProposal = ParamProposal
   , paramProposalPvtCommitteeNormal :: !(Maybe Double)
   , paramProposalPvtCommitteeNoConfidence :: !(Maybe Double)
   , paramProposalPvtHardForkInitiation :: !(Maybe Double)
-  , paramProposalPvtppSecurityGroup :: !(Maybe Double)
   , paramProposalDvtMotionNoConfidence :: !(Maybe Double)
   , paramProposalDvtCommitteeNormal :: !(Maybe Double)
   , paramProposalDvtCommitteeNoConfidence :: !(Maybe Double)
@@ -453,6 +452,7 @@ data ParamProposal = ParamProposal
   , paramProposalGovActionDeposit :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalDrepDeposit :: !(Maybe DbWord64) -- sqltype=word64type
   , paramProposalDrepActivity :: !(Maybe DbWord64) -- sqltype=word64type
+  , paramProposalPvtppSecurityGroup :: !(Maybe Double)
   , paramProposalMinFeeRefScriptCostPerByte :: !(Maybe Double)
   }
   deriving (Show, Eq, Generic)
@@ -505,7 +505,6 @@ paramProposalDecoder =
     <*> D.column (D.nullable D.float8) -- paramProposalPvtCommitteeNormal
     <*> D.column (D.nullable D.float8) -- paramProposalPvtCommitteeNoConfidence
     <*> D.column (D.nullable D.float8) -- paramProposalPvtHardForkInitiation
-    <*> D.column (D.nullable D.float8) -- paramProposalPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- paramProposalDvtMotionNoConfidence
     <*> D.column (D.nullable D.float8) -- paramProposalDvtCommitteeNormal
     <*> D.column (D.nullable D.float8) -- paramProposalDvtCommitteeNoConfidence
@@ -522,6 +521,7 @@ paramProposalDecoder =
     <*> maybeDbWord64Decoder -- paramProposalGovActionDeposit
     <*> maybeDbWord64Decoder -- paramProposalDrepDeposit
     <*> maybeDbWord64Decoder -- paramProposalDrepActivity
+    <*> D.column (D.nullable D.float8) -- paramProposalPvtppSecurityGroup
     <*> D.column (D.nullable D.float8) -- paramProposalMinFeeRefScriptCostPerByte
 
 paramProposalEncoder :: E.Params ParamProposal
@@ -566,7 +566,6 @@ paramProposalEncoder =
     , paramProposalPvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , paramProposalPvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
     , paramProposalPvtHardForkInitiation >$< E.param (E.nullable E.float8)
-    , paramProposalPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , paramProposalDvtMotionNoConfidence >$< E.param (E.nullable E.float8)
     , paramProposalDvtCommitteeNormal >$< E.param (E.nullable E.float8)
     , paramProposalDvtCommitteeNoConfidence >$< E.param (E.nullable E.float8)
@@ -583,6 +582,7 @@ paramProposalEncoder =
     , paramProposalGovActionDeposit >$< maybeDbWord64Encoder
     , paramProposalDrepDeposit >$< maybeDbWord64Encoder
     , paramProposalDrepActivity >$< maybeDbWord64Encoder
+    , paramProposalPvtppSecurityGroup >$< E.param (E.nullable E.float8)
     , paramProposalMinFeeRefScriptCostPerByte >$< E.param (E.nullable E.float8)
     ]
 
