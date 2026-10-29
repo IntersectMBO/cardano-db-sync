@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## Unreleased
+## 13.8.0.0
 - Update Docker configuration to allow PostgreSQL connection details to be provided via Docker secrets or a `.pgpass` file using the `PGPASSFILE` environment variable.
 - Add static binaries and docker images for aarch64-linux
 - Fix duplicate off-chain vote metadata child rows re-inserted when an anchor's metadata was re-processed; insertion is now idempotent (#1966).
@@ -18,6 +18,9 @@
 - Name the migrations that actually ran at startup and summarise the rest, replacing the per-script `Migration N/M` progress lines. Restarting on an up to date database now logs six lines rather than seventy-four ([#2128](https://github.com/IntersectMBO/cardano-db-sync/issues/2128)).
 - Pin dependencies to node 11.2: `ouroboros-consensus` 5.1.0.1, `cardano-ledger-dijkstra` 0.4.0.0 and the new `cardano-protocol` 0.2.0.0. db-sync still negotiates NodeToClient 23 and so stays compatible with 11.1.x nodes.
 - Read the node's `ExperimentalHardForksEnabled` (or its former name `TestEnableDevelopmentHardForkEras`, defaulting to `False`) and mirror it, rather than hardcoding the maximum supported protocol version. db-sync now claims Dijkstra's protocol version only when the experimental eras are enabled and Conway's otherwise, so it will not follow a chain that the node feeding it refuses as too new; and, as in the node, `TestDijkstraHardForkAtEpoch` is only read when they are enabled. A configuration that sets both key names to different values is rejected.
+- SMASH: published builds have authentication enabled; it was previously compiled out.
+- Fix the `epoch_param` and `param_proposal` collateral parameters wrapped by a signed 16-bit encoder; a startup migration repairs existing rows.
+- Harden the SMASH server and the off-chain fetcher: constant-time admin credential comparison, policy urls validated by parsed host, delisted pools kept when a policy fetch fails, reserved tickers matched case-insensitively, pool relay DNS names sanitised, and a tighter address restriction.
 
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
