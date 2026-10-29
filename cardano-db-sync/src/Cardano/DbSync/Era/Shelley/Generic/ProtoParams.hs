@@ -85,7 +85,7 @@ epochProtoParams lstate =
     LedgerStateAlonzo st -> Just $ fromAlonzoParams $ getProtoParams st
     LedgerStateBabbage st -> Just $ fromBabbageParams $ getProtoParams st
     LedgerStateConway st -> Just $ fromConwayParams $ getProtoParams st
-    LedgerStateDijkstra st -> Just $ fromDijkstraParams $ getProtoParams st -- TODO(Dijkstra)
+    LedgerStateDijkstra st -> Just $ fromDijkstraParams $ getProtoParams st
 
 getProtoParams ::
   EraGov era =>

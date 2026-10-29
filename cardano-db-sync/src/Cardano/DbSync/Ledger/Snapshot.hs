@@ -110,10 +110,13 @@ snapshotWriteLoop tracer env = loop
               , textShow (diffUTCTime endTime startTime)
               ]
           -- Trim old snapshots after writing the new one
+          -- 'trimSnapshots' only reads 'onDiskNumSnapshots'; db-sync decides for
+          -- itself when to snapshot, so the other two fields are never consulted.
           let policy =
                 SnapshotPolicy
-                  { onDiskNumSnapshots = 3
-                  , onDiskShouldTakeSnapshot = \_ _ -> True
+                  { onDiskNumSnapshots = NumOfDiskSnapshots 3
+                  , onDiskSnapshotSelector = const []
+                  , onDiskSnapshotDelayRange = SnapshotDelayRange 0 0
                   }
           deleted <- trimSnapshots (leSnapshotManager env) policy
           unless (null deleted) $
@@ -197,7 +200,7 @@ listDiskSnapshots env = listSnapshots (leSnapshotManager env)
 -- Works around a consensus bug where 'deleteSnapshotIfTemporary' calls
 -- 'LSM.deleteSnapshot' unconditionally, which throws 'SnapshotDoesNotExistError'
 -- if the LSM snapshot is missing (e.g. after a crash during snapshot write).
-safeDeleteSnapshot :: SnapshotManager IO IO blk st -> DiskSnapshot -> IO ()
+safeDeleteSnapshot :: SnapshotManager IO blk st -> DiskSnapshot -> IO ()
 safeDeleteSnapshot sm ds =
   handle (\(_ :: LSMTree.SnapshotDoesNotExistError) -> pure ()) $
     deleteSnapshotIfTemporary sm ds

@@ -78,7 +78,7 @@ import Paths_cardano_db_sync (version)
 import qualified System.Metrics as EKG
 import Trace.Forward.Forwarding (InitForwardingConfig (..), initForwardingDelayed)
 import Trace.Forward.Utils.TraceObject (writeToSink)
-import "contra-tracer" Control.Tracer (Tracer (..))
+import "contra-tracer" Control.Tracer (Tracer (..), emit)
 
 -- | All tracers used by db-sync.
 data DbSyncTracers = DbSyncTracers
@@ -108,7 +108,7 @@ data DbSyncTracers = DbSyncTracers
 
 -- | Convert a trace-dispatcher 'Trace' into a plain contra-tracer 'Tracer'.
 toTracer :: Trace IO a -> Tracer IO a
-toTracer tr = Tracer (traceWith tr)
+toTracer tr = Tracer (emit (traceWith tr))
 
 -- | Create all db-sync tracers.
 --

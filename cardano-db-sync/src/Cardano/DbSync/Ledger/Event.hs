@@ -32,6 +32,7 @@ import Cardano.Ledger.Coin (Coin (..), CompactForm (..))
 import Cardano.Ledger.Conway.Governance
 import Cardano.Ledger.Conway.Rules as Conway
 import qualified Cardano.Ledger.Core as Ledger
+import Cardano.Ledger.Dijkstra.Rules as Dijkstra (DijkstraLedgerEvent (..))
 import Cardano.Ledger.Hashes (SafeHash)
 import qualified Cardano.Ledger.Rewards as Ledger
 import Cardano.Ledger.Shelley.API (AdaPots, InstantaneousRewards (..))
@@ -156,7 +157,10 @@ instance ConvertLedgerEvent (ShelleyBlock protocol ConwayEra) where
       _ -> toLedgerEventConway evt hasRewards
 
 instance ConvertLedgerEvent (ShelleyBlock protocol DijkstraEra) where
-  toLedgerEvent _ _ = Nothing -- TODO(Dijkstra)
+  toLedgerEvent hasRewards evt =
+    case unwrapLedgerEvent evt of
+      LEDepositsDijkstra hsh coin -> Just $ LedgerDeposits hsh coin
+      _ -> toLedgerEventConway evt hasRewards
 
 toLedgerEventShelley ::
   ( Event (Ledger.EraRule "TICK" ledgerera) ~ ShelleyTickEvent ledgerera
@@ -343,7 +347,7 @@ pattern LEDepositShelley ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositShelley hsh coin <-
   ShelleyLedgerEventBBODY
     ( LedgersEvent
@@ -365,7 +369,7 @@ pattern LEDepositAllegra ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositAllegra hsh coin <-
   ShelleyLedgerEventBBODY
     ( LedgersEvent
@@ -387,7 +391,7 @@ pattern LEDepositsAlonzo ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositsAlonzo hsh coin <-
   ShelleyLedgerEventBBODY
     ( ShelleyInAlonzoEvent
@@ -413,13 +417,39 @@ pattern LEDepositsConway ::
   ) =>
   SafeHash Ledger.EraIndependentTxBody ->
   Coin ->
-  AuxLedgerEvent (LedgerState (ShelleyBlock protocol ledgerera))
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
 pattern LEDepositsConway hsh coin <-
   ShelleyLedgerEventBBODY
     ( ShelleyInAlonzoEvent
         ( LedgersEvent
             ( Shelley.LedgerEvent
                 ( Conway.UtxowEvent
+                    ( WrappedShelleyEraEvent
+                        ( UtxoEvent
+                            (TotalDeposits hsh coin)
+                          )
+                      )
+                  )
+              )
+          )
+      )
+
+pattern LEDepositsDijkstra ::
+  ( Event (Ledger.EraRule "BBODY" ledgerera) ~ Alonzo.AlonzoBbodyEvent ledgerera
+  , Event (Ledger.EraRule "LEDGERS" ledgerera) ~ ShelleyLedgersEvent ledgerera
+  , Event (Ledger.EraRule "LEDGER" ledgerera) ~ Dijkstra.DijkstraLedgerEvent ledgerera
+  , Event (Ledger.EraRule "UTXOW" ledgerera) ~ AlonzoUtxowEvent ledgerera
+  , Event (Ledger.EraRule "UTXO" ledgerera) ~ AlonzoUtxoEvent ledgerera
+  ) =>
+  SafeHash Ledger.EraIndependentTxBody ->
+  Coin ->
+  AuxLedgerEvent (ShelleyBlock protocol ledgerera)
+pattern LEDepositsDijkstra hsh coin <-
+  ShelleyLedgerEventBBODY
+    ( ShelleyInAlonzoEvent
+        ( LedgersEvent
+            ( Shelley.LedgerEvent
+                ( Dijkstra.UtxowEvent
                     ( WrappedShelleyEraEvent
                         ( UtxoEvent
                             (TotalDeposits hsh coin)

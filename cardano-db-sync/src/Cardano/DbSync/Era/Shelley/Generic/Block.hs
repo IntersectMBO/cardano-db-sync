@@ -21,8 +21,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
   blockPrevHash,
 ) where
 
+import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)
 import qualified Cardano.Crypto.Hash as Crypto
-import qualified Cardano.Crypto.KES.Class as KES
 import Cardano.Crypto.VRF.Class (VerKeyVRF)
 import Cardano.Crypto.VRF.Praos (PraosVRF)
 import Cardano.DbSync.Era.Shelley.Generic.Tx
@@ -36,7 +36,8 @@ import qualified Cardano.Ledger.Core as Ledger
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..), hashKey)
 import Cardano.Prelude
 import Cardano.Protocol.Crypto (Crypto, StandardCrypto, VRF)
-import qualified Cardano.Protocol.TPraos.BHeader as TPraos
+import qualified Cardano.Protocol.Praos.BlockHeader as Praos
+import qualified Cardano.Protocol.TPraos.BlockHeader as TPraos
 import qualified Cardano.Protocol.TPraos.OCert as TPraos
 import Cardano.Slotting.Slot (SlotNo (..))
 import Lens.Micro ((^.))
@@ -50,7 +51,6 @@ import Ouroboros.Consensus.Cardano.Block (
   ShelleyEra,
  )
 import Ouroboros.Consensus.Protocol.Praos (Praos)
-import qualified Ouroboros.Consensus.Protocol.Praos.Header as Praos
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
 import qualified Ouroboros.Consensus.Shelley.Ledger.Block as Consensus
 import Ouroboros.Consensus.Shelley.Protocol.Abstract
@@ -214,10 +214,10 @@ blockPrevHash blk =
     TPraos.BlockHash (TPraos.HashHeader h) -> Just $ Crypto.hashToBytes h
 
 blockOpCertKeyTPraos :: ShelleyBlock (TPraosStandard StandardCrypto) era -> ByteString
-blockOpCertKeyTPraos = KES.rawSerialiseVerKeyKES . TPraos.ocertVkHot . blockOpCertTPraos
+blockOpCertKeyTPraos = rawEncodeFixedSized . TPraos.ocertVkHot . blockOpCertTPraos
 
 blockOpCertKeyPraos :: ShelleyBlock (PraosStandard StandardCrypto) era -> ByteString
-blockOpCertKeyPraos = KES.rawSerialiseVerKeyKES . TPraos.ocertVkHot . blockOpCertPraos
+blockOpCertKeyPraos = rawEncodeFixedSized . TPraos.ocertVkHot . blockOpCertPraos
 
 blockOpCertCounterTPraos :: ShelleyBlock (TPraosStandard StandardCrypto) era -> Word64
 blockOpCertCounterTPraos = TPraos.ocertN . blockOpCertTPraos

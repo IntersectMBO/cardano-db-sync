@@ -9,7 +9,12 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   Tx (..),
   ShelleyCert,
   ConwayCert,
+  DijkstraCert,
   Cert (..),
+  Voting (..),
+  Proposal (..),
+  GovStateW (..),
+  DrepSnapW (..),
   TxCertificate (..),
   TxWithdrawal (..),
   TxIn (..),
@@ -78,8 +83,8 @@ data Tx = Tx
   , txScriptSizes :: [Word64] -- this contains only the sizes of plutus scripts in witnesses
   , txScripts :: [TxScript]
   , txExtraKeyWitnesses :: ![ByteString]
-  , txVotingProcedure :: ![(Voter, [(GovActionId, VotingProcedure ConwayEra)])]
-  , txProposalProcedure :: ![(GovActionId, ProposalProcedure ConwayEra)]
+  , txVotingProcedure :: ![(Voter, [(GovActionId, Voting)])]
+  , txProposalProcedure :: ![(GovActionId, Proposal)]
   , txTreasuryDonation :: !Coin
   }
 
@@ -88,6 +93,22 @@ type ConwayCert = ConwayTxCert ConwayEra
 type DijkstraCert = DijkstraTxCert DijkstraEra
 data Cert = SCert ShelleyCert | CCert ConwayCert | DCert DijkstraCert
   deriving (Eq)
+
+data Voting
+  = VotingC !(VotingProcedure ConwayEra)
+  | VotingD !(VotingProcedure DijkstraEra)
+
+data Proposal
+  = ProposalC !(ProposalProcedure ConwayEra)
+  | ProposalD !(ProposalProcedure DijkstraEra)
+
+data GovStateW
+  = GovStateC !(ConwayGovState ConwayEra)
+  | GovStateD !(ConwayGovState DijkstraEra)
+
+data DrepSnapW
+  = DrepSnapC !(DRepPulsingState ConwayEra)
+  | DrepSnapD !(DRepPulsingState DijkstraEra)
 
 data TxCertificate = TxCertificate
   { txcRedeemerIndex :: !(Maybe Word64)
@@ -190,12 +211,12 @@ instance DBScriptPurpose AlonzoEra where
     AlonzoSpending idx -> (DB.Spend, unAsIx idx)
     AlonzoMinting idx -> (DB.Mint, unAsIx idx)
     AlonzoCertifying idx -> (DB.Cert, unAsIx idx)
-    AlonzoRewarding idx -> (DB.Rewrd, unAsIx idx)
+    AlonzoWithdrawing idx -> (DB.Rewrd, unAsIx idx)
 
   toAlonzoPurpose txBody pp = case pp of
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
     AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
-    AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
+    AlonzoWithdrawing a -> Just $ Left (AlonzoWithdrawing a, Nothing)
     AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
 instance DBScriptPurpose BabbageEra where
@@ -203,12 +224,12 @@ instance DBScriptPurpose BabbageEra where
     AlonzoSpending idx -> (DB.Spend, unAsIx idx)
     AlonzoMinting idx -> (DB.Mint, unAsIx idx)
     AlonzoCertifying idx -> (DB.Cert, unAsIx idx)
-    AlonzoRewarding idx -> (DB.Rewrd, unAsIx idx)
+    AlonzoWithdrawing idx -> (DB.Rewrd, unAsIx idx)
 
   toAlonzoPurpose txBody pp = case pp of
     AlonzoSpending a -> Just $ Left (AlonzoSpending a, Nothing)
     AlonzoMinting a -> Just $ Left (AlonzoMinting a, Nothing)
-    AlonzoRewarding a -> Just $ Left (AlonzoRewarding a, Nothing)
+    AlonzoWithdrawing a -> Just $ Left (AlonzoWithdrawing a, Nothing)
     AlonzoCertifying a -> Just $ Left (AlonzoCertifying a, strictMaybeToMaybe (alonzoRedeemerPointer txBody pp))
 
 instance DBScriptPurpose ConwayEra where
@@ -216,7 +237,7 @@ instance DBScriptPurpose ConwayEra where
     ConwaySpending idx -> (DB.Spend, unAsIx idx)
     ConwayMinting idx -> (DB.Mint, unAsIx idx)
     ConwayCertifying idx -> (DB.Cert, unAsIx idx)
-    ConwayRewarding idx -> (DB.Rewrd, unAsIx idx)
+    ConwayWithdrawing idx -> (DB.Rewrd, unAsIx idx)
     ConwayVoting idx -> (DB.Vote, unAsIx idx)
     ConwayProposing idx -> (DB.Propose, unAsIx idx)
 
@@ -230,16 +251,19 @@ instance DBScriptPurpose DijkstraEra where
     DijkstraSpending idx -> (DB.Spend, unAsIx idx)
     DijkstraMinting idx -> (DB.Mint, unAsIx idx)
     DijkstraCertifying idx -> (DB.Cert, unAsIx idx)
-    DijkstraRewarding idx -> (DB.Rewrd, unAsIx idx)
+    DijkstraWithdrawing idx -> (DB.Rewrd, unAsIx idx)
     DijkstraVoting idx -> (DB.Vote, unAsIx idx)
     DijkstraProposing idx -> (DB.Propose, unAsIx idx)
-    DijkstraGuarding idx -> (DB.Propose, unAsIx idx) -- TODO(Dijkstra)
+    DijkstraGuarding idx -> (DB.Propose, unAsIx idx)
 
   toAlonzoPurpose _ = \case
     DijkstraVoting _ -> Nothing
     DijkstraProposing _ -> Nothing
     DijkstraGuarding _ -> Nothing
-    _ -> Nothing -- TODO(Dijkstra)
+    DijkstraSpending idx -> Just $ Right $ ConwaySpending idx
+    DijkstraMinting idx -> Just $ Right $ ConwayMinting idx
+    DijkstraCertifying idx -> Just $ Right $ ConwayCertifying idx
+    DijkstraWithdrawing idx -> Just $ Right $ ConwayWithdrawing idx
 
 class AlonzoEraScript era => DBPlutusScript era where
   getPlutusScriptType :: PlutusScript era -> DB.ScriptType

@@ -27,7 +27,7 @@ import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
-import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra, ConwayEra)
+import Ouroboros.Consensus.Cardano.Block (AlonzoEra, BabbageEra)
 
 data ParamProposal = ParamProposal
   { pppEpochNo :: !(Maybe EpochNo)
@@ -98,7 +98,11 @@ babbageParamProposal epochNo (Shelley.ProposedPPUpdates umap) =
 
 -- -------------------------------------------------------------------------------------------------
 
-convertConwayParamProposal :: PParamsUpdate ConwayEra -> ParamProposal
+-- TODO(Dijkstra): the `DijkstraEraPParams` lenses are dropped when this converter
+-- is used for a `PParamsUpdate DijkstraEra`: hkdMaxRefScriptSizePerBlockL,
+-- hkdMaxRefScriptSizePerTxL, hkdRefScriptCostStrideL, hkdRefScriptCostMultiplierL.
+-- Reading them needs new param_proposal columns.
+convertConwayParamProposal :: ConwayEraPParams era => PParamsUpdate era -> ParamProposal
 convertConwayParamProposal pmap =
   ParamProposal
     { pppEpochNo = Nothing

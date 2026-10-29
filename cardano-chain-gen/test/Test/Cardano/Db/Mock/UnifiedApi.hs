@@ -40,7 +40,8 @@ import Ouroboros.Consensus.Cardano.Block (
   ConwayEra,
   ShelleyEra,
  )
-import Ouroboros.Consensus.Ledger.Basics (EmptyMK, LedgerState)
+import Ouroboros.Consensus.Ledger.Basics (LedgerState)
+import Ouroboros.Consensus.Ledger.Tables (EmptyMK)
 import Ouroboros.Consensus.Shelley.Ledger (ShelleyBlock)
 
 forgeNextAndSubmit :: Interpreter -> ServerHandle IO CardanoBlock -> MockBlock -> IO CardanoBlock

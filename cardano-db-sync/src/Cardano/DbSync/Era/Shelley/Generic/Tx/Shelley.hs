@@ -46,6 +46,7 @@ import qualified Cardano.Ledger.TxIn as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import Data.Coerce (coerce)
 import qualified Data.Map.Strict as Map
 import Lens.Micro ((^.))
 import Ouroboros.Consensus.Cardano.Block (ShelleyEra)
@@ -196,10 +197,12 @@ mkTxCertificates ::
 mkTxCertificates bd =
   zipWith mkTxCertificate [0 ..] $ toShelleyCert <$> toList (bd ^. Core.certsTxBodyL)
 
+{-# ANN toShelleyCert ("HLint: ignore Avoid restricted function" :: [Char]) #-}
 toShelleyCert :: ShelleyTxCert era -> ShelleyCert
 toShelleyCert cert = case cert of
   ShelleyTxCertDelegCert a -> ShelleyTxCertDelegCert a
-  ShelleyTxCertPool a -> ShelleyTxCertPool a
+  -- The pool cert is era-independent, so coerce its phantom era to ShelleyEra.
+  ShelleyTxCertPool a -> ShelleyTxCertPool (coerce a)
   ShelleyTxCertGenesisDeleg a -> ShelleyTxCertGenesisDeleg a
   ShelleyTxCertMir a -> ShelleyTxCertMir a
 

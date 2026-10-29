@@ -18,6 +18,7 @@ module Cardano.DbSync.Config.Types (
   GenesisHashByron (..),
   GenesisHashAlonzo (..),
   GenesisHashConway (..),
+  GenesisHashDijkstra (..),
   RemoveJsonbFromSchemaConfig (..),
   TxOutVariantTypeConfig (..),
   SyncNodeConfig (..),
@@ -84,7 +85,7 @@ import Data.Aeson.Types (Pair, Parser, typeMismatch)
 import Data.ByteString.Short (ShortByteString (), fromShort, toShort)
 import Data.Default.Class (Default (..))
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
-import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, MaryEra, ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, DijkstraEra, MaryEra, ShelleyEra, StandardCrypto)
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -147,13 +148,18 @@ data SyncNodeConfig = SyncNodeConfig
   , dncAlonzoGenesisHash :: !GenesisHashAlonzo
   , dncConwayGenesisFile :: !GenesisFile
   , dncConwayGenesisHash :: !(Maybe GenesisHashConway)
+  , dncDijkstraGenesisFile :: !(Maybe GenesisFile)
+  , dncDijkstraGenesisHash :: !(Maybe GenesisHashDijkstra)
   , dncByronProtocolVersion :: !Byron.ProtocolVersion
+  , dncExperimentalHardForksEnabled :: !Bool
+  -- ^ Mirrors the node's @ExperimentalHardForksEnabled@.
   , dncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
   , dncAllegraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AllegraEra))
   , dncMaryHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) MaryEra))
   , dncAlonzoHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) AlonzoEra))
   , dncBabbageHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
   , dncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
+  , dncDijkstraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
   , dncInsertOptions :: !SyncInsertOptions
   , dncIpfsGateway :: [Text]
   , dncSnapshotInterval :: !SnapshotIntervalConfig
@@ -346,6 +352,10 @@ newtype GenesisHashAlonzo = GenesisHashAlonzo
 
 newtype GenesisHashConway = GenesisHashConway
   {unGenesisHashConway :: Crypto.Hash Crypto.Blake2b_256 ByteString}
+  deriving newtype (Eq, Show, ToJSON, FromJSON)
+
+newtype GenesisHashDijkstra = GenesisHashDijkstra
+  {unGenesisHashDijkstra :: Crypto.Hash Crypto.Blake2b_256 ByteString}
   deriving newtype (Eq, Show, ToJSON, FromJSON)
 
 newtype LedgerStateDir = LedgerStateDir

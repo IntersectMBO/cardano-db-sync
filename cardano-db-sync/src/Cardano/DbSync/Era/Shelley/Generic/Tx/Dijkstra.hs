@@ -13,7 +13,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Dijkstra (
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
-import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (getPlutusSizes, mkCollTxIn, mkTxData, resolveRedeemers, rmCerts, rmInps, rmWdrl, txDataWitness)
+import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (extraKeyWits, getPlutusSizes, mkCollTxIn, mkTxData, resolveRedeemers, rmCerts, rmInps, rmWdrl, txDataWitness)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Types
 import Cardano.DbSync.Era.Shelley.Generic.Util (unScriptHash)
@@ -76,9 +76,9 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txData = txDataWitness tx
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getDijkstraScripts tx
-    , txExtraKeyWitnesses = [] -- TODO(Dijkstra)
-    , txVotingProcedure = [] -- TODO(Dijkstra) Map.toList $ fmap Map.toList (unVotingProcedures $ dtbrVotingProcedures txBody)
-    , txProposalProcedure = [] -- TODO (Dijkskra) zipWith mkProposalIndex [0 ..] $ toList $ dtbProposalProcedures txBody
+    , txExtraKeyWitnesses = extraKeyWits txBody
+    , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingD) (unVotingProcedures $ dtbVotingProcedures txBody)
+    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dtbProposalProcedures txBody
     , txTreasuryDonation = dtbTreasuryDonation txBody
     }
   where
@@ -105,16 +105,17 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
     isValid2 =
-      case tx ^. Alonzo.isValidTxL of
-        Alonzo.IsValid x -> x
+      case tx ^. Alonzo.isPhase2ValidTxL of
+        Alonzo.Phase2Valid -> True
+        Alonzo.Phase2Invalid -> False
 
     (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx DCert
     (invalidBef, invalidAfter) = getInterval txBody
 
     collInputs = mkCollTxIn txBody
 
-    _mkProposalIndex :: Word16 -> a -> (GovActionId, a)
-    _mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
+    mkProposalIndex :: Word16 -> a -> (GovActionId, a)
+    mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
 
 -- | Dijkstra-specific TxOut conversion. DijkstraNativeScript is not Timelock,
 -- so we can't reuse Babbage.fromTxOut which requires NativeScript era ~ Timelock era.

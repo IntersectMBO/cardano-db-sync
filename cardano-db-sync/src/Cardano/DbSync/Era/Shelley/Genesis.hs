@@ -28,16 +28,19 @@ import Cardano.DbSync.Error
 import Cardano.DbSync.Types (BlockEra (..))
 import Cardano.DbSync.Util
 import Cardano.Ledger.Address (serialiseAddr)
+import Cardano.Ledger.BaseTypes (StrictMaybe (..))
 import qualified Cardano.Ledger.Coin as Ledger
 import qualified Cardano.Ledger.Core as Core
 import Cardano.Ledger.Credential (Credential (KeyHashObj))
 import qualified Cardano.Ledger.Shelley.Genesis as Shelley
 import Cardano.Ledger.Shelley.Scripts ()
+import Cardano.Ledger.Shelley.Transition (resolveInjectionSource)
 import Cardano.Ledger.Shelley.TxOut
 import qualified Cardano.Ledger.Shelley.UTxO as Shelley
 import Cardano.Ledger.TxIn
 import Cardano.Prelude
 import Cardano.Slotting.Slot (EpochNo (..))
+import Data.Aeson (FromJSON, FromJSONKey)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ListMap as ListMap
 import qualified Data.Map.Strict as Map
@@ -52,6 +55,8 @@ import Ouroboros.Consensus.Shelley.Node (
   emptyGenesisStaking,
  )
 import Paths_cardano_db_sync (version)
+import System.FS.API (MountPoint (..))
+import System.FS.IO (ioHasFS)
 
 -- | Idempotent insert the initial Genesis distribution transactions into the DB.
 -- If these transactions are already in the DB, they are validated.
@@ -63,6 +68,81 @@ insertValidateShelleyGenesisDist ::
   Bool ->
   ExceptT SyncNodeError IO ()
 insertValidateShelleyGenesisDist syncEnv networkName cfg shelleyInitiation = do
+  cfg' <- resolveGenesisInjections syncEnv cfg
+  insertValidateShelleyGenesisDist' syncEnv networkName cfg' shelleyInitiation
+
+-- | Resolve the genesis @extraConfig@ into the legacy 'sgInitialFunds' and
+-- 'sgStaking' fields, then clear it so the same data cannot be resolved twice.
+--
+-- Initial funds, pools and delegations can be declared in either shape, or in a
+-- separate hashed file. The ledger state path handles all three, but the DB-write
+-- path below reads only the legacy fields, so a network using @extraConfig@ got no
+-- genesis 'tx_out' rows at all. Rewriting the in-memory genesis is safe:
+-- 'configGenesisHash' ignores its argument and the genesis file hash is taken over
+-- the file's bytes elsewhere.
+resolveGenesisInjections ::
+  SyncEnv ->
+  ShelleyGenesis ->
+  ExceptT SyncNodeError IO ShelleyGenesis
+resolveGenesisInjections syncEnv genesis =
+  case sgExtraConfig genesis of
+    SNothing -> pure genesis
+    SJust _ -> do
+      initialFunds <- resolveSource "initialFunds" Shelley.secInitialFunds (sgInitialFunds genesis)
+      pools <- resolveSource "stakePools" Shelley.secStakePools (sgsPools staking)
+      stake <- resolveSource "stakeCredentials" Shelley.secStakeCredentials (sgsStake staking)
+      liftIO
+        . logInfo (getTrace syncEnv)
+        $ mconcat
+          [ "Resolved the Shelley genesis extraConfig: "
+          , textShow (length $ ListMap.unListMap initialFunds)
+          , " initial funds, "
+          , textShow (length $ ListMap.unListMap pools)
+          , " stake pools, "
+          , textShow (length $ ListMap.unListMap stake)
+          , " delegations"
+          ]
+      pure
+        genesis
+          { sgInitialFunds = initialFunds
+          , sgStaking = ShelleyGenesisStaking {sgsPools = pools, sgsStake = stake}
+          , sgExtraConfig = SNothing
+          }
+  where
+    staking = sgStaking genesis
+
+    -- The same 'HasFS' db-sync gives 'protocolInfoCardano', so a file path resolves
+    -- identically here and in the ledger state.
+    hasFS = ioHasFS (MountPoint "")
+
+    resolveSource ::
+      forall k v.
+      (FromJSONKey k, FromJSON v) =>
+      [Char] ->
+      (Shelley.ShelleyExtraConfig -> Shelley.InjectionData k v) ->
+      ListMap.ListMap k v ->
+      ExceptT SyncNodeError IO (ListMap.ListMap k v)
+    resolveSource name getSource legacy = wrapInjectionError $ do
+      source <- resolveInjectionSource name (sgExtraConfig genesis) getSource legacy
+      ListMap.fromList . reverse <$> Shelley.foldInjectionData hasFS source (flip (:)) []
+
+    -- Both ledger functions throw on a conflicting, unreadable or mis-hashed source.
+    wrapInjectionError :: forall a. IO a -> ExceptT SyncNodeError IO a
+    wrapInjectionError action = do
+      eResult <- liftIO $ try action
+      case eResult of
+        Right res -> pure res
+        Left (err :: Shelley.InjectionError) ->
+          throwError . SNErrCardanoConfig $
+            "Failed resolving the Shelley genesis extraConfig: " <> Text.pack (displayException err)
+
+insertValidateShelleyGenesisDist' ::
+  SyncEnv ->
+  Text ->
+  ShelleyGenesis ->
+  Bool ->
+  ExceptT SyncNodeError IO ()
+insertValidateShelleyGenesisDist' syncEnv networkName cfg shelleyInitiation = do
   let prunes = getPrunes syncEnv
   when (not shelleyInitiation && (hasInitialFunds || hasStakes)) $ do
     liftIO $ logError tracer $ show SNErrIgnoreShelleyInitiation

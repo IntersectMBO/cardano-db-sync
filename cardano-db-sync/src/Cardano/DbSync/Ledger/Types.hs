@@ -50,8 +50,8 @@ import Ouroboros.Consensus.BlockchainTime.WallClock.Types (SystemStart (..))
 import Ouroboros.Consensus.Cardano.Block hiding (CardanoBlock, CardanoLedgerState)
 import Ouroboros.Consensus.HardFork.Combinator.Basics (LedgerState (..))
 import Ouroboros.Consensus.Ledger.Abstract ()
-import Ouroboros.Consensus.Ledger.Basics (EmptyMK)
 import Ouroboros.Consensus.Ledger.Extended (ExtLedgerState (..))
+import Ouroboros.Consensus.Ledger.Tables (EmptyMK)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Ledger (LedgerState (..), ShelleyBlock)
 import Ouroboros.Consensus.Storage.LedgerDB.Snapshots (DiskSnapshot, SnapshotManager)
@@ -64,7 +64,7 @@ import Prelude (id)
 --------------------------------------------------------------------------
 
 -- | Consensus StateRef type used for snapshot operations.
-type ConsensusStateRef = Consensus.StateRef IO (ExtLedgerState CardanoBlock)
+type ConsensusStateRef = Consensus.StateRef IO ExtLedgerState CardanoBlock
 
 data HasLedgerEnv = HasLedgerEnv
   { leTrace :: !(Trace IO LogMessage)
@@ -82,7 +82,7 @@ data HasLedgerEnv = HasLedgerEnv
   , leSnapshotQueue :: !(TBQueue DbSyncStateRef)
   -- ^ Queue for async snapshot writing
   , leLedgerBackend :: !LedgerBackend
-  , leSnapshotManager :: !(SnapshotManager IO IO CardanoBlock ConsensusStateRef)
+  , leSnapshotManager :: !(SnapshotManager IO CardanoBlock ConsensusStateRef)
   -- ^ Consensus snapshot manager for save/load/list/cleanup
   , leInitGenesis :: !(IO ConsensusStateRef)
   -- ^ Create the initial consensus StateRef from genesis
@@ -110,7 +110,7 @@ data CardanoLedgerState = CardanoLedgerState
 -- | Full state with handle, used during block application and snapshotting.
 data DbSyncStateRef = DbSyncStateRef
   { srState :: !CardanoLedgerState
-  , srTables :: !(LedgerTablesHandle IO (ExtLedgerState CardanoBlock))
+  , srTables :: !(LedgerTablesHandle IO ExtLedgerState CardanoBlock)
   , srCanClose :: !(StrictTVar IO Bool)
   }
 
@@ -179,7 +179,7 @@ data ApplyResult = ApplyResult
   , apSlotDetails :: !SlotDetails
   , apStakeSlice :: !Generic.StakeSliceRes
   , apEvents :: ![LedgerEvent]
-  , apGovActionState :: !(Maybe (ConwayGovState ConwayEra))
+  , apGovActionState :: !(Maybe Generic.GovStateW)
   , apDepositsMap :: !DepositsMap
   }
 
@@ -209,8 +209,8 @@ updatedCommittee ::
   Set.Set (Credential ColdCommitteeRole) ->
   Map.Map (Credential ColdCommitteeRole) EpochNo ->
   Ledger.UnitInterval ->
-  Ledger.StrictMaybe (Committee ConwayEra) ->
-  Committee ConwayEra
+  Ledger.StrictMaybe (Committee era) ->
+  Committee era
 updatedCommittee membersToRemove membersToAdd newQuorum committee =
   case committee of
     Ledger.SNothing -> Committee membersToAdd newQuorum
@@ -337,6 +337,22 @@ instance HasNewEpochState ConwayEra where
         :* fn id
         :* fn (applyNewEpochState' st)
         :* fn id
+        :* Nil
+
+instance HasNewEpochState DijkstraEra where
+  getNewEpochState st = case ledgerState st of
+    LedgerStateDijkstra dijkstra -> Just (shelleyLedgerState dijkstra)
+    _ -> Nothing
+
+  applyNewEpochState st =
+    hApplyExtLedgerState $
+      fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn id
+        :* fn (applyNewEpochState' st)
         :* Nil
 
 hApplyExtLedgerState ::

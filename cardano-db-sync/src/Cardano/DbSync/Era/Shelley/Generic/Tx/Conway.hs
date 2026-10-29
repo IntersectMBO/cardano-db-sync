@@ -69,8 +69,8 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txScriptSizes = getPlutusSizes tx
     , txScripts = getScripts tx
     , txExtraKeyWitnesses = extraKeyWits txBody
-    , txVotingProcedure = Map.toList $ fmap Map.toList (unVotingProcedures $ ctbVotingProcedures txBody)
-    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ toList $ ctbProposalProcedures txBody
+    , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingC) (unVotingProcedures $ ctbVotingProcedures txBody)
+    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalC $ toList $ ctbProposalProcedures txBody
     , txTreasuryDonation = ctbTreasuryDonation txBody
     }
   where
@@ -97,8 +97,9 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
     isValid2 =
-      case tx ^. Alonzo.isValidTxL of
-        Alonzo.IsValid x -> x
+      case tx ^. Alonzo.isPhase2ValidTxL of
+        Alonzo.Phase2Valid -> True
+        Alonzo.Phase2Invalid -> False
 
     (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx CCert
     (invalidBef, invalidAfter) = getInterval txBody

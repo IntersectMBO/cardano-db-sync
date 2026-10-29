@@ -14,6 +14,7 @@ module Cardano.SMASH.Server.Config (
 import Cardano.Db.Log (LogMessage)
 import Cardano.Logging (
   BackendConfig (..),
+  ConfigSource (..),
   DetailLevel (..),
   FormatLogging (..),
   SeverityS (..),
@@ -118,7 +119,7 @@ configureLogging fp loggingName = do
     Left err -> throwIO $ ConfigError ("configureLogging: Error parsing config: " <> textShow err)
     Right (Aeson.Object o)
       | any (`KeyMap.member` o) ["TraceOptions", "HermodTracing", "Options"] ->
-          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) fp
+          readConfigurationWithFallback Info DNormal (Stdout HumanFormatUncoloured) (FromFile fp)
     Right _ -> pure defaultSmashTraceConfig
   mkSmashTracer traceConfig loggingName
 

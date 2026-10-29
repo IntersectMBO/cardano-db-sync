@@ -100,8 +100,9 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     -- This is true if second stage contract validation passes.
     isValid2 :: Bool
     isValid2 =
-      case tx ^. Alonzo.isValidTxL of
-        Alonzo.IsValid x -> x
+      case tx ^. Alonzo.isPhase2ValidTxL of
+        Alonzo.Phase2Valid -> True
+        Alonzo.Phase2Invalid -> False
 
     (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx (SCert . toShelleyCert)
     (invalidBef, invalidAfter) = getInterval txBody

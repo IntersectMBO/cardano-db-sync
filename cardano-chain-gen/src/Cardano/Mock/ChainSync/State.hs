@@ -23,7 +23,8 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Ouroboros.Consensus.Block (HasHeader, HeaderHash, Point, blockPoint, castPoint)
 import Ouroboros.Consensus.Config (TopLevelConfig)
-import Ouroboros.Consensus.Ledger.SupportsProtocol (LedgerSupportsProtocol)
+import Ouroboros.Consensus.Ledger.Abstract (ApplyBlock)
+import qualified Ouroboros.Consensus.Ledger.Extended as Consensus
 import Ouroboros.Network.Block (ChainUpdate (..))
 
 data ChainProducerState block = ChainProducerState
@@ -61,7 +62,7 @@ initChainProducerState config st = ChainProducerState (initChainDB config st) Ma
 
 -- | Add a block to the chain. It does not require any follower's state changes.
 addBlockState ::
-  LedgerSupportsProtocol block =>
+  ApplyBlock Consensus.ExtLedgerState block =>
   block ->
   ChainProducerState block ->
   ChainProducerState block

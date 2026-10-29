@@ -20,7 +20,9 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         # TODO: Add ghc910 when input-output-hk/devx is fixed
-        compiler-nix-name: [ghc96, ghc98, ghc912]
+        # ghc98 is excluded: cardano-ledger-shelley sets buildable: False for
+        # ghc >=9.8 && <9.10
+        compiler-nix-name: [ghc96, ghc912]
         include:
           # We want a single job, because macOS runners are scarce.
           - os: macos-latest

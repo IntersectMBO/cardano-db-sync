@@ -27,12 +27,12 @@ import Data.Aeson (FromJSON (..), Object, (.!=), (.:), (.:?))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
-import Data.Aeson.Types (Parser)
+import Data.Aeson.Types (Parser, parseFail)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.List as List
 import qualified Data.Yaml as Yaml
 import Ouroboros.Consensus.Cardano (CardanoHardForkTrigger (..))
-import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, MaryEra, ShelleyEra, StandardCrypto)
+import Ouroboros.Consensus.Cardano.Block (AllegraEra, AlonzoEra, BabbageEra, ConwayEra, DijkstraEra, MaryEra, ShelleyEra, StandardCrypto)
 import Ouroboros.Consensus.Protocol.Praos (Praos)
 import Ouroboros.Consensus.Protocol.TPraos (TPraos)
 import Ouroboros.Consensus.Shelley.Ledger.Block (ShelleyBlock)
@@ -48,7 +48,12 @@ data NodeConfig = NodeConfig
   , ncAlonzoGenesisHash :: !GenesisHashAlonzo
   , ncConwayGenesisFile :: !GenesisFile
   , ncConwayGenesisHash :: !(Maybe GenesisHashConway)
+  , ncDijkstraGenesisFile :: !(Maybe GenesisFile)
+  , ncDijkstraGenesisHash :: !(Maybe GenesisHashDijkstra)
   , ncRequiresNetworkMagic :: !RequiresNetworkMagic
+  , ncExperimentalHardForksEnabled :: !Bool
+  -- ^ Whether the node allows the not-yet-released hard fork eras. Decides the
+  -- claimed protocol version and whether the Dijkstra trigger is honoured.
   , ncByronProtocolVersion :: !Byron.ProtocolVersion
   , -- Shelley hardfok parameters
     ncShelleyHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (TPraos StandardCrypto) ShelleyEra))
@@ -62,6 +67,8 @@ data NodeConfig = NodeConfig
     ncBabbageHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) BabbageEra))
   , -- Conway hardfok parameters
     ncConwayHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) ConwayEra))
+  , -- Dijkstra hardfok parameters
+    ncDijkstraHardFork :: !(CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
   }
 
 parseNodeConfig :: ByteString -> IO NodeConfig
@@ -166,7 +173,10 @@ instance FromJSON NodeConfig where
           <*> (o .: "AlonzoGenesisHash")
           <*> (o .: "ConwayGenesisFile")
           <*> (o .:? "ConwayGenesisHash")
+          <*> (o .:? "DijkstraGenesisFile")
+          <*> (o .:? "DijkstraGenesisHash")
           <*> (o .: "RequiresNetworkMagic")
+          <*> parseExperimentalHardForksEnabled o
           <*> parseByronProtocolVersion o
           <*> parseShelleyHardForkEpoch o
           <*> parseAllegraHardForkEpoch o
@@ -174,6 +184,19 @@ instance FromJSON NodeConfig where
           <*> parseAlonzoHardForkEpoch o
           <*> parseBabbageHardForkEpoch o
           <*> parseConwayHardForkEpoch o
+          <*> parseDijkstraHardForkEpoch o
+
+      -- 'TestEnableDevelopmentHardForkEras' is the former name. Either is accepted;
+      -- only a config setting both, disagreeing, is rejected.
+      parseExperimentalHardForksEnabled :: Object -> Parser Bool
+      parseExperimentalHardForksEnabled o = do
+        mValue <- o .:? "ExperimentalHardForksEnabled"
+        mOldValue <- o .:? "TestEnableDevelopmentHardForkEras"
+        case (mValue, mOldValue) of
+          (Just value, Just oldValue)
+            | value /= oldValue ->
+                parseFail "ExperimentalHardForksEnabled and its former name TestEnableDevelopmentHardForkEras are both set, to different values"
+          _otherwise -> pure (fromMaybe False (mValue <|> mOldValue))
 
       -- The v2 format dropped these three keys. Nothing in db-sync depends on the
       -- value: it is forwarded to Consensus.byronProtocolVersion, two lines above a
@@ -227,3 +250,15 @@ instance FromJSON NodeConfig where
           [ CardanoTriggerHardForkAtEpoch <$> o .: "TestConwayHardForkAtEpoch"
           , pure CardanoTriggerHardForkAtDefaultVersion
           ]
+
+      -- The node reads this trigger only when the experimental eras are enabled.
+      parseDijkstraHardForkEpoch :: Object -> Parser (CardanoHardForkTrigger (ShelleyBlock (Praos StandardCrypto) DijkstraEra))
+      parseDijkstraHardForkEpoch o = do
+        experimental <- parseExperimentalHardForksEnabled o
+        if experimental
+          then
+            asum
+              [ CardanoTriggerHardForkAtEpoch <$> o .: "TestDijkstraHardForkAtEpoch"
+              , pure CardanoTriggerHardForkAtDefaultVersion
+              ]
+          else pure CardanoTriggerHardForkAtDefaultVersion

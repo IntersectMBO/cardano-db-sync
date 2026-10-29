@@ -59,6 +59,7 @@ library
                         Cardano.DbSync.Config.Byron
                         Cardano.DbSync.Config.Cardano
                         Cardano.DbSync.Config.Conway
+                        Cardano.DbSync.Config.Dijkstra
                         Cardano.DbSync.Config.Node
                         Cardano.DbSync.Config.Shelley
                         Cardano.DbSync.Config.Types
@@ -179,6 +180,7 @@ library
                       , cardano-ledger-shelley >= 1.12.3.0
                       , cardano-node
                       , cardano-prelude
+                      , cardano-protocol
                       , cardano-protocol-tpraos
                       , cardano-slotting
                       , cardano-strict-containers
@@ -203,6 +205,7 @@ library
                       , network
                       , lifted-base
                       , memory
+                      , mempack
                       , microlens
                       , network-mux
                       , ouroboros-consensus
@@ -213,7 +216,7 @@ library
                       , ouroboros-consensus:protocol
                       , ouroboros-network:api
                       , ouroboros-network:framework
-                      , ouroboros-network:framework-tracing
+                      , ouroboros-network:tracing
                       , ouroboros-network:protocols
                       , plutus-ledger-api
                       , prometheus

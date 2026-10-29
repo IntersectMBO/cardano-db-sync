@@ -365,11 +365,13 @@ drepDistrRollback =
     epoch1 <- fillUntilNextEpoch interpreter mockServer
     assertBlockNoBackoff dbSync (2 + length epoch0 + length epoch1)
 
-    -- Verify DrepDistr for epoch 2 was inserted
+    -- Verify DrepDistr for epoch 2 was inserted. The 5 lovelace over the 10_000
+    -- delegated is the delegator's epoch-0 reward, earned an epoch early because
+    -- consensus seeds the stake snapshots at genesis.
     assertEqQuery
       dbSync
       (DB.queryDRepDistrAmount (unCredentialHash drepId) 2)
-      10_000
+      10_005
       "Expected DrepDistr for epoch 2 after crossing boundary"
 
     -- Identify the epoch 2 boundary block (last block of epoch1 list)
@@ -404,7 +406,7 @@ drepDistrRollback =
     assertEqQuery
       dbSync
       (DB.queryDRepDistrAmount (unCredentialHash drepId) 2)
-      10_000
+      10_005
       "DrepDistr for epoch 2 should be re-inserted after replay through boundary"
   where
     testLabel = "conwayDrepDistrRollback"

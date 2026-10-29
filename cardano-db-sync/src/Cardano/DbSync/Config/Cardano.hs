@@ -21,6 +21,7 @@ import Cardano.Crypto.ProtocolMagic (ProtocolMagicId (..))
 import Cardano.DbSync.Config.Alonzo
 import Cardano.DbSync.Config.Byron
 import Cardano.DbSync.Config.Conway (readConwayGenesisConfig)
+import Cardano.DbSync.Config.Dijkstra (readDijkstraGenesisConfig)
 import Cardano.DbSync.Config.Shelley
 import Cardano.DbSync.Config.Types
 import Cardano.DbSync.Error
@@ -29,8 +30,7 @@ import Cardano.Ledger.Alonzo.Genesis (AlonzoGenesis)
 import qualified Cardano.Ledger.Api.Transition as Ledger
 import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
-import Cardano.Node.Protocol.Dijkstra
-import Cardano.Prelude (second)
+import Cardano.Ledger.Dijkstra.Genesis (DijkstraGenesis)
 import Control.Monad.Trans.Except (ExceptT)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
@@ -41,6 +41,8 @@ import Ouroboros.Consensus.Config (TopLevelConfig (..), emptyCheckpointsMap)
 import Ouroboros.Consensus.Node.ProtocolInfo (ProtocolInfo)
 import qualified Ouroboros.Consensus.Node.ProtocolInfo as Consensus
 import Ouroboros.Consensus.Shelley.Node (ShelleyGenesis (..))
+import System.FS.API (MountPoint (..), SomeHasFS (..))
+import System.FS.IO (ioHasFS)
 import "contra-tracer" Control.Tracer (nullTracer)
 
 -- Usually only one constructor, but may have two when we are preparing for a HFC event.
@@ -51,11 +53,12 @@ data GenesisConfig
       !ShelleyConfig
       !AlonzoGenesis
       !ConwayGenesis
+      !DijkstraGenesis
 
 genesisProtocolMagicId :: GenesisConfig -> ProtocolMagicId
 genesisProtocolMagicId ge =
   case ge of
-    GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg -> shelleyProtocolMagicId (scConfig sCfg)
+    GenesisCardano _cfg _bCfg sCfg _aCfg _cCfg _dCfg -> shelleyProtocolMagicId (scConfig sCfg)
   where
     shelleyProtocolMagicId :: ShelleyGenesis -> ProtocolMagicId
     shelleyProtocolMagicId sCfg = ProtocolMagicId (sgNetworkMagic sCfg)
@@ -71,11 +74,12 @@ readCardanoGenesisConfig enc =
         <*> readShelleyGenesisConfig enc
         <*> readAlonzoGenesisConfig enc
         <*> readConwayGenesisConfig enc
+        <*> readDijkstraGenesisConfig enc
 
 -- -------------------------------------------------------------------------------------------------
 
-mkTopLevelConfig :: GenesisConfig -> TopLevelConfig CardanoBlock
-mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg []
+mkTopLevelConfig :: GenesisConfig -> IO (TopLevelConfig CardanoBlock)
+mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg []
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
 
@@ -86,10 +90,13 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig $ fst $ mkProtocolInfoCardano cfg [
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
-  (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
-mkProtocolInfoCardano genesisConfig shelleyCred =
-  second (\f -> f nullTracer) $
-    protocolInfoCardano $
+  IO (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
+mkProtocolInfoCardano genesisConfig shelleyCred = do
+  -- db-sync never forges, so the KES-agent side of this filesystem is never
+  -- consulted. Consensus does resolve a genesis 'InjectionFromFile' through it,
+  -- which makes the mount point the working directory for those paths.
+  (pInfo, mkForgings) <-
+    protocolInfoCardano (SomeHasFS (ioHasFS (MountPoint ""))) $
       CardanoProtocolParams
         { byronProtocolParams =
             Consensus.ProtocolParamsByron
@@ -104,13 +111,18 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
               { Consensus.shelleyBasedInitialNonce = shelleyPraosNonce genesisHash
               , Consensus.shelleyBasedLeaderCredentials = shelleyCred
               }
-        , cardanoProtocolVersion = ProtVer (natVersion @10) 0
+        , -- Consensus' 'MaxMajorProtVer': past it the ledger rules declare this
+          -- node obsolete, so it has to mirror the node's own claim exactly.
+          cardanoProtocolVersion =
+            if dncExperimentalHardForksEnabled dnc
+              then ProtVer (natVersion @12) 0
+              else ProtVer (natVersion @11) 0
         , cardanoLedgerTransitionConfig =
             Ledger.mkLatestTransitionConfig
               shelleyGenesis
               alonzoGenesis
               conwayGenesis
-              emptyDijkstraGenesis -- TODO(Dijkstra)
+              dijkstraGenesis
         , cardanoHardForkTriggers =
             Consensus.CardanoHardForkTriggers'
               { triggerHardForkShelley = dncShelleyHardFork dnc
@@ -119,17 +131,19 @@ mkProtocolInfoCardano genesisConfig shelleyCred =
               , triggerHardForkAlonzo = dncAlonzoHardFork dnc
               , triggerHardForkBabbage = dncBabbageHardFork dnc
               , triggerHardForkConway = dncConwayHardFork dnc
-              , triggerHardForkDijkstra = Consensus.CardanoTriggerHardForkAtDefaultVersion -- TODO(Dijkstra)
+              , triggerHardForkDijkstra = dncDijkstraHardFork dnc
               }
         , cardanoCheckpoints = emptyCheckpointsMap
         }
+  pure (pInfo, mkForgings nullTracer)
   where
     GenesisCardano
       dnc
       bGenesis
       (ShelleyConfig shelleyGenesis genesisHash)
       alonzoGenesis
-      conwayGenesis = genesisConfig
+      conwayGenesis
+      dijkstraGenesis = genesisConfig
 
 shelleyPraosNonce :: GenesisHashShelley -> Nonce
 shelleyPraosNonce hsh = Nonce (Crypto.castHash . unGenesisHashShelley $ hsh)
