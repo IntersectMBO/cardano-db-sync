@@ -133,7 +133,7 @@ curl --verbose --header "Content-Type: application/json" \
 
 Delisting can be done as follows (in case you are an administrator):
 ```
-curl --verbose --header "Content-Type: application/json" \
+curl --fail-with-body --user <USERNAME> --header "Content-Type: application/json" \
   --request PATCH --data '{"poolId":"<POOL_ID>"}' \
   http://localhost:3100/api/v1/delist
 ```
@@ -197,6 +197,77 @@ curl -X GET -v http://localhost:3100/api/v1/metadata/8517fa7042cb9494818861c53c8
 ## Basic Auth and DB
 
 You need to provide username and passwords with the --admins <FILE> option. The file should contain lines in the form of <username>,<password>. These credentials are used for the secure endpoints (pool delisting and enlisting, ticker reserving, policies fetching)
+
+### NixOS startup delisting
+
+The standard SMASH build requires authentication for administrative writes.
+Public reads, including metadata and status, do not require credentials. Omitting
+`admins` leaves public reads enabled but prevents administrator authentication.
+
+For example, in an otherwise configured `services.smash` deployment:
+
+```nix
+services.smash = {
+  # Provision this root-readable file before smash.service starts, using a secret
+  # manager such as sops-nix (example below). A quoted runtime path keeps the
+  # decrypted contents out of the Nix store.
+  admins = "/run/secrets/smash-admins";
+  delistedPools = [
+    "8517fa7042cb9494818861c53c87780b4975c0bd402e3ed85168aa66"
+  ];
+};
+```
+
+For example, with [sops-nix](https://github.com/Mic92/sops-nix) imported and the
+host's decryption keys configured, keep a SOPS-encrypted YAML file at
+`secrets/smash.yaml`. Its `smash-admins` value should contain the administrator
+CSV lines. Use `sops secrets/smash.yaml` to edit it with your configured SOPS
+recipients, and commit only the encrypted output.
+
+```nix
+{ config, ... }: {
+  sops.secrets.smash-admins = {
+    sopsFile = ./secrets/smash.yaml; # Encrypted file; safe to put in the store.
+    format = "yaml";
+    key = "smash-admins";
+    owner = "root";
+    group = "root";
+    mode = "0400";
+    restartUnits = [ "smash.service" ];
+  };
+
+  # Runtime path, normally /run/secrets/smash-admins, not the secret contents.
+  services.smash.admins = config.sops.secrets.smash-admins.path;
+}
+```
+
+sops-nix supplies the decrypted file at runtime; systemd then loads it for SMASH
+through `LoadCredential`. The encrypted source may enter the Nix store, while
+the decrypted administrator file stays outside it. `restartUnits` refreshes the
+service's credential copy when sops-nix updates the secret.
+
+The administrator file contains `username,password` entries, one per line. These
+are plaintext passwords, not htpasswd hashes; the first comma separates the
+username from the password. The service loads this file with systemd
+`LoadCredential`, making it accessible to SMASH's dynamic service user without
+making the source file world-readable. Restart SMASH after rotating credentials.
+
+Startup delisting uses the first nonempty administrator entry, with surrounding
+whitespace stripped as in SMASH. Use a nonempty username without a colon and a
+nonempty password. Credentials are read at runtime and are not placed in command
+arguments or generated store files. Requests go directly to the loopback server.
+
+The startup hook waits for an HTTP response from the status endpoint, skips pools
+already delisted, applies missing delists, and verifies the configured pools are
+present. Both hex and bech32 pool IDs are accepted. It preserves other delists:
+removing a pool from this configuration does not enlist it. Authentication,
+HTTP, or verification failures fail service startup instead of silently leaving
+the configured policy unapplied.
+
+Provision `admins` before switching an existing deployment with nonempty
+`delistedPools` to the authenticated build. No credentials are needed for an
+instance that only serves public reads and has no startup delists. Public proxy
+and cache configuration does not need administrator credentials.
 
 
 ## How to insert the reserved ticker name?
