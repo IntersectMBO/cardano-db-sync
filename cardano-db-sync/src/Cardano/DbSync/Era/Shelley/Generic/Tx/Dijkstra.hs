@@ -12,6 +12,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Dijkstra (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Metadata
+import Cardano.DbSync.Era.Shelley.Generic.Script (fromDijkstraNativeScript)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Allegra (getInterval)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Alonzo (extraKeyWits, getPlutusSizes, mkCollTxIn, mkTxData, resolveRedeemers, rmCerts, rmInps, rmWdrl, txDataWitness)
 import Cardano.DbSync.Era.Shelley.Generic.Tx.Shelley
@@ -34,6 +35,8 @@ import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
 import qualified Cardano.Ledger.Plutus.Data as Alonzo
 import Cardano.Ledger.TxIn
 import Cardano.Prelude
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString.Short as SBS
 import qualified Data.Map.Strict as Map
 import Lens.Micro
@@ -285,8 +288,8 @@ fromDijkstraDatum bdat =
       let plutusData = Alonzo.binaryDataToData binaryData
        in InlineDatum $ mkTxData (Alonzo.hashData plutusData, plutusData)
 
--- | Dijkstra-specific script extraction. DijkstraNativeScript has no ToJSON,
--- so we store CBOR for native scripts instead of JSON.
+-- | Dijkstra-specific script extraction. DijkstraNativeScript is not Timelock, so we
+-- can't reuse Alonzo's 'mkTxScript'.
 getDijkstraScripts :: Core.Tx l DijkstraEra -> [TxScript]
 getDijkstraScripts tx =
   mkDijkstraTxScript
@@ -308,8 +311,8 @@ mkDijkstraTxScript (hsh, script) =
     { txScriptHash = unScriptHash hsh
     , txScriptType = getScriptType
     , txScriptPlutusSize = getPlutusSize
-    , txScriptJson = Nothing -- DijkstraNativeScript has no JSON serialization
-    , txScriptCBOR = Just $ Core.originalBytes script
+    , txScriptJson = nativeJsonScript
+    , txScriptCBOR = plutusCborScript
     }
   where
     getScriptType :: DB.ScriptType
@@ -324,3 +327,19 @@ mkDijkstraTxScript (hsh, script) =
         Alonzo.NativeScript {} -> Nothing
         Alonzo.PlutusScript ps ->
           Just $ fromIntegral $ SBS.length $ Alonzo.unPlutusBinary $ Alonzo.plutusScriptBinary ps
+
+    -- As in every earlier era, a native script is stored as JSON and a Plutus script as
+    -- CBOR. A Dijkstra native script is a timelock extended with the guard requirement,
+    -- which 'fromDijkstraNativeScript' renders in the same shape as a timelock.
+    nativeJsonScript :: Maybe ByteString
+    nativeJsonScript =
+      case script of
+        Alonzo.NativeScript s ->
+          Just . LBS.toStrict . Aeson.encode $ fromDijkstraNativeScript s
+        Alonzo.PlutusScript {} -> Nothing
+
+    plutusCborScript :: Maybe ByteString
+    plutusCborScript =
+      case script of
+        Alonzo.NativeScript {} -> Nothing
+        plScript -> Just $ Core.originalBytes plScript

@@ -8,15 +8,20 @@
 module Cardano.DbSync.Era.Shelley.Generic.Script (
   MultiSigScript (..),
   TimelockScript (..),
+  DijkstraScript (..),
   KeyHash (..),
   fromMultiSig,
   fromTimelock,
+  fromDijkstraNativeScript,
 ) where
 
 import Cardano.Crypto.Hash.Class
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
 import Cardano.Ledger.Core (Era (..))
 import qualified Cardano.Ledger.Core as Core
+import Cardano.Ledger.Credential (Credential (..))
+import qualified Cardano.Ledger.Dijkstra.Scripts as Dijkstra
+import Cardano.Ledger.Hashes (ScriptHash (..))
 import Cardano.Ledger.Keys (KeyHash (..), KeyRole (..), coerceKeyRole)
 import qualified Cardano.Ledger.Shelley.API.Types as Shelley
 import qualified Cardano.Ledger.Shelley.Scripts as Shelley
@@ -44,6 +49,13 @@ newtype TimelockScript era = TimelockScript {unTimelockScript :: Allegra.Timeloc
 instance Era era => Show (TimelockScript era) where
   show = show . unTimelockScript
 
+-- | Dijkstra native scripts: a timelock script extended with the guard requirement.
+newtype DijkstraScript era = DijkstraScript {unDijkstraScript :: Dijkstra.DijkstraNativeScript era}
+  deriving (Eq)
+
+instance Era era => Show (DijkstraScript era) where
+  show = show . unDijkstraScript
+
 fromMultiSig ::
   Shelley.MultiSig era ->
   MultiSigScript era
@@ -51,6 +63,9 @@ fromMultiSig = MultiSigScript
 
 fromTimelock :: Allegra.Timelock era -> TimelockScript era
 fromTimelock = TimelockScript
+
+fromDijkstraNativeScript :: Dijkstra.DijkstraNativeScript era -> DijkstraScript era
+fromDijkstraNativeScript = DijkstraScript
 
 instance (Era era, Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era) => Aeson.ToJSON (MultiSigScript era) where
   toJSON (MultiSigScript script) = multiSigToJSON script
@@ -85,6 +100,38 @@ instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra
 
 instance (Era era, Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => FromJSON (TimelockScript era) where
   parseJSON v = TimelockScript <$> parseTimelock v
+
+-- | A Dijkstra native script is a timelock script plus the @guard@ requirement, so it
+-- serialises to the same JSON as a timelock with one extra script type.
+instance
+  ( Era era
+  , Dijkstra.DijkstraEraScript era
+  , Core.NativeScript era ~ Dijkstra.DijkstraNativeScript era
+  ) =>
+  ToJSON (DijkstraScript era)
+  where
+  toJSON (DijkstraScript script) = dijkstraToJSON script
+    where
+      dijkstraToJSON (Shelley.RequireMOf req scripts) =
+        requireMOfToJSON req (map dijkstraToJSON $ toList scripts)
+      dijkstraToJSON (Shelley.RequireAnyOf scripts) =
+        requireAnyOfToJSON (map dijkstraToJSON $ toList scripts)
+      dijkstraToJSON (Shelley.RequireAllOf scripts) =
+        requireAllOfToJSON (map dijkstraToJSON $ toList scripts)
+      dijkstraToJSON (Shelley.RequireSignature sig) = requireSignatureToJSON sig
+      dijkstraToJSON (Allegra.RequireTimeStart slot) = requireTimeStartToJSON slot
+      dijkstraToJSON (Allegra.RequireTimeExpire slot) = requireTimeExpireToJSON slot
+      dijkstraToJSON (Dijkstra.RequireGuard cred) = requireGuardToJSON cred
+      dijkstraToJSON _ = error "Impossible: All NativeScripts should have been accounted for"
+
+instance
+  ( Era era
+  , Dijkstra.DijkstraEraScript era
+  , Core.NativeScript era ~ Dijkstra.DijkstraNativeScript era
+  ) =>
+  FromJSON (DijkstraScript era)
+  where
+  parseJSON v = DijkstraScript <$> parseDijkstraNativeScript v
 
 requireSignatureToJSON :: KeyHash discr -> Aeson.Value
 requireSignatureToJSON (KeyHash sig) =
@@ -129,6 +176,17 @@ requireTimeStartToJSON slot =
     , "slot" .= slot
     ]
 
+-- | A guard requirement names the credential that must be guarded: a key hash whose key
+-- has to sign, or a script hash whose script has to run. The field name says which.
+requireGuardToJSON :: Credential Guard -> Aeson.Value
+requireGuardToJSON cred =
+  Aeson.object $ ("type" .= Aeson.String "guard") : [credentialField]
+  where
+    credentialField =
+      case cred of
+        KeyHashObj (KeyHash kh) -> "keyHash" .= Aeson.String (hashToTextAsHex kh)
+        ScriptHashObj (ScriptHash sh) -> "scriptHash" .= Aeson.String (hashToTextAsHex sh)
+
 parseMultiSig ::
   (Shelley.ShelleyEraScript era, Core.NativeScript era ~ Shelley.MultiSig era) =>
   Aeson.Value ->
@@ -160,6 +218,45 @@ parseTimelock v =
     parseScriptAll' = fromList . map unTimelockScript <$> parseScriptAll v
     parseScriptAny' = fromList . map unTimelockScript <$> parseScriptAny v
     parseScriptMOf' = second (fromList . map unTimelockScript) <$> parseScriptMOf v
+
+parseDijkstraNativeScript ::
+  (Dijkstra.DijkstraEraScript era, Core.NativeScript era ~ Dijkstra.DijkstraNativeScript era) =>
+  Aeson.Value ->
+  Parser (Dijkstra.DijkstraNativeScript era)
+parseDijkstraNativeScript v =
+  (Shelley.RequireSignature <$> parseScriptSig')
+    <|> (Shelley.RequireAllOf <$> parseScriptAll')
+    <|> (Shelley.RequireAnyOf <$> parseScriptAny')
+    <|> (uncurry Shelley.RequireMOf <$> parseScriptMOf')
+    <|> parseTimelockExpire v
+    <|> parseTimelockStart v
+    <|> parseGuard v
+  where
+    parseScriptSig' = coerceKeyRole <$> parseScriptSig v
+    parseScriptAll' = fromList . map unDijkstraScript <$> parseScriptAll v
+    parseScriptAny' = fromList . map unDijkstraScript <$> parseScriptAny v
+    parseScriptMOf' = second (fromList . map unDijkstraScript) <$> parseScriptMOf v
+
+parseGuard ::
+  (Dijkstra.DijkstraEraScript era, Core.NativeScript era ~ Dijkstra.DijkstraNativeScript era) =>
+  Aeson.Value ->
+  Parser (Dijkstra.DijkstraNativeScript era)
+parseGuard = Aeson.withObject "guard" $ \obj -> do
+  v <- obj .: "type"
+  case (v :: Text) of
+    "guard" -> Dijkstra.mkRequireGuard <$> parseGuardCredential obj
+    _ -> fail "\"guard\" script value not found"
+
+parseGuardCredential :: Aeson.Object -> Parser (Credential Guard)
+parseGuardCredential obj =
+  (KeyHashObj . coerceKeyRole <$> (obj .: "keyHash" >>= parseKeyHash))
+    <|> (ScriptHashObj <$> (obj .: "scriptHash" >>= parseScriptHash))
+
+parseScriptHash :: Text -> Parser ScriptHash
+parseScriptHash v =
+  case ScriptHash <$> hashFromBytesAsHex (encodeUtf8 v) of
+    Just res -> pure res
+    Nothing -> fail $ "Error deserialising script hash: " <> show v
 
 parseScriptSig ::
   Aeson.Value ->
@@ -226,7 +323,7 @@ parseScriptMOf = Aeson.withObject "atLeast" $ \obj -> do
           <> " Scripts: "
           <> show (length scripts)
 
-parseTimelockExpire :: (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => Aeson.Value -> Parser (Allegra.Timelock era)
+parseTimelockExpire :: Allegra.AllegraEraScript era => Aeson.Value -> Parser (Core.NativeScript era)
 parseTimelockExpire = Aeson.withObject "before" $ \obj -> do
   v <- obj .: "type"
 
@@ -234,7 +331,7 @@ parseTimelockExpire = Aeson.withObject "before" $ \obj -> do
     "before" -> Allegra.RequireTimeExpire <$> (obj .: "slot")
     _ -> fail "\"before\" script value not found"
 
-parseTimelockStart :: (Allegra.AllegraEraScript era, Core.NativeScript era ~ Allegra.Timelock era) => Aeson.Value -> Parser (Allegra.Timelock era)
+parseTimelockStart :: Allegra.AllegraEraScript era => Aeson.Value -> Parser (Core.NativeScript era)
 parseTimelockStart =
   Aeson.withObject "after" $ \obj -> do
     v <- obj .: "type"

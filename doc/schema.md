@@ -652,7 +652,7 @@ A table containing scripts available, found in witnesses, inlined in outputs (re
 | `tx_id` | integer (64) | The Tx table index for the transaction where this script first became available. |
 | `hash` | hash28type | The Hash of the Script. |
 | `type` | scripttype | The type of the script. This is currenttly either 'timelock' or 'plutus'. |
-| `json` | jsonb | JSON representation of the timelock script, null for other script types |
+| `json` | jsonb | JSON representation of the timelock script, null for other script types. A Dijkstra native script is a timelock extended with a guard requirement, which appears as `{"type": "guard", "keyHash": ...}`, or `scriptHash` when the guarded credential is a script. The guard type is new in 13.8-Dijkstra (experimental); the rest of the shape is unchanged. |
 | `bytes` | bytea | CBOR encoded plutus script data, null for other script types |
 | `serialised_size` | word31type | The size of the CBOR serialised script, if it is a Plutus script. |
 

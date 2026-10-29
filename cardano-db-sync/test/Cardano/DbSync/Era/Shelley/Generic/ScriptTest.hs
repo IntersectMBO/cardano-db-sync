@@ -8,9 +8,10 @@ module Cardano.DbSync.Era.Shelley.Generic.ScriptTest (tests) where
 
 import Cardano.DbSync.Era.Shelley.Generic.Script
 import qualified Cardano.Ledger.Allegra.Scripts as Allegra
-import Cardano.Ledger.Api (AllegraEra, ShelleyEra)
+import Cardano.Ledger.Api (AllegraEra, DijkstraEra, ShelleyEra)
 import Cardano.Ledger.Binary.Decoding
-import Cardano.Ledger.Core (NativeScript)
+import Cardano.Ledger.Core (NativeScript, eraProtVerLow)
+import qualified Cardano.Ledger.Dijkstra.Scripts as Dijkstra
 import qualified Cardano.Ledger.Shelley.Scripts as Ledger
 import Cardano.Prelude
 import qualified Data.Aeson as Aeson
@@ -22,6 +23,7 @@ import qualified Hedgehog.Gen as Gen
 import Hedgehog.Gen.QuickCheck (arbitrary)
 import qualified Hedgehog.Range as Range
 import Test.Cardano.Ledger.Allegra.Arbitrary ()
+import Test.Cardano.Ledger.Core.Arbitrary ()
 import Test.Cardano.Ledger.Shelley.Arbitrary ()
 import Prelude (String ())
 
@@ -36,6 +38,10 @@ tests =
       , ("timelockToJSON simple", prop_timelockToJSON)
       , ("timelockToJSON negative", prop_timelockToJSON_bad)
       , ("timelockToJSON roundtrip", prop_timelockToJSON_roundtrip)
+      , ("dijkstraToJSON simple", prop_dijkstraToJSON)
+      , ("dijkstraToJSON guard", prop_dijkstraGuardToJSON)
+      , ("dijkstraToJSON negative", prop_dijkstraToJSON_bad)
+      , ("dijkstraToJSON roundtrip", prop_dijkstraToJSON_roundtrip)
       ]
 
 prop_multisigToJSON :: Property
@@ -89,6 +95,48 @@ prop_timelockToJSON_roundtrip :: Property
 prop_timelockToJSON_roundtrip = property $ do
   timelock <- forAll (genValidTimelock @AllegraEra)
   tripping timelock Aeson.toJSON Aeson.fromJSON
+
+-- | A Dijkstra native script must render the constructors it shares with a timelock
+-- exactly as a timelock does: the CBOR tags are the same, so the same vectors apply.
+prop_dijkstraToJSON :: Property
+prop_dijkstraToJSON = property $ do
+  (cborHex, jsonText) <- forAll $ Gen.element (knownMultiSigs <> knownTimelocks)
+  script <- evalEither $ decodeCbor cborHex
+  json <- evalEither $ Aeson.eitherDecodeStrict @Aeson.Value $ encodeUtf8 jsonText
+
+  Aeson.toJSON (fromDijkstraNativeScript script) === json
+  where
+    decodeCbor :: Text -> Either DecoderError (Dijkstra.DijkstraNativeScript DijkstraEra)
+    decodeCbor cbor = do
+      let bytes = LByteString.fromStrict $ deserialiseCborFromBase16 cbor
+      decodeFullAnnotator (eraProtVerLow @DijkstraEra) "DijkstraNativeScript" decCBOR bytes
+
+-- | The guard requirement is the one constructor a timelock does not have. Its JSON is
+-- checked as a fixed point: parsing it and rendering it again must give back the same
+-- JSON, which exercises the encoder and the parser against the stored shape.
+prop_dijkstraGuardToJSON :: Property
+prop_dijkstraGuardToJSON = property $ do
+  jsonText <- forAll $ Gen.element knownGuards
+  json <- evalEither $ Aeson.eitherDecodeStrict @Aeson.Value $ encodeUtf8 jsonText
+  script <- evalEither $ decodeJson jsonText
+
+  Aeson.toJSON script === json
+  where
+    decodeJson :: Text -> Either String (DijkstraScript DijkstraEra)
+    decodeJson = Aeson.eitherDecodeStrict . encodeUtf8
+
+prop_dijkstraToJSON_bad :: Property
+prop_dijkstraToJSON_bad = property $ do
+  jsonText <- forAll $ Gen.element (knownBadMultiSigs <> knownBadGuards)
+  assert $ isLeft (decodeJson jsonText)
+  where
+    decodeJson :: Text -> Either String (DijkstraScript DijkstraEra)
+    decodeJson = Aeson.eitherDecodeStrict . encodeUtf8
+
+prop_dijkstraToJSON_roundtrip :: Property
+prop_dijkstraToJSON_roundtrip = property $ do
+  script <- forAll genValidDijkstraScript
+  tripping script Aeson.toJSON Aeson.fromJSON
 
 knownMultiSigs :: [(Text, Text)]
 knownMultiSigs =
@@ -144,6 +192,22 @@ knownTimelocks =
     )
   ]
 
+knownGuards :: [Text]
+knownGuards =
+  [ "{\"type\": \"guard\", \"keyHash\": \"cda9e29dde371bd2c4f58edb036477ec1cde527dd890f429199f938e\"}"
+  , "{\"type\": \"guard\", \"scriptHash\": \"2f3f904868add46586c39811cb4c217db565903a13294804cb5fd036\"}"
+  , "{\"type\": \"all\", \"scripts\": [{\"type\": \"guard\", \"keyHash\": \"2f3f904868add46586c39811cb4c217db565903a13294804cb5fd036\"}, {\"type\": \"sig\", \"keyHash\": \"cda9e29dde371bd2c4f58edb036477ec1cde527dd890f429199f938e\"}]}"
+  ]
+
+knownBadGuards :: [Text]
+knownBadGuards =
+  [ -- A guard must name the credential it guards.
+    "{\"type\": \"guard\"}"
+  , -- And that credential must be a hash.
+    "{\"type\": \"guard\", \"keyHash\": \"not a key hash\"}"
+  , "{\"type\": \"guard\", \"scriptHash\": \"not a script hash\"}"
+  ]
+
 genValidMultiSig :: Gen (MultiSigScript ShelleyEra)
 genValidMultiSig = fromMultiSig <$> genValidLedgerMultiSigSized 5 10
 
@@ -188,6 +252,33 @@ genValidLedgerTimelockSized maxListLen maxDepth =
           (Range.linear minLen maxLen)
           maxDepth
           (genValidLedgerTimelockSized maxListLen)
+
+    genRequireMOf = do
+      req <- Gen.int (Range.linear 0 maxListLen)
+      Ledger.RequireMOf req <$> genList req maxListLen
+
+genValidDijkstraScript :: Gen (DijkstraScript DijkstraEra)
+genValidDijkstraScript = fromDijkstraNativeScript <$> genValidLedgerDijkstraSized 5 10
+
+genValidLedgerDijkstraSized :: Int -> Size -> Gen (Dijkstra.DijkstraNativeScript DijkstraEra)
+genValidLedgerDijkstraSized _ 0 = Ledger.RequireSignature <$> arbitrary
+genValidLedgerDijkstraSized maxListLen maxDepth =
+  Gen.choice
+    [ Ledger.RequireSignature <$> arbitrary
+    , Allegra.RequireTimeExpire <$> arbitrary
+    , Allegra.RequireTimeStart <$> arbitrary
+    , Dijkstra.mkRequireGuard <$> arbitrary
+    , Ledger.RequireAllOf <$> genList 0 maxListLen
+    , Ledger.RequireAnyOf <$> genList 0 maxListLen
+    , genRequireMOf
+    ]
+  where
+    genList minLen maxLen =
+      fromList
+        <$> genListSized
+          (Range.linear minLen maxLen)
+          maxDepth
+          (genValidLedgerDijkstraSized maxListLen)
 
     genRequireMOf = do
       req <- Gen.int (Range.linear 0 maxListLen)
