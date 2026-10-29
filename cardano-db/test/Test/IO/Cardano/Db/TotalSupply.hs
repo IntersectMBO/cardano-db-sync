@@ -58,6 +58,7 @@ initialSupplyTest =
           , txValidContract = True
           , txScriptSize = 0
           , txTreasuryDonation = DbLovelace 0
+          , txParentTxId = Nothing
           }
     _ <- insertTxIn (TxIn tx1Id (head tx0Ids) 0 Nothing)
     let addr = mkAddressHash bid1 tx1Id

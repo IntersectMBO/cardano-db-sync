@@ -148,6 +148,8 @@ data Tx = Tx
   , txScriptSize :: !Word64 -- sqltype=word31type
   -- New for Conway
   , txTreasuryDonation :: !DbLovelace -- sqltype=lovelace default=0
+  -- New for Dijkstra
+  , txParentTxId :: !(Maybe TxId) -- noreference -- The enclosing top-level tx of a sub-transaction.
   }
   deriving (Show, Eq, Generic)
 
@@ -176,6 +178,7 @@ txDecoder =
     <*> D.column (D.nonNullable D.bool) -- txValidContract
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- txScriptSize
     <*> dbLovelaceDecoder -- txTreasuryDonation
+    <*> maybeIdDecoder TxId -- txParentTxId
 
 txEncoder :: E.Params Tx
 txEncoder =
@@ -192,6 +195,7 @@ txEncoder =
     , txValidContract >$< E.param (E.nonNullable E.bool)
     , txScriptSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , txTreasuryDonation >$< dbLovelaceEncoder
+    , txParentTxId >$< maybeIdEncoder getTxId
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

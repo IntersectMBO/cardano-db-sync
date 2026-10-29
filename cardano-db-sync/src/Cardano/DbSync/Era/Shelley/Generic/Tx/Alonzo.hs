@@ -109,6 +109,7 @@ fromAlonzoTx ioExtraPlutus mprices (blkIndex, tx) =
     , txVotingProcedure = []
     , txProposalProcedure = []
     , txTreasuryDonation = mempty -- Alonzo does not support treasury donations
+    , txSubTransactions = [] -- no nested transactions before Dijkstra
     }
   where
     --    txBody :: Alonzo.AlonzoTxBody AlonzoEra

@@ -270,6 +270,7 @@ txZero bid =
     , txValidContract = True
     , txScriptSize = 0
     , txTreasuryDonation = DbLovelace 0
+    , txParentTxId = Nothing
     }
 
 poolHash0 :: PoolHash

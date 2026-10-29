@@ -86,6 +86,7 @@ A table for transactions within a block on the chain.
 | `valid_contract` | boolean | False if the contract is invalid. True if the contract is valid or there is no contract. |
 | `script_size` | word31type | The sum of the script sizes (in bytes) of scripts in the transaction. |
 | `treasury_donation` | lovelace |  |
+| `parent_tx_id` | integer (64) | The Tx table index of the enclosing top-level transaction, for a Dijkstra sub-transaction. NULL for a top-level transaction. New in 13.8-Dijkstra (experimental). |
 
 ### `tx_cbor`
 

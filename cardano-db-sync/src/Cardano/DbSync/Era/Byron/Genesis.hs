@@ -224,6 +224,7 @@ insertTxOutsByron syncEnv disInOut blkId (address, value) = do
               , DB.txValidContract = True
               , DB.txScriptSize = 0
               , DB.txTreasuryDonation = DB.DbLovelace 0
+              , DB.txParentTxId = Nothing
               }
       --
       unless disInOut $

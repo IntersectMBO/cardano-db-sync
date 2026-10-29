@@ -86,6 +86,8 @@ data Tx = Tx
   , txVotingProcedure :: ![(Voter, [(GovActionId, Voting)])]
   , txProposalProcedure :: ![(GovActionId, Proposal)]
   , txTreasuryDonation :: !Coin
+  , -- Dijkstra nested sub-transactions, each with its own TxId. Empty in every other era.
+    txSubTransactions :: ![Tx]
   }
 
 type ShelleyCert = ShelleyTxCert ShelleyEra

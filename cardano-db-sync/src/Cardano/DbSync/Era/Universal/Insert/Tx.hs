@@ -75,8 +75,10 @@ insertTx ::
   Generic.Tx ->
   BlockGroupedData ->
   BlockEra ->
-  ExceptT SyncNodeError DB.DbM BlockGroupedData
-insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped era = do
+  -- | The enclosing top-level tx.id when inserting a Dijkstra sub-transaction.
+  Maybe DB.TxId ->
+  ExceptT SyncNodeError DB.DbM (DB.TxId, BlockGroupedData)
+insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped era parentTxId = do
   let !txHash = Generic.txHash tx
   let !mdeposits = if not (Generic.txValidContract tx) then Just (Coin 0) else lookupDepositsMap txHash (apDepositsMap applyResult)
   let !outSum = fromIntegral $ unCoin $ Generic.txOutSum tx
@@ -94,6 +96,12 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
       let (resolvedInputs', _) = splitLast resolvedInputs
       pure (resolvedInputs', fees, Just (unCoin deposits))
+    -- The ledger reports one deposit total per batch, keyed by the top-level tx. A
+    -- sub-tx is never in that map, so deriving a residual here would invent a deposit.
+    (_, Nothing, Just fees) | isJust parentTxId -> do
+      resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
+      let (resolvedInputs', _) = splitLast resolvedInputs
+      pure (resolvedInputs', fees, Nothing)
     (_, Nothing, Just fees) -> do
       resolvedInputs <- mapM (resolveTxInputs syncEnv hasConsumed False (fst <$> groupedTxOut grouped)) txIn
       let (resolvedInputs', amounts) = splitLast resolvedInputs
@@ -129,6 +137,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
           , DB.txValidContract = Generic.txValidContract tx
           , DB.txScriptSize = sum $ Generic.txScriptSizes tx
           , DB.txTreasuryDonation = DB.DbLovelace (fromIntegral treasuryDonation)
+          , DB.txParentTxId = parentTxId
           }
 
   tryUpdateCacheTx cache (Generic.txLedgerTxId tx) txId
@@ -148,7 +157,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
       let !txIns = map (prepareTxIn txId Map.empty) resolvedInputs
       -- There is a custom semigroup instance for BlockGroupedData which uses addition for the values `fees` and `outSum`.
       -- Same happens bellow on last line of this function.
-      pure (grouped <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
+      pure (txId, grouped <> BlockGroupedData txIns txOutsGrouped [] [] fees outSum)
     else do
       -- The following operations only happen if the script passes stage 2 validation (or the tx has
       -- no script).
@@ -201,7 +210,7 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertVotingProcedures syncEnv blkId txId) (Generic.txVotingProcedure tx)
 
       let !txIns = map (prepareTxIn txId redeemers) resolvedInputs
-      pure (grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
+      pure (txId, grouped <> BlockGroupedData txIns txOutsGrouped txMetadata maTxMint fees outSum)
   where
     tracer = getTrace syncEnv
     cache = envCache syncEnv

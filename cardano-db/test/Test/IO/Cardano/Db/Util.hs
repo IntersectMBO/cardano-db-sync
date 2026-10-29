@@ -100,6 +100,7 @@ mkTxs blkId count =
         , txValidContract = True
         , txScriptSize = 0
         , txTreasuryDonation = DbLovelace 0
+        , txParentTxId = Nothing
         }
 
 testSlotLeader :: SlotLeader

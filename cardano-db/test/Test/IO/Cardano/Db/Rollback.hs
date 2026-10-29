@@ -121,7 +121,7 @@ createAndInsertBlocks blockCount =
                   True
                   0
                   (DbLovelace 0)
-
+                  Nothing -- txParentTxId
             void $ insertTxOut (mkTxOutCore blkId txId)
             pure $ Just txId
       case (indx, mTxOutId) of

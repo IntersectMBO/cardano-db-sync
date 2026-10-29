@@ -80,6 +80,9 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingD) (unVotingProcedures $ dtbVotingProcedures txBody)
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dtbProposalProcedures txBody
     , txTreasuryDonation = dtbTreasuryDonation txBody
+    , txSubTransactions =
+        map (fromDijkstraSubTx ioExtraPlutus mprices blkIndex) $
+          toList (txBody ^. subTransactionsTxBodyL)
     }
   where
     txBody :: Core.TxBody Core.TopTx DijkstraEra
@@ -117,6 +120,63 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     mkProposalIndex :: Word16 -> a -> (GovActionId, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
 
+-- | A Dijkstra nested sub-transaction. It has its own TxId, body and witnesses, but no
+-- collateral, no fee and no phase-2 validity flag of its own; the enclosing top-level tx
+-- governs all three. It cannot nest further. The parent link is set at insertion time.
+-- It does carry its own certificates, withdrawals, votes, proposals and treasury donation.
+fromDijkstraSubTx :: Bool -> Maybe Alonzo.Prices -> Word64 -> Core.Tx Core.SubTx DijkstraEra -> Tx
+fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
+  Tx
+    { txHash = txHashId tx
+    , txLedgerTxId = mkTxId tx
+    , txBlockIndex = blkIndex
+    , txCBOR = getTxCBOR tx
+    , txSize = getTxSize tx
+    , -- Only sub-transactions of a batch that passed phase 2 are inserted at all.
+      txValidContract = True
+    , txInputs = Map.elems $ rmInps finalMaps
+    , txCollateralInputs = []
+    , txReferenceInputs = map fromTxIn . toList $ txBody ^. referenceInputsTxBodyL
+    , txOutputs = outputs
+    , txCollateralOutputs = []
+    , txFees = Just mempty -- the top-level tx pays
+    , txOutSum = sumTxOutCoin outputs
+    , txInvalidBefore = invalidBef
+    , txInvalidHereafter = invalidAfter
+    , txWithdrawalSum = calcWithdrawalSum txBody
+    , txMetadata = fromAlonzoMetadata <$> getTxMetadata tx
+    , txCertificates = snd <$> rmCerts finalMaps
+    , txWithdrawals = Map.elems $ rmWdrl finalMaps
+    , txParamProposal = []
+    , txMint = txBody ^. mintTxBodyL
+    , txRedeemer = redeemers
+    , txData = txDataWitness tx
+    , txScriptSizes = getPlutusSizes tx
+    , txScripts = getDijkstraScripts tx
+    , txExtraKeyWitnesses = extraKeyWits txBody
+    , -- A proposal made in a sub-tx is keyed by that sub-tx's own TxId, which is what
+      -- the ledger uses in the governance state, so insertProposal's lookup finds it.
+      txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingD) (unVotingProcedures $ dstbVotingProcedures txBody)
+    , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dstbProposalProcedures txBody
+    , txTreasuryDonation = dstbTreasuryDonation txBody
+    , txSubTransactions = [] -- cannot nest further
+    }
+  where
+    txBody :: Core.TxBody Core.SubTx DijkstraEra
+    txBody = tx ^. Core.bodyTxL
+
+    txId :: TxId
+    txId = mkTxId tx
+
+    outputs :: [TxOut]
+    outputs = zipWith fromDijkstraTxOut [0 ..] $ toList (txBody ^. Core.outputsTxBodyL)
+
+    (finalMaps, redeemers) = resolveRedeemers ioExtraPlutus mprices tx DCert
+    (invalidBef, invalidAfter) = getInterval txBody
+
+    mkProposalIndex :: Word16 -> a -> (GovActionId, a)
+    mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
+
 -- | Dijkstra-specific TxOut conversion. DijkstraNativeScript is not Timelock,
 -- so we can't reuse Babbage.fromTxOut which requires NativeScript era ~ Timelock era.
 fromDijkstraTxOut :: Word64 -> BabbageTxOut DijkstraEra -> TxOut
@@ -148,7 +208,7 @@ fromDijkstraDatum bdat =
 
 -- | Dijkstra-specific script extraction. DijkstraNativeScript has no ToJSON,
 -- so we store CBOR for native scripts instead of JSON.
-getDijkstraScripts :: Core.Tx Core.TopTx DijkstraEra -> [TxScript]
+getDijkstraScripts :: Core.Tx l DijkstraEra -> [TxScript]
 getDijkstraScripts tx =
   mkDijkstraTxScript
     <$> ( Map.toList (tx ^. (Core.witsTxL . Core.scriptTxWitsL))

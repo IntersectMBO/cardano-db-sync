@@ -60,6 +60,7 @@ word128TrailingZerosTest =
           , txValidContract = True
           , txScriptSize = 0
           , txTreasuryDonation = DbLovelace 0
+          , txParentTxId = Nothing
           }
 
     setEpochSyncEnabled True
@@ -119,6 +120,7 @@ epochViewLargeSumsTest =
             , txValidContract = True
             , txScriptSize = 0
             , txTreasuryDonation = DbLovelace 0
+            , txParentTxId = Nothing
             }
     mapM_ (insertTx . bigTx) [0 .. nTxs - 1]
 

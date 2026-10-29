@@ -72,6 +72,7 @@ fromConwayTx ioExtraPlutus mprices (blkIndex, tx) =
     , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingC) (unVotingProcedures $ ctbVotingProcedures txBody)
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalC $ toList $ ctbProposalProcedures txBody
     , txTreasuryDonation = ctbTreasuryDonation txBody
+    , txSubTransactions = [] -- no nested transactions before Dijkstra
     }
   where
     txBody :: Core.TxBody Core.TopTx ConwayEra

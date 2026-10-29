@@ -96,8 +96,18 @@ insertBlockUniversal syncEnv shouldLog withinTwoMins withinHalfHour blk details 
           }
 
     let zippedTx = zip [0 ..] (Generic.blkTxs blk)
-    let txInserter = insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult
-    blockGroupedData <- foldM (\gp (idx, tx) -> txInserter idx tx gp (Generic.blkEra blk)) mempty zippedTx
+    let insertTx' idx tx gp =
+          insertTx syncEnv isMember blkId (sdEpochNo details) (Generic.blkSlotNo blk) applyResult idx tx gp (Generic.blkEra blk)
+        -- Insert the top-level tx, then its Dijkstra sub-transactions, each a tx row of
+        -- its own linked back by parent_tx_id. A batch that failed phase 2 applied none
+        -- of them, and their hashes may clash with txs that did apply, so they are
+        -- skipped; the top-level tx records the failure.
+        txInserter gp (idx, tx) = do
+          (topTxId, gp') <- insertTx' idx tx gp Nothing
+          if not (Generic.txValidContract tx)
+            then pure gp'
+            else foldM (\g subTx -> snd <$> insertTx' idx subTx g (Just topTxId)) gp' (Generic.txSubTransactions tx)
+    blockGroupedData <- foldM txInserter mempty zippedTx
 
     minIds <- insertBlockGroupedData syncEnv blockGroupedData
 
