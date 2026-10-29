@@ -202,6 +202,16 @@ prop_number_range = withTests 1 $ property $ do
   assert $ jsonNumberUnstorable (Sci.scientific 1 1000000000)
   assert $ jsonNumberUnstorable (Sci.scientific 1 (-16384))
   assert . not $ jsonNumberUnstorable (Sci.scientific 1 (-16383))
+  -- A negative exponent must not excuse the weight limit: these have 131073, 131072
+  -- and 114690 digits before the point respectively.
+  assert $ jsonNumberUnstorable (Sci.scientific bigCoefficient (-1))
+  assert . not $ jsonNumberUnstorable (Sci.scientific bigCoefficient (-2))
+  assert $ jsonNumberUnstorable (Sci.scientific bigCoefficient (-16384))
+  where
+    -- 131074 ones. Not divisible by 10, so no exact representation of a value
+    -- scaled from it can normalise the exponent back to zero.
+    bigCoefficient :: Integer
+    bigCoefficient = (10 ^ (131074 :: Int) - 1) `div` 9
 
 prop_number_clean :: Property
 prop_number_clean = property $ do

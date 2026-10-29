@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## Unreleased
+## 13.8.0.0
 - Update Docker configuration to allow PostgreSQL connection details to be provided via Docker secrets or a `.pgpass` file using the `PGPASSFILE` environment variable.
 - Add static binaries and docker images for aarch64-linux
 - Fix duplicate off-chain vote metadata child rows re-inserted when an anchor's metadata was re-processed; insertion is now idempotent (#1966).
@@ -13,9 +13,13 @@
 - Sanitize or drop jsonb valuues before inserting.
 - Fix the per-epoch statistics attributing dropped `datum.value` rows to `redeemer_data` and vice versa.
 - Roll back the database transaction when a block insert reports failure by returning `Left` rather than by throwing. Previously the runner committed it, leaving a partially written batch of blocks behind while db-sync reported the error.
+- Logging is configured with the node's `trace-dispatcher` system. The `iohk-monitoring` keys (`minSeverity`, `setupScribes`, `defaultScribes`, `setupBackends`, `defaultBackends`, `options`, `rotation`) are no longer read; replace them with a `TraceOptions` block, as in [`config/mainnet-config.yaml`](config/mainnet-config.yaml). A config that still carries the old keys starts on the default configuration (everything at `Info` severity to stdout) and warns on stderr.
+- Add `--ledger-only`, which replays the chain through the ledger and writes ledger snapshots to `--state-dir` without ever opening the database: no connection, no migration, no query and no insert, and nothing that depends on a database's tip. It resumes from the newest snapshot in the state dir, needs `"ledger": "enable"` and neither `PGPASSFILE` nor a running PostgreSQL, and produces snapshots an ordinary run can load. See [the docs](doc/state-snapshot.md#producing-snapshots-without-a-database).
 - Name the migrations that actually ran at startup and summarise the rest, replacing the per-script `Migration N/M` progress lines. Restarting on an up to date database now logs six lines rather than seventy-four ([#2128](https://github.com/IntersectMBO/cardano-db-sync/issues/2128)).
 - Pin dependencies to node 11.2: `ouroboros-consensus` 5.1.0.1, `cardano-ledger-dijkstra` 0.4.0.0 and the new `cardano-protocol` 0.2.0.0. db-sync still negotiates NodeToClient 23 and so stays compatible with 11.1.x nodes.
 - Read the node's `ExperimentalHardForksEnabled` (or its former name `TestEnableDevelopmentHardForkEras`, defaulting to `False`) and mirror it, rather than hardcoding the maximum supported protocol version. db-sync now claims Dijkstra's protocol version only when the experimental eras are enabled and Conway's otherwise, so it will not follow a chain that the node feeding it refuses as too new; and, as in the node, `TestDijkstraHardForkAtEpoch` is only read when they are enabled. A configuration that sets both key names to different values is rejected.
+- Fix the `epoch_param` and `param_proposal` collateral parameters wrapped by a signed 16-bit encoder; a startup migration repairs existing rows.
+- Harden the SMASH server and the off-chain fetcher: constant-time admin credential comparison, policy urls validated by parsed host, delisted pools kept when a policy fetch fails, reserved tickers matched case-insensitively, pool relay DNS names sanitised, and a tighter address restriction.
 
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.

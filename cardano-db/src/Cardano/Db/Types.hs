@@ -257,6 +257,7 @@ data ScriptPurpose
   | Rewrd
   | Vote
   | Propose
+  | Guard
   deriving (Eq, Generic, Show)
 
 scriptPurposeDecoder :: HsqlD.Value ScriptPurpose
@@ -267,6 +268,7 @@ scriptPurposeDecoder = HsqlD.enum $ \case
   "reward" -> Just Rewrd
   "vote" -> Just Vote
   "propose" -> Just Propose
+  "guard" -> Just Guard
   _ -> Nothing
 
 scriptPurposeEncoder :: HsqlE.Value ScriptPurpose
@@ -277,6 +279,7 @@ scriptPurposeEncoder = HsqlE.enum $ \case
   Rewrd -> "reward"
   Vote -> "vote"
   Propose -> "propose"
+  Guard -> "guard"
 
 --------------------------------------------------------------------------------
 data ScriptType

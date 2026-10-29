@@ -477,7 +477,9 @@ queryReservedTickerStmt =
           [ "SELECT ticker.pool_hash FROM "
           , reservedPoolTickerTable
           , " ticker"
-          , " WHERE ticker.name = $1"
+          , -- NB: the ticker is published by the pool itself, so an exact match let
+            -- "Ada" sidestep a reservation of "ADA".
+            " WHERE lower(btrim(ticker.name)) = lower(btrim($1))"
           , " LIMIT 1"
           ]
 

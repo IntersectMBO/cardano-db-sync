@@ -14,7 +14,8 @@ services:
       - postgres_user
       - postgres_db
     ports:
-      - ${POSTGRES_PORT:-5432}:5432
+      # Loopback only; the compose network is what db-sync uses.
+      - 127.0.0.1:${POSTGRES_PORT:-5432}:5432
     volumes:
       - postgres:/var/lib/postgresql/data
     restart: on-failure
@@ -54,7 +55,7 @@ services:
         max-file: "10"
 
   cardano-db-sync:
-    image: ghcr.io/intersectmbo/cardano-db-sync:13.7.2.1
+    image: ghcr.io/intersectmbo/cardano-db-sync:13.8.0.0
     environment:
       - DB_SYNC_CONFIG=${DB_SYNC_CONFIG:-}
       - DISABLE_LEDGER=${DISABLE_LEDGER}

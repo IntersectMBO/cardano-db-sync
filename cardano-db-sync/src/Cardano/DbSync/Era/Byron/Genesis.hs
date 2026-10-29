@@ -42,12 +42,13 @@ import Cardano.DbSync.Util
 -- If these transactions are already in the DB, they are validated.
 insertValidateByronGenesisDist ::
   SyncEnv ->
+  DB.DbEnv ->
   NetworkName ->
   Byron.Config ->
   ExceptT SyncNodeError IO ()
-insertValidateByronGenesisDist syncEnv (NetworkName networkName) cfg = do
+insertValidateByronGenesisDist syncEnv dbEnv (NetworkName networkName) cfg = do
   -- Genesis insertion is always syncing, use ReadCommitted for better performance
-  ExceptT $ runDbSyncTransaction (getTrace syncEnv) (envDbEnv syncEnv) (Just DB.ReadCommitted) insertAction
+  ExceptT $ runDbSyncTransaction (getTrace syncEnv) dbEnv (Just DB.ReadCommitted) insertAction
   where
     tracer = getTrace syncEnv
 

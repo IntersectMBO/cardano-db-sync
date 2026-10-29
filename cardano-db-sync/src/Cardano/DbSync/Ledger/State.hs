@@ -165,8 +165,9 @@ mkHasLedgerEnv ::
   SystemStart ->
   SyncOptions ->
   LedgerBackend ->
+  Bool ->
   IO HasLedgerEnv
-mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions backend = do
+mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions backend ledgerOnly = do
   -- Clean up any legacy .lstate files from previous versions
   migrateOldSnapshots dir trce
   svar <- newTVarIO Strict.Nothing
@@ -239,6 +240,7 @@ mkHasLedgerEnv trce protoInfo dir nw maxLovelaceSupply systemStart syncOptions b
     HasLedgerEnv
       { leTrace = trce
       , leUseLedger = ioUseLedger $ soptInsertOptions syncOptions
+      , leLedgerOnly = ledgerOnly
       , leHasRewards = ioRewards $ soptInsertOptions syncOptions
       , leProtocolInfo = protoInfo
       , leDir = dir

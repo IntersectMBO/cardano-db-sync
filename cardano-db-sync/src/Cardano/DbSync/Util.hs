@@ -171,9 +171,12 @@ jsonbNestingExceeded bs =
 -- | Whether Postgres would reject this number as out of @numeric@ range: more than
 -- 131072 digits before the decimal point, or 16383 after it.
 jsonNumberUnstorable :: Scientific -> Bool
-jsonNumberUnstorable sci
-  | expo >= 0 = integerDigits + expo > 131072
-  | otherwise = negate expo - trailingZeros > 16383
+jsonNumberUnstorable sci =
+  -- Both limits are independent, so both are tested. As alternatives, a negative
+  -- exponent skipped the weight check entirely. 'integerDigits + expo' is the digit
+  -- count before the point for either sign, going non-positive for a pure fraction.
+  integerDigits + expo > 131072
+    || (expo < 0 && negate expo - trailingZeros > 16383)
   where
     expo = base10Exponent sci
     digits = show (abs (coefficient sci)) :: [Char]

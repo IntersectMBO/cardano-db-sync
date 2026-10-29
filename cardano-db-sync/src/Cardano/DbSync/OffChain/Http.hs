@@ -115,7 +115,9 @@ httpGetOffChainVoteDataSingle ::
 httpGetOffChainVoteDataSingle allowPrivate vurl metaHash anchorType = do
   manager <- liftIO (newRestrictedManager allowPrivate)
   request <- parseOffChainUrl allowPrivate url
-  let req = httpGetBytes manager request 3000000 3000000 url
+  -- Read one byte past the limit, so an oversized body is rejected rather than
+  -- truncated to exactly the limit and accepted.
+  let req = httpGetBytes manager request 3000001 3000000 url
   httpRes <- handleExceptT (convertHttpException url) req
   (respBS, respLBS, mContentType) <- hoistEither httpRes
   (mocvd, decodedValue, metadataHash, mWarning, isValidJson) <- parseAndValidateVoteData respBS respLBS metaHash anchorType (Just $ OffChainVoteUrl vurl)
@@ -319,30 +321,41 @@ permissiveRestriction = addressRestriction $ const Nothing
 
 isPrivateAddr :: Socket.SockAddr -> Bool
 isPrivateAddr (Socket.SockAddrInet _ hostAddr) =
-  let (a, b, _, _) = Socket.hostAddressToTuple hostAddr
+  let (a, b, c, _) = Socket.hostAddressToTuple hostAddr
    in a == 0 -- 0.0.0.0/8 (current network)
         || a == 10 -- 10.0.0.0/8 (private)
         || (a == 100 && b >= 64 && b <= 127) -- 100.64.0.0/10 (CGNAT)
         || a == 127 -- 127.0.0.0/8 (loopback)
         || (a == 169 && b == 254) -- 169.254.0.0/16 (link-local)
         || (a == 172 && b >= 16 && b <= 31) -- 172.16.0.0/12 (private)
+        || (a == 192 && b == 0 && c == 0) -- 192.0.0.0/24 (IETF protocol assignments)
         || (a == 192 && b == 168) -- 192.168.0.0/16 (private)
         || (a == 198 && b >= 18 && b <= 19) -- 198.18.0.0/15 (benchmarking)
         || a >= 224 -- 224.0.0.0+ (multicast + reserved + broadcast)
 isPrivateAddr (Socket.SockAddrInet6 _ _ hostAddr6 _) =
   let addr@(w1, w2, w3, w4, w5, w6, w7, w8) = Socket.hostAddress6ToTuple hostAddr6
-      ipv4Mapped = (w1, w2, w3, w4, w5, w6) == (0, 0, 0, 0, 0, 0xFFFF)
-      mappedIPv4Addr =
+      embeddedLow = embeddedIPv4 w7 w8
+      embedded6to4 = embeddedIPv4 w2 w3
+      embeddedIPv4 hi lo =
         Socket.SockAddrInet 0 $
           Socket.tupleToHostAddress
-            ( fromIntegral (w7 `shiftR` 8)
-            , fromIntegral (w7 .&. 0xFF)
-            , fromIntegral (w8 `shiftR` 8)
-            , fromIntegral (w8 .&. 0xFF)
+            ( fromIntegral (hi `shiftR` 8)
+            , fromIntegral (hi .&. 0xFF)
+            , fromIntegral (lo `shiftR` 8)
+            , fromIntegral (lo .&. 0xFF)
             )
+      ipv4Mapped = (w1, w2, w3, w4, w5, w6) == (0, 0, 0, 0, 0, 0xFFFF)
+      ipv4Compatible = (w1, w2, w3, w4, w5, w6) == (0, 0, 0, 0, 0, 0)
    in addr == (0, 0, 0, 0, 0, 0, 0, 0) -- ::
         || addr == (0, 0, 0, 0, 0, 0, 0, 1) -- ::1
         || (w1 .&. 0xFE00) == 0xFC00 -- fc00::/7 (ULA)
         || (w1 .&. 0xFFC0) == 0xFE80 -- fe80::/10 (link-local)
-        || (ipv4Mapped && isPrivateAddr mappedIPv4Addr) -- ::ffff:0:0/96 (IPv4-mapped)
+        || (w1 .&. 0xFFC0) == 0xFEC0 -- fec0::/10 (deprecated site-local)
+        -- A NAT64 gateway rewrites these to the embedded IPv4 address, so without
+        -- them a private address is reachable through a public-looking literal.
+        || (w1, w2) == (0x0064, 0xFF9B) -- 64:ff9b::/32 (NAT64, RFC 6052 and 8215)
+        || (w1, w2) == (0x2001, 0x0000) -- 2001::/32 (Teredo)
+        || (w1 == 0x2002 && isPrivateAddr embedded6to4) -- 2002::/16 (6to4)
+        || (ipv4Mapped && isPrivateAddr embeddedLow) -- ::ffff:0:0/96 (IPv4-mapped)
+        || (ipv4Compatible && isPrivateAddr embeddedLow) -- ::a.b.c.d (IPv4-compatible)
 isPrivateAddr _ = False

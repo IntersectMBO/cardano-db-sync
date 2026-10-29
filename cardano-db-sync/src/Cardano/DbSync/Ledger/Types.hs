@@ -69,6 +69,9 @@ type ConsensusStateRef = Consensus.StateRef IO ExtLedgerState CardanoBlock
 data HasLedgerEnv = HasLedgerEnv
   { leTrace :: !(Trace IO LogMessage)
   , leUseLedger :: !Bool
+  , leLedgerOnly :: !Bool
+  -- ^ True when there is no database, so the snapshots in the state dir are the
+  -- only output and must not be deleted on a rollback to genesis.
   , leHasRewards :: !Bool
   , leProtocolInfo :: !(Consensus.ProtocolInfo CardanoBlock)
   , leDir :: !LedgerStateDir

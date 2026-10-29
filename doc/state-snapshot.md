@@ -72,6 +72,35 @@ The `<slot>` directory name must match the slot number in the ledger state.
 The `--config` flag takes the **node** config, not db-sync config.
 Converting does not modify the source.
 
+## Producing snapshots without a database
+
+`--ledger-only` replays the chain through the ledger and writes nothing else.
+db-sync never opens the database in this mode, so there is no connection, no
+migration, no query and no insert, and nothing it does depends on any
+database's tip. It resumes from the newest snapshot in `--state-dir` and
+follows the node from there, writing new snapshots on the usual cadence.
+
+```
+cardano-db-sync \
+  --config config/mainnet-config.yaml \
+  --socket-path <node.socket> \
+  --state-dir <state-dir> \
+  --schema-dir schema \
+  --ledger-only
+```
+
+The config needs `"ledger": "enable"`, because the snapshots are the only
+output and the other two settings leave the apply result empty so that no
+snapshot is ever taken. `PGPASSFILE` is not read and PostgreSQL does not have
+to be running; `--schema-dir` is still accepted but unused. `--rollback-to-slot`
+is rejected, since it deletes blocks from a database this mode does not open.
+
+Because a snapshot is keyed by chain point and carries nothing
+database-specific, one produced this way is loadable by an ordinary db-sync
+run. That makes it a way to prepare the ledger state for an upgrade on a second
+machine, or alongside a live instance, without touching its database or
+competing with it for one.
+
 ## Mainnet Snapshots
 
 Available at the [downloads page](https://update-cardano-mainnet.iohk.io/cardano-db-sync/index.html#)

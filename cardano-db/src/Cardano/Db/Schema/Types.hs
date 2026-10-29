@@ -50,6 +50,11 @@ poolUrlEncoder = (sanitiseUrl . unPoolUrl) >$< E.text
 sanitiseUrl :: Text -> Text
 sanitiseUrl = Text.replace (Text.singleton '\0') (Text.pack "%00")
 
+-- | Drop the Unicode NUL that Postgres cannot store in a @text@ column. Unlike
+-- 'sanitiseUrl' this drops the byte rather than percent-encoding it.
+sanitiseText :: Text -> Text
+sanitiseText = Text.filter (/= '\0')
+
 textDecoder :: HsqlD.Value Text
 textDecoder = HsqlD.custom (\_ bytes -> Right (Text.decodeUtf8With TextError.lenientDecode bytes))
 

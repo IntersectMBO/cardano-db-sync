@@ -23,6 +23,7 @@ module Cardano.SMASH.Server.Types (
   User (..),
   UserValidity (..),
   isLocalhostHost,
+  isRestrictedIPv6,
 ) where
 
 import Cardano.Api (
@@ -51,7 +52,7 @@ import qualified Data.Time.Clock.POSIX as Time
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import qualified Net.IPv4 as IPv4
 import qualified Net.IPv6 as IPv6
-import Network.URI (URI (..), parseURI, uriAuthority, uriRegName, uriScheme)
+import Network.URI (URI (..), parseURI, uriAuthority, uriRegName, uriScheme, uriUserInfo)
 import Quiet (Quiet (..))
 import Servant (FromHttpApiData (..), MimeUnrender (..), OctetStream)
 import qualified Text.Show as TShow
@@ -228,16 +229,34 @@ instance ToSchema PoolFetchError
 formatTimeToNormal :: Time.POSIXTime -> Text
 formatTimeToNormal = toS . formatTime defaultTimeLocale "%d.%m.%Y. %T" . Time.posixSecondsToUTCTime
 
+-- | Whether this is a loopback host. Accepts the bracketed form, because
+-- 'uriRegName' keeps the brackets around an IPv6 literal.
 isLocalhostHost :: Text -> Bool
 isLocalhostHost host =
-  host == "localhost" || host == "127.0.0.1" || host == "::1"
+  host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
 
 isRestrictedIPv6 :: IPv6.IPv6 -> Bool
 isRestrictedIPv6 ipv6 =
-  let (h1, _, _, _, _, _, _, _) = IPv6.toWord16s ipv6
+  let (h1, h2, h3, h4, h5, h6, h7, h8) = IPv6.toWord16s ipv6
+      embedded hi lo =
+        IPv4.fromOctets
+          (fromIntegral (hi `shiftR` 8))
+          (fromIntegral (hi .&. 0xFF))
+          (fromIntegral (lo `shiftR` 8))
+          (fromIntegral (lo .&. 0xFF))
+      ipv4Mapped = (h1, h2, h3, h4, h5, h6) == (0, 0, 0, 0, 0, 0xFFFF)
+      ipv4Compatible = (h1, h2, h3, h4, h5, h6) == (0, 0, 0, 0, 0, 0)
    in (ipv6 == IPv6.loopback)
-        || ((h1 .&. 0xfe00) == 0xfc00)
-        || (h1 == 0xfe80)
+        || (h1, h2, h3, h4, h5, h6, h7, h8) == (0, 0, 0, 0, 0, 0, 0, 0) -- ::
+        || ((h1 .&. 0xFE00) == 0xFC00) -- fc00::/7 (ULA)
+        -- NB: masked. 'h1 == 0xfe80' matched only the first /16 of fe80::/10.
+        || ((h1 .&. 0xFFC0) == 0xFE80) -- fe80::/10 (link-local)
+        || ((h1 .&. 0xFFC0) == 0xFEC0) -- fec0::/10 (deprecated site-local)
+        || (h1, h2) == (0x0064, 0xFF9B) -- 64:ff9b::/32 (NAT64)
+        || (h1, h2) == (0x2001, 0x0000) -- 2001::/32 (Teredo)
+        -- Routed to the embedded IPv4 address, so an IPv6 literal was a way to
+        -- reach a reserved IPv4 one.
+        || ((ipv4Mapped || ipv4Compatible) && IPv4.reserved (embedded h7 h8))
 
 validateSmashURL :: Text -> Maybe SmashURL
 validateSmashURL urlText =
@@ -245,18 +264,16 @@ validateSmashURL urlText =
     Nothing -> Nothing
     Just uri' -> do
       let scheme = uriScheme uri'
-      guard (Text.isPrefixOf "https://" urlText || (Text.isPrefixOf "http://" urlText && isLocalhostUrl urlText))
       guard (scheme == "http:" || scheme == "https:")
       authority <- uriAuthority uri'
       let host = Text.pack (uriRegName authority)
+      -- Refuse userinfo: the host of @http://127.0.0.1\@evil.example/@ is
+      -- @evil.example@, but a prefix test on the url read it as localhost.
+      guard (uriUserInfo authority == "")
+      -- Plain http reaches loopback only, decided from the parsed host.
+      guard (scheme == "https:" || isLocalhostHost host)
       guard (not (isBlockedHost host))
       Just (SmashURL uri')
-  where
-    isLocalhostUrl :: Text -> Bool
-    isLocalhostUrl u =
-      "http://localhost" `Text.isPrefixOf` u
-        || "http://127.0.0.1" `Text.isPrefixOf` u
-        || "http://[::1]" `Text.isPrefixOf` u
 
 isBlockedHost :: Text -> Bool
 isBlockedHost host

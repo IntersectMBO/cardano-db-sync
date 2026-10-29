@@ -241,7 +241,7 @@ runFetchOffChainPoolThread syncEnv = do
       ( \dbConn -> do
           let dbEnv = DB.createDbEnv dbConn Nothing (Just trce)
               -- Create a new SyncEnv with the new DbEnv but preserving all other fields
-              threadSyncEnv = syncEnv {envDbEnv = dbEnv}
+              threadSyncEnv = syncEnv {envDbEnv = Just dbEnv}
           forever $ do
             tDelay
             -- Use dynamic isolation level based on sync state
@@ -278,7 +278,7 @@ runFetchOffChainVoteThread syncEnv = do
       ( \dbConn -> do
           let dbEnv = DB.createDbEnv dbConn Nothing (Just trce)
               -- Create a new SyncEnv with the new DbEnv but preserving all other fields
-              threadSyncEnv = syncEnv {envDbEnv = dbEnv}
+              threadSyncEnv = syncEnv {envDbEnv = Just dbEnv}
           -- Use the thread-specific SyncEnv for all operations
           forever $ do
             tDelay

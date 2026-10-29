@@ -96,8 +96,10 @@ runDbSyncNode metricsSetters knownMigrations params syncNodeConfigFromFile =
         throwIO err
       Right genCfg -> pure genCfg
 
-    -- Run initial migrations synchronously first
-    runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile
+    -- Run initial migrations synchronously first. A ledger-only run has no
+    -- database to migrate.
+    unless (enpLedgerOnly params) $
+      runMigrationsOnly knownMigrations trce params syncNodeConfigFromFile
 
     runDbSync metricsSetters iomgr tracers params syncNodeConfigFromFile abortOnPanic genCfg
 
@@ -159,38 +161,52 @@ runDbSync ::
 runDbSync metricsSetters iomgr tracers params syncNodeConfigFromFile abortOnPanic genCfg = do
   logInfo trce $ textShow syncOpts
 
-  -- Read the PG connection info
-  pgConfig <- runOrThrowIO (DB.readPGPass $ enpPGPassSource params)
+  if enpLedgerOnly params
+    then
+      -- Nothing to connect to, nothing to migrate and nothing to roll back.
+      runSyncNode
+        metricsSetters
+        tracers
+        iomgr
+        Nothing
+        (const $ pure ())
+        syncNodeConfigFromFile
+        params
+        syncOpts
+        genCfg
+    else do
+      -- Read the PG connection info
+      pgConfig <- runOrThrowIO (DB.readPGPass $ enpPGPassSource params)
 
-  dbConnectionSetting <- case DB.toConnectionSetting pgConfig of
-    Left err -> do
-      let syncNodeErr = SNErrPGConfig ("Invalid database connection setting: " <> err)
-      logError trce $ show syncNodeErr
-      throwIO syncNodeErr
-    Right setting -> pure setting
+      dbConnectionSetting <- case DB.toConnectionSetting pgConfig of
+        Left err -> do
+          let syncNodeErr = SNErrPGConfig ("Invalid database connection setting: " <> err)
+          logError trce $ show syncNodeErr
+          throwIO syncNodeErr
+        Right setting -> pure setting
 
-  -- For testing and debugging.
-  whenJust (enpMaybeRollback params) $ \slotNo ->
-    void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
+      -- For testing and debugging.
+      whenJust (enpMaybeRollback params) $ \slotNo ->
+        void $ unsafeRollback trce (txOutConfigToTableType txOutConfig) pgConfig slotNo
 
-  -- These migrations will be ran when near the tip of the chain eg: indexes.
-  let runNearTipMigration mode = do
-        msg <- DB.getMaintenancePsqlConf pgConfig
-        logInfo trce $ "Running NearTip database migrations in mode " <> textShow mode
-        logInfo trce msg
-        when (mode `elem` [DB.NearTip, DB.Full]) $ logWarning trce indexesMsg
-        DB.runMigrations (Just trce) pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
+      -- These migrations will be ran when near the tip of the chain eg: indexes.
+      let runNearTipMigration mode = do
+            msg <- DB.getMaintenancePsqlConf pgConfig
+            logInfo trce $ "Running NearTip database migrations in mode " <> textShow mode
+            logInfo trce msg
+            when (mode `elem` [DB.NearTip, DB.Full]) $ logWarning trce indexesMsg
+            DB.runMigrations (Just trce) pgConfig True dbMigrationDir (Just $ DB.LogFileDir "/tmp") mode (txOutConfigToTableType txOutConfig)
 
-  runSyncNode
-    metricsSetters
-    tracers
-    iomgr
-    dbConnectionSetting
-    (void . runNearTipMigration)
-    syncNodeConfigFromFile
-    params
-    syncOpts
-    genCfg
+      runSyncNode
+        metricsSetters
+        tracers
+        iomgr
+        (Just dbConnectionSetting)
+        (void . runNearTipMigration)
+        syncNodeConfigFromFile
+        params
+        syncOpts
+        genCfg
   where
     trce = dstTracer tracers
     dbMigrationDir :: DB.MigrationDir
@@ -212,8 +228,9 @@ runSyncNode ::
   MetricSetters ->
   DbSyncTracers ->
   IOManager ->
-  -- | Database connection settings
-  HsqlSet.Setting ->
+  -- | Database connection settings. 'Nothing' for a ledger-only run, which
+  -- never opens the database.
+  Maybe HsqlSet.Setting ->
   -- | run migration function
   RunMigration ->
   SyncNodeConfig ->
@@ -221,7 +238,7 @@ runSyncNode ::
   SyncOptions ->
   GenesisConfig ->
   IO ()
-runSyncNode metricsSetters tracers iomgr dbConnSetting runNearTipMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions genCfg = do
+runSyncNode metricsSetters tracers iomgr mDbConnSetting runNearTipMigrationFnc syncNodeConfigFromFile syncNodeParams syncOptions genCfg = do
   whenJust maybeLedgerDir $
     \enpLedgerStateDir -> do
       createDirectoryIfMissing True (unLedgerStateDir enpLedgerStateDir)
@@ -230,87 +247,129 @@ runSyncNode metricsSetters tracers iomgr dbConnSetting runNearTipMigrationFnc sy
   logInfo trce $ "Using alonzo genesis file from: " <> (show . unGenesisFile $ dncAlonzoGenesisFile syncNodeConfigFromFile)
 
   let useLedger = shouldUseLedger (sioLedger $ dncInsertOptions syncNodeConfigFromFile)
-  -- The main thread
-  bracket
-    (DB.acquireConnection [dbConnSetting])
-    HsqlC.release
-    ( \dbConn -> do
-        runOrThrowIO $ runExceptT $ do
-          -- Create connection pool for parallel operations
-          pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
-          let dbEnv = DB.createDbEnv dbConn (Just pool) (Just trce)
-          isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
-          maxStackDepthKb <- liftSessionIO mkSyncNodeCallStack $ DB.queryMaxStackDepthKb dbConn
-          when (fromIntegral maxStackDepthKb < minMaxStackDepthKb) $
-            liftIO . logWarning trce $
-              mconcat
-                [ "max_stack_depth is "
-                , textShow maxStackDepthKb
-                , "kB, below the "
-                , textShow minMaxStackDepthKb
-                , "kB a JSON value nested to db-sync's limit of "
-                , textShow jsonbNestingLimit
-                , " levels needs. Deeply nested values may abort the transaction that "
-                , "inserts them. Raise max_stack_depth in postgresql.conf."
-                ]
-          logProtocolMagicId trce $ genesisProtocolMagicId genCfg
-
-          -- Determine the final JSONB state after any schema migrations
-          let finalJsonbInSchema = case (isJsonbInSchema, removeJsonbFromSchemaConfig) of
-                (True, True) -> False -- Will be removed
-                (False, False) -> True -- Will be added
-                (s, _) -> s -- No change
-          syncEnv <-
-            ExceptT $
-              mkSyncEnvFromConfig
-                metricsSetters
-                trce
-                dbEnv
-                syncOptions
-                genCfg
-                syncNodeConfigFromFile
-                syncNodeParams
-                runNearTipMigrationFnc
-                finalJsonbInSchema
-
-          -- Warn the user that jsonb datatypes are being removed from the database schema.
-          when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do
-            liftIO $ logWarning trce "Removing jsonb datatypes from the database. This can take time."
-            liftIO $ runRemoveJsonbFromSchema syncEnv
-
-          -- Warn the user that jsonb datatypes are being added to the database schema.
-          when (not isJsonbInSchema && not removeJsonbFromSchemaConfig) $ do
-            liftIO $ logWarning trce "Adding jsonb datatypes back to the database. This can take time."
-            liftIO $ runAddJsonbToSchema syncEnv
-          liftIO $ runConsumedTxOutMigrationsMaybe syncEnv
-          liftIO $ syncEpochViewConfig syncEnv
-          unless useLedger $ liftIO $ do
-            logInfo trce "Migrating to a no ledger schema"
-            DB.noLedgerMigrations dbEnv trce
-          insertValidateGenesisDist syncEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
-
-          -- Handle ledger snapshots after rollback to ensure consistency
-          liftIO $ handlePostRollbackSnapshots syncEnv (enpMaybeRollback syncNodeParams)
-
-          -- communication channel between datalayer thread and chainsync-client thread
-          threadChannels <- liftIO newThreadChannels
-          -- 'finally' on the worker pool ensures the LSM session (and any other
-          -- backend resources) are closed even when db-sync is cancelled or
-          -- crashes — important for tests that restart db-sync in the same
-          -- process and need the OS file lock to be released.
-          liftIO $
-            mapConcurrently_
-              id
-              [ runDbThread syncEnv threadChannels
-              , runSyncNodeClient metricsSetters syncEnv iomgr tracers threadChannels (enpSocketPath syncNodeParams)
-              , runFetchOffChainPoolThread syncEnv
-              , runFetchOffChainVoteThread syncEnv
-              , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
-              ]
-              `finally` closeLedgerEnv syncEnv
-    )
+  case mDbConnSetting of
+    Nothing -> runLedgerOnly
+    Just dbConnSetting -> runWithDb useLedger dbConnSetting
   where
     trce = dstTracer tracers
+
+    -- Replay the chain through the ledger and write snapshots, resuming from
+    -- the newest one in the state dir. The database is not opened, so there are
+    -- no migrations, no genesis insertion and no tip to reconcile against.
+    runLedgerOnly :: IO ()
+    runLedgerOnly = do
+      logInfo trce $
+        mconcat
+          [ "Ledger-only mode: the database is not opened, queried or written to. "
+          , "Resuming from the ledger snapshots in the state dir and following the node."
+          ]
+      logProtocolMagicIdIO trce $ genesisProtocolMagicId genCfg
+      syncEnv <-
+        runOrThrowIO $
+          mkSyncEnvFromConfig
+            metricsSetters
+            trce
+            Nothing
+            syncOptions
+            genCfg
+            syncNodeConfigFromFile
+            syncNodeParams
+            runNearTipMigrationFnc
+            False
+      runThreads syncEnv
+
+    runWithDb :: Bool -> HsqlSet.Setting -> IO ()
+    runWithDb useLedger dbConnSetting =
+      -- The main thread
+      bracket
+        (DB.acquireConnection [dbConnSetting])
+        HsqlC.release
+        ( \dbConn -> do
+            runOrThrowIO $ runExceptT $ do
+              -- Create connection pool for parallel operations
+              pool <- liftIO $ DB.createHasqlConnectionPool [dbConnSetting] 4 -- 4 connections for reasonable parallelism
+              let dbEnv = DB.createDbEnv dbConn (Just pool) (Just trce)
+              isJsonbInSchema <- liftSessionIO mkSyncNodeCallStack $ DB.queryJsonbInSchemaExists dbConn
+              maxStackDepthKb <- liftSessionIO mkSyncNodeCallStack $ DB.queryMaxStackDepthKb dbConn
+              when (fromIntegral maxStackDepthKb < minMaxStackDepthKb) $
+                liftIO . logWarning trce $
+                  mconcat
+                    [ "max_stack_depth is "
+                    , textShow maxStackDepthKb
+                    , "kB, below the "
+                    , textShow minMaxStackDepthKb
+                    , "kB a JSON value nested to db-sync's limit of "
+                    , textShow jsonbNestingLimit
+                    , " levels needs. Deeply nested values may abort the transaction that "
+                    , "inserts them. Raise max_stack_depth in postgresql.conf."
+                    ]
+              logProtocolMagicId trce $ genesisProtocolMagicId genCfg
+
+              -- Determine the final JSONB state after any schema migrations
+              let finalJsonbInSchema = case (isJsonbInSchema, removeJsonbFromSchemaConfig) of
+                    (True, True) -> False -- Will be removed
+                    (False, False) -> True -- Will be added
+                    (s, _) -> s -- No change
+              syncEnv <-
+                ExceptT $
+                  mkSyncEnvFromConfig
+                    metricsSetters
+                    trce
+                    (Just dbEnv)
+                    syncOptions
+                    genCfg
+                    syncNodeConfigFromFile
+                    syncNodeParams
+                    runNearTipMigrationFnc
+                    finalJsonbInSchema
+
+              -- Warn the user that jsonb datatypes are being removed from the database schema.
+              when (isJsonbInSchema && removeJsonbFromSchemaConfig) $ do
+                liftIO $ logWarning trce "Removing jsonb datatypes from the database. This can take time."
+                liftIO $ runRemoveJsonbFromSchema dbEnv
+
+              -- Warn the user that jsonb datatypes are being added to the database schema.
+              when (not isJsonbInSchema && not removeJsonbFromSchemaConfig) $ do
+                liftIO $ logWarning trce "Adding jsonb datatypes back to the database. This can take time."
+                liftIO $ runAddJsonbToSchema dbEnv
+              liftIO $ runConsumedTxOutMigrationsMaybe syncEnv dbEnv
+              liftIO $ syncEpochViewConfig syncEnv dbEnv
+              unless useLedger $ liftIO $ do
+                logInfo trce "Migrating to a no ledger schema"
+                DB.noLedgerMigrations dbEnv trce
+              insertValidateGenesisDist syncEnv dbEnv (dncNetworkName syncNodeConfigFromFile) genCfg (useShelleyInit syncNodeConfigFromFile)
+
+              -- Handle ledger snapshots after rollback to ensure consistency
+              liftIO $ handlePostRollbackSnapshots syncEnv (enpMaybeRollback syncNodeParams)
+
+              liftIO $ runThreads syncEnv
+        )
+
+    -- 'finally' on the worker pool ensures the LSM session (and any other
+    -- backend resources) are closed even when db-sync is cancelled or
+    -- crashes — important for tests that restart db-sync in the same
+    -- process and need the OS file lock to be released.
+    runThreads :: SyncEnv -> IO ()
+    runThreads syncEnv = do
+      -- communication channel between datalayer thread and chainsync-client thread
+      threadChannels <- newThreadChannels
+      -- The off-chain fetchers open connections of their own to write what they
+      -- fetch, so a ledger-only run does not start them.
+      let offChainThreads
+            | isLedgerOnly syncEnv = []
+            | otherwise =
+                [ runFetchOffChainPoolThread syncEnv
+                , runFetchOffChainVoteThread syncEnv
+                ]
+      mapConcurrently_
+        id
+        ( [ runDbThread syncEnv threadChannels
+          , runSyncNodeClient metricsSetters syncEnv iomgr tracers threadChannels (enpSocketPath syncNodeParams)
+          , runLedgerStateWriteThread (getTrace syncEnv) (envLedgerEnv syncEnv)
+          ]
+            <> offChainThreads
+        )
+        `finally` closeLedgerEnv syncEnv
 
     useShelleyInit :: SyncNodeConfig -> Bool
     useShelleyInit cfg =
@@ -322,10 +381,12 @@ runSyncNode metricsSetters tracers iomgr dbConnSetting runNearTipMigrationFnc sy
     maybeLedgerDir = enpMaybeLedgerStateDir syncNodeParams
 
 logProtocolMagicId :: Trace IO LogMessage -> Crypto.ProtocolMagicId -> ExceptT SyncNodeError IO ()
-logProtocolMagicId tracer pm =
-  liftIO
-    . logInfo tracer
-    $ mconcat
+logProtocolMagicId tracer = liftIO . logProtocolMagicIdIO tracer
+
+logProtocolMagicIdIO :: Trace IO LogMessage -> Crypto.ProtocolMagicId -> IO ()
+logProtocolMagicIdIO tracer pm =
+  logInfo tracer $
+    mconcat
       [ "NetworkMagic: "
       , textShow (Crypto.unProtocolMagicId pm)
       ]

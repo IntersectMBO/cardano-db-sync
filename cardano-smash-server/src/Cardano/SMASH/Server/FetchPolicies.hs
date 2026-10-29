@@ -8,7 +8,7 @@ module Cardano.SMASH.Server.FetchPolicies (
 ) where
 
 import Cardano.Prelude
-import Cardano.SMASH.Server.Types (HealthStatus, PolicyResult (..), PoolId, SmashURL (..), isLocalhostHost)
+import Cardano.SMASH.Server.Types (HealthStatus, PolicyResult (..), PoolId, SmashURL (..), isLocalhostHost, isRestrictedIPv6)
 import Control.Monad.Trans.Except.Extra
 import Data.Aeson (FromJSON, parseJSON)
 import Data.Aeson.Types (parseEither)
@@ -53,13 +53,6 @@ renderHttpClientError = \case
       , host
       , "' is not allowed. Only public IP addresses are permitted."
       ]
-
-isRestrictedIPv6 :: IPv6.IPv6 -> Bool
-isRestrictedIPv6 ipv6 =
-  let (h1, _, _, _, _, _, _, _) = IPv6.toWord16s ipv6
-   in (ipv6 == IPv6.loopback)
-        || ((h1 .&. 0xfe00) == 0xfc00)
-        || (h1 == 0xfe80)
 
 validateResolvedHost :: Http.Request -> ExceptT HttpClientError IO ()
 validateResolvedHost request = do
@@ -145,4 +138,6 @@ parseRequestEither requestEndpoint = do
   request <- firstExceptT (\_ -> HttpClientCannotParseEndpoint requestEndpoint) parsedRequest
   unless (isLocalhostHost $ Text.decodeUtf8 $ Http.host request) $
     validateResolvedHost request
-  pure request
+  -- Refuse redirects: only the host asked for is validated, so a 302 could send
+  -- this request anywhere on the private network.
+  pure request {Http.redirectCount = 0}
