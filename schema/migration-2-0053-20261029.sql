@@ -74,6 +74,13 @@ BEGIN
     -- cheap filtering. signers is the committee-seat bitfield and signer_count its
     -- population count. FALSE on every block before the Dijkstra era.
     EXECUTE 'ALTER TABLE "block" ADD COLUMN "has_leios_cert" BOOLEAN NOT NULL DEFAULT FALSE' ;
+    -- The balance assertions a Dijkstra tx body makes about accounts: the body is only
+    -- valid if the balance falls in the interval. 'starting' tells the two sets apart,
+    -- since the ledger checks them against different account states. Exactly one of
+    -- exact_value and the bound pair is set; lower_bound is inclusive, upper_bound
+    -- exclusive.
+    EXECUTE 'CREATE TABLE "tx_account_balance_interval"("id" SERIAL8 PRIMARY KEY UNIQUE,"tx_id" INT8 NOT NULL,"addr_id" INT8 NOT NULL,"starting" BOOLEAN NOT NULL,"lower_bound" lovelace NULL,"upper_bound" lovelace NULL,"exact_value" lovelace NULL)' ;
+
     -- The guard credentials a Dijkstra tx body supplies, and those it requires of its
     -- enclosing top-level tx. Kept apart because a supplied guard always has an index --
     -- the one its 'guard' redeemer points at -- and a required guard never does, but may

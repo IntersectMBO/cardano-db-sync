@@ -27,6 +27,7 @@ import Cardano.Ledger.BaseTypes
 import Cardano.Ledger.Conway.Governance
 import qualified Cardano.Ledger.Core as Core
 import qualified Cardano.Ledger.Credential as Ledger
+import Cardano.Ledger.Dijkstra.Scripts (AccountBalanceInterval (..), AccountBalanceIntervals (..))
 import Cardano.Ledger.Dijkstra.TxBody
 import qualified Cardano.Ledger.Keys as Ledger
 import Cardano.Ledger.Mary.Value (MaryValue (..), MultiAsset (..))
@@ -81,6 +82,9 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txScripts = getDijkstraScripts tx
     , txGuards = mkGuards $ dtbGuards txBody
     , txRequiredGuards = mkRequiredGuards $ dtbRequiredTopLevelGuards txBody
+    , txAccountBalanceIntervals =
+        mkAccountBalanceIntervals False (dtbAccountBalanceIntervals txBody)
+          <> mkAccountBalanceIntervals True (dtbStartingAccountBalanceIntervals txBody)
     , txExtraKeyWitnesses = extraKeyWits txBody
     , txVotingProcedure = Map.toList $ fmap (Map.toList . fmap VotingD) (unVotingProcedures $ dtbVotingProcedures txBody)
     , txProposalProcedure = zipWith mkProposalIndex [0 ..] $ map ProposalD $ toList $ dtbProposalProcedures txBody
@@ -91,6 +95,8 @@ fromDijkstraTx ioExtraPlutus mprices (blkIndex, tx) =
     , txDirectDeposits = mkDirectDeposits $ dtbDirectDeposits txBody
     }
   where
+    -- Every Dijkstra tx body field is now captured bar currentTreasuryValue, which
+    -- Conway carries too and db-sync has never stored.
     txBody :: Core.TxBody Core.TopTx DijkstraEra
     txBody = tx ^. Core.bodyTxL
 
@@ -163,6 +169,9 @@ fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
     , txScripts = getDijkstraScripts tx
     , txGuards = mkGuards $ dstbGuards txBody
     , txRequiredGuards = mkRequiredGuards $ dstbRequiredTopLevelGuards txBody
+    , -- A sub-transaction body asserts balances against the threaded account state only;
+      -- 'startingAccountBalanceIntervals' is carried by the top-level body alone.
+      txAccountBalanceIntervals = mkAccountBalanceIntervals False $ dstbAccountBalanceIntervals txBody
     , txExtraKeyWitnesses = extraKeyWits txBody
     , -- A proposal made in a sub-tx is keyed by that sub-tx's own TxId, which is what
       -- the ledger uses in the governance state, so insertProposal's lookup finds it.
@@ -187,6 +196,29 @@ fromDijkstraSubTx ioExtraPlutus mprices blkIndex tx =
 
     mkProposalIndex :: Word16 -> a -> (GovActionId, a)
     mkProposalIndex gix a = (GovActionId txId (GovActionIx gix), a)
+
+-- | A tx body's balance assertions about accounts. Both of a body's assertion sets have
+-- this shape; 'starting' says which one is being converted, since the two are checked
+-- against different account states (see 'TxAccountBalanceInterval').
+mkAccountBalanceIntervals :: Bool -> AccountBalanceIntervals DijkstraEra -> [TxAccountBalanceInterval]
+mkAccountBalanceIntervals starting =
+  map mkInterval . Map.toList . unAccountBalanceIntervals
+  where
+    mkInterval (account, interval) =
+      TxAccountBalanceInterval
+        { txabiStarting = starting
+        , txabiAccount = account
+        , txabiLowerBound = lowerBound
+        , txabiUpperBound = upperBound
+        , txabiExactValue = exactValue
+        }
+      where
+        (lowerBound, upperBound, exactValue) =
+          case interval of
+            AccountBalanceLowerBound l -> (Just $ unInclusive l, Nothing, Nothing)
+            AccountBalanceUpperBound u -> (Nothing, Just $ unExclusive u, Nothing)
+            AccountBalanceBothBounds l u -> (Just $ unInclusive l, Just $ unExclusive u, Nothing)
+            AccountBalanceExact c -> (Nothing, Nothing, Just c)
 
 -- | The guard credentials a tx body supplies, numbered by their position in the body's
 -- ordered guard set. That position is the index the body's 'guard' redeemers point at.

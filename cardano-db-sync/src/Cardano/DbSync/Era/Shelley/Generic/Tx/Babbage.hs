@@ -82,6 +82,7 @@ fromBabbageTx ioExtraPlutus mprices (blkIndex, tx) =
     , txDirectDeposits = [] -- no direct deposits before Dijkstra
     , txGuards = [] -- no transaction guards before Dijkstra
     , txRequiredGuards = []
+    , txAccountBalanceIntervals = [] -- no balance assertions before Dijkstra
     }
   where
     txBody :: Core.TxBody Core.TopTx BabbageEra

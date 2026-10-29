@@ -154,6 +154,22 @@ The guard credentials a Dijkstra transaction body requires of its enclosing top-
 | `has_script` | boolean | True when the credential is a script hash rather than a key hash. New in 13.8-Dijkstra (experimental). |
 | `data_id` | integer (64) | The Datum table index for the datum supplied for this guard. The ledger requires a datum exactly for a Plutus script credential and forbids one for a key hash or a native script, so this is NULL for those. It is also NULL when db-sync runs without `plutus` extra, which is what populates the `datum` table. New in 13.8-Dijkstra (experimental). |
 
+### `tx_account_balance_interval`
+
+A balance assertion a Dijkstra transaction body makes about an account: the body is only valid if that account's balance falls in the interval. `starting` tells the two assertion sets apart: a body's `accountBalanceIntervals` (`starting = false`) are checked against the account as that body is applied, while a top-level body's `startingAccountBalanceIntervals` (`starting = true`) are checked against the account as it stood before the whole transaction. A nested sub-transaction carries the first set only; because it is stored as its own `tx` row, its assertions are attributed to that row rather than to the enclosing transaction. Empty on every network that has not forked to Dijkstra. New in 13.8-Dijkstra (experimental).
+
+* Primary Id: `id`
+
+| Column name | Type | Description |
+|-|-|-|
+| `id` | integer (64) |  |
+| `tx_id` | integer (64) | The Tx table index for the transaction whose body makes this assertion. New in 13.8-Dijkstra (experimental). |
+| `addr_id` | integer (64) | The StakeAddress table index for the account the assertion is about. New in 13.8-Dijkstra (experimental). |
+| `starting` | boolean | True when the assertion is checked against the account as it stood before the whole transaction (`startingAccountBalanceIntervals`), false when it is checked against the account as the body is applied (`accountBalanceIntervals`). New in 13.8-Dijkstra (experimental). |
+| `lower_bound` | lovelace | The inclusive lower bound on the balance, or NULL when the interval has none. New in 13.8-Dijkstra (experimental). |
+| `upper_bound` | lovelace | The exclusive upper bound on the balance, or NULL when the interval has none. New in 13.8-Dijkstra (experimental). |
+| `exact_value` | lovelace | The exact balance required, for an interval given as a single value. NULL whenever the interval is given as bounds, and the bounds are NULL whenever this is set. New in 13.8-Dijkstra (experimental). |
+
 ### `tx_in`
 
 A table for transaction inputs.

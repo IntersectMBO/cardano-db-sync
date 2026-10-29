@@ -1452,6 +1452,16 @@ insertWithdrawalStmt =
 insertWithdrawal :: HasCallStack => SCB.Withdrawal -> DbM Id.WithdrawalId
 insertWithdrawal withdrawal = runSession mkDbCallStack $ HsqlSes.statement withdrawal insertWithdrawalStmt
 
+insertTxAccountBalanceIntervalStmt :: HsqlStmt.Statement SCB.TxAccountBalanceInterval Id.TxAccountBalanceIntervalId
+insertTxAccountBalanceIntervalStmt =
+  insert
+    SCB.txAccountBalanceIntervalEncoder
+    (WithResult $ HsqlD.singleRow $ Id.idDecoder Id.TxAccountBalanceIntervalId)
+
+insertTxAccountBalanceInterval :: HasCallStack => SCB.TxAccountBalanceInterval -> DbM Id.TxAccountBalanceIntervalId
+insertTxAccountBalanceInterval interval =
+  runSession mkDbCallStack $ HsqlSes.statement interval insertTxAccountBalanceIntervalStmt
+
 insertTxGuardStmt :: HsqlStmt.Statement SCB.TxGuard Id.TxGuardId
 insertTxGuardStmt =
   insert

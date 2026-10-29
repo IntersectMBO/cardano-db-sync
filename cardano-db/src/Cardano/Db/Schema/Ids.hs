@@ -96,6 +96,9 @@ newtype MetaId = MetaId {getMetaId :: Int64}
 newtype WithdrawalId = WithdrawalId {getWithdrawalId :: Int64}
   deriving (Eq, Show, Ord)
 
+newtype TxAccountBalanceIntervalId = TxAccountBalanceIntervalId {getTxAccountBalanceIntervalId :: Int64}
+  deriving (Eq, Show, Ord)
+
 newtype TxGuardId = TxGuardId {getTxGuardId :: Int64}
   deriving (Eq, Show, Ord)
 

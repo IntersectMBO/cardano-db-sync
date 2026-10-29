@@ -287,6 +287,7 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
               , prepareQueryDeleteAndLogTx @SCB.DirectDeposit "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCB.TxGuard "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCB.TxRequiredGuard "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.TxAccountBalanceInterval "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCE.Treasury "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCE.Reserve "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCE.PotTransfer "tx_id" txId
@@ -317,6 +318,7 @@ deleteTablesAfterTxId txOutVariantType mtxId minIdsW = do
               , prepareQueryDeleteAndLogTx @SCB.DirectDeposit "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCB.TxGuard "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCB.TxRequiredGuard "tx_id" txId
+              , prepareQueryDeleteAndLogTx @SCB.TxAccountBalanceInterval "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCE.Treasury "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCE.Reserve "tx_id" txId
               , prepareQueryDeleteAndLogTx @SCE.PotTransfer "tx_id" txId

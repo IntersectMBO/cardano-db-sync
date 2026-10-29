@@ -52,6 +52,7 @@ import Cardano.DbSync.Era.Universal.Insert.Other (
   insertRedeemer,
   insertScript,
   insertStakeAddressRefIfMissing,
+  insertTxAccountBalanceInterval,
   insertTxGuard,
   insertTxRequiredGuard,
   insertWithdrawals,
@@ -201,6 +202,8 @@ insertTx syncEnv isMember blkId epochNo slotNo applyResult blockIndex tx grouped
         mapM_ (insertTxGuard txId) $ Generic.txGuards tx
         mapM_ (insertTxRequiredGuard syncEnv (ioPlutusExtra iopts) txId) $
           Generic.txRequiredGuards tx
+        mapM_ (insertTxAccountBalanceInterval syncEnv txId) $
+          Generic.txAccountBalanceIntervals tx
       when (ioShelley iopts) $
         mapM_ (insertParamProposal syncEnv blkId txId) $
           Generic.txParamProposal tx

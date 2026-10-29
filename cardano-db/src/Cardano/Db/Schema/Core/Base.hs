@@ -36,6 +36,8 @@ import Cardano.Db.Types (
   dbLovelaceDecoder,
   dbLovelaceEncoder,
   dbWord64ValueEncoder,
+  maybeDbLovelaceDecoder,
+  maybeDbLovelaceEncoder,
   maybeDbWord64Decoder,
   maybeDbWord64Encoder,
   scriptPurposeEncoder,
@@ -774,6 +776,56 @@ txRequiredGuardEncoder =
     , txRequiredGuardCredential >$< E.param (E.nonNullable E.bytea)
     , txRequiredGuardHasScript >$< E.param (E.nonNullable E.bool)
     , txRequiredGuardDataId >$< maybeIdEncoder getDatumId
+    ]
+
+-----------------------------------------------------------------------------------------------------------------------------------
+-- Table Name: tx_account_balance_interval
+-- Description: A balance assertion a Dijkstra transaction body makes about an account:
+--   the body is only valid if that account's balance falls in the interval. `starting`
+--   tells the two assertion sets apart: the body's `accountBalanceIntervals` are checked
+--   against the account as the body is applied, while its `startingAccountBalanceIntervals`
+--   are checked against the account as it stood before the whole transaction. Exactly one
+--   of `exact_value` and the bound pair is set; `lower_bound` is inclusive and
+--   `upper_bound` is exclusive.
+-----------------------------------------------------------------------------------------------------------------------------------
+data TxAccountBalanceInterval = TxAccountBalanceInterval
+  { txAccountBalanceIntervalTxId :: !TxId -- noreference
+  , txAccountBalanceIntervalAddrId :: !StakeAddressId -- noreference
+  , txAccountBalanceIntervalStarting :: !Bool
+  , txAccountBalanceIntervalLowerBound :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , txAccountBalanceIntervalUpperBound :: !(Maybe DbLovelace) -- sqltype=lovelace
+  , txAccountBalanceIntervalExactValue :: !(Maybe DbLovelace) -- sqltype=lovelace
+  }
+  deriving (Eq, Show, Generic)
+
+type instance Key TxAccountBalanceInterval = TxAccountBalanceIntervalId
+instance DbInfo TxAccountBalanceInterval
+
+entityTxAccountBalanceIntervalDecoder :: D.Row (Entity TxAccountBalanceInterval)
+entityTxAccountBalanceIntervalDecoder =
+  Entity
+    <$> idDecoder TxAccountBalanceIntervalId
+    <*> txAccountBalanceIntervalDecoder
+
+txAccountBalanceIntervalDecoder :: D.Row TxAccountBalanceInterval
+txAccountBalanceIntervalDecoder =
+  TxAccountBalanceInterval
+    <$> idDecoder TxId -- txAccountBalanceIntervalTxId
+    <*> idDecoder StakeAddressId -- txAccountBalanceIntervalAddrId
+    <*> D.column (D.nonNullable D.bool) -- txAccountBalanceIntervalStarting
+    <*> maybeDbLovelaceDecoder -- txAccountBalanceIntervalLowerBound
+    <*> maybeDbLovelaceDecoder -- txAccountBalanceIntervalUpperBound
+    <*> maybeDbLovelaceDecoder -- txAccountBalanceIntervalExactValue
+
+txAccountBalanceIntervalEncoder :: E.Params TxAccountBalanceInterval
+txAccountBalanceIntervalEncoder =
+  mconcat
+    [ txAccountBalanceIntervalTxId >$< idEncoder getTxId
+    , txAccountBalanceIntervalAddrId >$< idEncoder getStakeAddressId
+    , txAccountBalanceIntervalStarting >$< E.param (E.nonNullable E.bool)
+    , txAccountBalanceIntervalLowerBound >$< maybeDbLovelaceEncoder
+    , txAccountBalanceIntervalUpperBound >$< maybeDbLovelaceEncoder
+    , txAccountBalanceIntervalExactValue >$< maybeDbLovelaceEncoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------

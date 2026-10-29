@@ -20,6 +20,7 @@ module Cardano.DbSync.Era.Shelley.Generic.Tx.Types (
   TxDirectDeposit (..),
   TxGuard (..),
   TxRequiredGuard (..),
+  TxAccountBalanceInterval (..),
   TxIn (..),
   TxOut (..),
   TxRedeemer (..),
@@ -89,6 +90,7 @@ data Tx = Tx
   , txExtraKeyWitnesses :: ![ByteString]
   , txGuards :: ![TxGuard]
   , txRequiredGuards :: ![TxRequiredGuard]
+  , txAccountBalanceIntervals :: ![TxAccountBalanceInterval]
   , txVotingProcedure :: ![(Voter, [(GovActionId, Voting)])]
   , txProposalProcedure :: ![(GovActionId, Proposal)]
   , txTreasuryDonation :: !Coin
@@ -155,6 +157,21 @@ data TxRequiredGuard = TxRequiredGuard
   { txrgCredential :: !ByteString
   , txrgHasScript :: !Bool
   , txrgDatum :: !(Maybe PlutusData)
+  }
+
+-- | A balance assertion a Dijkstra transaction body makes about an account: the body is
+-- only valid if the account's balance falls in the interval. 'txabiStarting' tells the two
+-- assertion sets apart: 'accountBalanceIntervals' (False) is checked against the account
+-- as the body is applied, while 'startingAccountBalanceIntervals' (True) is checked
+-- against the account as it stood before the whole transaction, and is carried by
+-- top-level bodies only. Exactly one of 'txabiExactValue' and the bound pair is set; the
+-- lower bound is inclusive and the upper bound exclusive.
+data TxAccountBalanceInterval = TxAccountBalanceInterval
+  { txabiStarting :: !Bool
+  , txabiAccount :: !Ledger.AccountAddress
+  , txabiLowerBound :: !(Maybe Coin)
+  , txabiUpperBound :: !(Maybe Coin)
+  , txabiExactValue :: !(Maybe Coin)
   }
 
 data TxIn = TxIn

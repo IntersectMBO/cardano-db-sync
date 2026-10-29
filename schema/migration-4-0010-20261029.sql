@@ -8,3 +8,5 @@ CREATE INDEX IF NOT EXISTS idx_tx_guard_tx_id ON tx_guard(tx_id) ;
 CREATE INDEX IF NOT EXISTS idx_tx_guard_credential ON tx_guard(credential) ;
 CREATE INDEX IF NOT EXISTS idx_tx_required_guard_tx_id ON tx_required_guard(tx_id) ;
 CREATE INDEX IF NOT EXISTS idx_tx_required_guard_credential ON tx_required_guard(credential) ;
+CREATE INDEX IF NOT EXISTS idx_tx_account_balance_interval_tx_id ON tx_account_balance_interval(tx_id) ;
+CREATE INDEX IF NOT EXISTS idx_tx_account_balance_interval_addr_id ON tx_account_balance_interval(addr_id) ;

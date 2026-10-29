@@ -13,6 +13,7 @@ module Cardano.DbSync.Era.Universal.Insert.Other (
   insertDirectDeposits,
   insertTxGuard,
   insertTxRequiredGuard,
+  insertTxAccountBalanceInterval,
   insertRedeemerData,
   insertStakeAddressRefIfMissing,
   insertMultiAsset,
@@ -192,6 +193,29 @@ insertTxRequiredGuard syncEnv insertDatums txId reqGuard = do
         , DB.txRequiredGuardCredential = Generic.txrgCredential reqGuard
         , DB.txRequiredGuardHasScript = Generic.txrgHasScript reqGuard
         , DB.txRequiredGuardDataId = mDatumId
+        }
+
+-- | Insert a balance assertion a Dijkstra transaction body makes about an account.
+insertTxAccountBalanceInterval ::
+  SyncEnv ->
+  DB.TxId ->
+  Generic.TxAccountBalanceInterval ->
+  ExceptT SyncNodeError DB.DbM ()
+insertTxAccountBalanceInterval syncEnv txId interval = do
+  addrId <-
+    queryOrInsertRewardAccount syncEnv UpdateCache $ Generic.txabiAccount interval
+  void . lift $
+    DB.insertTxAccountBalanceInterval $
+      DB.TxAccountBalanceInterval
+        { DB.txAccountBalanceIntervalTxId = txId
+        , DB.txAccountBalanceIntervalAddrId = addrId
+        , DB.txAccountBalanceIntervalStarting = Generic.txabiStarting interval
+        , DB.txAccountBalanceIntervalLowerBound =
+            Generic.coinToDbLovelace <$> Generic.txabiLowerBound interval
+        , DB.txAccountBalanceIntervalUpperBound =
+            Generic.coinToDbLovelace <$> Generic.txabiUpperBound interval
+        , DB.txAccountBalanceIntervalExactValue =
+            Generic.coinToDbLovelace <$> Generic.txabiExactValue interval
         }
 
 -- | Insert a stake address if it is not already in the `stake_address` table. Regardless of
