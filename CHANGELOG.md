@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## Unreleased
+- Experimental Dijkstra era support: sub-transactions, direct deposits, transaction guards, account balance assertions, Leios certificates, pool BLS keys, the Dijkstra and Leios protocol parameters, and Plutus V4. The schema it adds is provisional and may be renamed, re-typed or dropped without the deprecation period the rest of the schema gets; the affected columns are marked in [doc/schema.md](doc/schema.md).
+
 ## 13.8.0.0
 - Update Docker configuration to allow PostgreSQL connection details to be provided via Docker secrets or a `.pgpass` file using the `PGPASSFILE` environment variable.
 - Add static binaries and docker images for aarch64-linux
