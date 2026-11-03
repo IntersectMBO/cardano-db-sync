@@ -7,7 +7,20 @@
 --   Fix all epochs:
 --     psql -v epoch_no=-1 -f scripts/fix-epoch-table.sql cexplorer
 --
--- Wrap in a transaction so failures don't partially rewrite the table.
+-- Wrap in a transaction so failures don't partially rewrite the table, and stop at the
+-- first error so a failed fix does not exit 0.
+\set ON_ERROR_STOP on
+
+-- Since 13.7.2.1 epoch is a view (migration 2-0049): db-sync stores finished epochs in
+-- epoch_finalized and computes the current one from block and tx. This script only
+-- repairs the old table.
+DO $$
+BEGIN
+  IF (SELECT relkind FROM pg_class WHERE oid = to_regclass('epoch')) = 'v' THEN
+    RAISE EXCEPTION 'epoch is a view since db-sync 13.7.2.1, so this script cannot repair it'
+      USING HINT = 'Finished epochs are stored in epoch_finalized, which db-sync maintains; a mismatch reported by validate-epoch-table.sql points to a db-sync bug.';
+  END IF;
+END $$;
 
 BEGIN;
 
