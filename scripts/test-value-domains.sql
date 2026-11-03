@@ -16,11 +16,12 @@
 -- Usage:  psql -d <dbname> -f scripts/test-value-domains.sql
 --   or:   ./scripts/run-schema-checks.sh <dbname>
 --
--- Each check counts bad rows: 0 = PASS, >0 = FAIL. A check whose table/column is
--- absent is SKIP (works across 13.6 and 13.7 schemas). A check returning NULL is
--- SKIP too (precondition unmet, e.g. epoch sync disabled). An unexpected SQL error
--- is ERROR (not silently hidden). A SKIP is not coverage: watch the SKIP count
--- between versions, a check that starts SKIPping has silently stopped working.
+-- Each check counts what is wrong (rows, epochs or documents, as its FAIL line says):
+-- 0 = PASS, >0 = FAIL. A check whose table/column is absent is SKIP (works across
+-- 13.6 and 13.7 schemas). A check returning NULL is SKIP too (precondition unmet,
+-- e.g. epoch sync disabled). An unexpected SQL error is ERROR (not silently hidden).
+-- A SKIP is not coverage: watch the SKIP count between versions, a check that starts
+-- SKIPping has silently stopped working.
 --
 -- The script runs read-only in a transaction that is always rolled back, and
 -- exits non-zero if any check FAILs or ERRORs (so it can gate a release).
@@ -40,8 +41,8 @@ BEGIN;
 -- Collects one (label, status) row per check; the summary counts them. Rolled back.
 CREATE TEMP TABLE _vd_results (label text, status text);
 
--- Runs _query (returns a single bad-row count) and records the outcome.
-CREATE FUNCTION check_domain(_label text, _query text) RETURNS void AS $$
+-- Runs _query, which returns a count of what is wrong in _unit, and records the outcome.
+CREATE FUNCTION check_domain(_label text, _query text, _unit text DEFAULT 'row(s)') RETURNS void AS $$
 DECLARE
   _bad bigint;
 BEGIN
@@ -55,7 +56,7 @@ BEGIN
     RAISE NOTICE 'PASS: %', _label;
   ELSE
     INSERT INTO _vd_results VALUES (_label, 'FAIL');
-    RAISE WARNING 'FAIL: % (% bad row(s))', _label, _bad;
+    RAISE WARNING 'FAIL: % (% %)', _label, _bad, _unit;
   END IF;
 EXCEPTION
   WHEN undefined_table OR undefined_column THEN
@@ -134,7 +135,7 @@ BEGIN
              OR e.fees      <> c.c_fee
              OR e.tx_count  <> c.c_tx
              OR e.blk_count <> c.c_blk
-        ) END $q$);
+        ) END $q$, 'epoch(s)');
 
   -- No duplicate epoch number in "epoch". On the table form UNIQUE(no) prevents this;
   -- on the 13.7.2.1 view a regression in the #2127 finalized/current split would
@@ -142,7 +143,7 @@ BEGIN
   PERFORM check_domain(
     'epoch has no duplicate epoch numbers',
     $q$ SELECT count(*) FROM (
-          SELECT no FROM epoch GROUP BY no HAVING count(*) > 1) d $q$);
+          SELECT no FROM epoch GROUP BY no HAVING count(*) > 1) d $q$, 'epoch(s)');
 
   -- epoch_state duplicates (#2155/#2060): the table has no UNIQUE(epoch_no) and
   -- rollback does not delete it, so a rollback across an epoch boundary leaves a
@@ -152,7 +153,7 @@ BEGIN
     $q$ SELECT CASE WHEN (SELECT count(*) FROM epoch_state) = 0 THEN NULL ELSE (
           SELECT count(*) FROM (
             SELECT epoch_no FROM epoch_state GROUP BY epoch_no HAVING count(*) > 1) d
-        ) END $q$);
+        ) END $q$, 'epoch(s)');
 
   -- No missing epoch_state row within its range. >0 = that many epochs have no row.
   -- (A legitimately gov-toggled DB could show a gap here.)
@@ -161,7 +162,7 @@ BEGIN
     $q$ SELECT CASE WHEN (SELECT count(*) FROM epoch_state) = 0 THEN NULL ELSE (
           SELECT (MAX(epoch_no) - MIN(epoch_no)) - (COUNT(DISTINCT epoch_no) - 1)
           FROM epoch_state
-        ) END $q$);
+        ) END $q$, 'epoch(s)');
 
   -- Non-negative lovelace on the hot tables (catches decode wraps beyond the sweep).
   PERFORM check_domain(
@@ -191,7 +192,7 @@ BEGIN
           SELECT count(*) FROM (
             SELECT off_chain_vote_data_id FROM off_chain_vote_drep_data
             GROUP BY off_chain_vote_data_id HAVING count(*) > 1) d
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   PERFORM check_domain(
     'off_chain_vote_gov_action_data: at most one row per parent',
@@ -199,7 +200,7 @@ BEGIN
           SELECT count(*) FROM (
             SELECT off_chain_vote_data_id FROM off_chain_vote_gov_action_data
             GROUP BY off_chain_vote_data_id HAVING count(*) > 1) d
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   PERFORM check_domain(
     'off_chain_vote_author: no more rows than the document lists',
@@ -208,7 +209,7 @@ BEGIN
           JOIN (SELECT off_chain_vote_data_id, count(*) AS n
                 FROM off_chain_vote_author GROUP BY 1) c ON c.off_chain_vote_data_id = d.id
           WHERE c.n > jsonb_array_length(json_list(d.json::jsonb -> 'authors'))
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   PERFORM check_domain(
     'off_chain_vote_reference: no more rows than the document lists',
@@ -217,7 +218,7 @@ BEGIN
           JOIN (SELECT off_chain_vote_data_id, count(*) AS n
                 FROM off_chain_vote_reference GROUP BY 1) c ON c.off_chain_vote_data_id = d.id
           WHERE c.n > jsonb_array_length(json_list(d.json::jsonb -> 'body' -> 'references'))
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   PERFORM check_domain(
     'off_chain_vote_external_update: no more rows than the document lists',
@@ -226,7 +227,7 @@ BEGIN
           JOIN (SELECT off_chain_vote_data_id, count(*) AS n
                 FROM off_chain_vote_external_update GROUP BY 1) c ON c.off_chain_vote_data_id = d.id
           WHERE c.n > jsonb_array_length(json_list(d.json::jsonb -> 'body' -> 'externalUpdates'))
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   -- Each row is a copy of one entry of its own document. On mainnet 13.7.1.0 rows were
   -- found under a document that does not list them, often with the counts unchanged.
@@ -283,7 +284,7 @@ BEGIN
               OR coalesce(a.n, 0) <> CASE WHEN dr.off_chain_vote_data_id IS NULL
                                           THEN jsonb_array_length(json_list(d.json::jsonb -> 'authors'))
                                           ELSE 0 END)
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   PERFORM check_domain(
     'off_chain_vote_data: rejected documents have no child rows',
@@ -295,7 +296,7 @@ BEGIN
             UNION SELECT off_chain_vote_data_id FROM off_chain_vote_external_update
             UNION SELECT off_chain_vote_data_id FROM off_chain_vote_drep_data
             UNION SELECT off_chain_vote_data_id FROM off_chain_vote_gov_action_data)
-        ) END $q$);
+        ) END $q$, 'document(s)');
 
   -- Every epoch below the tip has at least one block (no gap in block.epoch_no; #2139).
   PERFORM check_domain(
@@ -305,7 +306,7 @@ BEGIN
           FROM block
           WHERE epoch_no IS NOT NULL
             AND epoch_no < (SELECT MAX(epoch_no) FROM block WHERE epoch_no IS NOT NULL)
-        ) END $q$);
+        ) END $q$, 'epoch(s)');
 
   -- Committee quorum is well-formed: 0 <= numerator <= denominator, denominator > 0.
   PERFORM check_domain(
