@@ -9,6 +9,19 @@
 --
 -- Any row in the output means a mismatch. No rows = all correct.
 
+-- Since 13.7.2.1 epoch is a view that is empty while epoch sync is not enabled, which
+-- would show every epoch as MISSING. The flag table only exists on the view form.
+SELECT coalesce((SELECT relkind = 'v' FROM pg_class WHERE oid = to_regclass('epoch')), false)
+  AS epoch_is_view \gset
+\if :epoch_is_view
+  SELECT NOT coalesce((SELECT enabled FROM epoch_sync_enabled WHERE singleton), false)
+    AS epoch_sync_off \gset
+  \if :epoch_sync_off
+    \echo 'Epoch sync is not enabled (disable_epoch is set, or db-sync has not started since the upgrade), so the epoch view is empty: nothing to validate.'
+    \quit
+  \endif
+\endif
+
 WITH calculated AS (
   SELECT
     b.epoch_no,
