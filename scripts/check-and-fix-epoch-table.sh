@@ -8,9 +8,8 @@
 #
 #   epoch_no: specific epoch to check (default: -1 = all epochs)
 #
-# Requires PGPASSFILE to be set (or ~/.pgpass configured), and expects the
-# database name to be on the PGDATABASE env var, the first line of the pgpass
-# file, or passed explicitly via psql_args.
+# Takes the database name from PGDATABASE or, if that is unset, from the first line
+# of the pgpass file PGPASSFILE points to. psql finds the password as usual.
 #
 # Examples:
 #   PGPASSFILE=config/pgpass-mainnet scripts/check-and-fix-epoch-table.sh
@@ -30,7 +29,7 @@ if [[ ! -f "$VALIDATE_SQL" || ! -f "$FIX_SQL" ]]; then
   exit 1
 fi
 
-# Derive the DB name from PGDATABASE or pgpass (field 5 of first line).
+# Derive the DB name from PGDATABASE or pgpass (field 3 of the first line).
 DB_NAME=${PGDATABASE:-}
 if [[ -z "$DB_NAME" && -n "${PGPASSFILE:-}" && -f "$PGPASSFILE" ]]; then
   DB_NAME=$(awk -F: 'NR==1{print $3}' "$PGPASSFILE")
