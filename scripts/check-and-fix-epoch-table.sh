@@ -77,7 +77,9 @@ if [[ "$EPOCH_KIND" == "v" ]]; then
   exit 1
 fi
 
-read -r -p "Apply fix? [y/N] " REPLY
+# read fails at end of input; keep what it read (a last line without a newline) and
+# treat no input at all as "no".
+read -r -p "Apply fix? [y/N] " REPLY || true
 case "$REPLY" in
   [yY]|[yY][eE][sS])
     echo "Applying fix..."
