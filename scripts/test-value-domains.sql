@@ -2,14 +2,16 @@
 --
 -- test-uniqueness.sql checks structure and test-referential-integrity.sql checks
 -- relations; this script checks that stored VALUES make sense: ranges,
--- non-negativity, agreement with recomputed totals, and no duplicate/missing rows.
+-- non-negativity, agreement with recomputed totals, no duplicate/missing rows, hash
+-- lengths, and the format of values db-sync renders itself (IP addresses, bech32 views).
 -- It catches corruption that is structurally valid but wrong.
 --
 -- Why it is needed: the numeric domains (lovelace, word*type, ...) were defined
--- with range CHECK constraints, but migration-2-0030 DROPS them all. So a real DB
--- has no value-domain enforcement; the Haskell layer is the only guard, and a
--- decoder or insert bug can store a bad value (e.g. #2135 negative ports,
--- #2118 inflated epoch sums, #2155 duplicate epoch_state rows).
+-- with range CHECK constraints and the hash domains with length ones, but
+-- migration-2-0030 DROPS them all. So a real DB has no value-domain enforcement; the
+-- Haskell layer is the only guard, and a decoder or insert bug can store a bad value
+-- (e.g. #2135 negative ports, #2118 inflated epoch sums, #2155 duplicate epoch_state
+-- rows, #2182 quoted relay IPs).
 --
 -- Usage:  psql -d <dbname> -f scripts/test-value-domains.sql
 --   or:   ./scripts/run-schema-checks.sh <dbname>
@@ -75,11 +77,22 @@ CREATE FUNCTION json_text(_v jsonb) RETURNS text AS $$
   SELECT coalesce(_v ->> '@value', _v #>> '{}')
 $$ LANGUAGE sql IMMUTABLE;
 
+-- Whether the text is a plain host address of the given family (4 or 6): it parses as
+-- inet and has no mask. Anything else, e.g. a quoted address, is false.
+CREATE FUNCTION is_host_ip(_v text, _family int) RETURNS boolean AS $$
+BEGIN
+  RETURN _v !~ '/' AND family(_v::inet) = _family;
+EXCEPTION WHEN invalid_text_representation THEN
+  RETURN false;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 CREATE FUNCTION test_value_domains() RETURNS void AS $$
 DECLARE
   _rec     RECORD;
   _js      jsonb;
   _col     text;
+  _label   text;
   _bad     bigint;
   _passed  int;
   _skipped int;
@@ -309,32 +322,120 @@ BEGIN
            OR quorum_numerator < 0
            OR quorum_numerator > quorum_denominator $q$);
 
-  -- Non-negativity sweep over every numeric column of every base table. The domain
-  -- CHECKs are gone (see header), so this is the general net for decode wraps like
-  -- #2135. information_schema resolves domains to their base type in data_type while
-  -- still exposing domain_name. Excludes surrogate keys/FKs, the signed int65type,
-  -- and columns that are negative by design. Each table is scanned once (all its
-  -- columns in one count(*) FILTER pass). Cost note: seq-scans large tables (tx_out,
-  -- ...) so on mainnet it dominates the ~10-15 min runtime; a diagnostic, not a hot path.
+  -- Relay addresses come from the ledger's IP types (13.8.0.0 stored their Show output,
+  -- wrapped in quotes, #2182). DNS names are not format-checked: the ledger only
+  -- checks their length, and pools have registered URLs, "ip@host" and control
+  -- characters as names.
+  PERFORM check_domain(
+    'pool_relay.ipv4 is a plain IPv4 address',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM pool_relay) THEN NULL ELSE (
+          SELECT count(*) FROM pool_relay WHERE ipv4 IS NOT NULL AND NOT is_host_ip(ipv4, 4)
+        ) END $q$);
+
+  PERFORM check_domain(
+    'pool_relay.ipv6 is a plain IPv6 address',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM pool_relay) THEN NULL ELSE (
+          SELECT count(*) FROM pool_relay WHERE ipv6 IS NOT NULL AND NOT is_host_ip(ipv6, 6)
+        ) END $q$);
+
+  -- Bech32 views are serialiseToBech32 <prefix> <raw bytes> (Cardano.DbSync.Util.Bech32).
+  -- A stake address and a Shelley address carry their network in the low nibble of the
+  -- first raw byte (1 = mainnet), so their prefix is checked against their own bytes.
+  PERFORM check_domain(
+    'pool_hash.view is a pool1 bech32 id',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM pool_hash) THEN NULL ELSE (
+          SELECT count(*) FROM pool_hash
+          WHERE view !~ '^pool1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{51}$'
+        ) END $q$);
+
+  PERFORM check_domain(
+    'drep_hash.view is a drep1 bech32 id or an always-* literal',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM drep_hash) THEN NULL ELSE (
+          SELECT count(*) FROM drep_hash
+          WHERE view !~ '^drep1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{51}$'
+            AND view NOT IN ('drep_always_abstain', 'drep_always_no_confidence')
+        ) END $q$);
+
+  PERFORM check_domain(
+    'multi_asset.fingerprint is an asset1 bech32 id',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM multi_asset) THEN NULL ELSE (
+          SELECT count(*) FROM multi_asset
+          WHERE fingerprint !~ '^asset1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{38}$'
+        ) END $q$);
+
+  PERFORM check_domain(
+    'block.vrf_key is a vrf_vk1 bech32 key',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM block) THEN NULL ELSE (
+          SELECT count(*) FROM block
+          WHERE vrf_key IS NOT NULL AND vrf_key !~ '^vrf_vk1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58}$'
+        ) END $q$);
+
+  PERFORM check_domain(
+    'stake_address.view is a bech32 stake address for its network',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM stake_address) THEN NULL ELSE (
+          SELECT count(*) FROM stake_address
+          WHERE CASE WHEN octet_length(hash_raw) = 0 THEN true
+                     ELSE view !~ (CASE WHEN get_byte(hash_raw, 0) & 15 = 1
+                                        THEN '^stake1' ELSE '^stake_test1' END
+                                   || '[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{53}$') END
+        ) END $q$);
+
+  -- Address-table variant only; SKIPs on the Core variant, whose addresses are in tx_out.
+  -- A header type below 8 is a Shelley address (bech32), a Byron one starts 0x82 (base58).
+  PERFORM check_domain(
+    'address.address is a Shelley or Byron address for its network',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM address) THEN NULL ELSE (
+          SELECT count(*) FROM address
+          WHERE CASE WHEN octet_length(raw) = 0 THEN true
+                     WHEN get_byte(raw, 0) >> 4 < 8
+                       THEN address !~ (CASE WHEN get_byte(raw, 0) & 15 = 1
+                                             THEN '^addr1' ELSE '^addr_test1' END
+                                        || '[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+$')
+                     ELSE address !~ '^[1-9A-HJ-NP-Za-km-z]+$' END
+        ) END $q$);
+
+  -- Sweep over every numeric and every fixed-length bytes column of every base table.
+  -- The domain CHECKs are gone (see header), so this is the general net for decode wraps
+  -- like #2135 and for hashes of the wrong length. information_schema resolves domains
+  -- to their base type in data_type while still exposing domain_name. Numeric: excludes
+  -- surrogate keys/FKs, the signed int65type, and columns that are negative by design.
+  -- Bytes: the lengths the stage 1 domains checked (hash32type, hash28type, addr29type,
+  -- asset32type). Each table is scanned once (all its columns in one count(*) FILTER
+  -- pass). Cost note: seq-scans large tables (tx_out, ...) so on mainnet it dominates the
+  -- runtime; a diagnostic, not a hot path.
   FOR _rec IN
-    SELECT c.table_name,
-           string_agg(
-             format('count(*) FILTER (WHERE %I < 0) AS %I', c.column_name, c.column_name),
-             ', ' ORDER BY c.column_name) AS agg_list
-    FROM information_schema.columns c
-    JOIN information_schema.tables t
-      ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-     AND t.table_type = 'BASE TABLE'
-    WHERE c.table_schema = 'public'
-      AND c.data_type IN ('integer', 'bigint', 'smallint', 'numeric')
-      AND (c.domain_name IS NULL OR c.domain_name <> 'int65type')
-      AND c.column_name <> 'id'
-      AND c.column_name NOT LIKE '%\_id'
-      AND (c.table_name, c.column_name) NOT IN (
-            ('tx', 'deposit'),                 -- net deposit, negative when refunded
-            ('drep_registration', 'deposit'))  -- negative on deregistration refund
-    GROUP BY c.table_name
-    ORDER BY c.table_name
+    SELECT a.table_name, string_agg(a.agg, ', ' ORDER BY a.alias) AS agg_list
+    FROM (
+      SELECT c.table_name, c.column_name AS alias,
+             format('count(*) FILTER (WHERE %I < 0) AS %I', c.column_name, c.column_name) AS agg
+      FROM information_schema.columns c
+      JOIN information_schema.tables t
+        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+       AND t.table_type = 'BASE TABLE'
+      WHERE c.table_schema = 'public'
+        AND c.data_type IN ('integer', 'bigint', 'smallint', 'numeric')
+        AND (c.domain_name IS NULL OR c.domain_name <> 'int65type')
+        AND c.column_name <> 'id'
+        AND c.column_name NOT LIKE '%\_id'
+        AND (c.table_name, c.column_name) NOT IN (
+              ('tx', 'deposit'),                 -- net deposit, negative when refunded
+              ('drep_registration', 'deposit'))  -- negative on deregistration refund
+      UNION ALL
+      -- alias "<column>:<rule>", e.g. "hash:32", turned into the label below
+      SELECT c.table_name, c.column_name || ':' || r.rule,
+             format('count(*) FILTER (WHERE octet_length(%I) %s) AS %I',
+                    c.column_name, r.test, c.column_name || ':' || r.rule)
+      FROM information_schema.columns c
+      JOIN information_schema.tables t
+        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+       AND t.table_type = 'BASE TABLE'
+      JOIN (VALUES ('hash32type', '32', '<> 32'), ('hash28type', '28', '<> 28'),
+                   ('addr29type', '29', '<> 29'), ('asset32type', 'at most 32', '> 32'))
+             r(domain_name, rule, test) ON r.domain_name = c.domain_name
+      WHERE c.table_schema = 'public'
+    ) a
+    GROUP BY a.table_name
+    ORDER BY a.table_name
   LOOP
     BEGIN
       RAISE NOTICE 'sweeping %', _rec.table_name;  -- heartbeat before a full table scan
@@ -342,7 +443,17 @@ BEGIN
         INTO _js;
       FOR _col, _bad IN SELECT key, value::bigint FROM jsonb_each_text(_js)
       LOOP
-        IF _bad = 0 THEN
+        IF _col LIKE '%:%' THEN
+          _label := format('%s.%s is %s bytes', _rec.table_name,
+                           split_part(_col, ':', 1), split_part(_col, ':', 2));
+          IF _bad = 0 THEN
+            INSERT INTO _vd_results VALUES (_label, 'PASS');
+            RAISE NOTICE 'PASS: %', _label;
+          ELSE
+            INSERT INTO _vd_results VALUES (_label, 'FAIL');
+            RAISE WARNING 'FAIL: % (% row(s) of the wrong length)', _label, _bad;
+          END IF;
+        ELSIF _bad = 0 THEN
           INSERT INTO _vd_results VALUES (format('%s.%s is non-negative', _rec.table_name, _col), 'PASS');
           RAISE NOTICE 'PASS: %.% is non-negative', _rec.table_name, _col;
         ELSE
@@ -351,7 +462,7 @@ BEGIN
         END IF;
       END LOOP;
     EXCEPTION WHEN OTHERS THEN
-      INSERT INTO _vd_results VALUES (format('%s non-negativity sweep', _rec.table_name), 'ERROR');
+      INSERT INTO _vd_results VALUES (format('%s sweep', _rec.table_name), 'ERROR');
       RAISE WARNING 'ERROR: % sweep (%)', _rec.table_name, SQLERRM;
     END;
   END LOOP;
