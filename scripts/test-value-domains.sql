@@ -65,6 +65,16 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
+-- A JSON array as it is, anything else (a missing key, null, an object) as [].
+CREATE FUNCTION json_list(_v jsonb) RETURNS jsonb AS $$
+  SELECT CASE WHEN jsonb_typeof(_v) = 'array' THEN _v ELSE '[]'::jsonb END
+$$ LANGUAGE sql IMMUTABLE;
+
+-- A text field as db-sync reads it: a string, or the "@value" of a JSON-LD object.
+CREATE FUNCTION json_text(_v jsonb) RETURNS text AS $$
+  SELECT coalesce(_v ->> '@value', _v #>> '{}')
+$$ LANGUAGE sql IMMUTABLE;
+
 CREATE FUNCTION test_value_domains() RETURNS void AS $$
 DECLARE
   _rec     RECORD;
@@ -154,42 +164,125 @@ BEGIN
     $q$ SELECT count(*) FROM ada_pots
         WHERE treasury < 0 OR reserves < 0 OR rewards < 0 OR utxo < 0 OR fees < 0 $q$);
 
-  -- Off-chain vote: no duplicated children (#2137: re-fetching an anchor re-inserted
-  -- its children, which have no uniqueness constraint). drep_data/gov_action_data are
-  -- 1:1 with the parent (>1 = dup); author/reference/external_update are 1:many, so
-  -- flag exact duplicate rows (author excludes the derived "warning" column).
+  -- Off-chain vote children (#1966, fixed in #2137: re-processing an anchor inserted
+  -- its children again, and children could be attached to another document).
+  -- db-sync writes children only for a document that parsed (is_valid), one row per
+  -- entry of a list in the stored document: authors, body.references and
+  -- body.externalUpdates. A document may list the same entry twice, so identical rows
+  -- are fine; more rows than the document lists, or a row it does not list, are not.
+  -- json is cast because remove_jsonb_from_schema stores it as varchar. NULL => SKIP
+  -- when no off-chain vote data was fetched (off by default since 13.7.0.3).
   PERFORM check_domain(
     'off_chain_vote_drep_data: at most one row per parent',
-    $q$ SELECT count(*) FROM (
-          SELECT off_chain_vote_data_id FROM off_chain_vote_drep_data
-          GROUP BY off_chain_vote_data_id HAVING count(*) > 1) d $q$);
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM (
+            SELECT off_chain_vote_data_id FROM off_chain_vote_drep_data
+            GROUP BY off_chain_vote_data_id HAVING count(*) > 1) d
+        ) END $q$);
 
   PERFORM check_domain(
     'off_chain_vote_gov_action_data: at most one row per parent',
-    $q$ SELECT count(*) FROM (
-          SELECT off_chain_vote_data_id FROM off_chain_vote_gov_action_data
-          GROUP BY off_chain_vote_data_id HAVING count(*) > 1) d $q$);
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM (
+            SELECT off_chain_vote_data_id FROM off_chain_vote_gov_action_data
+            GROUP BY off_chain_vote_data_id HAVING count(*) > 1) d
+        ) END $q$);
 
   PERFORM check_domain(
-    'off_chain_vote_author: no exact duplicate rows',
-    $q$ SELECT count(*) FROM (
-          SELECT 1 FROM off_chain_vote_author
-          GROUP BY off_chain_vote_data_id, name, witness_algorithm, public_key, signature
-          HAVING count(*) > 1) d $q$);
+    'off_chain_vote_author: no more rows than the document lists',
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_data d
+          JOIN (SELECT off_chain_vote_data_id, count(*) AS n
+                FROM off_chain_vote_author GROUP BY 1) c ON c.off_chain_vote_data_id = d.id
+          WHERE c.n > jsonb_array_length(json_list(d.json::jsonb -> 'authors'))
+        ) END $q$);
 
   PERFORM check_domain(
-    'off_chain_vote_reference: no exact duplicate rows',
-    $q$ SELECT count(*) FROM (
-          SELECT 1 FROM off_chain_vote_reference
-          GROUP BY off_chain_vote_data_id, label, uri, hash_digest, hash_algorithm
-          HAVING count(*) > 1) d $q$);
+    'off_chain_vote_reference: no more rows than the document lists',
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_data d
+          JOIN (SELECT off_chain_vote_data_id, count(*) AS n
+                FROM off_chain_vote_reference GROUP BY 1) c ON c.off_chain_vote_data_id = d.id
+          WHERE c.n > jsonb_array_length(json_list(d.json::jsonb -> 'body' -> 'references'))
+        ) END $q$);
 
   PERFORM check_domain(
-    'off_chain_vote_external_update: no exact duplicate rows',
-    $q$ SELECT count(*) FROM (
-          SELECT 1 FROM off_chain_vote_external_update
-          GROUP BY off_chain_vote_data_id, title, uri
-          HAVING count(*) > 1) d $q$);
+    'off_chain_vote_external_update: no more rows than the document lists',
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_data d
+          JOIN (SELECT off_chain_vote_data_id, count(*) AS n
+                FROM off_chain_vote_external_update GROUP BY 1) c ON c.off_chain_vote_data_id = d.id
+          WHERE c.n > jsonb_array_length(json_list(d.json::jsonb -> 'body' -> 'externalUpdates'))
+        ) END $q$);
+
+  -- Each row is a copy of one entry of its own document. On mainnet 13.7.1.0 rows were
+  -- found under a document that does not list them, often with the counts unchanged.
+  PERFORM check_domain(
+    'off_chain_vote_author: every row is listed in its document',
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_author r
+          JOIN off_chain_vote_data d ON d.id = r.off_chain_vote_data_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(json_list(d.json::jsonb -> 'authors')) e
+            WHERE json_text(e -> 'witness' -> 'publicKey') = r.public_key
+              AND json_text(e -> 'witness' -> 'signature') = r.signature)
+        ) END $q$);
+
+  PERFORM check_domain(
+    'off_chain_vote_reference: every row is listed in its document',
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_reference r
+          JOIN off_chain_vote_data d ON d.id = r.off_chain_vote_data_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(json_list(d.json::jsonb -> 'body' -> 'references')) e
+            WHERE json_text(e -> 'label') = r.label AND json_text(e -> 'uri') = r.uri)
+        ) END $q$);
+
+  PERFORM check_domain(
+    'off_chain_vote_external_update: every row is listed in its document',
+    $q$ SELECT CASE WHEN (SELECT count(*) FROM off_chain_vote_data) = 0 THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_external_update r
+          JOIN off_chain_vote_data d ON d.id = r.off_chain_vote_data_id
+          WHERE NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(json_list(d.json::jsonb -> 'body' -> 'externalUpdates')) e
+            WHERE json_text(e -> 'title') = r.title AND json_text(e -> 'uri') = r.uri)
+        ) END $q$);
+
+  -- A document that parsed has exactly one row per listed entry, so this also catches
+  -- dropped children. One read as a CIP-119 DRep document (it has a drep_data row)
+  -- stores no authors. Before 13.7.0.1 is_valid was always NULL (migration 2-0045 then
+  -- set those rows to true), so these two checks SKIP on an older schema.
+  PERFORM check_domain(
+    'off_chain_vote_data: valid documents have one child row per listed entry',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM off_chain_vote_data WHERE is_valid) THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_data d
+          LEFT JOIN (SELECT off_chain_vote_data_id, count(*) AS n
+                     FROM off_chain_vote_author GROUP BY 1) a ON a.off_chain_vote_data_id = d.id
+          LEFT JOIN (SELECT off_chain_vote_data_id, count(*) AS n
+                     FROM off_chain_vote_reference GROUP BY 1) r ON r.off_chain_vote_data_id = d.id
+          LEFT JOIN (SELECT off_chain_vote_data_id, count(*) AS n
+                     FROM off_chain_vote_external_update GROUP BY 1) e ON e.off_chain_vote_data_id = d.id
+          LEFT JOIN (SELECT DISTINCT off_chain_vote_data_id
+                     FROM off_chain_vote_drep_data) dr ON dr.off_chain_vote_data_id = d.id
+          WHERE d.is_valid
+            AND (coalesce(r.n, 0) <> jsonb_array_length(json_list(d.json::jsonb -> 'body' -> 'references'))
+              OR coalesce(e.n, 0) <> jsonb_array_length(json_list(d.json::jsonb -> 'body' -> 'externalUpdates'))
+              OR coalesce(a.n, 0) <> CASE WHEN dr.off_chain_vote_data_id IS NULL
+                                          THEN jsonb_array_length(json_list(d.json::jsonb -> 'authors'))
+                                          ELSE 0 END)
+        ) END $q$);
+
+  PERFORM check_domain(
+    'off_chain_vote_data: rejected documents have no child rows',
+    $q$ SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM off_chain_vote_data WHERE is_valid IS NOT NULL) THEN NULL ELSE (
+          SELECT count(*) FROM off_chain_vote_data
+          WHERE is_valid = false AND id IN (
+            SELECT off_chain_vote_data_id FROM off_chain_vote_author
+            UNION SELECT off_chain_vote_data_id FROM off_chain_vote_reference
+            UNION SELECT off_chain_vote_data_id FROM off_chain_vote_external_update
+            UNION SELECT off_chain_vote_data_id FROM off_chain_vote_drep_data
+            UNION SELECT off_chain_vote_data_id FROM off_chain_vote_gov_action_data)
+        ) END $q$);
 
   -- Every epoch below the tip has at least one block (no gap in block.epoch_no; #2139).
   PERFORM check_domain(
