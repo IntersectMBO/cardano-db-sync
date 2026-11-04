@@ -14,6 +14,17 @@
 
 BEGIN;
 
+-- Give the checks the memory PostgreSQL gives its own foreign key validation
+-- (RI_Initial_Check): maintenance_work_mem as work_mem and hash_mem_multiplier 1. That
+-- query runs without parallel workers, so turn them off too: each check then uses about
+-- maintenance_work_mem, as ADD FOREIGN KEY does. For this transaction only.
+DO $$
+BEGIN
+  PERFORM set_config('work_mem', current_setting('maintenance_work_mem'), true);
+  PERFORM set_config('hash_mem_multiplier', '1', true);
+  PERFORM set_config('max_parallel_workers_per_gather', '0', true);
+END $$;
+
 CREATE FUNCTION check_fk(_table text, _col text, _ref_table text, _ref_col text DEFAULT 'id') RETURNS int AS $$
 DECLARE
   _label text := _table || '.' || _col || ' -> ' || _ref_table || '.' || _ref_col;
