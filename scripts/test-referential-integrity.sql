@@ -1,26 +1,33 @@
--- Test referential integrity by temporarily adding foreign key constraints.
--- If ADD CONSTRAINT succeeds, the relationship has no dangling references.
--- The constraint is immediately dropped after a successful check.
--- If it fails, a WARNING is raised with the violation details.
+-- Test referential integrity: for each listed column, count the rows whose value has no
+-- matching row in the referenced table. NULL values are skipped, as a foreign key would
+-- allow them. A FAIL is raised as a WARNING with the number of such rows.
 --
 -- Usage: psql -d <dbname> -f scripts/test-referential-integrity.sql
 -- Or run all tests: ./scripts/run-schema-checks.sh <dbname>
 --
--- The entire script runs inside a transaction that is always rolled back,
--- so no foreign key constraints can ever remain in the database.
+-- The checks are plain SELECTs, so they do not block db-sync's writes or other readers.
+-- Like any query they hold ACCESS SHARE locks until the script ends, so DDL that needs
+-- ACCESS EXCLUSIVE (such as ALTER TABLE) waits until then, and while it waits, later
+-- queries on that table, db-sync's included, queue behind it. db-sync runs such DDL when
+-- it starts (migrations) and once near the tip, so avoid running the checks then. The
+-- script runs in a transaction that is always rolled back, which also drops its helpers.
 
 BEGIN;
 
 CREATE FUNCTION check_fk(_table text, _col text, _ref_table text, _ref_col text DEFAULT 'id') RETURNS int AS $$
 DECLARE
-  _cname text := 'test_fk_' || _table || '_' || _col;
   _label text := _table || '.' || _col || ' -> ' || _ref_table || '.' || _ref_col;
+  _orphans bigint;
 BEGIN
-  EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY(%I) REFERENCES %I(%I)',
-    _table, _cname, _col, _ref_table, _ref_col);
-  EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', _table, _cname);
-  RAISE NOTICE 'PASS: %', _label;
-  RETURN 1;
+  EXECUTE format('SELECT count(*) FROM %I f WHERE f.%I IS NOT NULL '
+                 'AND NOT EXISTS (SELECT 1 FROM %I r WHERE r.%I = f.%I)',
+    _table, _col, _ref_table, _ref_col, _col) INTO _orphans;
+  IF _orphans = 0 THEN
+    RAISE NOTICE 'PASS: %', _label;
+    RETURN 1;
+  END IF;
+  RAISE WARNING 'FAIL: %: % row(s) with no matching %.%', _label, _orphans, _ref_table, _ref_col;
+  RETURN 0;
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'FAIL: %: %', _label, SQLERRM;
   RETURN 0;
