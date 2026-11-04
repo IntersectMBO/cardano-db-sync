@@ -156,6 +156,7 @@ library
                       , base16-bytestring
                       , base58-bytestring
                       , case-insensitive
+                      , cardano-base
                       , cardano-binary
                       , cardano-diffusion:subscription
                       , cardano-crypto
