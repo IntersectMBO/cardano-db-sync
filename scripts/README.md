@@ -10,9 +10,9 @@ three SQL scripts in turn; each can also be run on its own with
 `psql -d <dbname> -f scripts/<script>.sql`.
 
 - **run-schema-checks.sh** `<dbname>` runs the three check scripts below against a database.
-- **test-uniqueness.sql** asserts UNIQUE invariants hold (no duplicate tx/block hashes and the like).
+- **test-uniqueness.sql** asserts UNIQUE invariants hold (no output spent twice, no duplicate epoch stake or reward rows, and the like). Block and tx hashes are not in it: the database already enforces them with its own unique constraints.
 - **test-referential-integrity.sql** asserts foreign-key invariants hold.
-- **test-value-domains.sql** asserts stored values are sane: ranges, non-negativity, epoch totals against a recompute, and duplicate or missing rows. On a mainnet-sized database a full run takes about 10 to 15 minutes.
+- **test-value-domains.sql** asserts stored values are sane: ranges, non-negativity, epoch totals against a recompute, duplicate or missing rows, off-chain vote rows against their document, hash lengths, and relay IP and bech32 formats. On a mainnet-sized database a full run takes about 10 to 15 minutes.
 
 ## Epoch table repair
 
