@@ -1,26 +1,47 @@
--- Test referential integrity by temporarily adding foreign key constraints.
--- If ADD CONSTRAINT succeeds, the relationship has no dangling references.
--- The constraint is immediately dropped after a successful check.
--- If it fails, a WARNING is raised with the violation details.
+-- Test referential integrity: for each listed column, count the rows whose value has no
+-- matching row in the referenced table. NULL values are skipped, as a foreign key would
+-- allow them. A FAIL is raised as a WARNING with the number of such rows.
 --
 -- Usage: psql -d <dbname> -f scripts/test-referential-integrity.sql
 -- Or run all tests: ./scripts/run-schema-checks.sh <dbname>
+-- Exits non-zero (psql exit code 3) if any check fails, so it can gate a release or CI.
 --
--- The entire script runs inside a transaction that is always rolled back,
--- so no foreign key constraints can ever remain in the database.
+-- The checks are plain SELECTs, so they do not block db-sync's writes or other readers.
+-- Like any query they hold ACCESS SHARE locks until the script ends, so DDL that needs
+-- ACCESS EXCLUSIVE (such as ALTER TABLE) waits until then, and while it waits, later
+-- queries on that table, db-sync's included, queue behind it. db-sync runs such DDL when
+-- it starts (migrations) and once near the tip, so avoid running the checks then. The
+-- script runs in a transaction that is always rolled back, which also drops its helpers.
+
+\set ON_ERROR_STOP on
 
 BEGIN;
 
+-- Give the checks the memory PostgreSQL gives its own foreign key validation
+-- (RI_Initial_Check): maintenance_work_mem as work_mem and hash_mem_multiplier 1. That
+-- query runs without parallel workers, so turn them off too: each check then uses about
+-- maintenance_work_mem, as ADD FOREIGN KEY does. For this transaction only.
+DO $$
+BEGIN
+  PERFORM set_config('work_mem', current_setting('maintenance_work_mem'), true);
+  PERFORM set_config('hash_mem_multiplier', '1', true);
+  PERFORM set_config('max_parallel_workers_per_gather', '0', true);
+END $$;
+
 CREATE FUNCTION check_fk(_table text, _col text, _ref_table text, _ref_col text DEFAULT 'id') RETURNS int AS $$
 DECLARE
-  _cname text := 'test_fk_' || _table || '_' || _col;
   _label text := _table || '.' || _col || ' -> ' || _ref_table || '.' || _ref_col;
+  _orphans bigint;
 BEGIN
-  EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY(%I) REFERENCES %I(%I)',
-    _table, _cname, _col, _ref_table, _ref_col);
-  EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', _table, _cname);
-  RAISE NOTICE 'PASS: %', _label;
-  RETURN 1;
+  EXECUTE format('SELECT count(*) FROM %I f WHERE f.%I IS NOT NULL '
+                 'AND NOT EXISTS (SELECT 1 FROM %I r WHERE r.%I = f.%I)',
+    _table, _col, _ref_table, _ref_col, _col) INTO _orphans;
+  IF _orphans = 0 THEN
+    RAISE NOTICE 'PASS: %', _label;
+    RETURN 1;
+  END IF;
+  RAISE WARNING 'FAIL: %: % row(s) with no matching %.%', _label, _orphans, _ref_table, _ref_col;
+  RETURN 0;
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'FAIL: %: %', _label, SQLERRM;
   RETURN 0;
@@ -326,6 +347,10 @@ BEGIN
   RAISE NOTICE 'Passed: %', _passed;
   RAISE NOTICE 'Failed: %', _failed;
   RAISE NOTICE '=============================================';
+
+  IF _failed > 0 THEN
+    RAISE EXCEPTION 'referential integrity checks did not pass: % of % failed', _failed, _total;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 
