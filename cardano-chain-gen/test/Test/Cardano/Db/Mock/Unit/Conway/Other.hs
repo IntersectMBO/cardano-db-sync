@@ -16,6 +16,7 @@ module Test.Cardano.Db.Mock.Unit.Conway.Other (
   poolDeReg,
   poolDeRegMany,
   poolDelist,
+  nulPoolUrlAndDnsNames,
 
   -- * Hard fork
   forkFixedEpoch,
@@ -25,11 +26,12 @@ module Test.Cardano.Db.Mock.Unit.Conway.Other (
 
 import qualified Cardano.Db as DB
 import Cardano.DbSync.Era.Shelley.Generic.Util (unKeyHashRaw)
-import Cardano.Ledger.BaseTypes (EpochNo (..))
+import Cardano.Ledger.BaseTypes (EpochNo (..), textToDns, textToUrl)
 import Cardano.Ledger.Conway.TxCert (ConwayTxCert (..))
 import Cardano.Ledger.Core (PoolCert (..))
 import Cardano.Ledger.Credential (Credential (..))
 import Cardano.Ledger.Keys (KeyHash, KeyRole (..))
+import Cardano.Ledger.State (PoolMetadata (..), StakePoolParams (..), StakePoolRelay (..))
 import Cardano.Mock.ChainSync.Server (IOManager (), addBlock)
 import Cardano.Mock.Forging.Interpreter (forgeNext, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Babbage as Babbage
@@ -40,6 +42,9 @@ import Cardano.Prelude hiding (from)
 import Cardano.SMASH.Server.PoolDataLayer (PoolDataLayer (..), toDbPoolId)
 import Cardano.SMASH.Server.Types (DBFail (..))
 import Data.List (last)
+import Data.Maybe (fromJust)
+import Data.Maybe.Strict (StrictMaybe (..))
+import qualified Data.Sequence.Strict as StrictSeq
 import Ouroboros.Consensus.Shelley.Eras (ConwayEra ())
 import Ouroboros.Network.Block (blockPoint)
 import Test.Cardano.Db.Mock.Config
@@ -141,6 +146,47 @@ poolReg =
     assertPoolLayerCounters dbSync (0, 0) [(PoolIndexNew 0, (Right False, False, True))] state'
   where
     testLabel = "conwayPoolReg"
+
+-- | A NUL is percent-encoded in a pool's metadata url and dropped from its relay dns names.
+nulPoolUrlAndDnsNames :: IOManager -> [(Text, Text)] -> Assertion
+nulPoolUrlAndDnsNames =
+  withFullConfig conwayConfigDir testLabel $ \interpreter mockServer dbSync -> do
+    startDBSync dbSync
+
+    void $
+      Api.withConwayFindLeaderAndSubmitTx interpreter mockServer $
+        Conway.mkDCertPoolTx [([StakeIndexNew 0], PoolIndexNew 0, consNulPoolCert)]
+    void $ Api.forgeNextFindLeaderAndSubmit interpreter mockServer []
+
+    assertBlockNoBackoff dbSync 2
+    assertEqQuery
+      dbSync
+      DB.queryPoolMetadataRefUrls
+      ["pool%00url"]
+      "Expected the NUL in the pool url to be stored percent-encoded"
+    assertEqQuery
+      dbSync
+      DB.queryPoolRelayDnsNames
+      [(Just "relay.example", Nothing), (Nothing, Just "srv.example")]
+      "Unexpected pool_relay dns_name / dns_srv_name"
+  where
+    testLabel = "conwayNulPoolUrlAndDnsNames"
+
+    consNulPoolCert [] _ = panic "Expected a reward credential"
+    consNulPoolCert (rwCred : _) poolId =
+      let params = Conway.consPoolParams poolId rwCred []
+       in ConwayTxCertPool . RegPool $
+            params
+              { sppRelays =
+                  StrictSeq.fromList
+                    [ SingleHostName SNothing (mkDns "relay\0.example")
+                    , MultiHostName (mkDns "srv\0.example")
+                    ]
+              , sppMetadata = setUrl <$> sppMetadata params
+              }
+
+    mkDns = fromJust . textToDns 64
+    setUrl md = md {pmUrl = fromJust $ textToUrl 64 "pool\0url"}
 
 -- Issue https://github.com/IntersectMBO/cardano-db-sync/issues/997
 nonexistentPoolQuery :: IOManager -> [(Text, Text)] -> Assertion

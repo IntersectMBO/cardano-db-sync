@@ -865,6 +865,51 @@ queryPoolRelayPort relayId =
   runSession mkDbCallStack $
     HsqlSes.statement (Id.getPoolRelayId relayId) queryPoolRelayPortStmt
 
+queryPoolMetadataRefUrlsStmt :: HsqlStmt.Statement () [Text]
+queryPoolMetadataRefUrlsStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    metadataRefTableN = tableName (Proxy @SCP.PoolMetadataRef)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT url"
+          , " FROM " <> metadataRefTableN
+          , " ORDER BY id"
+          ]
+
+    decoder = HsqlD.rowList $ HsqlD.column (HsqlD.nonNullable HsqlD.text)
+
+queryPoolMetadataRefUrls :: DbM [Text]
+queryPoolMetadataRefUrls =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryPoolMetadataRefUrlsStmt
+
+queryPoolRelayDnsNamesStmt :: HsqlStmt.Statement () [(Maybe Text, Maybe Text)]
+queryPoolRelayDnsNamesStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    relayTableN = tableName (Proxy @SCP.PoolRelay)
+
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT dns_name, dns_srv_name"
+          , " FROM " <> relayTableN
+          , " ORDER BY id"
+          ]
+
+    decoder = HsqlD.rowList $ do
+      dnsName <- HsqlD.column (HsqlD.nullable HsqlD.text)
+      dnsSrvName <- HsqlD.column (HsqlD.nullable HsqlD.text)
+      pure (dnsName, dnsSrvName)
+
+queryPoolRelayDnsNames :: DbM [(Maybe Text, Maybe Text)]
+queryPoolRelayDnsNames =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryPoolRelayDnsNamesStmt
+
 ------------------------------------------------------------------------------
 -- Database Column Order Information
 ------------------------------------------------------------------------------

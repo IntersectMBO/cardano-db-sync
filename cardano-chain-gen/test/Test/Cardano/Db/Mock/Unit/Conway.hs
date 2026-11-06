@@ -194,6 +194,10 @@ unitTests iom knownMigrations =
         , test "multiple scripts failed" Plutus.multipleScriptsFailed
         , test "multiple scripts failed same block" Plutus.multipleScriptsFailedSameBlock
         ]
+    , testGroup
+        "pools"
+        [ test "NUL in pool url and relay dns names" Other.nulPoolUrlAndDnsNames
+        ]
     , -- TODO: re-enable after fixing credential format for cardano-node 10.7.1
       -- PraosCredentialsSource vs NodeOperationalCertificate mismatch
       -- testGroup
