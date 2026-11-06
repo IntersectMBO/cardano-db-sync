@@ -8,8 +8,10 @@
 #
 #   epoch_no: specific epoch to check (default: -1 = all epochs)
 #
-# Takes the database name from PGDATABASE or, if that is unset, from the first line
-# of the pgpass file PGPASSFILE points to. psql finds the password as usual.
+# Connects the way db-sync does: host, port, database and user come from the first
+# line of the pgpass file PGPASSFILE points to. PGHOST, PGPORT, PGDATABASE and PGUSER,
+# when set, take precedence; a "*" field is left to psql's default. psql finds the
+# password as usual.
 #
 # Examples:
 #   PGPASSFILE=config/pgpass-mainnet scripts/check-and-fix-epoch-table.sh
@@ -29,10 +31,24 @@ if [[ ! -f "$VALIDATE_SQL" || ! -f "$FIX_SQL" ]]; then
   exit 1
 fi
 
-# Derive the DB name from PGDATABASE or pgpass (field 3 of the first line).
+# Take host, port, database and user from the first pgpass line, as db-sync does
+# (cardano-db PGConfig), so this checks and fixes the same database db-sync uses.
+PASS_HOST="" PASS_PORT="" PASS_DB="" PASS_USER=""
+if [[ -n "${PGPASSFILE:-}" && -f "$PGPASSFILE" ]]; then
+  IFS=: read -r PASS_HOST PASS_PORT PASS_DB PASS_USER _ < "$PGPASSFILE" || true
+fi
+if [[ -z "${PGHOST:-}" && -n "$PASS_HOST" && "$PASS_HOST" != "*" ]]; then
+  export PGHOST="$PASS_HOST"
+fi
+if [[ -z "${PGPORT:-}" && -n "$PASS_PORT" && "$PASS_PORT" != "*" ]]; then
+  export PGPORT="$PASS_PORT"
+fi
+if [[ -z "${PGUSER:-}" && -n "$PASS_USER" && "$PASS_USER" != "*" ]]; then
+  export PGUSER="$PASS_USER"
+fi
 DB_NAME=${PGDATABASE:-}
-if [[ -z "$DB_NAME" && -n "${PGPASSFILE:-}" && -f "$PGPASSFILE" ]]; then
-  DB_NAME=$(awk -F: 'NR==1{print $3}' "$PGPASSFILE")
+if [[ -z "$DB_NAME" && "$PASS_DB" != "*" ]]; then
+  DB_NAME=$PASS_DB
 fi
 if [[ -z "$DB_NAME" ]]; then
   echo "Error: could not determine database name. Set PGDATABASE or PGPASSFILE." >&2
@@ -52,7 +68,7 @@ if [[ "$EPOCH_KIND" == "v" ]]; then
   fi
 fi
 
-echo "Validating epoch data for database '$DB_NAME' (epoch_no=$EPOCH_NO)..."
+echo "Validating epoch data for database '$DB_NAME' on ${PGHOST:-the default host}, port ${PGPORT:-default} (epoch_no=$EPOCH_NO)..."
 OUTPUT=$(psql -X --no-psqlrc -v ON_ERROR_STOP=1 -v epoch_no="$EPOCH_NO" -f "$VALIDATE_SQL" "$DB_NAME")
 
 # Header has 2 lines (column names + separator). Tail has "(N rows)".
