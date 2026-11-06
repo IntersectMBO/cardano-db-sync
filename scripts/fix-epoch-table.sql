@@ -11,6 +11,15 @@
 -- first error so a failed fix does not exit 0.
 \set ON_ERROR_STOP on
 
+-- Stop with a usage hint (and a non-zero exit) when -v epoch_no was not given, instead of
+-- a syntax error at :epoch_no further down.
+\if :{?epoch_no}
+\else
+  DO $$ BEGIN
+    RAISE EXCEPTION 'missing -v epoch_no: run psql -v epoch_no=<epoch, or -1 for all epochs> -f scripts/fix-epoch-table.sql <dbname>';
+  END $$;
+\endif
+
 -- Since 13.7.2.1 epoch is a view (migration 2-0049): db-sync stores finished epochs in
 -- epoch_finalized and computes the current one from block and tx. This script only
 -- repairs the old table.

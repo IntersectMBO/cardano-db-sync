@@ -10,6 +10,16 @@
 -- Any row in the output means a mismatch. No rows = all correct. Compared: out_sum, fees,
 -- tx_count, blk_count, start_time and end_time - every column fix-epoch-table.sql rewrites.
 
+-- Stop with a usage hint (and a non-zero exit) when -v epoch_no was not given, instead of
+-- a syntax error at :epoch_no further down.
+\if :{?epoch_no}
+\else
+  \set ON_ERROR_STOP on
+  DO $$ BEGIN
+    RAISE EXCEPTION 'missing -v epoch_no: run psql -v epoch_no=<epoch, or -1 for all epochs> -f scripts/validate-epoch-table.sql <dbname>';
+  END $$;
+\endif
+
 -- Since 13.7.2.1 epoch is a view that is empty while epoch sync is not enabled, which
 -- would show every epoch as MISSING. The flag table only exists on the view form.
 SELECT coalesce((SELECT relkind = 'v' FROM pg_class WHERE oid = to_regclass('epoch')), false)
