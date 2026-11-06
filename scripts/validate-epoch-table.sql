@@ -7,7 +7,8 @@
 --   Validate all epochs:
 --     psql -v epoch_no=-1 -f scripts/validate-epoch-table.sql cexplorer
 --
--- Any row in the output means a mismatch. No rows = all correct.
+-- Any row in the output means a mismatch. No rows = all correct. Compared: out_sum, fees,
+-- tx_count, blk_count, start_time and end_time - every column fix-epoch-table.sql rewrites.
 
 -- Since 13.7.2.1 epoch is a view that is empty while epoch sync is not enabled, which
 -- would show every epoch as MISSING. The flag table only exists on the view form.
@@ -87,4 +88,6 @@ WHERE stored_out_sum IS NULL
    OR fees_diff != 0
    OR tx_count_diff != 0
    OR blk_count_diff != 0
+   OR calc_start_time IS DISTINCT FROM stored_start_time
+   OR calc_end_time IS DISTINCT FROM stored_end_time
 ORDER BY epoch_no;
