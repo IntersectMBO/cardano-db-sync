@@ -4,6 +4,7 @@
 --
 -- Usage: psql -d <dbname> -f scripts/test-referential-integrity.sql
 -- Or run all tests: ./scripts/run-schema-checks.sh <dbname>
+-- Exits non-zero (psql exit code 3) if any check fails, so it can gate a release or CI.
 --
 -- The checks are plain SELECTs, so they do not block db-sync's writes or other readers.
 -- Like any query they hold ACCESS SHARE locks until the script ends, so DDL that needs
@@ -11,6 +12,8 @@
 -- queries on that table, db-sync's included, queue behind it. db-sync runs such DDL when
 -- it starts (migrations) and once near the tip, so avoid running the checks then. The
 -- script runs in a transaction that is always rolled back, which also drops its helpers.
+
+\set ON_ERROR_STOP on
 
 BEGIN;
 
@@ -344,6 +347,10 @@ BEGIN
   RAISE NOTICE 'Passed: %', _passed;
   RAISE NOTICE 'Failed: %', _failed;
   RAISE NOTICE '=============================================';
+
+  IF _failed > 0 THEN
+    RAISE EXCEPTION 'referential integrity checks did not pass: % of % failed', _failed, _total;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 
