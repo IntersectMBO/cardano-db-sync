@@ -133,7 +133,7 @@ insertABlock syncEnv firstBlockOfEpoch blk details = do
         , DB.blockTime = sdSlotTime details
         , DB.blockTxCount = fromIntegral $ length txs
         , DB.blockProtoMajor = Byron.pvMajor (Byron.protocolVersion blk)
-        , DB.blockProtoMinor = Byron.pvMinor (Byron.protocolVersion blk)
+        , DB.blockProtoMinor = fromIntegral $ Byron.pvMinor (Byron.protocolVersion blk)
         , -- Shelley specific
           DB.blockVrfKey = Nothing
         , DB.blockOpCert = Nothing

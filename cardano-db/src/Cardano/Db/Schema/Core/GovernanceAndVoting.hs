@@ -8,7 +8,7 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Int (Int64)
 import Data.Text (Text)
-import Data.Word (Word16, Word64)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
@@ -417,7 +417,7 @@ data ParamProposal = ParamProposal
   , paramProposalDecentralisation :: !(Maybe Double)
   , paramProposalEntropy :: !(Maybe ByteString) -- sqltype=hash32type
   , paramProposalProtocolMajor :: !(Maybe Word16) -- sqltype=word31type
-  , paramProposalProtocolMinor :: !(Maybe Word16) -- sqltype=word31type
+  , paramProposalProtocolMinor :: !(Maybe Word32) -- sqltype=word63type
   , paramProposalMinUtxoValue :: !(Maybe DbLovelace) -- sqltype=lovelace
   , paramProposalMinPoolCost :: !(Maybe DbLovelace) -- sqltype=lovelace
   , paramProposalCostModelId :: !(Maybe Id.CostModelId) -- noreference
@@ -486,7 +486,7 @@ paramProposalDecoder =
     <*> D.column (D.nullable D.float8) -- paramProposalDecentralisation
     <*> D.column (D.nullable D.bytea) -- paramProposalEntropy
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalProtocolMajor
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalProtocolMinor
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- paramProposalProtocolMinor
     <*> maybeDbLovelaceDecoder -- paramProposalMinUtxoValue
     <*> maybeDbLovelaceDecoder -- paramProposalMinPoolCost
     <*> Id.maybeIdDecoder Id.CostModelId -- paramProposalCostModelId
@@ -544,7 +544,7 @@ paramProposalEncoder =
     , paramProposalDecentralisation >$< E.param (E.nullable E.float8)
     , paramProposalEntropy >$< E.param (E.nullable E.bytea)
     , paramProposalProtocolMajor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , paramProposalProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , paramProposalMinUtxoValue >$< maybeDbLovelaceEncoder
     , paramProposalMinPoolCost >$< maybeDbLovelaceEncoder
     , paramProposalCostModelId >$< Id.maybeIdEncoder Id.getCostModelId

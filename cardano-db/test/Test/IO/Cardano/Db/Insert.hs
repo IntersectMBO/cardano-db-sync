@@ -25,6 +25,7 @@ tests =
     , testCase "Insert twice" insertTwice
     , testCase "Insert foreign key missing" insertForeignKeyMissing
     , testCase "Insert pool relay with large port" insertPoolRelayLargePort
+    , testCase "Insert block with a CIP-0203 proto minor" insertBlockLargeProtoMinor
     , testCase "Off-chain vote data re-fetch does not duplicate children" insertOffChainVoteDataNoDuplicateChildren
     ]
 
@@ -123,6 +124,22 @@ insertPoolRelayLargePort =
         , poolRelayDnsSrvName = Nothing
         , poolRelayPort = Just p
         }
+
+-- Regression test for issue #2190: a protocol minor above 32767 used to be narrowed to
+-- Word16 and then encoded as a signed int2, so it lost bits 16 to 31 and wrapped negative.
+-- CIP-0203 packs a software tag into this field, so the full unsigned value must survive.
+insertBlockLargeProtoMinor :: IO ()
+insertBlockLargeProtoMinor =
+  runDbStandaloneSilent $ do
+    deleteAllBlocks
+    slid <- insertSlotLeader testSlotLeader
+    -- 4374593 (0x0042C041) is the Amaru tag observed on mainnet. It has bits set above
+    -- bit 15, so it exercises both the truncation and the sign wrap.
+    blkId <- insertCheckUniqueBlock $ (\b -> b {blockProtoMinor = 4374593}) (blockZero slid)
+    minorV <- queryBlockProtoMinor blkId
+    assertBool
+      ("Expected proto_minor 4374593 but got " ++ show minorV)
+      (minorV == 4374593)
 
 -- Regression test for #1966: re-fetching an already-stored anchor must not duplicate its children.
 insertOffChainVoteDataNoDuplicateChildren :: IO ()

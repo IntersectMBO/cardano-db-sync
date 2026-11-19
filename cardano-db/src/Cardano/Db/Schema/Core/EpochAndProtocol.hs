@@ -33,7 +33,7 @@ import Data.Functor.Contravariant
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Data.WideWord.Word128 (Word128)
-import Data.Word (Word16, Word64)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Generics (Generic)
 
 import Cardano.Db.Schema.Types (utcTimeAsTimestampDecoder)
@@ -107,7 +107,7 @@ data EpochParam = EpochParam
   , epochParamTreasuryGrowthRate :: !Double
   , epochParamDecentralisation :: !Double
   , epochParamProtocolMajor :: !Word16 -- sqltype=word31type
-  , epochParamProtocolMinor :: !Word16 -- sqltype=word31type
+  , epochParamProtocolMinor :: !Word32 -- sqltype=word63type
   , epochParamMinUtxoValue :: !DbLovelace -- sqltype=lovelace
   , epochParamMinPoolCost :: !DbLovelace -- sqltype=lovelace
   , epochParamNonce :: !(Maybe ByteString) -- sqltype=hash32type
@@ -176,7 +176,7 @@ epochParamDecoder =
     <*> D.column (D.nonNullable D.float8) -- epochParamTreasuryGrowthRate
     <*> D.column (D.nonNullable D.float8) -- epochParamDecentralisation
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- epochParamProtocolMajor
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- epochParamProtocolMinor
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamProtocolMinor
     <*> dbLovelaceDecoder -- epochParamMinUtxoValue
     <*> dbLovelaceDecoder -- epochParamMinPoolCost
     <*> D.column (D.nullable D.bytea) -- epochParamNonce
@@ -235,7 +235,7 @@ epochParamEncoder =
     , epochParamTreasuryGrowthRate >$< E.param (E.nonNullable E.float8)
     , epochParamDecentralisation >$< E.param (E.nonNullable E.float8)
     , epochParamProtocolMajor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
-    , epochParamProtocolMinor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , epochParamProtocolMinor >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , epochParamMinUtxoValue >$< dbLovelaceEncoder
     , epochParamMinPoolCost >$< dbLovelaceEncoder
     , epochParamNonce >$< E.param (E.nullable E.bytea)

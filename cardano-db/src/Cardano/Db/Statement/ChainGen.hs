@@ -891,6 +891,32 @@ queryPoolRelayAddrs =
   runSession mkDbCallStack $
     HsqlSes.statement () queryPoolRelayAddrsStmt
 
+-- | The raw @proto_minor@ of a block, read as a signed 64-bit value so that a wrapped
+-- encoding stays visible instead of being re-wrapped on the way out. Used as regression
+-- coverage for issue #2190.
+queryBlockProtoMinorStmt :: HsqlStmt.Statement Int64 Int64
+queryBlockProtoMinorStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT proto_minor"
+          , " FROM " <> blockTableN
+          , " WHERE id = $1"
+          , " LIMIT 1"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder =
+      HsqlD.singleRow $
+        HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+queryBlockProtoMinor :: Id.BlockId -> DbM Int64
+queryBlockProtoMinor blockId =
+  runSession mkDbCallStack $
+    HsqlSes.statement (Id.getBlockId blockId) queryBlockProtoMinorStmt
+
 ------------------------------------------------------------------------------
 -- Database Column Order Information
 ------------------------------------------------------------------------------

@@ -60,7 +60,7 @@ A table for blocks on the chain.
 | `time` | timestamp | The block time (UTCTime). |
 | `tx_count` | integer (64) | The number of transactions in this block. |
 | `proto_major` | word31type | The block's major protocol number. |
-| `proto_minor` | word31type | The block's major protocol number. |
+| `proto_minor` | word63type | The block's minor protocol number. Carries a CIP-0203 software tag when the producer sets one. |
 | `vrf_key` | string | The VRF key of the creator of this block. |
 | `op_cert` | hash32type | The hash of the operational certificate of the block producer. |
 | `op_cert_counter` | word63type | The value of the counter used to produce the operational certificate. |
@@ -647,7 +647,7 @@ A table containing block chain parameter change proposals.
 | `decentralisation` | double | The decentralisation parameter (1 fully centralised, 0 fully decentralised). |
 | `entropy` | hash32type | The 32 byte string of extra random-ness to be added into the protocol's entropy pool. |
 | `protocol_major` | word31type | The protocol major number. |
-| `protocol_minor` | word31type | The protocol minor number. |
+| `protocol_minor` | word63type | The protocol minor number. |
 | `min_utxo_value` | lovelace | The minimum value of a UTxO entry. |
 | `min_pool_cost` | lovelace | The minimum pool cost. |
 | `coins_per_utxo_size` | lovelace | For Alonzo this is the cost per UTxO word. For Babbage and later per UTxO byte. New in v13: Renamed from coins_per_utxo_word. |
@@ -710,7 +710,7 @@ The accepted protocol parameters for an epoch.
 | `decentralisation` | double | The decentralisation parameter (1 fully centralised, 0 fully decentralised). |
 | `extra_entropy` | hash32type | The 32 byte string of extra random-ness to be added into the protocol's entropy pool. New in v13: renamed from entopy. |
 | `protocol_major` | word31type | The protocol major number. |
-| `protocol_minor` | word31type | The protocol minor number. |
+| `protocol_minor` | word63type | The protocol minor number. |
 | `min_utxo_value` | lovelace | The minimum value of a UTxO entry. |
 | `min_pool_cost` | lovelace | The minimum pool cost. |
 | `nonce` | hash32type | The nonce value for this epoch. |
