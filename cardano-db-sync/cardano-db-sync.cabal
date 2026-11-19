@@ -376,6 +376,7 @@ test-suite test
                         Cardano.DbSync.Config.TypesTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest
                         Cardano.DbSync.Era.Shelley.Generic.ScriptTest
+                        Cardano.DbSync.Era.Universal.Insert.PoolTest
                         Cardano.DbSync.Gen
                         Cardano.DbSync.OffChain.HttpTest
                         Cardano.DbSync.OffChain.VoteTest
@@ -389,6 +390,7 @@ test-suite test
                       , aeson
                       , base16-bytestring
                       , bytestring
+                      , cardano-base
                       , cardano-binary
                       , cardano-crypto-class
                       , cardano-crypto-praos

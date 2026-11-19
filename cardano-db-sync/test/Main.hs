@@ -5,6 +5,7 @@ import qualified Cardano.DbSync.Config.NodeTest as NodeConfig
 import qualified Cardano.DbSync.Config.TypesTest as Types
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptDataTest as ScriptData
 import qualified Cardano.DbSync.Era.Shelley.Generic.ScriptTest as Script
+import qualified Cardano.DbSync.Era.Universal.Insert.PoolTest as Pool
 import qualified Cardano.DbSync.OffChain.HttpTest as HttpTest
 import qualified Cardano.DbSync.OffChain.VoteTest as VoteTest
 import qualified Cardano.DbSync.Util.AddressTest as Address
@@ -31,4 +32,5 @@ main =
     , HttpTest.tests
     , Util.tests
     , NodeConfig.tests
+    , Pool.tests
     ]
