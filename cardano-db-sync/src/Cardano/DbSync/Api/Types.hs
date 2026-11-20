@@ -79,6 +79,13 @@ data SyncOptions = SyncOptions
   -- resolved IP is in a private / loopback / link-local range. Set from
   -- the @--allow-private-offchain-urls@ CLI flag; off by default. Intended
   -- for local-cluster testing only.
+  , soptOnlyFix :: !Bool
+  -- ^ When 'True', db-sync runs any pending one-off data repair and then exits
+  -- rather than carrying on into normal syncing. Set from @--only-fix@.
+  , soptFixFromEpoch :: !(Maybe Word64)
+  -- ^ Forces the one-off repair to start at this epoch, bypassing the built-in
+  -- boundary, the "is anything broken" check and the completion marker. Set from
+  -- @--fix-from-epoch@.
   }
   deriving (Show)
 

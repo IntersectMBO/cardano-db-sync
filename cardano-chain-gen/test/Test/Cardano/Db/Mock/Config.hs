@@ -330,6 +330,8 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpMaybeRollback = Nothing
       , enpAllowPrivateOffChainUrls = False
       , enpLedgerOnly = False
+      , enpOnlyFix = False
+      , enpFixFromEpoch = Nothing
       }
 
 ------------------------------------------------------------------------------

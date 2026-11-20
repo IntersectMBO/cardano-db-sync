@@ -162,8 +162,8 @@ runDbSync metricsSetters iomgr tracers params syncNodeConfigFromFile abortOnPani
   logInfo trce $ textShow syncOpts
 
   if enpLedgerOnly params
-    then
-      -- Nothing to connect to, nothing to migrate and nothing to roll back.
+    then -- Nothing to connect to, nothing to migrate and nothing to roll back.
+
       runSyncNode
         metricsSetters
         tracers
@@ -423,6 +423,8 @@ extractSyncOptions snp aop snc =
     , soptInsertOptions = iopts
     , soptSnapshotInterval = dncSnapshotInterval snc
     , soptAllowPrivateOffChainUrls = enpAllowPrivateOffChainUrls snp
+    , soptOnlyFix = enpOnlyFix snp
+    , soptFixFromEpoch = enpFixFromEpoch snp
     }
   where
     maybeKeepMNames =

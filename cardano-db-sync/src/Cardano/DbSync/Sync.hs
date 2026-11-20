@@ -25,11 +25,13 @@ module Cardano.DbSync.Sync (
 ) where
 
 import Cardano.Client.Subscription (Decision (..), SubscriptionParams (..), SubscriptionTracers (..), subscribe)
+import qualified Cardano.Db as DB
 import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions, soptOnlyFix)
 import Cardano.DbSync.Config
 import Cardano.DbSync.DbEvent
+import Cardano.DbSync.Fix.ProtoMinor (ProtoMinorFixPlan, chainSyncClientFixProtoMinor, planProtoMinorFix)
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.Setup (DbSyncTracers (..), toTracer)
@@ -75,9 +77,10 @@ import Ouroboros.Network.Block (
   genesisPoint,
   getTipBlockNo,
  )
-import Ouroboros.Network.Driver.Simple (runPipelinedPeer)
+import Ouroboros.Network.Driver.Simple (runPeer, runPipelinedPeer)
 import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx)
 import qualified Ouroboros.Network.Mux as Mux
+import Ouroboros.Network.Protocol.ChainSync.Client (chainSyncClientPeer)
 import Ouroboros.Network.Protocol.ChainSync.ClientPipelined (
   ChainSyncClientPipelined (..),
   ClientPipelinedStIdle (..),
@@ -98,6 +101,7 @@ import Ouroboros.Network.Protocol.ChainSync.PipelineDecision (
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
 import qualified Ouroboros.Network.Snocket as Snocket
+import System.Exit (exitSuccess)
 
 runSyncNodeClient ::
   MetricSetters ->
@@ -178,28 +182,54 @@ dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig version bversion =
           logInfo tracer "Starting ChainSync client"
           setConsistentLevel syncEnv Unchecked
 
-          (latestPoints, currentTip) <- waitRestartState tc
-          let (inMemory, onDisk) = List.span snd latestPoints
-          logInfo tracer $
-            mconcat
-              [ "Suggesting intersection points from memory: "
-              , textShow (fst <$> inMemory)
-              , " and from disk: "
-              , textShow (fst <$> onDisk)
-              ]
-          void $
-            runPipelinedPeer
-              (toTracer (dstChainSyncTracer tracers))
-              (cChainSyncCodec codecs)
-              channel
-              ( chainSyncClientPeerPipelined $
-                  chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
-              )
-          atomically $ writeDbEventQueue tc DbFinish
-          -- We should return leftover bytes returned by 'runPipelinedPeer', but
-          -- client application do not care about them (it's only important if one
-          -- would like to restart a protocol on the same mux and thus bearer).
-          pure ((), Nothing)
+          -- A pending one-off repair takes the connection for itself, because the
+          -- chainsync protocol cannot be restarted on the same channel once a client
+          -- is done. The repair ends the connection and the next one syncs normally.
+          mFixPlan <- protoMinorFixPlan
+          case mFixPlan of
+            Just (dbEnv, plan) -> do
+              void $
+                runPeer
+                  (toTracer (dstChainSyncTracer tracers))
+                  (cChainSyncCodec codecs)
+                  channel
+                  (chainSyncClientPeer (chainSyncClientFixProtoMinor dbEnv tracer plan))
+              if soptOnlyFix (envOptions syncEnv)
+                then do
+                  logInfo tracer "Finished the repair and --only-fix was given, so exiting without syncing."
+                  exitSuccess
+                else do
+                  logInfo tracer "Reconnecting to resume syncing after the block.proto_minor repair."
+                  pure ((), Nothing)
+            Nothing -> do
+              (latestPoints, currentTip) <- waitRestartState tc
+              let (inMemory, onDisk) = List.span snd latestPoints
+              logInfo tracer $
+                mconcat
+                  [ "Suggesting intersection points from memory: "
+                  , textShow (fst <$> inMemory)
+                  , " and from disk: "
+                  , textShow (fst <$> onDisk)
+                  ]
+              void $
+                runPipelinedPeer
+                  (toTracer (dstChainSyncTracer tracers))
+                  (cChainSyncCodec codecs)
+                  channel
+                  ( chainSyncClientPeerPipelined $
+                      chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
+                  )
+              atomically $ writeDbEventQueue tc DbFinish
+              -- We should return leftover bytes returned by 'runPipelinedPeer', but
+              -- client application do not care about them (it's only important if one
+              -- would like to restart a protocol on the same mux and thus bearer).
+              pure ((), Nothing)
+
+    protoMinorFixPlan :: IO (Maybe (DB.DbEnv, ProtoMinorFixPlan))
+    protoMinorFixPlan =
+      case envDbEnv syncEnv of
+        Nothing -> pure Nothing
+        Just dbEnv -> fmap ((,) dbEnv) <$> planProtoMinorFix syncEnv dbEnv
 
     dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     dummylocalTxSubmit =

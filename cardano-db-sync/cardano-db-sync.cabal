@@ -68,6 +68,7 @@ library
                         Cardano.DbSync.Error
 
                         Cardano.DbSync.Era
+                        Cardano.DbSync.Fix.ProtoMinor
                         Cardano.DbSync.Era.Byron.Genesis
                         Cardano.DbSync.Era.Byron.Insert
                         Cardano.DbSync.Era.Byron.Util

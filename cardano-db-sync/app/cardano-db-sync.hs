@@ -123,6 +123,8 @@ pRunDbSyncNode = do
     <*> optional pRollbackSlotNo
     <*> pAllowPrivateOffChainUrls
     <*> pLedgerOnly
+    <*> pOnlyFix
+    <*> pFixFromEpoch
 
 pConfigFile :: Parser ConfigFile
 pConfigFile =
@@ -192,6 +194,37 @@ pAllowPrivateOffChainUrls =
           ( "Allow the off-chain pool and vote metadata fetchers to connect to "
               <> "URLs whose host or resolved IP is in a private, loopback, or "
               <> "link-local range. Intended for local-cluster testing; off by default."
+          )
+    )
+
+pFixFromEpoch :: Parser (Maybe Word64)
+pFixFromEpoch =
+  Opt.optional $
+    Opt.option
+      Opt.auto
+      ( Opt.long "fix-from-epoch"
+          <> Opt.metavar "EPOCH"
+          <> Opt.help
+            ( "Start the one-off data repair at this epoch instead of the built-in "
+                <> "per-network boundary, and run it even if nothing looks broken and "
+                <> "the repair is already recorded as done. Use 0 to sweep from genesis, "
+                <> "which is how a boundary gets confirmed. Reads every block in the "
+                <> "range from the node, so a from-genesis run on mainnet takes hours. "
+                <> "Combine with --only-fix to do it and exit."
+            )
+      )
+
+pOnlyFix :: Parser Bool
+pOnlyFix =
+  Opt.flag
+    False
+    True
+    ( Opt.long "only-fix"
+        <> Opt.help
+          ( "Run any pending one-off data repair and then exit, instead of "
+              <> "carrying on into normal syncing. Use this to get the repair "
+              <> "over with in a maintenance window. Without the flag the repair "
+              <> "still runs on the next start and hands over to syncing itself."
           )
     )
 

@@ -1494,3 +1494,108 @@ queryWithdrawalAddressesStmt =
 queryWithdrawalAddresses :: HasCallStack => DbM [Id.StakeAddressId]
 queryWithdrawalAddresses =
   runSession mkDbCallStack $ HsqlSes.statement () queryWithdrawalAddressesStmt
+
+--------------------------------------------------------------------------------
+-- proto_minor repair (issue #2190)
+--------------------------------------------------------------------------------
+
+-- | The earliest epoch holding a block whose stored @proto_minor@ looks like a CIP-0203
+-- software tag rather than a genuine small version: either sign-wrapped, or with a producer
+-- id in the low byte that survived the truncation. 'Nothing' means no tagged block is
+-- stored, so there is nothing to repair.
+queryFirstTaggedProtoMinorEpochStmt :: HsqlStmt.Statement () (Maybe Word64)
+queryFirstTaggedProtoMinorEpochStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT min(epoch_no)"
+          , " FROM " <> blockTableN
+          , " WHERE proto_minor < 0 OR (proto_minor & 255) > 8"
+          ]
+    decoder =
+      HsqlD.singleRow $
+        HsqlD.column (HsqlD.nullable (fromIntegral <$> HsqlD.int4))
+
+queryFirstTaggedProtoMinorEpoch :: HasCallStack => DbM (Maybe Word64)
+queryFirstTaggedProtoMinorEpoch =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryFirstTaggedProtoMinorEpochStmt
+
+-- | Whether any stored block has a negative @proto_minor@, which is the only shape of
+-- truncation that can be recognised from the stored value alone. Note this deliberately does
+-- not test @(proto_minor & 255) > 8@: a tag stored correctly by a fixed db-sync also has a
+-- producer id in its low byte, so that test would fire on a healthy database and buy a
+-- pointless sweep. It stops at the first hit, so it is the gate for whether the repair runs.
+queryHasTaggedProtoMinorStmt :: HsqlStmt.Statement () Bool
+queryHasTaggedProtoMinorStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT EXISTS (SELECT 1 FROM " <> blockTableN
+          , " WHERE proto_minor < 0)"
+          ]
+    decoder = HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.bool)
+
+queryHasTaggedProtoMinor :: HasCallStack => DbM Bool
+queryHasTaggedProtoMinor =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryHasTaggedProtoMinorStmt
+
+-- | The @(slot_no, hash)@ of the last block before the given epoch, used as the chainsync
+-- intersection point. 'Nothing' means there is no earlier block, so the sweep starts at
+-- origin.
+queryLastBlockBeforeEpochStmt :: HsqlStmt.Statement Word64 (Maybe (Word64, ByteString))
+queryLastBlockBeforeEpochStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT slot_no, hash"
+          , " FROM " <> blockTableN
+          , " WHERE epoch_no < $1 AND slot_no IS NOT NULL"
+          , " ORDER BY id DESC"
+          , " LIMIT 1"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int4))
+    decoder =
+      HsqlD.rowMaybe $
+        (,)
+          <$> HsqlD.column (HsqlD.nonNullable (fromIntegral <$> HsqlD.int8))
+          <*> HsqlD.column (HsqlD.nonNullable HsqlD.bytea)
+
+queryLastBlockBeforeEpoch :: HasCallStack => Word64 -> DbM (Maybe (Word64, ByteString))
+queryLastBlockBeforeEpoch epochNo =
+  runSession mkDbCallStack $
+    HsqlSes.statement epochNo queryLastBlockBeforeEpochStmt
+
+-- | Write the true @proto_minor@ of a block, keyed by hash, and only where it differs.
+-- Returns the number of rows changed, so a block that was already correct costs no write
+-- and the whole repair stays idempotent.
+updateBlockProtoMinorStmt :: HsqlStmt.Statement (ByteString, Word64) Int64
+updateBlockProtoMinorStmt =
+  HsqlStmt.Statement sql encoder HsqlD.rowsAffected True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "UPDATE " <> blockTableN
+          , " SET proto_minor = $2"
+          , " WHERE hash = $1 AND proto_minor IS DISTINCT FROM $2"
+          ]
+    encoder =
+      (fst >$< HsqlE.param (HsqlE.nonNullable HsqlE.bytea))
+        <> (snd >$< HsqlE.param (HsqlE.nonNullable (fromIntegral >$< HsqlE.int8)))
+
+updateBlockProtoMinor :: HasCallStack => ByteString -> Word64 -> DbM Int64
+updateBlockProtoMinor hsh minorV =
+  runSession mkDbCallStack $
+    HsqlSes.statement (hsh, minorV) updateBlockProtoMinorStmt

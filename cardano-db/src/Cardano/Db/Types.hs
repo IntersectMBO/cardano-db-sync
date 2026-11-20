@@ -339,6 +339,7 @@ data ExtraMigration
   | BootstrapFinished
   | ConsumeTxOutPreviouslySet
   | TxOutAddressPreviouslySet
+  | ProtoMinorFixed
   deriving (Eq, Show, Read)
 
 data MigrationValues = MigrationValues
@@ -396,6 +397,8 @@ extraDescription = \case
     "The --consume-tx-out flag has previously been enabled"
   TxOutAddressPreviouslySet ->
     "The addition of a Address table for TxOuts was previously set"
+  ProtoMinorFixed ->
+    "The block.proto_minor column has been repaired from the node's headers (issue #2190)"
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
 
