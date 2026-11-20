@@ -1,6 +1,6 @@
 # Revision history for cardano-db-sync
 
-## 13.8.1.0
+## 13.9.0.0
 - Pin dependencies to node 11.2.3: `ouroboros-consensus` 5.4.0.1, `cardano-api` 11.12.0.0, `cardano-ledger-dijkstra` 0.5.0.0 and `cardano-protocol` 0.2.0.2. The last of these restores the pre-protocol-version-12 decoder for the Praos block header, which does not enforce the header's list length.
 - Store pool relay IPs without the quotes that `Show` on the node 11.2 ledger's address wrapper adds; a startup migration strips the quotes 13.8.0.0 wrote [#2182](https://github.com/IntersectMBO/cardano-db-sync/issues/2182).
 - Store the full protocol version minor. CIP-0203 packs a software tag into the header's minor version, so a value of 32768 or more was truncated and stored as a negative number; `block.proto_minor`, `epoch_param.protocol_minor` and `param_proposal.protocol_minor` are now 64-bit. Rows already written cannot be repaired from the database, because the high bits were never stored, so a one-off pass re-reads the affected blocks from the node. It runs automatically once, from a per-network boundary epoch; `--fix-from-epoch EPOCH` starts it earlier and `--only-fix` runs it and exits [#2190](https://github.com/IntersectMBO/cardano-db-sync/issues/2190).
