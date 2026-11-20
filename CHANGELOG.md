@@ -1,5 +1,8 @@
 # Revision history for cardano-db-sync
 
+## 13.8.1.0
+- Pin dependencies to node 11.2.3: `ouroboros-consensus` 5.4.0.1, `cardano-api` 11.12.0.0, `cardano-ledger-dijkstra` 0.5.0.0 and `cardano-protocol` 0.2.0.2. The last of these restores the pre-protocol-version-12 decoder for the Praos block header, which does not enforce the header's list length.
+
 ## 13.8.0.0
 - Update Docker configuration to allow PostgreSQL connection details to be provided via Docker secrets or a `.pgpass` file using the `PGPASSFILE` environment variable.
 - Add static binaries and docker images for aarch64-linux
