@@ -1,6 +1,5 @@
 -- Give each column the domain its Haskell field already has: word64type where the field
--- is a Word64, as param_proposal already stores the matching parameters, and word63type
--- for block.proto_major, which migration 2-0054 widened for proto_minor.
+-- is a Word64, as param_proposal already stores the matching parameters.
 
 CREATE FUNCTION migrate() RETURNS void AS $$
 DECLARE
@@ -8,8 +7,6 @@ DECLARE
 BEGIN
   SELECT stage_two + 1 INTO next_version FROM schema_version ;
   IF next_version = 55 THEN
-
-    ALTER TABLE "block" ALTER COLUMN "proto_major" TYPE word63type ;
 
     ALTER TABLE "committee_member" ALTER COLUMN "expiration_epoch" TYPE word64type USING "expiration_epoch"::numeric ;
 
