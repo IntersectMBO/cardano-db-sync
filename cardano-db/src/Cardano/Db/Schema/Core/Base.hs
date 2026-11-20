@@ -18,7 +18,7 @@ import Data.Functor.Contravariant
 import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Data.Word (Word16, Word32, Word64)
+import Data.Word (Word32, Word64)
 import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
@@ -69,9 +69,8 @@ data Block = Block
   , blockSize :: !Word64 -- sqltype=word31type
   , blockTime :: !UTCTime -- sqltype=timestamp
   , blockTxCount :: !Word64
-  , blockProtoMajor :: !Word16 -- sqltype=word31type
-  -- The header protocol minor. CIP-0203 packs a software tag into it, so this is
-  -- a full unsigned 32-bit value, not a small version number. See issue #2190.
+  , blockProtoMajor :: !Word32 -- sqltype=word63type
+  -- CIP-0203 packs a software tag into the minor, so it is a full 32-bit value (#2190).
   , blockProtoMinor :: !Word32 -- sqltype=word63type
   -- Shelley specific
   , blockVrfKey :: !(Maybe Text)
@@ -103,7 +102,7 @@ blockDecoder =
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockSize
     <*> D.column (D.nonNullable utcTimeAsTimestampDecoder) -- blockTime
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockTxCount
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int2) -- blockProtoMajor
+    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockProtoMajor
     <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- blockProtoMinor
     <*> D.column (D.nullable D.text) -- blockVrfKey
     <*> D.column (D.nullable D.bytea) -- blockOpCert
@@ -122,7 +121,7 @@ blockEncoder =
     , blockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockTime >$< E.param (E.nonNullable utcTimeAsTimestampEncoder)
     , blockTxCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , blockProtoMajor >$< E.param (E.nonNullable $ fromIntegral >$< E.int2)
+    , blockProtoMajor >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockProtoMinor >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
     , blockVrfKey >$< E.param (E.nullable E.text)
     , blockOpCert >$< E.param (E.nullable E.bytea)

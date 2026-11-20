@@ -27,6 +27,8 @@ import Cardano.Db.Types (
   maybeDbWord64Encoder,
   syncStateEncoder,
   word128Decoder,
+  word64Decoder,
+  word64Encoder,
  )
 import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
@@ -93,15 +95,15 @@ epochDecoder =
 -- Description: Stores parameters relevant to each epoch, such as the number of slots per epoch or the block size limit.
 data EpochParam = EpochParam
   { epochParamEpochNo :: !Word64 -- sqltype=word31type
-  , epochParamMinFeeA :: !Word64 -- sqltype=word31type
-  , epochParamMinFeeB :: !Word64 -- sqltype=word31type
-  , epochParamMaxBlockSize :: !Word64 -- sqltype=word31type
-  , epochParamMaxTxSize :: !Word64 -- sqltype=word31type
-  , epochParamMaxBhSize :: !Word64 -- sqltype=word31type
+  , epochParamMinFeeA :: !Word64 -- sqltype=word64type
+  , epochParamMinFeeB :: !Word64 -- sqltype=word64type
+  , epochParamMaxBlockSize :: !Word64 -- sqltype=word64type
+  , epochParamMaxTxSize :: !Word64 -- sqltype=word64type
+  , epochParamMaxBhSize :: !Word64 -- sqltype=word64type
   , epochParamKeyDeposit :: !DbLovelace -- sqltype=lovelace
   , epochParamPoolDeposit :: !DbLovelace -- sqltype=lovelace
-  , epochParamMaxEpoch :: !Word64 -- sqltype=word31type
-  , epochParamOptimalPoolCount :: !Word64 -- sqltype=word31type
+  , epochParamMaxEpoch :: !Word64 -- sqltype=word64type
+  , epochParamOptimalPoolCount :: !Word64 -- sqltype=word64type
   , epochParamInfluence :: !Double
   , epochParamMonetaryExpandRate :: !Double
   , epochParamTreasuryGrowthRate :: !Double
@@ -162,15 +164,15 @@ epochParamDecoder :: D.Row EpochParam
 epochParamDecoder =
   EpochParam
     <$> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamEpochNo
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMinFeeA
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMinFeeB
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMaxBlockSize
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMaxTxSize
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMaxBhSize
+    <*> word64Decoder -- epochParamMinFeeA
+    <*> word64Decoder -- epochParamMinFeeB
+    <*> word64Decoder -- epochParamMaxBlockSize
+    <*> word64Decoder -- epochParamMaxTxSize
+    <*> word64Decoder -- epochParamMaxBhSize
     <*> dbLovelaceDecoder -- epochParamKeyDeposit
     <*> dbLovelaceDecoder -- epochParamPoolDeposit
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamMaxEpoch
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- epochParamOptimalPoolCount
+    <*> word64Decoder -- epochParamMaxEpoch
+    <*> word64Decoder -- epochParamOptimalPoolCount
     <*> D.column (D.nonNullable D.float8) -- epochParamInfluence
     <*> D.column (D.nonNullable D.float8) -- epochParamMonetaryExpandRate
     <*> D.column (D.nonNullable D.float8) -- epochParamTreasuryGrowthRate
@@ -221,15 +223,15 @@ epochParamEncoder :: E.Params EpochParam
 epochParamEncoder =
   mconcat
     [ epochParamEpochNo >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochParamMinFeeA >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochParamMinFeeB >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochParamMaxBlockSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochParamMaxTxSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochParamMaxBhSize >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , epochParamMinFeeA >$< word64Encoder
+    , epochParamMinFeeB >$< word64Encoder
+    , epochParamMaxBlockSize >$< word64Encoder
+    , epochParamMaxTxSize >$< word64Encoder
+    , epochParamMaxBhSize >$< word64Encoder
     , epochParamKeyDeposit >$< dbLovelaceEncoder
     , epochParamPoolDeposit >$< dbLovelaceEncoder
-    , epochParamMaxEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , epochParamOptimalPoolCount >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , epochParamMaxEpoch >$< word64Encoder
+    , epochParamOptimalPoolCount >$< word64Encoder
     , epochParamInfluence >$< E.param (E.nonNullable E.float8)
     , epochParamMonetaryExpandRate >$< E.param (E.nonNullable E.float8)
     , epochParamTreasuryGrowthRate >$< E.param (E.nonNullable E.float8)

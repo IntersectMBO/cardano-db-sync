@@ -917,6 +917,54 @@ queryBlockProtoMinor blockId =
   runSession mkDbCallStack $
     HsqlSes.statement (Id.getBlockId blockId) queryBlockProtoMinorStmt
 
+-- | The committee quorum as text, so a stored value is reported exactly as stored rather
+-- than through a decoder. Regression coverage for the column width.
+queryCommitteeQuorumTextStmt :: HsqlStmt.Statement Int64 (Text, Text)
+queryCommitteeQuorumTextStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    committeeTableN = tableName (Proxy @SGV.Committee)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT quorum_numerator::text, quorum_denominator::text"
+          , " FROM " <> committeeTableN
+          , " WHERE id = $1"
+          , " LIMIT 1"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder =
+      HsqlD.singleRow $
+        (,)
+          <$> HsqlD.column (HsqlD.nonNullable HsqlD.text)
+          <*> HsqlD.column (HsqlD.nonNullable HsqlD.text)
+
+queryCommitteeQuorumText :: Id.CommitteeId -> DbM (Text, Text)
+queryCommitteeQuorumText committeeId =
+  runSession mkDbCallStack $
+    HsqlSes.statement (Id.getCommitteeId committeeId) queryCommitteeQuorumTextStmt
+
+queryCommitteeMemberExpirationTextStmt :: HsqlStmt.Statement Int64 Text
+queryCommitteeMemberExpirationTextStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    memberTableN = tableName (Proxy @SGV.CommitteeMember)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT expiration_epoch::text"
+          , " FROM " <> memberTableN
+          , " WHERE id = $1"
+          , " LIMIT 1"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder = HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.text)
+
+queryCommitteeMemberExpirationText :: Id.CommitteeMemberId -> DbM Text
+queryCommitteeMemberExpirationText memberId =
+  runSession mkDbCallStack $
+    HsqlSes.statement (Id.getCommitteeMemberId memberId) queryCommitteeMemberExpirationTextStmt
+
 ------------------------------------------------------------------------------
 -- Database Column Order Information
 ------------------------------------------------------------------------------
