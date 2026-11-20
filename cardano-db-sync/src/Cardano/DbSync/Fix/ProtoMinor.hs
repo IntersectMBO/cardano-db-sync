@@ -62,6 +62,9 @@ protoMinorFixStartEpoch (NetworkMagic magic) =
     764824073 -> Just 640 -- mainnet, first tag seen in epoch 644
     1 -> Just 294 -- preprod, first tag seen in epoch 298
     2 -> Just 1270 -- preview, first tag seen in epoch 1274
+    6 -> Just 5 -- dijkstra, first tag seen in epoch 9
+    164 -> Just 13 -- musashi, first tag seen in epoch 17
+    4 -> Just 0 -- sanchonet, no tag seen; the gate only lets this run if one appears
     _ -> Nothing
 
 data ProtoMinorFixPlan = ProtoMinorFixPlan
