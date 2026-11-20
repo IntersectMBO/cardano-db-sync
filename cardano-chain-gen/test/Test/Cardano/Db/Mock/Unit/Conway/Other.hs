@@ -136,6 +136,13 @@ poolReg =
     assertBlockNoBackoff dbSync 2
     -- We should have added two owners
     assertPoolCounters dbSync (addPoolCounters (1, 1, 1, 2, 0, 1) initCounter)
+    -- The addresses must be stored bare, not as the quoted Show of the ledger's
+    -- address wrappers. See issue #2182.
+    relayAddrs <- runQuery dbSync DB.queryPoolRelayAddrs
+    assertEqual
+      "Unexpected pool relay addresses"
+      [(Just "1.2.3.4", Just "2001:db8::1")]
+      relayAddrs
     state' <- Api.getConwayLedgerState interpreter
     -- Should not be retired or delisted
     assertPoolLayerCounters dbSync (0, 0) [(PoolIndexNew 0, (Right False, False, True))] state'

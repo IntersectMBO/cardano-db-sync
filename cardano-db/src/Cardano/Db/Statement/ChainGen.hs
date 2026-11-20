@@ -865,6 +865,32 @@ queryPoolRelayPort relayId =
   runSession mkDbCallStack $
     HsqlSes.statement (Id.getPoolRelayId relayId) queryPoolRelayPortStmt
 
+-- | The @ipv4@ and @ipv6@ of every relay, in row order. 'Show' on the ledger's address
+-- wrappers quotes its output, so these columns can silently end up holding @"1.2.3.4"@
+-- rather than @1.2.3.4@. Used as regression coverage for issue #2182.
+queryPoolRelayAddrsStmt :: HsqlStmt.Statement () [(Maybe Text, Maybe Text)]
+queryPoolRelayAddrsStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    relayTableN = tableName (Proxy @SCP.PoolRelay)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT ipv4, ipv6"
+          , " FROM " <> relayTableN
+          , " ORDER BY id"
+          ]
+    decoder =
+      HsqlD.rowList $
+        (,)
+          <$> HsqlD.column (HsqlD.nullable HsqlD.text)
+          <*> HsqlD.column (HsqlD.nullable HsqlD.text)
+
+queryPoolRelayAddrs :: DbM [(Maybe Text, Maybe Text)]
+queryPoolRelayAddrs =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryPoolRelayAddrsStmt
+
 ------------------------------------------------------------------------------
 -- Database Column Order Information
 ------------------------------------------------------------------------------

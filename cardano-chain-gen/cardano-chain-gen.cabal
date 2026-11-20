@@ -61,6 +61,7 @@ library
                       , async
                       , aeson
                       , bytestring
+                      , cardano-base
                       , cardano-binary
                       , cardano-crypto-class
                       , cardano-data

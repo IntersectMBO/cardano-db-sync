@@ -13,9 +13,11 @@ module Cardano.DbSync.Era.Universal.Insert.Pool (
   insertPoolMetaDataRef,
   insertPoolOwner,
   insertPoolRelay,
+  mkPoolRelay,
   insertPoolCert,
 ) where
 
+import Cardano.Base.IP (unIPv4, unIPv6)
 import Cardano.Crypto.Hash (hashToBytes)
 import Cardano.Db (PoolUrl (..))
 import qualified Cardano.Db as DB
@@ -156,37 +158,41 @@ insertPoolRelay ::
   PoolP.StakePoolRelay ->
   ExceptT SyncNodeError DB.DbM ()
 insertPoolRelay updateId relay =
-  void
-    . lift
-    $ DB.insertPoolRelay
-    $ case relay of
-      PoolP.SingleHostAddr mPort mIpv4 mIpv6 ->
-        DB.PoolRelay -- An IPv4 and/or IPv6 address
-          { DB.poolRelayUpdateId = updateId
-          , DB.poolRelayIpv4 = textShow <$> strictMaybeToMaybe mIpv4
-          , DB.poolRelayIpv6 = textShow <$> strictMaybeToMaybe mIpv6
-          , DB.poolRelayDnsName = Nothing
-          , DB.poolRelayDnsSrvName = Nothing
-          , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
-          }
-      PoolP.SingleHostName mPort name ->
-        DB.PoolRelay -- An A or AAAA DNS record
-          { DB.poolRelayUpdateId = updateId
-          , DB.poolRelayIpv4 = Nothing
-          , DB.poolRelayIpv6 = Nothing
-          , DB.poolRelayDnsName = Just (Ledger.dnsToText name)
-          , DB.poolRelayDnsSrvName = Nothing
-          , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
-          }
-      PoolP.MultiHostName name ->
-        DB.PoolRelay -- An SRV DNS record
-          { DB.poolRelayUpdateId = updateId
-          , DB.poolRelayIpv4 = Nothing
-          , DB.poolRelayIpv6 = Nothing
-          , DB.poolRelayDnsName = Nothing
-          , DB.poolRelayDnsSrvName = Just (Ledger.dnsToText name)
-          , DB.poolRelayPort = Nothing
-          }
+  void . lift $ DB.insertPoolRelay (mkPoolRelay updateId relay)
+
+-- | Pure so it can be tested without a database. See 'Cardano.DbSync.Era.Universal.Insert.PoolTest'.
+mkPoolRelay :: DB.PoolUpdateId -> PoolP.StakePoolRelay -> DB.PoolRelay
+mkPoolRelay updateId relay =
+  case relay of
+    -- Show on the ledger's IPv4/IPv6 wrapper quotes its output, to round-trip with
+    -- its Read. Unwrap first so the columns hold a bare address.
+    PoolP.SingleHostAddr mPort mIpv4 mIpv6 ->
+      DB.PoolRelay -- An IPv4 and/or IPv6 address
+        { DB.poolRelayUpdateId = updateId
+        , DB.poolRelayIpv4 = textShow . unIPv4 <$> strictMaybeToMaybe mIpv4
+        , DB.poolRelayIpv6 = textShow . unIPv6 <$> strictMaybeToMaybe mIpv6
+        , DB.poolRelayDnsName = Nothing
+        , DB.poolRelayDnsSrvName = Nothing
+        , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
+        }
+    PoolP.SingleHostName mPort name ->
+      DB.PoolRelay -- An A or AAAA DNS record
+        { DB.poolRelayUpdateId = updateId
+        , DB.poolRelayIpv4 = Nothing
+        , DB.poolRelayIpv6 = Nothing
+        , DB.poolRelayDnsName = Just (Ledger.dnsToText name)
+        , DB.poolRelayDnsSrvName = Nothing
+        , DB.poolRelayPort = Ledger.portToWord16 <$> strictMaybeToMaybe mPort
+        }
+    PoolP.MultiHostName name ->
+      DB.PoolRelay -- An SRV DNS record
+        { DB.poolRelayUpdateId = updateId
+        , DB.poolRelayIpv4 = Nothing
+        , DB.poolRelayIpv6 = Nothing
+        , DB.poolRelayDnsName = Nothing
+        , DB.poolRelayDnsSrvName = Just (Ledger.dnsToText name)
+        , DB.poolRelayPort = Nothing
+        }
 
 insertPoolCert ::
   SyncEnv ->

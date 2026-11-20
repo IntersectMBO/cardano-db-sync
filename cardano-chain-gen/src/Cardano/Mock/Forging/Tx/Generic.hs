@@ -34,6 +34,7 @@ module Cardano.Mock.Forging.Tx.Generic (
   committeeVoters,
 ) where
 
+import Cardano.Base.IP (toIPv4, toIPv6)
 import Cardano.Binary (ToCBOR (..))
 import Cardano.Crypto.Hash (HashAlgorithm)
 import qualified Cardano.Crypto.Hash as Hash
@@ -329,8 +330,14 @@ consPoolParams poolId rwCred owners =
     , sppAccountAddress = AccountAddress Testnet (AccountId rwCred)
     , sppOwners = Set.fromList owners
     , -- Port 41950 is > 32767 on purpose so that pool_relay.port exercises the full
-      -- unsigned Word16 range (regression coverage for issue #2135).
-      sppRelays = StrictSeq.singleton $ SingleHostAddr (SJust (Port 41950)) SNothing SNothing
+      -- unsigned Word16 range (regression coverage for issue #2135). The addresses are
+      -- there so pool_relay.ipv4/ipv6 are exercised too (issue #2182).
+      sppRelays =
+        StrictSeq.singleton $
+          SingleHostAddr
+            (SJust (Port 41950))
+            (SJust (toIPv4 [1, 2, 3, 4]))
+            (SJust (toIPv6 [0x2001, 0xdb8, 0, 0, 0, 0, 0, 1]))
     , sppMetadata = SJust $ PoolMetadata (fromJust $ textToUrl 64 "best.pool") (let !(SBS.SBS ba) = SBS.toShort "89237365492387654983275634298756" in ByteArray ba)
     }
 
