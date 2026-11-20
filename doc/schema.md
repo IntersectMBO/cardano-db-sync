@@ -59,7 +59,7 @@ A table for blocks on the chain.
 | `size` | word31type | The block size (in bytes). Note, this size value is not expected to be the same as the sum of the tx sizes due to the fact that txs being stored in segwit format and oddities in the CBOR encoding. |
 | `time` | timestamp | The block time (UTCTime). |
 | `tx_count` | integer (64) | The number of transactions in this block. |
-| `proto_major` | word31type | The block's major protocol number. |
+| `proto_major` | word63type | The block's major protocol number. |
 | `proto_minor` | word63type | The block's minor protocol number. Carries a CIP-0203 software tag when the producer sets one. |
 | `vrf_key` | string | The VRF key of the creator of this block. |
 | `op_cert` | hash32type | The hash of the operational certificate of the block producer. |
@@ -695,15 +695,15 @@ The accepted protocol parameters for an epoch.
 |-|-|-|
 | `id` | integer (64) |  |
 | `epoch_no` | word31type | The first epoch for which these parameters are valid. |
-| `min_fee_a` | word31type | The 'a' parameter to calculate the minimum transaction fee. |
-| `min_fee_b` | word31type | The 'b' parameter to calculate the minimum transaction fee. |
-| `max_block_size` | word31type | The maximum block size (in bytes). |
-| `max_tx_size` | word31type | The maximum transaction size (in bytes). |
-| `max_bh_size` | word31type | The maximum block header size (in bytes). |
+| `min_fee_a` | word64type | The 'a' parameter to calculate the minimum transaction fee. |
+| `min_fee_b` | word64type | The 'b' parameter to calculate the minimum transaction fee. |
+| `max_block_size` | word64type | The maximum block size (in bytes). |
+| `max_tx_size` | word64type | The maximum transaction size (in bytes). |
+| `max_bh_size` | word64type | The maximum block header size (in bytes). |
 | `key_deposit` | lovelace | The amount (in Lovelace) require for a deposit to register a StakeAddress. |
 | `pool_deposit` | lovelace | The amount (in Lovelace) require for a deposit to register a stake pool. |
-| `max_epoch` | word31type | The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for. |
-| `optimal_pool_count` | word31type | The optimal number of stake pools. |
+| `max_epoch` | word64type | The maximum number of epochs in the future that a pool retirement is allowed to be scheduled for. |
+| `optimal_pool_count` | word64type | The optimal number of stake pools. |
 | `influence` | double | The influence of the pledge on a stake pool's probability on minting a block. |
 | `monetary_expand_rate` | double | The monetary expansion rate. |
 | `treasury_growth_rate` | double | The treasury growth rate. |
@@ -933,8 +933,8 @@ A table for new committee proposed on a GovActionProposal. New in 13.2-Conway.
 |-|-|-|
 | `id` | integer (64) |  |
 | `gov_action_proposal_id` | integer (64) | The GovActionProposal table index for this new committee. This can be null for genesis committees. |
-| `quorum_numerator` | integer (64) | The proposed quorum numerator. |
-| `quorum_denominator` | integer (64) | The proposed quorum denominator. |
+| `quorum_numerator` | word64type | The proposed quorum numerator. |
+| `quorum_denominator` | word64type | The proposed quorum denominator. |
 
 ### `committee_member`
 
@@ -947,7 +947,7 @@ A table for members of the committee. A committee can have multiple members. New
 | `id` | integer (64) |  |
 | `committee_id` | integer (64) | The reference to the committee |
 | `committee_hash_id` | integer (64) | The reference to the committee hash |
-| `expiration_epoch` | word31type | The epoch this member expires |
+| `expiration_epoch` | word64type | The epoch this member expires |
 
 ### `constitution`
 

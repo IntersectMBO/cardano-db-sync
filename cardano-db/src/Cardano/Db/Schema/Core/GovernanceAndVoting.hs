@@ -35,6 +35,8 @@ import Cardano.Db.Types (
   voteEncoder,
   voteUrlEncoder,
   voterRoleEncoder,
+  word64Decoder,
+  word64Encoder,
  )
 import Contravariant.Extras (contrazip3, contrazip4)
 
@@ -278,8 +280,9 @@ constitutionEncoder =
 -- Description: Contains information about the committee, including the quorum requirements and the proposal being considered.
 data Committee = Committee
   { committeeGovActionProposalId :: !(Maybe Id.GovActionProposalId) -- noreference
-  , committeeQuorumNumerator :: !Word64
-  , committeeQuorumDenominator :: !Word64
+  -- Numerator and denominator of a ledger UnitInterval: a full Word64 each.
+  , committeeQuorumNumerator :: !Word64 -- sqltype=word64type
+  , committeeQuorumDenominator :: !Word64 -- sqltype=word64type
   }
   deriving (Eq, Show, Generic)
 
@@ -290,15 +293,15 @@ committeeDecoder :: D.Row Committee
 committeeDecoder =
   Committee
     <$> Id.maybeIdDecoder Id.GovActionProposalId -- committeeGovActionProposalId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumNumerator
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumDenominator
+    <*> word64Decoder -- committeeQuorumNumerator
+    <*> word64Decoder -- committeeQuorumDenominator
 
 committeeEncoder :: E.Params Committee
 committeeEncoder =
   mconcat
     [ committeeGovActionProposalId >$< Id.maybeIdEncoder Id.getGovActionProposalId
-    , committeeQuorumNumerator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , committeeQuorumDenominator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , committeeQuorumNumerator >$< word64Encoder
+    , committeeQuorumDenominator >$< word64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -331,7 +334,8 @@ committeeHashEncoder =
 data CommitteeMember = CommitteeMember
   { committeeMemberCommitteeId :: !Id.CommitteeId -- OnDeleteCascade -- here intentionally we use foreign keys
   , committeeMemberCommitteeHashId :: !Id.CommitteeHashId -- noreference
-  , committeeMemberExpirationEpoch :: !Word64 -- sqltype=word31type
+  -- A proposal picks this epoch and the ledger does not bound it, so it is a full Word64.
+  , committeeMemberExpirationEpoch :: !Word64 -- sqltype=word64type
   }
   deriving (Eq, Show, Generic)
 
@@ -343,7 +347,7 @@ committeeMemberEncoder =
   mconcat
     [ committeeMemberCommitteeId >$< Id.idEncoder Id.getCommitteeId
     , committeeMemberCommitteeHashId >$< Id.idEncoder Id.getCommitteeHashId
-    , committeeMemberExpirationEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , committeeMemberExpirationEpoch >$< word64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -604,7 +608,7 @@ instance DbInfo TreasuryWithdrawal where
   unnestParamTypes _ =
     [ ("gov_action_proposal_id", "bigint[]")
     , ("stake_address_id", "bigint[]")
-    , ("amount", "bigint[]")
+    , ("amount", "numeric[]")
     ]
 
 treasuryWithdrawalBulkEncoder :: E.Params ([Id.GovActionProposalId], [Id.StakeAddressId], [DbLovelace])

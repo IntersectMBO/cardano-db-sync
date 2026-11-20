@@ -12,6 +12,7 @@ import qualified Data.ByteString.Char8 as BS
 import Data.Maybe (fromJust)
 import qualified Data.Text as Text
 import Data.Time.Clock
+import Data.Word (Word64)
 import Test.IO.Cardano.Db.Util
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase)
@@ -26,6 +27,7 @@ tests =
     , testCase "Insert foreign key missing" insertForeignKeyMissing
     , testCase "Insert pool relay with large port" insertPoolRelayLargePort
     , testCase "Insert block with a CIP-0203 proto minor" insertBlockLargeProtoMinor
+    , testCase "Insert committee with full Word64 widths" insertCommitteeMaxWidths
     , testCase "Off-chain vote data re-fetch does not duplicate children" insertOffChainVoteDataNoDuplicateChildren
     ]
 
@@ -140,6 +142,42 @@ insertBlockLargeProtoMinor =
     assertBool
       ("Expected proto_minor 4374593 but got " ++ show minorV)
       (minorV == 4374593)
+
+-- The quorum and a member's expiration epoch are picked by a proposal and unbounded by
+-- the ledger, so each has to round-trip a full Word64.
+insertCommitteeMaxWidths :: IO ()
+insertCommitteeMaxWidths =
+  runDbStandaloneSilent $ do
+    let maxWord64 = 18446744073709551615 :: Word64
+        expected = "18446744073709551615"
+    cid <-
+      insertCommittee
+        Committee
+          { committeeGovActionProposalId = Nothing
+          , committeeQuorumNumerator = maxWord64
+          , committeeQuorumDenominator = maxWord64
+          }
+    quorum <- queryCommitteeQuorumText cid
+    assertBool
+      ("Expected quorum " ++ show (expected, expected) ++ " but got " ++ show quorum)
+      (quorum == (expected, expected))
+    chId <-
+      insertCommitteeHash
+        CommitteeHash
+          { committeeHashRaw = BS.replicate 28 'c'
+          , committeeHashHasScript = False
+          }
+    cmId <-
+      insertCommitteeMember
+        CommitteeMember
+          { committeeMemberCommitteeId = cid
+          , committeeMemberCommitteeHashId = chId
+          , committeeMemberExpirationEpoch = maxWord64
+          }
+    expiry <- queryCommitteeMemberExpirationText cmId
+    assertBool
+      ("Expected expiration_epoch " ++ show expected ++ " but got " ++ show expiry)
+      (expiry == expected)
 
 -- Regression test for #1966: re-fetching an already-stored anchor must not duplicate its children.
 insertOffChainVoteDataNoDuplicateChildren :: IO ()
