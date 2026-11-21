@@ -21,9 +21,15 @@ Since 13.7.1.0 this repair runs automatically on first startup after upgrade
 (migration `2-0048`); these scripts are for operators on older release lines and
 for manual verification.
 
-- **validate-epoch-table.sql** recomputes the `epoch` table from `tx`/`block` and reports rows that disagree. Read-only.
-- **fix-epoch-table.sql** repairs the `epoch` table in place by recomputing and upserting. Modifies data.
-- **check-and-fix-epoch-table.sh** wrapper that validates first, then fixes if there are mismatches.
+Since 13.7.2.1 `epoch` is a view (migration `2-0049`): db-sync stores finished epochs
+in `epoch_finalized` and computes the current one from `block` and `tx`. There the fix
+script refuses to run and the wrapper only validates. While epoch sync is not enabled
+(`disable_epoch` is set, or db-sync has not started since the upgrade) the view is
+empty, so there is nothing to validate either.
+
+- **validate-epoch-table.sql** recomputes the epochs from `tx`/`block` and reports `epoch` rows that disagree. Read-only.
+- **fix-epoch-table.sql** repairs the `epoch` table in place by recomputing and upserting (before 13.7.2.1 only). Modifies data.
+- **check-and-fix-epoch-table.sh** wrapper that validates first, then offers the fix if there are mismatches (before 13.7.2.1 only).
 
 ## Database setup
 
