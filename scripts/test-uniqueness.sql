@@ -1,28 +1,40 @@
--- Test uniqueness by temporarily adding UNIQUE constraints.
--- If ADD CONSTRAINT succeeds, there are no duplicates for that combination.
--- The constraint is immediately dropped after a successful check.
--- If it fails, a WARNING is raised with the violation details.
+-- Test uniqueness: for each listed column combination, count the key values that occur
+-- in more than one row. Rows with a NULL in any key column are skipped, as a UNIQUE
+-- constraint would allow them. A FAIL is raised as a WARNING with the number of such keys.
 --
 -- Usage: psql -d <dbname> -f scripts/test-uniqueness.sql
 -- Or run all tests: ./scripts/run-schema-checks.sh <dbname>
+-- Exits non-zero (psql exit code 3) if any check fails, so it can gate a release or CI.
 --
--- The entire script runs inside a transaction that is always rolled back,
--- so no unique constraints can ever remain in the database.
+-- The checks are plain SELECTs, so they do not block db-sync's writes or other readers.
+-- Like any query they hold ACCESS SHARE locks until the script ends, so DDL that needs
+-- ACCESS EXCLUSIVE (such as ALTER TABLE) waits until then, and while it waits, later
+-- queries on that table, db-sync's included, queue behind it. db-sync runs such DDL when
+-- it starts (migrations) and once near the tip, so avoid running the checks then. The
+-- script runs in a transaction that is always rolled back, which also drops its helpers.
+
+\set ON_ERROR_STOP on
 
 BEGIN;
 
 CREATE FUNCTION check_unique(_table text, VARIADIC _cols text[]) RETURNS int AS $$
 DECLARE
-  _cname text := 'test_unique_' || _table;
   _col_list text;
+  _not_null text;
   _label text;
+  _dups bigint;
 BEGIN
-  SELECT string_agg(format('%I', c), ', ') INTO _col_list FROM unnest(_cols) AS c;
+  SELECT string_agg(format('%I', c), ', '), string_agg(format('%I IS NOT NULL', c), ' AND ')
+    INTO _col_list, _not_null FROM unnest(_cols) AS c;
   _label := _table || '(' || array_to_string(_cols, ', ') || ')';
-  EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I UNIQUE(', _table, _cname) || _col_list || ')';
-  EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', _table, _cname);
-  RAISE NOTICE 'PASS: %', _label;
-  RETURN 1;
+  EXECUTE format('SELECT count(*) FROM (SELECT 1 FROM %I WHERE %s GROUP BY %s '
+                 'HAVING count(*) > 1) d', _table, _not_null, _col_list) INTO _dups;
+  IF _dups = 0 THEN
+    RAISE NOTICE 'PASS: %', _label;
+    RETURN 1;
+  END IF;
+  RAISE WARNING 'FAIL: %: % key(s) in more than one row', _label, _dups;
+  RETURN 0;
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'FAIL: %: %', _label, SQLERRM;
   RETURN 0;
@@ -147,6 +159,10 @@ BEGIN
   RAISE NOTICE 'Passed: %', _passed;
   RAISE NOTICE 'Failed: %', _failed;
   RAISE NOTICE '=============================================';
+
+  IF _failed > 0 THEN
+    RAISE EXCEPTION 'uniqueness checks did not pass: % of % failed', _failed, _total;
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 
