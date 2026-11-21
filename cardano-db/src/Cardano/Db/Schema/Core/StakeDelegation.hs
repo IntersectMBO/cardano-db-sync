@@ -265,7 +265,7 @@ data EpochStake = EpochStake
 type instance Key EpochStake = EpochStakeId
 
 instance DbInfo EpochStake where
-  uniqueFields _ = ["addr_id", "pool_id", "epoch_no"]
+  uniqueFields _ = ["epoch_no", "addr_id", "pool_id"]
   unnestParamTypes _ =
     [ ("addr_id", "bigint[]")
     , ("pool_id", "bigint[]")
