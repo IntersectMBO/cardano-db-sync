@@ -389,6 +389,7 @@ mkSyncEnv metricSetters trce mDbEnv syncOptions protoInfo nw maxLovelaceSupply n
   epochVar <- newTVarIO initCurrentEpochNo
   epochStatistics <- initEpochStatistics
   dbIsolationStateVar <- newTVarIO DB.SyncLagging -- For database transaction isolation optimisation
+  protoMinorFixDoneVar <- newTVarIO False
   ledgerEnvType <-
     case (enpMaybeLedgerStateDir syncNP, hasLedger' syncNodeConfigFromFile) of
       (Just dir, True) ->
@@ -426,6 +427,7 @@ mkSyncEnv metricSetters trce mDbEnv syncOptions protoInfo nw maxLovelaceSupply n
       , envDbIsolationState = dbIsolationStateVar
       , envLedgerEnv = ledgerEnvType
       , envNetworkMagic = nwMagic
+      , envProtoMinorFixDone = protoMinorFixDoneVar
       , envOffChainPoolResultQueue = oprq
       , envOffChainPoolWorkQueue = opwq
       , envOffChainVoteResultQueue = oarq

@@ -193,7 +193,7 @@ dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig version bversion =
                   (toTracer (dstChainSyncTracer tracers))
                   (cChainSyncCodec codecs)
                   channel
-                  (chainSyncClientPeer (chainSyncClientFixProtoMinor dbEnv tracer plan))
+                  (chainSyncClientPeer (chainSyncClientFixProtoMinor syncEnv dbEnv plan))
               if soptOnlyFix (envOptions syncEnv)
                 then do
                   logInfo tracer "Finished the repair and --only-fix was given, so exiting without syncing."

@@ -15,16 +15,16 @@ module Cardano.DbSync.Fix.ProtoMinor (
 ) where
 
 import qualified Cardano.Db as DB
-import Cardano.Db.Log (LogMessage, logInfo, logWarning)
+import Cardano.Db.Log (logInfo, logWarning)
 import Cardano.DbSync.Api (convertToPoint, getTrace)
-import Cardano.DbSync.Api.Types (SyncEnv, envNetworkMagic, envOptions, soptFixFromEpoch)
+import Cardano.DbSync.Api.Types (SyncEnv, envNetworkMagic, envOptions, envProtoMinorFixDone, soptFixFromEpoch)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Block as Generic
 import Cardano.DbSync.Types (CardanoBlock, CardanoPoint)
 import Cardano.DbSync.Util (textShow)
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Logging (Trace)
 import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
+import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
 import Ouroboros.Network.Block (BlockNo (..), Tip, blockNo, genesisPoint, getTipBlockNo, unBlockNo)
 import Ouroboros.Network.Magic (NetworkMagic (..))
@@ -61,7 +61,7 @@ protoMinorFixStartEpoch (NetworkMagic magic) =
   case magic of
     764824073 -> Just 640 -- mainnet, first tag seen in epoch 644
     1 -> Just 294 -- preprod, first tag seen in epoch 298
-    2 -> Just 1270 -- preview, first tag seen in epoch 1274
+    2 -> Just 1470 -- preview, confirmed: a from-genesis run found the first tagged block in epoch 1473
     6 -> Just 5 -- dijkstra, first tag seen in epoch 9
     164 -> Just 13 -- musashi, first tag seen in epoch 17
     4 -> Just 0 -- sanchonet, no tag seen; the gate only lets this run if one appears
@@ -78,11 +78,14 @@ data ProtoMinorFixPlan = ProtoMinorFixPlan
 -- latter case the marker is written so the check is not repeated on every start.
 planProtoMinorFix :: SyncEnv -> DB.DbEnv -> IO (Maybe ProtoMinorFixPlan)
 planProtoMinorFix syncEnv dbEnv = do
+  alreadyRun <- readTVarIO (envProtoMinorFixDone syncEnv)
   case soptFixFromEpoch (envOptions syncEnv) of
     -- An explicit boundary is a deliberate manual run, so it overrides the marker and the
     -- "is anything broken" check too: the point of sweeping from genesis is to find what
-    -- the stored values cannot reveal.
-    Just forced -> do
+    -- the stored values cannot reveal. It overrides them once, though: this is called again
+    -- on every reconnect, so without the in-process flag the sweep would restart for as long
+    -- as the flag is on the command line and syncing would never resume.
+    Just forced | not alreadyRun -> do
       logInfo trce $
         mconcat
           [ "--fix-from-epoch "
@@ -91,7 +94,7 @@ planProtoMinorFix syncEnv dbEnv = do
           , " the built-in boundary and of whether it has run before."
           ]
       Just <$> planFrom forced
-    Nothing -> planAutomatically
+    _ -> planAutomatically
   where
     trce = getTrace syncEnv
 
@@ -118,7 +121,7 @@ planProtoMinorFix syncEnv dbEnv = do
           if not needed
             then do
               logInfo trce "No truncated block.proto_minor found, so no repair is needed."
-              markProtoMinorFixed dbEnv
+              markProtoMinorFixed syncEnv dbEnv
               pure Nothing
             else do
               fromEpoch <- case protoMinorFixStartEpoch (envNetworkMagic syncEnv) of
@@ -131,21 +134,27 @@ planProtoMinorFix syncEnv dbEnv = do
                     Nothing -> pure 0
               Just <$> planFrom fromEpoch
 
-markProtoMinorFixed :: DB.DbEnv -> IO ()
-markProtoMinorFixed dbEnv =
-  DB.runDbTransSilent dbEnv DB.ReadCommitted $
-    DB.insertExtraMigration DB.ProtoMinorFixed
+-- | Record the repair as done, in the database and for the rest of this process. The
+-- insert is guarded because a forced run ignores the marker, so the row can already be
+-- there and @extra_migrations@ has no unique constraint on the token.
+markProtoMinorFixed :: SyncEnv -> DB.DbEnv -> IO ()
+markProtoMinorFixed syncEnv dbEnv = do
+  DB.runDbTransSilent dbEnv DB.ReadCommitted $ do
+    done <- DB.queryAllExtraMigrations
+    unless (DB.ProtoMinorFixed `elem` done) $
+      DB.insertExtraMigration DB.ProtoMinorFixed
+  atomically $ writeTVar (envProtoMinorFixDone syncEnv) True
 
 -- | Sweep from the plan's start point to the tip, rewriting @proto_minor@ wherever the
 -- node's header disagrees with what is stored. The protocol cannot be restarted on the same
 -- channel once this client is done, so the caller is expected to let the connection drop and
 -- resume normal syncing on the next one.
 chainSyncClientFixProtoMinor ::
+  SyncEnv ->
   DB.DbEnv ->
-  Trace IO LogMessage ->
   ProtoMinorFixPlan ->
   Client.ChainSyncClient CardanoBlock CardanoPoint (Tip CardanoBlock) IO ()
-chainSyncClientFixProtoMinor dbEnv trce plan = Client.ChainSyncClient $ do
+chainSyncClientFixProtoMinor syncEnv dbEnv plan = Client.ChainSyncClient $ do
   logInfo trce $
     mconcat
       [ "Starting chainsync to repair block.proto_minor from epoch "
@@ -154,6 +163,8 @@ chainSyncClientFixProtoMinor dbEnv trce plan = Client.ChainSyncClient $ do
       ]
   pure $ Client.SendMsgFindIntersect [pmfpFrom plan] clientStIntersect
   where
+    trce = getTrace syncEnv
+
     clientStIntersect =
       Client.ClientStIntersect
         { Client.recvMsgIntersectFound = \_pnt tip ->
@@ -231,7 +242,7 @@ chainSyncClientFixProtoMinor dbEnv trce plan = Client.ChainSyncClient $ do
                         then ". Nothing in the swept range needed changing."
                         else "."
                     ]
-                markProtoMinorFixed dbEnv
+                markProtoMinorFixed syncEnv dbEnv
                 pure $ Client.SendMsgDone ()
               else pure $ Client.SendMsgRequestNext (pure ()) (clientStNext stopAt seen' fixed')
         , Client.recvMsgRollBackward = \_pnt _tip ->

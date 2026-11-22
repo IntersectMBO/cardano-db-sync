@@ -56,6 +56,10 @@ data SyncEnv = SyncEnv
   , envDbIsolationState :: !(StrictTVar IO DB.SyncState)
   , envLedgerEnv :: !LedgerEnv
   , envNetworkMagic :: !NetworkMagic
+  , envProtoMinorFixDone :: !(StrictTVar IO Bool)
+  -- ^ Set once the one-off @block.proto_minor@ repair has completed in this process.
+  -- @--fix-from-epoch@ deliberately ignores the stored completion marker, so without
+  -- this the repair would restart on every reconnect and never hand over to syncing.
   , envOffChainPoolResultQueue :: !(StrictTBQueue IO OffChainPoolResult)
   , envOffChainPoolWorkQueue :: !(StrictTBQueue IO OffChainPoolWorkQueue)
   , envOffChainVoteResultQueue :: !(StrictTBQueue IO OffChainVoteResult)
