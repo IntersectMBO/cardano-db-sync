@@ -109,8 +109,13 @@ runConsumedTxOutMigrations trce bulkSize txOutVariantType blockNoDiff pcm = do
         -- Consume TxOut
         (False, True, False) -> do
           liftIO $ logInfo trce $ msgName <> "Running extra migration consumed_tx_out"
-          insertExtraMigration ConsumeTxOutPreviouslySet
           migrateTxOut bulkSize trce txOutVariantType $ Just migrationValues
+          -- Only record the migration once it has completed. Each page is committed on its own,
+          -- so if db-sync is stopped half way and the marker was already written, the next start
+          -- would take the "already executed" branch and silently leave the remaining
+          -- consumed_by_tx_id values NULL. Re-running the migration is safe: the updates are
+          -- idempotent.
+          insertExtraMigration ConsumeTxOutPreviouslySet
 
         -- Prune TxOut
         (_, _, True) -> do
@@ -235,7 +240,7 @@ migrateTxOut bulkSize trce txOutVariantType mMvs = do
     when (pcmPruneTxOut (pruneConsumeMigration mvs)) $ do
       liftIO $ logInfo trce "migrateTxOut: adding prune contraint on tx_out table"
       createPruneConstraintTxOut
-  migrateNextPageTxOut bulkSize (Just trce) txOutVariantType 0
+  migrateNextPageTxOut bulkSize (Just trce) txOutVariantType
 
 -- | Process the tx_out table in pages for migration
 migrateNextPageTxOut ::
@@ -243,16 +248,18 @@ migrateNextPageTxOut ::
   Int ->
   Maybe (Trace IO LogMessage) ->
   TxOutVariantType ->
-  Word64 ->
   DbM ()
-migrateNextPageTxOut bulkSize mTrce txOutVariantType offst = do
-  whenJust mTrce $ \trce ->
-    liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
-  page <- getInputPage bulkSize offst
-  updatePageEntries txOutVariantType page
-  when (length page == bulkSize) $
-    migrateNextPageTxOut bulkSize mTrce txOutVariantType $!
-      (offst + fromIntegral bulkSize)
+migrateNextPageTxOut bulkSize mTrce txOutVariantType = go 0 0
+  where
+    go :: Int64 -> Word64 -> DbM ()
+    go afterId offst = do
+      whenJust mTrce $ \trce ->
+        liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
+      page <- getInputPage bulkSize afterId
+      updatePageEntries txOutVariantType (map snd page)
+      when (length page == bulkSize) $
+        go (lastInputId afterId page) $!
+          offst + fromIntegral bulkSize
 
 --------------------------------------------------------------------------------
 
@@ -351,44 +358,58 @@ createPruneConstraintTxOut = runSession mkDbCallStack $ HsqlSes.statement () cre
 
 --------------------------------------------------------------------------------
 
--- | Statement to get a page of inputs from tx_in table
-getInputPageStmt :: Int -> HsqlStmt.Statement Word64 [ConsumedTriplet]
+-- | Statement to get a page of inputs from tx_in table.
+--
+-- Uses keyset pagination (@WHERE id > $1@) rather than @OFFSET@: with @OFFSET@ every page
+-- has to walk past all previous rows again, so a full migration is quadratic in the size of
+-- @tx_in@ (days on mainnet), while a keyset page is a cheap range scan on the primary key.
+getInputPageStmt :: Int -> HsqlStmt.Statement Int64 [(Int64, ConsumedTriplet)]
 getInputPageStmt bulkSize =
   HsqlStmt.Statement sql encoder decoder True
   where
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT tx_out_id, tx_out_index, tx_in_id"
+          [ "SELECT id, tx_out_id, tx_out_index, tx_in_id"
           , " FROM tx_in"
+          , " WHERE id > $1"
           , " ORDER BY id"
           , " LIMIT "
           , Text.pack (show bulkSize)
-          , " OFFSET $1"
           ]
 
-    encoder = HsqlE.param $ HsqlE.nonNullable $ fromIntegral >$< HsqlE.int8
+    encoder = HsqlE.param $ HsqlE.nonNullable HsqlE.int8
 
     decoder = HsqlD.rowList $ do
+      txInRowId <- HsqlD.column (HsqlD.nonNullable HsqlD.int8)
       txOutId <- Id.idDecoder Id.TxId
       txOutIndex <- HsqlD.column (HsqlD.nonNullable $ fromIntegral <$> HsqlD.int8)
       txInId <- Id.idDecoder Id.TxId
-      pure $
-        ConsumedTriplet
-          { ctTxOutTxId = txOutId
-          , ctTxOutIndex = txOutIndex
-          , ctTxInTxId = txInId
-          }
+      pure
+        ( txInRowId
+        , ConsumedTriplet
+            { ctTxOutTxId = txOutId
+            , ctTxOutIndex = txOutIndex
+            , ctTxInTxId = txInId
+            }
+        )
 
--- | Get a page of consumed TX inputs
+-- | Get a page of consumed TX inputs, together with their @tx_in.id@
 getInputPage ::
   -- | Bulk size
   Int ->
-  -- | Offset
-  Word64 ->
-  DbM [ConsumedTriplet]
-getInputPage bulkSize offset =
-  runSession mkDbCallStack $ HsqlSes.statement offset (getInputPageStmt bulkSize)
+  -- | Only return inputs with a @tx_in.id@ greater than this (0 for the first page)
+  Int64 ->
+  DbM [(Int64, ConsumedTriplet)]
+getInputPage bulkSize afterId =
+  runSession mkDbCallStack $ HsqlSes.statement afterId (getInputPageStmt bulkSize)
+
+-- | The @tx_in.id@ of the last entry of a page, to start the next page after it
+lastInputId :: Int64 -> [(Int64, a)] -> Int64
+lastInputId afterId page =
+  case reverse page of
+    (txInRowId, _) : _ -> txInRowId
+    [] -> afterId
 
 --------------------------------------------------------------------------------
 
@@ -656,20 +677,20 @@ deleteAndUpdateConsumedTxOut bulkSize trce txOutVariantType migrationValues bloc
     Right maxTxId -> do
       migrateNextPage maxTxId False 0
   where
-    migrateNextPage :: Id.TxId -> Bool -> Word64 -> DbM ()
-    migrateNextPage maxTxId ranCreateConsumedTxOut offst = do
-      pageEntries <- getInputPage bulkSize offst
-      resPageEntries <- splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId pageEntries
-      when (length pageEntries == bulkSize) $
+    migrateNextPage :: Id.TxId -> Bool -> Int64 -> DbM ()
+    migrateNextPage maxTxId ranCreateConsumedTxOut afterId = do
+      page <- getInputPage bulkSize afterId
+      resPageEntries <- splitAndProcessPageEntries trce txOutVariantType ranCreateConsumedTxOut maxTxId (map snd page)
+      when (length page == bulkSize) $
         migrateNextPage maxTxId resPageEntries $!
-          offst + fromIntegral bulkSize
+          lastInputId afterId page
 
 --------------------------------------------------------------------------------
 
 migrateTxOutDbTool :: Int -> TxOutVariantType -> DbM ()
 migrateTxOutDbTool bulkSize txOutVariantType = do
   createConsumedIndexTxOut
-  migrateNextPageTxOut bulkSize Nothing txOutVariantType 0
+  migrateNextPageTxOut bulkSize Nothing txOutVariantType
 
 --------------------------------------------------------------------------------
 

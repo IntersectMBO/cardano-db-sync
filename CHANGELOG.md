@@ -26,6 +26,7 @@
 - Read the node's `ExperimentalHardForksEnabled` (or its former name `TestEnableDevelopmentHardForkEras`, defaulting to `False`) and mirror it, rather than hardcoding the maximum supported protocol version. db-sync now claims Dijkstra's protocol version only when the experimental eras are enabled and Conway's otherwise, so it will not follow a chain that the node feeding it refuses as too new; and, as in the node, `TestDijkstraHardForkAtEpoch` is only read when they are enabled. A configuration that sets both key names to different values is rejected.
 - Fix the `epoch_param` and `param_proposal` collateral parameters wrapped by a signed 16-bit encoder; a startup migration repairs existing rows.
 - Harden the SMASH server and the off-chain fetcher: constant-time admin credential comparison, policy urls validated by parsed host, delisted pools kept when a policy fetch fails, reserved tickers matched case-insensitively, pool relay DNS names sanitised, and a tighter address restriction.
+- Speed up the `consumed_tx_out` extra migration: page through `tx_in` by id instead of `OFFSET`, which made each page slower than the last (about 16 s per page at 200M rows on mainnet). The migration is now only marked as done once it has completed, so a db-sync stopped part-way through no longer leaves the remaining `consumed_by_tx_id` values `NULL`.
 
 ## 13.7.2.1
 - The `epoch` table is redesigned and replaced by a view; the in-memory cache that caused [#2118](https://github.com/IntersectMBO/cardano-db-sync/issues/2118) is removed. Reads are unchanged.
