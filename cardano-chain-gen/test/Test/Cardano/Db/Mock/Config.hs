@@ -116,7 +116,7 @@ import Cardano.Mock.ChainSync.Server
 import Cardano.Mock.Forging.Interpreter
 import Cardano.Node.Protocol.Shelley (readLeaderCredentials)
 import Cardano.Node.Types (ProtocolFilepaths (..))
-import Cardano.Prelude (NonEmpty ((:|)), panic, stderr, textShow, throwIO)
+import Cardano.Prelude (NonEmpty ((:|)), Word32, Word64, panic, stderr, textShow, throwIO)
 import Cardano.SMASH.Server.PoolDataLayer
 
 data Config = Config
@@ -148,6 +148,11 @@ data CommandLineArgs = CommandLineArgs
   , claFullMode :: Bool
   , claMigrateConsumed :: Bool
   , claPruneTxOut :: Bool
+  , claFixFromEpoch :: Maybe Word64
+  , claOnlyFix :: Bool
+  , claForgedProtoMinor :: Maybe Word32
+  -- ^ Not a db-sync flag: the minor stamped into the forged headers, so a test can
+  -- produce the CIP-0203 tags the @block.proto_minor@ repair exists for.
   }
 
 data WithConfigArgs = WithConfigArgs
@@ -265,10 +270,10 @@ withConfig :: FilePath -> FilePath -> CommandLineArgs -> SyncNodeConfig -> (Conf
 withConfig staticDir mutableDir cmdLineArgs config action = do
   let cfgDir = mkConfigDir staticDir
   genCfg <- runOrThrowIO $ runExceptT (readCardanoGenesisConfig config)
-  (pInfoDbSync, _) <- mkProtocolInfoCardano genCfg []
+  (pInfoDbSync, _) <- mkProtocolInfoCardano genCfg [] Nothing
   cryptoInit
   creds <- mkShelleyCredentials $ cfgDir </> "pools" </> "bulk1.creds"
-  (pInfoForger, mkForgings) <- mkProtocolInfoCardano genCfg creds
+  (pInfoForger, mkForgings) <- mkProtocolInfoCardano genCfg creds (claForgedProtoMinor cmdLineArgs)
   bracket
     (allocateRes mkForgings)
     (mapM finalize)
@@ -330,8 +335,8 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpMaybeRollback = Nothing
       , enpAllowPrivateOffChainUrls = False
       , enpLedgerOnly = False
-      , enpOnlyFix = False
-      , enpFixFromEpoch = Nothing
+      , enpOnlyFix = claOnlyFix
+      , enpFixFromEpoch = claFixFromEpoch
       }
 
 ------------------------------------------------------------------------------
@@ -420,6 +425,9 @@ initCommandLineArgs =
     , claFullMode = True
     , claMigrateConsumed = False
     , claPruneTxOut = False
+    , claFixFromEpoch = Nothing
+    , claOnlyFix = False
+    , claForgedProtoMinor = Nothing
     }
 
 emptyMetricsSetters :: MetricSetters

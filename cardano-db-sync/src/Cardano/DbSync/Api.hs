@@ -478,7 +478,7 @@ mkSyncEnvFromConfig metricsSetters trce mDbEnv syncOptions genCfg syncNodeConfig
               , textShow (Shelley.sgSystemStart $ scConfig sCfg)
               ]
       | otherwise -> do
-          (pInfo, _mkForgings) <- mkProtocolInfoCardano genCfg []
+          (pInfo, _mkForgings) <- mkProtocolInfoCardano genCfg [] Nothing
           Right
             <$> mkSyncEnv
               metricsSetters

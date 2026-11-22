@@ -3,6 +3,7 @@ module Test.Cardano.Db.Mock.Unit.Conway (unitTests) where
 import Cardano.Mock.ChainSync.Server (IOManager ())
 import Cardano.Prelude
 import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.ConfigFile as ConfigFile
+import qualified Test.Cardano.Db.Mock.Unit.Conway.CommandLineArg.FixFromEpoch as FixFromEpoch
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.JsonbInSchema as Config
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.MigrateConsumedPruneTxOut as MigrateConsumedPruneTxOut
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Config.Parse as Config
@@ -12,6 +13,7 @@ import qualified Test.Cardano.Db.Mock.Unit.Conway.Governance as Governance
 import qualified Test.Cardano.Db.Mock.Unit.Conway.InlineAndReference as InlineRef
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Other as Other
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Plutus as Plutus
+import qualified Test.Cardano.Db.Mock.Unit.Conway.ProtoMinor as ProtoMinor
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Reward as Reward
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Rollback as Rollback
 import qualified Test.Cardano.Db.Mock.Unit.Conway.Simple as Simple
@@ -108,6 +110,14 @@ unitTests iom knownMigrations =
                 "fails if incorrect config file given"
                 $ ConfigFile.checkConfigFileArg iom knownMigrations
             ]
+        , testGroup
+            "fix-from-epoch"
+            [ test "repair runs once and then syncs" FixFromEpoch.fixFromEpochRunsOnce
+            ]
+        ]
+    , testGroup
+        "proto_minor repair"
+        [ test "truncated values are rewritten from the headers" ProtoMinor.repairsTruncatedProtoMinor
         ]
     , testGroup
         "Epoch"
@@ -260,6 +270,7 @@ unitTests iom knownMigrations =
         "Governance"
         [ test "drep distribution" Governance.drepDistr
         , test "new committee member" Governance.newCommittee
+        , test "new committee member with edge values" Governance.newCommitteeEdgeValues
         , test "chained committee proposals" Governance.chainedNewCommittee
         , test "rollback new committee member" Governance.rollbackNewCommittee
         , test "rollback new committee member proposal" Governance.rollbackNewCommitteeProposal

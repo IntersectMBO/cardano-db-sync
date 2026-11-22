@@ -33,7 +33,7 @@ import qualified Cardano.Db.Schema.Variants.TxOutCore as SVC
 import Cardano.Db.Statement.Function.Core (runSession, runSessionEntity)
 import Cardano.Db.Statement.Function.Query (countAll, countWhere, parameterisedCountWhere)
 import Cardano.Db.Statement.Types (DbInfo (..), Entity (..), tableName)
-import Cardano.Db.Types (Ada, DbM, RewardSource, rewardSourceDecoder, scientificToWord64, word64ToAda)
+import Cardano.Db.Types (Ada, DbM, ExtraMigration, RewardSource, rewardSourceDecoder, scientificToWord64, word64Decoder, word64ToAda)
 
 queryEpochParamWithEpochNoStmt :: HsqlStmt.Statement Word64 (Maybe (Entity SCE.EpochParam))
 queryEpochParamWithEpochNoStmt =
@@ -391,7 +391,8 @@ queryCommitteeByTxHashStmt =
     sql =
       TextEnc.encodeUtf8 $
         Text.concat
-          [ "SELECT committee.*"
+          -- Named columns, not committee.*: the decoder has no field for id.
+          [ "SELECT committee.gov_action_proposal_id, committee.quorum_numerator, committee.quorum_denominator"
           , " FROM " <> committeeTableN <> " committee"
           , " INNER JOIN " <> govActionProposalTableN <> " govAction ON committee.gov_action_proposal_id = govAction.id"
           , " INNER JOIN " <> txTableN <> " tx ON govAction.tx_id = tx.id"
@@ -433,6 +434,24 @@ queryCommitteeMemberCountByTxHash :: Maybe ByteString -> DbM Word64
 queryCommitteeMemberCountByTxHash txHash =
   runSession mkDbCallStack $
     HsqlSes.statement txHash queryCommitteeMemberCountByTxHashStmt
+
+queryCommitteeMemberExpirationsStmt :: HsqlStmt.Statement () [Word64]
+queryCommitteeMemberExpirationsStmt =
+  HsqlStmt.Statement sql HsqlE.noParams decoder True
+  where
+    committeeMemberTableN = tableName (Proxy @SCG.CommitteeMember)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT expiration_epoch FROM " <> committeeMemberTableN
+          , " ORDER BY expiration_epoch DESC"
+          ]
+    decoder = HsqlD.rowList word64Decoder
+
+queryCommitteeMemberExpirations :: DbM [Word64]
+queryCommitteeMemberExpirations =
+  runSession mkDbCallStack $
+    HsqlSes.statement () queryCommitteeMemberExpirationsStmt
 
 ------------------------------------------------------------------------------------------------
 
@@ -916,6 +935,59 @@ queryBlockProtoMinor :: Id.BlockId -> DbM Int64
 queryBlockProtoMinor blockId =
   runSession mkDbCallStack $
     HsqlSes.statement (Id.getBlockId blockId) queryBlockProtoMinorStmt
+
+-- | How many blocks hold the given raw @proto_minor@.
+countBlockProtoMinorStmt :: HsqlStmt.Statement Int64 Int64
+countBlockProtoMinorStmt =
+  HsqlStmt.Statement sql encoder decoder True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        Text.concat
+          [ "SELECT count(*)"
+          , " FROM " <> blockTableN
+          , " WHERE proto_minor = $1"
+          ]
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+    decoder = HsqlD.singleRow $ HsqlD.column (HsqlD.nonNullable HsqlD.int8)
+
+countBlockProtoMinor :: Int64 -> DbM Int64
+countBlockProtoMinor minorV =
+  runSession mkDbCallStack $
+    HsqlSes.statement minorV countBlockProtoMinorStmt
+
+-- | Reproduce what the old narrow column stored, for every block the old encoder would
+-- have damaged: a minor below @0x8000@ survived it unchanged. The column's domain CHECK was
+-- dropped by migration 2-0030, so the wrapped negative goes in.
+truncateBlockProtoMinorStmt :: HsqlStmt.Statement Int64 Int64
+truncateBlockProtoMinorStmt =
+  HsqlStmt.Statement sql encoder HsqlD.rowsAffected True
+  where
+    blockTableN = tableName (Proxy @SCB.Block)
+    sql =
+      TextEnc.encodeUtf8 $
+        "UPDATE " <> blockTableN <> " SET proto_minor = $1 WHERE proto_minor >= 32768"
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.int8)
+
+truncateBlockProtoMinor :: Int64 -> DbM Int64
+truncateBlockProtoMinor minorV =
+  runSession mkDbCallStack $
+    HsqlSes.statement minorV truncateBlockProtoMinorStmt
+
+-- | Drop a completion marker, so a test can present a database as a pre-fix one.
+deleteExtraMigrationStmt :: HsqlStmt.Statement Text Int64
+deleteExtraMigrationStmt =
+  HsqlStmt.Statement sql encoder HsqlD.rowsAffected True
+  where
+    extraMigrationsTableN = tableName (Proxy @SCB.ExtraMigrations)
+    sql = TextEnc.encodeUtf8 $ "DELETE FROM " <> extraMigrationsTableN <> " WHERE token = $1"
+    encoder = HsqlE.param (HsqlE.nonNullable HsqlE.text)
+
+deleteExtraMigration :: ExtraMigration -> DbM Int64
+deleteExtraMigration em =
+  runSession mkDbCallStack $
+    HsqlSes.statement (textShow em) deleteExtraMigrationStmt
 
 -- | The committee quorum as text, so a stored value is reported exactly as stored rather
 -- than through a decoder. Regression coverage for the column width.
