@@ -163,7 +163,6 @@ runDbSync metricsSetters iomgr tracers params syncNodeConfigFromFile abortOnPani
 
   if enpLedgerOnly params
     then -- Nothing to connect to, nothing to migrate and nothing to roll back.
-
       runSyncNode
         metricsSetters
         tracers

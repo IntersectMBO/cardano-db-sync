@@ -20,10 +20,9 @@ import Cardano.DbSync.Api (convertToPoint, getTrace)
 import Cardano.DbSync.Api.Types (SyncEnv, envNetworkMagic, envOptions, envProtoMinorFixDone, soptFixFromEpoch, soptForceFix)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Block as Generic
 import Cardano.DbSync.Types (CardanoBlock, CardanoPoint)
-import Cardano.DbSync.Util (textShow)
 import qualified Cardano.Ledger.BaseTypes as Ledger
-import Cardano.Prelude
 import Cardano.Logging (Trace)
+import Cardano.Prelude
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -138,7 +137,7 @@ planProtoMinorFix syncEnv dbEnv = do
             Nothing -> genesisPoint
       pure ProtoMinorFixPlan {pmfpFrom = point, pmfpFromEpoch = fromEpoch}
 
-    -- | Where a run that was not given an explicit epoch starts.
+    -- \| Where a run that was not given an explicit epoch starts.
     boundaryEpoch :: IO Word64
     boundaryEpoch =
       case protoMinorFixStartEpoch (envNetworkMagic syncEnv) of

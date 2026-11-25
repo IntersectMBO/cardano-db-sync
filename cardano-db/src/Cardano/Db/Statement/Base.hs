@@ -1560,10 +1560,10 @@ queryLastBlockBeforeEpochStmt =
         Text.concat
           [ "SELECT slot_no, hash"
           , " FROM " <> blockTableN
-          -- The epoch comes from a CLI flag, so it is cast rather than narrowed to the
-          -- column's own int4: a value past 2^31 would otherwise wrap to a negative one,
-          -- match nothing, and silently turn into a sweep from genesis.
-          , " WHERE epoch_no < $1::bigint AND slot_no IS NOT NULL"
+          , -- The epoch comes from a CLI flag, so it is cast rather than narrowed to the
+            -- column's own int4: a value past 2^31 would otherwise wrap to a negative one,
+            -- match nothing, and silently turn into a sweep from genesis.
+            " WHERE epoch_no < $1::bigint AND slot_no IS NOT NULL"
           , " ORDER BY id DESC"
           , " LIMIT 1"
           ]

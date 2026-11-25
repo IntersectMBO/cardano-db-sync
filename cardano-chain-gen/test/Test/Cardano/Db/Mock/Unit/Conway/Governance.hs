@@ -43,8 +43,8 @@ import Cardano.Prelude (MonadIO (..), Word64, void)
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, isJust, isNothing)
-import Data.Ratio ((%))
 import Data.Maybe.Strict (StrictMaybe (..))
+import Data.Ratio ((%))
 import Data.Text (Text)
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Ouroboros.Network.Block (blockPoint)

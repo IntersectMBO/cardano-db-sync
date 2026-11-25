@@ -6,6 +6,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -102,7 +103,6 @@ import Ouroboros.Network.Protocol.ChainSync.PipelineDecision (
 import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientPeer)
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
 import qualified Ouroboros.Network.Snocket as Snocket
-import System.Exit (exitSuccess)
 
 -- | Raised to stop the subscription loop after a @--only-fix@ run, which must not be
 -- reconnected. 'runSyncNodeClient' turns it into a clean exit.
@@ -245,7 +245,7 @@ dbSyncProtocols onlyFixDoneVar syncEnv metricsSetters tracers tc codecConfig ver
                   pure (Right ((), Nothing))
         either throwIO pure result
 
-    -- | End the connection the repair took: either hand over to syncing on the next one, or
+    -- \| End the connection the repair took: either hand over to syncing on the next one, or
     -- stop the subscription so the caller can exit.
     afterRepair what
       | soptOnlyFix (envOptions syncEnv) = do
@@ -260,7 +260,7 @@ dbSyncProtocols onlyFixDoneVar syncEnv metricsSetters tracers tc codecConfig ver
     protoMinorFixPlan =
       case envDbEnv syncEnv of
         Nothing -> pure Nothing
-        Just dbEnv -> fmap ((,) dbEnv) <$> planProtoMinorFix syncEnv dbEnv
+        Just dbEnv -> fmap (dbEnv,) <$> planProtoMinorFix syncEnv dbEnv
 
     dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     dummylocalTxSubmit =

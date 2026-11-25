@@ -92,6 +92,7 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
+
   -- | Overrides the minor of the protocol version stamped into forged headers. Tests only:
   -- the minor is inert here, since only 'pvMajor' becomes Consensus' 'MaxMajorProtVer'.
   Maybe Word32 ->
