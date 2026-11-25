@@ -424,6 +424,7 @@ extractSyncOptions snp aop snc =
     , soptSnapshotInterval = dncSnapshotInterval snc
     , soptAllowPrivateOffChainUrls = enpAllowPrivateOffChainUrls snp
     , soptOnlyFix = enpOnlyFix snp
+    , soptForceFix = enpForceFix snp
     , soptFixFromEpoch = enpFixFromEpoch snp
     }
   where

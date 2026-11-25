@@ -124,6 +124,7 @@ pRunDbSyncNode = do
     <*> pAllowPrivateOffChainUrls
     <*> pLedgerOnly
     <*> pOnlyFix
+    <*> pForceFix
     <*> pFixFromEpoch
 
 pConfigFile :: Parser ConfigFile
@@ -225,6 +226,20 @@ pOnlyFix =
               <> "carrying on into normal syncing. Use this to get the repair "
               <> "over with in a maintenance window. Without the flag the repair "
               <> "still runs on the next start and hands over to syncing itself."
+          )
+    )
+
+pForceFix :: Parser Bool
+pForceFix =
+  Opt.flag
+    False
+    True
+    ( Opt.long "force-fix"
+        <> Opt.help
+          ( "Run the one-off data repair from this network's built-in boundary epoch even "
+              <> "though it is recorded as done and nothing stored looks broken. Use this if "
+              <> "an older db-sync may have truncated a value in a way the stored data "
+              <> "cannot reveal. Combine with --only-fix to do it and exit."
           )
     )
 

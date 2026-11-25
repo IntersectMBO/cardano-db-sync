@@ -150,6 +150,7 @@ data CommandLineArgs = CommandLineArgs
   , claPruneTxOut :: Bool
   , claFixFromEpoch :: Maybe Word64
   , claOnlyFix :: Bool
+  , claForceFix :: Bool
   , claForgedProtoMinor :: Maybe Word32
   -- ^ Not a db-sync flag: the minor stamped into the forged headers, so a test can
   -- produce the CIP-0203 tags the @block.proto_minor@ repair exists for.
@@ -336,6 +337,7 @@ mkSyncNodeParams staticDir mutableDir CommandLineArgs {..} = do
       , enpAllowPrivateOffChainUrls = False
       , enpLedgerOnly = False
       , enpOnlyFix = claOnlyFix
+      , enpForceFix = claForceFix
       , enpFixFromEpoch = claFixFromEpoch
       }
 
@@ -427,6 +429,7 @@ initCommandLineArgs =
     , claPruneTxOut = False
     , claFixFromEpoch = Nothing
     , claOnlyFix = False
+    , claForceFix = False
     , claForgedProtoMinor = Nothing
     }
 

@@ -118,6 +118,8 @@ unitTests iom knownMigrations =
     , testGroup
         "proto_minor repair"
         [ test "truncated values are rewritten from the headers" ProtoMinor.repairsTruncatedProtoMinor
+        , test "force-fix sweeps past the completion marker" ProtoMinor.forceFixBypassesMarker
+        , test "only-fix exits instead of syncing" ProtoMinor.onlyFixExits
         ]
     , testGroup
         "Epoch"

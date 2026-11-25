@@ -86,6 +86,9 @@ data SyncOptions = SyncOptions
   , soptOnlyFix :: !Bool
   -- ^ When 'True', db-sync runs any pending one-off data repair and then exits
   -- rather than carrying on into normal syncing. Set from @--only-fix@.
+  , soptForceFix :: !Bool
+  -- ^ When 'True', the one-off repair runs from the built-in boundary, bypassing the
+  -- completion marker and the "is anything broken" check. Set from @--force-fix@.
   , soptFixFromEpoch :: !(Maybe Word64)
   -- ^ Forces the one-off repair to start at this epoch, bypassing the built-in
   -- boundary, the "is anything broken" check and the completion marker. Set from

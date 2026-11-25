@@ -129,6 +129,10 @@ data SyncNodeParams = SyncNodeParams
   , enpOnlyFix :: !Bool
   -- ^ When 'True', db-sync runs any pending one-off data repair and then exits
   -- instead of going on to sync. Set from the @--only-fix@ CLI flag.
+  , enpForceFix :: !Bool
+  -- ^ When 'True', the one-off data repair runs from the built-in per-network boundary
+  -- even though it is recorded as done and nothing stored looks broken. Set from
+  -- @--force-fix@, for a database an older db-sync may have left invisibly truncated.
   , enpFixFromEpoch :: !(Maybe Word64)
   -- ^ Start the one-off data repair at this epoch instead of the built-in per-network
   -- boundary, and run it even when nothing looks broken and the repair is already

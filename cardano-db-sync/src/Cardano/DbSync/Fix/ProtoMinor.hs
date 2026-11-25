@@ -17,12 +17,13 @@ module Cardano.DbSync.Fix.ProtoMinor (
 import qualified Cardano.Db as DB
 import Cardano.Db.Log (logInfo, logWarning)
 import Cardano.DbSync.Api (convertToPoint, getTrace)
-import Cardano.DbSync.Api.Types (SyncEnv, envNetworkMagic, envOptions, envProtoMinorFixDone, soptFixFromEpoch)
+import Cardano.DbSync.Api.Types (SyncEnv, envNetworkMagic, envOptions, envProtoMinorFixDone, soptFixFromEpoch, soptForceFix)
 import qualified Cardano.DbSync.Era.Shelley.Generic.Block as Generic
 import Cardano.DbSync.Types (CardanoBlock, CardanoPoint)
 import Cardano.DbSync.Util (textShow)
 import qualified Cardano.Ledger.BaseTypes as Ledger
 import Cardano.Prelude
+import Cardano.Logging (Trace)
 import Cardano.Slotting.Slot (SlotNo (..), WithOrigin (..))
 import Control.Concurrent.Class.MonadSTM.Strict (readTVarIO, writeTVar)
 import Ouroboros.Consensus.Cardano.Block (HardForkBlock (..))
@@ -67,6 +68,17 @@ protoMinorFixStartEpoch (NetworkMagic magic) =
     4 -> Just 0 -- sanchonet, no tag seen; the gate only lets this run if one appears
     _ -> Nothing
 
+-- | Run one of the repair's database actions. The repair runs on the chainsync thread, so
+-- it must not use the connection the database thread writes blocks on: 'runInTransaction'
+-- issues its @BEGIN@ and @COMMIT@ as separate sessions, so the two would interleave and this
+-- @COMMIT@ could commit a half-written batch of blocks. db-sync keeps a pool for exactly
+-- this; a 'DbEnv' without one (a tool, a test) has no database thread to collide with.
+runRepairDb :: Trace IO DB.LogMessage -> DB.DbEnv -> DB.DbM a -> IO a
+runRepairDb trce dbEnv action
+  | isJust (DB.dbPoolConnection dbEnv) =
+      DB.runDbPoolTransLoggedWith (const True) trce dbEnv (Just DB.ReadCommitted) action
+  | otherwise = DB.runDbTransSilent dbEnv DB.ReadCommitted action
+
 data ProtoMinorFixPlan = ProtoMinorFixPlan
   { pmfpFrom :: !CardanoPoint
   -- ^ Where to intersect the chain, one block before the padded start epoch.
@@ -78,28 +90,45 @@ data ProtoMinorFixPlan = ProtoMinorFixPlan
 -- latter case the marker is written so the check is not repeated on every start.
 planProtoMinorFix :: SyncEnv -> DB.DbEnv -> IO (Maybe ProtoMinorFixPlan)
 planProtoMinorFix syncEnv dbEnv = do
+  -- The repair hands over by letting the connection drop, and this runs again on the next
+  -- one, so without the in-process flag a forced sweep would restart for as long as the flag
+  -- is on the command line and syncing would never resume. A completed automatic run has
+  -- written the marker as well, so checking the flag first only saves a query.
   alreadyRun <- readTVarIO (envProtoMinorFixDone syncEnv)
-  case soptFixFromEpoch (envOptions syncEnv) of
-    -- An explicit boundary is a deliberate manual run, so it overrides the marker and the
-    -- "is anything broken" check too: the point of sweeping from genesis is to find what
-    -- the stored values cannot reveal. It overrides them once, though: this is called again
-    -- on every reconnect, so without the in-process flag the sweep would restart for as long
-    -- as the flag is on the command line and syncing would never resume.
-    Just forced | not alreadyRun -> do
-      logInfo trce $
-        mconcat
-          [ "--fix-from-epoch "
-          , textShow forced
-          , " was given, so the block.proto_minor repair runs from that epoch regardless of"
-          , " the built-in boundary and of whether it has run before."
-          ]
-      Just <$> planFrom forced
-    _ -> planAutomatically
+  if alreadyRun
+    then pure Nothing
+    else case soptFixFromEpoch opts of
+      -- An explicit boundary is a deliberate manual run, so it overrides the built-in
+      -- boundary, the marker and the "is anything broken" check too: the point of sweeping
+      -- from genesis is to find what the stored values cannot reveal.
+      Just forced -> do
+        logInfo trce $
+          mconcat
+            [ "--fix-from-epoch "
+            , textShow forced
+            , " was given, so the block.proto_minor repair runs from that epoch regardless of"
+            , " the built-in boundary and of whether it has run before."
+            ]
+        Just <$> planFrom forced
+      Nothing
+        -- The same deliberate re-run, but from this network's boundary, so an operator who
+        -- suspects the gate below missed something neither guesses an epoch nor pays for a
+        -- sweep from genesis.
+        | soptForceFix opts -> do
+            logInfo trce $
+              mconcat
+                [ "--force-fix was given, so the block.proto_minor repair runs from this"
+                , " network's boundary epoch regardless of the completion marker and of"
+                , " whether anything stored looks broken."
+                ]
+            Just <$> (planFrom =<< boundaryEpoch)
+        | otherwise -> planAutomatically
   where
     trce = getTrace syncEnv
+    opts = envOptions syncEnv
 
     runDb :: DB.DbM a -> IO a
-    runDb = DB.runDbTransSilent dbEnv DB.ReadCommitted
+    runDb = runRepairDb trce dbEnv
 
     planFrom :: Word64 -> IO ProtoMinorFixPlan
     planFrom fromEpoch = do
@@ -108,6 +137,17 @@ planProtoMinorFix syncEnv dbEnv = do
             Just (slot, hsh) -> fromMaybe genesisPoint (convertToPoint (SlotNo slot) hsh)
             Nothing -> genesisPoint
       pure ProtoMinorFixPlan {pmfpFrom = point, pmfpFromEpoch = fromEpoch}
+
+    -- | Where a run that was not given an explicit epoch starts.
+    boundaryEpoch :: IO Word64
+    boundaryEpoch =
+      case protoMinorFixStartEpoch (envNetworkMagic syncEnv) of
+        Just e -> pure e
+        Nothing ->
+          -- Unknown network: fall back to what the stored values imply.
+          runDb DB.queryFirstTaggedProtoMinorEpoch >>= \case
+            Just tagEpoch -> pure $ if tagEpoch > padEpochs then tagEpoch - padEpochs else 0
+            Nothing -> pure 0
 
     planAutomatically :: IO (Maybe ProtoMinorFixPlan)
     planAutomatically = do
@@ -120,26 +160,26 @@ planProtoMinorFix syncEnv dbEnv = do
           needed <- runDb DB.queryHasTaggedProtoMinor
           if not needed
             then do
-              logInfo trce "No truncated block.proto_minor found, so no repair is needed."
+              -- Only a sign-wrapped value is recognisable from the stored data, so a
+              -- truncation whose surviving low bits look like a genuine small minor is
+              -- invisible here. Widening the test would sweep healthy databases, so the way
+              -- out is deliberate rather than automatic.
+              logInfo trce $
+                mconcat
+                  [ "No truncated block.proto_minor found, so no repair is needed."
+                  , " If this database was synced by a db-sync older than 13.9.0.0, --force-fix"
+                  , " re-reads the headers anyway."
+                  ]
               markProtoMinorFixed syncEnv dbEnv
               pure Nothing
-            else do
-              fromEpoch <- case protoMinorFixStartEpoch (envNetworkMagic syncEnv) of
-                Just e -> pure e
-                Nothing ->
-                  -- Unknown network: fall back to what the stored values imply.
-                  runDb DB.queryFirstTaggedProtoMinorEpoch >>= \case
-                    Just tagEpoch ->
-                      pure $ if tagEpoch > padEpochs then tagEpoch - padEpochs else 0
-                    Nothing -> pure 0
-              Just <$> planFrom fromEpoch
+            else Just <$> (planFrom =<< boundaryEpoch)
 
 -- | Record the repair as done, in the database and for the rest of this process. The
 -- insert is guarded because a forced run ignores the marker, so the row can already be
 -- there and @extra_migrations@ has no unique constraint on the token.
 markProtoMinorFixed :: SyncEnv -> DB.DbEnv -> IO ()
 markProtoMinorFixed syncEnv dbEnv = do
-  DB.runDbTransSilent dbEnv DB.ReadCommitted $ do
+  runRepairDb (getTrace syncEnv) dbEnv $ do
     done <- DB.queryAllExtraMigrations
     unless (DB.ProtoMinorFixed `elem` done) $
       DB.insertExtraMigration DB.ProtoMinorFixed
@@ -204,11 +244,11 @@ chainSyncClientFixProtoMinor syncEnv dbEnv plan = Client.ChainSyncClient $ do
               Nothing -> pure 0
               -- The old path narrowed to 'Word16' and then encoded as a signed 'int2',
               -- so a true minor below 32768 came through both steps unchanged and the
-              -- stored value is already right. Skipping those keeps the sweep to a few
-              -- hundred round trips instead of one per block read.
+              -- stored value is already right. Skipping those costs no round trip, so the
+              -- sweep is bound by the number of tagged blocks, not by the blocks read.
               Just (_, minorV) | minorV < 0x8000 -> pure 0
               Just (hsh, minorV) ->
-                DB.runDbTransSilent dbEnv DB.ReadCommitted $
+                runRepairDb trce dbEnv $
                   DB.updateBlockProtoMinor hsh (fromIntegral minorV)
             let seen' = seen + 1
                 fixed' = fixed + fromIntegral (max 0 changed)

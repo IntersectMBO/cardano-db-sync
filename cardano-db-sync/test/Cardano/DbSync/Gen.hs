@@ -79,6 +79,7 @@ syncNodeParams =
     <*> Gen.bool
     <*> Gen.bool
     <*> Gen.bool
+    <*> Gen.bool
     <*> Gen.maybe (Gen.word64 (Range.linear 0 1000))
 
 syncNodeConfig :: Gen SyncNodeConfig
