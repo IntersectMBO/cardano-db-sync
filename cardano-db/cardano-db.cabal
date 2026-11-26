@@ -153,7 +153,8 @@ test-suite test-db
   main-is:              test-db.hs
   hs-source-dirs:       test
 
-  other-modules:        Test.IO.Cardano.Db.EpochBlockTxs
+  other-modules:        Test.IO.Cardano.Db.ConsumedTxOut
+                        Test.IO.Cardano.Db.EpochBlockTxs
                         Test.IO.Cardano.Db.EpochCalc
                         Test.IO.Cardano.Db.Insert
                         Test.IO.Cardano.Db.Migration

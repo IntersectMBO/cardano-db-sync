@@ -5,6 +5,7 @@ import Data.Maybe (isNothing)
 import System.Directory (getCurrentDirectory)
 import System.Environment (lookupEnv, setEnv)
 import System.FilePath ((</>))
+import qualified Test.IO.Cardano.Db.ConsumedTxOut
 import qualified Test.IO.Cardano.Db.EpochBlockTxs
 import qualified Test.IO.Cardano.Db.EpochCalc
 import qualified Test.IO.Cardano.Db.Insert
@@ -33,6 +34,7 @@ main = do
       , Test.IO.Cardano.Db.Insert.tests
       , Test.IO.Cardano.Db.TotalSupply.tests
       , Test.IO.Cardano.Db.TxOutQuery.tests
+      , Test.IO.Cardano.Db.ConsumedTxOut.tests
       , Test.IO.Cardano.Db.Rollback.tests
       , Test.IO.Cardano.Db.EpochCalc.tests
       , Test.IO.Cardano.Db.Transaction.tests

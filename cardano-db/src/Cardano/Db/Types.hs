@@ -347,6 +347,7 @@ data ExtraMigration
   | PruneTxOutFlagPreviouslySet
   | BootstrapStarted
   | BootstrapFinished
+  | ConsumeTxOutStarted
   | ConsumeTxOutPreviouslySet
   | TxOutAddressPreviouslySet
   | ProtoMinorFixed
@@ -355,6 +356,7 @@ data ExtraMigration
 data MigrationValues = MigrationValues
   { isStakeDistrEnded :: !Bool
   , isPruneTxOutPreviouslySet :: !Bool
+  , isConsumeTxOutStarted :: !Bool
   , isConsumeTxOutPreviouslySet :: !Bool
   , isTxOutAddressPreviouslySet :: !Bool
   , pruneConsumeMigration :: !PruneConsumeMigration
@@ -366,6 +368,7 @@ processMigrationValues migrations pcm =
   MigrationValues
     { isStakeDistrEnded = StakeDistrEnded `elem` migrations
     , isPruneTxOutPreviouslySet = PruneTxOutFlagPreviouslySet `elem` migrations
+    , isConsumeTxOutStarted = ConsumeTxOutStarted `elem` migrations
     , isConsumeTxOutPreviouslySet = ConsumeTxOutPreviouslySet `elem` migrations
     , isTxOutAddressPreviouslySet = TxOutAddressPreviouslySet `elem` migrations
     , pruneConsumeMigration = pcm
@@ -403,6 +406,8 @@ extraDescription = \case
     "The bootstrap syncing is in progress"
   BootstrapFinished ->
     "The bootstrap is finalised"
+  ConsumeTxOutStarted ->
+    "The consumed_tx_out migration has started. It is recorded as complete only once it finishes"
   ConsumeTxOutPreviouslySet ->
     "The --consume-tx-out flag has previously been enabled"
   TxOutAddressPreviouslySet ->
