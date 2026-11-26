@@ -96,9 +96,14 @@ runConsumedTxOutMigrations trce bulkSize txOutVariantType blockNoDiff pcm = do
 
       case (isConsumeTxOutPreviouslySet, pcmConsumedTxOut, pcmPruneTxOut) of
         -- No Migration Needed
-        (False, False, False) -> do
-          liftIO $ logInfo trce $ msgName <> "No extra migration specified"
-
+        (False, False, False)
+          -- An interrupted migration leaves tx_out half populated. Carrying on without the
+          -- flag would leave those rows stale with no warning, so refuse it just as the
+          -- (True, False, False) case below refuses a completed migration.
+          | isConsumeTxOutStarted ->
+              liftIO $ logAndThrowIO trce $ msgName <> "consumed-tx-out or prune-tx-out is not set, but an unfinished consumed migration is found. Re-run with the flag enabled to finish it."
+          | otherwise ->
+              liftIO $ logInfo trce $ msgName <> "No extra migration specified"
         -- Already migrated
         (True, True, False) -> do
           liftIO $ logInfo trce $ msgName <> "Extra migration consumed_tx_out already executed"
@@ -109,10 +114,13 @@ runConsumedTxOutMigrations trce bulkSize txOutVariantType blockNoDiff pcm = do
         -- Consume TxOut
         (False, True, False) -> do
           liftIO $ logInfo trce $ msgName <> "Running extra migration consumed_tx_out"
+          -- Record the start before any page commits, so an interrupted run is still
+          -- detected when db-sync is next started without the flag.
+          unless isConsumeTxOutStarted $ insertExtraMigration ConsumeTxOutStarted
           migrateTxOut bulkSize trce txOutVariantType $ Just migrationValues
-          -- Only record the migration once it has completed. Each page is committed on its own,
-          -- so if db-sync is stopped half way and the marker was already written, the next start
-          -- would take the "already executed" branch and silently leave the remaining
+          -- Record completion only once it has completed. Each page is committed on its own,
+          -- so if db-sync is stopped half way and this marker was already written, the next
+          -- start would take the "already executed" branch and silently leave the remaining
           -- consumed_by_tx_id values NULL. Re-running the migration is safe: the updates are
           -- idempotent.
           insertExtraMigration ConsumeTxOutPreviouslySet
@@ -254,7 +262,7 @@ migrateNextPageTxOut bulkSize mTrce txOutVariantType = go 0 0
     go :: Int64 -> Word64 -> DbM ()
     go afterId offst = do
       whenJust mTrce $ \trce ->
-        liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling input offset " <> textShow offst
+        liftIO $ logInfo trce $ "migrateNextPageTxOut: Handling inputs from row " <> textShow offst
       page <- getInputPage bulkSize afterId
       updatePageEntries txOutVariantType (map snd page)
       when (length page == bulkSize) $
@@ -406,10 +414,8 @@ getInputPage bulkSize afterId =
 
 -- | The @tx_in.id@ of the last entry of a page, to start the next page after it
 lastInputId :: Int64 -> [(Int64, a)] -> Int64
-lastInputId afterId page =
-  case reverse page of
-    (txInRowId, _) : _ -> txInRowId
-    [] -> afterId
+lastInputId afterId [] = afterId
+lastInputId _ ((txInRowId, _) : rest) = lastInputId txInRowId rest
 
 --------------------------------------------------------------------------------
 
