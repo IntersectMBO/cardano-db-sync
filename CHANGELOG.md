@@ -1,5 +1,11 @@
 # Revision history for cardano-db-sync
 
+## 13.9.0.0
+- Pin dependencies to node 11.2.3: `ouroboros-consensus` 5.4.0.1, `cardano-api` 11.12.0.0, `cardano-ledger-dijkstra` 0.5.0.0 and `cardano-protocol` 0.2.0.2. The last of these restores the pre-protocol-version-12 decoder for the Praos block header, which does not enforce the header's list length.
+- Store pool relay IPs without the quotes that `Show` on the node 11.2 ledger's address wrapper adds; a startup migration strips the quotes 13.8.0.0 wrote [#2182](https://github.com/IntersectMBO/cardano-db-sync/issues/2182).
+- Store the full protocol version minor. CIP-0203 packs a software tag into the header's minor version, so a value of 32768 or more was truncated and stored as a negative number; `block.proto_minor`, `epoch_param.protocol_minor` and `param_proposal.protocol_minor` are now 64-bit. Rows already written cannot be repaired from the database, because the high bits were never stored, so a one-off pass re-reads the affected blocks from the node. It runs automatically once, from a per-network boundary epoch; `--force-fix` re-runs it from that boundary on a database where it is already recorded as done, `--fix-from-epoch EPOCH` starts it earlier and `--only-fix` runs it and exits [#2190](https://github.com/IntersectMBO/cardano-db-sync/issues/2190).
+- Give each column the domain its value already has. `committee_member.expiration_epoch`, `committee.quorum_numerator` and `quorum_denominator` are now `word64type`, as are the seven `epoch_param` parameter columns that `param_proposal` already stored that way, and `block.proto_major` is widened alongside `proto_minor`. `word64type` is `numeric`, so a client that maps column types sees a decimal where these columns were integers.
+
 ## 13.8.0.0
 - Update Docker configuration to allow PostgreSQL connection details to be provided via Docker secrets or a `.pgpass` file using the `PGPASSFILE` environment variable.
 - Add static binaries and docker images for aarch64-linux
@@ -10,7 +16,7 @@
 - `cardano-db-tool` fixes: `utxo-set`/`validate` no longer crash on enterprise-address outputs; `validate` runs every check and exits non-zero on failure with clean error messages [#2163](https://github.com/IntersectMBO/cardano-db-sync/issues/2163); `report` aligns columns and formats timestamps [#2164](https://github.com/IntersectMBO/cardano-db-sync/issues/2164); and two `validate` check bugs are fixed [#2170](https://github.com/IntersectMBO/cardano-db-sync/issues/2170).
 - Support the node's nested (v2) configuration format, alongside the flat (v1) one. The `Protocol` and `LastKnownBlockVersion-*` keys, which v2 drops, are now optional.
 - Fix metadata being dropped as if it contained a Unicode NUL: the check matched `\\u000`, which also matches the escapes `\\u0001` through `\\u000F` that Postgres stores without complaint.
-- Sanitize or drop jsonb valuues before inserting.
+- Sanitize or drop jsonb values before inserting [#2187](https://github.com/IntersectMBO/cardano-db-sync/issues/2187).
 - Fix the per-epoch statistics attributing dropped `datum.value` rows to `redeemer_data` and vice versa.
 - Roll back the database transaction when a block insert reports failure by returning `Left` rather than by throwing. Previously the runner committed it, leaving a partially written batch of blocks behind while db-sync reported the error.
 - Logging is configured with the node's `trace-dispatcher` system. The `iohk-monitoring` keys (`minSeverity`, `setupScribes`, `defaultScribes`, `setupBackends`, `defaultBackends`, `options`, `rotation`) are no longer read; replace them with a `TraceOptions` block, as in [`config/mainnet-config.yaml`](config/mainnet-config.yaml). A config that still carries the old keys starts on the default configuration (everything at `Info` severity to stdout) and warns on stderr.

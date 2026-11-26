@@ -11,7 +11,7 @@ repository cardano-haskell-packages
 
 index-state:
   , hackage.haskell.org 2026-09-29T11:48:37Z
-  , cardano-haskell-packages 2026-10-27T09:47:50Z
+  , cardano-haskell-packages 2026-11-18T19:33:14Z
 -- No `active-repositories` override: cardano-ledger-core needs cuddle >= 1.8, which
 -- only Hackage has, and overriding with CHaP hides it. cardano-node does the same.
 
@@ -94,8 +94,8 @@ allow-newer:
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-node
-  tag: dac0d7ab2dfdee1f9eda901589e3c6ac8eaa1899
-  --sha256: sha256-RppioYH9ZAvl5kQk1w1LOwzeC1LEwIwBvLHeaoV3Q74=
+  tag: 2d0649f2bd8146f5b042416cc6198eb528ba846b
+  --sha256: sha256-HWYnGz+ujlXf6NSoDY69v7ppBQy5ueSzJijM3ubvMtw=
   subdir:
     cardano-node
     trace-forward

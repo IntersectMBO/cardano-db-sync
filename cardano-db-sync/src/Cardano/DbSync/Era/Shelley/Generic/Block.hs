@@ -19,6 +19,8 @@ module Cardano.DbSync.Era.Shelley.Generic.Block (
   getTxs,
   blockHash,
   blockPrevHash,
+  blockProtoVersionTPraos,
+  blockProtoVersionPraos,
 ) where
 
 import Cardano.Binary.FixedSizeCodec (rawEncodeFixedSized)

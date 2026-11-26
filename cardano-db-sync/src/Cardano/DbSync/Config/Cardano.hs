@@ -32,6 +32,8 @@ import Cardano.Ledger.Binary.Version
 import Cardano.Ledger.Conway.Genesis
 import Cardano.Ledger.Dijkstra.Genesis (DijkstraGenesis)
 import Control.Monad.Trans.Except (ExceptT)
+import Data.Maybe (fromMaybe)
+import Data.Word (Word32)
 import Ouroboros.Consensus.Block.Forging
 import Ouroboros.Consensus.Cardano (Nonce (..), ProtVer (ProtVer))
 import qualified Ouroboros.Consensus.Cardano as Consensus
@@ -79,7 +81,7 @@ readCardanoGenesisConfig enc =
 -- -------------------------------------------------------------------------------------------------
 
 mkTopLevelConfig :: GenesisConfig -> IO (TopLevelConfig CardanoBlock)
-mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg []
+mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg [] Nothing
 
 -- Need a concrete type for 'm' ('IO') to make the type checker happy.
 
@@ -90,8 +92,12 @@ mkTopLevelConfig cfg = Consensus.pInfoConfig . fst <$> mkProtocolInfoCardano cfg
 mkProtocolInfoCardano ::
   GenesisConfig ->
   [Consensus.ShelleyLeaderCredentials StandardCrypto] -> -- this is not empty only in tests
+
+  -- | Overrides the minor of the protocol version stamped into forged headers. Tests only:
+  -- the minor is inert here, since only 'pvMajor' becomes Consensus' 'MaxMajorProtVer'.
+  Maybe Word32 ->
   IO (ProtocolInfo CardanoBlock, IO [MkBlockForging IO CardanoBlock])
-mkProtocolInfoCardano genesisConfig shelleyCred = do
+mkProtocolInfoCardano genesisConfig shelleyCred mForgedProtoMinor = do
   -- db-sync never forges, so the KES-agent side of this filesystem is never
   -- consulted. Consensus does resolve a genesis 'InjectionFromFile' through it,
   -- which makes the mount point the working directory for those paths.
@@ -113,10 +119,7 @@ mkProtocolInfoCardano genesisConfig shelleyCred = do
               }
         , -- Consensus' 'MaxMajorProtVer': past it the ledger rules declare this
           -- node obsolete, so it has to mirror the node's own claim exactly.
-          cardanoProtocolVersion =
-            if dncExperimentalHardForksEnabled dnc
-              then ProtVer (natVersion @12) 0
-              else ProtVer (natVersion @11) 0
+          cardanoProtocolVersion = ProtVer protoMajor (fromMaybe 0 mForgedProtoMinor)
         , cardanoLedgerTransitionConfig =
             Ledger.mkLatestTransitionConfig
               shelleyGenesis
@@ -137,6 +140,11 @@ mkProtocolInfoCardano genesisConfig shelleyCred = do
         }
   pure (pInfo, mkForgings nullTracer)
   where
+    protoMajor =
+      if dncExperimentalHardForksEnabled dnc
+        then natVersion @12
+        else natVersion @11
+
     GenesisCardano
       dnc
       bGenesis

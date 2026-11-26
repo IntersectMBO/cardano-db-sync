@@ -244,11 +244,16 @@ applyMigration (MigrationDir location) quiet pgconfig mLogFilename logHandle (mv
         if any (`List.isInfixOf` (stdt <> stderr)) ["DB has been migrated to", "DB has been initialized"]
           then MigrationApplied
           else if mvStage mv <= 2 then MigrationAlreadyApplied else MigrationIdempotent
-    ExitFailure _ -> errorExit exitCode
+    ExitFailure _ -> errorExit exitCode stdt stderr
   where
-    errorExit :: Show e => e -> IO a
-    errorExit e = do
+    -- Repeat psql's own output on the way out. It also goes to the log file, but that
+    -- lives in a temporary directory CI discards, so a failed migration would otherwise
+    -- report nothing but "ExitFailure 1".
+    errorExit :: Show e => e -> String -> String -> IO a
+    errorExit e out err = do
       print e
+      unless (null out) $ putStrLn out
+      unless (null err) $ putStrLn err
       hPrint logHandle e
       case mLogFilename of
         Nothing -> pure ()

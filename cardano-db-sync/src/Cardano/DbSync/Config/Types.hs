@@ -126,6 +126,18 @@ data SyncNodeParams = SyncNodeParams
   -- ^ When 'True', db-sync replays the chain through the ledger and writes
   -- snapshots, but never opens a database connection. Set from the
   -- @--ledger-only@ CLI flag.
+  , enpOnlyFix :: !Bool
+  -- ^ When 'True', db-sync runs any pending one-off data repair and then exits
+  -- instead of going on to sync. Set from the @--only-fix@ CLI flag.
+  , enpForceFix :: !Bool
+  -- ^ When 'True', the one-off data repair runs from the built-in per-network boundary
+  -- even though it is recorded as done and nothing stored looks broken. Set from
+  -- @--force-fix@, for a database an older db-sync may have left invisibly truncated.
+  , enpFixFromEpoch :: !(Maybe Word64)
+  -- ^ Start the one-off data repair at this epoch instead of the built-in per-network
+  -- boundary, and run it even when nothing looks broken and the repair is already
+  -- recorded as done. 0 means from genesis. Set from @--fix-from-epoch@; intended for
+  -- confirming a boundary, not for routine operation.
   }
   deriving (Show)
 

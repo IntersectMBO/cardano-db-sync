@@ -6,9 +6,10 @@
   - `--state-dir FILEPATH`: The directory for persisting ledger state.
   - `--schema-dir FILEPATH`: The directory containing the migrations.
   - `--pg-pass-env ENV`: Alternative env variable to use, defaults to `PGPASSFILE` env variable.
-  - `--skip-fix`: Disables the db-sync fix procedure for the wrong datum and redeemer_data bytes.
   - `--force-indexes`: Forces the Index creation at the start of db-sync. Normally they're created later.
-  - `--fix-only`: Runs only the db-sync fix procedure for the wrong datum, redeemer_data, and plutus script bytes and exits.
+  - `--only-fix`: Runs any pending one-off data repair and then exits, instead of carrying on into normal syncing. Without it the repair runs and syncing continues.
+  - `--force-fix`: Runs the one-off data repair from this network's built-in boundary epoch even though it is recorded as done and nothing stored looks broken. Only a sign-wrapped value is recognisable from the stored data, so a database synced by an older db-sync can hold a truncated value the automatic check cannot see; this re-reads the headers anyway.
+  - `--fix-from-epoch EPOCH`: Starts the one-off data repair at this epoch instead of the built-in per-network boundary, and runs it even when nothing looks broken. Use `0` to sweep from genesis.
   - `--disable-cache`: Disables the db-sync caches. Reduces memory usage but it takes longer to sync.
   - `--rollback-to-slot SLOTNO`: Force a rollback to the specified slot, if the given slot doesn't exist it will use the next greater slot. See [Manual Rollbacks](manual-rollbacks.md) for details.
   - `--disable-in-out`: Disables the `tx_in` and `tx_out` table.

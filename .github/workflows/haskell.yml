@@ -87,6 +87,13 @@ jobs:
           echo "PG_DIR=${PG_DIR}" >> "$GITHUB_ENV"
           echo "DB_DIR=${DB_DIR}" >> "$GITHUB_ENV"
           echo "DBUSER=${DBUSER}" >> "$GITHUB_ENV"
+          # The test step prepends /usr/bin, where Debian's psql is a pg_wrapper symlink
+          # that picks its own client version. Migrations shell out to psql, so pin them
+          # to the one that initialised this cluster.
+          PSQL_PATH="$(command -v psql || true)"
+          if [ -n "$PSQL_PATH" ]; then
+            echo "PSQL_BIN=$(dirname "$PSQL_PATH")" >> "$GITHUB_ENV"
+          fi
 
           # Start postgres
           ./scripts/postgresql-test.sh \
@@ -97,7 +104,8 @@ jobs:
             start
       - name: cabal test
         run: |
-          export PATH="/usr/bin:$PATH"
+          export PATH="${PSQL_BIN:+$PSQL_BIN:}/usr/bin:$PATH"
+          command -v psql && psql --version || echo "WARNING: no psql on PATH"
           # Create pgpass file
           export PGPASSFILE="${PG_DIR}/pgpass-testing"
           echo "${PG_DIR}:5432:$DBUSER:$DBUSER:*" > $PGPASSFILE

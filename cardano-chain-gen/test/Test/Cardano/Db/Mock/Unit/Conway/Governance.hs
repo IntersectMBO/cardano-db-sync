@@ -10,6 +10,7 @@
 module Test.Cardano.Db.Mock.Unit.Conway.Governance (
   drepDistr,
   newCommittee,
+  newCommitteeEdgeValues,
   rollbackNewCommittee,
   rollbackNewCommitteeProposal,
   updateConstitution,
@@ -38,11 +39,12 @@ import Cardano.Mock.Forging.Interpreter (Interpreter, getCurrentEpoch)
 import qualified Cardano.Mock.Forging.Tx.Conway as Conway
 import qualified Cardano.Mock.Forging.Tx.Generic as Forging
 import Cardano.Mock.Forging.Types
-import Cardano.Prelude (MonadIO (..), void)
+import Cardano.Prelude (MonadIO (..), Word64, void)
 import Cardano.Slotting.Slot (EpochNo (..))
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, isJust, isNothing)
 import Data.Maybe.Strict (StrictMaybe (..))
+import Data.Ratio ((%))
 import Data.Text (Text)
 import qualified Ouroboros.Consensus.Shelley.Eras as Consensus
 import Ouroboros.Network.Block (blockPoint)
@@ -93,7 +95,7 @@ newCommittee =
     -- Register SPOs, DReps, and committee to vote
     epoch1 <- initGovernance interpreter server
     -- Propose, ratify, and enact a new committee member
-    epoch3 <- enactNewCommittee interpreter server
+    epoch3 <- enactNewCommittee interpreter server proposeNewCommittee
 
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
@@ -106,6 +108,40 @@ newCommittee =
   where
     testLabel = "conwayNewCommittee"
 
+-- | A proposal may pick a committee expiration epoch and a quorum the ledger does not
+-- bound, so both have to survive as full 'Word64' values.
+newCommitteeEdgeValues :: IOManager -> [(Text, Text)] -> Assertion
+newCommitteeEdgeValues =
+  withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
+    startDBSync dbSync
+
+    epoch1 <- initGovernance interpreter server
+    epoch3 <- enactNewCommittee interpreter server proposal
+
+    assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
+
+    assertEqQuery
+      dbSync
+      (fmap quorum <$> DB.queryCommitteeByTxHash proposalTxHash)
+      (Just (1, maxBound))
+      "Unexpected committee quorum"
+
+    assertEqQuery
+      dbSync
+      (Prelude.take 1 <$> DB.queryCommitteeMemberExpirations)
+      [maxBound]
+      "Unexpected committee member expiration epoch"
+  where
+    proposal =
+      Conway.mkAddCommitteeTx
+        Nothing
+        (Prelude.head Forging.unregisteredCommitteeCreds)
+        (EpochNo maxBound)
+        (1 % fromIntegral (maxBound :: Word64))
+    proposalTxHash = unTxHash (txIdTx proposal)
+    quorum c = (DB.committeeQuorumNumerator c, DB.committeeQuorumDenominator c)
+    testLabel = "conwayNewCommitteeEdgeValues"
+
 rollbackNewCommittee :: IOManager -> [(Text, Text)] -> Assertion
 rollbackNewCommittee =
   withFullConfig conwayConfigDir testLabel $ \interpreter server dbSync -> do
@@ -114,7 +150,7 @@ rollbackNewCommittee =
     -- Register SPOs, DReps, and committee to vote
     epoch1 <- initGovernance interpreter server
     -- Propose, ratify, and enact a new committee member
-    epoch3 <- enactNewCommittee interpreter server
+    epoch3 <- enactNewCommittee interpreter server proposeNewCommittee
     -- Wait for it to sync
     assertBlockNoBackoff dbSync (length $ epoch1 <> epoch3)
     -- Should now have a committee member
@@ -167,11 +203,11 @@ chainedNewCommittee =
     let
       -- Propose a new committee member
       committee1Cred = Prelude.head Forging.unregisteredCommitteeCreds
-      proposal1 = Conway.mkAddCommitteeTx Nothing committee1Cred
+      proposal1 = Conway.mkAddCommitteeTx Nothing committee1Cred (EpochNo 20) (1 % 1)
 
       -- Propose another, using proposal1 as the prev governance action
       committee2Cred = Forging.unregisteredCommitteeCreds Prelude.!! 1
-      proposal2 = Conway.mkAddCommitteeTx (Just prevGovActionId) committee2Cred
+      proposal2 = Conway.mkAddCommitteeTx (Just prevGovActionId) committee2Cred (EpochNo 20) (1 % 1)
       proposal2TxHash = unTxHash (txIdTx proposal2)
 
       prevGovActionId =
@@ -233,13 +269,15 @@ rollbackNewCommitteeProposal =
   where
     testLabel = "conwayRollbackNewCommitteeProposal"
 
-enactNewCommittee :: Interpreter -> ServerHandle IO CardanoBlock -> IO [CardanoBlock]
-enactNewCommittee interpreter server = do
+enactNewCommittee ::
+  Interpreter ->
+  ServerHandle IO CardanoBlock ->
+  Core.Tx Core.TopTx Consensus.ConwayEra ->
+  IO [CardanoBlock]
+enactNewCommittee interpreter server addCcTx = do
   blk <-
     Api.withConwayFindLeaderAndSubmit interpreter server $ \ledger -> do
       let
-        -- Create gov action tx
-        addCcTx = proposeNewCommittee
         -- Create votes for all stake pools. We start in the Conway bootstrap phase, so
         -- DRep votes are not yet required.
         addVoteTx =
@@ -262,7 +300,7 @@ enactNewCommittee interpreter server = do
 
 proposeNewCommittee :: Core.Tx Core.TopTx Consensus.ConwayEra
 proposeNewCommittee =
-  Conway.mkAddCommitteeTx Nothing committeeCred
+  Conway.mkAddCommitteeTx Nothing committeeCred (EpochNo 20) (1 % 1)
   where
     committeeCred = Prelude.head Forging.unregisteredCommitteeCreds
 

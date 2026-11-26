@@ -8,7 +8,7 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Functor.Contravariant
 import Data.Int (Int64)
 import Data.Text (Text)
-import Data.Word (Word16, Word64)
+import Data.Word (Word16, Word32, Word64)
 import GHC.Generics (Generic)
 import Hasql.Decoders as D
 import Hasql.Encoders as E
@@ -35,6 +35,8 @@ import Cardano.Db.Types (
   voteEncoder,
   voteUrlEncoder,
   voterRoleEncoder,
+  word64Decoder,
+  word64Encoder,
  )
 import Contravariant.Extras (contrazip3, contrazip4)
 
@@ -278,8 +280,9 @@ constitutionEncoder =
 -- Description: Contains information about the committee, including the quorum requirements and the proposal being considered.
 data Committee = Committee
   { committeeGovActionProposalId :: !(Maybe Id.GovActionProposalId) -- noreference
-  , committeeQuorumNumerator :: !Word64
-  , committeeQuorumDenominator :: !Word64
+  -- Numerator and denominator of a ledger UnitInterval: a full Word64 each.
+  , committeeQuorumNumerator :: !Word64 -- sqltype=word64type
+  , committeeQuorumDenominator :: !Word64 -- sqltype=word64type
   }
   deriving (Eq, Show, Generic)
 
@@ -290,15 +293,15 @@ committeeDecoder :: D.Row Committee
 committeeDecoder =
   Committee
     <$> Id.maybeIdDecoder Id.GovActionProposalId -- committeeGovActionProposalId
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumNumerator
-    <*> D.column (D.nonNullable $ fromIntegral <$> D.int8) -- committeeQuorumDenominator
+    <*> word64Decoder -- committeeQuorumNumerator
+    <*> word64Decoder -- committeeQuorumDenominator
 
 committeeEncoder :: E.Params Committee
 committeeEncoder =
   mconcat
     [ committeeGovActionProposalId >$< Id.maybeIdEncoder Id.getGovActionProposalId
-    , committeeQuorumNumerator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
-    , committeeQuorumDenominator >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , committeeQuorumNumerator >$< word64Encoder
+    , committeeQuorumDenominator >$< word64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -331,7 +334,8 @@ committeeHashEncoder =
 data CommitteeMember = CommitteeMember
   { committeeMemberCommitteeId :: !Id.CommitteeId -- OnDeleteCascade -- here intentionally we use foreign keys
   , committeeMemberCommitteeHashId :: !Id.CommitteeHashId -- noreference
-  , committeeMemberExpirationEpoch :: !Word64 -- sqltype=word31type
+  -- A proposal picks this epoch and the ledger does not bound it, so it is a full Word64.
+  , committeeMemberExpirationEpoch :: !Word64 -- sqltype=word64type
   }
   deriving (Eq, Show, Generic)
 
@@ -343,7 +347,7 @@ committeeMemberEncoder =
   mconcat
     [ committeeMemberCommitteeId >$< Id.idEncoder Id.getCommitteeId
     , committeeMemberCommitteeHashId >$< Id.idEncoder Id.getCommitteeHashId
-    , committeeMemberExpirationEpoch >$< E.param (E.nonNullable $ fromIntegral >$< E.int8)
+    , committeeMemberExpirationEpoch >$< word64Encoder
     ]
 
 -----------------------------------------------------------------------------------------------------------------------------------
@@ -417,7 +421,7 @@ data ParamProposal = ParamProposal
   , paramProposalDecentralisation :: !(Maybe Double)
   , paramProposalEntropy :: !(Maybe ByteString) -- sqltype=hash32type
   , paramProposalProtocolMajor :: !(Maybe Word16) -- sqltype=word31type
-  , paramProposalProtocolMinor :: !(Maybe Word16) -- sqltype=word31type
+  , paramProposalProtocolMinor :: !(Maybe Word32) -- sqltype=word63type
   , paramProposalMinUtxoValue :: !(Maybe DbLovelace) -- sqltype=lovelace
   , paramProposalMinPoolCost :: !(Maybe DbLovelace) -- sqltype=lovelace
   , paramProposalCostModelId :: !(Maybe Id.CostModelId) -- noreference
@@ -486,7 +490,7 @@ paramProposalDecoder =
     <*> D.column (D.nullable D.float8) -- paramProposalDecentralisation
     <*> D.column (D.nullable D.bytea) -- paramProposalEntropy
     <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalProtocolMajor
-    <*> D.column (D.nullable $ fromIntegral <$> D.int2) -- paramProposalProtocolMinor
+    <*> D.column (D.nullable $ fromIntegral <$> D.int8) -- paramProposalProtocolMinor
     <*> maybeDbLovelaceDecoder -- paramProposalMinUtxoValue
     <*> maybeDbLovelaceDecoder -- paramProposalMinPoolCost
     <*> Id.maybeIdDecoder Id.CostModelId -- paramProposalCostModelId
@@ -544,7 +548,7 @@ paramProposalEncoder =
     , paramProposalDecentralisation >$< E.param (E.nullable E.float8)
     , paramProposalEntropy >$< E.param (E.nullable E.bytea)
     , paramProposalProtocolMajor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
-    , paramProposalProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int2)
+    , paramProposalProtocolMinor >$< E.param (E.nullable $ fromIntegral >$< E.int8)
     , paramProposalMinUtxoValue >$< maybeDbLovelaceEncoder
     , paramProposalMinPoolCost >$< maybeDbLovelaceEncoder
     , paramProposalCostModelId >$< Id.maybeIdEncoder Id.getCostModelId
@@ -604,7 +608,7 @@ instance DbInfo TreasuryWithdrawal where
   unnestParamTypes _ =
     [ ("gov_action_proposal_id", "bigint[]")
     , ("stake_address_id", "bigint[]")
-    , ("amount", "bigint[]")
+    , ("amount", "numeric[]")
     ]
 
 treasuryWithdrawalBulkEncoder :: E.Params ([Id.GovActionProposalId], [Id.StakeAddressId], [DbLovelace])

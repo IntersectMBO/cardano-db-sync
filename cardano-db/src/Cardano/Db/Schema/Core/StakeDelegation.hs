@@ -200,7 +200,7 @@ type instance Key Reward = RewardId
 instance DbInfo Reward where
   enumFields _ = [("type", "rewardtype"), ("amount", "lovelace")]
   generatedFields _ = ["earned_epoch"]
-  unnestParamTypes _ = [("addr_id", "bigint[]"), ("type", "text[]"), ("amount", "bigint[]"), ("spendable_epoch", "bigint[]"), ("pool_id", "bigint[]")]
+  unnestParamTypes _ = [("addr_id", "bigint[]"), ("type", "text[]"), ("amount", "numeric[]"), ("spendable_epoch", "bigint[]"), ("pool_id", "bigint[]")]
 
 rewardBulkEncoder :: E.Params ([StakeAddressId], [RewardSource], [DbLovelace], [Word64], [PoolHashId])
 rewardBulkEncoder =
@@ -233,7 +233,7 @@ instance DbInfo RewardRest where
   unnestParamTypes _ =
     [ ("addr_id", "bigint[]")
     , ("type", "text[]")
-    , ("amount", "bigint[]")
+    , ("amount", "numeric[]")
     , ("spendable_epoch", "bigint[]")
     ]
 
@@ -269,7 +269,7 @@ instance DbInfo EpochStake where
   unnestParamTypes _ =
     [ ("addr_id", "bigint[]")
     , ("pool_id", "bigint[]")
-    , ("amount", "bigint[]")
+    , ("amount", "numeric[]")
     , ("epoch_no", "bigint[]")
     ]
 

@@ -202,6 +202,16 @@ maybeDbWord64Encoder = HsqlE.param $ HsqlE.nullable dbWord64ValueEncoder
 maybeDbWord64Decoder :: HsqlD.Row (Maybe DbWord64)
 maybeDbWord64Decoder = HsqlD.column (HsqlD.nullable (DbWord64 . scientificToWord64 <$> HsqlD.numeric))
 
+-- Codecs for a Word64 field against a word64type (numeric) column.
+word64ValueEncoder :: HsqlE.Value Word64
+word64ValueEncoder = (\x -> scientific (toInteger x) 0) >$< HsqlE.numeric
+
+word64Encoder :: HsqlE.Params Word64
+word64Encoder = HsqlE.param $ HsqlE.nonNullable word64ValueEncoder
+
+word64Decoder :: HsqlD.Row Word64
+word64Decoder = HsqlD.column (HsqlD.nonNullable (scientificToWord64 <$> HsqlD.numeric))
+
 --------------------------------------------------------------------------------
 -- The following must be in alphabetic order.
 data RewardSource
@@ -339,6 +349,7 @@ data ExtraMigration
   | BootstrapFinished
   | ConsumeTxOutPreviouslySet
   | TxOutAddressPreviouslySet
+  | ProtoMinorFixed
   deriving (Eq, Show, Read)
 
 data MigrationValues = MigrationValues
@@ -396,6 +407,8 @@ extraDescription = \case
     "The --consume-tx-out flag has previously been enabled"
   TxOutAddressPreviouslySet ->
     "The addition of a Address table for TxOuts was previously set"
+  ProtoMinorFixed ->
+    "The block.proto_minor column has been repaired from the node's headers (issue #2190)"
 instance Ord PoolCert where
   compare a b = compare (pcCertNo a) (pcCertNo b)
 

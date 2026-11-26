@@ -6,6 +6,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -25,11 +26,13 @@ module Cardano.DbSync.Sync (
 ) where
 
 import Cardano.Client.Subscription (Decision (..), SubscriptionParams (..), SubscriptionTracers (..), subscribe)
+import qualified Cardano.Db as DB
 import Cardano.Db.Log (LogMessage, logInfo)
 import Cardano.DbSync.Api
-import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions)
+import Cardano.DbSync.Api.Types (ConsistentLevel (..), LedgerEnv (..), SyncEnv (..), envLedgerEnv, envNetworkMagic, envOptions, soptOnlyFix)
 import Cardano.DbSync.Config
 import Cardano.DbSync.DbEvent
+import Cardano.DbSync.Fix.ProtoMinor (ProtoMinorFixPlan, chainSyncClientFixProtoMinor, planProtoMinorFix)
 import Cardano.DbSync.LocalStateQuery
 import Cardano.DbSync.Metrics
 import Cardano.DbSync.Tracing.Setup (DbSyncTracers (..), toTracer)
@@ -39,6 +42,7 @@ import Cardano.Logging (Trace)
 import Cardano.Prelude hiding (Meta, Nat, (%))
 import Cardano.Slotting.Slot (WithOrigin (..))
 import Control.Concurrent.Async (AsyncCancelled (..))
+import Control.Concurrent.Class.MonadSTM.Strict (StrictTVar, newTVarIO, readTVarIO, writeTVar)
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.List as List
 import Network.TypedProtocol.Peer (N (..), Nat (..))
@@ -75,9 +79,10 @@ import Ouroboros.Network.Block (
   genesisPoint,
   getTipBlockNo,
  )
-import Ouroboros.Network.Driver.Simple (runPipelinedPeer)
+import Ouroboros.Network.Driver.Simple (runPeer, runPipelinedPeer)
 import Ouroboros.Network.Mux (MiniProtocolCb (..), RunMiniProtocol (..), RunMiniProtocolWithMinimalCtx)
 import qualified Ouroboros.Network.Mux as Mux
+import Ouroboros.Network.Protocol.ChainSync.Client (chainSyncClientPeer)
 import Ouroboros.Network.Protocol.ChainSync.ClientPipelined (
   ChainSyncClientPipelined (..),
   ClientPipelinedStIdle (..),
@@ -99,6 +104,13 @@ import Ouroboros.Network.Protocol.LocalStateQuery.Client (localStateQueryClientP
 import qualified Ouroboros.Network.Protocol.LocalStateQuery.Type as LocalStateQuery
 import qualified Ouroboros.Network.Snocket as Snocket
 
+-- | Raised to stop the subscription loop after a @--only-fix@ run, which must not be
+-- reconnected. 'runSyncNodeClient' turns it into a clean exit.
+data OnlyFixDone = OnlyFixDone
+  deriving (Show)
+
+instance Exception OnlyFixDone
+
 runSyncNodeClient ::
   MetricSetters ->
   SyncEnv ->
@@ -109,6 +121,7 @@ runSyncNodeClient ::
   IO ()
 runSyncNodeClient metricsSetters syncEnv iomgr tracers tc (SocketPath socketPath) = do
   logInfo (dstTracer tracers) $ "Connecting to node via " <> textShow socketPath
+  onlyFixDoneVar <- newTVarIO False
   void $
     subscribe
       (localSnocket iomgr)
@@ -116,7 +129,14 @@ runSyncNodeClient metricsSetters syncEnv iomgr tracers tc (SocketPath socketPath
       (supportedNodeToClientVersions (Proxy @CardanoBlock))
       subscriptionTracers
       subscriptionParams
-      (dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig)
+      (dbSyncProtocols onlyFixDoneVar syncEnv metricsSetters tracers tc codecConfig)
+  -- 'subscribe' swallows the exception it was given a 'Decision' for, so the exit is made
+  -- here, on the way out of this thread: 'mapConcurrently_' then cancels its siblings and
+  -- re-raises in the main thread, which is the only thread the RTS exits for.
+  onlyFixDone <- readTVarIO onlyFixDoneVar
+  when onlyFixDone $ do
+    logInfo (dstTracer tracers) "Exiting after the one-off repair, as --only-fix was given."
+    exitSuccess
   where
     codecConfig :: CodecConfig CardanoBlock
     codecConfig = configCodec $ getTopLevelConfig syncEnv
@@ -129,10 +149,11 @@ runSyncNodeClient metricsSetters syncEnv iomgr tracers tc (SocketPath socketPath
         { spAddress = Snocket.localAddressFromPath socketPath
         , spReconnectionDelay = Nothing
         , spCompleteCb = \case
-            Left e ->
-              case fromException e of
-                Just AsyncCancelled -> Abort
-                _other -> Reconnect
+            Left e
+              | Just AsyncCancelled <- fromException e -> Abort
+              -- A finished --only-fix run must not be reconnected; the caller exits.
+              | Just OnlyFixDone <- fromException e -> Abort
+              | otherwise -> Reconnect
             Right _ -> Reconnect
         }
 
@@ -146,6 +167,7 @@ runSyncNodeClient metricsSetters syncEnv iomgr tracers tc (SocketPath socketPath
         }
 
 dbSyncProtocols ::
+  StrictTVar IO Bool ->
   SyncEnv ->
   MetricSetters ->
   DbSyncTracers ->
@@ -154,7 +176,7 @@ dbSyncProtocols ::
   Network.NodeToClientVersion ->
   BlockNodeToClientVersion CardanoBlock ->
   NodeToClientProtocols 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
-dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig version bversion =
+dbSyncProtocols onlyFixDoneVar syncEnv metricsSetters tracers tc codecConfig version bversion =
   NodeToClientProtocols
     { localChainSyncProtocol = localChainSyncPtcl
     , localTxSubmissionProtocol = dummylocalTxSubmit
@@ -173,33 +195,72 @@ dbSyncProtocols syncEnv metricsSetters tracers tc codecConfig version bversion =
 
     localChainSyncPtcl :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     localChainSyncPtcl = InitiatorProtocolOnly $
-      MiniProtocolCb $ \_ctx channel ->
-        liftIO . logException tracer "ChainSyncWithBlocksPtcl: " $ do
+      MiniProtocolCb $ \_ctx channel -> liftIO $ do
+        -- The exit request is raised outside 'logException', so a --only-fix run that did
+        -- what it was asked does not log an error on its way out.
+        result <- logException tracer "ChainSyncWithBlocksPtcl: " $ do
           logInfo tracer "Starting ChainSync client"
           setConsistentLevel syncEnv Unchecked
 
-          (latestPoints, currentTip) <- waitRestartState tc
-          let (inMemory, onDisk) = List.span snd latestPoints
-          logInfo tracer $
-            mconcat
-              [ "Suggesting intersection points from memory: "
-              , textShow (fst <$> inMemory)
-              , " and from disk: "
-              , textShow (fst <$> onDisk)
-              ]
-          void $
-            runPipelinedPeer
-              (toTracer (dstChainSyncTracer tracers))
-              (cChainSyncCodec codecs)
-              channel
-              ( chainSyncClientPeerPipelined $
-                  chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
-              )
-          atomically $ writeDbEventQueue tc DbFinish
-          -- We should return leftover bytes returned by 'runPipelinedPeer', but
-          -- client application do not care about them (it's only important if one
-          -- would like to restart a protocol on the same mux and thus bearer).
-          pure ((), Nothing)
+          -- A pending one-off repair takes the connection for itself, because the
+          -- chainsync protocol cannot be restarted on the same channel once a client
+          -- is done. The repair ends the connection and the next one syncs normally.
+          mFixPlan <- protoMinorFixPlan
+          case mFixPlan of
+            Just (dbEnv, plan) -> do
+              void $
+                runPeer
+                  (toTracer (dstChainSyncTracer tracers))
+                  (cChainSyncCodec codecs)
+                  channel
+                  (chainSyncClientPeer (chainSyncClientFixProtoMinor syncEnv dbEnv plan))
+              afterRepair "Finished the block.proto_minor repair"
+            -- Nothing to repair, which --only-fix still has to be told about: it promises to
+            -- exit rather than carry on syncing, whether or not there was work to do.
+            Nothing
+              | soptOnlyFix (envOptions syncEnv) ->
+                  afterRepair "No block.proto_minor repair was pending"
+              | otherwise -> do
+                  (latestPoints, currentTip) <- waitRestartState tc
+                  let (inMemory, onDisk) = List.span snd latestPoints
+                  logInfo tracer $
+                    mconcat
+                      [ "Suggesting intersection points from memory: "
+                      , textShow (fst <$> inMemory)
+                      , " and from disk: "
+                      , textShow (fst <$> onDisk)
+                      ]
+                  void $
+                    runPipelinedPeer
+                      (toTracer (dstChainSyncTracer tracers))
+                      (cChainSyncCodec codecs)
+                      channel
+                      ( chainSyncClientPeerPipelined $
+                          chainSyncClient metricsSetters tracer (fst <$> latestPoints) currentTip tc
+                      )
+                  atomically $ writeDbEventQueue tc DbFinish
+                  -- We should return leftover bytes returned by 'runPipelinedPeer', but
+                  -- client application do not care about them (it's only important if one
+                  -- would like to restart a protocol on the same mux and thus bearer).
+                  pure (Right ((), Nothing))
+        either throwIO pure result
+
+    -- \| End the connection the repair took: either hand over to syncing on the next one, or
+    -- stop the subscription so the caller can exit.
+    afterRepair what
+      | soptOnlyFix (envOptions syncEnv) = do
+          logInfo tracer $ what <> " and --only-fix was given, so exiting without syncing."
+          atomically $ writeTVar onlyFixDoneVar True
+          pure (Left OnlyFixDone)
+      | otherwise = do
+          logInfo tracer $ what <> ", reconnecting to resume syncing."
+          pure (Right ((), Nothing))
+
+    protoMinorFixPlan :: IO (Maybe (DB.DbEnv, ProtoMinorFixPlan))
+    protoMinorFixPlan =
+      case envDbEnv syncEnv of
+        Nothing -> pure Nothing
+        Just dbEnv -> fmap (dbEnv,) <$> planProtoMinorFix syncEnv dbEnv
 
     dummylocalTxSubmit :: RunMiniProtocolWithMinimalCtx 'Mux.InitiatorMode LocalAddress BSL.ByteString IO () Void
     dummylocalTxSubmit =
