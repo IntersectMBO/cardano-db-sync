@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Cardano DB Sync" width="200">
+</p>
+
 # Documentation Table of Contents
 
 ## Overview
