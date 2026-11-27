@@ -7,7 +7,9 @@ development utilities. Run them from the repository root.
 
 Read-only checks against a populated database. `run-schema-checks.sh` runs the
 three SQL scripts in turn; each can also be run on its own with
-`psql -d <dbname> -f scripts/<script>.sql`.
+`psql -d <dbname> -f scripts/<script>.sql`. Each script, and the wrapper, exits
+non-zero when a check fails, so they can gate a release or a CI job; the wrapper
+still runs all three and then lists the ones that failed.
 
 - **run-schema-checks.sh** `<dbname>` runs the three check scripts below against a database.
 - **test-uniqueness.sql** asserts UNIQUE invariants hold (no duplicate tx/block hashes and the like).
